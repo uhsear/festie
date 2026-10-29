@@ -1,0 +1,100 @@
+packages:
+  - "shared"
+  - "mobile"
+  - "web"
+
+# pnpm v10 blocks dependency build scripts by default. Allow @sentry/cli to run
+# its postinstall, which downloads the sentry-cli binary that the
+# @sentry/react-native Gradle integration shells out to for release source-map
+# upload. Minimal allowlist — everything else stays blocked.
+onlyBuiltDependencies:
+  - "@sentry/cli"
+  - "esbuild"
+
+# Supply-chain hardening (semgrep pnpm ruleset; pnpm >=10.26 supports all three).
+# minimumReleaseAge: resolve only versions published >=7 days (10080 min) ago —
+# already-locked versions are unaffected; bump security patches past it with
+# minimumReleaseAgeExclude if ever needed urgently.
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+# Expo SDK packages ship coordinated patch trains from Expo's own release
+# pipeline; expo-doctor demands the exact latest patch, which is often <7 days
+# old. Exclude the expo scope from the release-age floor so doctor and the
+# supply-chain rule stop fighting.
+minimumReleaseAgeExclude:
+  - expo
+  - "expo-*"
+  - "@expo/*"
+  - babel-preset-expo
+  - jest-expo
+  # noxcturnal is a first-party Expo dependency (github.com/expo/noxcturnal) of
+  # @expo/metro-config 58; its ^0.1.10 range has no release older than 7 days.
+  # Exact versions only, so any later release still waits out the floor.
+  # Drop these entries once 0.1.11 passes the floor (2026-11-03).
+  - noxcturnal@0.1.11
+  - "@noxcturnal/noxcturnal-darwin-arm64@0.1.11"
+  - "@noxcturnal/noxcturnal-darwin-x64@0.1.11"
+  - "@noxcturnal/noxcturnal-linux-arm64-gnu@0.1.11"
+  - "@noxcturnal/noxcturnal-linux-arm64-musl@0.1.11"
+  - "@noxcturnal/noxcturnal-linux-x64-gnu@0.1.11"
+  - "@noxcturnal/noxcturnal-linux-x64-musl@0.1.11"
+  - "@noxcturnal/noxcturnal-win32-arm64-msvc@0.1.11"
+  - "@noxcturnal/noxcturnal-win32-x64-msvc@0.1.11"
+  # body-parser 1.20.9 patches a high-severity advisory (published 2026-10-22).
+  # Drop this entry once 1.20.9 is older than the 7-day floor (2026-10-29).
+  - body-parser@1.20.9
+# semver@5.7.2 (transitive via @lhci/cli>lighthouse) predates npm provenance;
+# a later semver version has attestation, so no-downgrade false-positives on
+# the old-but-locked pin. Trusted legacy dev-tool dep — excluded.
+trustPolicyExclude:
+  - semver
+  # eslint-import-resolver-typescript 3.10.1 (2025-04, locked since SDK 56 via
+  # eslint-config-expo) lost npm provenance that 3.10.0 had; same false positive
+  # as semver. Exact-version exclude so any other version still gets checked.
+  - eslint-import-resolver-typescript@3.10.1
+  # ua-parser-js 0.7.41 (via expo-device) and 1.0.41 (via react-native-web >
+  # fbjs), both locked since SDK 56: same provenance false positive; exact versions.
+  - ua-parser-js@0.7.41 || 1.0.41
+
+# Audit suppressions. ONLY for advisories where no patched release exists, so a
+# version bump cannot clear them and the alternative is deleting a feature.
+# Keyed by GHSA id, never by package name, so a future advisory against the same
+# package still fails the audit.
+# RE-CHECK TRIGGER: drop the node-forge and http-cache-semantics entries when a
+# release past 1.4.0 / 4.2.0 appears, the zod entry when Expo's CLI moves off
+# zod 3, and the image-size entries when image-size publishes >2.0.2,
+# and the extract-zip entry when extract-zip publishes >2.0.1. Both were the
+# latest published version as of 2026-09-08 and both are inside the vulnerable
+# range, so every existing release is affected.
+auditConfig:
+  ignoreGhsas:
+    # image-size ICNS infinite loop (CVE-2025-71330) and JXL/HEIF infinite loops
+    # (CVE-2025-71329). Reached only via mobile>expo>@expo/metro>metro, the React
+    # Native bundler: it reads dimensions of first-party assets at build time and
+    # does not ship in the app binary or parse user input at runtime.
+    - "GHSA-w3rx-r6r6-pgpr"
+    - "GHSA-5p2g-fcmc-qvqq"
+    # extract-zip unvalidated symlink path traversal (CVE-2026-56876). Dev-only,
+    # via web>@lhci/cli>lighthouse>puppeteer-core>@puppeteer/browsers, which uses
+    # it to unpack the Chrome build it downloads for Lighthouse CI.
+    - "GHSA-jmr9-qjv8-65gv"
+    # "extract-zip allows arbitrary file writes through symlink archive entries"
+    # — GitHub's own summary, quoted because it reads almost identically to the
+    # entry above and only the id tells them apart. Same package, same dev-only
+    # path, and still no published fix: every release up to and including 2.0.1,
+    # the latest, is inside the vulnerable range.
+    - "GHSA-7pqw-9j4j-h8q3"
+    # node-forge RSA PKCS#1 v1.5 signature verification (<=1.4.0, no patched
+    # release). Reached only via mobile>expo>@expo/cli, the Expo dev CLI; it does
+    # not ship in the app binary and verifies no untrusted signatures.
+    - "GHSA-86w9-cpqp-85rv"
+    # http-cache-semantics max-stale disclosure (<=4.2.0, no patched release).
+    # Dev-only, via mobile>@expo/ngrok>got, the tunnel helper of the Expo dev CLI.
+    - "GHSA-ch52-4w7c-c8xp"
+    # zod memory exhaustion on oversized constrained collections. The fix is
+    # 4.6.6, but this copy is zod 3.25.76 pinned by mobile>expo>@expo/cli, and
+    # the 3.x line has no patch. Forcing 4.x under the Expo CLI risks breaking
+    # expo prebuild. Dev-only: the CLI parses developer-owned config. The app's
+    # own zod (shared, root) is on 4.6.7 and is not affected.
+    - "GHSA-mrhx-c7xc-m3w5"

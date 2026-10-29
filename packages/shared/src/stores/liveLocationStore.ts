@@ -1,0 +1,203 @@
+// Copyright (c) 2026 Asir Khan. All rights reserved.
+// All Rights Reserved. See the LICENSE file.
+
+/**
+ * liveLocationStore — ephemeral Live Location + SOS state for the active crew.
+ *
+ * PRIVACY-CRITICAL: this store is created WITHOUT the persist middleware (unlike
+ * crewStore). GPS coordinates and SOS positions are NEVER written to disk
+ * (AsyncStorage / localStorage). They live only in memory for the lifetime of
+ * the page/app session and reset to empty on every launch — so the "share my
+ * location" toggle is always OFF by default and coordinates never leak to
+ * storage, analytics, or replay.
+ *
+ * Scope: one crew at a time. `crewId` is the crew this store is currently scoped
+ * to (viewing and/or sharing). Switching crews resets peers + SOS so one crew's
+ * markers never bleed into another's.
+ *
+ * Self-healing: `sweepStale` drops peers whose serverAt is older than the TTL
+ * (defense in depth alongside the server's 120s Redis TTL + peer-stopped
+ * broadcasts), so a force-quit peer's marker fades even with no clean stop event.
+ */
+
+import { create, StateCreator } from 'zustand';
+import type { PeerLocation, SosEntry } from '../types';
+import { LIVE_LOCATION } from '../constants/config';
+
+export interface LiveLocationState {
+  /** The crew this store is scoped to (viewing/sharing), or null when inactive. */
+  crewId: string | null;
+  /** The crew we are actively publishing our own position to, or null. */
+  sharingCrewId: string | null;
+  /**
+   * Phase 4C: ISO timestamp our own time-boxed share auto-stops, or null. Drives
+   * the "sharing ends in Nm" countdown on our own sharing indicator (peers get
+   * theirs from each peer's relayed expiresAt). Cleared on stop/reset.
+   */
+  sharingExpiresAt: string | null;
+  /** Publisher bookkeeping: epoch ms of our last published fix. */
+  lastSentAt: number | null;
+  /** Publisher bookkeeping: our last published coordinate (for move-threshold). */
+  lastSentCoord: { lat: number; lng: number } | null;
+  /** Peers currently sharing to this crew, keyed by userId. */
+  peers: Record<string, PeerLocation>;
+  /**
+   * All active SOS entries for this crew, keyed by the raiser's userId. Multiple
+   * crew members can have an SOS up at once; each is its own keyed slot.
+   */
+  sosByUser: Record<string, SosEntry>;
+  /**
+   * BACKWARD-COMPAT (do NOT remove): the single most-recent active SOS, DERIVED
+   * from `sosByUser` (latest by `raisedAt`), or null when none. Every existing
+   * consumer that reads `state.sos` keeps working unchanged; it now simply tracks
+   * the newest of possibly several active SOS entries.
+   */
+  sos: SosEntry | null;
+  /** All active SOS entries as an array, newest first (derived from `sosByUser`). */
+  activeSosList: SosEntry[];
+}
+
+export interface LiveLocationActions {
+  /**
+   * Scope the store to a crew (viewing). Resets peers + SOS + sharing bookkeeping
+   * when the crew changes so stale markers from another crew never render.
+   */
+  setActiveCrew: (crewId: string | null) => void;
+  /**
+   * Mark that we have started publishing our own position to `crewId`. `expiresAt`
+   * (Phase 4C) is the ISO auto-stop time for the "sharing ends in Nm" own-side
+   * countdown; omit it to leave the window unset.
+   */
+  startSharing: (crewId: string, expiresAt?: string | null) => void;
+  /** Stop publishing our own position; clears publisher bookkeeping. */
+  stopSharing: () => void;
+  /** Record a just-published fix (used by the throttle in useLiveLocationPublisher). */
+  recordSent: (coord: { lat: number; lng: number }, at: number) => void;
+  /** Apply a peer's position. Ignored if it targets a different crew than active. */
+  applyPeerUpdate: (peer: PeerLocation) => void;
+  /** Remove a peer (stop / disconnect / expiry). */
+  removePeer: (userId: string) => void;
+  /** Drop peers whose serverAt is older than ttlMs (defense in depth vs server TTL). */
+  sweepStale: (now: number, ttlMs?: number) => void;
+  /** Apply an SOS (keyed by raiser userId). Ignored if it targets a different crew than active. */
+  applySos: (entry: SosEntry) => void;
+  /**
+   * Clear SOS state. With a `raiserId`, removes just that raiser's SOS; with no
+   * argument (the socket "clear-all" / resolved path) clears every active SOS.
+   */
+  clearSos: (raiserId?: string) => void;
+  /** Full reset (e.g. on logout). */
+  reset: () => void;
+}
+
+export type LiveLocationStore = LiveLocationState & LiveLocationActions;
+
+const EMPTY: LiveLocationState = {
+  crewId: null,
+  sharingCrewId: null,
+  sharingExpiresAt: null,
+  lastSentAt: null,
+  lastSentCoord: null,
+  peers: {},
+  sosByUser: {},
+  sos: null,
+  activeSosList: [],
+};
+
+/**
+ * Recompute the derived SOS views (`activeSosList` newest-first + the
+ * backward-compat single `sos`) from the keyed `sosByUser` map. Centralized so
+ * every mutation that touches `sosByUser` keeps the derived fields in sync.
+ */
+function deriveSos(
+  sosByUser: Record<string, SosEntry>,
+): Pick<LiveLocationState, 'sosByUser' | 'sos' | 'activeSosList'> {
+  const activeSosList = Object.values(sosByUser).sort(
+    (a, b) => new Date(b.raisedAt).getTime() - new Date(a.raisedAt).getTime(),
+  );
+  return { sosByUser, activeSosList, sos: activeSosList[0] ?? null };
+}
+
+const liveLocationStore: StateCreator<LiveLocationStore> = (set, get) => ({
+  ...EMPTY,
+
+  setActiveCrew: (crewId) => {
+    if (get().crewId === crewId) return;
+    // Crew switch: wipe everything scoped to the previous crew, including any
+    // active sharing (you must re-opt-in for the new crew — no silent re-share).
+    set({ ...EMPTY, crewId });
+  },
+
+  startSharing: (crewId, expiresAt = null) => {
+    set({ crewId, sharingCrewId: crewId, sharingExpiresAt: expiresAt, lastSentAt: null, lastSentCoord: null });
+  },
+
+  stopSharing: () => {
+    set({ sharingCrewId: null, sharingExpiresAt: null, lastSentAt: null, lastSentCoord: null });
+  },
+
+  recordSent: (coord, at) => {
+    set({ lastSentCoord: coord, lastSentAt: at });
+  },
+
+  applyPeerUpdate: (peer) => {
+    const { crewId } = get();
+    // Guard: only accept peers for the crew we're scoped to. The realtime hook
+    // already guards via the router; this is defense in depth.
+    if (crewId && peer.crewId !== crewId) return;
+    set((state) => ({ peers: { ...state.peers, [peer.userId]: peer } }));
+  },
+
+  removePeer: (userId) => {
+    set((state) => {
+      if (!(userId in state.peers)) return state;
+      const next = { ...state.peers };
+      delete next[userId];
+      return { peers: next };
+    });
+  },
+
+  sweepStale: (now, ttlMs = LIVE_LOCATION.STALE_MS) => {
+    set((state) => {
+      let changed = false;
+      const next: Record<string, PeerLocation> = {};
+      for (const [userId, peer] of Object.entries(state.peers)) {
+        const serverMs = new Date(peer.serverAt).getTime();
+        if (Number.isFinite(serverMs) && now - serverMs > ttlMs) {
+          changed = true;
+          continue;
+        }
+        next[userId] = peer;
+      }
+      return changed ? { peers: next } : state;
+    });
+  },
+
+  applySos: (entry) => {
+    const { crewId } = get();
+    if (crewId && entry.crewId !== crewId) return;
+    set((state) => deriveSos({ ...state.sosByUser, [entry.userId]: entry }));
+  },
+
+  clearSos: (raiserId) => {
+    set((state) => {
+      // No raiserId → the socket "clear-all" / resolved path: drop every SOS.
+      if (raiserId === undefined) {
+        if (Object.keys(state.sosByUser).length === 0) return state;
+        return deriveSos({});
+      }
+      if (!(raiserId in state.sosByUser)) return state;
+      const next = { ...state.sosByUser };
+      delete next[raiserId];
+      return deriveSos(next);
+    });
+  },
+
+  reset: () => {
+    set({ ...EMPTY });
+  },
+});
+
+// NOTE: plain create() — NO persist middleware. Ephemerality is a hard privacy
+// requirement (see file header). Do not wrap this in persist().
+export const useLiveLocationStore = create<LiveLocationStore>()(liveLocationStore);

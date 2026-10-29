@@ -1,0 +1,536 @@
+@import 'tailwindcss/theme.css';
+@import 'tailwindcss/utilities.css';
+
+/* Generated @theme block — single-sourced from @festie/shared TS tokens.
+   Regenerate with `pnpm --filter @festie/shared gen:theme`; the
+   generateThemeCss.test.ts guard fails CI if it drifts. The remaining
+   CSS-only @theme tokens (focus rings, glass blur,
+   accent hover tones, timeline NOW, bg-chrome/bg-disabled) stay below. */
+@import './theme.generated.css';
+
+@source "../**/*.{ts,tsx,js,jsx}";
+
+@utility scrollbar-hide {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility glass {
+  backdrop-filter: saturate(180%) blur(var(--glass-blur-strong));
+}
+
+@utility glass-sm {
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+}
+
+@utility glass-xs {
+  backdrop-filter: blur(8px);
+}
+
+/* R4 (design-inspiration-deep-2026-06-10): Glassmorphic set-detail surface.
+   rgba(29,29,29,0.82) + blur(20px) + 1px rgba(255,255,255,0.08) border +
+   inset 1px top highlight (the glass edge). Used on DetailPanel Drawer.Content.
+   The scrim (Drawer.Overlay) uses rgba(0,0,0,0.6) — set at the call site.
+   Border-radius: 24px top corners on mobile (default), 16px on lg (dialog). */
+@utility detail-glass {
+  background-color: var(--detail-glass-bg);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--color-overlay-4);
+  box-shadow: inset 0 1px 0 var(--color-overlay-3);
+}
+
+/* vaul paints a ::after strip below every bottom drawer (top:100%, height:200%,
+   background:inherit) so a drag past the rest point shows no gap. At lg every
+   drawer here is a centred dialog with no drag, and the strip showed as a blank
+   tail under it. Guarded by src/styles/drawer-strip.test.ts. */
+@media (width >= 64rem) {
+  [data-vaul-drawer]::after {
+    display: none;
+  }
+}
+
+/* R23 (design-inspiration-deep-2026-06-10): One-shot presence flip ring.
+   Applied to the status dot wrapper when isOnline flips true. The ::after
+   pseudo is the expanding ring that fires once and stops (battery rule: no
+   continuous presence animation). Avatar.tsx manages the class toggle via a
+   ref + animationend listener. Reduce-motion: the global block collapses the
+   animation to 0.01ms, so no ring is visible. */
+@utility status-dot-flipped {
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--color-accent-aqua);
+    will-change: transform, opacity;
+    animation: status-dot-pulse-once 600ms var(--ease-out, ease-out) 1 both;
+    pointer-events: none;
+  }
+}
+
+/* R24 (design-inspiration-deep-2026-06-10): SOS FAB alert ring � continuous
+   coral pulse ONLY while an active SOS exists. Justified: emergency context.
+   Applied to the SOS button/FAB when liveLocationStore.sos is non-null.
+   Reduce-motion: global block collapses to 0.01ms; the sos-fab-static-ring
+   utility class is used instead (high-contrast outline, no animation). */
+@utility sos-fab-alerting {
+  animation: sos-fab-pulse 1.5s ease-out infinite;
+}
+
+/* R24 reduce-motion fallback: static high-contrast coral ring on the SOS
+   affordance, no animation. */
+@utility sos-fab-static-ring {
+  box-shadow: 0 0 0 3px rgba(var(--accent-coral-rgb), 0.6);
+}
+
+@utility crew-poll-bar {
+  animation: crew-bar-fill 420ms var(--ease-out, ease-out) both;
+}
+
+@utility crew-activity-rail {
+  position: relative;
+  &::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 48px;
+    bottom: -8px;
+    width: 1px;
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--color-accent-aqua) 30%, transparent), transparent);
+    pointer-events: none;
+  }
+  &:last-child::before {
+    display: none;
+  }
+}
+
+@utility press-scale {
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+@utility fm-live-dot {
+  position: relative;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-accent-coral);
+  vertical-align: middle;
+  margin-right: 6px;
+  margin-bottom: 2px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--color-accent-coral);
+    will-change: transform, opacity;
+    animation: fm-live-pulse 2s ease-out infinite;
+    pointer-events: none;
+  }
+}
+
+@keyframes fm-live-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@utility fm-card-enter {
+  animation: fm-card-enter 180ms var(--ease-out, ease-out) both;
+}
+
+@keyframes fm-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fm-day-banner-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility timeline-now-label {
+  &::before {
+    content: 'NOW';
+    position: absolute;
+    left: -52px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--timeline-now-color);
+    background: var(--timeline-now-bg);
+    padding: 1px 4px;
+    border-radius: var(--radius-xs, 4px);
+  }
+  @media (max-width: 640px) {
+    &::before {
+      left: -44px;
+    }
+  }
+  @media (min-width: 1024px) {
+    &::before {
+      left: -56px;
+    }
+  }
+  @media (min-width: 1440px) {
+    &::before {
+      left: -60px;
+    }
+  }
+}
+
+/* R7 (design-inspiration-deep-2026-06-10): surface-palette shimmer — #1a1a1a
+   base with #2a2a2a highlight matches the 5-step neutral scale. 1.4s linear. */
+@utility skeleton-shimmer {
+  background: linear-gradient(90deg, var(--skeleton-base) 0%, var(--skeleton-hi) 40%, var(--skeleton-base) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.4s linear infinite;
+  border-radius: 0.5rem;
+}
+
+/* R7: 150ms fade-out on data arrival. Add to the skeleton wrapper, then remove
+   the element after the transition ends (transitionend or 150ms setTimeout). */
+@utility skeleton-dismiss {
+  transition: opacity 150ms linear;
+  opacity: 0;
+}
+
+/* R19 (design-inspiration-deep-2026-06-10): Animated gradient border on
+   LIVE/featured cards. Uses CSS @property for --border-angle and conic-gradient.
+   Applied only to .set-card.live (single featured card on screen per R3).
+   Static fallback (1px aqua) when @property unsupported or prefers-reduced-motion. */
+@supports (background: conic-gradient(from 0deg, #00e8d0)) {
+  @property --border-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes rotateBorder {
+    to {
+      --border-angle: 360deg;
+    }
+  }
+
+  .set-card.live {
+    background:
+      linear-gradient(var(--skeleton-base), var(--skeleton-base)) padding-box,
+      conic-gradient(
+          from var(--border-angle),
+          var(--color-accent-aqua),
+          transparent 30%,
+          var(--color-accent-coral) 60%,
+          transparent 80%,
+          var(--color-accent-aqua)
+        )
+        border-box;
+    border: 1.5px solid transparent;
+    animation: rotateBorder 6s linear infinite;
+  }
+
+  @media (prefers-reduced-motion) {
+    .set-card.live {
+      animation: none;
+      background: linear-gradient(var(--skeleton-base), var(--skeleton-base)) padding-box;
+      border: 1px solid var(--color-aqua-a3);
+    }
+  }
+}
+
+/* Fallback for browsers without @property support. */
+.set-card.live {
+  border: 1px solid var(--color-aqua-a3);
+}
+
+/* R21 (design-inspiration-deep-2026-06-10): Empty state dot-grid background
+   and fade-up animation on mount. Centered flex column with icon, headline,
+   subtext, and CTA button. */
+.empty-state {
+  position: relative;
+  overflow: hidden;
+}
+
+.empty-state::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--color-aqua-a08) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.empty-state-content {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.empty-state-icon {
+  animation: fadeUp 400ms ease-out both;
+}
+
+.empty-state-title {
+  animation: fadeUp 400ms ease-out both;
+  animation-delay: 80ms;
+}
+
+.empty-state-description {
+  animation: fadeUp 400ms ease-out both;
+  animation-delay: 160ms;
+}
+
+.empty-state-cta {
+  animation: fadeUp 400ms ease-out both;
+  animation-delay: 240ms;
+}
+
+@media (prefers-reduced-motion) {
+  .empty-state-icon,
+  .empty-state-title,
+  .empty-state-description,
+  .empty-state-cta {
+    animation: none;
+  }
+}
+
+/* R12 (design-inspiration-deep-2026-06-10): Aqua spotlight hover on schedule
+   and crew cards. Radial gradient spotlight follows mousemove via CSS vars
+   --mx and --my. Desktop-only via @media (hover: hover). Applied to ::after
+   pseudo-element; set opacity via JavaScript state on hover. Box-shadow glow
+   is 0 0 12px rgba(0,232,208,0.25), 0 0 1px rgba(0,232,208,0.4) with 200ms
+   ease-out transition. */
+.set-card::after {
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), var(--color-aqua-a08) 0%, transparent 60%);
+}
+
+/* ── Stagelight type roles ───────────────────────────────────────────────
+   Named roles bound to the existing px ramp. A "title" is 20px here and on
+   RN (see @festie/shared typeRoles). Use these instead of ad-hoc text-[Npx].
+   ─────────────────────────────────────────────────────────────────────── */
+@utility type-display-xl {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-48);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-display);
+  word-spacing: var(--word-spacing-display);
+  font-weight: 700;
+}
+@utility type-display-lg {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-32);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-display);
+  word-spacing: var(--word-spacing-display);
+  font-weight: 700;
+}
+@utility type-heading {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-24);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-display);
+  word-spacing: var(--word-spacing-display);
+  font-weight: 700;
+}
+@utility type-title {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-20);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-body);
+  font-weight: 600;
+}
+@utility type-body {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-16);
+  line-height: var(--line-height-normal);
+  letter-spacing: var(--letter-spacing-body);
+}
+@utility type-label {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-normal);
+  font-weight: 500;
+}
+@utility type-caption {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-12);
+  line-height: var(--line-height-snug);
+}
+@utility type-micro {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-10);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-caps);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* `numeral` — the figure role, hand-authored here like the other type-* roles
+   (the generator emits the primitive ramp only, never the roles). Mirrors
+   @festie/shared typeRoles.numeral: 14px / snug / weight 500 / tracking 0.
+   font-variant-numeric: tabular-nums is the POINT of the role — confidence and
+   delivery figures are read at a glance and stacked in columns, and
+   proportional digits make a ticking column shift row to row. Space Grotesk
+   ships the OpenType `tnum` feature, so this resolves rather than no-ops.
+   RN gets the same via typeStyle('numeral') -> fontVariant: ['tabular-nums']. */
+@utility type-numeral {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-snug);
+  letter-spacing: 0;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   The bulk of the @theme tokens (breakpoints, colors, font-family, motion,
+   the 10/12/14/16/18/20/24/32/48 type ramp, line-heights, letter-spacing,
+   spacing, radii, z-index, glow shadows, overlay/shade/alpha scales, focus
+   rings, stage-fallback, bg-sticky, day-tab-active) are GENERATED from the
+   @festie/shared TS tokens and imported at the top of this file via
+   ./theme.generated.css — they are no longer hand-maintained here so web and
+   React Native can never drift. Regenerate: `pnpm --filter @festie/shared
+   gen:theme`. The block below holds ONLY the CSS-only tokens that have no
+   shared-TS source (the frosted-chrome surface, focus
+   ring widths, glass blur radii, solid-fill hover tones, timeline NOW markers,
+   and the disabled surface).
+   ─────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Chrome surface (header / sub-header / bottom nav). Paired with
+     backdrop-blur/saturate so the chrome reads as frosted near-black glass. */
+  --color-bg-chrome: rgba(10, 10, 20, 0.82);
+
+  /* Elevation for the raised sticky band (pairs with the generated
+     --color-bg-sticky). */
+  --shadow-sticky: 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.35);
+
+  /* ── Focus ring tokens (2026-06-04) ─────────────────────────────────────
+     Single source of truth for the accent-aqua focus affordance. base.css
+     :focus-visible, components.css inputs/buttons, and component-level
+     focus-visible:* utilities all reference these so a tuning pass touches
+     one place. Never the sole affordance — always paired with a ring shadow
+     for the 3:1 non-text-contrast floor (see :focus-visible rules). */
+  --focus-ring-width: 2px;
+  --focus-ring-color: var(--color-accent-aqua);
+  --focus-ring-offset: 2px;
+
+  /* ── Glass blur tokens (2026-06-04) ─────────────────────────────────────
+     Two canonical backdrop-blur radii. Chrome (header/bottom-nav) uses the
+     strong value; cards/dropdowns use the standard value. Replaces the
+     drift between 12px (components.css) and 16/20px (Header inline). */
+  --glass-blur: 12px;
+  --glass-blur-strong: 20px;
+
+  /* ── Discrete accent hover tones (2026-06-04) ───────────────────────────
+     Explicit darker accents for solid-fill button hover, replacing the
+     non-themeable brightness-110 filter. Toned ~10% so the hover reads as a
+     deliberate state change rather than a brightness bump. */
+  --color-accent-aqua-hover: #00cfba;
+  --color-accent-coral-hover: #e62e5c;
+  /* Solid-fill hover for the deepened danger/SOS coral (~10% darker;
+     white text stays well above AA on the darker tone). */
+  --color-accent-coral-strong-hover: #ac1a34;
+
+  /* Coral tint text — the lightened coral used as foreground text on a
+     translucent bg-accent-coral/20 chip (components.css), where the raw
+     #ff3366 fails AA on dark backgrounds. -hover is the /30 hover step. */
+  --color-coral-tint-text: #ff7a8c;
+  --color-coral-tint-text-hover: #ff8fa0;
+
+  /* ── Timeline NOW label tokens (2026-06-04) ─────────────────────────────
+     The "NOW" marker color/background, promoted so the coral marker can be
+     retuned without editing the timeline-now-label utility inline. */
+  --timeline-now-color: var(--color-accent-coral);
+  --timeline-now-bg: var(--color-bg-primary);
+
+  /* Disabled control surface — paired with --color-text-disabled. */
+  --color-bg-disabled: rgba(255, 255, 255, 0.04);
+
+  /* Surfaces that were raw literals: detail-panel glass, skeleton shimmer and
+     the live-card fill (#1a1a1a == the dark bg-secondary). */
+  --detail-glass-bg: rgba(29, 29, 29, 0.82);
+  --menu-panel-bg: rgba(18, 18, 18, 0.96);
+  --skeleton-base: #1a1a1a;
+  --skeleton-hi: #2a2a2a;
+  --glass-hover-border: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+}
+
+/* Values that cannot live in @theme: var() references, rgb channels,
+   and composite values. */
+:root {
+  /* RGB channel tokens (used in inline rgba() expressions) */
+  --accent-coral-rgb: 255, 51, 102;
+  --spotify-brand-rgb: 29, 185, 84;
+
+  /* Non-theme one-offs */
+  --text-on-light-accent: #080810;
+}
+
+/* Daylight overrides for the hand-authored colour tokens above. The generated
+   palette overrides live in theme.generated.css; hover = a slightly darker
+   fill, chrome/disabled/sticky follow the daylight ground (#f4f4f7). */
+:root[data-theme='daylight'] {
+  --accent-coral-rgb: 168, 0, 42;
+  /* Despite the name: ink on an accent FILL. Daylight fills are dark, so white. */
+  --text-on-light-accent: #ffffff;
+  --color-bg-chrome: rgba(244, 244, 247, 0.88);
+  --shadow-sticky: 0 1px 0 rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.12);
+  --color-accent-aqua-hover: #004a41;
+  --color-accent-coral-hover: #8f0023;
+  --color-accent-coral-strong-hover: #8a0019;
+  --color-coral-tint-text: #a8002a;
+  --color-coral-tint-text-hover: #8f0023;
+  --color-bg-disabled: rgba(0, 0, 0, 0.04);
+  --detail-glass-bg: rgba(255, 255, 255, 0.92);
+  --menu-panel-bg: rgba(255, 255, 255, 0.98);
+  --skeleton-base: #e8e8ee;
+  --skeleton-hi: #f4f4f7;
+  --glass-hover-border: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
+}
+
+/* Low-power mode (festival-mode store, mirrored on <html> by AppShell): stop the
+   ambient infinite loops. The timeline NOW dot sets its animation via a Tailwind
+   arbitrary class, so it is matched by class substring. */
+:root[data-low-power] .set-card.live,
+:root[data-low-power] .fm-live-dot::after,
+:root[data-low-power] [class*='timeline-now-pulse'] {
+  animation: none !important;
+}

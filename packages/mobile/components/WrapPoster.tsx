@@ -1,0 +1,221 @@
+import { View, Text, StyleSheet } from 'react-native';
+import { colors } from '@festie/shared/tokens';
+import { Ionicons } from '@expo/vector-icons';
+import { RATING_IONICON } from '../lib/ratingIcon';
+
+/**
+ * Poster palette — sourced from @festie/shared/tokens (pure data, zero runtime
+ * deps) so web and poster stay in sync if the palette evolves. Both sibling
+ * posters (WrapPoster + CrewWrapPoster) read from this same source (DC10 Option
+ * B): palette from tokens, white-overlay chrome via colors.overlay.
+ */
+const POSTER = {
+  bg: colors.bg.primary, // #080810
+  wordmark: colors.accent.coral, // #ff3366
+  text: colors.text.primary, // #eaeaf2
+  textMuted: colors.text.secondary, // #9999bb
+  rank: colors.accent.aqua, // #00e8d0
+} as const;
+
+interface PosterSet {
+  rating: number;
+  artist: string;
+  stageName?: string | null;
+}
+interface PosterStats {
+  totalRated: number;
+  stagesVisited: number;
+  daysAttended: number;
+  totalHours: number;
+}
+interface Props {
+  festivalName: string;
+  topSets: PosterSet[];
+  stats: PosterStats;
+}
+
+/**
+ * Fixed 1080×1920 (9:16) festival-wrap poster, rendered off-screen and captured
+ * to a PNG via react-native-view-shot for sharing to stories. A native mirror
+ * of the web WrapPoster: all dimensions are literal pixels so the capture is
+ * identical regardless of device. RN can't gradient-clip text or do CSS radial
+ * gradients, so the FESTIE wordmark is solid coral and the background is flat
+ * #080810 (close enough; the web poster is the high-fidelity version).
+ */
+export default function WrapPoster({ festivalName, topSets, stats }: Props) {
+  const statCells = [
+    { label: 'Sets', value: String(stats.totalRated) },
+    { label: 'Stages', value: String(stats.stagesVisited) },
+    { label: 'Days', value: String(stats.daysAttended) },
+    { label: 'Hours', value: stats.totalHours.toFixed(1) },
+  ];
+  return (
+    <View style={s.poster}>
+      {/* Header */}
+      <View style={s.header}>
+        <Text style={s.wordmark}>FESTIE</Text>
+        <Text style={s.kicker}>YOUR FESTIVAL WRAP</Text>
+        <Text style={s.festival} numberOfLines={2}>
+          {festivalName}
+        </Text>
+      </View>
+
+      {/* Top sets */}
+      <View style={s.topWrap}>
+        <Text style={s.topHeading}>TOP SETS</Text>
+        {topSets.slice(0, 5).map((set, i) => (
+          <View key={set.artist || i} style={s.topRow}>
+            <View style={s.topIcon}>
+              <Ionicons name={RATING_IONICON[set.rating] ?? 'trophy'} size={56} color={colors.accent.aqua} />
+            </View>
+            <View style={s.topInfo}>
+              <Text style={s.topArtist} numberOfLines={1}>
+                {set.artist}
+              </Text>
+              {set.stageName ? (
+                <Text style={s.topStage} numberOfLines={1}>
+                  {set.stageName}
+                </Text>
+              ) : null}
+            </View>
+            <Text style={s.topRank}>#{i + 1}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Stats grid */}
+      <View style={s.statsGrid}>
+        {statCells.map((cell) => (
+          <View key={cell.label} style={s.statCell}>
+            <Text style={s.statValue}>{cell.value}</Text>
+            <Text style={s.statLabel}>{cell.label.toUpperCase()}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={s.footer}>FESTIE.US</Text>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  poster: {
+    width: 1080,
+    height: 1920,
+    backgroundColor: POSTER.bg,
+    padding: 80,
+    flexDirection: 'column',
+  },
+  header: { alignItems: 'center' },
+  wordmark: {
+    // F25: ClashDisplay-Bold for the FESTIE wordmark — matches web WrapPoster.
+    // '900' was inert on native (no loaded cut above 700Bold); drop it.
+    fontFamily: 'ClashDisplay-Bold',
+    fontSize: 96,
+    letterSpacing: 8,
+    color: POSTER.wordmark,
+    lineHeight: 104,
+  },
+  kicker: {
+    // F25: Space Grotesk body face for sub-headings.
+    fontFamily: 'SpaceGrotesk_400Regular',
+    fontSize: 32,
+    color: POSTER.text,
+    opacity: 0.7,
+    marginTop: 16,
+    letterSpacing: 3,
+  },
+  festival: {
+    // F25: SpaceGrotesk_700Bold for festival name.
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 56,
+    color: POSTER.text,
+    marginTop: 18,
+    textAlign: 'center',
+  },
+  topWrap: { marginTop: 90, flex: 1 },
+  topHeading: {
+    // F25: caps label in Space Grotesk Medium.
+    fontFamily: 'SpaceGrotesk_500Medium',
+    fontSize: 28,
+    letterSpacing: 4,
+    color: POSTER.textMuted,
+    marginBottom: 24,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 24,
+    borderBottomWidth: 1,
+    // DC10: overlay[4] = rgba(255,255,255,0.08) — token-sourced divider.
+    borderBottomColor: colors.overlay[4],
+  },
+  topIcon: { width: 96, alignItems: 'center' },
+  topInfo: { flex: 1, paddingHorizontal: 24 },
+  topArtist: {
+    // F25: SpaceGrotesk_700Bold for artist names.
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 40,
+    color: POSTER.text,
+  },
+  topStage: {
+    // F25: Space Grotesk Regular for stage sub-line.
+    fontFamily: 'SpaceGrotesk_400Regular',
+    fontSize: 24,
+    color: POSTER.text,
+    opacity: 0.55,
+    marginTop: 4,
+  },
+  topRank: {
+    // F25: SpaceGrotesk_700Bold for rank number — '800' was inert, clamp to 700.
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 32,
+    color: POSTER.rank,
+    width: 100,
+    textAlign: 'right',
+  },
+  statsGrid: {
+    marginTop: 60,
+    flexDirection: 'row',
+    gap: 18,
+  },
+  statCell: {
+    flex: 1,
+    // DC10: overlay[3] = rgba(255,255,255,0.06) — aligned with CrewWrapPoster
+    // (which uses overlay[1]); split the diff at overlay[2] = 0.04 to keep
+    // stat cells visually consistent across both posters.
+    backgroundColor: colors.overlay[2],
+    // F48: 24 is off-scale; nearest token is radii.lg (20). Poster crop does
+    // not require the extra 4px — snap to token.
+    borderRadius: 20, // radii.lg — StyleSheet.create can't reference tokens here
+    borderWidth: 1,
+    // DC10: overlay[4] = rgba(255,255,255,0.08) — token border.
+    borderColor: colors.overlay[4],
+    paddingVertical: 28,
+    alignItems: 'center',
+  },
+  statValue: {
+    // F25: SpaceGrotesk_700Bold — '800' was inert, no loaded cut above 700Bold.
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 56,
+    color: POSTER.wordmark,
+    lineHeight: 60,
+  },
+  statLabel: {
+    fontFamily: 'SpaceGrotesk_400Regular',
+    fontSize: 20,
+    color: POSTER.text,
+    opacity: 0.65,
+    marginTop: 8,
+    letterSpacing: 3,
+  },
+  footer: {
+    fontFamily: 'SpaceGrotesk_400Regular',
+    textAlign: 'center',
+    marginTop: 60,
+    fontSize: 28,
+    color: POSTER.text,
+    opacity: 0.45,
+    letterSpacing: 6,
+  },
+});

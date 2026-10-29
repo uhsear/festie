@@ -1,0 +1,16 @@
+{
+  "check-coverage": true,
+  "lines": 87,
+  "branches": 80,
+  "functions": 89,
+  "statements": 87,
+  "reporter": ["text", "lcov", "json-summary"],
+  "exclude": [
+    "tests/**",
+    "coverage/**",
+    "node_modules/**",
+    "packages/**",
+    "scripts/**",
+    "migrations/**"
+  ]
+}

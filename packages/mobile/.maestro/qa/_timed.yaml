@@ -1,0 +1,77 @@
+# Forbidden Kingdom is the only festival with posted set times, so Timeline,
+# Grid and Now & Next show real data here. Selecting a festival only reads.
+appId: us.festie.app
+---
+- tapOn:
+    text: "Schedule"
+    optional: true
+- tapOn:
+    text: "Switch festival"
+    optional: true
+# At large Dynamic Type a festival card is taller than half the screen and its
+# centre sits under the tab bar, so a plain tap lands on a tab. Centre it first.
+- scrollUntilVisible:
+    element:
+      id: "festival-card-fk-2026"
+    centerElement: true
+    optional: true
+- tapOn:
+    id: "festival-card-fk-2026"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "Timeline|Cards"
+    timeout: 60000
+    optional: true
+- tapOn:
+    id: "segment-timeline"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-70-timed-timeline
+- scroll
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-71-timed-timeline-scrolled
+- tapOn:
+    id: "segment-cards"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-72-timed-cards
+- tapOn:
+    text: "Show filters"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-73-timed-filters
+- tapOn:
+    text: "Hide filters"
+    optional: true
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://grid", SHOT: "${THEME}-74-timed-grid" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://festival-mode", SHOT: "${THEME}-75-timed-now-next" }
+# Restart to clear the pushed routes, then return to North Coast.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 30000
+- tapOn:
+    text: "Switch festival"
+    optional: true
+# At large Dynamic Type a festival card is taller than half the screen and its
+# centre sits under the tab bar, so a plain tap lands on a tab. Centre it first.
+- scrollUntilVisible:
+    element:
+      id: "festival-card-nc-2026"
+    centerElement: true
+    optional: true
+- tapOn:
+    id: "festival-card-nc-2026"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "Timeline|Cards"
+    timeout: 60000
+    optional: true

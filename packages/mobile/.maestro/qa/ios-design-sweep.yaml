@@ -1,0 +1,163 @@
+# iOS design sweep: screenshots of every main surface in both themes, for a
+# human or agent to review. Not a gate: most steps are optional so one missing
+# element still yields the rest of the screenshots. Read-only against the
+# production API (no picks, crews, SOS or account changes). Run it through
+# .eas/workflows/ios-qa-sweep.yml against the saved `qa-sim` simulator build.
+appId: us.festie.app
+# Maestro reads only MAESTRO_-prefixed shell variables. The workflow maps the
+# EAS TEST_* secrets and the results directory onto those names.
+env:
+  TEST_USERNAME: ${MAESTRO_TEST_USERNAME}
+  TEST_PASSWORD: ${MAESTRO_TEST_PASSWORD}
+---
+# The qa-sim build listens on the production channel. The first launch only
+# downloads the latest OTA; relaunch so the rest of the sweep runs it.
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: "Plan your whole weekend|Select a Festival"
+    timeout: 90000
+- extendedWaitUntil:
+    visible: "__wait_for_ota_download__"
+    timeout: 30000
+    optional: true
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: "Plan your whole weekend|Select a Festival"
+    timeout: 90000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/00-intro
+- runFlow:
+    when:
+      visible: "Plan your whole weekend"
+    commands:
+      - tapOn: "Skip intro"
+- extendedWaitUntil:
+    visible: "Select a Festival"
+    timeout: 30000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/01-festival-picker
+# North Coast has artist photos on about half its sets.
+# At large Dynamic Type a festival card is taller than half the screen and its
+# centre sits under the tab bar, so a plain tap lands on a tab. Centre it first.
+- scrollUntilVisible:
+    element:
+      id: "festival-card-nc-2026"
+    centerElement: true
+- tapOn:
+    id: "festival-card-nc-2026"
+- extendedWaitUntil:
+    visible:
+      text: "Timeline|Cards"
+    timeout: 150000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/02-guest-schedule
+
+- openLink: "festie://register"
+- tapOn:
+    text: "^Open$"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/02b-register
+- openLink: "festie://forgot-password"
+- tapOn:
+    text: "^Open$"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/02c-forgot-password
+- tapOn:
+    text: "Picks"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/02d-guest-picks
+
+# Sign in. iOS traps (see ios-smoke.yaml): the password testID is hidden on
+# secure fields, pressKey Enter does not submit, and the keyboard covers the
+# button, so dismiss it by tapping the subtitle first.
+- openLink: "festie://login"
+# iOS asks "Open in Festie?" for a custom-scheme link opened from outside.
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "Sign in to your account"
+    timeout: 30000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/03-login
+- tapOn:
+    id: "login-username-input"
+- inputText: "${TEST_USERNAME}"
+# Dismiss the keyboard by tapping the subtitle: hideKeyboard fails at large
+# Dynamic Type sizes, where the keyboard covers the password field.
+- tapOn:
+    text: "Sign in to your account"
+# The visible "Password" label is still in XCUITest's tree (accessible={false}
+# hides it from VoiceOver only), and it comes first, so aim below it.
+- tapOn:
+    text: "Password"
+    below:
+      text: "Password"
+- inputText: "${TEST_PASSWORD}"
+- tapOn:
+    text: "Sign in to your account"
+- tapOn:
+    text: "^Sign in$"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    notVisible: "Sign in to your account"
+    timeout: 30000
+
+- runFlow:
+    file: _surfaces.yaml
+    env:
+      THEME: stage
+- runFlow:
+    file: _timed.yaml
+    env:
+      THEME: stage
+- runFlow:
+    file: _routes.yaml
+    env:
+      THEME: stage
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 30000
+
+- tapOn: "Account"
+- scrollUntilVisible:
+    element:
+      id: "daylight-switch"
+    timeout: 20000
+# The row title is plain text; only the Switch toggles the theme.
+- tapOn:
+    id: "daylight-switch"
+- waitForAnimationToEnd
+
+- runFlow:
+    file: _surfaces.yaml
+    env:
+      THEME: daylight
+- runFlow:
+    file: _timed.yaml
+    env:
+      THEME: daylight
+- runFlow:
+    file: _routes.yaml
+    env:
+      THEME: daylight
+
+# Theme and session must survive a cold relaunch.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Schedule"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/99-daylight-relaunch

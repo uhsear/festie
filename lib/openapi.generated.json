@@ -1,0 +1,3527 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Festie API",
+    "version": "1.0",
+    "description": "Real-time festival schedule planner — coordinate sets with your crew.",
+    "contact": {
+      "name": "Asir Khan",
+      "url": "https://festie.us"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Local dev"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Session token from /auth/login or /auth/register"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "festie_session",
+        "description": "httpOnly session cookie"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "null"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "status": {
+                "type": "integer"
+              },
+              "code": {
+                "type": "string",
+                "description": "Machine-readable error code"
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "Whether the client should retry this request"
+              }
+            }
+          }
+        }
+      },
+      "Success": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "Response payload"
+          },
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "type": "object",
+            "description": "Optional metadata (pagination, etc.)"
+          }
+        }
+      },
+      "Day": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Set"
+            }
+          }
+        }
+      },
+      "Set": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "stageId": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string",
+            "nullable": true
+          },
+          "endTime": {
+            "type": "string",
+            "nullable": true
+          },
+          "linkUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "avatarUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "email": {
+            "nullable": true,
+            "type": "string"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "venmoHandle": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cashappCashtag": {
+            "nullable": true,
+            "type": "string"
+          },
+          "paypalHandle": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "name",
+          "avatarUrl",
+          "email",
+          "emailVerified",
+          "venmoHandle",
+          "cashappCashtag",
+          "paypalHandle"
+        ],
+        "additionalProperties": false
+      },
+      "Stage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "nullable": true,
+            "type": "string"
+          },
+          "latitude": {
+            "nullable": true,
+            "type": "number"
+          },
+          "longitude": {
+            "nullable": true,
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "color",
+          "latitude",
+          "longitude"
+        ],
+        "additionalProperties": false
+      },
+      "Artist": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "links": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "FestivalSet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "artist": {
+            "nullable": true,
+            "type": "string"
+          },
+          "artists": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "links": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "stageId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "startTime": {
+            "nullable": true,
+            "type": "string"
+          },
+          "endTime": {
+            "nullable": true,
+            "type": "string"
+          },
+          "linkUrl": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "artist",
+          "artists",
+          "stageId",
+          "startTime",
+          "endTime",
+          "linkUrl"
+        ],
+        "additionalProperties": false
+      },
+      "FestivalDepth1": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "color": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "latitude": {
+                  "nullable": true,
+                  "type": "number"
+                },
+                "longitude": {
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "color",
+                "latitude",
+                "longitude"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "sets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "artist": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "artists": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "links": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "stageId": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "startTime": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "endTime": {
+                        "nullable": true,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "artist",
+                      "artists",
+                      "stageId",
+                      "startTime",
+                      "endTime"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "label",
+                "date",
+                "sets"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "mapConfig": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "center": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    }
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bounds": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          }
+                        ]
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          }
+                        ]
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "amenities": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "FeatureCollection"
+                    ]
+                  },
+                  "features": {
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "Feature"
+                          ]
+                        },
+                        "geometry": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "Point"
+                              ]
+                            },
+                            "coordinates": {
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": -180,
+                                    "maximum": 180
+                                  },
+                                  {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  }
+                                ]
+                              },
+                              "minItems": 2,
+                              "maxItems": 2
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "coordinates"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 100
+                            },
+                            "amenityType": {
+                              "type": "string",
+                              "enum": [
+                                "water",
+                                "medical",
+                                "toilet",
+                                "food",
+                                "atm",
+                                "entrance",
+                                "exit",
+                                "info",
+                                "charging"
+                              ]
+                            },
+                            "label": {
+                              "type": "string",
+                              "maxLength": 200
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "amenityType",
+                            "label"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "geometry",
+                        "properties"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "features"
+                ],
+                "additionalProperties": false
+              },
+              "zones": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "FeatureCollection"
+                    ]
+                  },
+                  "features": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "Feature"
+                          ]
+                        },
+                        "geometry": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "Polygon"
+                              ]
+                            },
+                            "coordinates": {
+                              "maxItems": 50,
+                              "type": "array",
+                              "items": {
+                                "maxItems": 1000,
+                                "type": "array",
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      }
+                                    ]
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "coordinates"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "properties": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "geometry"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "features"
+                ],
+                "additionalProperties": false
+              },
+              "siteplan": {
+                "type": "object",
+                "properties": {
+                  "imageUrl": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "format": "starts_with",
+                    "pattern": "^https:\\/\\/.*"
+                  },
+                  "corners": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        }
+                      ]
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "imageUrl",
+                  "corners",
+                  "opacity"
+                ],
+                "additionalProperties": false
+              },
+              "offlineBasemap": {
+                "type": "object",
+                "properties": {
+                  "pmtilesUrl": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "format": "starts_with",
+                    "pattern": "^https:\\/\\/.*"
+                  },
+                  "attribution": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "pmtilesUrl"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "location",
+          "stages",
+          "days",
+          "mapConfig",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Festival": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "b2bSeparator": {
+            "type": "string"
+          },
+          "timeZone": {
+            "nullable": true,
+            "type": "string"
+          },
+          "mapConfig": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "center": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    }
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "bounds": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          }
+                        ]
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          }
+                        ]
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "amenities": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "FeatureCollection"
+                    ]
+                  },
+                  "features": {
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "Feature"
+                          ]
+                        },
+                        "geometry": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "Point"
+                              ]
+                            },
+                            "coordinates": {
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": -180,
+                                    "maximum": 180
+                                  },
+                                  {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  }
+                                ]
+                              },
+                              "minItems": 2,
+                              "maxItems": 2
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "coordinates"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 100
+                            },
+                            "amenityType": {
+                              "type": "string",
+                              "enum": [
+                                "water",
+                                "medical",
+                                "toilet",
+                                "food",
+                                "atm",
+                                "entrance",
+                                "exit",
+                                "info",
+                                "charging"
+                              ]
+                            },
+                            "label": {
+                              "type": "string",
+                              "maxLength": 200
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "amenityType",
+                            "label"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "geometry",
+                        "properties"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "features"
+                ],
+                "additionalProperties": false
+              },
+              "zones": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "FeatureCollection"
+                    ]
+                  },
+                  "features": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "Feature"
+                          ]
+                        },
+                        "geometry": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "Polygon"
+                              ]
+                            },
+                            "coordinates": {
+                              "maxItems": 50,
+                              "type": "array",
+                              "items": {
+                                "maxItems": 1000,
+                                "type": "array",
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number",
+                                        "minimum": -180,
+                                        "maximum": 180
+                                      },
+                                      {
+                                        "type": "number",
+                                        "minimum": -90,
+                                        "maximum": 90
+                                      }
+                                    ]
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "coordinates"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "properties": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "geometry"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "features"
+                ],
+                "additionalProperties": false
+              },
+              "siteplan": {
+                "type": "object",
+                "properties": {
+                  "imageUrl": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "format": "starts_with",
+                    "pattern": "^https:\\/\\/.*"
+                  },
+                  "corners": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              {
+                                "type": "number",
+                                "minimum": -90,
+                                "maximum": 90
+                              }
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        }
+                      ]
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "imageUrl",
+                  "corners",
+                  "opacity"
+                ],
+                "additionalProperties": false
+              },
+              "offlineBasemap": {
+                "type": "object",
+                "properties": {
+                  "pmtilesUrl": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "format": "starts_with",
+                    "pattern": "^https:\\/\\/.*"
+                  },
+                  "attribution": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "pmtilesUrl"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "color": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "latitude": {
+                  "nullable": true,
+                  "type": "number"
+                },
+                "longitude": {
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "color",
+                "latitude",
+                "longitude"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dayIndex": {
+                  "type": "number"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "sets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "artist": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "artists": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "links": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "stageId": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "startTime": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "endTime": {
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "linkUrl": {
+                        "nullable": true,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "artist",
+                      "artists",
+                      "stageId",
+                      "startTime",
+                      "endTime",
+                      "linkUrl"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "dayIndex",
+                "label",
+                "date",
+                "sets"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "location",
+          "b2bSeparator",
+          "timeZone",
+          "mapConfig",
+          "createdAt",
+          "updatedAt",
+          "stages",
+          "days"
+        ],
+        "additionalProperties": false
+      },
+      "Crew": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "festivalId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "maxMembers": {
+            "type": "number"
+          },
+          "reformedFrom": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "homeBaseLocation": {
+            "nullable": true,
+            "type": "string"
+          },
+          "homeBaseTime": {
+            "nullable": true,
+            "type": "string"
+          },
+          "homeBaseUpdatedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "photoAlbumUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "totem_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "totem_emoji": {
+            "nullable": true,
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ]
+          },
+          "joinedAt": {
+            "type": "string"
+          },
+          "inviteCode": {
+            "type": "string"
+          },
+          "inviteExpiresAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "avatarKey": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "avatarVersion": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "member"
+                  ]
+                },
+                "joinedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "userId",
+                "username",
+                "name",
+                "avatarKey",
+                "avatarVersion",
+                "role"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "memberCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "festivalId",
+          "name",
+          "owner",
+          "createdBy",
+          "reformedFrom",
+          "createdAt",
+          "updatedAt",
+          "homeBaseLocation",
+          "homeBaseTime",
+          "homeBaseUpdatedAt",
+          "photoAlbumUrl",
+          "totem_name",
+          "totem_emoji",
+          "members",
+          "memberCount"
+        ],
+        "additionalProperties": false
+      },
+      "CrewMember": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatarKey": {
+            "nullable": true,
+            "type": "string"
+          },
+          "avatarVersion": {
+            "nullable": true,
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ]
+          },
+          "joinedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "username",
+          "name",
+          "avatarKey",
+          "avatarVersion",
+          "role"
+        ],
+        "additionalProperties": false
+      },
+      "MeetingPoint": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "meet_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "stage_reference": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expires_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "latitude": {
+            "nullable": true,
+            "type": "number"
+          },
+          "longitude": {
+            "nullable": true,
+            "type": "number"
+          },
+          "recurs_daily": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "creator_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "crew_id",
+          "created_by",
+          "label",
+          "location",
+          "type",
+          "meet_at",
+          "stage_reference",
+          "expires_at",
+          "latitude",
+          "longitude",
+          "recurs_daily",
+          "active",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "FestivalListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "stageCount": {
+            "type": "number"
+          },
+          "dayCount": {
+            "type": "number"
+          },
+          "startDate": {
+            "nullable": true,
+            "type": "string"
+          },
+          "endDate": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "location",
+          "stageCount",
+          "dayCount",
+          "startDate",
+          "endDate"
+        ],
+        "additionalProperties": false
+      },
+      "PickPriority": {
+        "type": "string",
+        "enum": [
+          "must",
+          "want-to-see",
+          "maybe"
+        ]
+      },
+      "Profile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "festivalId": {
+            "type": "string"
+          },
+          "userId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "picks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "must",
+                "want-to-see",
+                "maybe"
+              ]
+            }
+          },
+          "notes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "reminders": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "festivalId",
+          "userId",
+          "name",
+          "avatarUrl",
+          "picks",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CrewPoll": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "closes_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "vote_count": {
+            "type": "string"
+          },
+          "votes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "option": {
+                  "nullable": true,
+                  "type": "number"
+                },
+                "user_id": {
+                  "nullable": true,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "option",
+                "user_id"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "crew_id",
+          "created_by",
+          "question",
+          "options",
+          "closes_at",
+          "closed",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "CrewPollVote": {
+        "type": "object",
+        "properties": {
+          "option": {
+            "nullable": true,
+            "type": "number"
+          },
+          "user_id": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "option",
+          "user_id"
+        ],
+        "additionalProperties": false
+      },
+      "CrewExpense": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "paid_by": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "split_with": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "category": {
+            "type": "string"
+          },
+          "planned": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "paid_by_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "crew_id",
+          "paid_by",
+          "description",
+          "amount",
+          "split_with",
+          "category",
+          "planned",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "CrewSettlementPlan": {
+        "type": "object",
+        "properties": {
+          "balances": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "balance": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "userId",
+                "username",
+                "balance"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "settlements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fromUserId": {
+                  "type": "string"
+                },
+                "fromName": {
+                  "type": "string"
+                },
+                "toUserId": {
+                  "type": "string"
+                },
+                "toName": {
+                  "type": "string"
+                },
+                "amountCents": {
+                  "type": "number"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "payeeHandles": {
+                  "type": "object",
+                  "properties": {
+                    "venmo": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "cashapp": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "paypal": {
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "venmo",
+                    "cashapp",
+                    "paypal"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "fromUserId",
+                "fromName",
+                "toUserId",
+                "toName",
+                "amountCents",
+                "amount",
+                "payeeHandles"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "balances",
+          "settlements"
+        ],
+        "additionalProperties": false
+      },
+      "CrewPackingItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "brought_by": {
+            "nullable": true,
+            "type": "string"
+          },
+          "claimed": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "creator_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "crew_id",
+          "created_by",
+          "label",
+          "brought_by",
+          "claimed",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "CrewRideOffer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "driver": {
+            "nullable": true,
+            "type": "string"
+          },
+          "seats": {
+            "nullable": true,
+            "type": "number"
+          },
+          "depart_from": {
+            "nullable": true,
+            "type": "string"
+          },
+          "depart_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "note": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "creator_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "crew_id",
+          "created_by",
+          "driver",
+          "seats",
+          "depart_from",
+          "depart_at",
+          "note",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "CrewMemberStatus": {
+        "type": "object",
+        "properties": {
+          "crew_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "status": {
+            "nullable": true,
+            "type": "string"
+          },
+          "target_meeting_point_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "eta_minutes": {
+            "nullable": true,
+            "type": "number"
+          },
+          "note": {
+            "nullable": true,
+            "type": "string"
+          },
+          "latitude": {
+            "nullable": true,
+            "type": "number"
+          },
+          "longitude": {
+            "nullable": true,
+            "type": "number"
+          },
+          "location_captured_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "avatar_key": {
+            "nullable": true,
+            "type": "string"
+          },
+          "avatar_version": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "crew_id",
+          "user_id",
+          "status",
+          "target_meeting_point_id",
+          "eta_minutes",
+          "note",
+          "latitude",
+          "longitude",
+          "location_captured_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "CrewActivityEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "detail": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "crew_id",
+          "user_id",
+          "type",
+          "detail",
+          "created_at",
+          "username"
+        ],
+        "additionalProperties": false
+      },
+      "NotificationPrefs": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "crewUpdates": {
+            "type": "number"
+          },
+          "setReminders": {
+            "type": "number"
+          },
+          "scheduleChanges": {
+            "type": "number"
+          },
+          "lineupDrops": {
+            "type": "number"
+          },
+          "crewReformed": {
+            "type": "number"
+          },
+          "wrapReady": {
+            "type": "number"
+          },
+          "dndStart": {
+            "nullable": true,
+            "type": "string"
+          },
+          "dndEnd": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "crewUpdates",
+          "setReminders",
+          "scheduleChanges",
+          "lineupDrops",
+          "crewReformed",
+          "wrapReady",
+          "dndStart",
+          "dndEnd"
+        ],
+        "additionalProperties": false
+      },
+      "AuthEnvelope": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "name": {
+                "nullable": true,
+                "type": "string"
+              },
+              "avatarUrl": {
+                "nullable": true,
+                "type": "string"
+              },
+              "email": {
+                "nullable": true,
+                "type": "string"
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "venmoHandle": {
+                "nullable": true,
+                "type": "string"
+              },
+              "cashappCashtag": {
+                "nullable": true,
+                "type": "string"
+              },
+              "paypalHandle": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "avatarUrl",
+              "email",
+              "emailVerified",
+              "venmoHandle",
+              "cashappCashtag",
+              "paypalHandle"
+            ],
+            "additionalProperties": false
+          },
+          "token": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "additionalProperties": false
+      },
+      "RefreshTokenResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "name": {
+                "nullable": true,
+                "type": "string"
+              },
+              "avatarUrl": {
+                "nullable": true,
+                "type": "string"
+              },
+              "email": {
+                "nullable": true,
+                "type": "string"
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "venmoHandle": {
+                "nullable": true,
+                "type": "string"
+              },
+              "cashappCashtag": {
+                "nullable": true,
+                "type": "string"
+              },
+              "paypalHandle": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "username",
+              "name",
+              "avatarUrl",
+              "email",
+              "emailVerified",
+              "venmoHandle",
+              "cashappCashtag",
+              "paypalHandle"
+            ],
+            "additionalProperties": false
+          },
+          "token": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register new user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200
+                  },
+                  "confirmPassword": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 254,
+                        "format": "email",
+                        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          ""
+                        ]
+                      }
+                    ]
+                  },
+                  "dateOfBirth": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "tosAccepted": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                },
+                "required": [
+                  "username",
+                  "password",
+                  "confirmPassword",
+                  "dateOfBirth",
+                  "tosAccepted"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshTokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "username",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "423": {
+            "description": "Account locked"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh-token": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Exchange refresh token for new session + refresh token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "refreshToken"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tokens rotated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/expired refresh token"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get current user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Logout",
+        "responses": {
+          "200": {
+            "description": "Session invalidated"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh session token (requires valid session)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "New session token"
+          }
+        }
+      }
+    },
+    "/api/v1/festivals": {
+      "get": {
+        "tags": [
+          "Festivals"
+        ],
+        "summary": "List all festivals",
+        "responses": {
+          "200": {
+            "description": "Festival list (ETag-cached)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FestivalListItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/festivals/{id}": {
+      "get": {
+        "tags": [
+          "Festivals"
+        ],
+        "summary": "Get festival by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Festival data (full depth=2 document; depth=1 returns the FestivalDepth1 shape)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Festival"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{festivalId}": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "List profiles for festival",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "festivalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profile list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Profile"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{festivalId}/join": {
+      "post": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Join festival",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Profile created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{festivalId}/picks": {
+      "put": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Update picks (with ETag concurrency)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Picks updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version mismatch"
+          }
+        }
+      }
+    },
+    "/api/v1/crews": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "List user crews",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Crew list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Crew"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Create crew",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Crew created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Crew"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crews/join/{code}": {
+      "post": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Join crew by invite code",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Joined crew"
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/overlap": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Get crew pick overlap analysis",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Overlap data"
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/polls": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "List active crew polls",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Polls (with vote tallies)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "polls": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CrewPoll"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Create crew poll",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Poll created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "poll": {
+                      "$ref": "#/components/schemas/CrewPoll"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/expenses": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "List crew expenses",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expense ledger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrewExpense"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Add crew expense",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Expense created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrewExpense"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/expenses/settlement-plan": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Netted who-pays-whom settlement plan",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balances + settlements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrewSettlementPlan"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/packing": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "List crew packing items",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Packing board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CrewPackingItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Add packing item",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/CrewPackingItem"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/rides": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "List crew ride offers",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ride board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "offers": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CrewRideOffer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Add ride offer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offer created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "offer": {
+                      "$ref": "#/components/schemas/CrewRideOffer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/status": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "List crew member statuses",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member statuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statuses": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CrewMemberStatus"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Upsert my own status",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status upserted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "$ref": "#/components/schemas/CrewMemberStatus"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/activity": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Crew activity feed (cursor-paginated)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CrewActivityEntry"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/festivals/{festivalId}/calendar": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Calendar events JSON for native integration",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Calendar events"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/tokens": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Register FCM push token",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token registered"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/preferences": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get notification preferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPrefs"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Update notification preferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPrefs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/bulk/deactivate": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Bulk deactivate users",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userIds": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "required": [
+                  "userIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Results"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/bulk/archive-festivals": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Bulk archive festivals",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Results"
+          }
+        }
+      }
+    },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness probe (no DB, no auth)",
+        "responses": {
+          "200": {
+            "description": "Alive"
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check with metrics",
+        "responses": {
+          "200": {
+            "description": "Health status"
+          }
+        }
+      }
+    },
+    "/join/{code}": {
+      "get": {
+        "tags": [
+          "Deep Links"
+        ],
+        "summary": "Crew invite deep link (redirects to app)",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to app with joinCrew param"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Authentication and session management"
+    },
+    {
+      "name": "Festivals",
+      "description": "Festival CRUD and listing"
+    },
+    {
+      "name": "Profiles",
+      "description": "Festival participation, picks, notes"
+    },
+    {
+      "name": "Crews",
+      "description": "Crew management, invites, overlap"
+    },
+    {
+      "name": "Export",
+      "description": "Calendar and data export"
+    },
+    {
+      "name": "Notifications",
+      "description": "Push notifications and preferences"
+    },
+    {
+      "name": "Admin",
+      "description": "Admin operations"
+    },
+    {
+      "name": "Health",
+      "description": "Health checks and metrics"
+    },
+    {
+      "name": "Deep Links",
+      "description": "Universal link / deep link handlers"
+    }
+  ]
+}

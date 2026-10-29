@@ -1,0 +1,403 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, useWindowDimensions, type ScrollViewInstance } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import Button from './Button';
+import DisplayWords from './DisplayWords';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+
+/**
+ * One-time first-run intro. A 3-slide explainer shown over the app on first
+ * launch (gated by an AsyncStorage flag owned by the caller). Gives a cold
+ * install context — what Festie does — instead of dropping users on a bare
+ * festival picker. `onDone` fires for both Skip and Get started.
+ *
+ * Layout intent (design roadmap P2-1): the slide visual sits in the upper half
+ * and the value-first copy is anchored low (just above the controls) rather than
+ * dead-centered, so the screen doesn't read as a generic empty template. Slide 1
+ * leads with a product visual (a miniature of the picks/schedule surface); the
+ * remaining slides use a single accent glyph. Copy is single-sourced in `SLIDES`.
+ */
+interface Slide {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+  /** Slide 1 renders the product visual instead of the icon glyph. */
+  showProductVisual?: boolean;
+}
+
+const SLIDES: Slide[] = [
+  {
+    icon: 'calendar-outline',
+    title: 'Plan your whole weekend',
+    body: 'Pick the sets you want across every stage and see your whole weekend in one place.',
+    showProductVisual: true,
+  },
+  {
+    icon: 'people-outline',
+    title: 'Keep your crew together',
+    body: 'Compare schedules, set meeting points, and find each other when there’s no signal.',
+  },
+  {
+    icon: 'notifications-outline',
+    title: 'Reminders for your picks',
+    body: 'Get a reminder before each set, online or off.',
+  },
+];
+
+/** A miniature of the picks surface — a "Friday" day card with priority-tiered
+ *  set rows. Pure decoration (hidden from the a11y tree) that signals the
+ *  product instead of a generic centered icon. */
+function ProductVisual() {
+  const t = useTokens();
+  const styles = useStyles();
+  const rows: { color: string; w: number; time: string }[] = [
+    { color: t.colors.priority.must, w: 0.78, time: '8:30' },
+    { color: t.colors.priority.want, w: 0.62, time: '9:45' },
+    { color: t.colors.priority.maybe, w: 0.7, time: '11:00' },
+  ];
+  return (
+    <View style={styles.visualCard} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View style={styles.visualHeader}>
+        <Text style={styles.visualDay}>Friday</Text>
+        <View style={styles.visualPill}>
+          <Text style={styles.visualPillText}>3 picks</Text>
+        </View>
+      </View>
+      {rows.map((r, i) => (
+        <View key={i} style={styles.visualRow}>
+          <View style={[styles.visualDot, { backgroundColor: r.color }]} />
+          <View style={styles.visualBars}>
+            <View style={[styles.visualBar, { width: `${r.w * 100}%` }]} />
+            <View style={[styles.visualBarSub, { width: `${r.w * 64}%` }]} />
+          </View>
+          <Text style={styles.visualTime}>{r.time}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * DC16: Real horizontal paging pager. Slides are laid out in a horizontal
+ * ScrollView with pagingEnabled; `index` is driven by onMomentumScrollEnd so
+ * the dots always reflect where the user actually landed. The Next button
+ * remains as a secondary/keyboard path — it programmatically scrolls to the
+ * next page instead of toggling state directly, keeping both paths in sync.
+ */
+export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
+  const t = useTokens();
+  const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  const [index, setIndex] = useState(0);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+
+  const { width: screenWidth } = useWindowDimensions();
+  const previousWidth = useRef(screenWidth);
+  const isLast = index === SLIDES.length - 1;
+
+  // Scroll to the target page programmatically (used by the Next button).
+  const scrollToPage = useCallback(
+    (page: number) => {
+      scrollRef.current?.scrollTo({ x: page * screenWidth, animated: true });
+    },
+    [screenWidth],
+  );
+
+  // Update the dot indicator when a swipe lands on a page boundary.
+  const handleMomentumScrollEnd = useCallback(
+    (e: { nativeEvent: { contentOffset: { x: number } } }) => {
+      const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+      setIndex(page);
+    },
+    [screenWidth],
+  );
+
+  const handleNext = useCallback(() => {
+    if (isLast) {
+      onDone();
+    } else {
+      const nextPage = index + 1;
+      setIndex(nextPage);
+      scrollToPage(nextPage);
+    }
+  }, [isLast, index, onDone, scrollToPage]);
+
+  // Keep current slide aligned after rotation or split-screen resize.
+  useEffect(() => {
+    if (previousWidth.current === screenWidth) return;
+    previousWidth.current = screenWidth;
+    scrollRef.current?.scrollTo({ x: index * screenWidth, animated: false });
+  }, [index, screenWidth]);
+
+  const handleAccessibilityAction = useCallback(
+    (actionName: string) => {
+      const nextIndex =
+        actionName === 'increment'
+          ? Math.min(index + 1, SLIDES.length - 1)
+          : actionName === 'decrement'
+            ? Math.max(index - 1, 0)
+            : index;
+      if (nextIndex === index) return;
+      setIndex(nextIndex);
+      scrollToPage(nextIndex);
+    },
+    [index, scrollToPage],
+  );
+
+  return (
+    <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View style={styles.skipRow}>
+        <TouchableOpacity
+          testID="intro-skip"
+          style={styles.skipButton}
+          onPress={onDone}
+          accessibilityRole="button"
+          accessibilityLabel="Skip intro"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.skip}>Skip</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Paging ScrollView — each slide gets exactly one screen-width slot. */}
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        style={styles.pager}
+        contentContainerStyle={styles.pagerContent}
+        accessibilityRole="adjustable"
+        accessibilityLabel="Intro slides"
+        accessibilityValue={{ min: 1, max: SLIDES.length, now: index + 1, text: `Slide ${index + 1} of ${SLIDES.length}` }}
+        accessibilityActions={[
+          { name: 'increment', label: 'Next slide' },
+          { name: 'decrement', label: 'Previous slide' },
+        ]}
+        onAccessibilityAction={(event) => handleAccessibilityAction(event.nativeEvent.actionName)}
+      >
+        {SLIDES.map((slide, i) => (
+          <ScrollView
+            key={i}
+            style={{ width: screenWidth }}
+            contentContainerStyle={styles.slide}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            {/* Upper region. The product card (slide 1) anchors high — it has
+                enough visual mass to own the top third. The bare icon slides
+                center in the region instead: a 112px circle pinned to the top
+                of a mostly-empty screen reads as unfinished. */}
+            <View style={[styles.hero, !slide.showProductVisual && styles.heroCentered]}>
+              {slide.showProductVisual ? (
+                <ProductVisual />
+              ) : (
+                <View
+                  style={styles.iconCircle}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Ionicons name={slide.icon} size={88} color={t.colors.accent.aqua} />
+                </View>
+              )}
+            </View>
+
+            {/* Value-first copy, anchored low (just above the controls). */}
+            <View style={styles.copy}>
+              <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                <DisplayWords text={slide.title} fontSize={styles.title.fontSize} />
+              </Text>
+              <Text style={styles.text}>{slide.body}</Text>
+            </View>
+          </ScrollView>
+        ))}
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <View style={styles.dots}>
+          {SLIDES.map((_, i) => (
+            <View key={i} style={[styles.dot, i === index && styles.dotActive]} />
+          ))}
+        </View>
+        <Button label={isLast ? 'Get started' : 'Next'} onPress={handleNext} style={styles.button} />
+      </View>
+    </View>
+  );
+}
+
+const useStyles = makeStyles((t) => ({
+  overlay: {
+    ...({ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const),
+    backgroundColor: t.colors.bg.primary,
+    zIndex: 100,
+  },
+  skipRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingVertical: t.spacing[3],
+    paddingHorizontal: t.spacing[6],
+  },
+  skip: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
+  },
+  skipButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // DC16: pager container takes all remaining vertical space above the footer.
+  pager: {
+    flex: 1,
+  },
+  pagerContent: {
+    // alignItems stretch so each slide fills the pager's cross-axis (height).
+    // The pager itself gets height via flex:1, so this makes each slide fill
+    // that measured height without needing an explicit pixel value.
+    alignItems: 'stretch' as const,
+  },
+  // Each slide is exactly one screen-width wide (set inline from Dimensions).
+  // Height is inherited from the content container's alignItems: 'stretch'.
+  slide: {
+    flexGrow: 1,
+    paddingHorizontal: t.spacing[6],
+  },
+  // Upper region: visual sits in the top third, not dead-centered. flex:1
+  // fills remaining height so the copy block stays anchored at the bottom.
+  hero: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: t.spacing[10],
+  },
+  // Icon slides (2/3): center the small glyph in the hero region; the
+  // top-anchored layout only works when the visual fills the zone (slide 1).
+  heroCentered: {
+    justifyContent: 'center',
+    paddingTop: 0,
+  },
+  copy: {
+    gap: t.spacing[3],
+    paddingBottom: t.spacing[8],
+  },
+  // 176px circle / 88px glyph: a 112px circle centered in the ~500px hero
+  // region read as a small glyph lost in a void on device.
+  iconCircle: {
+    width: 176,
+    height: 176,
+    borderRadius: 88,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // aquaAlpha[12] (was [6]) gives enough fill to distinguish the circle
+    // shape from a pure-black (#0a0a0a) background. Border bumped to [20]
+    // so the container boundary reads clearly.
+    backgroundColor: t.colors.aquaAlpha[12],
+    borderWidth: 1,
+    borderColor: t.colors.aquaAlpha[20],
+  },
+  // ── Product visual (slide 1) ───────────────────────────────────────────────
+  visualCard: {
+    width: '100%',
+    maxWidth: 320,
+    padding: t.spacing[4],
+    gap: t.spacing[3],
+    borderRadius: t.radii.lg,
+    borderWidth: 1,
+    borderColor: t.colors.border.light,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  visualHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  visualDay: {
+    ...typeStyle('title'),
+    color: t.colors.text.primary,
+  },
+  visualPill: {
+    paddingHorizontal: t.spacing[3],
+    paddingVertical: t.spacing[1],
+    borderRadius: t.radii.pill,
+    backgroundColor: t.colors.aquaAlpha[20],
+    borderWidth: 1,
+    borderColor: t.colors.aquaAlpha[30],
+  },
+  visualPillText: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.aqua,
+  },
+  visualRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+    paddingVertical: t.spacing[2],
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.default,
+    backgroundColor: t.colors.bg.card,
+  },
+  visualDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  visualBars: {
+    flex: 1,
+    gap: t.spacing[2],
+  },
+  visualBar: {
+    height: 8,
+    borderRadius: t.radii.xs,
+    backgroundColor: t.colors.overlay[5],
+  },
+  visualBarSub: {
+    height: 6,
+    borderRadius: t.radii.xs,
+    backgroundColor: t.colors.overlay[3],
+  },
+  visualTime: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+  },
+  // ───────────────────────────────────────────────────────────────────────────
+  title: {
+    ...typeStyle('heading'),
+    color: t.colors.text.primary,
+  },
+  text: {
+    ...typeStyle('body'),
+    color: t.colors.text.secondary,
+  },
+  footer: {
+    gap: t.spacing[4],
+    paddingBottom: t.spacing[6],
+    paddingHorizontal: t.spacing[6],
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: t.spacing[2],
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    // border.light is only rgba(255,255,255,0.1) — near-invisible on #0a0a0a.
+    // text.muted keeps inactive dots a clear progress indicator in both themes.
+    backgroundColor: t.colors.text.muted,
+  },
+  dotActive: {
+    backgroundColor: t.colors.accent.aqua,
+    width: 20,
+    borderRadius: 9999,
+  },
+  // CTA layout only — fill/ink/radius live in components/Button (F8). Keeps the
+  // taller intro-CTA padding.
+  button: {
+    paddingVertical: t.spacing[4],
+  },
+}));

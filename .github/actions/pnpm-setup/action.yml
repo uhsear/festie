@@ -1,0 +1,52 @@
+name: pnpm setup
+description: >-
+  Set up Node and pnpm and restore the pnpm store cache for jobs that build the
+  packages/ workspace. Checkout is intentionally NOT included — callers must run
+  actions/checkout before this action.
+
+inputs:
+  node-version:
+    description: Node.js version to install.
+    required: false
+    default: '22'
+  pnpm-version:
+    description: >-
+      pnpm version to install. Must track the major in packages/package.json's
+      `packageManager` field (an explicit version is required here because this
+      action runs from the repo root, whose package.json deliberately has no
+      packageManager field).
+    required: false
+    default: '10'
+  node-cache:
+    description: >-
+      setup-node built-in cache. Set to 'npm' for jobs that also run `npm ci`
+      against the root npm project; leave empty otherwise.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ inputs.node-cache }}
+    - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      with:
+        version: ${{ inputs.pnpm-version }}
+        run_install: false
+    - name: Get pnpm store directory
+      shell: bash
+      run: |
+        # Query from packages/ (the real workspace); the root pnpm-workspace.yaml
+        # has no `packages:` field, so `pnpm store path` errors there. Swallow any
+        # error and fall back to the default store dir so the cache always has a path.
+        STORE_PATH="$(cd packages && pnpm store path --silent 2>/dev/null || true)"
+        if [ -z "$STORE_PATH" ]; then STORE_PATH="$HOME/.local/share/pnpm/store"; fi
+        echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_ENV"
+    - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: ${{ env.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('packages/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-

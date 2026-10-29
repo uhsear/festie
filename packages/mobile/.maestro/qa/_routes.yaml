@@ -1,0 +1,42 @@
+# Secondary routes reached by deep link, in the current theme. Read-only: the
+# flow only opens screens and never taps a submit, join or SOS control. Each
+# openLink fires the app's foreground backfill, so the waits also pace the
+# requests under the production rate limit (120 per 60 s).
+appId: us.festie.app
+---
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://festival-mode", SHOT: "${THEME}-50-festival-mode" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://grid", SHOT: "${THEME}-51-grid" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://crew-plan", SHOT: "${THEME}-52-crew-plan" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://crew-compare", SHOT: "${THEME}-53-crew-compare" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://plan-share", SHOT: "${THEME}-54-plan-share" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://find", SHOT: "${THEME}-55-find" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://map", SHOT: "${THEME}-56-map" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://compass", SHOT: "${THEME}-57-compass" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://wrap", SHOT: "${THEME}-58-wrap" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://join/QA0000", SHOT: "${THEME}-59-join-invalid" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://privacy", SHOT: "${THEME}-60-privacy" }
+- runFlow:
+    file: _route.yaml
+    env: { LINK: "festie://admin", SHOT: "${THEME}-61-admin" }

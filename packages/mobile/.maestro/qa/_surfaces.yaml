@@ -1,0 +1,121 @@
+# One pass over the signed-in surfaces in the current theme. Called twice by
+# ios-design-sweep.yaml with THEME=stage and THEME=daylight. Every step is
+# optional so a missing element costs one screenshot, not the whole pass.
+appId: us.festie.app
+---
+- tapOn:
+    text: "Schedule"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "schedule-screen"
+    timeout: 20000
+    optional: true
+- tapOn:
+    id: "segment-cards"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-10-cards
+
+# Set sheet with an artist photo, then one without. Search instead of
+# scrolling: the lineup is long and iOS scrolls slowly. The typed query must
+# not equal the artist name, or the input itself matches the tap.
+- tapOn:
+    text: "Search the lineup"
+    optional: true
+- inputText: "Lorenzo"
+- hideKeyboard:
+    optional: true
+# The card exposes one merged label ("Chris Lorenzo, STADIUM, TBA").
+- tapOn:
+    text: "Chris Lorenzo,.*"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-11-sheet-photo
+# Pull the sheet to its large detent, then scroll its content.
+- swipe:
+    start: "50%,58%"
+    end: "50%,12%"
+    duration: 600
+- waitForAnimationToEnd
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-11b-sheet-photo-large
+- scroll
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-12-sheet-photo-scrolled
+- tapOn:
+    text: "Close detail"
+    optional: true
+- waitForAnimationToEnd
+# Closing the sheet drops focus; refocus the field (the toggle now reads "Hide search").
+- tapOn:
+    text: "Search the lineup"
+    optional: true
+- eraseText
+- inputText: "Fishe"
+- hideKeyboard:
+    optional: true
+- tapOn:
+    text: "Fisher,.*"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-13-sheet-no-photo
+- tapOn:
+    text: "Close detail"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Hide search"
+    optional: true
+
+- tapOn:
+    id: "segment-timeline"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-14-timeline
+- tapOn:
+    id: "segment-cards"
+    optional: true
+
+- tapOn:
+    text: "Picks"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-20-picks
+
+- tapOn:
+    text: "Crew"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-30-crew
+- tapOn:
+    id: "crew-tab-members"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-31-crew-members
+- tapOn:
+    id: "crew-tab-plan"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-32-crew-plan
+- tapOn:
+    id: "crew-tab-money"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-33-crew-money
+- tapOn:
+    id: "crew-tab-logistics"
+    optional: true
+
+- tapOn:
+    text: "Account"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-40-account
+- scroll
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-41-account-scrolled

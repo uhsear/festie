@@ -1,0 +1,16 @@
+title = "Festie gitleaks config"
+
+# Extend the built-in gitleaks ruleset; only add a narrow allowlist below.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public/test-only fixtures with no real secrets: the Android google-services.json (public Firebase client config, shipped in every APK, key restricted by package/SHA) and the webhook PII test fixture (a hard-coded fake HMAC key used to exercise the PII-stripping path)."
+paths = [
+  '''packages/mobile/google-services\.json''',
+  '''tests/notifications-webhook-pii\.test\.ts''',
+]
+regexes = [
+  # Fake 32-hex reset token in tests/stores-festivals-lib-misc.test.ts.
+  '''^abcdef1234567890abcdef1234567890$''',
+]

@@ -1,0 +1,352 @@
+/**
+ * Prometheus metrics — opt-in. Safe if prom-client isn't installed
+ * (returns a no-op metrics object and /metrics returns 503).
+ *
+ * Exports:
+ *   createMetrics(ctx?) → { registry, httpHistogram, socketGauge, pgPoolGauge, ... }
+ *   metricsMiddleware(metrics) → Express middleware that records HTTP latency
+ *   metricsHandler(metrics) → Express route handler for GET /metrics
+ */
+
+import http from 'http';
+
+import { timingSafeEqualString } from './crypto-auth.js';
+
+let client: any = null;
+let available = false;
+try {
+  client = (await import('prom-client')).default;
+  available = true;
+} catch {
+  client = null;
+  available = false;
+}
+
+function createMetrics() {
+  if (!available) {
+    return {
+      available: false,
+      registry: null,
+      httpHistogram: null,
+      socketGauge: null,
+      pgPoolTotalGauge: null,
+      pgPoolIdleGauge: null,
+      pgPoolWaitingGauge: null,
+      errorCounter: null,
+      rateLimitCounter: null,
+      authFailuresCounter: null,
+      dbQueryHistogram: null,
+      rateLimitHitsCounter: null,
+      pushProviderOutageCounter: null,
+      reengagementWorkerErrorsCounter: null,
+      reengagementQueueDepthGauge: null,
+    };
+  }
+
+  const registry = new client.Registry();
+  const workerId = process.env.NODE_APP_INSTANCE !== undefined
+    ? String(process.env.NODE_APP_INSTANCE)
+    : (process.env.PM_ID !== undefined ? String(process.env.PM_ID) : '0');
+  registry.setDefaultLabels({ service: 'festie', worker: workerId });
+  client.collectDefaultMetrics({ register: registry, prefix: 'festie_' });
+
+  const httpHistogram = new client.Histogram({
+    name: 'festie_http_request_duration_seconds',
+    help: 'HTTP request duration in seconds',
+    labelNames: ['method', 'route', 'status'],
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  });
+  registry.registerMetric(httpHistogram);
+
+  const httpCounter = new client.Counter({
+    name: 'festie_http_requests_total',
+    help: 'Total HTTP requests',
+    labelNames: ['method', 'route', 'status'],
+  });
+  registry.registerMetric(httpCounter);
+
+  const socketGauge = new client.Gauge({
+    name: 'festie_socket_connected_clients',
+    help: 'Currently connected Socket.IO clients',
+  });
+  registry.registerMetric(socketGauge);
+
+  const pgPoolTotalGauge = new client.Gauge({
+    name: 'festie_pg_pool_total',
+    help: 'Total connections in the pg pool',
+  });
+  const pgPoolIdleGauge = new client.Gauge({
+    name: 'festie_pg_pool_idle',
+    help: 'Idle connections in the pg pool',
+  });
+  const pgPoolWaitingGauge = new client.Gauge({
+    name: 'festie_pg_pool_waiting',
+    help: 'Queries waiting for a pg connection',
+  });
+  registry.registerMetric(pgPoolTotalGauge);
+  registry.registerMetric(pgPoolIdleGauge);
+  registry.registerMetric(pgPoolWaitingGauge);
+
+  const errorCounter = new client.Counter({
+    name: 'festie_errors_total',
+    help: 'Unhandled/captured errors',
+    labelNames: ['kind'],
+  });
+  registry.registerMetric(errorCounter);
+
+  const rateLimitCounter = new client.Counter({
+    name: 'festie_rate_limit_hits_total',
+    help: 'Rate limit rejections',
+    labelNames: ['scope'],
+  });
+  registry.registerMetric(rateLimitCounter);
+
+  const rateLimitFallbackCounter = new client.Counter({
+    name: 'festie_rate_limit_fallback_total',
+    help: 'Rate limiter failed-over to in-memory cluster-unaware fallback',
+    labelNames: ['tier'],
+  });
+  registry.registerMetric(rateLimitFallbackCounter);
+
+  // --- fp_* namespace: auth/db/rate-limit observability counters ---
+  // Named fp_* to match the web-vitals histogram + future frontend-facing
+  // metrics. Coexist with the existing festie_* series (different names).
+
+  const authFailuresCounter = new client.Counter({
+    name: 'fp_auth_failures_total',
+    help: 'Authentication failures by reason (bad-password, expired-token, locked, ...)',
+    labelNames: ['reason'],
+  });
+  registry.registerMetric(authFailuresCounter);
+
+  const dbQueryHistogram = new client.Histogram({
+    name: 'fp_db_query_duration_seconds',
+    help: 'Database query duration per store/method',
+    labelNames: ['store', 'method'],
+    buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  });
+  registry.registerMetric(dbQueryHistogram);
+
+  const rateLimitHitsCounter = new client.Counter({
+    name: 'fp_rate_limit_hits_total',
+    help: 'Rate-limit hits by tier and action',
+    labelNames: ['tier', 'action'],
+  });
+  registry.registerMetric(rateLimitHitsCounter);
+
+  // --- push / re-engagement observability ---
+
+  /**
+   * Incremented when a push-provider batch has a high failure ratio that signals
+   * a provider outage rather than benign all-opt-out or zero-recipient conditions.
+   * Labels: provider (fcm | apns).
+   */
+  const pushProviderOutageCounter = new client.Counter({
+    name: 'fp_push_provider_outage_total',
+    help: 'Push batches where send-errors dominate (>50% of attempted sends failed), indicating a provider outage',
+    labelNames: ['provider'],
+  });
+  registry.registerMetric(pushProviderOutageCounter);
+
+  /**
+   * Incremented each time the BullMQ re-engagement worker marks a job as failed
+   * (after all retry attempts are exhausted or an unrecoverable error occurs).
+   */
+  const reengagementWorkerErrorsCounter = new client.Counter({
+    name: 'fp_reengagement_queue_worker_errors_total',
+    help: 'BullMQ re-engagement worker job failures (all attempts exhausted)',
+  });
+  registry.registerMetric(reengagementWorkerErrorsCounter);
+
+  /**
+   * Current number of jobs waiting in the re-engagement queue (waiting + delayed).
+   * Sampled periodically by startReengagementQueueSampler.
+   */
+  const reengagementQueueDepthGauge = new client.Gauge({
+    name: 'fp_reengagement_queue_depth',
+    help: 'Number of jobs currently waiting or delayed in the re-engagement BullMQ queue',
+  });
+  registry.registerMetric(reengagementQueueDepthGauge);
+
+  return {
+    available: true,
+    client,
+    registry,
+    httpHistogram,
+    httpCounter,
+    socketGauge,
+    pgPoolTotalGauge,
+    pgPoolIdleGauge,
+    pgPoolWaitingGauge,
+    errorCounter,
+    rateLimitCounter,
+    rateLimitFallbackCounter,
+    authFailuresCounter,
+    dbQueryHistogram,
+    rateLimitHitsCounter,
+    pushProviderOutageCounter,
+    reengagementWorkerErrorsCounter,
+    reengagementQueueDepthGauge,
+  };
+}
+
+/** Express middleware — records timing histogram + counter per request. */
+function metricsMiddleware(metrics: any) {
+  if (!metrics || !metrics.available) return (req: any, res: any, next: any) => next();
+  return function metricsMw(req: any, res: any, next: any) {
+    const end = metrics.httpHistogram.startTimer();
+    res.on('finish', () => {
+      const route = (req.route && req.route.path) || req.baseUrl || 'unknown';
+      const labels = {
+        method: req.method,
+        route: String(route).slice(0, 120),
+        status: String(res.statusCode),
+      };
+      end(labels);
+      metrics.httpCounter.inc(labels);
+    });
+    next();
+  };
+}
+
+/** Returns a GET /metrics handler, gated on a METRICS_TOKEN bearer token. */
+function metricsHandler(metrics: any) {
+  return async function metricsHandlerFn(req: any, res: any) {
+    if (!metrics || !metrics.available) {
+      res.status(503).type('text/plain').send('metrics unavailable (prom-client not installed)');
+      return;
+    }
+    if (!hasValidMetricsToken(req)) {
+      res.status(403).type('text/plain').send('forbidden');
+      return;
+    }
+    try {
+      res.set('Content-Type', metrics.registry.contentType);
+      res.end(await metrics.registry.metrics());
+    } catch (err: any) {
+      res.status(500).type('text/plain').send(`metrics error: ${err.message}`);
+    }
+  };
+}
+
+/**
+ * Gate for GET /metrics: requires `Authorization: Bearer <METRICS_TOKEN>`.
+ *
+ * Replaces an internal-IP allowlist that was spoofable in prod: behind the
+ * Cloudflare Tunnel (single-host topology, docs/adrs/014-pm2-cloudflare-tunnel-single-host.md)
+ * req.ip collapses to 127.0.0.1 for ALL traffic, and any caller can force
+ * that shape themselves by forging X-Forwarded-For — see the "spoofable /
+ * collapsed to 127.0.0.1" analysis in docs/security/trust-proxy-hardening.md.
+ * An IP check cannot tell an internal caller from a public one in this
+ * topology, so it is no longer trusted as a gate on its own.
+ *
+ * No METRICS_TOKEN configured => deny everyone (fail closed). Real
+ * Prometheus scraping uses the loopback-only per-worker listener
+ * (startMetricsListener below), which needs no gate since it is never
+ * reachable through the tunnel.
+ */
+function hasValidMetricsToken(req: any) {
+  const configured = process.env.METRICS_TOKEN;
+  if (!configured) return false;
+  const header = req?.headers?.authorization;
+  if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false;
+  const presented = header.slice('Bearer '.length);
+  if (!presented) return false;
+  return timingSafeEqualString(presented, configured);
+}
+
+/** Periodically sample pg pool + socket counts. Returns a stop() function. */
+function startMetricsSampler(metrics: any, { pool, io }: any = {}, intervalMs = 10_000) {
+  if (!metrics || !metrics.available) return () => {};
+  const sample = () => {
+    try {
+      if (pool && typeof pool.totalCount === 'number') {
+        metrics.pgPoolTotalGauge.set(pool.totalCount);
+        metrics.pgPoolIdleGauge.set(pool.idleCount || 0);
+        metrics.pgPoolWaitingGauge.set(pool.waitingCount || 0);
+      }
+      if (io && io.engine && typeof io.engine.clientsCount === 'number') {
+        metrics.socketGauge.set(io.engine.clientsCount);
+      }
+    } catch { /* ignore sampler errors */ }
+  };
+  sample();
+  const handle = setInterval(sample, intervalMs);
+  if (typeof handle.unref === 'function') handle.unref();
+  return () => clearInterval(handle);
+}
+
+/**
+ * Start a dedicated per-worker metrics HTTP listener bound to 127.0.0.1.
+ *
+ * Rationale: PM2 cluster mode shares the main HTTP port across workers, so
+ * scrapes to port 4000 hit a round-robin worker. prom-client AggregatorRegistry
+ * requires the cluster primary to orchestrate, but PM2 owns the primary. The
+ * simplest correct solution is to have each worker bind its own metrics port
+ * (basePort + workerId) and let Prometheus scrape all N targets directly.
+ *
+ * Only binds to 127.0.0.1. Prometheus must run on the same host or use
+ * a reverse proxy with IP allowlist.
+ */
+function startMetricsListener(metrics: any, { basePort = 9400, workerId = 0 }: any = {}) {
+  if (!metrics || !metrics.available) return () => {};
+  const port = basePort + Number(workerId);
+  const handler = async (req: any, res: any) => {
+    if (req.url !== '/metrics') {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('not found');
+      return;
+    }
+    try {
+      res.writeHead(200, { 'Content-Type': metrics.registry.contentType });
+      res.end(await metrics.registry.metrics());
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('metrics error: ' + err.message);
+    }
+  };
+  const srv = http.createServer(handler);
+  srv.listen({ port, host: '127.0.0.1', exclusive: true });
+  srv.on('error', (err: any) => {
+    if (err && err.code === 'EADDRINUSE') return;
+    throw err;
+  });
+  srv.unref();
+  return () => new Promise<void>((resolve) => srv.close(() => resolve()));
+}
+
+/**
+ * Periodically sample the re-engagement BullMQ queue depth (waiting + delayed).
+ * Call this after the queue is created; returns a stop() function.
+ * `bullQueue` must expose `.getWaitingCount()` and `.getDelayedCount()` (standard BullMQ Queue API).
+ */
+async function startReengagementQueueSampler(
+  metrics: any,
+  bullQueue: any,
+  intervalMs = 15_000,
+): Promise<() => void> {
+  if (!metrics || !metrics.available || !bullQueue) return () => {};
+  const sample = async () => {
+    try {
+      const [waiting, delayed] = await Promise.all([
+        bullQueue.getWaitingCount(),
+        bullQueue.getDelayedCount(),
+      ]);
+      metrics.reengagementQueueDepthGauge.set(waiting + delayed);
+    } catch { /* ignore sampler errors */ }
+  };
+  await sample();
+  const handle = setInterval(sample, intervalMs);
+  if (typeof handle.unref === 'function') handle.unref();
+  return () => clearInterval(handle);
+}
+
+export {
+  createMetrics,
+  metricsMiddleware,
+  metricsHandler,
+  startMetricsSampler,
+  startReengagementQueueSampler,
+  available,
+  startMetricsListener,
+};

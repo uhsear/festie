@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <path id="pin" fill-rule="evenodd" d="M256 282c-30-44-52-68-52-98a52 52 0 0 1 104 0c0 30-22 54-52 98zm0-78a20 20 0 1 0 0-40 20 20 0 0 0 0 40z"/>
+    <mask id="gap"><rect width="512" height="512" fill="#fff"/><use href="#pin" fill="#000" stroke="#000" stroke-width="20" stroke-linejoin="round"/></mask>
+  </defs>
+  <path fill="#ff3366" mask="url(#gap)" d="M218 236 256 300 212 372H132zM294 236 380 372H300l-44-72z"/>
+  <use href="#pin" fill="#00e8d0"/>
+</svg>

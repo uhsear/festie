@@ -1,0 +1,59 @@
+{
+  "name": "festie-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm --filter @festie/mobile dev",
+    "build": "pnpm --filter @festie/web build",
+    "lint": "pnpm -r --parallel lint",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "typecheck:fast": "pnpm -r --parallel typecheck:fast",
+    "test": "pnpm -r --parallel test"
+  },
+  "pnpm": {
+    "overrides": {
+      "serialize-javascript": ">=7.0.5",
+      "basic-ftp": ">=6.2.1",
+      "@types/react-dom": "~19.3.0",
+      "workbox-build": "^7.4.1",
+      "eslint": "^9.39.0",
+      "esbuild": ">=0.28.1",
+      "ws": ">=8.21.0",
+      "tmp": ">=0.2.6",
+      "qs": ">=6.16.1",
+      "undici": "^7.30.1",
+      "form-data": ">=4.0.6",
+      "uuid": ">=11.1.1",
+      "playwright": "1.60.0",
+      "playwright-core": "1.60.0",
+      "@xmldom/xmldom@0.8": "^0.8.15",
+      "@xmldom/xmldom@0.9": "^0.9.12",
+      "axios": "^1.18.0",
+      "brace-expansion@1": "^1.1.21",
+      "brace-expansion@2": "^2.1.7",
+      "brace-expansion@5": "^5.0.12",
+      "browserslist": "^4.28.7",
+      "fast-uri": "^3.1.9",
+      "ip-address": "^10.7.4",
+      "js-yaml@3": "^3.15.1",
+      "js-yaml@4": "^4.3.1",
+      "nanoid": "^3.3.18",
+      "postcss": "^8.5.18",
+      "shell-quote": ">=1.11.0",
+      "socket.io-parser": "^4.2.7",
+      "decode-uri-component": ">=0.5.0",
+      "source-map-js": ">=1.2.2",
+      "proxy-addr": ">=2.0.8",
+      "joi@17": "^17.13.8",
+      "joi@18": "^18.2.9",
+      "compression": ">=1.8.2",
+      "follow-redirects": ">=1.16.1",
+      "body-parser@1": "^1.20.9",
+      "@babel/core": ">=7.29.6"
+    }
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "latest",
+    "typescript": "~5.8.0"
+  }
+}

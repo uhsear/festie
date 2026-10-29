@@ -1,0 +1,31 @@
+{
+  "indent": "  ",
+  "sortFirst": [
+    "name",
+    "version",
+    "description",
+    "private",
+    "type",
+    "main",
+    "types",
+    "exports",
+    "scripts",
+    "dependencies",
+    "devDependencies",
+    "peerDependencies"
+  ],
+  "semverGroups": [],
+  "versionGroups": [
+    {
+      "label": "Runtime libs shared across backend, web, and mobile must not drift",
+      "dependencies": ["zod", "socket.io-client", "zustand"],
+      "packages": ["**"]
+    },
+    {
+      "label": "Everything else: versions may differ per package (peer ranges, tool majors)",
+      "dependencies": ["**"],
+      "packages": ["**"],
+      "isIgnored": true
+    }
+  ]
+}

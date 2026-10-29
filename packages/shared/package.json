@@ -1,0 +1,52 @@
+{
+  "name": "@festie/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./types/socket-events": "./src/types/socket-events.ts",
+    "./stores": "./src/stores/index.ts",
+    "./services": "./src/services/index.ts",
+    "./services/offlineQueue": "./src/services/offlineQueue.ts",
+    "./hooks": "./src/hooks/index.ts",
+    "./utils": "./src/utils/index.ts",
+    "./constants": "./src/constants/index.ts",
+    "./tokens": "./src/tokens/index.ts",
+    "./platform": "./src/platform/index.ts",
+    "./pwa": "./src/pwa/runtimeCaching.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "typecheck:fast": "tsgo --noEmit",
+    "gen:theme": "tsx scripts/gen-theme-css.ts",
+    "lint": "eslint src/ --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.3",
+    "zod": "^4.6.6",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "~19.3.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "jsdom": "^30.0.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "@typescript/native-preview": "latest",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "react": "^19.0.0"
+  }
+}

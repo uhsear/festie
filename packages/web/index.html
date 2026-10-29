@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="description"
+      content="Festie is a festival planner: browse the lineup, save Must/Want/Maybe picks, spot set conflicts, and plan with your crew."
+    />
+    <!-- Open Graph / Twitter share cards -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://festie.us/" />
+    <meta property="og:title" content="Festie — Festival Planner" />
+    <meta
+      property="og:description"
+      content="Browse the lineup, save your picks, spot set conflicts, and plan with your crew."
+    />
+    <meta property="og:image" content="https://festie.us/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta
+      property="og:image:alt"
+      content="Festie logo — a coral tent under an aqua map pin — with the tagline Plan festivals with your crew, in real time"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Festie — Festival Planner" />
+    <meta
+      name="twitter:description"
+      content="Browse the lineup, save your picks, spot set conflicts, and plan with your crew."
+    />
+    <meta name="twitter:image" content="https://festie.us/og-image.png" />
+    <meta
+      name="twitter:image:alt"
+      content="Festie logo — a coral tent under an aqua map pin — with the tagline Plan festivals with your crew, in real time"
+    />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Preload the Google Fonts CSS so the fetch starts early, then apply it
+         from /font-loader.js (async) so it never blocks first paint. The
+         media="print"+onload swap would violate CSP script-src-attr 'none'.
+         `display=swap` + the size-adjust fallback below cover the swap. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+    <script src="/font-loader.js" async></script>
+    <!-- Display face (Clash Display) is self-hosted (font-src 'self' — no CDN/CSP
+         change). Preload the Bold weight: it carries the FESTIE wordmark + every
+         heading on first paint. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/clash-display/clash-display-700.woff2" crossorigin />
+    <!-- app.css migrated to packages/web/src/styles/legacy.css (bundled by Vite) -->
+    <!-- Size-adjust fallback: matches x-height + ascent of Space Grotesk and
+         Clash Display so the system-ui fallback that renders during font swap
+         occupies the same vertical metrics. Prevents text reflow when the
+         web font loads. Values measured empirically against macOS
+         system-ui / Windows Segoe UI. -->
+    <style>
+      @font-face {
+        font-family: 'Space Grotesk Fallback';
+        src: local('Arial');
+        size-adjust: 101%;
+        ascent-override: 95%;
+        descent-override: 25%;
+        line-gap-override: 0%;
+        font-display: swap;
+      }
+      /* Clash Display — self-hosted display face (replaces Syncopate). Heavier
+         Bold cut + tight tracking fixes the thin-on-mobile display headings. */
+      @font-face {
+        font-family: 'Clash Display';
+        src: url('/fonts/clash-display/clash-display-400.woff2') format('woff2');
+        font-weight: 400;
+        font-display: swap;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Clash Display';
+        src: url('/fonts/clash-display/clash-display-500.woff2') format('woff2');
+        font-weight: 500;
+        font-display: swap;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Clash Display';
+        src: url('/fonts/clash-display/clash-display-600.woff2') format('woff2');
+        font-weight: 600;
+        font-display: swap;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Clash Display';
+        src: url('/fonts/clash-display/clash-display-700.woff2') format('woff2');
+        font-weight: 700;
+        font-display: swap;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Clash Display Fallback';
+        src: local('Arial');
+        size-adjust: 100%;
+        ascent-override: 96%;
+        descent-override: 24%;
+        line-gap-override: 0%;
+        font-display: swap;
+      }
+      body {
+        font-family: 'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
+      }
+    </style>
+    <!-- Persisted theme, applied before first paint (see /theme-init.js). -->
+    <script src="/theme-init.js"></script>
+    <title>Festie — Festival Planner</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+# iOS QA rig, step 1: build the reusable `qa-sim` Simulator app, then run the
+# design sweep on it. Run once per native version (runtime), not per change:
+#   npx eas-cli@latest workflow:run .eas/workflows/ios-qa-build.yml
+# Costs one iOS build. The build listens on the production channel, so later
+# OTAs reach it; re-test them with ios-qa-sweep.yml, which needs no build.
+name: ios-qa-build
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build_qa_sim:
+    type: build
+    params:
+      platform: ios
+      profile: qa-sim
+  design_sweep:
+    needs: [build_qa_sim]
+    type: maestro
+    environment: preview
+    env:
+      MAESTRO_TEST_USERNAME: ${{ env.TEST_USERNAME }}
+      MAESTRO_TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
+    params:
+      build_id: ${{ needs.build_qa_sim.outputs.build_id }}
+      flow_path: ['.maestro/qa/ios-design-sweep.yaml']

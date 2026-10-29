@@ -1,0 +1,14 @@
+# Open one deep link and screenshot it. iOS asks "Open in Festie?" first.
+appId: us.festie.app
+---
+- openLink: "${LINK}"
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "__settle__"
+    timeout: 5000
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ${MAESTRO_TESTS_DIR}/${SHOT}

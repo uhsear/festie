@@ -1,0 +1,47 @@
+// Copyright (c) 2026 Asir Khan. All rights reserved.
+// All Rights Reserved. See the LICENSE file.
+
+import { isInDndWindow } from './dnd.js';
+import { createRetryQueue } from './retry.js';
+import { initFirebase, createSendService } from './send.js';
+import { isApnsConfigured } from './apns.js';
+
+/**
+ * Create the notification service.
+ *
+ * @param deps
+ * @param deps.stores - DB stores (notificationPrefs, deviceTokens, notificationCounts, notificationLog, profiles, topicSubscriptions)
+ * @param deps.config - App config (FIREBASE_CREDENTIALS_PATH, PUBLIC_ORIGIN, ...)
+ * @param deps.log    - Logger with info/warn/debug/error
+ * @param deps._io  - Reserved for Socket.IO injection (unused today)
+ * @param deps.pushClient - OPTIONAL Firebase messaging client override for tests.
+ *   When provided, we skip initFirebase() and use this client directly. Must implement
+ *   `send(message)` and `sendEach(batch)` to match firebase-admin's Messaging surface.
+ *   When NOT provided (production path), behavior is identical to before: initFirebase()
+ *   runs, lazily requires firebase-admin, and returns null if FIREBASE_CREDENTIALS_PATH is unset.
+ */
+export function createNotificationService({ stores, config, log, _io, pushClient, promMetrics }: any) {
+  // DI: if a pushClient is provided (not null/undefined), use it directly.
+  // Otherwise fall back to the original initFirebase() path for production.
+  const messaging = (pushClient !== undefined && pushClient !== null)
+    ? pushClient
+    : initFirebase(config, log);
+
+  const retryQueue = createRetryQueue({ log });
+
+  const { send, sendToOfflineUsers, sendSilentSync, markRead } =
+    createSendService({ stores, config, log, messaging, retryQueue, promMetrics });
+
+  return {
+    send,
+    sendToOfflineUsers,
+    sendSilentSync,
+    markRead,
+    retryQueue,
+    // Either transport counts — emitter.ts and reengagement.ts gate every push
+    // on this flag, so FCM-only here would keep the APNs path dead.
+    isConfigured: !!messaging || isApnsConfigured(config),
+  };
+}
+
+export { isInDndWindow };

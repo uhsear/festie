@@ -1,0 +1,45 @@
+# EAS Workflow: build the iOS app for the Simulator on Expo's macOS cloud workers,
+# then run the Maestro smoke flow against it — automated iOS UI testing with NO Mac.
+# Run manually from Windows:  npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml
+#
+# Scheduled WEEKLY, and the frequency is a budget decision rather than a testing one.
+# Each run consumes one iOS build; the EAS free tier allows 15/month. Nightly (~30)
+# overruns it outright, and even 3x/week (~13) would leave almost nothing for actual
+# release builds — see packages/mobile/CLAUDE.md, which requires sign-off before
+# spending EAS credits. Weekly (~4/month) catches regressions while leaving ~11 for
+# releases. Raise it only if the owner decides the build budget is better spent here.
+# Still no `pull_request`/`push` trigger — an iOS build per push would exhaust the
+# month's allowance in a day.
+#
+# This is deliberately NOT a GitHub Actions job. GitHub-hosted macOS runners bill
+# private repos at a 10x minute multiplier ($0.062/min), whereas this runs on Expo's
+# own macOS infrastructure inside the plan already being paid for. A duplicate
+# GitHub Actions nightly (.github/workflows/ios-e2e-nightly.yml) was removed
+# 2026-08-19 for exactly that reason.
+#
+# Scheduled EAS workflows only run on the repository's DEFAULT branch (main).
+name: e2e-ios
+
+on:
+  schedule:
+    - cron: '17 7 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  build_ios_for_e2e:
+    type: build
+    params:
+      platform: ios
+      profile: e2e-test
+  maestro_test:
+    needs: [build_ios_for_e2e]
+    type: maestro
+    # Binds the EAS `preview` env so TEST_USERNAME / TEST_PASSWORD (EAS secret env
+    # vars) are available to the Maestro flow for the authed-screen coverage.
+    environment: preview
+    env:
+      MAESTRO_TEST_USERNAME: ${{ env.TEST_USERNAME }}
+      MAESTRO_TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
+    params:
+      build_id: ${{ needs.build_ios_for_e2e.outputs.build_id }}
+      flow_path: ['.maestro/ios-smoke.yaml']

@@ -1,0 +1,42 @@
+# iOS QA rig, step 2: re-run the design sweep on the newest `qa-sim` build,
+# with no new build. The app fetches the latest production OTA on first launch.
+#   npx eas-cli@latest workflow:run .eas/workflows/ios-qa-sweep.yml
+# Screenshots land in the "Maestro Test Results" artifact.
+# Large-text pass: add -F text_size=accessibility-extra-large (any simctl
+# content_size value) to check Dynamic Type layouts.
+name: ios-qa-sweep
+
+on:
+  workflow_dispatch:
+    inputs:
+      text_size:
+        type: string
+        required: false
+        default: ''
+        description: 'simctl content_size for the simulator, e.g. accessibility-extra-large'
+
+jobs:
+  find_qa_sim:
+    type: get-build
+    params:
+      platform: ios
+      profile: qa-sim
+      wait_for_in_progress: true
+  design_sweep:
+    needs: [find_qa_sim]
+    type: maestro
+    environment: preview
+    env:
+      MAESTRO_TEST_USERNAME: ${{ env.TEST_USERNAME }}
+      MAESTRO_TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
+    params:
+      build_id: ${{ needs.find_qa_sim.outputs.build_id }}
+      flow_path: ['.maestro/qa/ios-design-sweep.yaml']
+    hooks:
+      before_maestro_tests:
+        - name: Set Dynamic Type size
+          run: |
+            if [ -n "${{ inputs.text_size }}" ]; then
+              xcrun simctl list devices booted
+              xcrun simctl ui booted content_size "${{ inputs.text_size }}"
+            fi

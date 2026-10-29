@@ -1,0 +1,74 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EAS_USE_CACHE": "1",
+        "EXPO_USE_PRECOMPILED_MODULES": "1"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "environment": "preview",
+      "env": {
+        "EAS_USE_CACHE": "1",
+        "EXPO_USE_PRECOMPILED_MODULES": "1"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "channel": "production",
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "EAS_USE_CACHE": "1",
+        "EXPO_USE_PRECOMPILED_MODULES": "1"
+      }
+    },
+    "qa-sim": {
+      "channel": "production",
+      "environment": "production",
+      "distribution": "internal",
+      "autoIncrement": false,
+      "env": {
+        "EAS_USE_CACHE": "1",
+        "EXPO_USE_PRECOMPILED_MODULES": "1",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "e2e-test": {
+      "withoutCredentials": true,
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      },
+      "ios": {
+        "ascAppId": "6776245156"
+      }
+    }
+  }
+}

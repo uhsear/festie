@@ -1,0 +1,88 @@
+version: 2
+updates:
+  # Keep the SHA-pinned GitHub Actions current (and patched). Actions are pinned
+  # to full commit SHAs in .github/workflows/* for supply-chain safety; Dependabot
+  # bumps those SHAs (preserving the `# vX` tag comment) so pinning doesn't mean
+  # going stale on security fixes.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Application dependencies, both npm projects in ONE entry.
+  # The root (npm, backend) and /packages (pnpm workspace: web, mobile, shared)
+  # share runtime libs (zod, socket.io-client, zustand) that `npx syncpack lint`
+  # requires to stay in lockstep. With one entry per project, Dependabot bumped
+  # only one side per PR and every such PR failed the `quality` job on syncpack
+  # drift. `group-by: dependency-name` makes Dependabot open a single PR per
+  # dependency that updates it in every directory at once.
+  # Note: pnpm workspaces are declared under the `npm` ecosystem (Dependabot has
+  # no separate `pnpm` value). Dependency-type groups cannot be combined with
+  # `group-by`, so there is one PR per dependency; the limit below is raised to
+  # keep the first weekly run from being truncated. Security bumps still arrive
+  # individually.
+  #
+  # `/packages` is the pnpm WORKSPACE ROOT, not `/packages/*`. pnpm-lock.yaml
+  # lives at /packages, so a member-scoped update changed packages/*/package.json
+  # and left the lockfile alone: every job then failed on
+  # `pnpm install --frozen-lockfile` (ERR_PNPM_OUTDATED_LOCKFILE) before running
+  # a check. From the workspace root, Dependabot resolves the members through
+  # pnpm-workspace.yaml and updates the lockfile in the same commit.
+  - package-ecosystem: npm
+    directories:
+      - /
+      - /packages
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: chore
+    ignore:
+      # Expo pins the versions of its own SDK packages; bump these via
+      # `expo install --check` during a deliberate SDK upgrade, never piecemeal.
+      # (Only /packages has these; the patterns are inert at the root.)
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "react-native"
+      - dependency-name: "@expo/*"
+      # react and react-dom must equal the renderer bundled in react-native
+      # (react-native 0.88.0 ships react-native-renderer 19.3.0). A mismatch
+      # throws "Incompatible React versions" at launch and crash-loops the app;
+      # android-e2e run 40590090622 caught 19.2.8 against 19.2.3 on SDK 56. Web and shared
+      # stay on the same version so the workspace moves together. Bump all three
+      # with the Expo SDK upgrade, to the version `expo install --check` reports.
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      # typescript 7 is a hard block, not a preference: `npm run lint` fails with
+      # "typescript-eslint does not support TS 7.0" (typescript-eslint 8.70.0
+      # still peers on typescript >=4.8.4 <6.1.0, and no release widens it yet),
+      # and the `gen:api-types` CI gate throws
+      # "Cannot read properties of undefined (reading 'createKeywordTypeNode')"
+      # because TS 7's root export is only lib/version.cjs — the JS compiler API
+      # moved to typescript/unstable/ast/*, which openapi-typescript does not use.
+      # Unblocked when BOTH are true: typescript-eslint ships a peer range that
+      # covers 7.x, and scripts/gen-api-types.mjs no longer depends on a package
+      # that imports the removed root compiler API. All three workspace members
+      # are pinned to the 6.x line together, so the major has to move as one
+      # change once both blockers clear. Majors only; patch and minor updates to
+      # typescript must keep flowing.
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
+      # @types/node tracks the runtime. Prod, CI and engines run Node 22, so a
+      # newer major would type-check APIs that do not exist at run time. Move the
+      # major together with the Node runtime; patch and minor updates keep flowing.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
+    groups:
+      npm-deps:
+        patterns:
+          - "*"
+        group-by: dependency-name

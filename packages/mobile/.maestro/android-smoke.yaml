@@ -1,0 +1,241 @@
+# Deterministic, read-only Android route smoke. It uses the same hard assertions
+# as iOS and never performs a production mutation.
+appId: us.festie.app
+tags:
+  - smoke
+  - authed
+  - nightly
+env:
+  TEST_USERNAME: ${TEST_USERNAME}
+  TEST_PASSWORD: ${TEST_PASSWORD}
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Plan your whole weekend|Select a Festival"
+    timeout: 120000
+- takeScreenshot: 01-launch
+- runFlow:
+    when:
+      visible: "Plan your whole weekend"
+    commands:
+      - assertVisible: "Plan your whole weekend"
+      - tapOn:
+          id: "intro-skip"
+- extendedWaitUntil:
+    visible: "Select a Festival"
+    timeout: 30000
+- assertVisible: "Select a Festival"
+- takeScreenshot: 02-festival-picker
+- tapOn:
+    id: "festival-card-nc-2026"
+- extendedWaitUntil:
+    visible:
+      text: "Timeline|Cards"
+    timeout: 150000
+- waitForAnimationToEnd:
+    timeout: 6000
+- assertNotVisible: "Select a Festival"
+- takeScreenshot: 03-schedule-guest
+
+- openLink: "festie://register"
+- extendedWaitUntil:
+    visible: "Create your account"
+    timeout: 30000
+- takeScreenshot: 04-register
+- openLink: "festie://forgot-password"
+- extendedWaitUntil:
+    visible: "Reset your password|Forgot password"
+    timeout: 30000
+- takeScreenshot: 05-forgot-password
+- openLink: "festie://login"
+- extendedWaitUntil:
+    visible: "Sign in to your account"
+    timeout: 30000
+- tapOn:
+    id: "login-username-input"
+- inputText: "${TEST_USERNAME}"
+- hideKeyboard
+- tapOn:
+    id: "login-password-input"
+- inputText: "${TEST_PASSWORD}"
+- hideKeyboard
+- tapOn: "Sign in"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    notVisible: "Sign in to your account"
+    timeout: 30000
+
+# Exercise the real native tab controls before using deep links for secondary
+# routes. Stable screen IDs prevent a generic tab label from passing in the
+# wrong navigation state.
+- openLink: "festie://cards"
+- assertVisible:
+    id: "schedule-screen"
+- tapOn: "Picks"
+- assertVisible:
+    id: "picks-screen"
+- tapOn: "Crew"
+- assertVisible:
+    id: "crew-screen"
+- tapOn: "Account"
+- assertVisible:
+    id: "account-screen"
+- tapOn: "Schedule"
+- assertVisible:
+    id: "schedule-screen"
+
+- openLink: "festie://cards"
+- extendedWaitUntil:
+    visible:
+      id: "schedule-screen"
+    timeout: 30000
+- assertVisible:
+    id: "segment-cards"
+    selected: true
+- assertVisible: "Friday"
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 06-cards
+- tapOn:
+    text: "Day: Saturday"
+- assertVisible:
+    text: "Day: Saturday"
+    selected: true
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 07-cards-saturday
+- openLink: "festie://timeline"
+- extendedWaitUntil:
+    visible:
+      id: "segment-timeline"
+      selected: true
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 08-timeline
+- openLink: "festie://grid"
+- extendedWaitUntil:
+    visible: "Schedule grid"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 09-grid
+- openLink: "festie://picks"
+- assertVisible:
+    id: "picks-screen"
+- takeScreenshot: 10-picks
+- openLink: "festie://crew"
+- extendedWaitUntil:
+    visible:
+      id: "crew-tab-members"
+      selected: true
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 11-crew
+- openLink: "festie://crew-plan"
+- extendedWaitUntil:
+    visible: "Meet up"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 12-crew-plan
+- openLink: "festie://crew-compare"
+- extendedWaitUntil:
+    notVisible: "Loading crew picks…"
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      text: "No crew picks yet|Couldn't load crew picks|No picks on this day yet|Day: Saturday"
+    timeout: 30000
+- assertNotVisible:
+    text: "^No crew$"
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 13-crew-compare
+- openLink: "festie://festival-mode"
+- extendedWaitUntil:
+    visible: "Now & Next"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 14-now-next
+- openLink: "festie://find"
+- extendedWaitUntil:
+    visible:
+      id: "find-action-map"
+    timeout: 30000
+- assertVisible:
+    id: "find-action-compass"
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 15-find
+- openLink: "festie://map"
+- extendedWaitUntil:
+    visible:
+      id: "map-screen"
+    timeout: 30000
+- assertVisible:
+    id: "map-sos-fab"
+- extendedWaitUntil:
+    visible:
+      text: "Drop pin|Map needs the festival downloaded for offline.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 6000
+- assertNotVisible: "Find each other"
+- takeScreenshot: 16-map
+- openLink: "festie://compass"
+- extendedWaitUntil:
+    visible:
+      text: "Save a meeting point with a captured location.*"
+    timeout: 30000
+- assertNotVisible:
+    text: "Pick a crew and save a meeting point.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 17-compass
+- openLink: "festie://plan-share"
+- assertVisible: "Share plan"
+- tapOn: "Text crew"
+- assertVisible:
+    id: "plan-share-tab-text"
+    selected: true
+- extendedWaitUntil:
+    visible:
+      text: "Texting isn't available|No meeting point to text|Text the meeting point to your crew"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 18-plan-share
+- openLink: "festie://privacy"
+- extendedWaitUntil:
+    visible: "1. Data Controller & Contact Information"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 19-privacy
+- openLink: "festie://account"
+- extendedWaitUntil:
+    visible:
+      id: "account-screen"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 20-account
+- openLink: "festie://admin"
+- extendedWaitUntil:
+    notVisible: "Loading admin data"
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      text: "Users|Couldn't load admin data"
+    timeout: 30000
+- assertNotVisible: "Admins only"
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 21-admin

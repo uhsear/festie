@@ -1,0 +1,119 @@
+node_modules
+
+# Environment files
+.env*
+!.env.example
+# local backup copies of env/scripts (secrets)
+*.bak-*
+.env.local
+.env.production
+.env.*.local
+.env.deploy
+
+# Secrets / credentials
+*.pem
+*.key
+credentials*.json
+# Google Play / GCP service-account keys (never commit)
+*service-account*.json
+*-service-account.json
+festie-*.json
+play-store-key*.json
+google-play*.json
+
+# Python tooling caches (packages/mobile/store/play)
+__pycache__/
+*.pyc
+
+# Build outputs
+coverage/
+output/
+lhci-reports/
+.turbo/
+dist/
+dist.disabled/
+packages/web/dist/
+*.apk
+*.aab
+
+# Playwright debug scripts
+pw-*.js
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local editor/tool settings
+.claude/
+.agents/
+.mcp.json
+skills-lock.json
+mobile-loop-capture.js
+
+# Code review graph DB
+.code-review-graph/
+
+# Playwright MCP and test artifacts
+.playwright-mcp/
+*.png
+# Reviewed Linux baselines for deterministic responsive regression tests.
+!tests/__snapshots__/responsive-design.spec.ts/*.png
+# but DO track the mobile app icons/splash (required by EAS prebuild)
+!packages/mobile/assets/*.png
+# and DO track the Play Store listing assets (icon, feature graphic, screenshots)
+!packages/mobile/store/play/images/**/*.png
+# and DO track the web PWA install icons + apple-touch-icon (referenced by the
+# manifest/index.html — the global *.png ignore was silently dropping these,
+# which is why the installed PWA showed a blank icon)
+!packages/web/public/icons/*.png
+!packages/web/public/apple-touch-icon.png
+# and the social share image (og:image / twitter:image) and the brand kit
+!packages/web/public/og-image.png
+!docs/brand/*.png
+
+# Session logs and loop captures
+docs/session-logs/
+mobile-loop-*/
+
+*storybook.log
+storybook-static
+
+# Orphaned root pnpm lock — the real workspace is packages/ (uses packages/pnpm-lock.yaml). Root installs via npm.
+/pnpm-lock.yaml
+packages/*/pnpm-lock.yaml
+
+# Playwright auth storage-state (contains live session cookies — never commit)
+tests/e2e/.auth/
+
+# TypeScript incremental build cache (changes every build)
+*.tsbuildinfo
+
+# Local per-session state doc (operational; not for the public repo).
+# NOTE: do NOT ignore /context.md — that case-collides with the tracked public CONTEXT.md on Windows.
+/SESSION.md
+
+# Local session-bootstrap docs (SESSION/ARCHITECTURE/DEPENDENCIES/CONTEXT copies +
+# prompt). Holds operational metadata (prod host, deploy paths) — never publish.
+/projectstate/
+
+logs/.alert-state.json
+
+scripts/deploy/__pycache__/
+
+# Local instruction/config files — not for the public repo
+/CLAUDE.md
+/AGENTS.md
+/.cursorrules
+/.github/copilot-instructions.md
+
+# runtime output: never publish
+logs/
+public/uploads/
+
+# Licensed fonts: the ITF Free Font License forbids public redistribution.
+# They live in the private repo uhsear/festie-fonts; scripts/fetch-fonts.mjs copies them in.
+packages/mobile/assets/fonts/clash-display/
+packages/web/public/fonts/clash-display/
