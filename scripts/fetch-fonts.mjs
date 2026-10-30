@@ -12,12 +12,12 @@
 //   node scripts/fetch-fonts.mjs --optional  # warn and exit 0 instead
 //
 // Access, in order:
-//   FESTIE_FONTS_SSH_KEY  private deploy key, or a path to it (CI and EAS secrets) — cloned over SSH
+//   FESTIE_FONTS_SSH_KEY  private deploy key (GitHub Actions secret) — cloned over SSH
 //   FESTIE_FONTS_REPO     clone URL override
 //   default               https://github.com/uhsear/festie-fonts.git with the
 //                         machine's own git credentials
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,9 +39,7 @@ const work = mkdtempSync(join(tmpdir(), 'festie-fonts-'));
 try {
   const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
   let url = process.env.FESTIE_FONTS_REPO || 'https://github.com/uhsear/festie-fonts.git';
-  // The key itself (GitHub secret) or a path to it (EAS "file" variable).
-  const raw = process.env.FESTIE_FONTS_SSH_KEY;
-  const key = raw && !raw.includes('PRIVATE KEY') && existsSync(raw) ? readFileSync(raw, 'utf8') : raw;
+  const key = process.env.FESTIE_FONTS_SSH_KEY;
   if (key) {
     const keyFile = join(work, 'key');
     const hostsFile = join(work, 'known_hosts');
