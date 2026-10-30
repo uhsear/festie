@@ -273,7 +273,12 @@ function CrewViewInner() {
               Plan and setup
             </h2>
             {activeCrew.inviteCode && (
-              <CrewInviteBar inviteCode={activeCrew.inviteCode} crewId={activeCrew.id} isOwner={isOwner} />
+              <CrewInviteBar
+                inviteCode={activeCrew.inviteCode}
+                crewId={activeCrew.id}
+                isOwner={isOwner}
+                expiresAt={(activeCrew as { inviteExpiresAt?: string | null }).inviteExpiresAt}
+              />
             )}
 
             <Link

@@ -8,19 +8,18 @@ interface WrapHeroProps {
   detail?: string;
 }
 
-/** Editorial hero stat: one big count-up number, one label, one supporting line. */
+/** Single-line recap: a count-up number, its label, and the supporting facts. */
 export default function WrapHero({ value, label, detail }: WrapHeroProps) {
   const animated = useAnimatedNumber(value, { duration: 800, decimals: 0, startFrom: 0 });
   return (
-    <section aria-label={`${value} ${label}`} className="text-center py-4">
-      <div
-        className="font-display font-bold text-accent-aqua text-5xl leading-none tracking-[var(--letter-spacing-display)]"
-        aria-hidden="true"
-      >
+    <p aria-label={`${value} ${label}`} className="text-center text-sm text-text-secondary">
+      <span className="font-display font-bold text-accent-aqua" aria-hidden="true">
         {animated}
-      </div>
-      <div className="mt-2 text-lg font-display font-bold text-text-primary">{label}</div>
-      {detail && <p className="mt-1 text-sm text-text-secondary">{detail}</p>}
-    </section>
+      </span>{' '}
+      <span aria-hidden="true">
+        {label}
+        {detail && ` · ${detail}`}
+      </span>
+    </p>
   );
 }

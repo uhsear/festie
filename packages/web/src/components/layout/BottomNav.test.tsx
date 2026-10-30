@@ -1,14 +1,17 @@
+import type React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import BottomNav from './BottomNav';
 
-const mockNavigate = vi.fn();
 const mockLocation = { pathname: '/cards' };
 
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => mockLocation,
-  useNavigate: () => mockNavigate,
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 let mockUser: { id: string; username: string } | null = null;
@@ -88,11 +91,9 @@ describe('BottomNav', () => {
     expect(screen.getByLabelText('View Schedule')).toHaveAttribute('aria-current', 'page');
   });
 
-  it('navigates when a tab is clicked', async () => {
-    const user = userEvent.setup();
+  it('renders tabs as real links with hrefs', () => {
     render(<BottomNav />);
-    await user.click(screen.getByLabelText('View Schedule'));
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' });
+    expect(screen.getByRole('link', { name: 'View Schedule' })).toHaveAttribute('href', '/cards');
   });
 
   it('renders a navigation landmark', () => {
@@ -100,19 +101,19 @@ describe('BottomNav', () => {
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
   });
 
-  it('renders 4 nav buttons for guests (Schedule + Picks + Crew + Account)', () => {
+  it('renders 4 nav links for guests (Schedule + Picks + Crew + Account)', () => {
     render(<BottomNav />);
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     // Guests get the full tab set now (Wrap stays gated on isFestivalOver=false).
-    expect(within(nav).getAllByRole('button').length).toBe(4);
+    expect(within(nav).getAllByRole('link').length).toBe(4);
   });
 
-  it('renders 4 nav buttons for logged-in user', () => {
+  it('renders 4 nav links for logged-in user', () => {
     mockUser = { id: 'u1', username: 'alice' };
     render(<BottomNav />);
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     // Schedule + My Picks + Crew + Me
-    expect(within(nav).getAllByRole('button').length).toBe(4);
+    expect(within(nav).getAllByRole('link').length).toBe(4);
   });
 
   it('keeps every nav item keyboard-reachable (no roving tabindex)', () => {

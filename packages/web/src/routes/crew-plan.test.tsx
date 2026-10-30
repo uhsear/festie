@@ -159,11 +159,38 @@ describe('CrewPlanView', () => {
     expect(screen.getByText('Back by 2am')).toBeInTheDocument();
 
     // Who-picked-what's-next: both members, with the highest-priority label
-    expect(screen.getByText('Me')).toBeInTheDocument();
-    expect(screen.getByText('Ari')).toBeInTheDocument();
-    expect(screen.getAllByText('Disclosure').length).toBeGreaterThanOrEqual(1);
+    // One row per set, strongest priority, names joined.
+    expect(screen.getByText('Disclosure')).toBeInTheDocument();
+    expect(screen.getByText(/Me, Ari/)).toBeInTheDocument();
     expect(screen.getByText('Must')).toBeInTheDocument();
-    expect(screen.getByText('Maybe')).toBeInTheDocument();
+    expect(screen.queryByText('Maybe')).not.toBeInTheDocument();
+  });
+
+  it('groups picks by set, shows the stage, and links to the set', () => {
+    festivalState.stages = [{ id: 'st1', name: 'Main Stage' }];
+    for (const n of ['Jo', 'Kim', 'Lee']) {
+      (festivalState.allProfiles as unknown[]).push({
+        id: `p-${n}`,
+        userId: `u-${n}`,
+        festivalId: 'f1',
+        name: n,
+        picks: { s1: 'want-to-see' },
+        notes: {},
+        updatedAt: '',
+      });
+      (crewState.activeCrew as { members: unknown[] }).members.push({ id: `m-${n}`, userId: `u-${n}`, name: n });
+    }
+    render(<CrewPlanView />);
+    expect(screen.getByText(/Main Stage/)).toBeInTheDocument();
+    expect(screen.getByText(/Me, Jo \+3/)).toBeInTheDocument();
+    expect(screen.getAllByText('Disclosure')).toHaveLength(1);
+  });
+
+  it('offers a way forward when no picks exist', () => {
+    festivalState.allProfiles = [];
+    render(<CrewPlanView />);
+    expect(screen.getByText('Add picks from the schedule')).toBeInTheDocument();
+    expect(screen.getByText('Invite your crew')).toBeInTheDocument();
   });
 
   it('issues zero network requests (no fetch / XHR)', () => {

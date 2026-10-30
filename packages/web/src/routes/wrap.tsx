@@ -274,12 +274,30 @@ function WrapPageInner() {
       {tabBar}
       <div id="wrap-tab-panel" className="max-w-lg mx-auto flex flex-col gap-6 pt-4 pb-6">
         <header className="text-center space-y-1">
-          <div className="inline-flex items-center gap-2 text-accent-aqua text-xs uppercase tracking-[var(--letter-spacing-caps)]">
-            <Sparkles className="w-4 h-4" aria-hidden="true" />
-            Your Festival Wrap
-          </div>
           <h1 className="text-xl font-display font-bold text-text-primary leading-tight">{currentFestival.name}</h1>
         </header>
+
+        {/* Poster preview: the exact image Share exports (also the html-to-image source). */}
+        {stats.totalRated > 0 && (
+          <section className="flex flex-col gap-3">
+            <PosterPreview ref={posterRef}>
+              <WrapPoster
+                festivalName={currentFestival.name}
+                topSets={posterTopSets}
+                stats={{
+                  totalRated: stats.totalRated,
+                  stagesVisited: stats.stagesVisited,
+                  daysAttended: stats.daysAttended,
+                  totalHours,
+                }}
+              />
+            </PosterPreview>
+            <Button variant="primary" fullWidth isLoading={sharing} onClick={handleShare} className="min-h-[44px]">
+              <Share2 className="w-4 h-4" aria-hidden="true" />
+              Share your wrap
+            </Button>
+          </section>
+        )}
 
         {stats.totalRated > 0 && <WrapHero value={stats.totalRated} label="sets rated" detail={detail} />}
 
@@ -349,28 +367,6 @@ function WrapPageInner() {
             >
               Open the crew wrap
             </button>
-          </section>
-        )}
-
-        {/* Poster preview: the exact image Share exports (also the html-to-image source). */}
-        {stats.totalRated > 0 && (
-          <section className="flex flex-col gap-3">
-            <PosterPreview ref={posterRef}>
-              <WrapPoster
-                festivalName={currentFestival.name}
-                topSets={posterTopSets}
-                stats={{
-                  totalRated: stats.totalRated,
-                  stagesVisited: stats.stagesVisited,
-                  daysAttended: stats.daysAttended,
-                  totalHours,
-                }}
-              />
-            </PosterPreview>
-            <Button variant="primary" fullWidth isLoading={sharing} onClick={handleShare} className="min-h-[44px]">
-              <Share2 className="w-4 h-4" aria-hidden="true" />
-              Share your wrap
-            </Button>
           </section>
         )}
 

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, AlertCircle, Download, RefreshCw } from 'lucide-react';
+import { Check, AlertCircle, ChevronDown, Download, RefreshCw } from 'lucide-react';
 import { useOfflineReadinessStore } from '@festie/shared/stores/offlineReadinessStore';
 import type { ReadinessSection, SectionReadiness } from '@festie/shared/stores/offlineReadinessStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { timeAgo } from '@festie/shared/utils';
+import { useFestivalStore } from '@festie/shared/stores/festivalStore';
+import { isFestivalOver, timeAgo } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
 
 interface Props {
@@ -130,6 +131,10 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
   const downloadForOffline = useOfflineReadinessStore((s) => s.downloadForOffline);
   const activeCrewId = useCrewStore((s) => s.activeCrew?.id ?? null);
 
+  const currentFestival = useFestivalStore((s) => s.currentFestival);
+  const days = useFestivalStore((s) => s.days);
+  const [expanded, setExpanded] = useState(false);
+
   const isDownloading = downloadingFestivalId === festivalId;
 
   // 30s tick so "synced N ago" keeps advancing from the device clock.
@@ -163,6 +168,31 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
   const handleDownload = () => void downloadForOffline(festivalId, activeCrewId ?? undefined);
   // Per-step retry re-triggers the full download (store handles idempotency).
   const handleRetry = () => void downloadForOffline(festivalId, activeCrewId ?? undefined);
+
+  const allReady = !!readiness && SECTIONS.every(({ key }) => readiness[key]?.status === 'ready');
+  const collapsed = !expanded && !isDownloading && (allReady || isFestivalOver(currentFestival, days));
+  if (collapsed) {
+    const syncedTimes = SECTIONS.map(({ key }) => readiness?.[key]?.syncedAt).filter((t): t is number => t != null);
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        aria-expanded={false}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-xl border border-border bg-bg-card px-4 min-h-11 text-left text-sm text-text-secondary',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
+          className,
+        )}
+      >
+        <Check className="w-4 h-4 text-accent-aqua flex-shrink-0" aria-hidden="true" />
+        <span className="flex-1 min-w-0 truncate">
+          Saved for offline
+          {syncedTimes.length > 0 && ` · synced ${timeAgo(Math.max(...syncedTimes))}`}
+        </span>
+        <ChevronDown className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+      </button>
+    );
+  }
 
   return (
     <section
