@@ -19,6 +19,8 @@ interface Props {
    * nothing the user could do to make it ready.
    */
   pmtilesUrl?: string | null;
+  /** The festival is over: the checklist collapses to one summary row. */
+  festivalPast?: boolean;
 }
 
 const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
@@ -211,7 +213,7 @@ function StepRow({
  * Used in the picks tab (mobile mirror of web's OfflineReadinessCard) so the
  * crew can download before heading to the festival. No new dependencies.
  */
-export default function OfflineReadinessCard({ festivalId, pmtilesUrl = null }: Props) {
+export default function OfflineReadinessCard({ festivalId, pmtilesUrl = null, festivalPast = false }: Props) {
   const t = useTokens();
   const styles = useCardStyles();
 
@@ -252,6 +254,16 @@ export default function OfflineReadinessCard({ festivalId, pmtilesUrl = null }: 
     steps.push({ key: 'map', label: 'Offline map', section: mapSection, onRetry: () => void downloadMap() });
   }
 
+  // C9 — nothing left to do: one summary row, tap to expand the checklist.
+  const [expanded, setExpanded] = useState(false);
+  const lastSyncedAt = steps.reduce<number | null>(
+    (max, { section }) =>
+      section.status === 'ready' && section.syncedAt != null ? Math.max(max ?? 0, section.syncedAt) : max,
+    null,
+  );
+  const collapsed =
+    !expanded && lastSyncedAt != null && (festivalPast || steps.every(({ section }) => section.status === 'ready'));
+
   return (
     <View style={styles.card} accessibilityRole="none" accessibilityLabel="Download festival for offline">
       {/* Header row: title + download button */}
@@ -285,19 +297,34 @@ export default function OfflineReadinessCard({ festivalId, pmtilesUrl = null }: 
         </TouchableOpacity>
       </View>
 
-      {/* R18: vertical step list */}
-      <View style={styles.stepList} accessibilityRole="list">
-        {steps.map(({ key, label, section, onRetry }, i) => (
-          <View key={key} style={i < steps.length - 1 ? styles.stepBorder : undefined}>
-            <StepRow
-              label={label}
-              section={section}
-              tick={tick}
-              onRetry={section.status === 'error' ? onRetry : undefined}
-            />
-          </View>
-        ))}
-      </View>
+      {collapsed ? (
+        <TouchableOpacity
+          style={styles.summaryRow}
+          onPress={() => setExpanded(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Show offline download details"
+          accessibilityState={{ expanded: false }}
+        >
+          <Ionicons name="checkmark-circle" size={16} color={t.colors.accent.aqua} />
+          <Text style={styles.summaryText} numberOfLines={1}>
+            Saved for offline · synced {timeAgo(lastSyncedAt)}
+          </Text>
+          <Ionicons name="chevron-down" size={14} color={t.colors.text.muted} />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.stepList} accessibilityRole="list">
+          {steps.map(({ key, label, section, onRetry }, i) => (
+            <View key={key} style={i < steps.length - 1 ? styles.stepBorder : undefined}>
+              <StepRow
+                label={label}
+                section={section}
+                tick={tick}
+                onRetry={section.status === 'error' ? onRetry : undefined}
+              />
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -348,6 +375,18 @@ const useCardStyles = makeStyles((t) => ({
   },
   stepList: {
     marginTop: t.spacing[3],
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    marginTop: t.spacing[3],
+    minHeight: 44,
+  },
+  summaryText: {
+    ...typeStyle('caption'),
+    flex: 1,
+    color: t.colors.text.primary,
   },
   stepBorder: {
     borderBottomWidth: 1,

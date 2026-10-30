@@ -7,6 +7,7 @@ import { etaMinutes, formatStaleness } from '@festie/shared/utils';
 import type { CrewMemberStatus } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import Avatar from './Avatar';
 import Button from './Button';
 
 interface CrewStatusProps {
@@ -52,6 +53,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
 
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
   const statuses = useCrewStore((s) => s.crewStatuses);
+  const members = useCrewStore((s) => s.crewMembers);
   const loadStatuses = useCrewStore((s) => s.loadStatuses);
   const updateMyStatus = useCrewStore((s) => s.updateMyStatus);
 
@@ -406,6 +408,22 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
             );
           })}
         </View>
+      ) : members.length > 0 ? (
+        // C3 — nobody has shared a status: a compact roster beats an empty block.
+        <View
+          style={styles.emptyRow}
+          accessibilityRole="text"
+          accessibilityLabel={`No one has shared a status yet, ${members.length} member${members.length === 1 ? '' : 's'}`}
+        >
+          <View style={styles.emptyAvatars} accessible={false}>
+            {members.slice(0, 6).map((m) => (
+              <Avatar key={m.userId} name={m.name || m.username || 'Crew'} size="xs" borderColor={t.colors.bg.card} />
+            ))}
+          </View>
+          <Text style={styles.emptyText} numberOfLines={1}>
+            No one has shared a status yet · {members.length} member{members.length === 1 ? '' : 's'}
+          </Text>
+        </View>
       ) : null}
     </View>
   );
@@ -582,6 +600,19 @@ const useStyles = makeStyles((t) => ({
   },
   list: {
     gap: t.spacing[2],
+  },
+  emptyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  emptyAvatars: {
+    flexDirection: 'row',
+  },
+  emptyText: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+    flexShrink: 1,
   },
   statusRow: {
     flexDirection: 'row',

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { colorsDaylight } from '@festie/shared/tokens';
 import { buildMapHtml } from './mapDocument';
 import {
   MAPLIBRE_CSS_SRC,
@@ -74,6 +75,19 @@ describe('map document — no CDN runtime', () => {
     expect(raster.includes(PMTILES_JS_SRC)).toBe(false);
     expect(remote.includes(`<script>${PMTILES_JS_SRC}</script>`)).toBe(true);
     expect(local.includes(`<script>${PMTILES_JS_SRC}</script>`)).toBe(true);
+  });
+});
+
+describe('map document theme', () => {
+  it('keeps the dark ground for Stage and uses Daylight bg.primary for Daylight', () => {
+    const stage = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'stage');
+    const day = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'daylight');
+    expect(buildMapHtml(CENTER, RASTER_STYLE, null, false, null)).toBe(stage);
+    expect(stage).toContain('background: #080810; }');
+    expect(stage).toContain('rgba(8,8,16,0.9)');
+    expect(day).toContain(`background: ${colorsDaylight.bg.primary}; }`);
+    expect(day).toContain('rgba(244,244,247,0.9)');
+    expect(day).not.toContain('rgba(8,8,16,0.82)');
   });
 });
 

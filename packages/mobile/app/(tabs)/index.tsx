@@ -686,16 +686,6 @@ export default function TimelineScreen() {
         </View>
       ) : null}
 
-      {/* P1-5 — phase-aware home actions: re-prioritizes the crew's destinations
-          (picks / crew / find / Now & Next / wrap) by festival phase. Hidden when
-          the festival has no usable dates (phase === null). Folds behind the
-          filter toggle (DC1) — it's a setup action, not a mid-crowd one. */}
-      {phase && filtersOpen ? (
-        <View style={{ paddingHorizontal: hPad }}>
-          <PhaseHomeActions phase={phase} />
-        </View>
-      ) : null}
-
       {/* Day selector */}
       {days.length > 1 ? (
         <View style={styles.daysWrap}>
@@ -900,6 +890,17 @@ export default function TimelineScreen() {
     // single top of the screen, sitting above the consolidated control row.
     <View style={styles.container} testID="schedule-screen">
       <ScreenHeader title={currentFestival.name} icon="calendar-outline" right={headerActions} />
+      {/* P1-5 — phase-aware home actions: re-prioritizes the crew's destinations
+          (picks / crew / find / Now & Next / wrap) by festival phase. Hidden when
+          the festival has no usable dates (phase === null). Folds behind the
+          filter toggle (DC1) — it's a setup action, not a mid-crowd one. Sits
+          above the view switcher so it reads as the head of the Filters panel. */}
+      {phase && filtersOpen ? (
+        <View style={{ paddingHorizontal: hPad }}>
+          <PhaseHomeActions phase={phase} />
+        </View>
+      ) : null}
+
       {/* DC1 — one consolidated control row: LiveDot now-indicator, the
           view switcher, and the search/filter toggles. The search bar and the
           stage/phase filters fold inline below (in `controls`) only when their

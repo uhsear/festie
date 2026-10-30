@@ -44,6 +44,8 @@ export interface NowNextSelection {
   dayIndex: number | null;
   /** When the festival starts (earliest lineup set, else day 1). Set while `before`. */
   startsAt: number | null;
+  /** False when `startsAt` is only a day boundary (no set time known), so surfaces show the weekday, not a clock. */
+  startsAtTimed: boolean;
   /** Sets playing now, soonest-ending first. */
   current: DayOfSet[];
   /** Sets starting after now, soonest first, capped at `upcomingLimit`. */
@@ -97,7 +99,7 @@ export function selectNowNext({
 }: SelectNowNextInput): NowNextSelection {
   const dated = days.filter((d) => d?.date);
   if (!dated.length) {
-    return { phase: 'none', dayIndex: null, startsAt: null, current: [], upcoming: [], todayCount: 0 };
+    return { phase: 'none', dayIndex: null, startsAt: null, startsAtTimed: false, current: [], upcoming: [], todayCount: 0 };
   }
 
   const lineup: DayOfSet[] = [];
@@ -129,6 +131,7 @@ export function selectNowNext({
     dayIndex,
     startsAt:
       phase === 'before' ? (Number.isFinite(earliestSet) ? earliestSet : wallMs(dated[0]!.date, 0, timeZone)) : null,
+    startsAtTimed: Number.isFinite(earliestSet),
     current: source.filter((s) => s.start <= nowMs && s.end > nowMs).sort((a, b) => a.end - b.end),
     upcoming: source
       .filter((s) => s.start > nowMs)
@@ -156,6 +159,11 @@ export function fmtZonedDayClock(ms: number, timeZone?: string): string {
     new Date(ms),
   );
   return `${weekday} ${fmtZonedClock(ms, timeZone)}`;
+}
+
+/** `Sat` in the festival zone, or device-local when no zone is known. */
+export function fmtZonedWeekday(ms: number, timeZone?: string): string {
+  return new Intl.DateTimeFormat('en-US', { weekday: 'short', ...(timeZone ? { timeZone } : {}) }).format(new Date(ms));
 }
 
 /**

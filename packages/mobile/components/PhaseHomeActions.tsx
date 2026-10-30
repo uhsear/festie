@@ -61,7 +61,7 @@ interface PhaseHomeActionsProps {
  *  - live → Find each other (map/SOS/meeting) + crew lead; Now & Next stays one tap away
  *  - post → festival wrap + settle-up lead
  *
- * The destination set is fixed — phase only reorders and emphasizes the lead —
+ * The destination set is fixed — phase only reorders —
  * so nothing is ever hidden, only re-prioritized.
  */
 export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
@@ -77,15 +77,14 @@ export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
       <Text style={styles.heading}>{heading.label}</Text>
       <Text style={styles.hint}>{heading.hint}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {order.map((key, i) => {
+        {order.map((key) => {
           const a = ACTIONS[key];
-          const primary = i === 0;
-          const iconColor = a.danger ? t.colors.accent.coral : primary ? t.colors.accent.aqua : t.colors.text.secondary;
+          const iconColor = a.danger ? t.colors.accent.coral : t.colors.text.secondary;
           return (
             <TouchableOpacity
               key={key}
               testID={`phase-action-${key}`}
-              style={[styles.chip, primary && styles.chipPrimary]}
+              style={styles.chip}
               // Tab destinations switch tabs (navigate dedupes to the existing
               // tab instance); the root-level pushed routes (Now & Next, Find,
               // Wrap) must PUSH so Back pops cleanly to the schedule with the
@@ -99,7 +98,7 @@ export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
               accessibilityLabel={a.a11y}
             >
               <Ionicons name={a.icon} size={16} color={iconColor} />
-              <Text style={[styles.chipText, primary && styles.chipTextPrimary]} numberOfLines={1}>
+              <Text style={styles.chipText} numberOfLines={1}>
                 {a.label}
               </Text>
             </TouchableOpacity>
@@ -149,21 +148,8 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.secondary,
   },
-  // Emphasized lead action for the current phase — aqua-tinted fill + border so
-  // it carries more weight than the rest without becoming a loud solid CTA
-  // (coral is reserved for danger/SOS). Mirrors crew.tsx's overlapTogglePrimary.
-  chipPrimary: {
-    borderColor: t.colors.accent.aqua,
-    backgroundColor: t.colors.aquaAlpha[10],
-  },
   chipText: {
     ...typeStyle('label'),
     color: t.colors.text.secondary,
-  },
-  chipTextPrimary: {
-    // Re-spread at 700 so the Bold cut loads (bare fontWeight fake-bolds on
-    // Android over the weighted base family).
-    ...typeStyle('label', 700),
-    color: t.colors.accent.aqua,
   },
 }));
