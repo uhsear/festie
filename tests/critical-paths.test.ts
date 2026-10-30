@@ -718,7 +718,7 @@ describe('audit logging', { concurrency: 1 }, () => {
     const adminToken = await loginAdmin(server);
 
     // Create a festival
-    await server.request
+    const createRes = await server.request
       .post('/api/v1/admin/festivals')
       .set('x-user-token', adminToken)
       .set(TRUSTED_MUTATION_HEADER, '1')
@@ -735,16 +735,21 @@ describe('audit logging', { concurrency: 1 }, () => {
         ],
       })
       .expect(201);
-
-    // Allow async audit log write to complete
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const festId = createRes.body.data.id;
 
     // Query audit log directly
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });
     try {
-      const { rows } = await pool.query(
-        "SELECT * FROM audit_log WHERE action = 'festival:create' ORDER BY created_at DESC LIMIT 1"
-      );
+      // routes/festivals.ts audit() inserts fire-and-forget after the 201 is
+      // sent, so poll (bounded) instead of sleeping a fixed 100ms.
+      let rows: any[] = [];
+      for (let i = 0; i < 100 && rows.length === 0; i++) {
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 20));
+        ({ rows } = await pool.query(
+          "SELECT * FROM audit_log WHERE action = 'festival:create' AND target_id = $1",
+          [festId]
+        ));
+      }
       assert.ok(rows.length > 0, 'Audit log should contain festival:create entry');
       assert.ok(['admin', 'user'].includes(rows[0].actor_type), 'actor_type should be admin or user');
       assert.equal(rows[0].target_type, 'festival');
