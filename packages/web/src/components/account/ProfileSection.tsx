@@ -4,6 +4,7 @@ import { api } from '@festie/shared/services/api';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import { identityLabel } from '@festie/shared/utils';
 import Avatar from '../ui/Avatar';
 import { AtSign, Camera, Trash2, User } from 'lucide-react';
 
@@ -85,7 +86,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
         </h3>
 
         <div className="flex items-center gap-4">
-          <Avatar name={user.name || user.username || 'User'} image={user.avatar} size="lg" />
+          <Avatar name={identityLabel(user)} image={user.avatar} size="lg" />
 
           <div className="flex gap-2">
             <Button

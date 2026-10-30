@@ -23,6 +23,7 @@ export default function createUsersStore(pool: Pool, utils: any) {
     venmoHandle: 'venmo_handle',
     cashappCashtag: 'cashapp_cashtag',
     paypalHandle: 'paypal_handle',
+    publicSchedule: 'public_schedule',
   };
 
   const ALLOWED_UPDATE_KEYS = new Set([...Object.keys(COLUMN_MAP), ...Object.values(COLUMN_MAP)]);
@@ -45,6 +46,7 @@ export default function createUsersStore(pool: Pool, utils: any) {
     venmo_handle AS "venmoHandle",
     cashapp_cashtag AS "cashappCashtag",
     paypal_handle AS "paypalHandle",
+    public_schedule AS "publicSchedule",
     date_of_birth AS "dateOfBirth",
     created_at AS "createdAt",
     updated_at AS "updatedAt",
@@ -69,6 +71,7 @@ export default function createUsersStore(pool: Pool, utils: any) {
       venmoHandle: row.venmoHandle || null,
       cashappCashtag: row.cashappCashtag || null,
       paypalHandle: row.paypalHandle || null,
+      publicSchedule: row.publicSchedule === true,
       dateOfBirth: row.dateOfBirth || null,
     };
   }

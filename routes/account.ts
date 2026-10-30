@@ -10,6 +10,7 @@ import { createPasswordResetRateLimit } from '../lib/rate-limiting';
 import type { RouteDeps } from '../lib/types';
 import type {
   displayNameChangeSchema,
+  publicScheduleSchema,
   accountDeleteSchema,
   paymentHandlesSchema,
   updateEmailSchema,
@@ -443,6 +444,23 @@ export default function createAccountRoutes(deps: RouteDeps) {
     validate(schemas.paymentHandles),
     updatePaymentHandles,
   );
+
+  // ── PUT|PATCH /public-schedule — opt in/out of the public /u/:username page
+  const updatePublicSchedule = async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const { publicSchedule } = req.validatedBody as z.infer<typeof publicScheduleSchema>;
+      const result = await stores.users.update(req.user.userId, { publicSchedule });
+      if (!result) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+      invalidateUserCache();
+      return sendSuccess(res, { user: serializePublicUser(result) });
+    } catch (error) {
+      log.error('public schedule update failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to update public schedule', ErrorCodes.INTERNAL_ERROR);
+    }
+  };
+  router.put('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
+  router.patch('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
 
   // ── POST /email — request a change of the account email address ────────
   // Shaped on POST /api/v1/auth/change-password (routes/auth.ts) and on

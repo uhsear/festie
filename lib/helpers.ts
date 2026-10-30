@@ -65,6 +65,7 @@ export function serializePublicUser(user: any): PublicUser {
     venmoHandle: user.venmoHandle || null,
     cashappCashtag: user.cashappCashtag || null,
     paypalHandle: user.paypalHandle || null,
+    publicSchedule: user.publicSchedule === true,
   };
 }
 

@@ -41,6 +41,8 @@ export interface PublicUser {
   venmoHandle: string | null;
   cashappCashtag: string | null;
   paypalHandle: string | null;
+  // Opt-in flag for the public /u/:username share page (false = private).
+  publicSchedule: boolean;
 }
 
 /** A Zod-validation middleware factory (validate / validateParams / validateQuery). */

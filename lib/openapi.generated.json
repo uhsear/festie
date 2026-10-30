@@ -153,6 +153,9 @@
           "paypalHandle": {
             "nullable": true,
             "type": "string"
+          },
+          "publicSchedule": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -164,7 +167,8 @@
           "emailVerified",
           "venmoHandle",
           "cashappCashtag",
-          "paypalHandle"
+          "paypalHandle",
+          "publicSchedule"
         ],
         "additionalProperties": false
       },
@@ -2246,6 +2250,9 @@
               "paypalHandle": {
                 "nullable": true,
                 "type": "string"
+              },
+              "publicSchedule": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -2257,7 +2264,8 @@
               "emailVerified",
               "venmoHandle",
               "cashappCashtag",
-              "paypalHandle"
+              "paypalHandle",
+              "publicSchedule"
             ],
             "additionalProperties": false
           },
@@ -2311,6 +2319,9 @@
               "paypalHandle": {
                 "nullable": true,
                 "type": "string"
+              },
+              "publicSchedule": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -2322,7 +2333,8 @@
               "emailVerified",
               "venmoHandle",
               "cashappCashtag",
-              "paypalHandle"
+              "paypalHandle",
+              "publicSchedule"
             ],
             "additionalProperties": false
           },

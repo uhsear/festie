@@ -68,6 +68,15 @@ export function buildPicksShareUrl(profileId: string, origin?: string): string {
 }
 
 /**
+ * Opt-in public schedule page: `<origin>/s/u/<username>`.
+ * Mirrors the server route `GET /s/u/:username`, which 404s unless the user
+ * turned on `publicSchedule`.
+ */
+export function buildPublicScheduleUrl(username: string, origin?: string): string {
+  return absolute(`/s/u/${encodeURIComponent(username)}`, origin);
+}
+
+/**
  * Bare home link (`<origin>`), used as the share-sheet URL where there is no
  * per-resource public page (e.g. web DetailPanel's set share text).
  */

@@ -56,6 +56,7 @@ const publicUser: PublicUser = {
   venmoHandle: null,
   cashappCashtag: null,
   paypalHandle: null,
+  publicSchedule: false,
 };
 // The public projection carries the identity fields the shared User contract
 // requires; assert that overlap explicitly (the API intentionally emits `null`

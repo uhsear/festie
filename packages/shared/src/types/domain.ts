@@ -176,6 +176,8 @@ export interface User {
   venmoHandle?: string | null;
   cashappCashtag?: string | null;
   paypalHandle?: string | null;
+  // Opt-in public share page at /u/:username; absent/false = private.
+  publicSchedule?: boolean;
   createdAt: string;
   updatedAt: string;
 }

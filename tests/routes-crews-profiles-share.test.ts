@@ -1976,7 +1976,7 @@ describe('routes/share.js', () => {
       const { app } = await buildShareApp({
         stores: {
           ...makeShareDeps().stores,
-          users: { getByUsername: mock.fn(async () => ({ id: 'u1', username: 'testuser' })) },
+          users: { getByUsername: mock.fn(async () => ({ id: 'u1', username: 'testuser', publicSchedule: true })) },
           pool: { query: mock.fn(async () => ({ rows: [] })) },
         },
       });
@@ -1989,13 +1989,28 @@ describe('routes/share.js', () => {
       const { app } = await buildShareApp({
         stores: {
           ...makeShareDeps().stores,
-          users: { getByUsername: mock.fn(async () => ({ id: 'u1', username: 'testuser' })) },
+          users: { getByUsername: mock.fn(async () => ({ id: 'u1', username: 'testuser', publicSchedule: true })) },
           pool: { query: mock.fn(async () => ({ rows: [{ id: 'p-new' }] })) },
         },
       });
       const res = await request(app).get('/s/u/testuser');
       assert.equal(res.status, 302);
       assert.ok(res.headers.location!.includes('/s/p-new'));
+    });
+
+    test('private user returns the exact same 404 as an unknown user', async () => {
+      const query = mock.fn(async () => ({ rows: [{ id: 'p-new' }] }));
+      const build = (user: unknown) =>
+        buildShareApp({
+          stores: { ...makeShareDeps().stores, users: { getByUsername: mock.fn(async () => user) }, pool: { query } },
+        });
+      const unknown = await request((await build(null)).app).get('/s/u/testuser');
+      const priv = await request((await build({ id: 'u1', username: 'testuser', publicSchedule: false })).app).get(
+        '/s/u/testuser',
+      );
+      assert.equal(priv.status, 404);
+      assert.equal(priv.text, unknown.text);
+      assert.equal(query.mock.callCount(), 0);
     });
 
     test('returns 500 on internal error', async () => {

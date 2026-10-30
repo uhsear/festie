@@ -1,5 +1,6 @@
 export * from './format';
 export * from './colors';
+export * from './initials';
 export * from './contrast';
 export * from './conflicts';
 export * from './festivalTime';
