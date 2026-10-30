@@ -16,6 +16,7 @@ import DetailCrewSection from './DetailCrewSection';
 import DetailNotesSection from './DetailNotesSection';
 import { useDetailPanelData } from './useDetailPanelData';
 import { useHaptics } from '../../hooks/useHaptics';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useToast } from '../../lib/toastContext';
 import { Share2 } from 'lucide-react';
 import Button from '../ui/Button';
@@ -29,6 +30,7 @@ interface DetailPanelProps {
 
 export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: DetailPanelProps) {
   const theme = useUIStore((s) => s.theme);
+  const isLg = useMediaQuery('(min-width: 1024px)');
   const {
     currentFestival,
     festivalDays,
@@ -245,6 +247,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
       onOpenChange={(o: boolean) => {
         if (!o) onClose();
       }}
+      direction={isLg ? 'right' : 'bottom'}
       dismissible
       handleOnly
     >
@@ -253,16 +256,15 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
         <Drawer.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60" />
         {/* R4: glassmorphic surface — rgba(29,29,29,0.82) + blur(20px) +
             1px rgba(255,255,255,0.08) border + inset top highlight.
-            Radii: 24px top-corners on mobile sheet, 16px full on lg dialog.
+            Radii: 24px top-corners on mobile sheet, 16px left-only on the lg side panel.
             detail-glass utility owns all four glass properties; rounded-* owns radii. */}
         <Drawer.Content
           aria-label="Set detail panel"
           className="fixed bottom-0 inset-x-0 z-[var(--z-modal)] max-h-[min(90dvh,calc(100dvh-32px))] flex flex-col
                      rounded-tl-[24px] rounded-tr-[24px] detail-glass outline-none
-                     lg:bottom-auto lg:inset-x-auto lg:top-1/2 lg:left-1/2
-                     lg:-translate-x-1/2 lg:-translate-y-1/2
-                     lg:w-[clamp(420px,40vw,540px)] lg:max-w-[calc(100vw-2rem)] lg:max-h-[85dvh]
-                     lg:rounded-[16px]"
+                     lg:inset-y-0 lg:right-0 lg:left-auto lg:bottom-auto lg:h-dvh lg:max-h-none
+                     lg:w-[420px] lg:max-w-full
+                     lg:rounded-none lg:rounded-l-[16px]"
           onOpenAutoFocus={(e: Event) => {
             e.preventDefault();
             closeBtnRef.current?.focus();
