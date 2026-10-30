@@ -2,12 +2,11 @@
 # then run the Maestro smoke flow against it — automated iOS UI testing with NO Mac.
 # Run manually from Windows:  npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml
 #
-# Scheduled WEEKLY, and the frequency is a budget decision rather than a testing one.
-# Each run consumes one iOS build; the EAS free tier allows 15/month. Nightly (~30)
-# overruns it outright, and even 3x/week (~13) would leave almost nothing for actual
-# release builds — see packages/mobile/CLAUDE.md, which requires sign-off before
-# spending EAS credits. Weekly (~4/month) catches regressions while leaving ~11 for
-# releases. Raise it only if the owner decides the build budget is better spent here.
+# Manual only. The weekly schedule was removed on 2026-10-29: a scheduled run builds
+# from the GitHub checkout, and the Clash Display font files are not in the public
+# repository (licence), so metro cannot bundle the app there. `workflow:run` from a
+# local checkout uploads the fonts fetched by `node scripts/fetch-fonts.mjs`.
+# Each run consumes one iOS build; the EAS free tier allows 15/month.
 # Still no `pull_request`/`push` trigger — an iOS build per push would exhaust the
 # month's allowance in a day.
 #
@@ -16,13 +15,9 @@
 # own macOS infrastructure inside the plan already being paid for. A duplicate
 # GitHub Actions nightly (.github/workflows/ios-e2e-nightly.yml) was removed
 # 2026-08-19 for exactly that reason.
-#
-# Scheduled EAS workflows only run on the repository's DEFAULT branch (main).
 name: e2e-ios
 
 on:
-  schedule:
-    - cron: '17 7 * * 1'
   workflow_dispatch: {}
 
 jobs:
