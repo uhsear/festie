@@ -12,6 +12,7 @@ import {
   type AnalyticsData,
 } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import DisplayWords from '../../components/DisplayWords';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import SectionLabel from '../../components/SectionLabel';
@@ -181,7 +182,7 @@ export default function AdminAnalyticsScreen() {
           maxFontSizeMultiplier={MAX_FONT_SCALE}
           accessibilityRole="header"
         >
-          Analytics
+          <DisplayWords text="Analytics" fontSize={styles.headerTitle.fontSize} />
         </Text>
         {!loading && !error ? (
           <TouchableOpacity

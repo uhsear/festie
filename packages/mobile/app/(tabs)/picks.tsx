@@ -25,6 +25,7 @@ import type { ConflictGroup } from '@festie/shared/utils';
 import {
   artistDisplayName,
   hasOfflineBasemap,
+  festivalPhase,
   buildPickConflicts,
   getSetTimeBounds,
   resolveFestivalTimeZone,
@@ -910,7 +911,11 @@ export default function PicksScreen() {
       </View>
       {currentFestival && (
         <View style={styles.offlineCard}>
-          <OfflineReadinessCard festivalId={currentFestival.id} pmtilesUrl={offlineBasemapUrl} />
+          <OfflineReadinessCard
+            festivalId={currentFestival.id}
+            pmtilesUrl={offlineBasemapUrl}
+            festivalPast={festivalPhase(currentFestival, storeDays) === 'post'}
+          />
         </View>
       )}
       {summaryRow}

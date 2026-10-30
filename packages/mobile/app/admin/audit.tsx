@@ -15,6 +15,7 @@ import { api } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import { timeAgoFromIso } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import DisplayWords from '../../components/DisplayWords';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import SectionLabel from '../../components/SectionLabel';
@@ -281,7 +282,7 @@ export default function AdminAuditScreen() {
             maxFontSizeMultiplier={MAX_FONT_SCALE}
             accessibilityRole="header"
           >
-            Audit Log
+            <DisplayWords text="Audit Log" fontSize={styles.headerTitleText.fontSize} />
           </Text>
           {total !== null ? (
             <Text style={styles.headerSubtitle} numberOfLines={1}>

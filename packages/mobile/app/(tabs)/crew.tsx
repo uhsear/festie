@@ -42,13 +42,14 @@ import CrewPhotoLink from '../../components/CrewPhotoLink';
 import CrewPolls from '../../components/CrewPolls';
 import CrewMeetingPoints from '../../components/CrewMeetingPoints';
 import CrewStatus from '../../components/CrewStatus';
+import { festivalForCrew } from '../../lib/crewFestival';
 import CrewPacking from '../../components/CrewPacking';
 import CrewRides from '../../components/CrewRides';
 import CrewExpenses from '../../components/CrewExpenses';
 import CrewActivity from '../../components/CrewActivity';
 import CrewLiveLocation from '../../components/CrewLiveLocation';
 import CrewSos from '../../components/CrewSos';
-import UpdatedAgoBadge from '../../components/UpdatedAgoBadge';
+import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
 
 // DC2 deep-link tab whitelist. Module-scoped so its identity is stable across
@@ -673,6 +674,7 @@ export default function CrewScreen() {
   // Current user's role within this crew drives which admin controls show.
   const myMembership = members.find((m) => m.userId === user.id);
   const isOwner = crew.owner === user.id || myMembership?.role === 'owner';
+  const crewFestival = festivalForCrew(crew, currentFestival);
 
   const overlapEntries: CrewOverlap[] = Object.values(crewOverlap)
     .filter((o) => o.memberCount > 0)
@@ -737,7 +739,7 @@ export default function CrewScreen() {
               ) : null}
             </View>
           ) : null}
-          <UpdatedAgoBadge surface="crew" />
+          <FreshnessChip surface="crew" />
           <LowPowerIndicator />
           {/* Always-visible SOS entry: the full SOS panel lives in the Logistics
               tab, so this chip jumps there rather than duplicating the raise
@@ -1297,8 +1299,8 @@ export default function CrewScreen() {
             crewId={crew.id}
             currentUserId={user.id}
             isOwner={isOwner}
-            festival={currentFestival}
-            days={festivalDays}
+            festival={crewFestival}
+            days={crewFestival ? festivalDays : undefined}
             prefillCoords={prefillCoords}
           />
 

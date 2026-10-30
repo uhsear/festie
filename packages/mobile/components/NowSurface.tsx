@@ -5,6 +5,7 @@ import type { FestivalSet } from '@festie/shared/types';
 import {
   artistDisplayName,
   fmtStartsIn,
+  fmtZonedWeekday,
   fmtTimeLeft,
   fmtZonedClock,
   fmtZonedDayClock,
@@ -76,7 +77,7 @@ export function NowHero({
 }: HeroProps) {
   const t = useTokens();
   const s = useStyles();
-  const { phase, current, upcoming, todayCount, startsAt } = selection;
+  const { phase, current, upcoming, todayCount, startsAt, startsAtTimed } = selection;
   const live = current.length > 0;
   const next = upcoming[0];
   const name = (set: FestivalSet) => artistDisplayName(set, b2bSeparator);
@@ -115,13 +116,21 @@ export function NowHero({
     body = (
       <Quiet
         icon="calendar-outline"
-        title={startsAt !== null ? `Starts ${fmtZonedDayClock(startsAt, timeZone)}` : 'Not started yet'}
+        title={
+          startsAt === null
+            ? 'Not started yet'
+            : startsAtTimed
+              ? `Starts ${fmtZonedDayClock(startsAt, timeZone)}`
+              : `Starts ${fmtZonedWeekday(startsAt, timeZone)}`
+        }
         body={
           startsAt === null
             ? undefined
             : far
               ? `In ${days} day${days === 1 ? '' : 's'}.`
-              : `First set ${fmtStartsIn(startsAt, nowMs, timeZone)}.`
+              : !startsAtTimed
+                ? undefined
+                : `First set ${fmtStartsIn(startsAt, nowMs, timeZone)}.`
         }
       />
     );

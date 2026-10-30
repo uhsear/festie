@@ -11,6 +11,7 @@ import { useFestival } from '@festie/shared/hooks';
 import { isFestivalOver } from '@festie/shared/utils';
 import { RATING_LABEL } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
+import DisplayWords from '../components/DisplayWords';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { RATING_IONICON } from '../lib/ratingIcon';
 import { useSharedValue, withTiming, Easing, useDerivedValue, runOnJS } from 'react-native-reanimated';
@@ -244,7 +245,7 @@ export default function WrapScreen() {
             <View style={styles.leadCard}>
               <Text style={styles.topMeta}>#1 · {stageLabel(topSets[0]!)}</Text>
               <Text style={styles.leadArtist} numberOfLines={2}>
-                {topSets[0]!.artist || topSets[0]!.setId}
+                <DisplayWords text={topSets[0]!.artist || topSets[0]!.setId} fontSize={styles.leadArtist.fontSize} />
               </Text>
               <RatingTag rating={topSets[0]!.rating} />
               {topSets[0]!.note ? (
@@ -286,7 +287,7 @@ export default function WrapScreen() {
               <Text style={styles.kickerText}>Your crew moment</Text>
             </View>
             <Text style={styles.leadArtist} numberOfLines={2}>
-              {crewMoment.artist || crewMoment.setId}
+              <DisplayWords text={crewMoment.artist || crewMoment.setId} fontSize={styles.leadArtist.fontSize} />
             </Text>
             <Text style={styles.superSub}>
               {crewMoment.count} of {crewWrap.memberCount} in {activeCrew?.name ?? 'your crew'} loved it

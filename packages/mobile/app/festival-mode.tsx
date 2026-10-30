@@ -9,7 +9,7 @@ import { fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/s
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
 import EmptyState from '../components/EmptyState';
-import UpdatedAgoBadge from '../components/UpdatedAgoBadge';
+import FreshnessChip from '../components/FreshnessChip';
 import { DaylightToggle, LowPowerToggle, LowPowerIndicator } from '../components/LowPowerControls';
 import { CrewNow, CrewPrompt, MeetNow, NowHero, UpNext } from '../components/NowSurface';
 import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref } from '../lib/dayOfRoutes';
@@ -91,7 +91,7 @@ export default function FestivalModeScreen() {
             </View>
           </View>
           <View style={styles.metaRow}>
-            <UpdatedAgoBadge surface="schedule" />
+            <FreshnessChip surface="schedule" />
             <LowPowerIndicator />
           </View>
 

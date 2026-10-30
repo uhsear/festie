@@ -128,7 +128,7 @@ const primaryInk = (t: Tokens) => inkOnFill(t.colors.accent.aqua, t.colors.text.
 
 const ICON_COLOR: Record<ButtonVariant, (t: Tokens) => string> = {
   primary: (t) => primaryInk(t),
-  secondary: (t) => t.colors.text.muted,
+  secondary: (t) => t.colors.text.secondary,
   ghost: (t) => t.colors.text.secondary,
   danger: (t) => t.colors.text.onAccent,
   utility: (t) => t.colors.accent.aqua,
@@ -158,12 +158,12 @@ const useStyles = makeStyles((t) => ({
   primary: {
     backgroundColor: t.colors.accent.aqua,
   },
-  // R3 outline-secondary: 1px aqua/40 border + muted text. The single solid
+  // R3 outline-secondary: 1px aqua/70 border + secondary text. The single solid
   // aqua per screen lives on `primary`; demoted CTAs use this. (No hover on
-  // native, so the resting aqua/40 + muted-text state is authoritative.)
+  // native, so the resting aqua/70 + secondary-text state is authoritative.)
   secondary: {
     borderWidth: 1,
-    borderColor: t.colors.aquaAlpha[40],
+    borderColor: t.colors.aquaAlpha[70],
   },
   ghost: {},
   // Filled danger: coralStrong clears WCAG AA behind white text (~6.04:1); plain
@@ -190,10 +190,10 @@ const useStyles = makeStyles((t) => ({
   labelPrimary: {
     color: t.colors.text.onLightAccent,
   },
-  // R3: muted text on the outline-secondary (was aqua) so the lone solid-aqua
+  // R3: secondary text on the outline-secondary (was aqua) so the lone solid-aqua
   // primary is the only loud element on screen.
   labelSecondary: {
-    color: t.colors.text.muted,
+    color: t.colors.text.secondary,
   },
   labelGhost: {
     color: t.colors.text.secondary,

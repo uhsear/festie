@@ -254,6 +254,7 @@ export default function OfflineMap({
   // App-wide connectivity, driven from NetInfo by the root OfflineBanner. Used
   // only to decide whether a basemap is reachable at all (see canRenderMap).
   const offlineMode = useUIStore((s) => s.offlineMode);
+  const theme = useUIStore((s) => s.theme);
   // react-native-webview 14 types the class as WebView<P = undefined>, which
   // collapses its props to `never`; pass `object` here and on the JSX tag.
   const webRef = useRef<WebView<object>>(null);
@@ -600,8 +601,8 @@ export default function OfflineMap({
   // basemap style, and the site-plan image host (for the CSP) — so it rebuilds
   // only when those change (pins/zones/siteplan data flow in via injectJavaScript).
   const html = useMemo(
-    () => buildMapHtml(center, mapStyle, offlineBasemapHost, usingLocalBasemap, siteplanImageHost),
-    [center, mapStyle, offlineBasemapHost, usingLocalBasemap, siteplanImageHost],
+    () => buildMapHtml(center, mapStyle, offlineBasemapHost, usingLocalBasemap, siteplanImageHost, theme),
+    [center, mapStyle, offlineBasemapHost, usingLocalBasemap, siteplanImageHost, theme],
   );
 
   // Navigation guard + origin whitelist, widened by EXACTLY the festival's

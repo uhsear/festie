@@ -4,6 +4,7 @@ import {
   fmtStartsIn,
   fmtTimeLeft,
   fmtZonedClock,
+  fmtZonedWeekday,
   logicalDayIndexAt,
   selectActiveMeet,
   selectActiveSos,
@@ -70,6 +71,14 @@ describe('selectNowNext', () => {
     const r = selectNowNext({ sets: SETS, days: DAYS, picks, nowMs: ny('2026-09-01', '12:00'), timeZone: TZ });
     expect(r.phase).toBe('before');
     expect(r.startsAt).toBe(ny('2026-09-04', '18:00'));
+    expect(r.startsAtTimed).toBe(true);
+  });
+
+  it('flags startsAt as untimed when no set time is known', () => {
+    const r = selectNowNext({ sets: [], days: DAYS, nowMs: ny('2026-09-01', '12:00'), timeZone: TZ });
+    expect(r.phase).toBe('before');
+    expect(r.startsAtTimed).toBe(false);
+    expect(fmtZonedWeekday(r.startsAt!, TZ)).toBe('Fri');
   });
 
   it('reports no picks today while other days still have picks', () => {

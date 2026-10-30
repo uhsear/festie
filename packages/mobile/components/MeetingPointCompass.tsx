@@ -26,6 +26,7 @@ import * as Location from 'expo-location';
 import { bearing, haversineDistance, relativeArrowAngle, formatDistance } from '@festie/shared/utils';
 import type { Coord } from '@festie/shared/utils';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
+import DisplayWords from './DisplayWords';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
 /** A saved meeting-point target: a label plus its captured coords. */
@@ -207,7 +208,7 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
           accessibilityRole="text"
           accessibilityLabel={`${formatDistance(distanceM)} to ${target.label}, straight-line distance`}
         >
-          {formatDistance(distanceM)}
+          <DisplayWords text={formatDistance(distanceM)} fontSize={styles.distance.fontSize} />
         </Text>
       </View>
     );
@@ -250,7 +251,7 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
         accessibilityRole="text"
         accessibilityLabel={`${formatDistance(distanceM)} to ${target.label}, straight-line distance`}
       >
-        {formatDistance(distanceM)}
+        <DisplayWords text={formatDistance(distanceM)} fontSize={styles.distance.fontSize} />
       </Text>
       <Text style={styles.honest}>Straight-line direction to a point you saved · on-device, no live tracking</Text>
     </View>

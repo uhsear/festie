@@ -2,6 +2,7 @@ import { Component, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { typeStyle, useTokens, makeStyles } from '../hooks/useTokens';
+import DisplayWords from './DisplayWords';
 
 /**
  * App-wide render error boundary — the mobile analog of the web
@@ -38,7 +39,9 @@ function ErrorFallback({ onReset, onEscape }: { onReset: () => void; onEscape?: 
       style={[styles.container, { backgroundColor: t.colors.bg.primary, padding: t.spacing[12] }]}
       accessibilityRole="alert"
     >
-      <Text style={[styles.heading, { color: t.colors.text.primary }]}>Something went wrong</Text>
+      <Text style={[styles.heading, { color: t.colors.text.primary }]}>
+        <DisplayWords text="Something went wrong" fontSize={styles.heading.fontSize} />
+      </Text>
       <Text style={[styles.description, { color: t.colors.text.secondary }]}>
         An unexpected error occurred. Tap retry to reload this screen.
       </Text>

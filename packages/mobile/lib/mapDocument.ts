@@ -36,6 +36,8 @@
 // are a separate problem — a festival still needs a cached PMTiles archive
 // (lib/basemapCache.ts) to draw anything without a network.
 
+import { colorsDaylight } from '@festie/shared/tokens';
+import type { ThemePreference } from '@festie/shared/stores';
 import { safeJsonForScript } from './webviewBridge';
 import {
   MAPLIBRE_CSS_SRC,
@@ -67,6 +69,31 @@ import {
  * `{type:'error'}` if the inlined runtime fails to define `maplibregl` or the
  * map throws while initializing — RN uses those to decide map vs fallback.
  */
+const DARK_CHROME = {
+  bg: '#080810',
+  text: '#eaeaf2',
+  chipText: '#cfcfe0',
+  chipBorder: 'rgba(255,255,255,0.14)',
+  zoneBorder: 'rgba(255,255,255,0.25)',
+};
+
+/** Document ground + chip colours per theme. Stage keeps the original dark values byte-for-byte. */
+function documentChrome(theme: ThemePreference) {
+  if (theme !== 'daylight') return DARK_CHROME;
+  return {
+    bg: colorsDaylight.bg.primary,
+    text: colorsDaylight.text.primary,
+    chipText: colorsDaylight.text.secondary,
+    chipBorder: 'rgba(0,0,0,0.14)',
+    zoneBorder: 'rgba(0,0,0,0.25)',
+  };
+}
+
+function rgba(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
 export function buildMapHtml(
   center: { latitude: number; longitude: number } | null,
   /** MapLibre style object (raster OSM by default, PMTiles vector when configured). */
@@ -90,7 +117,10 @@ export function buildMapHtml(
    * this is null and the CSP is byte-for-byte as before.
    */
   siteplanOrigin: string | null = null,
+  /** The app theme: Daylight swaps the document ground and the chip/popup chrome to the light palette. */
+  theme: ThemePreference = 'stage',
 ): string {
+  const ui = documentChrome(theme);
   // center is numeric, non-user-controlled coords — safe to template. Still run
   // it through the hardened serializer for uniformity.
   const centerJson = safeJsonForScript(center ?? { latitude: 0, longitude: 0 });
@@ -156,7 +186,7 @@ export function buildMapHtml(
   <script id="mlgl-worker" type="text/plain">${MAPLIBRE_WORKER_SRC}</script>
   <script id="mlgl-main" type="text/plain">${MAPLIBRE_JS_SRC}</script>
   <style>
-    html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; background: #080810; }
+    html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; background: ${ui.bg}; }
     .festie-marker {
       width: 18px; height: 18px; border-radius: 50%;
       background: #ff3366; border: 2px solid #fff;
@@ -181,9 +211,9 @@ export function buildMapHtml(
     }
     .festie-chip {
       position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
-      white-space: nowrap; background: rgba(8,8,16,0.9); color: #cfcfe0;
+      white-space: nowrap; background: ${rgba(ui.bg, 0.9)}; color: ${ui.chipText};
       font: 600 10px -apple-system, system-ui, sans-serif;
-      padding: 1px 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);
+      padding: 1px 6px; border-radius: 8px; border: 1px solid ${ui.chipBorder};
     }
     /* Phase 4C: direction-of-travel caret pinned above the avatar, rotated inline
        per-peer by the GPS course. */
@@ -222,7 +252,7 @@ export function buildMapHtml(
     .festie-stage-tag {
       position: absolute; top: calc(100% + 3px); left: 50%; transform: translateX(-50%);
       white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
-      background: rgba(8,8,16,0.82); color: #eaeaf2;
+      background: ${rgba(ui.bg, 0.82)}; color: ${ui.text};
       font: 700 10px/1.4 -apple-system, system-ui, sans-serif;
       padding: 1px 6px; border-radius: 8px;
     }
@@ -237,10 +267,10 @@ export function buildMapHtml(
        marker. Non-interactive. */
     .festie-zone-label {
       white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis;
-      background: rgba(8,8,16,0.7); color: #eaeaf2;
+      background: ${rgba(ui.bg, 0.7)}; color: ${ui.text};
       font: 700 10px/1.3 -apple-system, system-ui, sans-serif;
       letter-spacing: 0.02em; text-transform: uppercase;
-      padding: 2px 7px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
+      padding: 2px 7px; border-radius: 8px; border: 1px solid ${ui.zoneBorder};
       pointer-events: none;
     }
     /* Authoring draft dot (Phase 4A/4B): a small aqua dot rendered at each tapped
