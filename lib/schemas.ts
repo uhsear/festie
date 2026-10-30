@@ -223,6 +223,12 @@ export const paymentHandlesSchema = z
   });
 export type PaymentHandlesInput = z.infer<typeof paymentHandlesSchema>;
 
+// Opt-in switch for the public /u/:username share page.
+export const publicScheduleSchema = z.object({
+  publicSchedule: z.boolean(),
+});
+export type PublicScheduleInput = z.infer<typeof publicScheduleSchema>;
+
 export const accountDeleteSchema = z.object({
   password: z.string().min(1, 'Password confirmation required'),
 });
@@ -1154,6 +1160,7 @@ export const schemas = {
   usernameChange: usernameChangeSchema,
   displayNameChange: displayNameChangeSchema,
   paymentHandles: paymentHandlesSchema,
+  publicSchedule: publicScheduleSchema,
   accountDelete: accountDeleteSchema,
   topicSubscription: topicSubscriptionSchema,
   festivalCreate: festivalCreateSchema,

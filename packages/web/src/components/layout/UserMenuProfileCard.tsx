@@ -1,5 +1,6 @@
 import React from 'react';
 import { useFestivalStore } from '@festie/shared';
+import { identityLabel } from '@festie/shared/utils';
 import Avatar from '../ui/Avatar';
 
 interface UserMenuProfileCardProps {
@@ -15,7 +16,7 @@ export default function UserMenuProfileCard({ user }: UserMenuProfileCardProps) 
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
 
-  const avatarName = user.username || user.name || '';
+  const avatarName = identityLabel(user);
 
   // Compute pick/note stats from the current profile
   const summary = (() => {

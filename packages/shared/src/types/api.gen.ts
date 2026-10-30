@@ -1304,6 +1304,7 @@ export type components = {
                 id: string;
                 name: string | null;
                 paypalHandle: string | null;
+                publicSchedule: boolean;
                 username: string;
                 venmoHandle: string | null;
             };
@@ -1719,6 +1720,7 @@ export type components = {
                 id: string;
                 name: string | null;
                 paypalHandle: string | null;
+                publicSchedule: boolean;
                 username: string;
                 venmoHandle: string | null;
             };
@@ -1753,6 +1755,7 @@ export type components = {
             id: string;
             name: string | null;
             paypalHandle: string | null;
+            publicSchedule: boolean;
             username: string;
             venmoHandle: string | null;
         };

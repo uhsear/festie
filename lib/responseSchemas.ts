@@ -57,6 +57,7 @@ export const userResponseSchema = z.object({
   venmoHandle: z.string().nullable(),
   cashappCashtag: z.string().nullable(),
   paypalHandle: z.string().nullable(),
+  publicSchedule: z.boolean(),
 });
 export type UserResponse = z.infer<typeof userResponseSchema>;
 

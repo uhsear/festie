@@ -33,6 +33,12 @@ vi.mock('../components/account/DangerZone', () => ({
 vi.mock('../components/account/PaymentHandlesSection', () => ({
   default: () => <div data-testid="payment-handles-section" />,
 }));
+vi.mock('../components/account/PublicScheduleSection', () => ({
+  default: () => <div data-testid="public-schedule-section" />,
+}));
+vi.mock('../components/account/ReplayIntroRow', () => ({
+  default: () => <div data-testid="replay-intro-row" />,
+}));
 vi.mock('../components/account/HistorySection', () => ({
   default: () => <div data-testid="history-section" />,
 }));

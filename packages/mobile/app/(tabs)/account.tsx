@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useMobilePush } from '../../hooks/useMobilePush';
 import { useAuth } from '@festie/shared/hooks';
+import { displayInitials, identityLabel } from '@festie/shared/utils';
 import { useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import ScreenHeader from '../../components/ScreenHeader';
 import AppPressable from '../../components/AppPressable';
@@ -14,6 +15,7 @@ import SectionLabel from '../../components/SectionLabel';
 import AccountAvatarSection from '../../components/AccountAvatarSection';
 import AccountDisplayNameSection from '../../components/AccountDisplayNameSection';
 import AccountPaymentHandlesSection from '../../components/AccountPaymentHandlesSection';
+import AccountPublicScheduleSection from '../../components/AccountPublicScheduleSection';
 import AccountPasswordSection from '../../components/AccountPasswordSection';
 import AccountEmailVerifySection from '../../components/AccountEmailVerifySection';
 import AccountNotificationsSection from '../../components/AccountNotificationsSection';
@@ -76,7 +78,7 @@ export default function AccountScreen() {
   const [historyReload, setHistoryReload] = useState(0);
 
   const avatarUrl = user?.avatar ?? user?.avatarUrl;
-  const displayName = user?.name ?? user?.username ?? 'Account';
+  const displayName = user ? identityLabel(user) : 'Account';
   const emailVerified = !!user?.emailVerified;
   const hasEmail = !!user?.email;
   const appVersion = Constants.expoConfig?.version ?? null;
@@ -169,7 +171,9 @@ export default function AccountScreen() {
             />
           ) : (
             <View style={styles.avatarFallback}>
-              <Ionicons name="person" size={36} color={t.colors.accent.aqua} />
+              <Text style={styles.avatarInitials} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {displayInitials(user)}
+              </Text>
             </View>
           )}
           <View style={styles.identityText}>
@@ -232,6 +236,9 @@ export default function AccountScreen() {
         <SectionLabel>Profile</SectionLabel>
         <AccountDisplayNameSection />
         <AccountPaymentHandlesSection />
+
+        <SectionLabel>Sharing</SectionLabel>
+        <AccountPublicScheduleSection />
 
         {/* Security */}
         <SectionLabel>Security</SectionLabel>
@@ -438,6 +445,10 @@ const useStyles = makeStyles((t) => ({
     height: 64,
     borderRadius: 32,
     backgroundColor: t.colors.bg.primary,
+  },
+  avatarInitials: {
+    ...typeStyle('title'),
+    color: t.colors.accent.aqua,
   },
   avatarFallback: {
     width: 64,

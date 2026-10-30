@@ -3,6 +3,7 @@ import { useAuthStore } from '@festie/shared';
 import { api } from '@festie/shared/services/api';
 import { useNavigate } from '@tanstack/react-router';
 import { useToast } from '../../lib/toastContext';
+import { identityLabel } from '@festie/shared/utils';
 import Avatar from '../ui/Avatar';
 import ChangeEmailModal from './ChangeEmailModal';
 import ChangePasswordModal from './ChangePasswordModal';
@@ -67,7 +68,7 @@ export default function UserMenu({ user }: UserMenuProps) {
     setShowChangeEmail(false);
   };
 
-  const avatarName = user.username || user.name || '';
+  const avatarName = identityLabel(user);
 
   return (
     <>

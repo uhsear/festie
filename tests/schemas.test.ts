@@ -581,6 +581,14 @@ describe('responseSchemas: serialized payloads parse', () => {
     assert.equal(parsedMin.name, null);
     assert.equal(parsedMin.avatarUrl, null);
     assert.equal(parsedMin.emailVerified, false);
+    assert.equal(parsedMin.publicSchedule, false);
+  });
+
+  it('publicSchedule schema accepts only a boolean', () => {
+    assert.ok(schemas.publicSchedule.safeParse({ publicSchedule: true }).success);
+    assert.ok(schemas.publicSchedule.safeParse({ publicSchedule: false }).success);
+    assert.equal(schemas.publicSchedule.safeParse({ publicSchedule: 'yes' }).success, false);
+    assert.equal(schemas.publicSchedule.safeParse({}).success, false);
   });
 
   it('festivalDepth1ResponseSchema parses a depth=1 festival payload', () => {

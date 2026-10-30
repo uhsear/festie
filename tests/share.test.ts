@@ -122,6 +122,12 @@ async function registerUser(server: any, suffix: any) {
   return { ...res.body.data, username };
 }
 
+// Vanity pages are opt-in; flip the flag directly so each test controls it.
+async function setPublicSchedule(username: string, value: boolean) {
+  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+  try { await pool.query('UPDATE users SET public_schedule = $2 WHERE username = $1', [username, value]); } finally { await pool.end(); }
+}
+
 async function joinFestival(server: any, userToken: any) {
   const res = await server.request
     .post('/api/v1/profiles')
@@ -234,6 +240,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     servers.push(server);
     const user = await registerUser(server, 'vanity');
     const profile = await joinFestival(server, user.token);
+    await setPublicSchedule(user.username, true);
 
     const res = await getVanity(server, user.username);
     assert.equal(res.status, 302);
@@ -246,6 +253,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     servers.push(server);
     const user = await registerUser(server, 'mixedcase');
     await joinFestival(server, user.token);
+    await setPublicSchedule(user.username, true);
 
     const res = await getVanity(server, user.username.toUpperCase());
     assert.equal(res.status, 302);
@@ -267,10 +275,59 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     const server = (await startServer())!;
     servers.push(server);
     const user = await registerUser(server, 'noprof');
+    await setPublicSchedule(user.username, true);
 
     const res = await getVanity(server, user.username);
     assert.equal(res.status, 404);
     assert.match(res.text || '', /No Schedule Yet|not joined|no.*festival/i);
+  });
+
+  test('vanity URL for a private user is byte-identical to a nonexistent user 404', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const user = await registerUser(server, 'private');
+    await joinFestival(server, user.token);
+
+    const priv = await getVanity(server, user.username);
+    const ghost = await getVanity(server, `ghost${RUN_ID}`);
+    assert.equal(priv.status, 404);
+    assert.equal(ghost.status, 404);
+    assert.equal(priv.text, ghost.text);
+    assert.equal(priv.headers.location, undefined);
+  });
+
+  test('PUT /account/public-schedule opts in and out, exposed on the user payload', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const user = await registerUser(server, 'toggle');
+    await joinFestival(server, user.token);
+    assert.equal(user.user.publicSchedule, false);
+
+    const on = await server.request
+      .put('/api/v1/account/public-schedule')
+      .set('x-user-token', user.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ publicSchedule: true })
+      .expect(200);
+    assert.equal(on.body.data.user.publicSchedule, true);
+    assert.equal((await getVanity(server, user.username)).status, 302);
+
+    await server.request
+      .put('/api/v1/account/public-schedule')
+      .set('x-user-token', user.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ publicSchedule: false })
+      .expect(200);
+    assert.equal((await getVanity(server, user.username)).status, 404);
+
+    await server.request
+      .put('/api/v1/account/public-schedule')
+      .set('x-user-token', user.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ publicSchedule: 'yes' })
+      .expect(400);
   });
 
   test('share page rejects malformed profile ID with 400', async () => {

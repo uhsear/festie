@@ -41,7 +41,8 @@ export default function createShareRoutes(deps: any) {
 
       // Look up user by username (case-insensitive, targeted query)
       const user = await stores.users.getByUsername(username.toLowerCase());
-      if (!user) {
+      // Private users answer exactly like a nonexistent one so the page does not reveal the account.
+      if (!user || !user.publicSchedule) {
         return sendShareError(res, 404, 'User Not Found', 'No account with this username exists.');
       }
 

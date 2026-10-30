@@ -6,10 +6,13 @@ import PaymentHandlesSection from '../components/account/PaymentHandlesSection';
 import PasswordSection from '../components/account/PasswordSection';
 import NotificationSection from '../components/account/NotificationSection';
 import NotificationPrefsSection from '../components/account/NotificationPrefsSection';
+import PublicScheduleSection from '../components/account/PublicScheduleSection';
+import ReplayIntroRow from '../components/account/ReplayIntroRow';
 import DaylightSection from '../components/account/DaylightSection';
 import HistorySection from '../components/account/HistorySection';
 import DangerZone from '../components/account/DangerZone';
 import Avatar from '../components/ui/Avatar';
+import { identityLabel } from '@festie/shared/utils';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 
 export default function AccountPage() {
@@ -47,7 +50,7 @@ function AccountPageInner() {
 
         {/* Identity */}
         <section className="flex items-center gap-4 p-4 rounded-xl bg-bg-card border border-border">
-          <Avatar name={displayName} image={user.avatar ?? user.avatarUrl} size="lg" />
+          <Avatar name={identityLabel(user)} image={user.avatar ?? user.avatarUrl} size="lg" />
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-lg font-semibold text-text-primary truncate">{displayName}</p>
             {user.username ? <p className="text-sm text-accent-aqua truncate">@{user.username}</p> : null}
@@ -70,6 +73,11 @@ function AccountPageInner() {
           <PaymentHandlesSection />
         </Section>
 
+        {/* Public schedule page (opt-in) */}
+        <Section label="Sharing">
+          <PublicScheduleSection />
+        </Section>
+
         {/* Security */}
         <Section label="Security">
           <PasswordSection />
@@ -80,6 +88,7 @@ function AccountPageInner() {
           <DaylightSection />
           <NotificationSection />
           <NotificationPrefsSection />
+          <ReplayIntroRow />
         </Section>
 
         {/* Legal */}

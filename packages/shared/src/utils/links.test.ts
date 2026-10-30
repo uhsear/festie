@@ -5,6 +5,7 @@ import {
   buildJoinUrl,
   buildSetUrl,
   buildPicksShareUrl,
+  buildPublicScheduleUrl,
   buildHomeUrl,
   buildAppDeepLink,
 } from './links';
@@ -73,5 +74,12 @@ describe('links — buildAppDeepLink', () => {
 
   it('uses the exported scheme constant', () => {
     expect(buildAppDeepLink('').startsWith(FESTIE_SCHEME)).toBe(true);
+  });
+});
+
+describe('links — buildPublicScheduleUrl', () => {
+  it('builds the vanity schedule URL and encodes the username', () => {
+    expect(buildPublicScheduleUrl('raver_1')).toBe('https://festie.us/s/u/raver_1');
+    expect(buildPublicScheduleUrl('a b', 'http://localhost:5173/')).toBe('http://localhost:5173/s/u/a%20b');
   });
 });
