@@ -83,7 +83,7 @@
     "@typescript/native-preview": "^7.0.0-dev.20260707.2",
     "c8": "^12.0.0",
     "dependency-cruiser": "^18.2.0",
-    "eslint": "^10.10.0",
+    "eslint": "^10.13.0",
     "eslint-plugin-sql": "^3.4.1",
     "globals": "^17.12.0",
     "knip": "^6.34.0",
