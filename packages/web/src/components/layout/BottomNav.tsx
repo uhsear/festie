@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
 import { useFestivalStore } from '@festie/shared/stores';
 import { isFestivalOver } from '@festie/shared/utils';
@@ -89,7 +89,6 @@ const wrapTab: NavTab = { label: 'Wrap', href: '/wrap', icon: <WrapIcon /> };
 
 export default function BottomNav() {
   const location = useLocation();
-  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const days = useFestivalStore((state) => state.days);
@@ -150,14 +149,14 @@ export default function BottomNav() {
         {tabs.map((tab) => {
           const active = isActive(tab.href);
           return (
-            <button
+            <Link
               key={tab.href}
-              type="button"
+              to={tab.href}
               aria-current={active ? 'page' : undefined}
               aria-label={`View ${tab.href === '/account' && !user ? 'Sign in' : tab.label}`}
               className={cn(
                 'flex flex-col items-center gap-1 px-3 py-2',
-                'bg-transparent text-text-muted text-[10px] font-semibold',
+                'bg-transparent text-text-muted text-[10px] font-semibold no-underline',
                 'rounded-sm min-h-11 min-w-0 flex-1 overflow-hidden',
                 'transition-[color,transform] duration-150 ease-[ease]',
                 'active:scale-90 motion-reduce:active:!transform-none',
@@ -170,13 +169,12 @@ export default function BottomNav() {
               )}
               onPointerEnter={() => prefetchers[tab.href]?.().catch(() => {})}
               onPointerDown={() => prefetchers[tab.href]?.().catch(() => {})}
-              onClick={() => navigate({ to: tab.href })}
             >
               {tab.icon}
               <span className={cn('max-w-full overflow-hidden text-ellipsis whitespace-nowrap', 'max-[359px]:hidden')}>
                 {tab.href === '/account' && !user ? 'Sign in' : tab.label}
               </span>
-            </button>
+            </Link>
           );
         })}
       </nav>

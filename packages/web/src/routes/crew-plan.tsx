@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { artistDisplayName, formatTime, pickActiveMeetingPoint, buildSlots } from '@festie/shared/utils';
+import type { SlotPick } from '@festie/shared/utils';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import type { FestivalDay, FestivalSet, Priority, Profile } from '@festie/shared/types';
 import FreshnessChip from '../components/features/FreshnessChip';
@@ -27,6 +28,31 @@ const PRIORITY_BADGE: Record<Priority, string> = {
 // Pure digest assembly (pickActiveMeetingPoint + buildSlots) lives in
 // @festie/shared/utils so web + mobile share one implementation.
 
+const EMPTY_LINK =
+  'inline-flex items-center min-h-11 text-sm font-medium text-accent-aqua underline underline-offset-2';
+
+const PRIORITY_RANK: Record<Priority, number> = { maybe: 0, 'want-to-see': 1, must: 2 };
+
+// One row per set: the members who picked it, tinted by the strongest priority among them.
+function groupPicksBySet(picks: SlotPick[]) {
+  const groups = new Map<string, { set: FestivalSet; priority: Priority; names: string[] }>();
+  for (const p of picks) {
+    const g = groups.get(p.set.id);
+    if (!g) {
+      groups.set(p.set.id, { set: p.set, priority: p.priority, names: [p.memberName] });
+      continue;
+    }
+    g.names.push(p.memberName);
+    if (PRIORITY_RANK[p.priority] > PRIORITY_RANK[g.priority]) g.priority = p.priority;
+  }
+  return [...groups.values()];
+}
+
+function memberSummary(names: string[]) {
+  const extra = names.length - 2;
+  return extra > 0 ? `${names.slice(0, 2).join(', ')} +${extra}` : names.join(', ');
+}
+
 export default function CrewPlanView() {
   return (
     <RenderErrorBoundary name="crew-plan">
@@ -44,6 +70,7 @@ function CrewPlanInner() {
   const sets = useFestivalStore((s) => s.sets) as FestivalSet[];
   const days = useFestivalStore((s) => s.days) as FestivalDay[];
   const allProfiles = useFestivalStore((s) => s.allProfiles) as Profile[];
+  const stages = useFestivalStore((s) => s.stages);
 
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
@@ -73,6 +100,7 @@ function CrewPlanInner() {
             icon={<Users className="w-12 h-12" aria-hidden="true" />}
             title="No crew selected"
             description="Open the Crew tab and pick a crew to see its plan."
+            cta={{ label: 'Open crew', onClick: () => navigate({ to: '/crew' }) }}
           />
         </Card>
       </div>
@@ -145,9 +173,17 @@ function CrewPlanInner() {
         </Card.Header>
         <Card.Body className="space-y-4">
           {slotsWithPicks.length === 0 ? (
-            <p className="text-sm text-text-secondary">
-              No upcoming crew picks. Add sets to your schedule to fill this in.
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm text-text-secondary">No upcoming crew picks yet.</p>
+              <div className="flex flex-wrap gap-x-4">
+                <Link to="/cards" className={EMPTY_LINK}>
+                  Add picks from the schedule
+                </Link>
+                <Link to="/crew" className={EMPTY_LINK}>
+                  Invite your crew
+                </Link>
+              </div>
+            </div>
           ) : (
             slotsWithPicks.map((slot) => (
               <div key={slot.startMs} className="space-y-2">
@@ -155,20 +191,31 @@ function CrewPlanInner() {
                   {slot.startTime ? formatTime(slot.startTime) : 'Soon'}
                 </p>
                 <ul className="space-y-1.5">
-                  {slot.picks.map((p) => (
-                    <li key={p.memberId} className="flex items-center gap-2 text-sm">
-                      <span
-                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 ${PRIORITY_BADGE[p.priority]}`}
-                        aria-label={PRIORITY_LABEL[p.priority]}
-                      >
-                        <PriorityIcon priority={p.priority} className="w-3 h-3" filled />
-                        {PRIORITY_LABEL[p.priority]}
-                      </span>
-                      <span className="text-text-primary font-medium truncate">{p.memberName}</span>
-                      <span className="text-text-secondary">→</span>
-                      <span className="text-text-secondary truncate">{artistDisplayName(p.set)}</span>
-                    </li>
-                  ))}
+                  {groupPicksBySet(slot.picks).map((g) => {
+                    const stageName = stages?.find((st) => st.id === g.set.stageId)?.name;
+                    return (
+                      <li key={g.set.id}>
+                        <Link
+                          to="/set/$setId"
+                          params={{ setId: g.set.id }}
+                          className="flex items-center gap-2 min-h-11 text-sm hover:underline"
+                        >
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 ${PRIORITY_BADGE[g.priority]}`}
+                            aria-label={PRIORITY_LABEL[g.priority]}
+                          >
+                            <PriorityIcon priority={g.priority} className="w-3 h-3" filled />
+                            {PRIORITY_LABEL[g.priority]}
+                          </span>
+                          <span className="truncate">
+                            <span className="text-text-primary font-medium">{artistDisplayName(g.set)}</span>
+                            {stageName && <span className="text-text-secondary"> · {stageName}</span>}
+                            <span className="text-text-secondary"> · {memberSummary(g.names)}</span>
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))

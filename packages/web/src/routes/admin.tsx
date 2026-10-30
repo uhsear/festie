@@ -1,6 +1,6 @@
-import React, { lazy, Suspense, useState } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { useAuthStore } from '@festie/shared';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import AdminLayout from '../components/admin/AdminLayout';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { LayoutDashboard, Tent, Users, UsersRound, ClipboardList, TrendingUp } from 'lucide-react';
@@ -12,7 +12,8 @@ const AdminCrews = lazy(() => import('../components/admin/AdminCrews'));
 const AdminAudit = lazy(() => import('../components/admin/AdminAudit'));
 const AdminAnalytics = lazy(() => import('../components/admin/AdminAnalytics'));
 
-type AdminTab = 'dashboard' | 'festivals' | 'users' | 'crews' | 'audit' | 'analytics';
+const ADMIN_TABS = ['dashboard', 'festivals', 'users', 'crews', 'audit', 'analytics'] as const;
+type AdminTab = (typeof ADMIN_TABS)[number];
 
 export default function AdminPanel() {
   return (
@@ -25,7 +26,8 @@ export default function AdminPanel() {
 function AdminPanelInner() {
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const { tab } = useSearch({ from: '/admin' });
+  const activeTab: AdminTab = ADMIN_TABS.find((t) => t === tab) ?? ADMIN_TABS[0];
 
   if (!user?.isAdmin) {
     return (
@@ -75,7 +77,7 @@ function AdminPanelInner() {
       title="Admin Panel"
       description="Manage system, festivals, users, and view analytics"
       activeTab={activeTab}
-      onTabChange={(tab) => setActiveTab(tab as AdminTab)}
+      onTabChange={(next) => navigate({ to: '/admin', search: { tab: next }, replace: true })}
       tabs={tabs}
     >
       <Suspense fallback={<div className="flex-center p-8 text-text-muted">Loading…</div>}>{renderContent()}</Suspense>

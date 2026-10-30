@@ -122,4 +122,16 @@ describe('OfflineReadinessCard', () => {
     // The weather label text turns coral (rendered as label text).
     expect(screen.getByText('Weather')).toBeInTheDocument();
   });
+
+  it('collapses to one row when every section is ready, and expands on tap', () => {
+    const ready = { status: 'ready', syncedAt: Date.now() };
+    setReadiness({
+      byFestival: { 'fest-1': { schedule: ready, picks: ready, crew: ready, weather: ready, art: ready } },
+    });
+    render(<OfflineReadinessCard festivalId="fest-1" />);
+    const row = screen.getByRole('button', { name: /Saved for offline · synced just now/ });
+    expect(screen.queryByText('Weather')).not.toBeInTheDocument();
+    fireEvent.click(row);
+    expect(screen.getByText('Weather')).toBeInTheDocument();
+  });
 });

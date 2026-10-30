@@ -241,6 +241,8 @@ const adminRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/admin',
   component: AdminPanel,
+  validateSearch: (search: Record<string, unknown>): { tab?: string } =>
+    typeof search.tab === 'string' ? { tab: search.tab } : {},
   beforeLoad: async () => {
     await authReady();
     if (!isAuthenticated()) throw redirect({ to: '/login' });

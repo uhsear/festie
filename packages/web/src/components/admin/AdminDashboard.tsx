@@ -85,7 +85,7 @@ export default function AdminDashboard() {
       {/* Stats Grid */}
       <div>
         <h2 className="type-heading text-text-primary mb-4">Statistics</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Users', value: stats.users, icon: <Users />, color: 'text-accent-aqua' },
             { label: 'Festivals', value: stats.festivals, icon: <Tent />, color: 'text-accent-aqua' },

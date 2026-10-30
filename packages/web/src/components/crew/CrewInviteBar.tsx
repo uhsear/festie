@@ -10,9 +10,23 @@ interface CrewInviteBarProps {
   inviteCode: string;
   crewId: string;
   isOwner: boolean;
+  /** ISO timestamp from the crew's `inviteExpiresAt`; omitted when the invite does not expire. */
+  expiresAt?: string | null;
 }
 
-export default function CrewInviteBar({ inviteCode, crewId, isOwner }: CrewInviteBarProps) {
+// timeAgo in @festie/shared only formats the past; invites expire in the future.
+export function formatExpiry(expiresAt: string | null | undefined, now = Date.now()): string | null {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - now;
+  if (!Number.isFinite(diff)) return null;
+  if (diff <= 0) return 'Expired';
+  const m = Math.floor(diff / 60_000);
+  if (m < 60) return `Expires in ${Math.max(m, 1)}m`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `Expires in ${h}h` : `Expires in ${Math.floor(h / 24)}d`;
+}
+
+export default function CrewInviteBar({ inviteCode, crewId, isOwner, expiresAt }: CrewInviteBarProps) {
   const { toast } = useToast();
   const regenerateInvite = useCrewStore((s) => s.regenerateInvite);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -48,6 +62,7 @@ export default function CrewInviteBar({ inviteCode, crewId, isOwner }: CrewInvit
     handleCopy();
   }, [inviteCode, handleCopy]);
 
+  const expiry = formatExpiry(expiresAt);
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
   const handleRegenerate = useCallback(async () => {
@@ -70,6 +85,7 @@ export default function CrewInviteBar({ inviteCode, crewId, isOwner }: CrewInvit
       <span className="text-xs text-text-secondary truncate">
         Invite: <span className="text-text-primary font-mono">{inviteCode}</span>
       </span>
+      {expiry && <span className="text-xs text-text-muted whitespace-nowrap">{expiry}</span>}
       <div className="flex items-center gap-2 ml-auto flex-shrink-0">
         {isOwner && (
           <Button
