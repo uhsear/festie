@@ -137,8 +137,8 @@ test.describe('responsive design', () => {
     await expect(drawer).toHaveCount(0);
   });
 
-  // vaul's ::after overscroll strip hung below the centred desktop dialog as a blank tail.
-  test('desktop detail dialog has no strip below it', async ({ app, page }) => {
+  // At lg the detail opens as a right-hand side panel; vaul's ::after overscroll strip must stay hidden.
+  test('desktop detail panel is a full-height right side panel with no strip', async ({ app, page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await gotoSchedule(page, app);
 
@@ -148,6 +148,12 @@ test.describe('responsive design', () => {
     const drawer = page.locator('[aria-label="Set detail panel"]');
     await expect(drawer).toBeVisible();
     expect(await drawer.evaluate((el) => getComputedStyle(el, '::after').display)).toBe('none');
+
+    const box = await drawer.boundingBox();
+    expect(box).not.toBeNull();
+    expect(Math.round(box!.x + box!.width)).toBe(1440);
+    expect(Math.round(box!.y)).toBe(0);
+    expect(Math.round(box!.height)).toBe(900);
   });
 
   test('priority buttons meet 44px minimum', async ({ app, page }) => {
