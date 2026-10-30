@@ -433,7 +433,7 @@ describe('admin festival CRUD + cascade + audit', () => {
   test('admin mutations write audit_log entries', async () => {
     const server = await startServer(); servers.push(server);
     const adminToken = await loginAdmin(server);
-    await server.request
+    const createRes = await server.request
       .post('/api/v1/admin/festivals')
       .set('x-user-token', adminToken)
       .set(TRUSTED_MUTATION_HEADER, '1')
@@ -444,14 +444,21 @@ describe('admin festival CRUD + cascade + audit', () => {
           sets: [{ id: 'audit-set-1', artist: 'Artist', stageId: 'audit-stage-1', startTime: '20:00', endTime: '21:00' }] }],
       })
       .expect(201);
+    const festId = createRes.body.data.id;
 
-    await new Promise<void>((r) => setImmediate(r));
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });
     try {
-      const { rows } = await pool.query(
-        "SELECT * FROM audit_log WHERE action LIKE 'festival:%' ORDER BY created_at DESC LIMIT 5"
-      );
-      assert.ok(rows.length > 0);
+      // routes/festivals.ts audit() inserts fire-and-forget after the 201 is
+      // sent, so poll (bounded) instead of assuming one tick is enough.
+      let rows: any[] = [];
+      for (let i = 0; i < 100 && rows.length === 0; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, 20));
+        ({ rows } = await pool.query(
+          "SELECT * FROM audit_log WHERE action = 'festival:create' AND target_id = $1",
+          [festId]
+        ));
+      }
+      assert.equal(rows.length, 1);
     } finally { await pool.end(); }
   });
 });
