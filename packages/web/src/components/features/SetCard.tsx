@@ -2,7 +2,7 @@ import React, { memo, useRef, useState, useEffect, useMemo } from 'react';
 import { Play, Square, AlertTriangle, StickyNote } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { usePicks } from '@festie/shared/hooks';
-import { formatTime, artistDisplayName, artistSubtitle, PRIORITY_RANK } from '@festie/shared/utils';
+import { formatTime, artistDisplayName, artistSubtitle, festivalPhase, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { api } from '@festie/shared/services/api';
 import { useSetStatus } from '@/hooks/useSetStatus';
@@ -74,6 +74,9 @@ function SetCard({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioListenersRef = useRef<{ ended: () => void; error: () => void } | null>(null);
   const setStatus = useSetStatus(set);
+  const days = useFestivalStore((state) => state.days);
+  // Dim ended sets only while the festival is running; before/after, every set reads the same.
+  const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [spotlightPos, setSpotlightPos] = useState({ x: '50%', y: '50%' });
 
@@ -322,9 +325,11 @@ function SetCard({
           'card-stage',
           'relative z-[2] inline-block px-2 py-1 rounded-xl',
           'type-micro font-bold uppercase tracking-[0.08em] mb-2.5',
-          'text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]',
+          dimmed
+            ? 'bg-[var(--color-overlay-3)] text-text-secondary'
+            : 'text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]',
         )}
-        style={{ background: ensureWhiteContrast(stageColor) }}
+        style={dimmed ? undefined : { background: ensureWhiteContrast(stageColor) }}
         aria-hidden="true"
       >
         {stageName}
@@ -335,7 +340,8 @@ function SetCard({
         className={cn(
           'card-artist',
           'relative z-[2] pointer-events-none',
-          'type-title font-bold leading-[1.15] mb-1 text-text-primary',
+          'type-title font-bold leading-[1.15] mb-1',
+          dimmed ? 'text-text-secondary' : 'text-text-primary',
         )}
         aria-hidden="true"
       >

@@ -17,6 +17,7 @@ vi.mock('@festie/shared/hooks', () => ({
 const festivalStoreState: Record<string, unknown> = {
   currentFestival: { id: 'fest-1' },
   allProfiles: [],
+  days: [],
 };
 const crewStoreState: Record<string, unknown> = {
   crewMembers: [],
@@ -385,5 +386,41 @@ describe('SetCard', () => {
     expect(stageEl.style.background).not.toBe('rgb(0, 255, 0)');
     expect(g).toBeGreaterThan(0);
     expect(g).toBeLessThan(255);
+  });
+
+  describe('past-set dimming', () => {
+    const iso = (offsetDays: number) => {
+      const d = new Date(Date.now() + offsetDays * 86_400_000);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const setPhase = (start: number, end: number) => {
+      festivalStoreState.currentFestival = { id: 'fest-1', startDate: iso(start), endDate: iso(end) };
+    };
+    const renderPast = () => {
+      vi.mocked(useSetStatus).mockReturnValue({ status: 'past', label: 'Ended', minutesUntil: -60, progress: 0 });
+      render(<SetCard {...defaultProps} />);
+      return {
+        artist: document.querySelector('.card-artist') as HTMLElement,
+        stage: document.querySelector('.card-stage') as HTMLElement,
+      };
+    };
+
+    it('dims a past set tonally while the festival is live', () => {
+      setPhase(-1, 1);
+      const { artist, stage } = renderPast();
+      expect(artist).toHaveClass('text-text-secondary');
+      expect(stage).toHaveClass('text-text-secondary');
+      expect(stage.style.background).toBe('');
+    });
+
+    it.each([
+      ['upcoming', 2, 3],
+      ['fully past', -3, -2],
+    ])('does not dim a past set when the festival is %s', (_name, start, end) => {
+      setPhase(start, end);
+      const { artist, stage } = renderPast();
+      expect(artist).toHaveClass('text-text-primary');
+      expect(stage.style.background).not.toBe('');
+    });
   });
 });
