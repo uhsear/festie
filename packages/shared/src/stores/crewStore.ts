@@ -456,9 +456,12 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   regenerateInvite: async (crewId: string) => {
     set({ error: null });
     try {
-      const { inviteCode } = await api.post<{ inviteCode: string }>(`/crews/${crewId}/invite`, {});
+      const { inviteCode, inviteExpiresAt } = await api.post<{ inviteCode: string; inviteExpiresAt?: string | null }>(
+        `/crews/${crewId}/invite`,
+        {},
+      );
       set((state) => ({
-        activeCrew: state.activeCrew ? { ...state.activeCrew, inviteCode } : null,
+        activeCrew: state.activeCrew ? { ...state.activeCrew, inviteCode, inviteExpiresAt } : null,
       }));
       return inviteCode;
     } catch (err) {

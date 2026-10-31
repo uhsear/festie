@@ -225,6 +225,8 @@ export interface Crew {
   id: string;
   name: string;
   inviteCode?: string;
+  /** Sent to the owner only. */
+  inviteExpiresAt?: string | null;
   owner: string;
   festivalId?: string;
   members: CrewMember[];
