@@ -12,7 +12,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalStore, useFestivalDataStore } from '@festie/shared/stores';
 import { duration as motionDuration } from '@festie/shared/tokens';
-import type { CrewPoll, FestivalSet, PollSetRef } from '@festie/shared/types';
+import type { CrewPoll, FestivalDay, FestivalSet, PollSetRef, Stage } from '@festie/shared/types';
 import {
   artistDisplayName,
   formatTime,
@@ -25,10 +25,14 @@ import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import Button from './Button';
 import CrewSyncMarker from './CrewSyncMarker';
+import { festivalForCrew } from '../lib/crewFestival';
 
 // Lead time (minutes) for the reminder seeded when a schedule poll closes.
 const SCHEDULE_POLL_REMINDER_LEAD = 15;
 const MAX_OPTIONS = 4;
+const EMPTY_SETS: FestivalSet[] = [];
+const EMPTY_DAYS: FestivalDay[] = [];
+const EMPTY_STAGES: Stage[] = [];
 
 interface Slot {
   startTime: string;
@@ -122,11 +126,18 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
 
   // Festival lineup (from the persisted festival cache — works offline) powers
   // the schedule-aware composer + the close-time meeting point / reminder.
-  const sets = useFestivalStore((s) => s.sets);
-  const days = useFestivalStore((s) => s.days);
-  const stages = useFestivalStore((s) => s.stages);
+  // The schedule tab's festival can differ from the crew's: use the lineup only
+  // when it belongs to this crew's festival, else offer none and seed no reminder.
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const storeSets = useFestivalStore((s) => s.sets);
+  const storeDays = useFestivalStore((s) => s.days);
+  const storeStages = useFestivalStore((s) => s.stages);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const festivalId = currentFestival?.id ?? null;
+  const crewFestival = festivalForCrew(activeCrew, currentFestival);
+  const sets = crewFestival ? storeSets : EMPTY_SETS;
+  const days = crewFestival ? storeDays : EMPTY_DAYS;
+  const stages = crewFestival ? storeStages : EMPTY_STAGES;
+  const festivalId = crewFestival?.id ?? null;
 
   const stageName = (stageId: string): string | null => stages.find((st) => st.id === stageId)?.name ?? null;
 

@@ -47,3 +47,14 @@ export function offlineReadyLabel(cachedAt: number | null | undefined): LastSync
   if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt)) return null;
   return 'offline-ready';
 }
+
+/**
+ * Freshness line for chips that must say whether the device is offline.
+ * Online: the same "Updated 4m ago" as `formatLastSynced`. Offline:
+ * "Showing offline data · updated 4m ago". Null timestamp → null.
+ */
+export function formatFreshnessLabel(cachedAt: number | null | undefined, offline: boolean): string | null {
+  const updated = formatLastSynced(cachedAt);
+  if (!updated) return null;
+  return offline ? `Showing offline data · ${updated.charAt(0).toLowerCase()}${updated.slice(1)}` : updated;
+}

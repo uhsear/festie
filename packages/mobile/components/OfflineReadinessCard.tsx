@@ -7,6 +7,7 @@ import type { ReadinessSection, SectionReadiness } from '@festie/shared/stores';
 import { timeAgo } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { offlineSummary } from '../lib/offlineSummary';
 import { basemapCacheInfo, ensureBasemapCached } from '../lib/basemapCache';
 
 interface Props {
@@ -256,13 +257,12 @@ export default function OfflineReadinessCard({ festivalId, pmtilesUrl = null, fe
 
   // C9 — nothing left to do: one summary row, tap to expand the checklist.
   const [expanded, setExpanded] = useState(false);
-  const lastSyncedAt = steps.reduce<number | null>(
-    (max, { section }) =>
-      section.status === 'ready' && section.syncedAt != null ? Math.max(max ?? 0, section.syncedAt) : max,
-    null,
+  const summary = offlineSummary(
+    steps.map((x) => x.section),
+    festivalPast,
   );
-  const collapsed =
-    !expanded && lastSyncedAt != null && (festivalPast || steps.every(({ section }) => section.status === 'ready'));
+  const syncedAgo = summary.lastSyncedAt != null ? timeAgo(summary.lastSyncedAt) : '';
+  const collapsed = !expanded && summary.collapsed;
 
   return (
     <View style={styles.card} accessibilityRole="none" accessibilityLabel="Download festival for offline">
@@ -302,12 +302,13 @@ export default function OfflineReadinessCard({ festivalId, pmtilesUrl = null, fe
           style={styles.summaryRow}
           onPress={() => setExpanded(true)}
           accessibilityRole="button"
-          accessibilityLabel="Show offline download details"
+          accessibilityLabel={`Saved for offline, synced ${syncedAgo}`}
+          accessibilityHint="Shows download details"
           accessibilityState={{ expanded: false }}
         >
           <Ionicons name="checkmark-circle" size={16} color={t.colors.accent.aqua} />
           <Text style={styles.summaryText} numberOfLines={1}>
-            Saved for offline · synced {timeAgo(lastSyncedAt)}
+            Saved for offline · synced {syncedAgo}
           </Text>
           <Ionicons name="chevron-down" size={14} color={t.colors.text.muted} />
         </TouchableOpacity>

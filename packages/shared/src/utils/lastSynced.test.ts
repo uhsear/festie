@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { formatLastSynced, offlineReadyLabel } from './lastSynced';
+import { formatFreshnessLabel, formatLastSynced, offlineReadyLabel } from './lastSynced';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -49,5 +49,19 @@ describe('offlineReadyLabel', () => {
   it('returns "offline-ready" once cached', () => {
     expect(offlineReadyLabel(Date.now())).toBe('offline-ready');
     expect(offlineReadyLabel(0)).toBe('offline-ready');
+  });
+});
+
+describe('formatFreshnessLabel', () => {
+  it('matches formatLastSynced online and prefixes offline data when offline', () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-06-14T12:00:00Z').getTime();
+    vi.setSystemTime(now);
+    expect(formatFreshnessLabel(now - 4 * 60_000, false)).toBe('Updated 4m ago');
+    expect(formatFreshnessLabel(now - 4 * 60_000, true)).toBe('Showing offline data · updated 4m ago');
+  });
+
+  it('returns null without a timestamp', () => {
+    expect(formatFreshnessLabel(null, true)).toBe(null);
   });
 });
