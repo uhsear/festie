@@ -128,6 +128,8 @@ export default function createShareRoutes(deps: any) {
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'public, max-age=300');
+      // Shared links keep working, but must never be indexed by search engines.
+      res.setHeader('X-Robots-Tag', 'noindex');
       res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https:; frame-ancestors 'none'");
       return res.send(renderSharePage({
         username: escapeHtml(user?.username || profile.name || 'Anonymous'),
@@ -167,6 +169,7 @@ export default function createShareRoutes(deps: any) {
       const username = user?.username || profile.name || 'Anonymous';
 
       res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('X-Robots-Tag', 'noindex');
       return sendSuccess(res, {
         username,
         festivalName: festival.name,

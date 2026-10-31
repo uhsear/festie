@@ -32,10 +32,14 @@ export default function PublicScheduleSection() {
     }
   };
 
-  const copy = () => {
-    navigator.clipboard?.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast("Couldn't copy the link. Select it and copy it yourself.", 'error');
+    }
   };
 
   return (
@@ -46,7 +50,7 @@ export default function PublicScheduleSection() {
             <Globe className="w-4 h-4" aria-hidden="true" />
             Public schedule page
           </h3>
-          <p className="text-xs text-text-muted">Anyone with the link can see your picks.</p>
+          <p className="text-xs text-text-muted">Anyone with the link can see your picks. Turning it off hides this link; picks links you already shared keep working.</p>
         </div>
         <button
           type="button"
