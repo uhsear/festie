@@ -2093,6 +2093,7 @@ describe('routes/share.js', () => {
       const res = await request(app).get('/s/p1');
       assert.equal(res.status, 200);
       assert.ok(res.headers['content-type']!.includes('text/html'));
+      assert.equal(res.headers['x-robots-tag'], 'noindex');
       assert.ok(res.text.includes('testuser'));
       assert.ok(res.text.includes('Test Fest'));
       assert.ok(res.text.includes('Alpha')); // artist name
@@ -2246,6 +2247,7 @@ describe('routes/share.js', () => {
       assert.equal(res.body.data.festivalName, 'Test Fest');
       assert.deepStrictEqual(res.body.data.picks, { 'set-a': 'must' });
       assert.ok(res.body.data.festival);
+      assert.equal(res.headers['x-robots-tag'], 'noindex');
       assert.ok(res.body.data.festival.stages);
       assert.ok(res.body.data.festival.days);
     });

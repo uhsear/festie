@@ -46,7 +46,7 @@ export default function AccountPublicScheduleSection() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Public schedule page</Text>
-          <Text style={styles.rowHint}>Anyone with the link can see your picks.</Text>
+          <Text style={styles.rowHint}>Anyone with the link can see your picks. Turning it off hides this link; picks links you already shared keep working.</Text>
         </View>
         <Switch
           value={on}
