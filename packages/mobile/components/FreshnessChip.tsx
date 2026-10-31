@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import { useCrewStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
-import { timeAgo } from '@festie/shared/utils';
+import { formatFreshnessLabel } from '@festie/shared/utils';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { freshnessFor } from '../lib/freshness';
 
@@ -17,11 +17,11 @@ interface FreshnessChipProps {
 }
 
 /**
- * Offline-honest freshness chip. Renders "Synced N ago" when online or
- * "Showing offline data · synced N ago" when `uiStore.offlineMode` is set,
+ * Offline-honest freshness chip. Renders "Updated N ago" when online or
+ * "Showing offline data · updated N ago" when `uiStore.offlineMode` is set,
  * with a small "N queued" badge driven by `uiStore.pendingSync`.
  *
- * The relative-time label comes from the SHARED `timeAgo` util (single source
+ * The relative-time label comes from the SHARED `formatFreshnessLabel` util (single source
  * of truth across web + mobile). The "N ago" value advances from the device
  * clock — even on a cold offline launch — via a 30s tick.
  *
@@ -37,7 +37,7 @@ export default function FreshnessChip({ surface }: FreshnessChipProps) {
   const festivalCachedAt = useFestivalDataStore((s) => s._festivalCachedAt);
   const cachedAt = surface === 'crew' ? crewCachedAt : festivalCachedAt;
 
-  // Re-render on a 30s tick so "synced N ago" keeps advancing from the device
+  // Re-render on a 30s tick so "updated N ago" keeps advancing from the device
   // clock without any network.
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -46,9 +46,8 @@ export default function FreshnessChip({ surface }: FreshnessChipProps) {
     return () => clearInterval(id);
   }, [cachedAt]);
 
-  if (cachedAt == null) return null;
-
-  const label = offlineMode ? `Showing offline data · synced ${timeAgo(cachedAt)}` : `Synced ${timeAgo(cachedAt)}`;
+  const label = formatFreshnessLabel(cachedAt, offlineMode);
+  if (!label || cachedAt == null) return null;
 
   // Colour is never alone (tokens/colors.ts): the age numeral is in the label,
   // the shape is filled (live) / hollow ring (aging) / dashed ring (stale).
