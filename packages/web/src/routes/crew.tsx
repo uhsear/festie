@@ -277,7 +277,7 @@ function CrewViewInner() {
                 inviteCode={activeCrew.inviteCode}
                 crewId={activeCrew.id}
                 isOwner={isOwner}
-                expiresAt={(activeCrew as { inviteExpiresAt?: string | null }).inviteExpiresAt}
+                expiresAt={activeCrew.inviteExpiresAt}
               />
             )}
 

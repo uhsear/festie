@@ -307,6 +307,13 @@ describe('crewStore', () => {
       expect(useCrewStore.getState().activeCrew!.inviteCode).toBe('NEW456');
     });
 
+    it('refreshes inviteExpiresAt from the response', async () => {
+      useCrewStore.setState({ activeCrew: { ...mockCrew, inviteExpiresAt: '2020-01-01T00:00:00.000Z' } });
+      vi.mocked(api.post).mockResolvedValueOnce({ inviteCode: 'NEW456', inviteExpiresAt: '2099-01-08T00:00:00.000Z' });
+      await useCrewStore.getState().regenerateInvite('crew-1');
+      expect(useCrewStore.getState().activeCrew!.inviteExpiresAt).toBe('2099-01-08T00:00:00.000Z');
+    });
+
     it('leaves activeCrew null if no active crew', async () => {
       vi.mocked(api.post).mockResolvedValueOnce({ inviteCode: 'NEW456' });
       await useCrewStore.getState().regenerateInvite('crew-1');
