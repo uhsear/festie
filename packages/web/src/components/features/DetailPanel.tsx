@@ -249,7 +249,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
       }}
       direction={isLg ? 'right' : 'bottom'}
       dismissible
-      handleOnly
     >
       <Drawer.Portal>
         {/* R4: scrim rgba(0,0,0,0.6) per spec (was bg-black/50 = 0.5) */}
@@ -271,8 +270,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
           }}
         >
           <div className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-border-light flex-shrink-0 lg:hidden" />
-          {/* R4: aqua hairline divider below drag handle (interior header boundary) */}
-          <div className="h-px w-full bg-[var(--color-aqua-a12)] flex-shrink-0 lg:hidden" />
           <Drawer.Title className="sr-only">{artistDisplayName(set, b2bSeparator)}</Drawer.Title>
           <Drawer.Description className="sr-only">
             Set details, schedule, and crew info for {artistDisplayName(set, b2bSeparator)}
