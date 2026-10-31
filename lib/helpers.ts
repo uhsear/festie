@@ -139,10 +139,11 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
   // so exported wrap PNGs include the custom Syncopate/Space Grotesk glyphs
   // instead of falling back to system fonts.
   connectParts.push('https://fonts.googleapis.com https://fonts.gstatic.com');
-  // Crew map (MapLibre) raster tiles + Sentry error ingest. The OSM tile host is
-  // also added to img-src (raster tiles load as images); Sentry's RN/web SDK
+  // Crew map (MapLibre) OpenFreeMap basemap + Sentry error ingest. The basemap
+  // host serves the style, vector tiles, glyphs and sprites; it is also in
+  // img-src for its raster hillshade and sprite images. Sentry's RN/web SDK
   // POSTs envelopes to *.sentry.io.
-  connectParts.push('https://tile.openstreetmap.org https://*.sentry.io');
+  connectParts.push('https://tiles.openfreemap.org https://*.sentry.io');
   const connectSrc = connectParts.join(' ');
 
   const directives = [
@@ -156,7 +157,7 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
     // (packages/shared/src/pwa/runtimeCaching.ts).  Without these hosts here the
     // browser blocks the cached images from rendering (CSP violation), defeating the
     // offline art cache entirely.  Kept tight — no other hosts added.
-    "img-src 'self' data: blob: https://art.festie.us https://*.scdn.co https://*.spotifycdn.com https://tile.openstreetmap.org",
+    "img-src 'self' data: blob: https://art.festie.us https://*.scdn.co https://*.spotifycdn.com https://tiles.openfreemap.org",
     "font-src 'self' https://fonts.gstatic.com",
     `style-src ${styleSrc}`,
     `script-src ${scriptSrc}`,

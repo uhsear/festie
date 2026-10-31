@@ -108,9 +108,9 @@ describe('map document CSP', () => {
 
   it('still permits exactly what TILES need', () => {
     const raster = cspOf(VARIANTS[0]![1]);
-    // The online OSM raster basemap is still a network dependency.
-    expect(raster['img-src']).toContain('https://*.tile.openstreetmap.org');
-    expect(raster['connect-src']).toContain('https://*.tile.openstreetmap.org');
+    // The online OpenFreeMap basemap is still a network dependency.
+    expect(raster['img-src']).toContain('https://tiles.openfreemap.org');
+    expect(raster['connect-src']).toContain('https://tiles.openfreemap.org');
 
     // A festival's own remote PMTiles archive is byte-range fetched.
     const remote = cspOf(VARIANTS[1]![1]);

@@ -289,6 +289,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           COALESCE(f.location, '') AS location,
           COALESCE(f.b2b_separator, 'b2b') AS "b2bSeparator",
           f.time_zone AS "timeZone",
+          f.latitude,
+          f.longitude,
           f.map_config AS "mapConfig",
           f.created_at AS "createdAt",
           f.updated_at AS "updatedAt",
@@ -443,6 +445,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             name,
             location,
             time_zone AS "timeZone",
+            latitude,
+            longitude,
             map_config AS "mapConfig",
             created_at AS "createdAt",
             updated_at AS "updatedAt"
@@ -535,6 +539,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             name,
             location,
             time_zone AS "timeZone",
+            latitude,
+            longitude,
             map_config AS "mapConfig",
             created_at AS "createdAt",
             updated_at AS "updatedAt"

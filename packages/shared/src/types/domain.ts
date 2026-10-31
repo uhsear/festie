@@ -88,6 +88,13 @@ export interface Festival {
    */
   timeZone?: string;
   /**
+   * Venue coordinates (degrees), geocoded on the server from `location`. The map
+   * centres here when the festival has no map-config camera and no pins, and the
+   * weather card reads them. `null`/absent when the location could not be found.
+   */
+  latitude?: number | null;
+  longitude?: number | null;
+  /**
    * M6 festival site-map config (serializer key `mapConfig`; DB column
    * `map_config` jsonb). `null`/absent = "not mapped yet" fallback. Additive +
    * backward-compatible — legacy festivals omit it and keep working.

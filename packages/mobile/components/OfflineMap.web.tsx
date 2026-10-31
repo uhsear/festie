@@ -48,7 +48,7 @@ import { useNow } from '../hooks/useNow';
  * the library: the WebView document inlines a vendored copy of the same dist
  * bytes (see `vendor/mapRuntime.ts`), so it no longer fetches one from a CDN.
  *
- * What it renders: a LIVE MapLibre GL JS map (no API key, OSM raster basemap),
+ * What it renders: a LIVE MapLibre GL JS map (no API key, OpenFreeMap basemap),
  * the same three marker kinds web's `CrewMap.tsx` plots — meeting-point pins,
  * live peers, and an emphasized SOS — ported to the OfflineMap props. MapLibre is
  * heavy and is `import()`-ed dynamically inside an effect (mirroring CrewMap) so
@@ -100,8 +100,8 @@ interface OfflineMapProps {
 
 // Basemap style is chosen by the shared `pickMapStyle` (Phase 3A): a festival
 // with an `offlineBasemap.pmtilesUrl` gets a PMTiles VECTOR basemap; every other
-// festival keeps TODAY's online OSM raster (graceful fallback, never regressed) —
-// mirrors CrewMap.tsx so the web surfaces render identically.
+// festival gets the online OpenFreeMap style (the Stage default here; this
+// dev-only Expo-web fallback does not follow the theme) — mirrors CrewMap.tsx.
 //
 // Phase 3B caching (web): the PMTiles JS client byte-range fetches the archive
 // over HTTPS, and the browser's HTTP cache (the archive is served immutable +
@@ -579,7 +579,7 @@ export default function OfflineMap({
         const cfg = mapConfigRef.current;
         // Phase 3A: register the pmtiles protocol + read the vector style only
         // when this festival carries a valid offline basemap; otherwise
-        // pickMapStyle returns the unchanged online OSM raster. addProtocol is a
+        // pickMapStyle returns the online OpenFreeMap style. addProtocol is a
         // process-global on the maplibre module — guard against double-register.
         // Done BEFORE the final mounted-guard so no await sits between it and the
         // mapRef assignment.

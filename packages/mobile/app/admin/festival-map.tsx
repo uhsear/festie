@@ -70,6 +70,8 @@ interface FestivalDetail {
   name?: string;
   location?: string;
   timeZone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   mapConfig?: FestivalMapConfig | null;
   stages?: { id?: string; name?: string; color?: string; latitude?: number | null; longitude?: number | null }[];
   days?: {
@@ -215,7 +217,7 @@ export default function FestivalMapEditorScreen() {
 
   // Fold the live stages into a Festival-shaped object so OfflineMap can plot the
   // stage + amenity pins as they're authored (live preview). The cast is safe:
-  // OfflineMap only reads stages[] + mapConfig off this object.
+  // OfflineMap only reads stages[], mapConfig and the geocoded venue off this object.
   // The config the PREVIEW renders: committed config, plus the in-progress zone
   // (once it has ≥3 vertices) appended as a draft so the organizer watches the
   // polygon take shape. The draft is never saved — only committed zones persist.
@@ -238,10 +240,12 @@ export default function FestivalMapEditorScreen() {
     return {
       id: editingId ?? 'draft',
       name,
+      latitude: detail?.latitude ?? null,
+      longitude: detail?.longitude ?? null,
       mapConfig: previewConfig,
       stages: stages as unknown as Stage[],
     } as Festival & { stages?: Stage[] };
-  }, [editingId, name, previewConfig, stages]);
+  }, [editingId, name, detail?.latitude, detail?.longitude, previewConfig, stages]);
 
   // The WebView authoring mode follows the armed target ('stage' / 'amenity' /
   // 'off'). Cosmetic on the WebView side; the tap still flows through onMapPress.

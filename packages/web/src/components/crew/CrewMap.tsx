@@ -17,6 +17,7 @@ import {
   hasOfflineBasemap,
   type MapPin as Pin,
 } from '@festie/shared/utils';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import EmptyState from '../ui/EmptyState';
 import { type MapLibre, type PursueTarget } from './crew-map/mapDom';
@@ -138,7 +139,7 @@ let pmtilesRegistration: Promise<void> | null = null;
 
 // Basemap style is chosen by the shared `pickMapStyle` (Phase 3A): a festival
 // with an `offlineBasemap.pmtilesUrl` gets a PMTiles VECTOR basemap; every other
-// festival keeps TODAY's online OSM raster (graceful fallback, never regressed).
+// festival gets the online OpenFreeMap style for the current theme.
 
 export default function CrewMap({
   meetingPoints,
@@ -223,9 +224,15 @@ export default function CrewMap({
   const hasSiteplan = !!siteplan;
   const hasPeers = peers.length > 0;
   const hasSos = sosList.some((s) => !!s.position);
+  // A festival camera alone (map-config bounds/center or the geocoded venue) is
+  // enough: an unmapped festival still opens on its grounds, and the admin editor
+  // gets a canvas for the first pin.
+  const hasCamera = useMemo(() => pickFestivalCamera(festival, []).center != null, [festival]);
   // Render the map when there's ANYTHING to plot (meeting points, stage/amenity
-  // map data, zone polygons, a site-plan overlay, live peers, or an SOS coord).
-  const shouldRenderMap = hasPins || hasStages || hasAmenities || hasZones || hasSiteplan || hasPeers || hasSos;
+  // map data, zone polygons, a site-plan overlay, live peers, an SOS coord) or a
+  // known place to centre on.
+  const shouldRenderMap =
+    hasPins || hasStages || hasAmenities || hasZones || hasSiteplan || hasPeers || hasSos || hasCamera;
 
   // Initial camera: prefer the festival's explicit map-config (bounds/center),
   // then fall back to framing the static pins (meeting points + stages +
@@ -378,6 +385,9 @@ export default function CrewMap({
   // making it a creation dep. The style is picked once at map creation.
   const mapConfigRef = useRef(festival?.mapConfig);
   mapConfigRef.current = festival?.mapConfig;
+  // The online basemap follows the theme, so a theme change rebuilds the map and
+  // the per-concern hooks re-add their layers when it reports ready again.
+  const theme = useUIStore((s) => s.theme);
 
   // ── Map lifecycle: create once when there's content; tear down on unmount ──
   useEffect(() => {
@@ -400,7 +410,7 @@ export default function CrewMap({
         const cfg = mapConfigRef.current;
         // Phase 3A: only when this festival carries a valid offline basemap do we
         // register the pmtiles protocol + read it from a vector style. Otherwise
-        // pickMapStyle returns the unchanged online OSM raster. addProtocol is a
+        // pickMapStyle returns the themed online OpenFreeMap style. addProtocol is a
         // process-global registration; the module-level flag guards repeated map
         // mounts from double-registering (maplibre warns on a duplicate). The
         // flag lives on this module because maplibre-gl v6 is ESM-only and its
@@ -429,7 +439,7 @@ export default function CrewMap({
         const c = centerRef.current;
         const map = new maplibregl.Map({
           container: containerRef.current,
-          style: pickMapStyle(cfg) as unknown as import('maplibre-gl').StyleSpecification,
+          style: pickMapStyle(cfg, theme) as unknown as import('maplibre-gl').StyleSpecification,
           center: c ? [c.longitude, c.latitude] : [0, 0],
           zoom: c ? 14 : 1,
           attributionControl: { compact: true },
@@ -482,10 +492,11 @@ export default function CrewMap({
       mapRef.current?.remove();
       mapRef.current = null;
       glRef.current = null;
+      setStatus('pending');
     };
-    // Only (re)create when content first appears / disappears. The refs read
-    // inside are intentionally not deps (mount-once map init).
-  }, [shouldRenderMap]);
+    // Only (re)create when content first appears / disappears or the theme
+    // changes the basemap. The refs read inside are intentionally not deps.
+  }, [shouldRenderMap, theme]);
 
   // ── Per-concern layers (each keys its own effect on a stable content string,
   //    reads its live data through a ref → honest deps, no suppressions). ──────

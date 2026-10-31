@@ -52,6 +52,8 @@ interface FestivalDetail {
   name?: string;
   location?: string;
   timeZone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   mapConfig?: FestivalMapConfig | null;
   stages?: { id?: string; name?: string; color?: string; latitude?: number | null; longitude?: number | null }[];
   days?: {
@@ -176,16 +178,19 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
   }, [isDrawingZone, draftVertices, zoneColor, zoneLabel, mapConfig, isPlacingSiteplan, draftCorners, siteplanUrl, siteplanOpacity]);
 
   // Fold stages into a Festival-shaped object for the live CrewMap preview. The
-  // cast is safe: CrewMap reads only stages[] + mapConfig off this object.
+  // cast is safe: CrewMap reads only stages[], mapConfig and the geocoded venue
+  // (the camera fallback, so an unmapped festival opens on its grounds).
   const mapFestival = useMemo(
     () =>
       ({
         id: festivalId,
         name,
+        latitude: detail?.latitude ?? null,
+        longitude: detail?.longitude ?? null,
         mapConfig: previewConfig,
         stages: stages as unknown as Stage[],
       }) as Festival & { stages?: Stage[] },
-    [festivalId, name, previewConfig, stages],
+    [festivalId, name, detail?.latitude, detail?.longitude, previewConfig, stages],
   );
 
   // A click on the map applies to the armed target (one-shot: disarms after).

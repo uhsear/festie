@@ -40,6 +40,8 @@ export default function createUtils(pool: Pool) {
         COALESCE(f.location, '') AS location,
         COALESCE(f.b2b_separator, 'b2b') AS "b2bSeparator",
         f.time_zone AS "timeZone",
+        f.latitude,
+        f.longitude,
         f.map_config AS "mapConfig",
         f.created_at AS "createdAt",
         f.updated_at AS "updatedAt",

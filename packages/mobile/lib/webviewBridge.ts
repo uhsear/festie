@@ -7,6 +7,8 @@
 // No React, no react-native, no WebView imports — keep this importable from a
 // plain Jest test.
 
+import { OPENFREEMAP_HOST } from '@festie/shared/utils';
+
 // U+2028 / U+2029 are valid whitespace in JSON output but are literal line
 // terminators inside a JS string literal — they must be \u-escaped before the
 // JSON is spliced into the WebView's JS context. Built from char codes so this
@@ -34,12 +36,10 @@ export function safeJsonForScript(value: unknown): string {
  * blocked (default-deny), mirroring the hardened Spotify embed WebView. The
  * MapLibre runtime is vendored into the app and inlined into the document (see
  * lib/mapDocument.ts), so unpkg.com is NO LONGER permitted here — the only
- * baked-in hosts left are the OpenStreetMap tile hosts
- * (`tile.openstreetmap.org` + its `*.tile.openstreetmap.org` subdomains). The
- * anchored regex (`(^|\.)tile\.openstreetmap\.org$`) rejects lookalike hosts
- * such as `evil.openstreetmap.org.attacker.com` or
- * `tile.openstreetmap.org.evil.com` — the `$` end-anchor means the host must
- * END at the legitimate domain.
+ * baked-in host left is the OpenFreeMap basemap host (`OPENFREEMAP_HOST`, which
+ * serves the style, tiles, glyphs and sprites). It is matched by strict
+ * equality, so lookalikes such as `tiles.openfreemap.org.evil.com` or
+ * `eviltiles.openfreemap.org` never match.
  *
  * Phase 3A: a festival MAY carry an offline PMTiles vector basemap, whose archive
  * is byte-range fetched over HTTPS from a per-festival host. That host is NOT
@@ -47,7 +47,7 @@ export function safeJsonForScript(value: unknown): string {
  * upstream); the renderer passes it in via `extraHost` so the allowlist permits
  * EXACTLY that one origin and nothing more — default-deny is preserved. The host
  * is compared by strict equality (no wildcard), so only the configured origin
- * (and the static OSM tile hosts) can ever load.
+ * (and the static basemap host) can ever load.
  *
  * Phase 4B: `extraHost` may be an ARRAY so the renderer can permit BOTH the
  * basemap host AND the georeferenced site-plan image host (each config-driven,
@@ -55,7 +55,7 @@ export function safeJsonForScript(value: unknown): string {
  * equality; a single string is still accepted for backward compatibility.
  */
 export function isAllowedMapHost(host: string, extraHost?: string | string[] | null): boolean {
-  if (/(^|\.)tile\.openstreetmap\.org$/.test(host)) return true;
+  if (host === OPENFREEMAP_HOST) return true;
   // The festival's configured host(s) (PMTiles basemap / site-plan image), when
   // present. Strict equality only — no wildcard. Empty strings never match.
   if (!extraHost) return false;

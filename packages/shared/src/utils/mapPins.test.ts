@@ -245,6 +245,13 @@ describe('pickFestivalCamera', () => {
     expect(cam.center).toEqual({ latitude: 5, longitude: 7 });
   });
 
+  it('falls back to the geocoded venue when there is no map-config camera and no pins', () => {
+    const f = festival({ latitude: 28.538, longitude: -81.405 });
+    expect(pickFestivalCamera(f, [])).toEqual({ center: { latitude: 28.538, longitude: -81.405 }, bounds: null });
+    // Pins still win over the venue point.
+    expect(pickFestivalCamera(f, pins).bounds).not.toBeNull();
+  });
+
   it('returns center: null, bounds: null when there is nothing to show', () => {
     expect(pickFestivalCamera(null)).toEqual({ center: null, bounds: null });
     expect(pickFestivalCamera(festival({}), [])).toEqual({ center: null, bounds: null });

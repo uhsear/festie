@@ -92,37 +92,20 @@ describe('isAllowedMapHost', () => {
     expect(isAllowedMapHost('unpkg.com')).toBe(false);
   });
 
-  it('allows the bare OSM tile host', () => {
-    expect(isAllowedMapHost('tile.openstreetmap.org')).toBe(true);
+  it('allows the OpenFreeMap basemap host', () => {
+    expect(isAllowedMapHost('tiles.openfreemap.org')).toBe(true);
   });
 
-  it('allows OSM tile subdomains (a/b/c.tile.openstreetmap.org)', () => {
-    expect(isAllowedMapHost('a.tile.openstreetmap.org')).toBe(true);
-    expect(isAllowedMapHost('b.tile.openstreetmap.org')).toBe(true);
-    expect(isAllowedMapHost('c.tile.openstreetmap.org')).toBe(true);
+  it('no longer allows the old OSM tile hosts', () => {
+    expect(isAllowedMapHost('tile.openstreetmap.org')).toBe(false);
+    expect(isAllowedMapHost('a.tile.openstreetmap.org')).toBe(false);
   });
 
-  it('rejects a suffix-lookalike that appends an attacker domain', () => {
-    // The classic bypass: legitimate domain as a left-label of an evil host.
-    expect(isAllowedMapHost('evil.openstreetmap.org.attacker.com')).toBe(false);
-    expect(isAllowedMapHost('tile.openstreetmap.org.evil.com')).toBe(false);
+  it('rejects lookalikes of the basemap host', () => {
+    expect(isAllowedMapHost('tiles.openfreemap.org.evil.com')).toBe(false);
+    expect(isAllowedMapHost('eviltiles.openfreemap.org')).toBe(false);
+    expect(isAllowedMapHost('openfreemap.org')).toBe(false);
     expect(isAllowedMapHost('unpkg.com.evil.com')).toBe(false);
-  });
-
-  it('rejects a prefix-lookalike that prepends the legit host to a junk label', () => {
-    // "...org" must be the END of the host -- a different TLD/label fails.
-    expect(isAllowedMapHost('tile.openstreetmap.orgx')).toBe(false);
-    expect(isAllowedMapHost('tileXopenstreetmapXorg')).toBe(false);
-  });
-
-  it('rejects a host that merely embeds the allowed host mid-string', () => {
-    expect(isAllowedMapHost('nottile.openstreetmap.org.io')).toBe(false);
-    expect(isAllowedMapHost('myunpkg.com')).toBe(false);
-  });
-
-  it('rejects bare openstreetmap.org (only the tile. zone is whitelisted)', () => {
-    expect(isAllowedMapHost('openstreetmap.org')).toBe(false);
-    expect(isAllowedMapHost('www.openstreetmap.org')).toBe(false);
   });
 
   it('rejects the empty host and obvious attacker hosts', () => {
