@@ -25,6 +25,7 @@ import {
   buildPursuit,
   nearestPin,
   pickMapStyle,
+  OPENFREEMAP_HOST,
   pmtilesHost,
   hasOfflineBasemap,
   pmtilesVectorStyle,
@@ -116,13 +117,12 @@ interface LivePin {
 
 // Origins the inline map document is allowed to load/navigate to. The page is
 // served as inline HTML (about:blank origin) and, now that the MapLibre runtime
-// is vendored into the app, pulls nothing but raster tiles from OpenStreetMap.
+// is vendored into the app, pulls nothing but the OpenFreeMap basemap.
 // Narrowed off the old ['*'] so the WebView can't be navigated to an arbitrary
 // attacker origin (security-review H3 / I4).
 const MAP_ORIGIN_WHITELIST = [
   'about:',
-  'https://tile.openstreetmap.org',
-  'https://*.tile.openstreetmap.org',
+  `https://${OPENFREEMAP_HOST}`,
 ];
 
 /**
@@ -575,9 +575,9 @@ export default function OfflineMap({
       // via the SAME shared style builder (single source of truth).
       return pmtilesVectorStyle(localBasemapUri, basemapAttribution);
     }
-    // Remote https basemap (Phase 3A) or no basemap → unchanged shared pick.
-    return pickMapStyle(festival?.mapConfig);
-  }, [usingLocalBasemap, localBasemapUri, basemapAttribution, festival]);
+    // Remote https basemap (Phase 3A), or the themed online OpenFreeMap style.
+    return pickMapStyle(festival?.mapConfig, theme);
+  }, [usingLocalBasemap, localBasemapUri, basemapAttribution, festival, theme]);
 
   // The remote host is permitted in the CSP/allowlist ONLY while we're still
   // reading the remote archive. Once the local file is in use, no remote origin
@@ -1429,7 +1429,7 @@ const useStyles = makeStyles((t) => ({
   chipGlyphOff: {
     opacity: 0.4,
   },
-  // The map canvas is always dark, so the chips need an opaque themed ground.
+  // The basemap under the chips varies, so they need an opaque themed ground.
   nearestChip: {
     minHeight: 44,
     flexDirection: 'row',

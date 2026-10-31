@@ -5,10 +5,10 @@
  * mapStyle.ts — pure MapLibre style selection for the festival map (Phase 3A),
  * shared by web (CrewMap, OfflineMap.web) and the native WebView document.
  *
- * PRIME DIRECTIVE — ADDITIVE + GRACEFUL FALLBACK: a festival with NO
- * `offlineBasemap.pmtilesUrl` MUST render exactly as before — the online OSM
- * raster basemap. Only when a festival carries a valid https PMTiles URL do we
- * switch to a minimal Protomaps-style VECTOR basemap reading `pmtiles://<url>`.
+ * A festival with NO `offlineBasemap.pmtilesUrl` renders the online OpenFreeMap
+ * vector basemap (themed). Only when a festival carries a valid https PMTiles URL
+ * do we switch to a minimal Protomaps-style VECTOR basemap reading
+ * `pmtiles://<url>`.
  *
  * This module owns ONLY the style JSON (a plain object MapLibre accepts) + the
  * pmtiles-host extraction used by the security allowlists. It has no map/DOM
@@ -17,32 +17,31 @@
  */
 
 import type { FestivalMapConfig } from '../types/domain';
+import type { ThemePreference } from '../stores/uiStore';
 
-/** OSM raster attribution string, kept identical to today's inline styles. */
-const OSM_ATTRIBUTION = '© OpenStreetMap contributors';
-
-/**
- * The online OpenStreetMap raster style (no API key) — TODAY's basemap. Returned
- * verbatim whenever there's no offline basemap so the online path never regresses.
- * `version` is the literal 8 MapLibre requires.
- */
-export function osmRasterStyle(): {
+/** A MapLibre style object (`version` is the literal 8 MapLibre requires). */
+export interface MapStyleObject {
   version: 8;
   sources: Record<string, unknown>;
   layers: Array<Record<string, unknown>>;
-} {
-  return {
-    version: 8,
-    sources: {
-      osm: {
-        type: 'raster',
-        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-        tileSize: 256,
-        attribution: OSM_ATTRIBUTION,
-      },
-    },
-    layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-  };
+}
+
+/**
+ * The single host behind every OpenFreeMap style: style JSON, TileJSON, vector
+ * tiles, glyphs and sprites. The web CSP (lib/helpers.ts) and the native
+ * WebView CSP + host allowlist must permit exactly this host.
+ */
+export const OPENFREEMAP_HOST = 'tiles.openfreemap.org';
+
+/**
+ * The online default basemap: OpenFreeMap vector styles (OpenStreetMap data, no
+ * API key, no request limit). Dark for Stage, light for Daylight, so the map
+ * matches the app theme and stays readable in sunlight. Attribution comes from
+ * the style's TileJSON, so MapLibre's attribution control credits OpenFreeMap,
+ * OpenMapTiles and OpenStreetMap without extra code.
+ */
+export function openFreeMapStyleUrl(theme: ThemePreference = 'stage'): string {
+  return `https://${OPENFREEMAP_HOST}/styles/${theme === 'daylight' ? 'positron' : 'dark'}`;
 }
 
 /**
@@ -58,14 +57,7 @@ export function osmRasterStyle(): {
  * host allowlist). No labels (text) layers — those need a glyphs endpoint we
  * don't host; geometry-only keeps the basemap fully self-contained.
  */
-export function pmtilesVectorStyle(
-  pmtilesUrl: string,
-  attribution?: string,
-): {
-  version: 8;
-  sources: Record<string, unknown>;
-  layers: Array<Record<string, unknown>>;
-} {
+export function pmtilesVectorStyle(pmtilesUrl: string, attribution?: string): MapStyleObject {
   return {
     version: 8,
     sources: {
@@ -120,7 +112,7 @@ export function pmtilesVectorStyle(
 /**
  * True when the festival map-config carries a usable offline vector basemap: an
  * https PMTiles URL. Anything else (absent config, non-https, empty) is false so
- * the caller keeps the online raster basemap (graceful fallback).
+ * the caller keeps the online basemap (graceful fallback).
  */
 export function hasOfflineBasemap(
   mapConfig: FestivalMapConfig | null | undefined,
@@ -131,15 +123,19 @@ export function hasOfflineBasemap(
 
 /**
  * Pick the MapLibre style for a festival: the PMTiles vector basemap when the
- * config carries a valid offline basemap, otherwise TODAY's online OSM raster.
- * Pure + total — the renderer hands the result straight to `new Map({ style })`.
+ * config carries a valid offline basemap, otherwise the themed OpenFreeMap style
+ * URL. Pure + total — the renderer hands the result straight to
+ * `new Map({ style })`, which accepts either a style object or a style URL.
  */
-export function pickMapStyle(mapConfig: FestivalMapConfig | null | undefined): ReturnType<typeof osmRasterStyle> {
+export function pickMapStyle(
+  mapConfig: FestivalMapConfig | null | undefined,
+  theme: ThemePreference = 'stage',
+): MapStyleObject | string {
   if (hasOfflineBasemap(mapConfig)) {
     const { pmtilesUrl, attribution } = mapConfig.offlineBasemap;
     return pmtilesVectorStyle(pmtilesUrl, attribution);
   }
-  return osmRasterStyle();
+  return openFreeMapStyleUrl(theme);
 }
 
 /**

@@ -27,9 +27,31 @@ export default function createFestivalsRoutes(deps: any) {
     validateQuery,
     validateParams,
     invalidateFestivalCache,
+    geocodeVenue,
   } = deps;
 
   const router = express.Router();
+
+  // Fill a festival's venue coordinates from its free-text location (lib/geocode.ts),
+  // after the save has answered the admin. The map centres on them when nothing is
+  // pinned, and the weather route needs them. Tests do not inject geocodeVenue.
+  async function fillVenueCoords(festivalId: string, location: string) {
+    if (!geocodeVenue || !location?.trim()) return;
+    try {
+      const coords = await geocodeVenue(location);
+      if (!coords) {
+        log.info('festival venue not found', { festivalId, location });
+        return;
+      }
+      const festival = await stores.festivals.update(festivalId, coords);
+      if (!festival) return;
+      invalidateFestivalCache();
+      invalidateFestivalListCache();
+      emitter.festivalUpdated({ festival });
+    } catch (error: any) {
+      log.warn('festival venue geocode failed', { festivalId, error: error.message });
+    }
+  }
 
   let _festivalListCache: any = null;
   let _festivalListETag: any = null;
@@ -215,6 +237,8 @@ export default function createFestivalsRoutes(deps: any) {
             id: festival.id,
             name: festival.name,
             location: festival.location,
+            latitude: festival.latitude ?? null,
+            longitude: festival.longitude ?? null,
             stages: (festival.stages || []).map((s: any) => ({
               id: s.id,
               name: s.name,
@@ -267,6 +291,7 @@ export default function createFestivalsRoutes(deps: any) {
         log.info('festival:created', { festivalId: festival.id, name: festival.name });
         audit('festival:create', 'festival', festival.id, req, { name: festival.name });
         emitter.festivalCreated({ id: festival.id, name: festival.name });
+        void fillVenueCoords(festival.id, festival.location);
         res.status(201);
         return sendSuccess(res, festival);
       } catch (error: any) {
@@ -307,6 +332,10 @@ export default function createFestivalsRoutes(deps: any) {
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
         audit('festival:update', 'festival', festival.id, req, { name: festival.name });
         emitter.festivalUpdated({ festival });
+        const venueMissing = typeof existingFestival.latitude !== 'number';
+        if (venueMissing || nextFestival.location !== existingFestival.location) {
+          void fillVenueCoords(festival.id, nextFestival.location);
+        }
         return sendSuccess(res, festival);
       } catch (error: any) {
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });

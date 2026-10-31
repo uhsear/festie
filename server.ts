@@ -106,6 +106,7 @@ import { createAppContext, buildContentSecurityPolicy, collectInlineHashes, load
 import { configureMiddleware } from './lib/middleware';
 import { configureSocketIO } from './lib/socket-setup';
 import { createBackgroundTasks, createCloseHandler } from './lib/shutdown';
+import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
 import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
@@ -233,6 +234,8 @@ async function createFestieApp(overrides: any = {}) {
   });
   ctx.reminderScheduler = reminderScheduler;
   deps.emitter = emitter;
+  // Venue geocoding (OpenStreetMap Nominatim). Off under test so suites make no network calls.
+  if (config.NODE_ENV !== 'test') deps.geocodeVenue = createVenueGeocoder({ log }).geocodeVenue;
 
   // 5. Mount route modules
   const authRoutes = createAuthRoutes(deps);
@@ -426,6 +429,16 @@ async function createFestieApp(overrides: any = {}) {
         }
         log.warn('startup token purge failed', { error: err.message });
       });
+  }
+
+  // Fill venue coordinates for festivals saved before geocoding existed. Waits for
+  // migrations so the festivals table is ready; leader only, like the purge above.
+  if (_isPurgeLeader && deps.geocodeVenue) {
+    Promise.resolve(ctx.migrationsReady)
+      .then(() =>
+        backfillVenueCoords({ pool, geocodeVenue: deps.geocodeVenue, log, onUpdated: deps.invalidateFestivalCache }),
+      )
+      .catch((err: any) => log.warn('venue backfill failed', { error: err.message }));
   }
 
   // 8. Background tasks (session/avatar/token cleanup, memory monitoring)

@@ -38,6 +38,7 @@
 
 import { colorsDaylight } from '@festie/shared/tokens';
 import type { ThemePreference } from '@festie/shared/stores';
+import { OPENFREEMAP_HOST } from '@festie/shared/utils';
 import { safeJsonForScript } from './webviewBridge';
 import {
   MAPLIBRE_CSS_SRC,
@@ -49,8 +50,8 @@ import {
 
 // The basemap style is CHOSEN by the shared `pickMapStyle` (Phase 3A) and
 // templated into buildMapHtml per-festival: a festival with an offline PMTiles
-// basemap gets a vector style; every other festival keeps TODAY's online OSM
-// raster (graceful fallback — the online path is never regressed).
+// basemap gets a vector style; every other festival gets the themed online
+// OpenFreeMap style URL.
 
 
 /**
@@ -97,7 +98,7 @@ function rgba(hex: string, alpha: number): string {
 export function buildMapHtml(
   center: { latitude: number; longitude: number } | null,
   /** MapLibre style object (raster OSM by default, PMTiles vector when configured). */
-  style: object,
+  style: object | string,
   /** The festival's PMTiles host to permit in the CSP, or null for none. */
   pmtilesOrigin: string | null,
   /**
@@ -132,7 +133,7 @@ export function buildMapHtml(
   const styleJson = safeJsonForScript(style);
   // Phase 3A/3B: load the pmtiles UMD when a vector basemap is configured — either
   // a remote https archive (pmtilesOrigin set) OR a local cached file:// archive
-  // (localBasemap set). With neither, the map is the unchanged online OSM raster.
+  // (localBasemap set). With neither, the map is the online OpenFreeMap style.
   const usePmtiles = pmtilesOrigin != null || localBasemap;
   // Phase 3A CSP widening (the one security-sensitive change). When — and only
   // when — a festival has a REMOTE offline basemap, we add its EXACT https origin
@@ -155,7 +156,7 @@ export function buildMapHtml(
   // The map runtime is inlined (see the file header), so NO remote origin is
   // needed to start the map: script-src and style-src carry no host at all, and
   // the only https origins left anywhere in the policy are the ones TILES still
-  // need — the OSM raster hosts plus, conditionally, the festival's own PMTiles
+  // need — the OpenFreeMap host plus, conditionally, the festival's own PMTiles
   // and site-plan hosts. 'unsafe-inline' covers the vendored blobs exactly as it
   // already covered the bootstrap script; `blob:` stays because MapLibre spawns
   // its render workers from blob URLs, and since MapLibre 6 the vendored ES
@@ -164,8 +165,8 @@ export function buildMapHtml(
     "default-src 'none'",
     "script-src 'unsafe-inline' blob:",
     "style-src 'unsafe-inline'",
-    `img-src data: blob: https://*.tile.openstreetmap.org${extra}${fileExtra}${siteplanExtra}`,
-    `connect-src https://*.tile.openstreetmap.org${extra}${fileExtra}`,
+    `img-src data: blob: https://${OPENFREEMAP_HOST}${extra}${fileExtra}${siteplanExtra}`,
+    `connect-src https://${OPENFREEMAP_HOST}${extra}${fileExtra}`,
     'worker-src blob:',
     'font-src data:',
   ].join('; ');

@@ -251,7 +251,8 @@ export interface FestivalCamera {
  *   1. `mapConfig.bounds` (fit it; centre = box midpoint),
  *   2. `mapConfig.center` (centre there; no fit),
  *   3. derived from `pins`: their bounding box (fit) when ≥2 distinct points,
- *      else their centroid (centre; no fit).
+ *      else their centroid (centre; no fit),
+ *   4. the geocoded venue (`festival.latitude/longitude`; centre; no fit).
  * Returns `{ center: null, bounds: null }` when there's nothing to show.
  *
  * Pure: no map/DOM deps. The renderer decides how to apply center vs bounds.
@@ -290,5 +291,13 @@ export function pickFestivalCamera(
       bounds,
     };
   }
-  return { center: pinsCentroid(pins), bounds: null };
+  const centroid = pinsCentroid(pins);
+  if (centroid) return { center: centroid, bounds: null };
+
+  // 4. The geocoded venue, so an unmapped festival still opens on its grounds.
+  const { latitude, longitude } = festival ?? {};
+  if (typeof latitude === 'number' && typeof longitude === 'number' && isFiniteLngLat([longitude, latitude])) {
+    return { center: { latitude, longitude }, bounds: null };
+  }
+  return { center: null, bounds: null };
 }
