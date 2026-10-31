@@ -35,6 +35,12 @@ export default function DetailCrewSection({ title, others, crewNotes }: Props) {
   return (
     <div className="mb-6">
       <div className="text-xs font-bold text-text-secondary mb-2.5 uppercase tracking-[1px]">{title}</div>
+      {others.length === 0 && crewNotes.length === 0 && (
+        // Ends the sheet on a sentence, not a bare heading that reads as a list still loading.
+        <p className="m-0 text-[length:var(--font-size-14)] text-text-muted">
+          When friends pick this set, they show up here.
+        </p>
+      )}
       <ul className="list-none m-0 p-0">
         {others.map((o) => {
           const ink = avatarInk(getAvatarColor(o.name));
