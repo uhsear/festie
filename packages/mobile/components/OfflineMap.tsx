@@ -680,6 +680,9 @@ export default function OfflineMap({
   // than latching it into state) means reconnecting, or a cached archive landing,
   // restores the map on the next render with nothing to reset.
   const phase = canRenderMap ? webviewPhase : 'fallback';
+  // Bumped on every 'ready'. A rebuilt document (theme or basemap change) reloads while
+  // phase stays 'map', so the inject effects key on this to replay into the new page.
+  const [docGen, setDocGen] = useState(0);
 
   const fellBackRef = useRef(false);
   // Holds the in-flight offline-fallback timer so a new onLoadStart (the WebView
@@ -709,7 +712,10 @@ export default function OfflineMap({
         return;
       }
       if (msg.type === 'ready') {
-        if (!fellBackRef.current) setPhase('map');
+        if (!fellBackRef.current) {
+          setPhase('map');
+          setDocGen((g) => g + 1);
+        }
       } else if (msg.type === 'pursue-select') {
         // A live peer / SOS marker tap. Toggle: re-tapping the same target clears.
         const { id, label, latitude, longitude } = msg;
@@ -808,7 +814,7 @@ export default function OfflineMap({
   useEffect(() => {
     if (phase !== 'map' || !webRef.current) return;
     webRef.current.injectJavaScript(`window.__festieSetPins && window.__festieSetPins(${pinsJson}); true;`);
-  }, [phase, pinsJson]);
+  }, [phase, docGen, pinsJson]);
 
   // Push live peer + SOS markers into the WebView whenever they change and the
   // map is up. injectJavaScript re-renders the live layer (peers move). Same
@@ -817,7 +823,7 @@ export default function OfflineMap({
   useEffect(() => {
     if (phase !== 'map' || !webRef.current) return;
     webRef.current.injectJavaScript(`window.__festieSetPeers && window.__festieSetPeers(${liveJson}); true;`);
-  }, [phase, liveJson]);
+  }, [phase, docGen, liveJson]);
 
   // Push static festival map data (stage + amenity markers) into the WebView when
   // the map is up and whenever it changes. Same hardened serializer (labels are
@@ -826,7 +832,7 @@ export default function OfflineMap({
   useEffect(() => {
     if (phase !== 'map' || !webRef.current) return;
     webRef.current.injectJavaScript(`window.__festieSetMapData && window.__festieSetMapData(${mapDataJson}); true;`);
-  }, [phase, mapDataJson]);
+  }, [phase, docGen, mapDataJson]);
 
   // Push zone polygons (a GeoJSON FeatureCollection with color baked in + label
   // anchors) into the WebView when the map is up and whenever they change. Same
@@ -838,7 +844,7 @@ export default function OfflineMap({
   useEffect(() => {
     if (phase !== 'map' || !webRef.current) return;
     webRef.current.injectJavaScript(`window.__festieSetZones && window.__festieSetZones(${zonesJson}); true;`);
-  }, [phase, zonesJson]);
+  }, [phase, docGen, zonesJson]);
 
   // Push the site-plan raster overlay (Phase 4B) into the WebView when the map is
   // up and whenever it changes. A null payload tears the layer down. The image
@@ -848,7 +854,7 @@ export default function OfflineMap({
   useEffect(() => {
     if (phase !== 'map' || !webRef.current) return;
     webRef.current.injectJavaScript(`window.__festieSetSiteplan && window.__festieSetSiteplan(${siteplanJson}); true;`);
-  }, [phase, siteplanJson]);
+  }, [phase, docGen, siteplanJson]);
 
   // Push in-progress authoring vertices/corners into the WebView (a dot per tap)
   // when the map is up and whenever they change. Keyed on the serialized string so
@@ -859,7 +865,7 @@ export default function OfflineMap({
     webRef.current.injectJavaScript(
       `window.__festieSetDraftPoints && window.__festieSetDraftPoints(${draftPointsJson}); true;`,
     );
-  }, [phase, draftPointsJson]);
+  }, [phase, docGen, draftPointsJson]);
 
   // Frame the map to the festival's explicit map-config bounds once it's up. The
   // map was already centered on camera.center via buildHtml; bounds (when the
@@ -881,7 +887,7 @@ export default function OfflineMap({
       `window.__festieFitBounds && window.__festieFitBounds(${west}, ${south}, ${east}, ${north}); true;`,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, boundsKey]);
+  }, [phase, docGen, boundsKey]);
 
   // Push the authoring mode into the WebView whenever it (or the map phase)
   // changes (Phase D / 4A / 4B). The mode is whitelisted by buildSetAuthoringScript
@@ -889,7 +895,7 @@ export default function OfflineMap({
   useEffect(() => {
     if (phase !== 'map' || !webRef.current) return;
     webRef.current.injectJavaScript(buildSetAuthoringScript(authoringMode));
-  }, [phase, authoringMode]);
+  }, [phase, docGen, authoringMode]);
 
   // Zone drawing + site-plan corner placement need placement ARMED across multiple
   // taps (one vertex/corner per tap), so entering a multi-tap mode arms placement
@@ -909,7 +915,7 @@ export default function OfflineMap({
       webRef.current.injectJavaScript('window.__festieSetPlacement && window.__festieSetPlacement(false); true;');
     }
     prevAuthRef.current = authoringMode;
-  }, [phase, authoringMode]);
+  }, [phase, docGen, authoringMode]);
 
   // P1 safety: one-shot fly/frame to each incoming SOS the moment it first
   // appears, regardless of meeting pins. The WebView's renderLive only auto-frames
@@ -936,7 +942,7 @@ export default function OfflineMap({
       framedSosRef.current.add(s.userId);
       webRef.current.injectJavaScript(`window.__festieFlyTo && window.__festieFlyTo(${lng}, ${lat}, 16); true;`);
     }
-  }, [phase, sosList]);
+  }, [phase, docGen, sosList]);
 
   // Toggle placement mode in the WebView. The next single map tap (while on)
   // drops a meeting point and auto-exits. We optimistically flip local state for
