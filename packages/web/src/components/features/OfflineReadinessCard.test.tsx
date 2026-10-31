@@ -5,6 +5,12 @@ import { useOfflineReadinessStore } from '@festie/shared/stores/offlineReadiness
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 
 const { downloadForOffline } = vi.hoisted(() => ({ downloadForOffline: vi.fn() }));
+const festivalOver = vi.hoisted(() => ({ value: false }));
+
+vi.mock('@festie/shared/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/utils')>()),
+  isFestivalOver: () => festivalOver.value,
+}));
 
 type ReadinessState = {
   byFestival: Record<string, unknown>;
@@ -33,6 +39,7 @@ function setCrew(activeCrew: { id: string } | null) {
 describe('OfflineReadinessCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    festivalOver.value = false;
     setReadiness({});
     setCrew({ id: 'crew-1' });
   });
@@ -132,6 +139,17 @@ describe('OfflineReadinessCard', () => {
     const row = screen.getByRole('button', { name: /Saved for offline · synced just now/ });
     expect(screen.queryByText('Weather')).not.toBeInTheDocument();
     fireEvent.click(row);
+    expect(screen.getByText('Weather')).toBeInTheDocument();
+  });
+
+  it('stays expanded after the festival when nothing was downloaded', () => {
+    festivalOver.value = true;
+    const idle = { status: 'idle', syncedAt: null };
+    setReadiness({
+      byFestival: { 'fest-1': { schedule: idle, picks: idle, crew: idle, weather: idle, art: idle } },
+    });
+    render(<OfflineReadinessCard festivalId="fest-1" />);
+    expect(screen.queryByRole('button', { name: /Saved for offline/ })).not.toBeInTheDocument();
     expect(screen.getByText('Weather')).toBeInTheDocument();
   });
 });

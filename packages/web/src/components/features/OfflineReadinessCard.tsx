@@ -170,9 +170,13 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
   const handleRetry = () => void downloadForOffline(festivalId, activeCrewId ?? undefined);
 
   const allReady = !!readiness && SECTIONS.every(({ key }) => readiness[key]?.status === 'ready');
-  const collapsed = !expanded && !isDownloading && (allReady || isFestivalOver(currentFestival, days));
+  // Only claim 'saved' when at least one section actually downloaded.
+  const syncedTimes = SECTIONS.filter(({ key }) => readiness?.[key]?.status === 'ready')
+    .map(({ key }) => readiness?.[key]?.syncedAt)
+    .filter((t): t is number => t != null);
+  const collapsed = !expanded && !isDownloading && syncedTimes.length > 0
+    && (allReady || isFestivalOver(currentFestival, days));
   if (collapsed) {
-    const syncedTimes = SECTIONS.map(({ key }) => readiness?.[key]?.syncedAt).filter((t): t is number => t != null);
     return (
       <button
         type="button"
@@ -186,8 +190,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
       >
         <Check className="w-4 h-4 text-accent-aqua flex-shrink-0" aria-hidden="true" />
         <span className="flex-1 min-w-0 truncate">
-          Saved for offline
-          {syncedTimes.length > 0 && ` · synced ${timeAgo(Math.max(...syncedTimes))}`}
+          Saved for offline · synced {timeAgo(Math.max(...syncedTimes))}
         </span>
         <ChevronDown className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
       </button>
