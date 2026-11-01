@@ -22,6 +22,8 @@ export * from './mapAuthoring';
 export * from './ongoingNotification';
 export * from './crewNudges';
 export * from './pickConflicts';
+export * from './clashPlan';
+export * from './myDay';
 export * from './meetingTime';
 export * from './crewPlan';
 export * from './stageColor';

@@ -190,15 +190,21 @@ describe('SetCard', () => {
   });
 
   describe('conflict badge', () => {
-    it('shows conflict badge when conflicts exist', () => {
-      render(<SetCard {...defaultProps} conflicts={[makeSet({ id: 'set-2' })]} />);
+    it('renders the given clash label', () => {
+      render(<SetCard {...defaultProps} clashLabel="Clashes with Chris Lake (30 min)" />);
       expect(screen.getByTestId('set-card').className).toContain('has-conflict');
-      expect(screen.getByText('Clash')).toBeInTheDocument();
+      expect(screen.getByText('Clashes with Chris Lake (30 min)')).toBeInTheDocument();
     });
 
-    it('does not show conflict badge when no conflicts', () => {
-      render(<SetCard {...defaultProps} conflicts={[]} />);
+    it('renders no badge when clashLabel is empty', () => {
+      render(<SetCard {...defaultProps} clashLabel="" />);
       expect(screen.getByTestId('set-card').className).not.toContain('has-conflict');
+    });
+
+    it('re-renders when only clashLabel changes', () => {
+      const { rerender } = render(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" />);
+      rerender(<SetCard {...defaultProps} clashLabel="Clashes with B (20 min)" />);
+      expect(screen.getByText('Clashes with B (20 min)')).toBeInTheDocument();
     });
   });
 

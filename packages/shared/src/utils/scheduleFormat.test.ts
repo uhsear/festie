@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtCountdown, byStartTime, setLabel } from './scheduleFormat';
+import { fmtCountdown, byStartTime, setLabel, fmtDurationMinutes } from './scheduleFormat';
 import type { FestivalSet } from '../types/domain';
 
 // ---------------------------------------------------------------------------
@@ -129,5 +129,17 @@ describe('setLabel', () => {
   it('falls back to truncated id only when no artist, no artists, and no startTime', () => {
     const set = { ...base, artist: undefined, artists: undefined, startTime: '' };
     expect(setLabel(set, 'abc123xyz')).toBe('Set abc123');
+  });
+});
+
+describe('fmtDurationMinutes', () => {
+  it.each([
+    [0, '0 min'],
+    [-5, '0 min'],
+    [45, '45 min'],
+    [60, '1 h'],
+    [75, '1 h 15 min'],
+  ])('formats %i as %s', (minutes, label) => {
+    expect(fmtDurationMinutes(minutes)).toBe(label);
   });
 });

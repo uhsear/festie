@@ -1,5 +1,7 @@
 import { FestivalSet, Priority } from '../types/domain';
-import { setMinuteRange } from './setStatus';
+import { festivalStartMinutes, setMinuteRange } from './setStatus';
+import { artistDisplayName } from './format';
+import { fmtDurationMinutes } from './scheduleFormat';
 
 export interface ConflictDetected {
   setA: FestivalSet;
@@ -84,4 +86,77 @@ export function getConflictingSetIds(sets: FestivalSet[], getMyPick: GetMyPickFn
 export function hasConflict(setId: string, sets: FestivalSet[], getMyPick: GetMyPickFn): boolean {
   const conflictIds = getConflictingSetIds(sets, getMyPick);
   return conflictIds.has(setId);
+}
+
+/** The clash badge for one set: the other set it clashes with most, and the label to show. */
+export interface ClashBadge {
+  otherSetId: string;
+  otherName: string;
+  /** 0 for a tight change. */
+  overlapMinutes: number;
+  /** Other clashing sets beyond `otherSetId`. */
+  more: number;
+  /** True only when every pair for this set is a tight change. */
+  tight: boolean;
+  label: string;
+}
+
+interface BadgeCandidate {
+  other: FestivalSet;
+  overlapMinutes: number;
+  tight: boolean;
+}
+
+const startKey = (s: FestivalSet): number => (s.startTime ? festivalStartMinutes(s.startTime) : Infinity);
+
+/** Negative when `a` is the better "other" set for the badge. */
+function compareCandidates(a: BadgeCandidate, b: BadgeCandidate): number {
+  // Any overlap outranks a tight change.
+  if (a.tight !== b.tight) return a.tight ? 1 : -1;
+  if (a.overlapMinutes !== b.overlapMinutes) return b.overlapMinutes - a.overlapMinutes;
+  const byStart = startKey(a.other) - startKey(b.other);
+  if (byStart !== 0) return byStart;
+  return a.other.id < b.other.id ? -1 : a.other.id > b.other.id ? 1 : 0;
+}
+
+/**
+ * One badge per clashing set, from clash pairs (`ConflictDetected` or the
+ * `ConflictPair`s of `buildPickConflicts`). The badge names the set with the
+ * largest overlap; a tight pair ranks below any overlap; ties go to the
+ * earlier-starting other set, then the lower id.
+ */
+export function clashBadgeBySetId(
+  pairs: ReadonlyArray<{ setA: FestivalSet; setB: FestivalSet; overlapMinutes: number; tight?: boolean }>,
+  b2bSeparator?: string,
+): Map<string, ClashBadge> {
+  const candidates = new Map<string, BadgeCandidate[]>();
+  const add = (self: FestivalSet, candidate: BadgeCandidate) => {
+    const list = candidates.get(self.id) ?? [];
+    list.push(candidate);
+    candidates.set(self.id, list);
+  };
+  for (const p of pairs) {
+    const tight = !!p.tight;
+    add(p.setA, { other: p.setB, overlapMinutes: p.overlapMinutes, tight });
+    add(p.setB, { other: p.setA, overlapMinutes: p.overlapMinutes, tight });
+  }
+
+  const badges = new Map<string, ClashBadge>();
+  for (const [setId, list] of candidates) {
+    const best = list.reduce((a, b) => (compareCandidates(b, a) < 0 ? b : a));
+    const otherName = artistDisplayName(best.other, b2bSeparator);
+    const more = list.length - 1;
+    const base = best.tight
+      ? `Tight change with ${otherName}`
+      : `Clashes with ${otherName} (${fmtDurationMinutes(best.overlapMinutes)})`;
+    badges.set(setId, {
+      otherSetId: best.other.id,
+      otherName,
+      overlapMinutes: best.tight ? 0 : best.overlapMinutes,
+      more,
+      tight: best.tight,
+      label: more > 0 ? `${base} +${more}` : base,
+    });
+  }
+  return badges;
 }

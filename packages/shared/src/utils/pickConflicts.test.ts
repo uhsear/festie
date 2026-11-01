@@ -209,3 +209,92 @@ describe('buildPickConflicts', () => {
     expect(out[0]!.overlapMin).toBe(45);
   });
 });
+
+describe('buildPickConflicts with stage pins', () => {
+  // 0.009 degrees of latitude is about 1 km; 0.0009 is about 100 m.
+  const STAGES = [
+    { id: 'stage-1', latitude: 40.0, longitude: -74.0 },
+    { id: 'stage-2', latitude: 40.009, longitude: -74.0 },
+    { id: 'stage-near', latitude: 40.0009, longitude: -74.0 },
+  ];
+
+  it('flags a tight change when the walk is longer than the gap', () => {
+    const sets = [
+      makeSet({ id: 'a', stageId: 'stage-1', startTime: '20:00', endTime: '21:00' }),
+      makeSet({ id: 'b', stageId: 'stage-2', startTime: '21:05', endTime: '22:00' }),
+    ];
+    const input = { sets, myPicks: { a: 'must', b: 'must' } as Record<string, Priority>, selectedDay: 0, days: DAYS };
+    const out = buildPickConflicts({ ...input, stages: STAGES });
+    expect(out).toHaveLength(1);
+    expect(out[0]!.tight).toBe(true);
+    expect(out[0]!.overlapMin).toBe(0);
+    expect(out[0]!.pairs).toHaveLength(1);
+    expect(out[0]!.pairs[0]).toMatchObject({
+      setA: sets[0],
+      setB: sets[1],
+      overlapMinutes: 0,
+      gapMinutes: 5,
+      walkMinutes: 14,
+      tight: true,
+    });
+
+    // Without stages, walking time does not count.
+    expect(buildPickConflicts(input)).toEqual([]);
+  });
+
+  it('does not flag back-to-back sets on nearby stages', () => {
+    const sets = [
+      makeSet({ id: 'a', stageId: 'stage-1', startTime: '20:00', endTime: '21:00' }),
+      makeSet({ id: 'b', stageId: 'stage-near', startTime: '21:00', endTime: '22:00' }),
+    ];
+    const out = buildPickConflicts({
+      sets,
+      myPicks: { a: 'must', b: 'must' },
+      selectedDay: 0,
+      days: DAYS,
+      stages: STAGES,
+    });
+    expect(out).toEqual([]);
+  });
+
+  it('lists overlap pairs with the walk only when stages are given', () => {
+    const sets = [
+      makeSet({ id: 'b', stageId: 'stage-2', startTime: '14:30', endTime: '15:30' }),
+      makeSet({ id: 'a', stageId: 'stage-1', startTime: '14:00', endTime: '15:00' }),
+    ];
+    const input = { sets, myPicks: { a: 'maybe', b: 'must' } as Record<string, Priority>, selectedDay: 0, days: DAYS };
+    const expectedPair = { setA: sets[1], setB: sets[0], overlapMinutes: 30, gapMinutes: 0, tight: false };
+
+    const withStages = buildPickConflicts({ ...input, stages: STAGES });
+    expect(withStages[0]!.tight).toBe(false);
+    expect(withStages[0]!.pairs).toEqual([{ ...expectedPair, walkMinutes: 14 }]);
+
+    const without = buildPickConflicts(input);
+    expect(without[0]!.pairs).toEqual([{ ...expectedPair, walkMinutes: null }]);
+    expect(without[0]!.tight).toBe(false);
+  });
+
+  it('joins an overlap and a tight change into one group that is not tight', () => {
+    const sets = [
+      makeSet({ id: 'a', stageId: 'stage-1', startTime: '20:00', endTime: '21:00' }),
+      makeSet({ id: 'b', stageId: 'stage-1', startTime: '20:30', endTime: '21:00' }),
+      makeSet({ id: 'c', stageId: 'stage-2', startTime: '21:05', endTime: '22:00' }),
+    ];
+    const out = buildPickConflicts({
+      sets,
+      myPicks: { a: 'must', b: 'maybe', c: 'want-to-see' },
+      selectedDay: 0,
+      days: DAYS,
+      stages: STAGES,
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]!.picks.map((p) => p.set.id)).toEqual(['a', 'b', 'c']);
+    expect(out[0]!.pairs.map((p) => `${p.setA.id}-${p.setB.id}:${p.tight}`)).toEqual([
+      'a-b:false',
+      'a-c:true',
+      'b-c:true',
+    ]);
+    expect(out[0]!.tight).toBe(false);
+    expect(out[0]!.overlapMin).toBe(30);
+  });
+});

@@ -15,6 +15,10 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
+vi.mock('@festie/shared/stores/crewStore', () => ({
+  useCrewStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel({ meetingPoints: [] })),
+}));
+
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: Object.assign(vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)), { subscribe: vi.fn() }),
 }));
@@ -40,6 +44,19 @@ vi.mock('@festie/shared/utils', () => ({
   resolveStageColor: (c: string | null | undefined, fallback: string) => c || fallback,
   // Mirrors the real @festie/shared/utils/setStatus.isSetScheduled: a set is
   // scheduled only when dayIndex resolves to a real position in `days`.
+  resolveFestivalTimeZone: vi.fn(() => undefined),
+  buildPickConflicts: vi.fn(() => []),
+  buildMyDay: vi.fn(() => ({ sections: [], unscheduled: [], pickCount: 0 })),
+  // Reminders list = sets with a reminder; notes list = sets with a non-empty note.
+  buildPlanList: vi.fn(
+    (
+      kind: string,
+      input: { sets: Array<{ id: string }>; notes?: Record<string, string>; reminders?: Record<string, number> },
+    ) =>
+      input.sets
+        .filter((s) => (kind === 'notes' ? !!input.notes?.[s.id]?.trim() : typeof input.reminders?.[s.id] === 'number'))
+        .map((set) => ({ set, dayIndex: 0, note: null, reminderMinutes: null, priority: null })),
+  ),
   isSetScheduled: (set: { dayIndex?: number }, days: unknown[]) =>
     typeof set.dayIndex === 'number' && set.dayIndex >= 0 && set.dayIndex < days.length,
 }));
@@ -80,6 +97,18 @@ vi.mock('../components/features/OfflineReadinessCard', () => ({
 // its crew-store mocks / extra lucide icons / shared buildPickConflicts mock.
 vi.mock('../components/features/PickConflicts', () => ({
   default: () => <div data-testid="pick-conflicts" />,
+}));
+
+vi.mock('../components/features/MyDayList', () => ({
+  default: () => <div data-testid="my-day-list" />,
+}));
+
+vi.mock('../components/features/PlanNotesList', () => ({
+  default: ({ kind, items }: { kind: string; items: unknown[] }) => (
+    <div data-testid="plan-notes-list">
+      {kind}:{items.length}
+    </div>
+  ),
 }));
 
 // Guests get the in-place teaser instead of a redirect; stub it so this suite
@@ -347,5 +376,34 @@ describe('PicksView', () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText).toHaveBeenCalledWith('https://festie.us/s/p1');
     expect(mockToast).toHaveBeenCalledWith('Share link copied to clipboard', 'success');
+  });
+
+  it('switches to My day and renders MyDayList', () => {
+    const sets = [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }];
+    setStoreState({ sets, currentProfile: { picks: { s1: 'must' }, notes: {} } });
+    vi.mocked(usePicks).mockReturnValue({
+      getMyPick: vi.fn(() => 'must'),
+      savePick: vi.fn(),
+      getMyNote: vi.fn(() => ''),
+    });
+    render(<PicksView />);
+    expect(screen.queryByTestId('my-day-list')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'My day' }));
+    expect(screen.getByTestId('my-day-list')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'My day' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('shows the tab row and the Notes list for a user with only a note', () => {
+    const sets = [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }];
+    setStoreState({ sets, currentProfile: { picks: {}, notes: { s1: 'Bring water' } } });
+    render(<PicksView />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Notes · 1' }));
+    expect(screen.getByTestId('plan-notes-list')).toHaveTextContent('notes:1');
+    expect(screen.queryByTestId('empty-state')).toBeNull();
+  });
+
+  it('hides the tab row when there are no picks, notes or reminders', () => {
+    render(<PicksView />);
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 });
