@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useFestivalStore } from '../stores/festivalStore';
 import { FestivalSet } from '../types';
 import { STAGE_COLOR_FALLBACK } from '../utils/stageColor';
+import { setMatchesSearch } from '../utils/setSearch';
 
 export interface UseFestivalReturn {
   getDays: () => { index: number; date: string; label?: string }[];
@@ -49,18 +50,7 @@ export function useFestival(): UseFestivalReturn {
         return false;
       }
 
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesArtist =
-          set.artist?.toLowerCase().includes(query) || set.artists?.some((a) => a.name.toLowerCase().includes(query));
-
-        const stageName = stages.find((s) => s.id === set.stageId)?.name.toLowerCase();
-        const matchesStage = stageName?.includes(query);
-
-        return matchesArtist || matchesStage;
-      }
-
-      return true;
+      return setMatchesSearch(set, searchQuery, stages);
     });
   }, [getCurrentDaySets, activeStages, searchQuery, stages, onlyMine, currentProfile]);
 

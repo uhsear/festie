@@ -370,12 +370,13 @@ export default function PicksScreen() {
     (set: FestivalSet, priority: Priority | null) => {
       if (!currentFestival) return;
       if (priority === null) {
-        removePick(currentFestival.id, set.id).catch(() => {});
+        // The card shows the Retry chip on failure.
+        removePick(currentFestival.id, set.id).catch(() => haptics.warning());
       } else {
-        savePick(currentFestival.id, set.id, priority).catch(() => {});
+        savePick(currentFestival.id, set.id, priority).catch(() => haptics.warning());
       }
     },
-    [currentFestival, savePick, removePick],
+    [currentFestival, savePick, removePick, haptics],
   );
 
   const toggleCollapse = useCallback(

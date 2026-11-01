@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { usePicks } from '../usePicks';
+import { usePicks, usePickSync } from '../usePicks';
 import { useFestivalStore } from '../../stores/festivalStore';
 
 vi.mock('../../services/api', () => ({
@@ -247,6 +247,28 @@ describe('usePicks hook', () => {
         setId: 'set-1',
         note: 'Great set!',
       });
+    });
+  });
+
+  describe('usePickSync', () => {
+    it('returns only this set entry, and retry calls retryPick with the set id', async () => {
+      const retryPick = vi.fn().mockResolvedValue(undefined);
+      useFestivalStore.setState({
+        pickSync: { 'set-1': { state: 'failed', priority: 'must' }, 'set-2': { state: 'saving', priority: null } },
+        retryPick,
+      } as never);
+      const { result } = renderHook(() => usePickSync('set-1'));
+      expect(result.current.sync).toEqual({ state: 'failed', priority: 'must' });
+      await act(async () => {
+        await result.current.retry();
+      });
+      expect(retryPick).toHaveBeenCalledWith('set-1');
+    });
+
+    it('returns undefined for a set with no write in progress', () => {
+      useFestivalStore.setState({ pickSync: {} } as never);
+      const { result } = renderHook(() => usePickSync('set-9'));
+      expect(result.current.sync).toBeUndefined();
     });
   });
 });

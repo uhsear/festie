@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
 import { AccessibilityInfo, Platform, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUIStore, type Toast } from '@festie/shared/stores';
 import { durationEffects, durationSpatial } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useListBottomInset } from '../hooks/useListBottomInset';
 import { haptic } from '../hooks/useHaptics';
 
 const MAX_VISIBLE = 3;
@@ -20,7 +20,8 @@ function ToastCard({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolea
     info: t.colors.accent.aqua,
     success: t.colors.accent.green,
     warning: t.colors.accent.amber,
-    error: t.colors.accent.coralStrong,
+    // Amber, not coral: coral is for danger and SOS only.
+    error: t.colors.accent.amber,
   }[toast.kind];
 
   // Mount-only: announce and buzz once when the toast appears.
@@ -44,7 +45,13 @@ function ToastCard({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolea
       style={[styles.card, { borderLeftColor: accent }]}
       accessibilityRole={toast.kind === 'error' ? 'alert' : undefined}
     >
-      <Text style={styles.message}>{toast.message}</Text>
+      <Pressable
+        onPress={() => dismissToast(toast.id)}
+        style={styles.messageHit}
+        accessibilityHint="Dismisses this message"
+      >
+        <Text style={styles.message}>{toast.message}</Text>
+      </Pressable>
       {onUndo ? (
         <Pressable
           onPress={() => {
@@ -65,7 +72,7 @@ function ToastCard({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolea
 /** App-wide toast host: renders the last 3 entries of the shared uiStore toast list. */
 export default function Toaster() {
   const toasts = useUIStore((s) => s.toasts);
-  const insets = useSafeAreaInsets();
+  const bottom = useListBottomInset({ base: TAB_BAR_CLEARANCE });
   const styles = useStyles();
   const reduceMotion = useReduceMotion();
   const visible = toasts.slice(-MAX_VISIBLE);
@@ -73,7 +80,7 @@ export default function Toaster() {
     <View
       pointerEvents="box-none"
       accessibilityLiveRegion="polite"
-      style={[styles.container, { bottom: insets.bottom + TAB_BAR_CLEARANCE }]}
+      style={[styles.container, { bottom }]}
     >
       {visible.map((toast) => (
         <ToastCard key={toast.id} toast={toast} reduceMotion={reduceMotion} />
@@ -104,10 +111,14 @@ const useStyles = makeStyles((t) => ({
     // Spec says bg.card, but Stage's bg.card is 65% translucent with no blur, so text under a floating toast bleeds through.
     backgroundColor: t.colors.bg.secondary,
   },
+  messageHit: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
   message: {
     ...typeStyle('body'),
     color: t.colors.text.primary,
-    flex: 1,
   },
   undo: {
     minWidth: 44,

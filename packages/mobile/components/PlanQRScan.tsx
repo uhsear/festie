@@ -1,93 +1,61 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
-import { decodePlanSnapshot, fromPickPriority, type PlanSnapshot } from '@festie/shared/utils';
+import {
+  decodePlanSnapshot,
+  previewPlanImport,
+  artistDisplayName,
+  formatTime,
+  type PlanSnapshot,
+  type PlanImportPreview,
+} from '@festie/shared/utils';
+import { PRIORITY_LABELS } from '@festie/shared/constants';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import Button from './Button';
 import EmptyState from './EmptyState';
 
-// ── Untrusted import (offline-native) ──────────────────────────────────────
+// ── Untrusted import with preview (offline-native) ─────────────────────────
 // A scanned QR string is fully untrusted, cross-device input. We hand it
 // STRAIGHT to the shared codec, which size-bounds + Zod-validates it and never
 // throws — we only ever act on `{ ok: true }`. We never eval/JSON.parse it
-// ourselves. On success we merge the snapshot into the LOCAL cache through the
-// stores' existing setters (the same offline-queued write paths the rest of the
+// ourselves. On success we show a preview and write NOTHING until the user taps
+// Add; Undo restores the previous values. Writes go through the stores' existing setters (the same offline-queued write paths the rest of the
 // app uses), so this works with no signal on either phone.
 
-interface ImportSummary {
-  festivalName: string;
-  picksImported: number;
-  picksSkipped: number;
-  meetingPointImported: boolean;
-  festivalMismatch: boolean;
+interface ScanPreview {
+  snapshot: PlanSnapshot;
+  preview: PlanImportPreview;
+  /** Active crew the meeting point can go into; null when none or it is a duplicate. */
+  meetingTarget: { id: string; name: string } | null;
 }
 
 /**
- * Merge a validated snapshot into the local cache and report what landed.
- *
- * Picks only import when the snapshot's festival matches the user's CURRENT
- * profile (a profile is festival-scoped — we must not write another festival's
- * picks into this one) AND the set id exists in the loaded schedule. Both
- * guards keep junk out of the cache. The meeting point imports into the active
- * crew when one is selected. Every write goes through an existing store setter,
- * so offline it queues + reconciles like any other change.
+ * Compare a validated snapshot with the local plan. Writes nothing. Picks only
+ * import when the snapshot's festival matches the CURRENT profile and the set id
+ * exists in the loaded schedule (previewPlanImport enforces both).
  */
-async function importSnapshot(data: PlanSnapshot): Promise<ImportSummary> {
+function buildPreview(snapshot: PlanSnapshot): ScanPreview {
   const fest = useFestivalDataStore.getState();
   const crew = useCrewStore.getState();
+  const preview = previewPlanImport(snapshot, {
+    currentFestivalId: fest.currentFestivalId,
+    picks: fest.currentProfile?.picks as Record<string, Priority> | undefined,
+    setIds: new Set((fest.sets as FestivalSet[]).map((s) => s.id)),
+  });
 
-  const summary: ImportSummary = {
-    festivalName: data.festivalName,
-    picksImported: 0,
-    picksSkipped: 0,
-    meetingPointImported: false,
-    festivalMismatch: false,
-  };
-
-  // Picks: only when the snapshot is for the festival this profile belongs to.
-  const profile = fest.currentProfile;
-  const festivalMatches = !!profile && fest.currentFestivalId === data.festivalId;
-  if (!festivalMatches) {
-    summary.festivalMismatch = true;
-    summary.picksSkipped = data.picks.length;
-  } else {
-    const knownSetIds = new Set((fest.sets as FestivalSet[]).map((s) => s.id));
-    // Group importable picks by their app priority so each priority is one
-    // coalesced write (bulkSavePicks issues a single queued PUT per call).
-    const byPriority = new Map<Priority, string[]>();
-    for (const pick of data.picks) {
-      if (!knownSetIds.has(pick.setId)) {
-        summary.picksSkipped += 1;
-        continue;
-      }
-      const appPriority = fromPickPriority(pick.priority) as Priority;
-      const list = byPriority.get(appPriority) ?? [];
-      list.push(pick.setId);
-      byPriority.set(appPriority, list);
-      summary.picksImported += 1;
-    }
-    for (const [priority, setIds] of byPriority) {
-      if (setIds.length > 0) {
-        // Offline-queued, idempotent, one PUT per priority group.
-        await fest.bulkSavePicks(setIds, priority);
-      }
-    }
-  }
-
-  // Meeting point: import into the active crew (offline-queued optimistic create).
-  if (data.meetingPoint && crew.activeCrew) {
-    const mp = data.meetingPoint;
-    // Avoid an obvious duplicate if the same coord+label is already present.
+  let meetingTarget: ScanPreview['meetingTarget'] = null;
+  const mp = snapshot.meetingPoint;
+  if (mp && crew.activeCrew && !preview.festivalMismatch) {
     // Epsilon-based coord compare: identical points can serialize with tiny
-    // floating-point drift across devices (e.g. 41.881 vs 41.8810000000001),
-    // so strict equality would wrongly admit a duplicate. ~0.0001° ≈ 11m.
+    // floating-point drift across devices, so strict equality would admit a
+    // duplicate. ~0.0001° ≈ 11m.
     const dup = crew.meetingPoints.some(
       (p) =>
         p.label === mp.label &&
@@ -96,22 +64,46 @@ async function importSnapshot(data: PlanSnapshot): Promise<ImportSummary> {
         Math.abs(p.latitude - mp.lat) < 0.0001 &&
         Math.abs(p.longitude - mp.lng) < 0.0001,
     );
-    if (!dup) {
-      await crew.createMeetingPoint(crew.activeCrew.id, {
-        label: mp.label,
-        location: mp.label,
-        type: 'shared',
-        latitude: mp.lat,
-        longitude: mp.lng,
-      });
-      summary.meetingPointImported = true;
-    }
+    if (!dup) meetingTarget = { id: crew.activeCrew.id, name: crew.activeCrew.name };
   }
-
-  return summary;
+  return { snapshot, preview, meetingTarget };
 }
 
-type Phase = 'scanning' | 'importing' | 'done' | 'error';
+/** Write the previewed picks, one coalesced offline-queued PUT per priority. Returns the real changed count. */
+async function addPreviewedPicks(preview: PlanImportPreview): Promise<number> {
+  const byPriority = new Map<Priority, string[]>();
+  for (const { setId, priority } of preview.toAdd) {
+    const list = byPriority.get(priority) ?? [];
+    list.push(setId);
+    byPriority.set(priority, list);
+  }
+  let added = 0;
+  for (const [priority, setIds] of byPriority) {
+    added += await useFestivalDataStore.getState().bulkSavePicks(setIds, priority);
+  }
+  return added;
+}
+
+async function addMeetingPoint(snapshot: PlanSnapshot, crewId: string): Promise<void> {
+  const mp = snapshot.meetingPoint;
+  if (!mp) return;
+  await useCrewStore.getState().createMeetingPoint(crewId, {
+    label: mp.label,
+    location: mp.label,
+    type: 'shared',
+    latitude: mp.lat,
+    longitude: mp.lng,
+  });
+}
+
+/** "Sat 7:30 PM" style line for one set in the preview list. */
+function setLine(set: FestivalSet | undefined, dayLabels: Map<number, string>): string {
+  if (!set) return '';
+  const day = set.dayIndex != null ? dayLabels.get(set.dayIndex) : undefined;
+  return [day, formatTime(set.startTime)].filter(Boolean).join(' · ');
+}
+
+type Phase = 'scanning' | 'preview' | 'importing' | 'done' | 'error';
 
 /**
  * Scans a plan-snapshot QR with the device camera and imports it into the local
@@ -125,11 +117,16 @@ export default function PlanQRScan() {
   const [permission, requestPermission] = useCameraPermissions();
   const [phase, setPhase] = useState<Phase>('scanning');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [scan, setScan] = useState<ScanPreview | null>(null);
+  const [added, setAdded] = useState(0);
+  const [undone, setUndone] = useState(false);
+  const [meetingAdded, setMeetingAdded] = useState(false);
+  const sets = useFestivalDataStore((st) => st.sets) as FestivalSet[];
+  const days = useFestivalDataStore((st) => st.days);
   // Guard against the camera firing the scan callback repeatedly for one code.
   const handledRef = useRef(false);
 
-  const handleScanned = useCallback(async (result: BarcodeScanningResult) => {
+  const handleScanned = useCallback((result: BarcodeScanningResult) => {
     if (handledRef.current) return;
     handledRef.current = true;
 
@@ -139,24 +136,60 @@ export default function PlanQRScan() {
       setPhase('error');
       return;
     }
-
-    setPhase('importing');
-    try {
-      const s = await importSnapshot(decoded.data);
-      setSummary(s);
-      setPhase('done');
-    } catch {
-      setErrorMsg("Couldn't save the plan to this device. Try again.");
-      setPhase('error');
-    }
+    setScan(buildPreview(decoded.data));
+    setPhase('preview');
   }, []);
 
   const reset = useCallback(() => {
     handledRef.current = false;
     setErrorMsg(null);
-    setSummary(null);
+    setScan(null);
+    setAdded(0);
+    setUndone(false);
+    setMeetingAdded(false);
     setPhase('scanning');
   }, []);
+
+  const onAdd = useCallback(async () => {
+    if (!scan) return;
+    setPhase('importing');
+    try {
+      setAdded(await addPreviewedPicks(scan.preview));
+      setPhase('done');
+    } catch {
+      setErrorMsg("Couldn't save the plan to this device. Try again.");
+      setPhase('error');
+    }
+  }, [scan]);
+
+  const onUndo = useCallback(async () => {
+    if (!scan) return;
+    try {
+      await useFestivalDataStore.getState().restorePicks(scan.preview.previous);
+      setUndone(true);
+    } catch {
+      setErrorMsg("Couldn't undo. Your picks are unchanged from the import.");
+      setPhase('error');
+    }
+  }, [scan]);
+
+  const onAddMeeting = useCallback(async () => {
+    if (!scan?.meetingTarget) return;
+    try {
+      await addMeetingPoint(scan.snapshot, scan.meetingTarget.id);
+      setMeetingAdded(true);
+    } catch {
+      setErrorMsg("Couldn't save the meeting point. Try again.");
+      setPhase('error');
+    }
+  }, [scan]);
+
+  const setById = useMemo(() => new Map(sets.map((x) => [x.id, x])), [sets]);
+  const dayLabels = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const d of days) if (d.dayIndex != null && d.label) m.set(d.dayIndex, d.label);
+    return m;
+  }, [days]);
 
   // Permission still loading.
   if (!permission) {
@@ -194,33 +227,78 @@ export default function PlanQRScan() {
     );
   }
 
-  if (phase === 'done' && summary) {
+  if (phase === 'preview' && scan) {
+    const { preview, snapshot, meetingTarget } = scan;
+    if (preview.festivalMismatch) {
+      return (
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Different festival"
+          message={`This plan is for ${snapshot.festivalName}. Open that festival in Festie to add its picks.`}
+          action={{ label: 'Not now', onPress: reset }}
+        />
+      );
+    }
+    const n = preview.toAdd.length;
+    return (
+      <ScrollView contentContainerStyle={[styles.doneContent, { paddingBottom: bottomPad }]}>
+        <Text style={styles.doneTitle}>{`A friend's plan for ${snapshot.festivalName}`}</Text>
+        <Text style={styles.doneSub}>{`${preview.total} sets · ${n} you haven't picked`}</Text>
+
+        {n > 0 ? (
+          <View style={styles.summaryCard}>
+            {preview.toAdd.map(({ setId, priority }) => {
+              const set = setById.get(setId);
+              const wasPicked = preview.previous[setId] !== undefined;
+              return (
+                <View key={setId} style={styles.summaryRow}>
+                  <Text style={styles.summaryText}>
+                    {set ? artistDisplayName(set) : setId}
+                    {wasPicked ? ` (upgrade to ${PRIORITY_LABELS[priority]})` : ''}
+                  </Text>
+                  <Text style={[styles.summaryText, styles.summaryMuted]}>{setLine(set, dayLabels)}</Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {n > 0 ? (
+          <Button
+            label={`Add ${n} to my plan`}
+            onPress={() => void onAdd()}
+            accessibilityLabel={`Add ${n} picks to my plan`}
+          />
+        ) : (
+          <Text style={styles.honest}>You already have all of these.</Text>
+        )}
+        {meetingTarget && !meetingAdded ? (
+          <Button
+            label={`Add meeting point to ${meetingTarget.name}`}
+            icon="location-outline"
+            variant="secondary"
+            onPress={() => void onAddMeeting()}
+          />
+        ) : null}
+        {meetingAdded ? <SummaryRow icon="location" label="Meeting point added to your crew" /> : null}
+        <Button label="Not now" variant="ghost" onPress={reset} />
+      </ScrollView>
+    );
+  }
+
+  if (phase === 'done' && scan) {
     return (
       <ScrollView contentContainerStyle={[styles.doneContent, { paddingBottom: bottomPad }]}>
         <Ionicons name="checkmark-circle" size={56} color={t.colors.accent.aqua} />
-        <Text style={styles.doneTitle}>Plan imported</Text>
-        <Text style={styles.doneSub}>{summary.festivalName}</Text>
+        <Text style={styles.doneTitle}>{`${added} pick${added === 1 ? '' : 's'} added`}</Text>
+        <Text style={styles.doneSub}>{scan.snapshot.festivalName}</Text>
 
-        <View style={styles.summaryCard}>
-          <SummaryRow
-            icon="star"
-            label={`${summary.picksImported} pick${summary.picksImported === 1 ? '' : 's'} added`}
-          />
-          {summary.meetingPointImported ? (
-            <SummaryRow icon="location" label="Meeting point added to your crew" />
-          ) : null}
-          {summary.picksSkipped > 0 ? (
-            <SummaryRow
-              icon="information-circle"
-              muted
-              label={
-                summary.festivalMismatch
-                  ? "Picks skipped — they're for a different festival than the one you're in"
-                  : `${summary.picksSkipped} pick${summary.picksSkipped === 1 ? '' : 's'} skipped (not in this lineup)`
-              }
-            />
-          ) : null}
-        </View>
+        {undone ? (
+          <Text style={styles.honest}>Undone. Your plan is back to how it was.</Text>
+        ) : (
+          <Button label="Undo" icon="arrow-undo-outline" variant="secondary" onPress={() => void onUndo()} />
+        )}
+        {meetingAdded ? <SummaryRow icon="location" label="Meeting point added to your crew" /> : null}
 
         <Text style={styles.honest}>
           Imported as a snapshot from your friend's phone. Queued changes sync when signal returns.
@@ -249,7 +327,7 @@ export default function PlanQRScan() {
         style={styles.camera}
         facing="back"
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-        onBarcodeScanned={stillScanning ? (e) => void handleScanned(e) : undefined}
+        onBarcodeScanned={stillScanning ? (e) => handleScanned(e) : undefined}
         accessibilityLabel="QR code scanner"
         accessibilityHint="Point your camera at a Festie plan QR code to scan and import picks"
       />

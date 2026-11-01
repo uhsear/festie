@@ -14,7 +14,7 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: (selector: (s: { user: unknown }) => unknown) => selector({ user: authUser }),
 }));
 vi.mock('@festie/shared/stores/uiStore', () => ({
-  useUIStore: (selector: (s: Record<string, unknown>) => unknown) => selector({ setDetailSet: vi.fn() }),
+  useUIStore: Object.assign((selector: (s: Record<string, unknown>) => unknown) => selector({ setDetailSet: vi.fn() }), { subscribe: vi.fn() }),
 }));
 
 let crewDayOf: CrewDayOf = { crew: null, whereabouts: [], meet: null };

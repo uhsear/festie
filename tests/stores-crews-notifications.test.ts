@@ -796,6 +796,25 @@ describe('createNotificationsStore — deviceTokens', () => {
     assert.ok(expiresAt.getTime() < expectedMax, 'expires_at should be ~90 days out');
   });
 
+  it('register keeps the stored local-reminders festival unless the field is present', async () => {
+    const pool = mockPool([]);
+    const { deviceTokens } = createNotificationsStore(pool, mockUtils);
+
+    await deviceTokens.register({ id: 'dt1', userId: 'u1', token: 't' });
+    await deviceTokens.register({
+      id: 'dt1',
+      userId: 'u1',
+      token: 't',
+      localRemindersFestivalId: null,
+      localRemindersPresent: true,
+    });
+
+    assert.ok(pool.queries[0].sql.includes('CASE WHEN $10 THEN EXCLUDED.local_reminders_festival_id'));
+    assert.strictEqual(pool.queries[0].params[9], false);
+    assert.strictEqual(pool.queries[1].params[8], null);
+    assert.strictEqual(pool.queries[1].params[9], true);
+  });
+
   it('getTokenOwner returns userId when found', async () => {
     const pool = mockPool([{ rows: [{ userId: 'u1' }] }]);
     const { deviceTokens } = createNotificationsStore(pool, mockUtils);

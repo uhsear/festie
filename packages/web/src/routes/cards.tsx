@@ -8,10 +8,14 @@ import {
   getConflictingSetIds,
   festivalPhase,
   resolveStageColor,
+  setMatchesSearch,
+  searchOtherDays,
+  searchEmptyCopy,
 } from '@festie/shared/utils';
 import { useScheduleFilters } from '../hooks/useScheduleFilters';
 import SetCard from '../components/features/SetCard';
 import PhaseHomeActions from '../components/features/PhaseHomeActions';
+import OtherDayMatches from '../components/features/OtherDayMatches';
 import EmptyState from '../components/ui/EmptyState';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -53,13 +57,17 @@ function CardsViewInner() {
   const user = useAuthStore((state) => state.user);
   const sets = useFestivalStore((state) => state.sets);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
+  const stages = useFestivalStore((state) => state.stages);
+  const setSelectedDay = useFestivalStore((state) => state.setSelectedDay);
+  const setActiveStages = useFestivalStore((state) => state.setActiveStages);
+  const setOnlyMine = useFestivalStore((state) => state.setOnlyMine);
   const searchQuery = useFestivalStore((state) => state.searchQuery);
   const { filterSets } = useScheduleFilters();
 
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const setDetailAutoSpotify = useUIStore((state) => state.setDetailAutoSpotify);
   const { getMyPick, getOtherPicks } = usePicks();
-  const { getStageColor: getStageColorRaw, getStageName } = useFestival();
+  const { getStageColor: getStageColorRaw, getStageName, getDays } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
     (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)'),
@@ -80,13 +88,8 @@ function CardsViewInner() {
     // Filter by selected day using dayIndex (legacy: getCurrentDaySets via day array index)
     let filtered = sets.filter((s) => s.dayIndex === selectedDay);
 
-    // Filter by search query
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (s) => s.artists?.some((a) => a.name.toLowerCase().includes(q)) || (s.artist || '').toLowerCase().includes(q),
-      );
-    }
+    // Filter by search query (artist, B2B names, stage name)
+    if (searchQuery) filtered = filtered.filter((s) => setMatchesSearch(s, searchQuery, stages));
 
     // Stage chips + My picks, shared with Timeline and Grid.
     filtered = filterSets(filtered);
@@ -109,7 +112,27 @@ function CardsViewInner() {
         { sensitivity: 'base' },
       );
     });
-  }, [sets, selectedDay, filterSets, searchQuery, currentFestival?.b2bSeparator]);
+  }, [sets, selectedDay, filterSets, searchQuery, stages, currentFestival?.b2bSeparator]);
+
+  // Matches on the other days, so a search never dead-ends on the selected day.
+  const otherDayGroups = useMemo(
+    () => (searchQuery.trim() ? searchOtherDays(sets, searchQuery, selectedDay, stages) : []),
+    [sets, searchQuery, selectedDay, stages],
+  );
+  const dayLabels = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const d of getDays()) map[d.index] = d.label || d.date;
+    return map;
+  }, [getDays]);
+  const q = searchQuery.trim();
+  const searchCopy = searchEmptyCopy({
+    sets,
+    query: searchQuery,
+    selectedDay,
+    stages,
+    otherDayCount: otherDayGroups.length,
+    dayLabel: dayLabels[selectedDay],
+  });
 
   // Compute conflict set IDs
   const conflictIds = useMemo(() => {
@@ -148,21 +171,39 @@ function CardsViewInner() {
 
       {/* Card grid */}
       {filteredSets.length === 0 ? (
-        <EmptyState
-          icon={
-            searchQuery ? (
-              <SearchX className="w-12 h-12" aria-hidden="true" />
-            ) : (
-              <Music className="w-12 h-12" aria-hidden="true" />
-            )
-          }
-          title={searchQuery ? 'No artists match your search' : 'No sets for this day'}
-          description={
-            searchQuery
-              ? 'Try a different spelling or clear the search to see the full lineup.'
-              : 'Pick another day from the day selector to browse the schedule.'
-          }
-        />
+        <>
+          <EmptyState
+            icon={
+              q ? (
+                <SearchX className="w-12 h-12" aria-hidden="true" />
+              ) : (
+                <Music className="w-12 h-12" aria-hidden="true" />
+              )
+            }
+            title={q ? searchCopy.title : 'No sets for this day'}
+            description={q ? searchCopy.description : 'Pick another day from the day selector to browse the schedule.'}
+            cta={
+              q && searchCopy.hiddenByFilters
+                ? {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setActiveStages([]);
+                      setOnlyMine(false);
+                    },
+                  }
+                : undefined
+            }
+          />
+          {q && (
+            <OtherDayMatches
+              groups={otherDayGroups}
+              dayLabels={dayLabels}
+              stages={stages}
+              b2bSeparator={currentFestival?.b2bSeparator}
+              onSelectDay={setSelectedDay}
+            />
+          )}
+        </>
       ) : (
         <div
           // `card-grid` is kept for its behavioral hooks (scroll-container
@@ -226,6 +267,15 @@ function CardsViewInner() {
             );
           })}
         </div>
+      )}
+      {q && filteredSets.length > 0 && (
+        <OtherDayMatches
+          groups={otherDayGroups}
+          dayLabels={dayLabels}
+          stages={stages}
+          b2bSeparator={currentFestival?.b2bSeparator}
+          onSelectDay={setSelectedDay}
+        />
       )}
     </>
   );

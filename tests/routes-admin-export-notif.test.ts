@@ -1401,6 +1401,44 @@ describe('routes/notifications.js', () => {
     assert.ok(deps.stores.deviceTokens.register.mock.calls.length > 0);
   });
 
+  test('POST /token passes localRemindersFestivalId with present=true', async () => {
+    const { app, deps } = await buildNotifApp();
+    await request(app)
+      .post('/token')
+      .send({ token: 'a'.repeat(30), platform: 'android', localRemindersFestivalId: 'fest-1' })
+      .expect(200);
+    const arg = (deps.stores.deviceTokens.register.mock.calls as any[])[0]!.arguments[0];
+    assert.equal(arg.localRemindersFestivalId, 'fest-1');
+    assert.equal(arg.localRemindersPresent, true);
+  });
+
+  test('POST /token without localRemindersFestivalId passes present=false', async () => {
+    const { app, deps } = await buildNotifApp();
+    await request(app).post('/token').send({ token: 'a'.repeat(30), platform: 'web' }).expect(200);
+    const arg = (deps.stores.deviceTokens.register.mock.calls as any[])[0]!.arguments[0];
+    assert.equal(arg.localRemindersPresent, false);
+  });
+
+  test('pushToken schema rejects a 129-character localRemindersFestivalId', async () => {
+    const { pushTokenSchema } = await import('../lib/schemas.js');
+    const base = { token: 'a'.repeat(30), platform: 'android' as const };
+    assert.equal(pushTokenSchema.safeParse({ ...base, localRemindersFestivalId: 'f'.repeat(129) }).success, false);
+    assert.equal(pushTokenSchema.safeParse({ ...base, localRemindersFestivalId: 'f'.repeat(128) }).success, true);
+    assert.equal(pushTokenSchema.safeParse({ ...base, localRemindersFestivalId: null }).success, true);
+  });
+
+  test('POST /token returns 400 for a 129-character localRemindersFestivalId', async () => {
+    // The shared harness stubs validate(); this case runs the real middleware and schema.
+    const { validate, schemas } = await import('../lib/schemas.js');
+    const { app, deps } = await buildNotifApp({ validate, schemas: { ...makeDeps().schemas, pushToken: schemas.pushToken } });
+    const res = await request(app)
+      .post('/token')
+      .send({ token: 'a'.repeat(30), platform: 'android', localRemindersFestivalId: 'f'.repeat(129) })
+      .expect(400);
+    assert.equal(res.body.data, null);
+    assert.equal(deps.stores.deviceTokens.register.mock.calls.length, 0);
+  });
+
   test('POST /token rejects short token', async () => {
     const { app } = await buildNotifApp();
     const res = await request(app).post('/token').send({ token: 'short', platform: 'web' }).expect(400);

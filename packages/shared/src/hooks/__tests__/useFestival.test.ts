@@ -163,6 +163,13 @@ describe('useFestival hook', () => {
       expect(filtered[0]!.stageId).toBe('s2');
     });
 
+    it('search ignores surrounding whitespace and still matches stage names', () => {
+      useFestivalDataStore.setState({ sets: [set1, set2], days: [day1], stages: [stage1, stage2] });
+      useFestivalUIStore.setState({ selectedDay: 0, activeStages: ['s1', 's2'], searchQuery: '  Side Stage ' });
+      const { result } = renderHook(() => useFestival());
+      expect(result.current.getFilteredSets().map((s) => s.id)).toEqual(['set-2']);
+    });
+
     it('search is case-insensitive', () => {
       useFestivalDataStore.setState({ sets: [set1], days: [day1], stages: [stage1] });
       useFestivalUIStore.setState({ selectedDay: 0, activeStages: ['s1'], searchQuery: 'DAFT' });

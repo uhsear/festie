@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewNudges, usePicks, useFestival } from '@festie/shared/hooks';
-import { useFestivalDataStore } from '@festie/shared/stores';
+import { useFestivalDataStore, useUIStore } from '@festie/shared/stores';
+import { mapErrorToUserMessage } from '@festie/shared/services';
 import { artistDisplayName, ensureWhiteContrast } from '@festie/shared/utils';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -49,10 +50,14 @@ export default function CrewSuggestionStrip() {
     (setId: string, priority: Parameters<typeof savePick>[2]) => {
       if (!festival) return;
       haptics.success();
-      // Optimistic + offline-queued: the store surfaces its own error and the
-      // queue retries, so swallow the rejection rather than throwing out of a
-      // press handler. The row vanishes once the pick lands.
-      savePick(festival.id, setId, priority).catch(() => {});
+      // Optimistic + offline-queued. This strip has no card chip, so a failed
+      // save gets a toast; the row vanishes once the pick lands.
+      savePick(festival.id, setId, priority).catch((err) => {
+        haptics.warning();
+        useUIStore
+          .getState()
+          .showToast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), { kind: 'error' });
+      });
     },
     [festival, haptics, savePick],
   );

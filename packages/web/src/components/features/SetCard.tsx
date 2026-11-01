@@ -1,7 +1,7 @@
 import React, { memo, useRef, useState, useEffect, useMemo } from 'react';
-import { Play, Square, AlertTriangle, StickyNote } from 'lucide-react';
+import { Play, Square, AlertTriangle, StickyNote, Clock } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { usePicks } from '@festie/shared/hooks';
+import { usePicks, usePickSync } from '@festie/shared/hooks';
 import { formatTime, artistDisplayName, artistSubtitle, festivalPhase, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { api } from '@festie/shared/services/api';
@@ -59,6 +59,7 @@ function SetCard({
   b2bSeparator,
 }: SetCardProps) {
   const { getMyPick, savePick, getMyNote } = usePicks();
+  const { sync: pickSync, retry: retryPick } = usePickSync(set.id);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   // Read-only joins for the crew-overlap cluster: profiles supply the
   // profileId -> userId link, crew members supply the avatar image. Both are
@@ -163,6 +164,7 @@ function SetCard({
         await savePick(currentFestival.id, set.id, currentlyActive ? null : (priority as Priority));
       }
     } catch {
+      // The failed-pick chip under the priority row is the visible error.
       warning();
     } finally {
       setSaving(false);
@@ -408,6 +410,12 @@ function SetCard({
             {(['must', 'want-to-see', 'maybe'] as const).map((p) => {
               const active = myPick === p;
               const priKey = PRI_MAP[p];
+              const pending = active && (pickSync?.state === 'saving' || pickSync?.state === 'queued');
+              const pendingSuffix = pending
+                ? pickSync?.state === 'queued'
+                  ? ' (saved on this device, will sync)'
+                  : ' (saving)'
+                : '';
               return (
                 <button
                   key={p}
@@ -449,7 +457,8 @@ function SetCard({
                   aria-pressed={active ? 'true' : 'false'}
                   aria-label={
                     (p === 'must' ? 'Must See' : p === 'want-to-see' ? 'Want to See' : 'Maybe') +
-                    (active ? ' (selected)' : '')
+                    (active ? ' (selected)' : '') +
+                    pendingSuffix
                   }
                   title={p === 'must' ? 'Must See' : p === 'want-to-see' ? 'Want to See' : 'Maybe'}
                   disabled={saving}
@@ -460,6 +469,7 @@ function SetCard({
                   }}
                 >
                   <PriorityIcon priority={p} filled={active} />
+                  {pending && <Clock className="w-3 h-3 ml-0.5" aria-hidden="true" data-testid="pick-pending-clock" />}
                 </button>
               );
             })}
@@ -469,6 +479,24 @@ function SetCard({
         {/* Crew overlap / who's going */}
         {groupedFriends.length > 0 && <CrewOverlapAvatars friends={groupedFriends} artistName={artistName} />}
       </div>
+
+      {showPicks && pickSync?.state === 'failed' && (
+        <div className="relative z-[2] mt-2 inline-flex items-center gap-2 text-xs font-medium text-accent-amber">
+          <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+          <span>Pick not saved.</span>
+          <button
+            type="button"
+            className="min-h-[44px] min-w-[44px] px-2 underline cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              retryPick().catch(() => warning());
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
     </div>
   );
 }

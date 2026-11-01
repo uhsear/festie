@@ -88,7 +88,9 @@ describe('PlanQRShare', () => {
     // Honest, snapshot-not-live-link copy from mobile (substring matchers avoid
     // depending on exact text-node boundaries within the paragraph).
     expect(screen.getByText(/nothing is sent over the internet/)).toBeInTheDocument();
-    expect(screen.getByText(/snapshot copy, not a live link/)).toBeInTheDocument();
+    expect(screen.getByText(/then chooses which to add to their own plan/)).toBeInTheDocument();
+    expect(screen.getByText(/snapshot, not a live link/)).toBeInTheDocument();
+    expect(screen.queryByText(/gets a copy/)).toBeNull();
   });
 
   it('includes an active meeting point with coords in the snapshot', () => {
