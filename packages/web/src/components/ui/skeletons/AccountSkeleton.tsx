@@ -7,8 +7,9 @@ export default function AccountSkeleton() {
     <div
       className="space-y-4 px-4 pb-24"
       aria-busy="true"
-      aria-label="Loading account"
+      aria-label="Loading account" role="status" aria-live="polite"
     >
+      <span className="sr-only">Loading account…</span>
       {/* avatar row */}
       <div className="flex items-center gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
         <div className="skeleton-shimmer h-16 w-16 rounded-full" />

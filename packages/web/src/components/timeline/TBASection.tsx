@@ -132,10 +132,7 @@ export default function TBASection({
                         )}
                         type="button"
                         aria-pressed={active ? 'true' : 'false'}
-                        aria-label={
-                          PRIORITY_SYMBOLS[p].label +
-                          (active ? ' (selected)' : '')
-                        }
+                        aria-label={PRIORITY_SYMBOLS[p].label}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();

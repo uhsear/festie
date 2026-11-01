@@ -59,6 +59,7 @@ describe('TimelineGridCell block placement', () => {
     const el = renderCell('c', 0, 4, 'want-to-see');
     const btn = el.querySelector<HTMLElement>('button[aria-pressed="true"]')!;
     expect(btn.className).toContain('--text-on-light-accent');
+    expect(btn.getAttribute('aria-label')).not.toContain('(selected)');
   });
 
   it('shows the pick row only when canPick is set', () => {

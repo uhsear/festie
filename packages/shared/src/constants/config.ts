@@ -145,6 +145,12 @@ export const RATING_LABEL: Record<number, string> = Object.fromEntries(
   RATING_SCALE_DATA.map((r) => [r.value, r.label]),
 );
 
+/** Caption under the rating row; identical on web and mobile. */
+export function ratingCaption(value: number | null): string {
+  if (value == null || !RATING_LABEL[value]) return 'Tap to rate this set';
+  return `You rated this: ${RATING_LABEL[value]} (${value} of 5)`;
+}
+
 export const PRIORITY_MAP: Record<string, string> = {
   must: 'must',
   'want-to-see': 'want',

@@ -329,8 +329,11 @@ function PicksViewInner() {
 
 export default function PicksView() {
   return (
-    <RenderErrorBoundary name="picks">
-      <PicksViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">My Picks</h1>
+      <RenderErrorBoundary name="picks">
+        <PicksViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }

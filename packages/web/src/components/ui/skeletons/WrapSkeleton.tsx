@@ -5,7 +5,8 @@
  */
 export default function WrapSkeleton() {
   return (
-    <div className="max-w-lg mx-auto space-y-4 px-4 pb-24" aria-busy="true" aria-label="Loading wrap">
+    <div className="max-w-lg mx-auto space-y-4 px-4 pb-24" aria-busy="true" aria-label="Loading wrap" role="status" aria-live="polite">
+      <span className="sr-only">Loading wrap…</span>
       {/* tab bar */}
       <div className="flex gap-2">
         <div className="skeleton-shimmer h-10 flex-1 rounded-lg" />
