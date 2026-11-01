@@ -245,9 +245,14 @@ export default function AdminCrewsScreen() {
         setBanner({ text: `Deleted ${name}.`, error: false });
       } else if (confirm.kind === 'force-logout') {
         const userIds = Array.from(selectedUserIds);
-        await api.post<void>('/admin/bulk/deactivate', { userIds });
+        const { results } = await api.post<{ results: { status: string }[] }>('/admin/bulk/deactivate', { userIds });
+        const ok = results.filter((r) => r.status === 'logged_out').length;
+        const failed = results.length - ok;
         setSelectedUserIds(new Set());
-        setBanner({ text: `Forced logout for ${userIds.length} user${userIds.length === 1 ? '' : 's'}.`, error: false });
+        setBanner({
+          text: `Logged out ${ok} of ${results.length} users.${failed > 0 ? ` ${failed} failed.` : ''}`,
+          error: failed > 0,
+        });
       } else if (confirm.kind === 'archive') {
         const festivalIds = Array.from(selectedFestivalIds);
         await api.post<void>('/admin/bulk/archive-festivals', { festivalIds });

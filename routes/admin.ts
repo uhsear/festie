@@ -79,6 +79,13 @@ export default function createAdminRoutes(deps: any): Router {
     festival_create: 'Festival Created',
     festival_update: 'Festival Updated',
     festival_delete: 'Festival Deleted',
+    'festival:create': 'Festival Created',
+    'festival:update': 'Festival Updated',
+    'festival:soft-delete': 'Festival Deleted',
+    'festival:hard-delete': 'Festival Deleted Permanently',
+    'set:link-update': 'Set Link Changed',
+    lineup_import: 'Lineup Imported',
+    spotify_backfill: 'Spotify Backfill',
     'delete:users': 'Delete User',
   };
 
@@ -128,7 +135,7 @@ export default function createAdminRoutes(deps: any): Router {
         getUsers(),
         getFestivals(),
         getProfiles(),
-        stores.auditLog.query({ limit: 20 }).then(({ rows }: any) => rows),
+        stores.auditLog.query({ limit: 20, actorType: 'admin' }).then(({ rows }: any) => rows),
       ]);
 
       // Build username map from users for activity resolution
@@ -197,7 +204,7 @@ export default function createAdminRoutes(deps: any): Router {
   // registered — all paths here are unique so order-reshuffling within a
   // single router is safe, but we preserve the original order to make diffs
   // trivial to audit.
-  const ctx = { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray };
+  const ctx = { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray, getFriendlyAction };
   mountAdminUserRoutes({ router, deps, ctx }); // /users, /users/:id/*
   mountAdminAuditRoutes({ router, deps, ctx }); // /audit
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*
@@ -332,6 +339,19 @@ export default function createAdminRoutes(deps: any): Router {
         skipped: sets.length - updated,
         ip: getRequestIp(req),
       });
+      if (stores.auditLog) {
+        await stores.auditLog.insert({
+          actorType: 'admin',
+          actorId: req.user?.userId,
+          action: 'spotify_backfill',
+          targetType: 'festival',
+          targetId: festivalId,
+          detailsJson: JSON.stringify({ updated, skipped: sets.length - updated, total: sets.length }),
+          ip: getRequestIp(req),
+        });
+        // eslint-disable-next-line require-atomic-updates -- res is request-scoped
+        res.locals.auditWritten = true;
+      }
       return sendSuccess(res, { updated, skipped: sets.length - updated, total: sets.length });
     } catch (error: any) {
       log.error('spotify backfill failed', { error: error.message, festivalId: req.params.id });

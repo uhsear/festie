@@ -223,6 +223,16 @@ async function loginAdmin(server: any) {
   return loginRes.body.data.token;
 }
 
+// Festival delete needs a password re-entry within 15 minutes (requireRecentAuth).
+async function reauthAdmin(server: any, adminToken: string) {
+  await server.request
+    .post('/api/v1/auth/reauth')
+    .set('x-user-token', adminToken)
+    .set(TRUSTED_MUTATION_HEADER, '1')
+    .send({ password: 'test-admin-password-pass' })
+    .expect(200);
+}
+
 
 const servers: any[] = [];
 afterEach(async () => {
@@ -304,6 +314,7 @@ describe('admin festival CRUD', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const adminToken = await loginAdmin(server);
+    await reauthAdmin(server, adminToken);
 
     await server.request
       .delete('/api/v1/admin/festivals/fest-1')
@@ -321,6 +332,7 @@ describe('admin festival CRUD', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const adminToken = await loginAdmin(server);
+    await reauthAdmin(server, adminToken);
 
     await server.request
       .delete('/api/v1/admin/festivals/fest-1?hard=true')
@@ -349,6 +361,7 @@ describe('admin festival CRUD', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const adminToken = await loginAdmin(server);
+    await reauthAdmin(server, adminToken);
 
     await server.request
       .delete('/api/v1/admin/festivals/nonexistent-fest')

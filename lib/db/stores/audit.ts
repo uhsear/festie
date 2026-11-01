@@ -54,7 +54,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return id;
     },
 
-    async query({ actorId, action, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
+    async query({ actorId, actorType, action, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
       const maxLimit = 200;
       const finalLimit = Math.min(Math.max(1, limit || 50), maxLimit);
 
@@ -81,6 +81,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         cursorCreatedAt,
         cursorId,
         finalLimit,
+        actorType || null,
       ];
 
       const result = await pool.query(`
@@ -104,6 +105,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
           AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4::TIMESTAMPTZ)
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
           AND ($6::TIMESTAMPTZ IS NULL OR (created_at, id) < ($6::TIMESTAMPTZ, $7::TEXT))
+          AND ($9::TEXT IS NULL OR actor_type = $9::TEXT)
         ORDER BY created_at DESC, id DESC
         LIMIT $8
       `, params);
@@ -127,13 +129,14 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return { rows, nextCursor };
     },
 
-    async count({ actorId, action, resourceType, from, to }: any = {}) {
+    async count({ actorId, actorType, action, resourceType, from, to }: any = {}) {
       const params: any[] = [
         actorId || null,
         action || null,
         resourceType || null,
         from || null,
         to || null,
+        actorType || null,
       ];
 
       const result = await pool.query(`
@@ -144,6 +147,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
           AND ($3::TEXT IS NULL OR target_type = $3::TEXT)
           AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4::TIMESTAMPTZ)
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
+          AND ($6::TEXT IS NULL OR actor_type = $6::TEXT)
       `, params);
 
       return parseInt(result.rows[0]?.total || 0, 10);

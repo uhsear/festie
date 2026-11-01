@@ -67,6 +67,8 @@ export interface MappableMeetingPoint {
 }
 
 interface Props {
+  /** Admin map editor: always render the canvas, even with nothing to plot yet. */
+  authoring?: boolean;
   meetingPoints: MappableMeetingPoint[];
   /** Live peer positions (ephemeral). Empty/omitted keeps the original behaviour. */
   peers?: PeerLocation[];
@@ -149,6 +151,7 @@ export default function CrewMap({
   festival = null,
   onMapClick,
   draftPoints,
+  authoring = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // 'pending' until we know whether the GL library mounted; flips to 'error' on
@@ -232,7 +235,7 @@ export default function CrewMap({
   // map data, zone polygons, a site-plan overlay, live peers, an SOS coord) or a
   // known place to centre on.
   const shouldRenderMap =
-    hasPins || hasStages || hasAmenities || hasZones || hasSiteplan || hasPeers || hasSos || hasCamera;
+    authoring || hasPins || hasStages || hasAmenities || hasZones || hasSiteplan || hasPeers || hasSos || hasCamera;
 
   // Initial camera: prefer the festival's explicit map-config (bounds/center),
   // then fall back to framing the static pins (meeting points + stages +
@@ -698,7 +701,7 @@ export default function CrewMap({
       )}
 
       <p className="text-xs text-text-muted text-center">
-        {countCopy || 'Live locations'}
+        {countCopy || (authoring ? 'Click Set location, then click the map.' : 'Live locations')}
         {!hasStages && !hasAmenities && pins.length > 0 ? ' · this festival isn’t mapped yet' : ''}
       </p>
     </div>

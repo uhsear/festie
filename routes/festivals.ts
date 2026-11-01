@@ -9,6 +9,8 @@ export default function createFestivalsRoutes(deps: any) {
     config,
     log,
     adminAuth,
+    hasRecentAuth,
+    requireRecentAuth,
     getFestivals,
     getFestivalById,
     validateFestival,
@@ -97,16 +99,19 @@ export default function createFestivalsRoutes(deps: any) {
     }
   }
 
-  // Audit log helper — writes to audit_log table if available (async, fire-and-forget with error handling)
+  // Audit log helper — writes to audit_log table if available (async, fire-and-forget with error handling).
+  // Every caller sits behind adminAuth, so the actor is the signed-in admin.
   function audit(action: any, targetType: any, targetId: any, req: any, details: any = {}) {
     if (!stores.auditLog) return;
+    // Tells the generic audit middleware this request already has its row.
+    if (req.res?.locals) req.res.locals.auditWritten = true;
     // Fire async without awaiting to avoid blocking HTTP response
     Promise.resolve().then(async () => {
       try {
         await stores.auditLog.insert({
           id: crypto.randomUUID(),
-          actorType: req.adminSession ? 'admin' : 'user',
-          actorId: req.adminSession ? 'admin' : req.user?.userId,
+          actorType: 'admin',
+          actorId: req.user?.userId,
           action,
           targetType,
           targetId,
@@ -117,6 +122,30 @@ export default function createFestivalsRoutes(deps: any) {
         log.warn('audit log write failed', { error: e.message });
       }
     });
+  }
+
+  const setsOf = (festival: any): any[] => (festival?.days || []).flatMap((d: any) => d.sets || []);
+
+  // "1 day, 24 sets and 113 picks": the non-zero parts, in this order.
+  function removalSummary(removal: { days: number; sets: number; picks: number; ratings: number }) {
+    const parts = (
+      [
+        [removal.days, 'day'],
+        [removal.sets, 'set'],
+        [removal.picks, 'pick'],
+        [removal.ratings, 'rating'],
+      ] as const
+    )
+      .filter(([n]) => n > 0)
+      .map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`);
+    if (parts.length <= 1) return parts.join('');
+    return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  }
+
+  async function countOnSets(table: 'festival_profile_picks' | 'set_ratings', setIds: string[]) {
+    if (setIds.length === 0) return 0;
+    const result = await stores.pool.query(`SELECT COUNT(*) AS count FROM ${table} WHERE set_id = ANY($1)`, [setIds]);
+    return Number.parseInt(result.rows[0]?.count ?? '0', 10) || 0;
   }
 
   router.get('/', rateLimit(120, 'festival-list'), async (req: any, res: any) => {
@@ -309,28 +338,89 @@ export default function createFestivalsRoutes(deps: any) {
     validate(schemas.festivalUpdate),
     async (req: any, res: any) => {
       try {
-        const validationErrors = validateFestival(config, req.validatedBody);
+        const body = req.validatedBody;
+        const validationErrors = validateFestival(config, body);
         if (validationErrors.length > 0) {
           return sendError(res, 400, validationErrors.join('; '), ErrorCodes.INVALID_INPUT);
         }
         const existingFestival = await getFestivalById(req.validatedParams.id);
         if (!existingFestival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
-        const nextFestival = sanitizeFestivalPayload(req.validatedBody, existingFestival);
+        if (
+          body.expectedUpdatedAt !== undefined &&
+          new Date(body.expectedUpdatedAt).getTime() !== new Date(existingFestival.updatedAt).getTime()
+        ) {
+          return sendError(
+            res,
+            409,
+            'This festival changed since you opened it. Reload it, then make your change again.',
+            ErrorCodes.FESTIVAL_CHANGED,
+          );
+        }
+
+        const nextFestival = sanitizeFestivalPayload(body, existingFestival);
+        // Days and sets are touched only when the payload sends them; the map
+        // editors leave them out so a map save cannot rewrite the lineup.
+        const daysSent = body.days !== undefined;
+        const stats = { setsAdded: 0, setsRemoved: 0, setsChanged: 0, picksLost: 0 };
+        if (daysSent) {
+          const storedSets = setsOf(existingFestival);
+          const storedById = new Map(storedSets.map((set: any) => [set.id, set]));
+          const nextSets = setsOf(nextFestival);
+          const nextIds = new Set(nextSets.map((set: any) => set.id));
+          const removedIds = storedSets.map((set: any) => set.id).filter((id: string) => !nextIds.has(id));
+          const [picks, ratings] = await Promise.all([
+            countOnSets('festival_profile_picks', removedIds),
+            countOnSets('set_ratings', removedIds),
+          ]);
+          if (picks + ratings > 0 && body.confirmRemovals !== true) {
+            const removal = {
+              days: Math.max(0, (existingFestival.days || []).length - nextFestival.days.length),
+              sets: removedIds.length,
+              picks,
+              ratings,
+            };
+            return sendError(
+              res,
+              409,
+              `This save removes ${removalSummary(removal)}. Confirm to continue.`,
+              ErrorCodes.CONFIRM_REMOVALS,
+              { removal },
+            );
+          }
+          stats.setsRemoved = removedIds.length;
+          stats.picksLost = picks;
+          for (const set of nextSets) {
+            const before: any = storedById.get(set.id);
+            if (!before) stats.setsAdded++;
+            else if (
+              before.artist !== set.artist ||
+              (before.stageId || '') !== (set.stageId || '') ||
+              (before.startTime || null) !== (set.startTime || null) ||
+              (before.endTime || null) !== (set.endTime || null)
+            ) {
+              stats.setsChanged++;
+            }
+          }
+        }
+        if (body.confirmRemovals === true && !hasRecentAuth(req)) {
+          return sendError(res, 403, 'Confirm your password to continue.', ErrorCodes.REAUTH_REQUIRED);
+        }
+
         const festival = await stores.festivals.update(req.validatedParams.id, {
           name: nextFestival.name,
           location: nextFestival.location,
           b2bSeparator: nextFestival.b2bSeparator,
           timeZone: nextFestival.timeZone,
           stages: nextFestival.stages,
-          days: nextFestival.days,
+          ...(daysSent ? { days: nextFestival.days } : {}),
           mapConfig: nextFestival.mapConfig,
         });
         invalidateFestivalCache();
 
         invalidateFestivalListCache();
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
-        audit('festival:update', 'festival', festival.id, req, { name: festival.name });
+        audit('festival:update', 'festival', festival.id, req, { name: festival.name, ...stats });
         emitter.festivalUpdated({ festival });
         const venueMissing = typeof existingFestival.latitude !== 'number';
         if (venueMissing || nextFestival.location !== existingFestival.location) {
@@ -349,6 +439,7 @@ export default function createFestivalsRoutes(deps: any) {
     '/:id',
     adminAuth,
     rateLimit(5, 'festival-delete'),
+    requireRecentAuth,
     validateParams(schemas.genericIdParams),
     validateQuery(schemas.festivalDeleteQuery),
     async (req: any, res: any) => {

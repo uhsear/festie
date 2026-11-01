@@ -145,6 +145,12 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     const revoked = waitForEvent(socket, 'festival:access-revoked', (payload) => payload.festivalId === 'fest-1');
     const deleted = waitForEvent(socket, 'festival:deleted', (payload) => payload.id === 'fest-1');
 
+    // Festival delete is a gated admin action (T4 re-auth window).
+    await server.request
+      .post('/api/v1/auth/reauth')
+      .set('x-user-token', adminToken)
+      .send({ password: 'test-admin-password' })
+      .expect(200);
     await server.request
       .delete('/api/v1/festivals/fest-1?hard=true')
       .set('x-user-token', adminToken)

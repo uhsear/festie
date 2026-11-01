@@ -75,6 +75,22 @@ async function insertStagesBatch(client: any, rows: any[][]) {
   );
 }
 
+/** Batch-upsert stages by (festival_id, id), so existing stage rows (and their sets) survive. */
+async function upsertStagesBatch(client: any, rows: any[][]) {
+  if (rows.length === 0) return;
+  const { clause, params } = buildMultiInsert(rows);
+  await client.query(
+    `INSERT INTO festival_stages (festival_id, id, name, color, sort_order, latitude, longitude) VALUES ${clause}
+     ON CONFLICT (festival_id, id) DO UPDATE SET
+       name = EXCLUDED.name,
+       color = EXCLUDED.color,
+       sort_order = EXCLUDED.sort_order,
+       latitude = EXCLUDED.latitude,
+       longitude = EXCLUDED.longitude`,
+    params,
+  );
+}
+
 /** Batch-insert days in a single multi-row query. */
 async function insertDaysBatch(client: any, rows: any[][]) {
   if (rows.length === 0) return;
@@ -393,21 +409,37 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       });
     },
 
-    async insertSets(festivalId: string, sets: any[]) {
-      if (!sets || sets.length === 0) return;
-      const rows = sets.map((set: any, sortOrder: number) => [
-        set.id,
-        festivalId,
-        set.dayIndex,
-        set.artist,
-        set.stageId,
-        set.startTime,
-        set.endTime,
-        set.sortOrder ?? sortOrder,
-        set.linkUrl || null,
-        JSON.stringify(set.artists || []),
-      ]);
-      await insertSetsBatch({ query: (sql: string, params: any[]) => pool.query(sql, params) }, rows);
+    /**
+     * Apply a lineup import in one transaction: insert new sets, then update the stage and
+     * times of matched sets. Matched sets keep their ids, so picks and ratings survive.
+     */
+    async applyLineupImport(
+      festivalId: string,
+      inserts: any[],
+      updates: { id: string; stageId: string; startTime: string; endTime: string }[],
+    ) {
+      return withTransaction(pool, async (client) => {
+        const rows = inserts.map((set: any, sortOrder: number) => [
+          set.id,
+          festivalId,
+          set.dayIndex,
+          set.artist,
+          set.stageId,
+          set.startTime,
+          set.endTime,
+          set.sortOrder ?? sortOrder,
+          set.linkUrl || null,
+          JSON.stringify(set.artists || []),
+        ]);
+        await insertSetsBatch(client, rows);
+        for (const u of updates) {
+          await client.query(
+            'UPDATE festival_sets SET stage_id = $1, start_time = $2, end_time = $3 WHERE id = $4 AND festival_id = $5',
+            [u.stageId, u.startTime, u.endTime, u.id, festivalId],
+          );
+        }
+        await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
+      });
     },
 
     async create(festival: any) {
@@ -511,9 +543,10 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
 
         await client.query(`UPDATE festivals SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL`, values);
 
-        // Update stages if provided (batch insert)
+        // Upsert stages instead of delete-and-reinsert: festival_sets_stage_fkey is ON DELETE
+        // CASCADE, so deleting a stage row would delete (or, with picks, fail on) its sets.
+        const stageIds: string[] = (fields.stages || []).map((stage: any) => stage.id);
         if (fields.stages !== undefined) {
-          await client.query('DELETE FROM festival_stages WHERE festival_id = $1', [festivalId]);
           const stageRows = (fields.stages || []).map((stage: any, sortOrder: number) => [
             festivalId,
             stage.id,
@@ -523,13 +556,25 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             stage.latitude ?? null,
             stage.longitude ?? null,
           ]);
-          await insertStagesBatch(client, stageRows);
+          await upsertStagesBatch(client, stageRows);
         }
 
         // Update days and sets if provided (batch insert with pick/rating preservation)
         if (fields.days !== undefined) {
           const children = collectFestivalChildren(festivalId, { days: fields.days });
           await replaceChildRows(client, festivalId, children);
+        }
+
+        // Drop stages missing from the payload only once no set uses them, so this never
+        // cascades into festival_sets. A map save without days keeps a stage that still has sets.
+        if (fields.stages !== undefined) {
+          await client.query(
+            `DELETE FROM festival_stages st
+             WHERE st.festival_id = $1
+               AND NOT (st.id = ANY($2::text[]))
+               AND NOT EXISTS (SELECT 1 FROM festival_sets s WHERE s.festival_id = st.festival_id AND s.stage_id = st.id)`,
+            [festivalId, stageIds],
+          );
         }
 
         const result = await client.query(

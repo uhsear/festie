@@ -3,12 +3,12 @@ import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert } from 
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '@festie/shared/services';
+import { api, withReauth } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
-import { ConfirmDialog, LabeledTextInput } from '../../components/admin';
+import { ConfirmDialog, LabeledTextInput, useReauthPrompt } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
@@ -72,6 +72,7 @@ export default function AdminUsersScreen() {
   // Pending destructive intent + in-flight guard for the ConfirmDialog.
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [busy, setBusy] = useState(false);
+  const { askPassword: askReauthPassword, reauthDialog } = useReauthPrompt();
 
   const load = useCallback(async () => {
     setError(false);
@@ -146,13 +147,26 @@ export default function AdminUsersScreen() {
   const runPending = useCallback(async () => {
     if (!pending) return;
     setBusy(true);
+    // withReauth returns null both on cancel and for an empty response, so track cancel here.
+    let cancelled = false;
+    const askPassword = async () => {
+      const password = await askReauthPassword();
+      if (password === null) cancelled = true;
+      return password;
+    };
     try {
       if (pending.kind === 'toggle-admin') {
         const { user, grant } = pending;
-        if (grant) {
-          await api.post<unknown>(`/admin/users/${user.id}/roles`, { role: 'admin' });
-        } else {
-          await api.delete<unknown>(`/admin/users/${user.id}/roles/admin`);
+        await withReauth(
+          () =>
+            grant
+              ? api.post<unknown>(`/admin/users/${user.id}/roles`, { role: 'admin' })
+              : api.delete<unknown>(`/admin/users/${user.id}/roles/admin`),
+          askPassword,
+        );
+        if (cancelled) {
+          setPending(null);
+          return;
         }
         setUsers((prev) =>
           prev.map((u) =>
@@ -172,7 +186,11 @@ export default function AdminUsersScreen() {
         Alert.alert('Password reset', `A new password has been set for @${user.username}.`);
       } else {
         const { user } = pending;
-        await api.delete<unknown>(`/admin/users/${user.id}`);
+        await withReauth(() => api.delete<unknown>(`/admin/users/${user.id}`), askPassword);
+        if (cancelled) {
+          setPending(null);
+          return;
+        }
         setUsers((prev) => prev.filter((u) => u.id !== user.id));
         if (expandedId === user.id) setExpandedId(null);
         setPending(null);
@@ -185,7 +203,7 @@ export default function AdminUsersScreen() {
     } finally {
       setBusy(false);
     }
-  }, [pending, expandedId]);
+  }, [pending, expandedId, askReauthPassword]);
 
   // Confirm-dialog copy derived from the staged intent.
   const confirm = useMemo(() => {
@@ -384,6 +402,7 @@ export default function AdminUsersScreen() {
         onConfirm={() => void runPending()}
         onCancel={() => setPending(null)}
       />
+      {reauthDialog}
     </View>
   );
 }

@@ -36,8 +36,29 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     validateParams,
     createAuditLog,
     invalidateUserCache,
+    requireRecentAuth,
   } = deps;
   const { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray } = ctx;
+
+  async function writeAudit(req: any, res: any, action: string, targetId: string, details: Record<string, unknown>) {
+    if (!stores.auditLog) return;
+    // The action already took effect, so a failed audit insert must not turn it into a 500.
+    // auditWritten stays unset then, so the generic middleware still records the request.
+    try {
+      await stores.auditLog.insert({
+        actorType: 'admin',
+        actorId: req.user?.userId,
+        action,
+        targetType: 'user',
+        targetId,
+        detailsJson: JSON.stringify(details),
+        ip: getRequestIp(req),
+      });
+      res.locals.auditWritten = true;
+    } catch (err: any) {
+      log.warn('admin user audit write failed', { action, targetId, error: err?.message });
+    }
+  }
 
   // ── GET /users — list users with roles and optional search ────────────
   router.get('/users', adminAuth, validateQuery(schemas.adminUserSearchQuery), async (req: any, res: any) => {
@@ -95,6 +116,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     '/users/:id/roles',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     validateParams(schemas.genericIdParams),
     validate(schemas.adminAddRole),
     async (req: any, res: any) => {
@@ -127,6 +149,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
             detailsJson: JSON.stringify({ role: roleName, targetUsername: user.username }),
             ip: getRequestIp(req),
           });
+          res.locals.auditWritten = true;
         }
 
         log.warn('admin:role-grant', { targetUserId, targetUsername: user.username, role: roleName, actorId });
@@ -144,6 +167,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     '/users/:id/roles/:role',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     validateParams(schemas.genericIdParams),
     async (req: any, res: any) => {
       try {
@@ -177,6 +201,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
             detailsJson: JSON.stringify({ role: roleName, targetUsername: user.username }),
             ip: getRequestIp(req),
           });
+          res.locals.auditWritten = true;
         }
 
         log.warn('admin:role-revoke', { targetUserId, targetUsername: user.username, role: roleName, actorId });
@@ -232,6 +257,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
           ipAddress: getRequestIp(req),
         });
         log.warn('admin:reset-link', { ...auditLog });
+        await writeAudit(req, res, 'admin_reset_link', targetUserId, { targetUsername: user.username });
         return sendSuccess(res, { resetUrl, username: user.username });
       } catch (error: any) {
         log.error('admin reset-link failed', { error: error.message, targetUserId: req.validatedParams?.id });
@@ -278,6 +304,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
           ipAddress: getRequestIp(req),
         });
         log.warn('admin:reset-password', { ...auditLog });
+        await writeAudit(req, res, 'admin_reset_password', targetUserId, { targetUsername: username });
         return sendSuccess(res, { success: true, username });
       } catch (error: any) {
         log.error('admin reset-password failed', { error: error.message, targetUserId: req.validatedParams?.id });
@@ -290,6 +317,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     '/users/:id',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     validateParams(schemas.genericIdParams),
     async (req: any, res: any) => {
       try {
@@ -319,6 +347,10 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
           ipAddress: getRequestIp(req),
         });
         log.warn('admin:delete-user', { ...auditLog });
+        await writeAudit(req, res, 'admin_delete_user', removedUser.id, {
+          targetUsername: removedUser.username,
+          profilesRemoved: (removedProfiles || []).length,
+        });
 
         await removeAvatarFile(removedUser.avatarKey).catch(() => {});
         for (const profile of removedProfiles || []) {

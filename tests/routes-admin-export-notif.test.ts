@@ -140,6 +140,7 @@ function makeDeps(overrides: any = {}) {
       p && p.length >= 8 && p.length <= 100 ? null : 'Password must be at least 8 characters',
     hashPassword: mock.fn(async () => 'hashed-password'),
     invalidateUserSessions: mock.fn(async () => {}),
+    requireRecentAuth: (_req: any, _res: any, next: any) => next(),
     disconnectUserSockets: mock.fn(),
     removeAvatarFile: mock.fn(async () => {}),
     removeProfileSockets: mock.fn(),
@@ -645,21 +646,21 @@ describe('routes/admin-audit.js', () => {
     const { default: mountAdminAuditRoutes } = await import('../routes/admin-audit.js');
     const deps = makeDeps();
     const router = express.Router();
-    mountAdminAuditRoutes({ router, deps });
+    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
     const app = buildApp(router);
 
     const res = await request(app).get('/audit').expect(200);
     assert.equal(res.body.error, null);
     assert.ok(Array.isArray(res.body.data));
     assert.ok(res.body.meta);
-    assert.equal(res.body.meta.meta.total, 1);
+    assert.equal(res.body.meta.total, 1);
   });
 
   test('GET /audit passes query filters to store', async () => {
     const { default: mountAdminAuditRoutes } = await import('../routes/admin-audit.js');
     const deps = makeDeps();
     const router = express.Router();
-    mountAdminAuditRoutes({ router, deps });
+    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
     const app = buildApp(router);
 
     await request(app).get('/audit?actor_id=user-1&action=login&limit=10').expect(200);
@@ -676,7 +677,7 @@ describe('routes/admin-audit.js', () => {
       throw new Error('DB down');
     });
     const router = express.Router();
-    mountAdminAuditRoutes({ router, deps });
+    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
     const app = buildApp(router);
 
     const res = await request(app).get('/audit').expect(500);
@@ -863,6 +864,17 @@ describe('routes/admin-users.js', () => {
     assert.ok(deps.invalidateUserSessions.mock.calls.length > 0);
   });
 
+  test('DELETE /users/:id still succeeds and cleans up when the audit insert fails', async () => {
+    const { app, deps } = await buildUserRouter();
+    deps.stores.auditLog.insert = mock.fn(async () => {
+      throw new Error('audit down');
+    });
+    const res = await request(app).delete('/users/user-2').expect(200);
+    assert.equal(res.body.data.success, true);
+    assert.equal(deps.stores.auditLog.insert.mock.calls.length, 1);
+    assert.ok(deps.invalidateUserSessions.mock.calls.length > 0);
+  });
+
   test('DELETE /users/:id returns 404 for missing user', async () => {
     const { app } = await buildUserRouter({
       getUserById: mock.fn(async () => null),
@@ -918,7 +930,7 @@ describe('routes/admin-bulk.js', () => {
     const { app } = await buildBulkRouter();
     let callCount = 0;
     const deps2 = makeDeps();
-    deps2.stores.sessions.deleteUserSessions = mock.fn(async () => {
+    deps2.invalidateUserSessions = mock.fn(async () => {
       callCount++;
       if (callCount === 2) throw new Error('Session delete failed');
     });
