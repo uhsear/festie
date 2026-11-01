@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { X, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { usePickSync } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
@@ -15,12 +15,11 @@ interface Props {
 
 // Icons and labels come from the shared PRIORITY_SYMBOLS set, so the same
 // concept renders identically across cards, grid, picks and this panel.
-// `X` is the Clear affordance.
-const priorityOptions: Array<{ value: Priority | null; Icon: LucideIcon; label: string }> = [
+// Tapping the active option clears the pick; "Remove pick" repeats that as text.
+const priorityOptions: Array<{ value: Priority; Icon: LucideIcon; label: string }> = [
   { value: 'must', Icon: priorityLucide('must'), label: PRIORITY_SYMBOLS.must.label },
   { value: 'want-to-see', Icon: priorityLucide('want-to-see'), label: PRIORITY_SYMBOLS['want-to-see'].label },
   { value: 'maybe', Icon: priorityLucide('maybe'), label: PRIORITY_SYMBOLS.maybe.label },
-  { value: null, Icon: X, label: 'Clear' },
 ];
 
 // Selected fill mirrors SetCard's active priority buttons (solid fill + glow,
@@ -44,28 +43,26 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
     <div className="mb-6">
     <div className="flex gap-4">
       {priorityOptions.map(({ value: p, Icon, label }) => {
-        const active = p !== null && myPick === p;
-        const key: Priority | 'clear' = p ?? 'clear';
-        const isThisBusy = priorityBusy === key;
+        const active = myPick === p;
+        const isThisBusy = priorityBusy === p;
         const anyBusy = priorityBusy !== null;
         return (
           <button
             key={label}
-            className={cn(baseButtonClass, active && p !== null && activeStyles[p])}
+            className={cn(baseButtonClass, active && activeStyles[p])}
             type="button"
-            aria-pressed={p === null ? undefined : active ? 'true' : 'false'}
+            aria-pressed={active ? 'true' : 'false'}
             aria-label={label + (active ? ' (selected)' : '') + (active && pending ? pendingSuffix : '')}
             aria-busy={isThisBusy ? 'true' : 'false'}
-            disabled={anyBusy || (p === null && !myPick)}
+            disabled={anyBusy}
             onClick={async (e) => {
               e.preventDefault();
               e.stopPropagation();
               if (priorityBusy !== null) return;
-              await onPriorityClick(p);
+              await onPriorityClick(active ? null : p);
             }}
           >
-            {/* Fill the glyph when active (Clear's X stays an outline — it has no
-                meaningful fill area). Mirrors SetCard's fill-on-active treatment. */}
+            {/* Fill the glyph when active, as SetCard's active priority buttons do. */}
             <Icon
               className="w-5 h-5 mx-auto"
               fill={active ? 'currentColor' : 'none'}
@@ -77,6 +74,16 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
         );
       })}
     </div>
+    {myPick && (
+      <button
+        type="button"
+        className="mt-2 text-sm text-text-secondary underline min-h-11 cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua"
+        disabled={priorityBusy !== null}
+        onClick={() => void onPriorityClick(null)}
+      >
+        Remove pick
+      </button>
+    )}
     {sync?.state === 'failed' && (
       <div role="status" className="mt-2 text-xs text-accent-amber">
         Pick not saved.{' '}

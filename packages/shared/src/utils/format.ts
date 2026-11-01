@@ -1,5 +1,5 @@
 import { FestivalSet } from '../types/domain';
-import { createDateInLocalFrame, getSetTimeBounds } from './setStatus';
+import { createDateInLocalFrame } from './setStatus';
 
 /**
  * Format a festival date range for display, e.g. "Sep 4 – Sep 6, 2026".
@@ -66,60 +66,4 @@ export function getSetLinks(set: FestivalSet): Array<{ name: string; links: Reco
     name: string;
     links: Record<string, string>;
   }>;
-}
-
-const _hotnessCache = new Map<string, number>();
-let _hotnessCacheSecond = -1;
-
-export function getSetHotness(set: FestivalSet): number {
-  if (!set.date || !set.startTime) return 0;
-
-  const nowSec = Math.floor(Date.now() / 1000);
-  if (nowSec !== _hotnessCacheSecond) {
-    _hotnessCache.clear();
-    _hotnessCacheSecond = nowSec;
-  }
-
-  const cacheKey = set.id || `${set.date}${set.startTime}`;
-  if (_hotnessCache.has(cacheKey)) return _hotnessCache.get(cacheKey) || 0;
-
-  const now = nowSec * 1000;
-
-  // Delegate start/end instant math (incl. post-midnight rollover) to the shared,
-  // idempotent getSetTimeBounds so hotness and getSetStatus agree on the exact
-  // boundaries and the rollover is never double-applied. Returns null for TBA.
-  //
-  // CRITICAL (TZ parity): getSetTimeBounds builds every Date via
-  // createDateInLocalFrame, which seeds calendar fields explicitly so the result
-  // is ALWAYS in the device's local frame (never the JS UTC string-parser). Do not
-  // reintroduce inline `new Date(set.date)` math here — it would parse YYYY-MM-DD as
-  // UTC midnight and skew hotness for non-UTC users while CI (UTC) stays green.
-  const bounds = getSetTimeBounds(set);
-  if (!bounds) {
-    _hotnessCache.set(cacheKey, 0);
-    return 0;
-  }
-  const { startMs: setStart, endMs: setEnd } = bounds;
-
-  if (now >= setStart && now < setEnd) {
-    _hotnessCache.set(cacheKey, 1000);
-    return 1000;
-  }
-
-  const minsUntil = (setStart - now) / 60000;
-  if (minsUntil > 0 && minsUntil < 720) {
-    const v = 500 * Math.exp(-minsUntil / 120);
-    _hotnessCache.set(cacheKey, v);
-    return v;
-  }
-
-  const minsAgo = (now - setEnd) / 60000;
-  if (minsAgo > 0 && minsAgo < 120) {
-    const v = 100 * Math.exp(-minsAgo / 30);
-    _hotnessCache.set(cacheKey, v);
-    return v;
-  }
-
-  _hotnessCache.set(cacheKey, 0);
-  return 0;
 }

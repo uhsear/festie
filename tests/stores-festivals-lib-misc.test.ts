@@ -1075,8 +1075,7 @@ describe('routes/spotify.js', () => {
     global.fetch = mock.fn(async () => ({
       ok: true,
       json: async () => ({
-        tracks: {
-          items: [
+        tracks: [
             {
               id: 't1',
               name: 'Track 1',
@@ -1084,8 +1083,7 @@ describe('routes/spotify.js', () => {
               album: { images: [{ url: 'https://album.art' }] },
               artists: [{ id: 'abc123', name: 'Artist' }],
             },
-          ],
-        },
+        ],
       }),
     })) as any;
 
@@ -1204,7 +1202,7 @@ describe('routes/spotify.js', () => {
     assert.equal(data.embedType, null);
   });
 
-  it('falls back to artist embed when search returns no tracks', async () => {
+  it('falls back to artist embed when top-tracks returns no tracks', async () => {
     const deps = makeDeps({
       stores: {
         pool: makePool([
@@ -1223,7 +1221,7 @@ describe('routes/spotify.js', () => {
     const origFetch = global.fetch;
     global.fetch = mock.fn(async () => ({
       ok: true,
-      json: async () => ({ tracks: { items: [] } }),
+      json: async () => ({ tracks: [] }),
     })) as any;
 
     try {
@@ -1248,7 +1246,7 @@ describe('routes/spotify.js', () => {
     }
   });
 
-  it('falls back to artist embed when search response is not ok', async () => {
+  it('falls back to artist embed when top-tracks response is not ok', async () => {
     const deps = makeDeps({
       stores: {
         pool: makePool([
@@ -1366,8 +1364,7 @@ describe('routes/spotify.js', () => {
     global.fetch = mock.fn(async () => ({
       ok: true,
       json: async () => ({
-        tracks: {
-          items: [
+        tracks: [
             {
               id: 'track-1',
               name: 'Great Track',
@@ -1375,8 +1372,7 @@ describe('routes/spotify.js', () => {
               album: { images: [{ url: 'https://art.jpg' }] },
               artists: [{ id: 'trk456', name: 'Track Artist' }],
             },
-          ],
-        },
+        ],
       }),
     })) as any;
 
@@ -1425,8 +1421,7 @@ describe('routes/spotify.js', () => {
     global.fetch = mock.fn(async () => ({
       ok: true,
       json: async () => ({
-        tracks: {
-          items: [
+        tracks: [
             {
               id: 'track-noart',
               name: 'No Art Track',
@@ -1434,8 +1429,7 @@ describe('routes/spotify.js', () => {
               album: { images: [] },
               artists: [{ id: 'na789', name: 'No Art' }],
             },
-          ],
-        },
+        ],
       }),
     })) as any;
 
@@ -1461,68 +1455,7 @@ describe('routes/spotify.js', () => {
     }
   });
 
-  it('prefers track with preview_url over one without', async () => {
-    const deps = makeDeps({
-      stores: {
-        pool: makePool([
-          {
-            rows: [
-              {
-                id: 'set-pref',
-                artists: [{ name: 'Pref', links: { spotify: 'https://open.spotify.com/artist/pref1' } }],
-              },
-            ],
-          },
-        ]),
-      },
-    });
-
-    const origFetch = global.fetch;
-    global.fetch = mock.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        tracks: {
-          items: [
-            {
-              id: 'no-preview',
-              name: 'No Preview',
-              preview_url: null,
-              album: { images: [] },
-              artists: [{ id: 'pref1', name: 'Pref' }],
-            },
-            {
-              id: 'has-preview',
-              name: 'Has Preview',
-              preview_url: 'https://p.scdn.co/clip.mp3',
-              album: { images: [{ url: 'https://art2.jpg' }] },
-              artists: [{ id: 'pref1', name: 'Pref' }],
-            },
-          ],
-        },
-      }),
-    })) as any;
-
-    try {
-      const router = createSpotifyRoutes(deps);
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
-
-      const req = { params: { setId: 'set-pref' } };
-      const res = {
-        json: mock.fn(),
-        status: mock.fn(function (this: any) {
-          return this;
-        }),
-      };
-      await handler(req, res);
-      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
-      assert.equal(data.trackId, 'has-preview');
-    } finally {
-      global.fetch = origFetch;
-    }
-  });
-
-  it('filters tracks by matching artist name (case insensitive)', async () => {
+  it('never returns a track by another artist', async () => {
     const deps = makeDeps({
       stores: {
         pool: makePool([
@@ -1542,24 +1475,9 @@ describe('routes/spotify.js', () => {
     global.fetch = mock.fn(async () => ({
       ok: true,
       json: async () => ({
-        tracks: {
-          items: [
-            {
-              id: 'wrong-artist-track',
-              name: 'Wrong',
-              preview_url: 'https://p1.mp3',
-              album: { images: [] },
-              artists: [{ id: 'other', name: 'Wrong Artist' }],
-            },
-            {
-              id: 'correct-artist-track',
-              name: 'Correct',
-              preview_url: 'https://p2.mp3',
-              album: { images: [] },
-              artists: [{ id: 'ca1', name: 'correct artist' }], // lowercase match
-            },
-          ],
-        },
+        tracks: [
+          { id: 'wrong-artist-track', name: 'Wrong', album: { images: [] }, artists: [{ id: 'other', name: 'Correct Artist' }] },
+        ],
       }),
     })) as any;
 
@@ -1567,17 +1485,57 @@ describe('routes/spotify.js', () => {
       const router = createSpotifyRoutes(deps);
       const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
       const handler = layer.route.stack[layer.route.stack.length - 1].handle;
-
-      const req = { params: { setId: 'set-filter' } };
-      const res = {
-        json: mock.fn(),
-        status: mock.fn(function (this: any) {
-          return this;
-        }),
-      };
-      await handler(req, res);
+      const res = { json: mock.fn(), status: mock.fn(function (this: any) { return this; }) };
+      await handler({ params: { setId: 'set-filter' } }, res);
       const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
-      assert.equal(data.trackId, 'correct-artist-track');
+      assert.equal(data.embedType, 'artist');
+      assert.equal(data.artistId, 'ca1');
+      assert.equal(data.trackId, undefined);
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
+
+  it('calls top-tracks with the stored artist id and omits the preview url', async () => {
+    const deps = makeDeps({
+      stores: {
+        pool: makePool([
+          {
+            rows: [
+              {
+                id: 'set-top',
+                artists: [{ name: 'Top Artist', links: { spotify: 'https://open.spotify.com/artist/top1' } }],
+              },
+            ],
+          },
+        ]),
+      },
+    });
+
+    const origFetch = global.fetch;
+    const fetchMock = mock.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        tracks: [
+          { id: 'tt1', name: 'Hit', preview_url: 'https://p.mp3', album: { images: [] }, artists: [{ id: 'top1', name: 'Top Artist' }] },
+        ],
+      }),
+    }));
+    global.fetch = fetchMock as any;
+
+    try {
+      const router = createSpotifyRoutes(deps);
+      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
+      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+      const res = { json: mock.fn(), status: mock.fn(function (this: any) { return this; }) };
+      await handler({ params: { setId: 'set-top' } }, res);
+      const urls = fetchMock.mock.calls.map((c: any) => String(c.arguments[0]));
+      assert.ok(urls.some((u: string) => u.includes('/artists/top1/top-tracks?market=US')));
+      assert.ok(!urls.some((u: string) => u.includes('/v1/search')));
+      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      assert.equal(data.embedType, 'track');
+      assert.equal(data.trackId, 'tt1');
+      assert.ok(!('url' in data));
     } finally {
       global.fetch = origFetch;
     }

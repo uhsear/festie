@@ -1,10 +1,11 @@
-import React, { useCallback, useMemo, useSyncExternalStore } from 'react';
-import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import React, { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import {
-  artistDisplayName,
-  getSetHotness,
+  getHomeActions,
+  resolveFestivalTimeZone,
+  splitCardsByNow,
   getConflictingSetIds,
   festivalPhase,
   resolveStageColor,
@@ -12,6 +13,7 @@ import {
   searchOtherDays,
   searchEmptyCopy,
 } from '@festie/shared/utils';
+import { useNow } from '../hooks/useSetStatus';
 import { useScheduleFilters } from '../hooks/useScheduleFilters';
 import SetCard from '../components/features/SetCard';
 import PhaseHomeActions from '../components/features/PhaseHomeActions';
@@ -19,7 +21,7 @@ import OtherDayMatches from '../components/features/OtherDayMatches';
 import EmptyState from '../components/ui/EmptyState';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { Music, SearchX } from 'lucide-react';
+import { ChevronDown, ChevronUp, Music, SearchX } from 'lucide-react';
 
 export default function CardsView() {
   return (
@@ -55,6 +57,8 @@ function CardsViewInner() {
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const days = useFestivalStore((state) => state.days);
   const user = useAuthStore((state) => state.user);
+  const isLoading = useFestivalStore((state) => state.isLoading);
+  const crews = useCrewStore((state) => state.crews);
   const sets = useFestivalStore((state) => state.sets);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
   const stages = useFestivalStore((state) => state.stages);
@@ -83,8 +87,11 @@ function CardsViewInner() {
     [setDetailAutoSpotify, setDetailSet],
   );
 
+  const nowMs = useNow();
+  const [showEarlier, setShowEarlier] = useState(false);
+
   // Filter sets by day, stages, and search query — mirrors legacy filteredSets()
-  const filteredSets = useMemo(() => {
+  const { earlier, rest } = useMemo(() => {
     // Filter by selected day using dayIndex (legacy: getCurrentDaySets via day array index)
     let filtered = sets.filter((s) => s.dayIndex === selectedDay);
 
@@ -94,25 +101,16 @@ function CardsViewInner() {
     // Stage chips + My picks, shared with Timeline and Grid.
     filtered = filterSets(filtered);
 
-    // Sort by hotness (picks count), then by time, then by artist name
-    return filtered.sort((a, b) => {
-      const hotA = getSetHotness(a);
-      const hotB = getSetHotness(b);
-      if (hotA > 0 || hotB > 0) return hotB - hotA;
-
-      const timeA = a.startTime || '';
-      const timeB = b.startTime || '';
-      if (timeA && timeB) return timeA.localeCompare(timeB);
-      if (timeA && !timeB) return -1;
-      if (!timeA && timeB) return 1;
-
-      return artistDisplayName(a, currentFestival?.b2bSeparator).localeCompare(
-        artistDisplayName(b, currentFestival?.b2bSeparator),
-        undefined,
-        { sensitivity: 'base' },
-      );
+    // Time order; sets already over today fold into one "Earlier today" row.
+    return splitCardsByNow(filtered, {
+      days,
+      nowMs,
+      timeZone: resolveFestivalTimeZone(currentFestival),
+      separator: currentFestival?.b2bSeparator,
     });
-  }, [sets, selectedDay, filterSets, searchQuery, stages, currentFestival?.b2bSeparator]);
+  }, [sets, selectedDay, filterSets, searchQuery, stages, days, nowMs, currentFestival]);
+  const filteredSets = useMemo(() => [...earlier, ...rest], [earlier, rest]);
+  const visibleSets = showEarlier ? filteredSets : rest;
 
   // Matches on the other days, so a search never dead-ends on the selected day.
   const otherDayGroups = useMemo(
@@ -163,11 +161,18 @@ function CardsViewInner() {
     return <CardsSkeleton />;
   }
 
+  const hasCrew = crews.some((c) => !c.festivalId || c.festivalId === currentFestival.id);
+  const actions = getHomeActions({
+    phase,
+    signedIn: !!user,
+    pickCount: Object.keys(currentProfile?.picks ?? {}).length,
+    hasCrew,
+  });
+
   return (
     <>
-      {/* P1-5 — phase-aware home actions (authed only; matches BottomNav hiding
-          crew/picks/wrap from guests). Re-prioritizes destinations by phase. */}
-      {user && phase ? <PhaseHomeActions phase={phase} /> : null}
+      {/* Next useful steps for this phase; empty (hidden) when there is nothing to do. */}
+      {actions.length > 0 ? <PhaseHomeActions actions={actions} /> : null}
 
       {/* Card grid */}
       {filteredSets.length === 0 ? (
@@ -225,7 +230,27 @@ function CardsViewInner() {
           role="region"
           aria-label="Card view"
         >
-          {filteredSets.map((set, idx) => {
+          {earlier.length > 0 && (
+            <button
+              type="button"
+              className="col-span-full inline-flex items-center justify-center gap-1.5 min-h-11 rounded-xl border border-glass-border bg-bg-card text-sm font-medium text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+              aria-expanded={showEarlier}
+              aria-label={
+                showEarlier
+                  ? 'Hide sets that ended earlier today'
+                  : `Show ${earlier.length} sets that ended earlier today`
+              }
+              onClick={() => setShowEarlier((v) => !v)}
+            >
+              {showEarlier ? 'Hide earlier sets' : `Earlier today (${earlier.length})`}
+              {showEarlier ? (
+                <ChevronUp className="w-4 h-4" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="w-4 h-4" aria-hidden="true" />
+              )}
+            </button>
+          )}
+          {visibleSets.map((set, idx) => {
             const sc = getStageColor(set.stageId);
             const sn = getStageName(set.stageId) || 'Unknown';
             const others = getOtherPicks(set.id);
@@ -257,6 +282,7 @@ function CardsViewInner() {
                   onTap={() => setDetailSet(set)}
                   onPreview={() => handlePreview(set)}
                   showPicks={!!currentProfile}
+                  picksLoading={!!user && !currentProfile && isLoading}
                   stageName={sn}
                   stageColor={sc}
                   friendProfiles={others}

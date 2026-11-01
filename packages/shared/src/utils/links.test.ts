@@ -8,7 +8,9 @@ import {
   buildPublicScheduleUrl,
   buildHomeUrl,
   buildAppDeepLink,
+  primarySpotifyArtist,
 } from './links';
+import type { FestivalSet } from '../types/domain';
 
 describe('links — buildJoinUrl', () => {
   it('builds the production join link by default', () => {
@@ -81,5 +83,21 @@ describe('links — buildPublicScheduleUrl', () => {
   it('builds the vanity schedule URL and encodes the username', () => {
     expect(buildPublicScheduleUrl('raver_1')).toBe('https://festie.us/s/u/raver_1');
     expect(buildPublicScheduleUrl('a b', 'http://localhost:5173/')).toBe('http://localhost:5173/s/u/a%20b');
+  });
+});
+
+describe('links — primarySpotifyArtist', () => {
+  const set = (artists: Array<{ name: string; links?: Record<string, string> }>) =>
+    ({ id: 's', festivalId: 'f', stageId: 'st', startTime: '', endTime: '', createdAt: '', updatedAt: '', artists }) as FestivalSet;
+  it('skips a Spotify link that is not an artist URL', () => {
+    const s = set([
+      { name: 'A', links: { spotify: 'https://open.spotify.com/user/abc' } },
+      { name: 'B', links: { spotify: 'https://open.spotify.com/artist/xyz789' } },
+    ]);
+    expect(primarySpotifyArtist(s)).toEqual({ name: 'B', url: 'https://open.spotify.com/artist/xyz789' });
+  });
+  it('returns null when no artist qualifies', () => {
+    expect(primarySpotifyArtist(set([{ name: 'A' }, { name: 'B', links: { instagram: 'x' } }]))).toBeNull();
+    expect(primarySpotifyArtist({ ...set([]), artists: undefined })).toBeNull();
   });
 });

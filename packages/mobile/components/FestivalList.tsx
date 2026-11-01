@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import type { Festival } from '@festie/shared/types';
-import { formatFestivalDateRange, festivalStatus, type FestivalStatus } from '@festie/shared/utils';
+import { formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
@@ -272,20 +272,8 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   // Order: live first, then upcoming (soonest first), then past (most recent
   // first), so the festivals a user is most likely choosing sit at the top.
   const sortedFestivals = useMemo(() => {
-    // Pre-compute status + sort rank per festival ONCE, then sort by the cached
-    // rank instead of re-deriving festivalStatus on every comparison (O(n) vs
-    // O(n log n) calls).
-    const ranked = festivals.map((f) => {
-      const s = festivalStatus(f);
-      const r = s === 'ongoing' ? 0 : s === 'past' ? 2 : 1;
-      return { f, r, start: f.startDate || '' };
-    });
-    ranked.sort((a, b) => {
-      if (a.r !== b.r) return a.r - b.r;
-      // ISO date strings sort lexicographically. Past = most recent first.
-      return a.r === 2 ? b.start.localeCompare(a.start) : a.start.localeCompare(b.start);
-    });
-    return ranked.map(({ f }) => f);
+    const g = groupFestivalsByStatus(festivals);
+    return [...g.live, ...g.upcoming, ...g.past, ...g.undated];
   }, [festivals]);
 
   const handleRefresh = useCallback(() => {

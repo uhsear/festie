@@ -1,3 +1,5 @@
+import type { FestivalSet } from '../types/domain';
+
 /**
  * Public share / deep-link URL builders — ONE definition per link, shared by
  * web (React + Vite SPA) and mobile (Expo / React Native).
@@ -94,4 +96,16 @@ export function buildHomeUrl(origin: string = FESTIE_ORIGIN): string {
  */
 export function buildAppDeepLink(path: string): string {
   return `${FESTIE_SCHEME}${path}`;
+}
+
+/**
+ * First artist whose Spotify link is an `/artist/<id>` URL, the same rule as
+ * routes/spotify.ts. The Listen section owns exactly this link.
+ */
+export function primarySpotifyArtist(set: FestivalSet): { name: string; url: string } | null {
+  for (const a of set.artists ?? []) {
+    const url = a.links?.spotify;
+    if (url && /\/artist\/[a-zA-Z0-9]+/.test(url)) return { name: a.name || 'Unknown', url };
+  }
+  return null;
 }

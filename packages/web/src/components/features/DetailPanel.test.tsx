@@ -92,7 +92,6 @@ vi.mock('../../hooks/useHaptics', () => ({
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@festie/shared/utils')>()),
   hasSetStarted: vi.fn(() => false),
-  festivalTimeLabel: vi.fn((): 'Festival time' | null => null),
 }));
 
 // Mock sub-components to isolate DetailPanel behavior
@@ -101,7 +100,16 @@ vi.mock('./DetailArtistHeader', () => ({
   default: ({ artistName }: { artistName: string }) => <div data-testid="artist-header">{artistName}</div>,
 }));
 vi.mock('./DetailSpotifySection', () => ({
-  default: () => <div data-testid="spotify-section" />,
+  default: ({ status }: { status: string }) => <div data-testid="spotify-section">{status}</div>,
+}));
+const mockUseSpotifyPreview = vi.fn((): { status: string; preview: unknown } => ({ status: 'none', preview: null }));
+vi.mock('@festie/shared/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/hooks')>()),
+  useSpotifyPreview: () => mockUseSpotifyPreview(),
+}));
+vi.mock('../../hooks/useSetStatus', () => ({
+  useNow: () => 0,
+  useSetStatus: () => null,
 }));
 vi.mock('./DetailConflictWarning', () => ({
   default: () => <div data-testid="conflict-warning" />,
@@ -123,6 +131,7 @@ vi.mock('./DetailNotesSection', () => ({
       <textarea aria-label="personal note" onChange={(e) => onPersonalChange(e.target.value)} />
     </div>
   ),
+  NoteStatusLine: () => null,
 }));
 vi.mock('../../hooks/usePushNotifications', () => ({
   usePushNotifications: () => ({
@@ -135,7 +144,7 @@ vi.mock('../../hooks/usePushNotifications', () => ({
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
 import DetailPanel from './DetailPanel';
-import { festivalTimeLabel, hasSetStarted } from '@festie/shared/utils';
+import { hasSetStarted, formatSetWhen } from '@festie/shared/utils';
 import { useDetailPanelData } from './useDetailPanelData';
 import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
 import { useNotificationPrefsStore } from '@festie/shared/stores';
@@ -192,6 +201,7 @@ describe('DetailPanel', () => {
     vi.clearAllMocks();
     vi.mocked(useDetailPanelData).mockReturnValue(defaultDetailData());
     vi.mocked(hasSetStarted).mockReturnValue(false);
+    mockUseSpotifyPreview.mockReturnValue({ status: 'none', preview: null });
     useFestivalDataStore.setState({ saveNote: mockSaveNote } as never);
     useNotificationPrefsStore.setState({ loadPrefs: vi.fn(async () => {}) } as never);
   });
@@ -213,12 +223,17 @@ describe('DetailPanel', () => {
 
   it('renders formatted time range', () => {
     render(<DetailPanel {...defaultProps} />);
-    expect(screen.getByText('2:00 PM - 3:00 PM')).toBeInTheDocument();
+    expect(screen.getByTestId('set-when')).toHaveTextContent('2:00 PM - 3:00 PM');
+  });
+
+  it('renders the when line from formatSetWhen', () => {
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.getByTestId('set-when').textContent).toBe(formatSetWhen(defaultProps.set, [], null));
   });
 
   it('renders TBA when times are missing', () => {
     render(<DetailPanel {...defaultProps} set={makeSet({ startTime: '', endTime: '' })} />);
-    expect(screen.getByText('TBA')).toBeInTheDocument();
+    expect(screen.getByTestId('set-when')).toHaveTextContent('Time TBA');
   });
 
   it('renders the close button', () => {
@@ -286,25 +301,58 @@ describe('DetailPanel', () => {
     expect(screen.getByText('Daft Punk', { selector: 'h2' })).toBeInTheDocument();
   });
 
-  it('renders the reminder picker when user has a profile', () => {
+  it('keeps the reminder picker behind the Reminder & note button', async () => {
     render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByText('Remind me before it starts')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: /Remind me/ }));
     expect(screen.getByText('Remind me before it starts')).toBeInTheDocument();
   });
 
-  it('hides the reminder picker when the set has no start time', () => {
+  it('always renders Share and copies the set link without navigator.share', async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<DetailPanel {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText('Share this set'));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/\/set\/set-1$/)));
+    expect(mockToast).toHaveBeenCalledWith('Link copied', 'success');
+  });
+
+  it.each(['loading', 'ready', 'offline', 'none'])('renders the Listen section for %s', (status) => {
+    mockUseSpotifyPreview.mockReturnValue({ status, preview: null });
+    render(
+      <DetailPanel
+        {...defaultProps}
+        set={makeSet({
+          artist: 'Daft Punk',
+          artists: [{ name: 'Daft Punk', links: { spotify: 'https://open.spotify.com/artist/abc123' } }],
+        } as Partial<FestivalSet>)}
+      />,
+    );
+    expect(screen.getByTestId('spotify-section')).toHaveTextContent(status);
+  });
+
+  it('hides the Listen section without a Spotify artist link', () => {
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByTestId('spotify-section')).not.toBeInTheDocument();
+  });
+
+  it('hides the reminder picker when the set has no start time', async () => {
     render(<DetailPanel {...defaultProps} set={makeSet({ startTime: '', endTime: '' })} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /note/i }));
     expect(screen.queryByText('Remind me before it starts')).not.toBeInTheDocument();
   });
 
-  it('hides the reminder picker once the set has started', () => {
+  it('hides the reminder picker once the set has started', async () => {
     vi.mocked(hasSetStarted).mockReturnValue(true);
     render(<DetailPanel {...defaultProps} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /note/i }));
     expect(screen.queryByText('Remind me before it starts')).not.toBeInTheDocument();
   });
 
   it('flushes a pending note save when the sheet unmounts within 500 ms', () => {
     const { unmount } = render(<DetailPanel {...defaultProps} />);
-    fireEvent.change(screen.getByLabelText('personal note'), { target: { value: 'meet at the rail' } });
+    fireEvent.click(screen.getByRole('button', { name: /Remind me/ }));
+    fireEvent.change(screen.getByLabelText('Your note'), { target: { value: 'meet at the rail' } });
     expect(mockSaveNote).not.toHaveBeenCalled();
     unmount();
     expect(mockSaveNote).toHaveBeenCalledTimes(1);
@@ -314,6 +362,7 @@ describe('DetailPanel', () => {
   it('calls saveReminder when a reminder option is selected', async () => {
     const user = userEvent.setup();
     render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByRole('button', { name: /Remind me/ }));
     await user.click(screen.getByRole('button', { name: 'Remind me 15m before' }));
     expect(mockSaveReminder).toHaveBeenCalledWith('fest-1', 'set-1', 15);
   });
@@ -325,6 +374,7 @@ describe('DetailPanel', () => {
       myReminder: 30,
     });
     render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByRole('button', { name: /Reminder 30m/ }));
     await user.click(screen.getByRole('button', { name: 'Reminder 30m before, click to clear' }));
     expect(mockSaveReminder).toHaveBeenCalledWith('fest-1', 'set-1', null);
   });
@@ -333,6 +383,7 @@ describe('DetailPanel', () => {
     const user = userEvent.setup();
     mockSaveReminder.mockRejectedValueOnce(new Error('network'));
     render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByRole('button', { name: /Remind me/ }));
     const btn = screen.getByRole('button', { name: 'Remind me 5m before' });
     await user.click(btn);
     expect(mockSaveReminder).toHaveBeenCalledWith('fest-1', 'set-1', 5);
@@ -340,17 +391,5 @@ describe('DetailPanel', () => {
     // handleReminderClick clears reminderBusy in finally, so the buttons
     // become interactive again (not stuck disabled).
     expect(screen.getByRole('button', { name: 'Remind me 5m before' })).not.toBeDisabled();
-  });
-
-  it('shows the Festival time label when the phone zone differs from the festival zone', () => {
-    vi.mocked(festivalTimeLabel).mockReturnValue('Festival time');
-    render(<DetailPanel {...defaultProps} />);
-    expect(screen.getByText(/Festival time/)).toBeInTheDocument();
-  });
-
-  it('omits the Festival time label when festivalTimeLabel returns null', () => {
-    vi.mocked(festivalTimeLabel).mockReturnValue(null);
-    render(<DetailPanel {...defaultProps} />);
-    expect(screen.queryByText(/Festival time/)).not.toBeInTheDocument();
   });
 });

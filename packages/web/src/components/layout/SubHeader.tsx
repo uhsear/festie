@@ -1,11 +1,12 @@
 import React, { useCallback } from 'react';
 import { useLocation } from '@tanstack/react-router';
-import { useFestivalStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestival } from '@festie/shared/hooks';
 import {
   festivalStatus,
   festivalTimeLabel,
+  formatDayChip,
   logicalDayIndexAt,
   resolveFestivalTimeZone,
   resolveStageColor,
@@ -16,11 +17,11 @@ import { useSwipeDays } from '../../hooks/useSwipeDays';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useSetStatus';
 import { useScrollFade } from '../../hooks/useScrollFade';
-import { useToast } from '../../lib/toastContext';
 import { Filter, Star } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
 import SaveStatusChip from '../features/SaveStatusChip';
+import FestivalPicker from './FestivalPicker';
 
 const STATUS_LABEL: Record<FestivalStatus, string> = {
   upcoming: 'Upcoming',
@@ -41,9 +42,7 @@ interface SubHeaderProps {
 
 export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const theme = useUIStore((s) => s.theme);
-  const festivals = useFestivalStore((s) => s.festivals);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const selectFestival = useFestivalStore((s) => s.selectFestival);
   const stages = useFestivalStore((s) => s.stages);
   const days = useFestivalStore((s) => s.days);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
@@ -53,6 +52,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const currentProfile = useFestivalStore((s) => s.currentProfile);
+  const user = useAuthStore((s) => s.user);
+  const isLoading = useFestivalStore((s) => s.isLoading);
   const onlyMine = useFestivalStore((s) => s.onlyMine);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const { getStageColor: getStageColorRaw } = useFestival();
@@ -62,7 +63,6 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
     [getStageColorRaw],
   );
   const { select: selectHaptic } = useHaptics();
-  const { toastError } = useToast();
   const { ref: stageScrollRef, canScrollLeft, canScrollRight } = useScrollFade<HTMLDivElement>();
   const {
     ref: dayScrollRef,
@@ -82,19 +82,6 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
       setSelectedDay(dayIndex);
     },
     [selectHaptic, setSelectedDay],
-  );
-
-  const handleFestivalChange = useCallback(
-    async (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const id = e.target.value;
-      if (!id) return;
-      try {
-        await selectFestival(id);
-      } catch (err) {
-        toastError(err, "Couldn't switch festival. Try again.");
-      }
-    },
-    [selectFestival, toastError],
   );
 
   const handleStageToggle = useCallback(
@@ -131,6 +118,9 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const showMyPicks = !festivalOnly && !!currentFestival && !!currentProfile && pathname !== '/picks';
   // Timeline and Grid honour the stage filter but show no chips; surface the
   // active filter there so sets never vanish without a visible cause.
+  // Profile still loading for a signed-in user: hold the My picks chip's place so it does not pop in.
+  const showMyPicksSkeleton =
+    !festivalOnly && !!currentFestival && !!user && !currentProfile && isLoading && pathname !== '/picks';
   const showStageSummary =
     dayOnly && (pathname === '/timeline' || pathname === '/grid') && activeStages.length > 0 && stages.length > 0;
   // CLS: while currentFestival is still loading, reserve the day-tab and
@@ -164,38 +154,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         aria-label="Festival view controls"
       >
         {/* Festival selector */}
-        <label
-          htmlFor="festival-select-input"
-          className="mr-1.5 inline-block text-xs font-semibold text-[var(--color-text-secondary)]"
-        >
-          Festival:
-        </label>
-        <select
-          id="festival-select-input"
-          className={cn(
-            'festival-select',
-            // min-h-[44px] guarantees the WCAG 2.5.5 / iOS 44px tap target on
-            // the trigger (the native option-row height stays UA-controlled).
-            'min-h-[44px] py-2 pl-3.5 pr-8 bg-bg-card border border-border rounded-full',
-            'text-text-primary text-sm font-semibold cursor-pointer',
-            // Responsive cap: reserve room for the label + sibling controls on
-            // narrow phones (down to 320px) instead of a hard 220px that could
-            // clip the dropdown arrow; relax past 640px once there's space.
-            'max-w-[min(220px,calc(100vw-160px))] sm:max-w-[min(340px,40vw)]',
-            'backdrop-blur-[8px]',
-            'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
-          )}
-          data-testid="festival-select"
-          value={currentFestival?.id || ''}
-          onChange={handleFestivalChange}
-        >
-          <option value="">Select Festival</option>
-          {festivals.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
+        <FestivalPicker />
 
         {/* Festival status pill — moved out of the (truncatable) option text
             so long festival names don't push "· Live" off the visible edge. */}
@@ -247,6 +206,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
               {days.map((day, i) => {
                 const isActive = selectedDay === i;
                 const isToday = i === todayIndex;
+                const chip = formatDayChip(day);
                 return (
                   <button
                     key={day.id || i}
@@ -268,7 +228,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                     )}
                     type="button"
                     aria-pressed={isActive}
-                    aria-label={`Day: ${day.label || day.date}${isToday ? ' (today)' : ''}`}
+                    aria-label={`Day: ${chip.a11y}${isToday ? ' (today)' : ''}`}
                     onClick={() => handleDaySelect(i)}
                   >
                     {isToday && (
@@ -280,7 +240,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                         aria-hidden="true"
                       />
                     )}
-                    {day.label || day.date}
+                    {chip.label}
+                    {chip.date && <span className="font-medium opacity-75">{chip.date}</span>}
                   </button>
                 );
               })}
@@ -315,6 +276,10 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             <Star className="w-3.5 h-3.5" fill={onlyMine ? 'currentColor' : 'none'} aria-hidden="true" />
             My picks
           </button>
+        )}
+
+        {showMyPicksSkeleton && (
+          <div className="skeleton-shimmer h-[44px] w-[104px] rounded-full shrink-0" aria-hidden="true" />
         )}
 
         {showStageSummary && (

@@ -1,47 +1,23 @@
-import React from 'react';
 import { Artist } from '@festie/shared/types';
-
-const PLATFORM_LABELS: Record<string, string> = {
-  spotify: 'Spotify',
-  soundcloud: 'SoundCloud',
-  instagram: 'Instagram',
-  twitter: 'X',
-  tiktok: 'TikTok',
-  facebook: 'Facebook',
-  website: 'Website',
-};
 
 interface Props {
   artistName: string;
   subtitle: string | null;
   primaryArtist: Artist | undefined;
   stageColor: string;
-  artistLinks: Array<{ name: string; links: Record<string, string> }>;
-  isB2B: boolean;
-  genres: string[];
   /** Original set.artist for alt text fallback */
   setArtist: string | undefined;
 }
 
-export default function DetailArtistHeader({
-  artistName,
-  subtitle,
-  primaryArtist,
-  stageColor,
-  artistLinks,
-  isB2B,
-  genres,
-  setArtist,
-}: Props) {
+export default function DetailArtistHeader({ artistName, subtitle, primaryArtist, stageColor, setArtist }: Props) {
   return (
-    <>
-      {/* Artist photo */}
+    <div className="flex items-center gap-3 my-2">
       {primaryArtist && primaryArtist.photo && (
-        <div className="text-center my-3 mb-1.5" style={{ background: stageColor + '18' }}>
+        <div className="flex-shrink-0 rounded-full" style={{ background: stageColor + '18' }}>
           <img
             src={primaryArtist.photo}
             alt={primaryArtist.name || setArtist || ''}
-            className="w-24 h-24 rounded-full object-cover border-2 border-[var(--color-overlay-5)] inline-block"
+            className="w-14 h-14 rounded-full object-cover border-2 border-[var(--color-overlay-5)] block"
             width={300}
             height={300}
             loading="lazy"
@@ -53,61 +29,16 @@ export default function DetailArtistHeader({
           />
         </div>
       )}
-
-      {/* Artist name */}
-      <div
-        className="type-heading mb-1 text-text-primary"
-        id="detail-panel-title"
-      >
-        {artistName}
+      <div className="min-w-0">
+        <div className="type-heading text-text-primary" id="detail-panel-title">
+          {artistName}
+        </div>
+        {subtitle && (
+          <div className="text-[length:var(--font-size-14)] font-medium leading-[1.35] text-text-muted mt-1 overflow-hidden text-ellipsis [-webkit-line-clamp:4] [-webkit-box-orient:vertical] [display:-webkit-box] break-words">
+            {subtitle}
+          </div>
+        )}
       </div>
-
-      {/* Subtitle (B2B) */}
-      {subtitle && (
-        <div className="text-[length:var(--font-size-14)] font-medium leading-[1.35] text-text-muted mt-1 overflow-hidden text-ellipsis [-webkit-line-clamp:4] [-webkit-box-orient:vertical] [display:-webkit-box] break-words">
-          {subtitle}
-        </div>
-      )}
-
-      {/* Genre chips */}
-      {genres.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 my-1.5 mb-2.5">
-          {genres.map((g) => (
-            <span
-              key={g}
-              className="px-2.5 py-0.5 rounded-DEFAULT bg-[var(--color-overlay-2)] border border-border text-text-secondary text-[length:var(--font-size-12)] font-semibold capitalize tracking-[0.02em]"
-            >
-              {g}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Artist links */}
-      {artistLinks.length > 0 && (
-        <div>
-          {artistLinks.map((a, i) => (
-            <React.Fragment key={a.name + i}>
-              {isB2B && <div className="mt-1.5 text-xs font-semibold text-text-secondary">{a.name}</div>}
-              <div className="py-1 pb-2 text-[length:var(--font-size-14)] flex flex-wrap gap-2.5">
-                {Object.entries(a.links || {}).map(([platform, url]) => (
-                  <a
-                    key={platform}
-                    // Defense-in-depth: React passes javascript:/data: URLs
-                    // through to the DOM, so only emit an href for http(s).
-                    href={/^https?:/i.test(url) ? url : undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center min-h-11 text-[length:var(--font-size-14)] text-accent-aqua no-underline hover:underline"
-                  >
-                    {(PLATFORM_LABELS[platform] || platform) + ' ↗'}
-                  </a>
-                ))}
-              </div>
-            </React.Fragment>
-          ))}
-        </div>
-      )}
-    </>
+    </div>
   );
 }

@@ -13,7 +13,7 @@ import type { Page } from '@playwright/test';
  *
  * Selectors are drawn ONLY from the real components:
  *   - #app, .auth-screen ......................... AppShell
- *   - [data-testid="festival-select"] ............ SubHeader (festival dropdown)
+ *   - [data-testid="festival-select"] ............ SubHeader (festival picker trigger)
  *   - .day-tab-underline ......................... SubHeader (day tabs)
  *   - [data-testid="set-card"][data-artist=…] .... SetCard
  *   - .card-priority-btn (aria-label "Must See" …) SetCard footer priority buttons
@@ -109,7 +109,7 @@ test.describe('festival planner browser regression', () => {
     await gotoApp(page, app);
 
     // fest-1 auto-selected on boot → its sets render.
-    await expect(page.locator('[data-testid="festival-select"]')).toHaveValue('fest-1');
+    await expect(page.locator('[data-testid="festival-select"]')).toHaveAttribute('data-festival-id', 'fest-1');
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
     await expect(page.locator('[data-testid="set-card"][data-artist="Beta"]')).toBeVisible();
 
@@ -118,7 +118,8 @@ test.describe('festival planner browser regression', () => {
     await expect(page.getByRole('button', { name: 'My Picks' })).toBeVisible();
 
     // Switch to fest-2 → Omega appears (Friday/Sunday differ; Sunday is the only day).
-    await page.locator('[data-testid="festival-select"]').selectOption('fest-2');
+    await page.locator('[data-testid="festival-select"]').click();
+    await page.locator('[data-testid="festival-option-fest-2"]').click();
     await expect(page.locator('[data-testid="set-card"][data-artist="Omega"]')).toBeVisible();
   });
 
@@ -170,7 +171,7 @@ test.describe('festival planner browser regression', () => {
     await registerUser(page, app, `alice_${Date.now()}`);
 
     // On /cards the schedule loads for fest-1.
-    await expect(page.locator('[data-testid="festival-select"]')).toHaveValue('fest-1');
+    await expect(page.locator('[data-testid="festival-select"]')).toHaveAttribute('data-festival-id', 'fest-1');
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
     // Profile badge in the header opens the user menu.

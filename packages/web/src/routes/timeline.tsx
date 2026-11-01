@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
-import { selectNowNext, resolveFestivalTimeZone, artistDisplayName, resolveStageColor } from '@festie/shared/utils';
+import { resolveStageColor } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import TimelineGrid from '../features/TimelineGrid';
@@ -31,8 +31,6 @@ export default function TimelineView() {
 
 function TimelineViewInner() {
   const currentProfile = useFestivalStore((state) => state.currentProfile);
-  const days = useFestivalStore((state) => state.days);
-  const allSets = useFestivalStore((state) => state.sets);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   // Low-power mode backs off the per-tick auto-scroll-to-now (an aggressive,
   // battery-costing reflow loop). The manual "Now" button stays available.
@@ -66,35 +64,12 @@ function TimelineViewInner() {
   const { ref: scrollRef, handleScroll: handleBeamScroll } = useScrollProgress<HTMLDivElement>();
 
   // --- Live mode -----------------------------------------------------------
-  // A 60s shared-clock tick drives the next-pick countdown and the auto-scroll.
+  // A 60s shared-clock tick drives the auto-scroll.
   // Fully offline-native: reads only cached sets + the local clock, never the
   // network. Set-time math comes from the SHARED getSetTimeBounds (TZ-safe,
   // post-midnight rollover) — never a local parseSetMs. Shares the single
   // module-level clock (useNow) with every SetCard instead of a second interval.
   const nowMs = useNow();
-
-  // Countdown to the next picked set (across all days, like festival-mode's
-  // "up next"), recomputed every tick from the shared clock in the festival zone.
-  const timeZone = resolveFestivalTimeZone(currentFestival);
-  const nextPick = useMemo(() => {
-    const picks = currentProfile?.picks;
-    // Without picks selectNowNext would read the whole lineup, so bail first.
-    if (!picks) return null;
-    const next = selectNowNext({ sets: allSets, days, picks, nowMs, timeZone, upcomingLimit: 1 }).upcoming[0];
-    return next ? { set: next.set, startMs: next.start } : null;
-  }, [currentProfile?.picks, allSets, days, nowMs, timeZone]);
-
-  const nextPickLabel = useMemo(() => {
-    if (!nextPick) return null;
-    const totalMin = Math.max(0, Math.round((nextPick.startMs - nowMs) / 60_000));
-    const h = Math.floor(totalMin / 60);
-    const m = totalMin % 60;
-    const eta = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
-    return {
-      eta,
-      name: artistDisplayName(nextPick.set, currentFestival?.b2bSeparator),
-    };
-  }, [nextPick, nowMs, currentFestival?.b2bSeparator]);
 
   // Track active user scrolling so the tick-driven auto-scroll never fights a
   // user who is reading another part of the timeline. Any scroll on the
@@ -225,20 +200,6 @@ function TimelineViewInner() {
                 <LastSyncedBadge surface="schedule" />
               </div>
             </div>
-            {nextPickLabel && (
-              <div
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-text-secondary border-t border-border-default/40"
-                aria-live="polite"
-                data-testid="next-pick-countdown"
-              >
-                <Music aria-hidden="true" className="w-3.5 h-3.5 text-[var(--color-text-danger)]" />
-                <span>
-                  Up next in <span className="text-[var(--color-text-danger)]">{nextPickLabel.eta}</span>
-                  {' · '}
-                  <span className="text-text-primary">{nextPickLabel.name}</span>
-                </span>
-              </div>
-            )}
           </div>
           <TimelineGrid
             visibleStages={visibleStages}

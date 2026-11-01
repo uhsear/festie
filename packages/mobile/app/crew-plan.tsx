@@ -3,7 +3,7 @@ import { View, Text, ScrollView } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
-import { artistDisplayName, formatTime, pickActiveMeetingPoint, buildSlots, CREW_PLAN_SLOTS, resolveFestivalTimeZone } from '@festie/shared/utils';
+import { artistDisplayName, formatTime, formatSetTimeRange, pickActiveMeetingPoint, buildSlots, CREW_PLAN_SLOTS, resolveFestivalTimeZone } from '@festie/shared/utils';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import type { FestivalDay, FestivalSet, Profile } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -171,7 +171,7 @@ export default function CrewPlanScreen() {
                       </Text>
                       <Ionicons name="arrow-forward" size={iconSize.xs} color={t.colors.text.secondary} />
                       <Text style={styles.pickSet} numberOfLines={1}>
-                        {artistDisplayName(p.set)}
+                        {artistDisplayName(p.set)} · {formatSetTimeRange(p.set) || 'TBA'}
                       </Text>
                     </View>
                   ))}

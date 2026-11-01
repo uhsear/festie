@@ -26,7 +26,7 @@ describe('T10 schedule large-text guards', () => {
 
   it('set sheet shrinks the photo, hides it at large text, and caps the name', () => {
     const src = read('app/set/[setId].tsx');
-    expect(src).toContain('height: 120');
+    expect(src).toContain('height: 64');
     expect(src).toContain("typeScaleCap('display-lg')");
     expect(src).toMatch(/artistPhoto && !largeText/);
   });

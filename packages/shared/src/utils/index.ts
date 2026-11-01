@@ -42,3 +42,4 @@ export * from './crewActivity';
 export * from './authValidation';
 export * from './pushTarget';
 export * from './notificationSettings';
+export * from './homeActions';

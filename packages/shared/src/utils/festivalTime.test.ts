@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   festivalStatus,
   festivalPhase,
+  groupFestivalsByStatus,
   festivalTimeLabel,
   isFestivalOver,
   hasSetStarted,
@@ -238,5 +239,27 @@ describe('listTimeZones', () => {
     } finally {
       intl.supportedValuesOf = original;
     }
+  });
+});
+
+describe('groupFestivalsByStatus', () => {
+  const f = (id: string, startDate: string, endDate: string, name = id) => fest({ id, name, startDate, endDate });
+  it('groups and orders by status', () => {
+    const g = groupFestivalsByStatus(
+      [
+        f('p1', '2026-01-01', '2026-01-02'),
+        f('p2', '2026-03-01', '2026-03-02'),
+        f('u2', '2026-12-10', '2026-12-11'),
+        f('u1', '2026-11-20', '2026-11-21'),
+        f('live', '2026-10-30', '2026-11-02'),
+        f('zz', '', '', 'Zed'),
+        f('aa', '', '', 'Abe'),
+      ],
+      new Date('2026-11-01T12:00:00'),
+    );
+    expect(g.live.map((x) => x.id)).toEqual(['live']);
+    expect(g.upcoming.map((x) => x.id)).toEqual(['u1', 'u2']);
+    expect(g.past.map((x) => x.id)).toEqual(['p2', 'p1']);
+    expect(g.undated.map((x) => x.id)).toEqual(['aa', 'zz']);
   });
 });
