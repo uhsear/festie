@@ -1963,80 +1963,6 @@ describe('routes/account.js — POST /email notifies the address on file', () =>
   });
 });
 
-// ── POST /register — anonymous ?ref= sign-up counts (migration 070) ────
-describe('POST /register — signup ref counts', () => {
-  const BODY = {
-    username: 'newuser',
-    password: 'Str0ngTest!Pw',
-    confirmPassword: 'Str0ngTest!Pw',
-    dateOfBirth: '1990-01-01',
-    tosAccepted: true,
-  };
-
-  function refDeps(query: any, overrides: any = {}) {
-    return makeMockDeps({
-      // The real register schema, so the ref is normalized as in production.
-      schemas: { register: realSchemas.register },
-      validate: (schema: any) => (req: any, res: any, next: any) => {
-        const parsed = schema.safeParse(req.body);
-        if (!parsed.success) return res.status(400).json({ data: null, error: { status: 400 } });
-        req.validatedBody = parsed.data;
-        next();
-      },
-      stores: {
-        users: {
-          create: mock.fn(async (d: any) => d),
-          getByUsername: mock.fn(async () => null),
-          countActive: mock.fn(async () => 0),
-        },
-        profiles: { claimOrphanProfiles: mock.fn(async () => {}) },
-        pool: { query },
-        roles: { getUserRoles: mock.fn(async () => ['user']) },
-      },
-      ...overrides,
-    });
-  }
-
-  const refInserts = (query: any) =>
-    query.mock.calls.filter((c: any) => String(c.arguments[0]).includes('signup_ref_counts'));
-
-  test('a valid ref is lower-cased and counted once', async () => {
-    const query = mock.fn(async () => ({ rows: [] }));
-    const app = createApp(createAuthRoutes(refDeps(query)));
-    const res = await request(app).post('/register').send({ ...BODY, ref: 'Insta_Story' });
-    assert.equal(res.status, 201);
-    const inserts = refInserts(query);
-    assert.equal(inserts.length, 1);
-    assert.deepEqual(inserts[0].arguments[1], ['insta_story']);
-    assert.match(inserts[0].arguments[0], /ON CONFLICT \(day, ref\) DO UPDATE SET signups = signup_ref_counts\.signups \+ 1/);
-  });
-
-  test('an invalid ref is ignored and sign-up still succeeds', async () => {
-    const query = mock.fn(async () => ({ rows: [] }));
-    const app = createApp(createAuthRoutes(refDeps(query)));
-    const res = await request(app).post('/register').send({ ...BODY, ref: 'bad ref!<script>' });
-    assert.equal(res.status, 201);
-    assert.equal(refInserts(query).length, 0);
-  });
-
-  test('a failed register does not count', async () => {
-    const query = mock.fn(async () => ({ rows: [] }));
-    const app = createApp(createAuthRoutes(refDeps(query, { validateUsername: () => false })));
-    const res = await request(app).post('/register').send({ ...BODY, ref: 'insta' });
-    assert.equal(res.status, 400);
-    assert.equal(refInserts(query).length, 0);
-  });
-
-  test('a counting error does not fail register', async () => {
-    const query = mock.fn(async (sql: string) => {
-      if (sql.includes('signup_ref_counts')) throw new Error('relation does not exist');
-      return { rows: [] };
-    });
-    const app = createApp(createAuthRoutes(refDeps(query)));
-    const res = await request(app).post('/register').send({ ...BODY, ref: 'insta' });
-    assert.equal(res.status, 201);
-    assert.equal(refInserts(query).length, 1);
-
 // ═══════════════════════════════════════════════════════════════════════
 // T4 P1: festival save guards and re-auth
 // ═══════════════════════════════════════════════════════════════════════
@@ -2174,5 +2100,81 @@ describe('routes/auth.js — POST /reauth', () => {
     assert.equal(calls[0].arguments[0], 'hashed-raw-tok-123');
     const until = new Date(res.body.data.reauthUntil).getTime();
     assert.ok(until >= before + 15 * 60 * 1000 - 1000 && until <= Date.now() + 15 * 60 * 1000);
+  });
+});
+
+// ── POST /register — anonymous ?ref= sign-up counts (migration 070) ────
+describe('POST /register — signup ref counts', () => {
+  const BODY = {
+    username: 'newuser',
+    password: 'Str0ngTest!Pw',
+    confirmPassword: 'Str0ngTest!Pw',
+    dateOfBirth: '1990-01-01',
+    tosAccepted: true,
+  };
+
+  function refDeps(query: any, overrides: any = {}) {
+    return makeMockDeps({
+      // The real register schema, so the ref is normalized as in production.
+      schemas: { register: realSchemas.register },
+      validate: (schema: any) => (req: any, res: any, next: any) => {
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ data: null, error: { status: 400 } });
+        req.validatedBody = parsed.data;
+        next();
+      },
+      stores: {
+        users: {
+          create: mock.fn(async (d: any) => d),
+          getByUsername: mock.fn(async () => null),
+          countActive: mock.fn(async () => 0),
+        },
+        profiles: { claimOrphanProfiles: mock.fn(async () => {}) },
+        pool: { query },
+        roles: { getUserRoles: mock.fn(async () => ['user']) },
+      },
+      ...overrides,
+    });
+  }
+
+  const refInserts = (query: any) =>
+    query.mock.calls.filter((c: any) => String(c.arguments[0]).includes('signup_ref_counts'));
+
+  test('a valid ref is lower-cased and counted once', async () => {
+    const query = mock.fn(async () => ({ rows: [] }));
+    const app = createApp(createAuthRoutes(refDeps(query)));
+    const res = await request(app).post('/register').send({ ...BODY, ref: 'Insta_Story' });
+    assert.equal(res.status, 201);
+    const inserts = refInserts(query);
+    assert.equal(inserts.length, 1);
+    assert.deepEqual(inserts[0].arguments[1], ['insta_story']);
+    assert.match(inserts[0].arguments[0], /ON CONFLICT \(day, ref\) DO UPDATE SET signups = signup_ref_counts\.signups \+ 1/);
+  });
+
+  test('an invalid ref is ignored and sign-up still succeeds', async () => {
+    const query = mock.fn(async () => ({ rows: [] }));
+    const app = createApp(createAuthRoutes(refDeps(query)));
+    const res = await request(app).post('/register').send({ ...BODY, ref: 'bad ref!<script>' });
+    assert.equal(res.status, 201);
+    assert.equal(refInserts(query).length, 0);
+  });
+
+  test('a failed register does not count', async () => {
+    const query = mock.fn(async () => ({ rows: [] }));
+    const app = createApp(createAuthRoutes(refDeps(query, { validateUsername: () => false })));
+    const res = await request(app).post('/register').send({ ...BODY, ref: 'insta' });
+    assert.equal(res.status, 400);
+    assert.equal(refInserts(query).length, 0);
+  });
+
+  test('a counting error does not fail register', async () => {
+    const query = mock.fn(async (sql: string) => {
+      if (sql.includes('signup_ref_counts')) throw new Error('relation does not exist');
+      return { rows: [] };
+    });
+    const app = createApp(createAuthRoutes(refDeps(query)));
+    const res = await request(app).post('/register').send({ ...BODY, ref: 'insta' });
+    assert.equal(res.status, 201);
+    assert.equal(refInserts(query).length, 1);
   });
 });
