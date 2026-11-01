@@ -199,7 +199,7 @@ function TimelineGridCell({
                 )}
                 type="button"
                 aria-pressed={active ? 'true' : 'false'}
-                aria-label={pickLabel(p) + (active ? ' (selected)' : '')}
+                aria-label={pickLabel(p)}
                 title={pickLabel(p)}
                 onClick={(e) => {
                   e.preventDefault();

@@ -135,7 +135,7 @@ const useStyles = makeStyles((t) => ({
   },
   tosRow: {
     flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
+    alignItems: 'center' as const,
     gap: t.spacing[2],
     marginTop: t.spacing[1],
   },
@@ -143,7 +143,10 @@ const useStyles = makeStyles((t) => ({
     marginTop: t.spacing[2],
   },
   tosCheckbox: {
-    paddingTop: t.spacing[1],
+    minWidth: Platform.OS === 'android' ? 48 : 44,
+    minHeight: Platform.OS === 'android' ? 48 : 44,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   tosTextWrap: {
     flex: 1,
@@ -297,6 +300,11 @@ export default function RegisterScreen() {
 
   // Clears one field's error as soon as the user edits it.
   const clearError = (field: RegisterField) => setErrors((prev) => ({ ...prev, [field]: undefined }));
+
+  const toggleTos = () => {
+    setTosAccepted((v) => !v);
+    clearError('tosAccepted');
+  };
 
   const focusField = (field: RegisterField) => {
     const inputs = { username: usernameRef, email: emailRef, password: passwordRef, confirmPassword: confirmRef };
@@ -589,12 +597,8 @@ export default function RegisterScreen() {
         <View style={styles.tosRow}>
           <TouchableOpacity
             ref={tosRef}
-            onPress={() => {
-              setTosAccepted((v) => !v);
-              clearError('tosAccepted');
-            }}
+            onPress={toggleTos}
             activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: tosAccepted }}
             accessibilityLabel="I agree to the Terms of Service and Privacy Policy"
@@ -611,7 +615,9 @@ export default function RegisterScreen() {
             />
           </TouchableOpacity>
           <View style={styles.tosTextWrap}>
-            <Text style={styles.tosText}>I agree to the </Text>
+            <Text style={styles.tosText} onPress={toggleTos} accessible={false} importantForAccessibility="no">
+              I agree to the{' '}
+            </Text>
             <TouchableOpacity
               onPress={() => void Linking.openURL(TERMS_URL)}
               accessibilityRole="link"
@@ -619,7 +625,10 @@ export default function RegisterScreen() {
             >
               <Text style={[styles.tosText, styles.linkTextAccent]}>Terms of Service</Text>
             </TouchableOpacity>
-            <Text style={styles.tosText}> &amp; </Text>
+            <Text style={styles.tosText} onPress={toggleTos} accessible={false} importantForAccessibility="no">
+              {' '}
+              &amp;{' '}
+            </Text>
             <TouchableOpacity
               onPress={() => router.push('/privacy')}
               accessibilityRole="link"

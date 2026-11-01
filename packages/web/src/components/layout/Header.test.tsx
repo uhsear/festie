@@ -90,17 +90,17 @@ describe('Header', () => {
     it('shows a single consolidated Schedule tab when not logged in', () => {
       mockAuthStore.mockReturnValue(null);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Schedule' })).toBeInTheDocument();
       // Timeline/Grid folded into the in-page ScheduleViewSwitcher.
-      expect(screen.queryByRole('button', { name: 'Timeline' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Grid' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Timeline' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Grid' })).not.toBeInTheDocument();
     });
 
     it('shows My Picks and Crew tabs for guests too (parity with mobile)', () => {
       mockAuthStore.mockReturnValue(null);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'My Picks' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Crew' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'My Picks' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Crew' })).toBeInTheDocument();
     });
   });
 
@@ -108,9 +108,9 @@ describe('Header', () => {
     it('shows Schedule, My Picks, and Crew tabs when logged in', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'My Picks' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Crew' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Schedule' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'My Picks' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Crew' })).toBeInTheDocument();
     });
   });
 
@@ -118,29 +118,27 @@ describe('Header', () => {
     it('marks Schedule as active on /cards', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/cards' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
     });
 
     it('marks Schedule as active on /', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
     });
 
     it('keeps Schedule active on the timeline and grid views', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/timeline' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
     });
   });
 
   describe('tab navigation', () => {
-    it('navigates when a tab is clicked', async () => {
-      const user = userEvent.setup();
+    it('renders tabs as real links', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      await user.click(screen.getByRole('button', { name: 'Crew' }));
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew' });
+      expect(screen.getByRole('link', { name: 'My Picks' })).toHaveAttribute('href', '/picks');
     });
   });
 
@@ -227,13 +225,13 @@ describe('Header', () => {
     it('is hidden while the festival is not over', () => {
       mockFestivalOver.mockReturnValue(false);
       render(<Header />);
-      expect(screen.queryByRole('button', { name: 'Wrap' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Wrap' })).not.toBeInTheDocument();
     });
 
     it('appears once the festival is over', () => {
       mockFestivalOver.mockReturnValue(true);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Wrap' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Wrap' })).toBeInTheDocument();
     });
   });
 

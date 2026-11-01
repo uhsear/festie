@@ -58,7 +58,10 @@ const MinimalFallback = () => (
     className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-[var(--space-8)] px-6 py-4"
     aria-busy="true"
     aria-label="Loading"
+    role="status"
+    aria-live="polite"
   >
+    <span className="sr-only">Loading…</span>
     <div className="skeleton-shimmer h-[200px] m-6 rounded-xl" />
   </div>
 );

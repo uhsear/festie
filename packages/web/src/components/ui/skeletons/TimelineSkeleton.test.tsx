@@ -3,14 +3,15 @@ import { render, screen } from '@testing-library/react';
 import TimelineSkeleton from './TimelineSkeleton';
 
 describe('TimelineSkeleton', () => {
+  it('announces loading as a status with sr-only text', () => {
+    render(<TimelineSkeleton />);
+    expect(screen.getByRole('status', { name: 'Loading timeline' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading timeline…')).toBeInTheDocument();
+  });
+
   it('renders with aria-busy for loading state', () => {
     render(<TimelineSkeleton />);
     expect(screen.getByLabelText('Loading timeline')).toHaveAttribute('aria-busy', 'true');
-  });
-
-  it('has role=region for accessibility landmark', () => {
-    render(<TimelineSkeleton />);
-    expect(screen.getByRole('region')).toBeInTheDocument();
   });
 
   it('renders 4 stage header cells plus one corner cell', () => {

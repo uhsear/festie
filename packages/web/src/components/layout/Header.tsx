@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { useAuthStore, useUIStore } from '@festie/shared';
 import { useFestivalStore } from '@festie/shared/stores';
 import { isFestivalOver } from '@festie/shared/utils';
@@ -13,7 +13,6 @@ import { useThemeSync } from '../../lib/theme';
 export default function Header() {
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
-  const navigate = useNavigate();
 
   // Desktop nav tabs — all visible for guests (parity with mobile + BottomNav).
   // Picks/Crew render their own GuestTeaser / empty state when unauthenticated
@@ -217,21 +216,20 @@ export default function Header() {
             {desktopTabs.map((tab) => {
               const active = isTabActive(tab.href);
               return (
-                <button
+                <Link
                   key={tab.href}
-                  type="button"
+                  to={tab.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'px-4 py-2 bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
+                    'px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
                     'transition-colors duration-[250ms] ease-standard tracking-[0.3px]',
                     'hover:text-text-primary',
                     'border border-transparent',
                     active && 'bg-aqua-a12 text-accent-aqua !border-aqua-a2 !rounded-lg',
                   )}
-                  onClick={() => navigate({ to: tab.href })}
                 >
                   {tab.label}
-                </button>
+                </Link>
               );
             })}
           </div>

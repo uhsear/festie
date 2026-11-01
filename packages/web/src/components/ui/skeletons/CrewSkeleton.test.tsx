@@ -3,6 +3,12 @@ import { render, screen } from '@testing-library/react';
 import CrewSkeleton from './CrewSkeleton';
 
 describe('CrewSkeleton', () => {
+  it('announces loading as a status with sr-only text', () => {
+    render(<CrewSkeleton />);
+    expect(screen.getByRole('status', { name: 'Loading crew' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading crew…')).toBeInTheDocument();
+  });
+
   it('renders with aria-busy for loading state', () => {
     render(<CrewSkeleton />);
     expect(screen.getByLabelText('Loading crew')).toHaveAttribute('aria-busy', 'true');

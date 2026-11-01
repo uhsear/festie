@@ -3,6 +3,12 @@ import { render, screen } from '@testing-library/react';
 import AccountSkeleton from './AccountSkeleton';
 
 describe('AccountSkeleton', () => {
+  it('announces loading as a status with sr-only text', () => {
+    render(<AccountSkeleton />);
+    expect(screen.getByRole('status', { name: 'Loading account' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading account…')).toBeInTheDocument();
+  });
+
   it('renders with aria-busy for loading state', () => {
     render(<AccountSkeleton />);
     expect(screen.getByLabelText('Loading account')).toHaveAttribute('aria-busy', 'true');

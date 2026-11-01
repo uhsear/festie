@@ -23,9 +23,12 @@ import { Music, SearchX } from 'lucide-react';
 
 export default function CardsView() {
   return (
-    <RenderErrorBoundary name="cards">
-      <CardsViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Schedule</h1>
+      <RenderErrorBoundary name="cards">
+        <CardsViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 

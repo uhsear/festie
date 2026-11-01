@@ -105,7 +105,7 @@ function TBACard({
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={active ? `${option.label} (selected)` : option.label}
+                accessibilityLabel={option.label}
               >
                 <Ionicons
                   name={option.icon}
