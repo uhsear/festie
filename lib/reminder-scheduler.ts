@@ -133,9 +133,13 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
           },
           threadId: `reminder-${festival.id}`,
         });
-        if (result?.sent > 0) {
+        if (result?.sent > 0 || result?.localCovered > 0) {
           _firedCache.set(dedupKey, now);
-          logger.debug('reminder fired', { userId: profile.userId, setId, minutesBefore });
+          if (result?.sent > 0) {
+            logger.debug('reminder fired', { userId: profile.userId, setId, minutesBefore });
+          } else {
+            logger.debug('reminder covered by device', { userId: profile.userId, setId, minutesBefore });
+          }
         } else {
           logger.warn('reminder not delivered', {
             userId: profile.userId,

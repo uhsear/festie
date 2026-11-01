@@ -62,6 +62,7 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     assert.ok(!('password' in bobEntry));
     assert.equal(bobEntry.profileCount, 1);
 
+    await reauth(server, adminToken);
     await server.request
       .put(`/api/v1/admin/users/${bob.user.id}/reset-password`)
       .set('x-user-token', adminToken)
@@ -225,6 +226,7 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token });
     const bobDisconnected = waitForEvent(bobSocket, 'disconnect', () => true);
 
+    await reauth(server, adminToken);
     const res = await server.request
       .post('/api/v1/admin/bulk/deactivate')
       .set('x-user-token', adminToken)

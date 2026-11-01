@@ -7,6 +7,31 @@ import * as Sentry from '@sentry/react-native';
 import { api } from '@festie/shared/services';
 
 const TOKEN_KEY = 'festie-push-token';
+// Festival id last reported to the server as covered by on-device reminders.
+const LOCAL_FESTIVAL_KEY = 'festie-push-local-festival';
+const NO_FESTIVAL = '';
+
+/**
+ * Tell the server which festival this phone schedules local set reminders for,
+ * so the reminder scheduler skips the duplicate push. Pass null to turn the
+ * skip off. No-op without a registered token or when the value is unchanged.
+ */
+export async function reportLocalRemindersFestival(festivalId: string | null): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    const reported = await AsyncStorage.getItem(LOCAL_FESTIVAL_KEY);
+    if (reported === (festivalId ?? NO_FESTIVAL)) return;
+    await api.post('/notifications/token', {
+      token,
+      platform: Platform.OS,
+      localRemindersFestivalId: festivalId,
+    });
+    await AsyncStorage.setItem(LOCAL_FESTIVAL_KEY, festivalId ?? NO_FESTIVAL);
+  } catch (e) {
+    Sentry.captureException(e);
+  }
+}
 
 // Show a banner for notifications that arrive while the app is foregrounded.
 // Time-critical local set reminders (scheduled with sound:true + data.kind
@@ -133,6 +158,7 @@ export function useMobilePush(): MobilePush {
         deviceName: Device.deviceName ?? undefined,
       });
       await AsyncStorage.setItem(TOKEN_KEY, token);
+      await AsyncStorage.removeItem(LOCAL_FESTIVAL_KEY);
       setRegistered(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't enable notifications. Try again.");
@@ -150,6 +176,7 @@ export function useMobilePush(): MobilePush {
       if (token) {
         await api.delete('/notifications/token', { body: { token } });
         await AsyncStorage.removeItem(TOKEN_KEY);
+        await AsyncStorage.removeItem(LOCAL_FESTIVAL_KEY);
       }
       setRegistered(false);
     } catch (err) {

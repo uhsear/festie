@@ -70,6 +70,8 @@ interface Props {
   /** Admin map editor: always render the canvas, even with nothing to plot yet. */
   authoring?: boolean;
   meetingPoints: MappableMeetingPoint[];
+  /** Pursue this SOS raiser (from an SOS banner). The live coordinate comes from the SOS list. */
+  focusSosUserId?: string;
   /** Live peer positions (ephemeral). Empty/omitted keeps the original behaviour. */
   peers?: PeerLocation[];
   /**
@@ -143,8 +145,14 @@ let pmtilesRegistration: Promise<void> | null = null;
 // with an `offlineBasemap.pmtilesUrl` gets a PMTiles VECTOR basemap; every other
 // festival gets the online OpenFreeMap style for the current theme.
 
+// Placeholder target: liveTarget swaps in the SOS's real coordinate from sosList.
+function sosPursueTarget(userId?: string): PursueTarget | null {
+  return userId ? { id: 'sos:' + userId, label: '', coord: { latitude: 0, longitude: 0 } } : null;
+}
+
 export default function CrewMap({
   meetingPoints,
+  focusSosUserId,
   peers = [],
   sos = null,
   activeSosList,
@@ -180,7 +188,10 @@ export default function CrewMap({
 
   // ── Pursue / filter / nearest state (Phase 2B) ─────────────────────────────
   // The current pursue target (a peer, the SOS, or a nearest-amenity pin) or null.
-  const [pursue, setPursue] = useState<PursueTarget | null>(null);
+  const [pursue, setPursue] = useState<PursueTarget | null>(() => sosPursueTarget(focusSosUserId));
+  useEffect(() => {
+    if (focusSosUserId) setPursue(sosPursueTarget(focusSosUserId));
+  }, [focusSosUserId]);
   // Hidden amenity categories — toggled off via the filter chips. Default: all
   // shown (empty set). Component-local only, never persisted to the backend.
   const [hiddenAmenities, setHiddenAmenities] = useState<Set<AmenityType>>(() => new Set());

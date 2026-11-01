@@ -14,7 +14,7 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: (selector: (s: { user: unknown }) => unknown) => selector({ user: authUser }),
 }));
 vi.mock('@festie/shared/stores/uiStore', () => ({
-  useUIStore: (selector: (s: Record<string, unknown>) => unknown) => selector({ setDetailSet: vi.fn() }),
+  useUIStore: Object.assign((selector: (s: Record<string, unknown>) => unknown) => selector({ setDetailSet: vi.fn() }), { subscribe: vi.fn() }),
 }));
 
 let crewDayOf: CrewDayOf = { crew: null, whereabouts: [], meet: null };
@@ -23,6 +23,9 @@ vi.mock('@festie/shared/hooks', () => ({
   useCrewDayOf: () => crewDayOf,
 }));
 
+vi.mock('../components/crew/SosRaiseButton', () => ({
+  default: ({ crewId }: { crewId: string }) => <button data-testid="sos-raise">{crewId}</button>,
+}));
 vi.mock('../components/features/LowPowerToggle', () => ({ default: () => <div data-testid="low-power-toggle" /> }));
 vi.mock('../components/features/LowPowerIndicator', () => ({ default: () => null }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
@@ -124,7 +127,18 @@ describe('FestivalModeView (Now surface)', () => {
     expect(screen.getByTestId('fm-crew')).toHaveTextContent('Ana');
     expect(screen.getByTestId('fm-crew')).toHaveTextContent('Live');
     expect(screen.getByTestId('fm-meet')).toHaveTextContent('Left of Main');
+    expect(screen.getByTestId('sos-raise')).toHaveTextContent('c1');
     fireEvent.click(screen.getByTestId('fm-find-crew'));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew' });
+  });
+
+  it('guest or no crew: shows no SOS button', () => {
+    setup({ user: false });
+    const { unmount } = render(<FestivalModeView />);
+    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
+    unmount();
+    setup({ user: true });
+    render(<FestivalModeView />);
+    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
   });
 });

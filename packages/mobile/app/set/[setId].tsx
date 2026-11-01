@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as Notifications from 'expo-notifications';
 import {
   View,
   Text,
@@ -9,6 +10,7 @@ import {
   Share,
   Image,
   BackHandler,
+  AppState,
   Platform,
   type StyleProp,
   type ViewStyle,
@@ -17,8 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useFestivalDataStore, useAuthStore } from '@festie/shared/stores';
-import { usePicks, useFestival, useCrew } from '@festie/shared/hooks';
+import { useFestivalDataStore, useAuthStore, useUIStore, useNotificationPrefsStore } from '@festie/shared/stores';
+import { usePicks, usePickSync, useFestival, useCrew, useDebouncedNote, type NoteSaveStatus } from '@festie/shared/hooks';
 import { api, mapErrorToUserMessage } from '@festie/shared/services';
 import {
   formatTime,
@@ -30,6 +32,9 @@ import {
   buildSetUrl,
   festivalTimeLabel,
   resolveFestivalTimeZone,
+  reminderDeliveryProblem,
+  QUEUED_WRITE_MESSAGE,
+  type ReminderPermission,
 } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -126,7 +131,7 @@ export default function SetDetailScreen() {
   const loadProfiles = useFestivalDataStore((s) => s.loadProfiles);
   const days = useFestivalDataStore((s) => s.days);
 
-  const { getMyPick, savePick, saveNote, getOtherPicks, saveReminder, getMyReminder } = usePicks();
+  const { getMyPick, savePick, getOtherPicks, saveReminder, getMyReminder } = usePicks();
   const { getStageColor, getStageName } = useFestival();
   const { getCrewScopedOtherPicks } = useCrew();
   const haptics = useHaptics();
@@ -246,56 +251,44 @@ export default function SetDetailScreen() {
       }));
   }, [allProfiles, currentProfile?.id, set]);
 
-  // ---- Notes (debounced save, mirroring the web 500ms debounce). ----------
-  const [personalNote, setPersonalNote] = useState('');
-  const [crewNote, setCrewNote] = useState('');
-  const personalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const crewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ---- Notes (debounced save; flushed on unmount so closing the sheet keeps the text). ----
+  const personal = useDebouncedNote({
+    festivalId: currentFestival?.id,
+    profileId: currentProfile?.id,
+    noteKey: set?.id ?? '',
+    initialValue: currentProfile?.notes?.[set?.id ?? ''] || '',
+    onError: () => haptics.warning(),
+  });
+  const crew = useDebouncedNote({
+    festivalId: currentFestival?.id,
+    profileId: currentProfile?.id,
+    noteKey: 'crew:' + (set?.id ?? ''),
+    initialValue: currentProfile?.notes?.['crew:' + (set?.id ?? '')] || '',
+    onError: () => haptics.warning(),
+  });
 
+  // ---- Reminder delivery (OS permission + Account preference). ----
+  // 'undetermined' counts as granted: useLocalReminders asks on the first reminder.
+  const [permission, setPermission] = useState<ReminderPermission>('granted');
+  const setRemindersPref = useNotificationPrefsStore((s) => s.prefs.setReminders);
   useEffect(() => {
-    if (!set) return;
-    // Deps are set?.id/currentProfile?.id, NOT the whole objects: festivalDataStore's
-    // loadProfiles()/selectFestival() hand back a brand-new set/currentProfile object
-    // reference on every background refresh (AppState foreground, offline-readiness
-    // download) even when the note text is unchanged. Keying this effect on the whole
-    // objects reseeds -- and clobbers whatever the user is mid-typing -- on every such
-    // refresh; keying on id only reseeds when the set or profile actually changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- seed the editable note drafts from the store when the set/profile changes; can't be derived state because the user then edits these locally (debounced save back to the store)
-    setPersonalNote(currentProfile?.notes?.[set.id] || '');
-    setCrewNote(currentProfile?.notes?.['crew:' + set.id] || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: reseed only on set/profile identity change, not on every background-refresh object-reference churn (see comment above)
-  }, [set?.id, currentProfile?.id]);
-
-  const handlePersonalNoteChange = useCallback(
-    (value: string) => {
-      setPersonalNote(value);
-      if (!set || !currentFestival) return;
-      if (personalTimer.current) clearTimeout(personalTimer.current);
-      personalTimer.current = setTimeout(() => {
-        saveNote(currentFestival.id, set.id, value).catch(() => {});
-      }, 500);
-    },
-    [set, currentFestival, saveNote],
-  );
-
-  const handleCrewNoteChange = useCallback(
-    (value: string) => {
-      setCrewNote(value);
-      if (!set || !currentFestival) return;
-      if (crewTimer.current) clearTimeout(crewTimer.current);
-      crewTimer.current = setTimeout(() => {
-        saveNote(currentFestival.id, 'crew:' + set.id, value).catch(() => {});
-      }, 500);
-    },
-    [set, currentFestival, saveNote],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (personalTimer.current) clearTimeout(personalTimer.current);
-      if (crewTimer.current) clearTimeout(crewTimer.current);
+    const read = () => {
+      Notifications.getPermissionsAsync()
+        .then((p) => setPermission(p.status === 'denied' ? 'denied' : 'granted'))
+        .catch(() => {});
     };
+    read();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') read();
+    });
+    return () => sub.remove();
   }, []);
+  const deliveryProblem = reminderDeliveryProblem({
+    hasReminder: myReminder != null,
+    permission,
+    setRemindersPref,
+  });
+  const { sync: pickSync, retry: retryPick } = usePickSync(set?.id ?? '');
 
   // ---- Spotify preview (fetched on mount, rendered inline via WebView). ----
   const [spotify, setSpotify] = useState<SpotifyPreview | null>(null);
@@ -327,16 +320,26 @@ export default function SetDetailScreen() {
       // F34: selection haptic, matching SetCardMobile's priority toggle and the
       // reminder chips below — the same gesture class should always buzz.
       haptics.select();
-      savePick(currentFestival.id, set.id, priority).catch(() => {});
+      savePick(currentFestival.id, set.id, priority).catch((err) => {
+        haptics.warning();
+        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), { kind: 'error' });
+      });
     },
     [set, currentFestival, savePick, haptics],
   );
 
+  // A failed reminder save shows inline: on iOS the root toast sits behind this native sheet.
+  const [reminderFailed, setReminderFailed] = useState<{ minutes: number | null } | null>(null);
   const handleReminder = useCallback(
     (minutes: number | null) => {
       if (!set || !currentFestival) return;
       haptics.select();
-      saveReminder(currentFestival.id, set.id, minutes).catch(() => {});
+      setReminderFailed(null);
+      saveReminder(currentFestival.id, set.id, minutes).catch((err) => {
+        haptics.warning();
+        setReminderFailed({ minutes });
+        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your reminder. Try again."), { kind: 'error' });
+      });
     },
     [set, currentFestival, saveReminder, haptics],
   );
@@ -347,7 +350,10 @@ export default function SetDetailScreen() {
     (clearSetId: string) => {
       if (!currentFestival) return;
       haptics.select();
-      savePick(currentFestival.id, clearSetId, null).catch(() => {});
+      savePick(currentFestival.id, clearSetId, null).catch((err) => {
+        haptics.warning();
+        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't clear your pick. Try again."), { kind: 'error' });
+      });
     },
     [currentFestival, savePick, haptics],
   );
@@ -484,6 +490,7 @@ export default function SetDetailScreen() {
                 {PRIORITY_BUTTONS.map((option) => {
                   const active = myPick === option.value;
                   const accent = priorityColor(t, option.value);
+                  const pending = pickSync?.state === 'saving' || pickSync?.state === 'queued';
                   return (
                     <TouchableOpacity
                       key={option.value}
@@ -492,13 +499,20 @@ export default function SetDetailScreen() {
                       activeOpacity={0.7}
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
-                      accessibilityLabel={option.label}
+                      accessibilityLabel={
+                        active && pending
+                          ? `${option.label}, ${pickSync?.state === 'queued' ? 'waiting to sync' : 'saving'}`
+                          : option.label
+                      }
                     >
                       <Ionicons
                         name={option.icon}
                         size={16}
                         color={active ? t.colors.text.onLightAccent : t.colors.text.muted}
                       />
+                      {active && pending ? (
+                        <Ionicons name="time-outline" size={14} color={t.colors.text.onLightAccent} />
+                      ) : null}
                       <Text
                         style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
                         maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -509,6 +523,19 @@ export default function SetDetailScreen() {
                   );
                 })}
               </View>
+              {pickSync?.state === 'failed' ? (
+                <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                  <Text style={styles.statusWarn}>Pick not saved.</Text>
+                  <TouchableOpacity
+                    style={styles.statusAction}
+                    onPress={() => retryPick().catch(() => {})}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry saving pick"
+                  >
+                    <Text style={styles.statusActionText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
             {!(currentFestival && hasSetStarted(set, currentFestival, days)) ? (
             <View style={styles.section}>
@@ -544,6 +571,39 @@ export default function SetDetailScreen() {
                   );
                 })}
               </View>
+              {reminderFailed ? (
+                <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                  <Text style={styles.statusWarn}>Reminder not saved.</Text>
+                  <TouchableOpacity
+                    style={styles.statusAction}
+                    onPress={() => handleReminder(reminderFailed.minutes)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry saving reminder"
+                  >
+                    <Text style={styles.statusActionText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              {deliveryProblem === 'denied' || deliveryProblem === 'pref-off' ? (
+                <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                  <Text style={styles.statusWarn}>
+                    {deliveryProblem === 'denied'
+                      ? "Notifications are off for Festie, so this reminder can't reach you."
+                      : 'Set reminders are turned off in Account.'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.statusAction}
+                    onPress={() =>
+                      deliveryProblem === 'denied' ? Linking.openSettings() : router.push('/(tabs)/account')
+                    }
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.statusActionText}>
+                      {deliveryProblem === 'denied' ? 'Open settings' : 'Open Account'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
             ) : null}
           </>
@@ -710,28 +770,57 @@ export default function SetDetailScreen() {
             <Text style={styles.sectionLabel}>Your note</Text>
             <TextInput
               style={styles.noteInput}
-              value={personalNote}
-              onChangeText={handlePersonalNoteChange}
+              value={personal.value}
+              onChangeText={personal.setValue}
               placeholder="Private note for yourself"
               placeholderTextColor={t.colors.text.placeholder}
               multiline
               accessibilityLabel="Personal note"
             />
+            <NoteStatus status={personal.status} onRetry={personal.retry} />
             <View style={styles.noteDivider} />
             <Text style={styles.sectionLabel}>Crew note</Text>
             <TextInput
               style={styles.noteInput}
-              value={crewNote}
-              onChangeText={handleCrewNoteChange}
+              value={crew.value}
+              onChangeText={crew.setValue}
               placeholder="Shared note for your crew"
               placeholderTextColor={t.colors.text.placeholder}
               multiline
               accessibilityLabel="Crew note"
             />
+            <NoteStatus status={crew.status} onRetry={crew.retry} />
           </View>
         ) : null}
       </ScrollView>
     </View>
+  );
+}
+
+/** Save-state line under a note input. Renders nothing while idle. */
+function NoteStatus({ status, onRetry }: { status: NoteSaveStatus; onRetry: () => void }) {
+  const styles = useStyles();
+  if (status === 'idle') return null;
+  if (status === 'failed') {
+    return (
+      <View style={styles.statusRow} accessibilityLiveRegion="polite">
+        <Text style={styles.statusWarn}>Not saved.</Text>
+        <TouchableOpacity
+          style={styles.statusAction}
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel="Retry saving note"
+        >
+          <Text style={styles.statusActionText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+  const text = status === 'saving' ? 'Saving…' : status === 'queued' ? QUEUED_WRITE_MESSAGE : 'Saved';
+  return (
+    <Text style={styles.statusText} accessibilityLiveRegion="polite">
+      {text}
+    </Text>
   );
 }
 
@@ -1021,6 +1110,31 @@ const useStyles = makeStyles((t) => ({
   crewNoteText: {
     ...typeStyle('body'),
     color: t.colors.text.primary,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  statusText: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+  },
+  statusWarn: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.amber,
+    flexShrink: 1,
+  },
+  statusAction: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    paddingHorizontal: t.spacing[2],
+  },
+  statusActionText: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
   },
   noteInput: {
     ...typeStyle('body'),

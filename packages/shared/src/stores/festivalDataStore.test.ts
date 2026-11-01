@@ -34,6 +34,8 @@ const mockProfile: Profile = {
 };
 
 function resetStores() {
+  // UI first: a pendingSync 1 -> 0 drop clears pickSync and stamps lastSavedAt.
+  useUIStore.setState({ pendingSync: 0, offlineMode: false, failedSync: [] });
   useFestivalDataStore.setState({
     festivals: [],
     currentFestivalId: null,
@@ -48,13 +50,15 @@ function resetStores() {
     _festivalCachedAt: null,
     _profilesCachedAt: null,
     _cachedFestivalId: null,
+    pickSync: {},
+    savesInFlight: 0,
+    lastSavedAt: null,
   });
   useFestivalUIStore.setState({
     selectedDay: 0,
     activeStages: [],
     searchQuery: '',
   });
-  useUIStore.setState({ pendingSync: 0 });
 }
 
 describe('festivalDataStore', () => {
@@ -813,6 +817,248 @@ describe('festivalDataStore', () => {
 
       expect(api.put).toHaveBeenCalled();
       expect(useFestivalDataStore.getState().currentProfile!.picks['set-2']).toBe('want-to-see');
+    });
+  });
+
+  describe('dropping a pick drops its reminder (planning-2)', () => {
+    const withReminder: Profile = { ...mockProfile, reminders: { 'set-1': 15, 'set-9': 30 } };
+
+    it('savePick(null) on a set with a reminder sends the picks PUT, then the reminders PUT', async () => {
+      useFestivalDataStore.setState({ currentProfile: withReminder });
+      vi.mocked(api.put).mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+
+      await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-1', priority: null });
+
+      expect(api.put).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ picks: {} });
+      expect(vi.mocked(api.put).mock.calls[0]![2]).toMatchObject({ clientId: 'pick-prof-1-set-1' });
+      expect(vi.mocked(api.put).mock.calls[1]![1]).toEqual({ reminders: { 'set-9': 30 } });
+      expect(vi.mocked(api.put).mock.calls[1]![2]).toMatchObject({ clientId: 'reminder-prof-1-set-1' });
+      expect(useFestivalDataStore.getState().currentProfile!.reminders).toEqual({ 'set-9': 30 });
+    });
+
+    it('removePick on a set with a reminder sends both PUTs', async () => {
+      useFestivalDataStore.setState({ currentProfile: withReminder });
+      vi.mocked(api.put).mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+
+      await useFestivalDataStore.getState().removePick('fest-1', 'set-1');
+
+      expect(api.put).toHaveBeenCalledTimes(2);
+      expect(useFestivalDataStore.getState().currentProfile!.reminders).toEqual({ 'set-9': 30 });
+    });
+
+    it('clearing a pick without a reminder sends one PUT', async () => {
+      useFestivalDataStore.setState({ currentProfile: mockProfile });
+      vi.mocked(api.put).mockResolvedValueOnce(undefined);
+
+      await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-1', priority: null });
+
+      expect(api.put).toHaveBeenCalledTimes(1);
+    });
+
+    it('setting a pick never touches the reminder', async () => {
+      useFestivalDataStore.setState({ currentProfile: withReminder });
+      vi.mocked(api.put).mockResolvedValueOnce(undefined);
+
+      await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-1', priority: 'maybe' });
+
+      expect(api.put).toHaveBeenCalledTimes(1);
+      expect(useFestivalDataStore.getState().currentProfile!.reminders).toEqual({ 'set-1': 15, 'set-9': 30 });
+    });
+
+    it('a failing reminder clear leaves the pick cleared and does not throw', async () => {
+      useFestivalDataStore.setState({ currentProfile: withReminder });
+      vi.mocked(api.put).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Server error'));
+
+      await expect(
+        useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-1', priority: null }),
+      ).resolves.toBeUndefined();
+
+      const state = useFestivalDataStore.getState();
+      expect(state.currentProfile!.picks['set-1']).toBeUndefined();
+      expect(state.currentProfile!.reminders?.['set-1']).toBe(15); // reminder rolled back, still visible
+      expect(state.error).toBe('Server error');
+      expect(state.pickSync['set-1']).toBeUndefined();
+    });
+  });
+
+  describe('pick save state (F-A)', () => {
+    it('a 500 rolls back the pick and marks it failed; retryPick re-sends and clears it', async () => {
+      useFestivalDataStore.setState({ currentProfile: mockProfile, currentFestivalId: 'fest-1' });
+      vi.mocked(api.put).mockRejectedValueOnce(Object.assign(new Error('Server error'), { status: 500 }));
+
+      await expect(
+        useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
+      ).rejects.toThrow('Server error');
+
+      let state = useFestivalDataStore.getState();
+      expect(state.currentProfile!.picks['set-2']).toBeUndefined();
+      expect(state.pickSync['set-2']).toEqual({ state: 'failed', priority: 'must' });
+
+      vi.mocked(api.put).mockResolvedValueOnce(undefined);
+      await useFestivalDataStore.getState().retryPick('set-2');
+
+      state = useFestivalDataStore.getState();
+      expect(api.put).toHaveBeenCalledTimes(2);
+      expect(state.currentProfile!.picks['set-2']).toBe('must');
+      expect(state.pickSync['set-2']).toBeUndefined();
+    });
+
+    it('a failed removePick keeps the pick and marks it failed with priority null', async () => {
+      useFestivalDataStore.setState({ currentProfile: mockProfile });
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('Server error'));
+
+      await expect(useFestivalDataStore.getState().removePick('fest-1', 'set-1')).rejects.toThrow();
+
+      const state = useFestivalDataStore.getState();
+      expect(state.currentProfile!.picks['set-1']).toBe('must');
+      expect(state.pickSync['set-1']).toEqual({ state: 'failed', priority: null });
+    });
+
+    it('does not mark a pick failed when there is no profile', async () => {
+      await expect(
+        useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
+      ).rejects.toThrow('No active profile');
+      expect(useFestivalDataStore.getState().pickSync).toEqual({});
+    });
+
+    it('retryPick does nothing without a failed entry', async () => {
+      useFestivalDataStore.setState({ currentProfile: mockProfile, currentFestivalId: 'fest-1' });
+      await useFestivalDataStore.getState().retryPick('set-2');
+      expect(api.put).not.toHaveBeenCalled();
+    });
+
+    it('retryPick that fails again keeps the entry failed and does not throw', async () => {
+      useFestivalDataStore.setState({
+        currentProfile: mockProfile,
+        currentFestivalId: 'fest-1',
+        pickSync: { 'set-2': { state: 'failed', priority: 'maybe' } },
+      });
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('Server error'));
+
+      await expect(useFestivalDataStore.getState().retryPick('set-2')).resolves.toBeUndefined();
+      expect(useFestivalDataStore.getState().pickSync['set-2']).toEqual({ state: 'failed', priority: 'maybe' });
+    });
+
+    it('shows saving while the PUT runs', async () => {
+      useFestivalDataStore.setState({ currentProfile: mockProfile });
+      let resolvePut!: (v: unknown) => void;
+      vi.mocked(api.put).mockImplementationOnce(() => new Promise((r) => (resolvePut = r)));
+
+      const p = useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'maybe' });
+      expect(useFestivalDataStore.getState().pickSync['set-2']).toEqual({ state: 'saving', priority: 'maybe' });
+      expect(useFestivalDataStore.getState().savesInFlight).toBe(1);
+
+      resolvePut(undefined);
+      await p;
+      expect(useFestivalDataStore.getState().pickSync['set-2']).toBeUndefined();
+    });
+
+    it('a queued outcome gives state queued; the queue draining (pendingSync 1 -> 0) clears it', async () => {
+      useFestivalDataStore.setState({ currentProfile: mockProfile });
+      vi.mocked(api.put).mockResolvedValueOnce({ _optimistic: true } as never);
+
+      await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'maybe' });
+      expect(useFestivalDataStore.getState().pickSync['set-2']).toEqual({ state: 'queued', priority: 'maybe' });
+      expect(useFestivalDataStore.getState().lastSavedAt).toBeNull();
+
+      useUIStore.setState({ pendingSync: 1 });
+      expect(useFestivalDataStore.getState().pickSync['set-2']?.state).toBe('queued');
+      useUIStore.setState({ pendingSync: 0 });
+      expect(useFestivalDataStore.getState().pickSync['set-2']).toBeUndefined();
+    });
+
+    it('the queue draining keeps failed entries', () => {
+      useFestivalDataStore.setState({
+        pickSync: { a: { state: 'queued', priority: 'must' }, b: { state: 'failed', priority: 'maybe' } },
+      });
+      useUIStore.setState({ pendingSync: 2 });
+      useUIStore.setState({ pendingSync: 0 });
+      expect(useFestivalDataStore.getState().pickSync).toEqual({ b: { state: 'failed', priority: 'maybe' } });
+    });
+
+    it('savesInFlight returns to 0 after success and after failure; lastSavedAt only on a sent outcome', async () => {
+      useFestivalDataStore.setState({ currentProfile: mockProfile });
+
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('Server error'));
+      await expect(
+        useFestivalDataStore.getState().saveNote({ festivalId: 'fest-1', setId: 'set-2', note: 'x' }),
+      ).rejects.toThrow();
+      expect(useFestivalDataStore.getState().savesInFlight).toBe(0);
+      expect(useFestivalDataStore.getState().lastSavedAt).toBeNull();
+
+      vi.mocked(api.put).mockResolvedValueOnce({ _optimistic: true } as never);
+      await useFestivalDataStore.getState().saveReminder({ festivalId: 'fest-1', setId: 'set-2', minutes: 15 });
+      expect(useFestivalDataStore.getState().savesInFlight).toBe(0);
+      expect(useFestivalDataStore.getState().lastSavedAt).toBeNull();
+
+      vi.mocked(api.put).mockResolvedValueOnce(undefined);
+      await useFestivalDataStore.getState().bulkSavePicks(['set-5'], 'maybe');
+      expect(useFestivalDataStore.getState().savesInFlight).toBe(0);
+      expect(useFestivalDataStore.getState().lastSavedAt).toEqual(expect.any(Number));
+    });
+
+    it('a successful selectFestival resets pickSync', async () => {
+      useFestivalDataStore.setState({ pickSync: { x: { state: 'failed', priority: 'must' } } });
+      vi.mocked(api.get).mockResolvedValueOnce({ ...mockFestival, stages: [], days: [] });
+      await useFestivalDataStore.getState().selectFestival('fest-1');
+      expect(useFestivalDataStore.getState().pickSync).toEqual({});
+    });
+  });
+
+  describe('a failed festival switch keeps the current festival (schedule-14)', () => {
+    it('keeps currentFestivalId equal to the loaded festival id', async () => {
+      useFestivalDataStore.setState({ currentFestivalId: 'fest-1', currentFestival: mockFestival });
+      vi.mocked(api.get).mockRejectedValueOnce(new Error('offline'));
+
+      await expect(useFestivalDataStore.getState().selectFestival('fest-2')).rejects.toThrow();
+
+      const state = useFestivalDataStore.getState();
+      expect(state.currentFestivalId).toBe('fest-1');
+      expect(state.currentFestival?.id).toBe('fest-1');
+      expect(state.error).toBe('offline');
+    });
+
+    it('keeps the requested id when no festival data is loaded (cold offline start)', async () => {
+      vi.mocked(api.get).mockRejectedValueOnce(new Error('offline'));
+      await expect(useFestivalDataStore.getState().selectFestival('fest-2')).rejects.toThrow();
+      expect(useFestivalDataStore.getState().currentFestivalId).toBe('fest-2');
+    });
+  });
+
+  describe('restorePicks (plan-import undo)', () => {
+    it('sends one PUT with clientId bulk-<profileId> and deletes keys whose previous value is undefined', async () => {
+      useFestivalDataStore.setState({
+        currentProfile: { ...mockProfile, picks: { 'set-1': 'must', 'set-2': 'must', 'set-3': 'maybe' } },
+      });
+      vi.mocked(api.put).mockResolvedValueOnce(undefined);
+
+      await useFestivalDataStore.getState().restorePicks({ 'set-2': undefined, 'set-3': 'want-to-see' });
+
+      expect(api.put).toHaveBeenCalledTimes(1);
+      expect(api.put).toHaveBeenCalledWith(
+        '/profiles/prof-1',
+        { picks: { 'set-1': 'must', 'set-3': 'want-to-see' } },
+        expect.objectContaining({ clientId: 'bulk-prof-1' }),
+      );
+      expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-1': 'must', 'set-3': 'want-to-see' });
+    });
+
+    it('rolls back only its keys on failure and re-throws', async () => {
+      useFestivalDataStore.setState({ currentProfile: { ...mockProfile, picks: { 'set-1': 'must', 'set-2': 'must' } } });
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('Server error'));
+
+      await expect(useFestivalDataStore.getState().restorePicks({ 'set-2': undefined })).rejects.toThrow();
+
+      const state = useFestivalDataStore.getState();
+      expect(state.currentProfile!.picks).toEqual({ 'set-1': 'must', 'set-2': 'must' });
+      expect(state.error).toBe('Server error');
+    });
+
+    it('writes nothing for an empty map', async () => {
+      useFestivalDataStore.setState({ currentProfile: mockProfile });
+      await useFestivalDataStore.getState().restorePicks({});
+      expect(api.put).not.toHaveBeenCalled();
     });
   });
 

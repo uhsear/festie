@@ -70,4 +70,39 @@ describe('DetailNotesSection', () => {
     const textarea = screen.getByPlaceholderText(/Share a note with your crew/);
     expect(textarea).toBeInTheDocument();
   });
+
+  it.each([
+    ['saving', 'Saving…'],
+    ['saved', 'Saved'],
+    ['queued', 'Saved on this device — will send when online'],
+    ['failed', 'Not saved.'],
+  ] as const)('renders the %s status', (status, text) => {
+    render(<DetailNotesSection {...defaultProps} personalStatus={status} />);
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent(text);
+  });
+
+  it('renders nothing visible for idle', () => {
+    render(<DetailNotesSection {...defaultProps} />);
+    screen.getAllByRole('status').forEach((el) => expect(el).toBeEmptyDOMElement());
+  });
+
+  it('calls the retry callbacks', async () => {
+    const user = userEvent.setup();
+    const onRetryPersonal = vi.fn();
+    const onRetryCrew = vi.fn();
+    render(
+      <DetailNotesSection
+        {...defaultProps}
+        personalStatus="failed"
+        crewStatus="failed"
+        onRetryPersonal={onRetryPersonal}
+        onRetryCrew={onRetryCrew}
+      />,
+    );
+    const [first, second] = screen.getAllByRole('button', { name: 'Retry' });
+    await user.click(first!);
+    await user.click(second!);
+    expect(onRetryPersonal).toHaveBeenCalledOnce();
+    expect(onRetryCrew).toHaveBeenCalledOnce();
+  });
 });

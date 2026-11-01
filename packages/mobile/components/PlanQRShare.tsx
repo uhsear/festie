@@ -149,12 +149,14 @@ export default function PlanQRShare() {
       </View>
 
       <Text style={styles.instructions}>
-        Have your friend open Crew › Share plan › Scan QR and point their camera here. Works with both phones offline —
-        nothing is sent over the internet.
+        Have your friend open Festie and scan this. Works offline — nothing is sent over the internet.
+      </Text>
+      <Text style={styles.instructions}>
+        Have your friend open Crew › Share plan › Scan QR and point their camera here.
       </Text>
       <Text style={[styles.instructions, { color: t.colors.text.muted }]}>
-        This shares your current picks{meetingPoint ? ' and the active meeting point' : ''} as a snapshot — not a live
-        link. Your friend gets a copy as it stands now.
+        Your friend sees your picks{meetingPoint ? ' and the meeting point' : ''} first, then chooses which to add to
+        their own plan. It's a snapshot, not a live link.
       </Text>
     </ScrollView>
   );

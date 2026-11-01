@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 
@@ -118,12 +118,27 @@ vi.mock('./DetailCrewSection', () => ({
   default: ({ title }: { title: string }) => <div data-testid="crew-section">{title}</div>,
 }));
 vi.mock('./DetailNotesSection', () => ({
-  default: () => <div data-testid="notes-section" />,
+  default: ({ onPersonalChange }: { onPersonalChange: (v: string) => void }) => (
+    <div data-testid="notes-section">
+      <textarea aria-label="personal note" onChange={(e) => onPersonalChange(e.target.value)} />
+    </div>
+  ),
 }));
+vi.mock('../../hooks/usePushNotifications', () => ({
+  usePushNotifications: () => ({
+    permissionState: 'granted',
+    unsupportedReason: null,
+    requestPermission: vi.fn(),
+    registerToken: vi.fn(),
+  }),
+}));
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
 import DetailPanel from './DetailPanel';
-import { festivalTimeLabel } from '@festie/shared/utils';
+import { festivalTimeLabel, hasSetStarted } from '@festie/shared/utils';
 import { useDetailPanelData } from './useDetailPanelData';
+import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
+import { useNotificationPrefsStore } from '@festie/shared/stores';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
   return {
@@ -176,6 +191,9 @@ describe('DetailPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useDetailPanelData).mockReturnValue(defaultDetailData());
+    vi.mocked(hasSetStarted).mockReturnValue(false);
+    useFestivalDataStore.setState({ saveNote: mockSaveNote } as never);
+    useNotificationPrefsStore.setState({ loadPrefs: vi.fn(async () => {}) } as never);
   });
 
   it('renders the drawer with set detail aria-label', () => {
@@ -276,6 +294,21 @@ describe('DetailPanel', () => {
   it('hides the reminder picker when the set has no start time', () => {
     render(<DetailPanel {...defaultProps} set={makeSet({ startTime: '', endTime: '' })} />);
     expect(screen.queryByText('Remind me before it starts')).not.toBeInTheDocument();
+  });
+
+  it('hides the reminder picker once the set has started', () => {
+    vi.mocked(hasSetStarted).mockReturnValue(true);
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByText('Remind me before it starts')).not.toBeInTheDocument();
+  });
+
+  it('flushes a pending note save when the sheet unmounts within 500 ms', () => {
+    const { unmount } = render(<DetailPanel {...defaultProps} />);
+    fireEvent.change(screen.getByLabelText('personal note'), { target: { value: 'meet at the rail' } });
+    expect(mockSaveNote).not.toHaveBeenCalled();
+    unmount();
+    expect(mockSaveNote).toHaveBeenCalledTimes(1);
+    expect(mockSaveNote).toHaveBeenCalledWith({ festivalId: 'fest-1', setId: 'set-1', note: 'meet at the rail' });
   });
 
   it('calls saveReminder when a reminder option is selected', async () => {

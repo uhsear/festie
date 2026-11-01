@@ -409,6 +409,7 @@ describe('admin user management', { concurrency: 1 }, () => {
       .expect(200);
     const bob = usersRes.body.data.find((u: any) => u.username === 'bob');
 
+    await reauthAdmin(server, adminToken);
     await server.request
       .put(`/api/v1/admin/users/${bob.id}/reset-password`)
       .set('x-user-token', adminToken)

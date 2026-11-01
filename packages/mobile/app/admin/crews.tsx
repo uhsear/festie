@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, FlatList } from 'react-native'
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '@festie/shared/services';
+import { api, withReauth } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import type { Festival } from '@festie/shared/types';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -11,7 +11,7 @@ import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
-import { ConfirmDialog } from '../../components/admin';
+import { ConfirmDialog, useReauthPrompt } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
@@ -107,6 +107,7 @@ export default function AdminCrewsScreen() {
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [confirmTargetId, setConfirmTargetId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { askPassword: askReauthPassword, reauthDialog } = useReauthPrompt();
 
   const [banner, setBanner] = useState<{ text: string; error: boolean } | null>(null);
 
@@ -236,6 +237,13 @@ export default function AdminCrewsScreen() {
     if (!confirm) return;
     setBusy(true);
     setBanner(null);
+    // withReauth returns null both on cancel and for an empty response, so track cancel here.
+    let cancelled = false;
+    const askPassword = async () => {
+      const password = await askReauthPassword();
+      if (password === null) cancelled = true;
+      return password;
+    };
     try {
       if (confirm.kind === 'delete-crew' && confirmTargetId) {
         const name = crews.find((c) => c.id === confirmTargetId)?.name || 'crew';
@@ -245,7 +253,15 @@ export default function AdminCrewsScreen() {
         setBanner({ text: `Deleted ${name}.`, error: false });
       } else if (confirm.kind === 'force-logout') {
         const userIds = Array.from(selectedUserIds);
-        const { results } = await api.post<{ results: { status: string }[] }>('/admin/bulk/deactivate', { userIds });
+        const res = await withReauth(
+          () => api.post<{ results: { status: string }[] }>('/admin/bulk/deactivate', { userIds }),
+          askPassword,
+        );
+        if (cancelled || !res) {
+          setConfirm(null);
+          return;
+        }
+        const { results } = res;
         const ok = results.filter((r) => r.status === 'logged_out').length;
         const failed = results.length - ok;
         setSelectedUserIds(new Set());
@@ -255,7 +271,11 @@ export default function AdminCrewsScreen() {
         });
       } else if (confirm.kind === 'archive') {
         const festivalIds = Array.from(selectedFestivalIds);
-        await api.post<void>('/admin/bulk/archive-festivals', { festivalIds });
+        await withReauth(() => api.post<void>('/admin/bulk/archive-festivals', { festivalIds }), askPassword);
+        if (cancelled) {
+          setConfirm(null);
+          return;
+        }
         setFestivals((prev) => prev.filter((f) => !selectedFestivalIds.has(f.id)));
         setSelectedFestivalIds(new Set());
         setBanner({ text: `Archived ${festivalIds.length} festival${festivalIds.length === 1 ? '' : 's'}.`, error: false });
@@ -267,7 +287,7 @@ export default function AdminCrewsScreen() {
     } finally {
       setBusy(false);
     }
-  }, [confirm, confirmTargetId, crews, expandedId, selectedUserIds, selectedFestivalIds]);
+  }, [confirm, confirmTargetId, crews, expandedId, selectedUserIds, selectedFestivalIds, askReauthPassword]);
 
   const cancelConfirm = useCallback(() => {
     if (busy) return;
@@ -586,6 +606,7 @@ export default function AdminCrewsScreen() {
         onConfirm={() => void runConfirmed()}
         onCancel={cancelConfirm}
       />
+      {reauthDialog}
 
       <Stack.Screen options={{ headerShown: false }} />
     </View>

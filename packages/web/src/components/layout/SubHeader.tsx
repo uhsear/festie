@@ -20,6 +20,7 @@ import { useToast } from '../../lib/toastContext';
 import { Filter, Star } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
+import SaveStatusChip from '../features/SaveStatusChip';
 
 const STATUS_LABEL: Record<FestivalStatus, string> = {
   upcoming: 'Upcoming',
@@ -289,6 +290,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             </div>
           </div>
         )}
+
+        {currentProfile && <SaveStatusChip />}
 
         {/* My picks filter */}
         {showMyPicks && (

@@ -1,8 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
-import { timeAgo } from '@festie/shared/utils';
-import { CREW_ACTIVITY_LABELS } from '@festie/shared/constants';
+import { timeAgo, describeCrewActivity } from '@festie/shared/utils';
 import EmptyState from '../ui/EmptyState';
 import Avatar from '../ui/Avatar';
 import Skeleton from '../ui/Skeleton';
@@ -82,7 +81,7 @@ export default function ActivityTab({ crewId }: Props) {
   return (
     <div className="space-y-2 px-4">
       {items.map((it, idx) => {
-        const verb = CREW_ACTIVITY_LABELS[it.type] || it.type.replace(/-/g, ' ');
+        const { verb, detail } = describeCrewActivity(it);
         return (
           <div
             key={it.id}
@@ -93,7 +92,7 @@ export default function ActivityTab({ crewId }: Props) {
             <div className="flex-1 min-w-0">
               <div className="text-sm text-text-primary">
                 <span className="font-semibold">{it.username}</span> <span className="text-text-secondary">{verb}</span>
-                {it.detail && <span className="text-text-secondary">: {it.detail}</span>}
+                {detail && <span className="text-text-secondary">: {detail}</span>}
               </div>
               <div className="text-xs text-text-muted mt-0.5">{timeAgo(new Date(it.created_at).getTime())}</div>
             </div>

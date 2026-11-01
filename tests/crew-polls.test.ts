@@ -43,8 +43,13 @@ function makePollDeps(overrides: any = {}) {
   const storesBase = {
     crews: {
       getMember: mock.fn(async () => null),
+      meetingPoints: {
+        countByCrew: mock.fn(async () => 0),
+        create: mock.fn(async (d: any) => ({ id: d.id, crew_id: d.crewId, label: d.label })),
+      },
     },
     polls: {
+      tallyVotes: mock.fn(async () => []),
       listByCrew: mock.fn(async () => []),
       countActiveByCrew: mock.fn(async () => 0),
       create: mock.fn(async (data: any) => ({
@@ -80,6 +85,7 @@ function makePollDeps(overrides: any = {}) {
       req.user = { userId: 'user-1', username: 'testuser' };
       next();
     }),
+    createOpaqueId: (prefix: string) => `${prefix}-test`,
     sanitizeIdentifier: overrides.sanitizeIdentifier || ((s: any) => (typeof s === 'string' ? s.trim() : '')),
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
     sendError: (res: any, status: any, msg: any, code: any) => res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
@@ -278,6 +284,19 @@ describe('routes/crew-polls.js — POST /:crewId/polls', () => {
     const passedClosesAt = (createFn.mock.calls as any[])[0].arguments[0].closesAt;
     assert.ok(passedClosesAt instanceof Date);
     assert.equal(passedClosesAt.toISOString(), closesAt);
+  });
+
+  test('passes setRefs to stores.polls.create', async () => {
+    const createFn = mock.fn(async (data: any) => ({ id: 'poll-new', question: data.question, options: data.options }));
+    const { app } = await buildPollApp({
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) },
+        polls: { countActiveByCrew: mock.fn(async () => 0), create: createFn },
+      },
+    });
+    const setRefs = [{ setId: 's0', label: 'A', stageReference: null, meetAt: null }, null];
+    await request(app).post('/crew-1/polls').send({ question: 'Q?', options: ['A', 'B'], setRefs });
+    assert.deepEqual((createFn.mock.calls as any[])[0].arguments[0].setRefs, setRefs);
   });
 
   test('creates a poll with null closesAt when not provided', async () => {
@@ -805,6 +824,107 @@ describe('routes/crew-polls.js — DELETE /:crewId/polls/:pollId', () => {
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:poll-closed');
     assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { pollId: 'poll-1' });
+  });
+
+  // ── Close creates the winning set's meeting point ─────────────────
+  const SET_REFS = [
+    { setId: 's0', label: 'Act 0', stageReference: 'Main', meetAt: '2026-07-11T23:00:00.000Z' },
+    { setId: 's1', label: 'Act 1', stageReference: null, meetAt: null },
+    { setId: 's2', label: 'Act 2', stageReference: 'Tent', meetAt: '2026-07-12T01:00:00.000Z' },
+  ];
+  async function closeWith(votes: number[], pollOver: any = {}, extra: any = {}) {
+    const ioObj = makeIo();
+    const createMp = mock.fn(async (d: any) => ({ id: d.id, label: d.label }));
+    const closeFn = extra.close ?? mock.fn(async () => ({ ...DEFAULT_POLL, closed: true }));
+    const { app } = await buildPollApp({
+      io: ioObj,
+      stores: {
+        crews: {
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'owner' })),
+          meetingPoints: { countByCrew: mock.fn(async () => 0), create: extra.create ?? createMp },
+        },
+        polls: {
+          getById: mock.fn(async () => ({ ...DEFAULT_POLL, set_refs: SET_REFS, ...pollOver })),
+          close: closeFn,
+          tallyVotes: mock.fn(async () => votes),
+        },
+      },
+    });
+    const res = await request(app).delete('/crew-1/polls/poll-1');
+    const events = (ioObj._emit.mock.calls as any[]).map((c) => c.arguments[0]);
+    return { res, createMp, events };
+  }
+
+  test('close creates a meeting point from the winning set and broadcasts it', async () => {
+    const { res, createMp, events } = await closeWith([0, 2, 2]);
+    assert.equal(res.status, 200);
+    assert.equal(createMp.mock.calls.length, 1);
+    const arg = (createMp.mock.calls as any[])[0].arguments[0];
+    assert.equal(arg.label, 'Act 1');
+    assert.equal(arg.location, 'Act 1');
+    assert.equal(arg.type, 'set');
+    assert.equal(arg.createdBy, 'user-1');
+    assert.equal(arg.recursDaily, false);
+    assert.ok(events.includes('crew:meeting-point-created'));
+    assert.equal(res.body.data.winningSetId, 's1');
+    assert.equal(res.body.data.meetingPoint.label, 'Act 1');
+  });
+
+  test('close tie picks the lowest option index and sets expiry from meetAt', async () => {
+    const { res, createMp } = await closeWith([3, 1, 3]);
+    const arg = (createMp.mock.calls as any[])[0].arguments[0];
+    assert.equal(arg.label, 'Act 0');
+    assert.equal(arg.location, 'Main');
+    assert.equal(arg.expiresAt, '2026-07-11T23:30:00.000Z');
+    assert.equal(res.body.data.winningSetId, 's0');
+  });
+
+  test('a 200-char set label is accepted on create and trimmed to 100 on the meeting point', async () => {
+    const long = 'B'.repeat(200);
+    const createFn = mock.fn(async (data: any) => ({ id: 'poll-new', question: data.question, options: data.options }));
+    const { app } = await buildPollApp({
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) },
+        polls: { countActiveByCrew: mock.fn(async () => 0), create: createFn },
+      },
+    });
+    const created = await request(app)
+      .post('/crew-1/polls')
+      .send({ question: 'Q?', options: [long, 'B'], setRefs: [{ setId: 's0', label: long, stageReference: null, meetAt: null }, null] });
+    assert.equal(created.status, 200);
+
+    const { createMp } = await closeWith([1], { set_refs: [{ setId: 's0', label: long, stageReference: null, meetAt: null }] });
+    const arg = (createMp.mock.calls as any[])[0].arguments[0];
+    assert.equal(arg.label.length, 100);
+    assert.equal(arg.location, long);
+  });
+
+  test('close with no votes creates nothing', async () => {
+    const { res, createMp } = await closeWith([]);
+    assert.equal(createMp.mock.calls.length, 0);
+    assert.equal(res.body.data.meetingPoint, null);
+    assert.equal(res.body.data.winningSetId, null);
+  });
+
+  test('close of a plain poll creates nothing', async () => {
+    const { res, createMp } = await closeWith([1, 1], { set_refs: null });
+    assert.equal(createMp.mock.calls.length, 0);
+    assert.equal(res.status, 200);
+  });
+
+  test('close returning undefined (already closed) creates nothing and emits no poll-closed', async () => {
+    const { res, createMp, events } = await closeWith([0, 2], {}, { close: mock.fn(async () => undefined) });
+    assert.equal(res.status, 200);
+    assert.equal(createMp.mock.calls.length, 0);
+    assert.ok(!events.includes('crew:poll-closed'));
+    assert.equal(res.body.data.closed, null);
+  });
+
+  test('meeting point store error still returns 200', async () => {
+    const { res, events } = await closeWith([0, 2], {}, { create: mock.fn(async () => { throw new Error('mp down'); }) });
+    assert.equal(res.status, 200);
+    assert.ok(events.includes('crew:poll-closed'));
+    assert.equal(res.body.data.meetingPoint, null);
   });
 
   // ── Permission: regular member cannot close another's poll ────────

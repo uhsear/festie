@@ -213,6 +213,11 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     const presenceAfterRevoke = waitForEvent(aliceSocket, 'presence:update', (payload) => payload.online.length === 1);
 
     await server.request
+      .post('/api/v1/auth/reauth')
+      .set('x-user-token', adminToken)
+      .send({ password: 'test-admin-password' })
+      .expect(200);
+    await server.request
       .put(`/api/v1/admin/users/${bob.user.id}/reset-password`)
       .set('x-user-token', adminToken)
       .send({ newPassword: 'bobreset789' })

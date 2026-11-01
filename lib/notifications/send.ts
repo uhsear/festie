@@ -407,11 +407,18 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     const badgeCount = await getUnreadCount(userId);
     const apns = getApns();
     let sent = 0;
+    let localCovered = 0;
     const staleTokens: any[] = [];
 
     for (const device of tokens) {
       if (!isValidDeviceToken(device)) {
         staleTokens.push(device.token);
+        continue;
+      }
+
+      // The phone schedules this festival's set reminders on-device; a push would double them.
+      if (type === 'set_reminder' && device.localRemindersFestivalId && device.localRemindersFestivalId === safeData.festivalId) {
+        localCovered += 1;
         continue;
       }
 
@@ -489,7 +496,7 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
       if (staleToken) await stores.deviceTokens.unregister(staleToken, userId);
     }
 
-    return { sent, staleRemoved: staleTokens.length };
+    return { sent, localCovered, staleRemoved: staleTokens.length };
   }
 
   const MAX_PUSH_BATCH = 200;

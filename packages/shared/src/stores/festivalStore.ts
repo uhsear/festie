@@ -109,6 +109,9 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     '_festivalCachedAt',
     '_profilesCachedAt',
     '_cachedFestivalId',
+    'pickSync',
+    'savesInFlight',
+    'lastSavedAt',
     'loadFestivals',
     'selectFestival',
     'loadProfiles',
@@ -119,6 +122,8 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     'removePick',
     'saveNote',
     'saveReminder',
+    'retryPick',
+    'restorePicks',
     'setError',
   ]);
   const uiKeys = new Set<string>([

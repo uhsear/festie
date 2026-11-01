@@ -22,13 +22,16 @@ vi.mock('@festie/shared', async (importOriginal) => ({
 }));
 
 vi.mock('@festie/shared/stores/uiStore', () => ({
-  useUIStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      detailSet: null,
-      setDetailSet: vi.fn(),
-      detailAutoSpotify: false,
-      setDetailAutoSpotify: vi.fn(),
-    }),
+  useUIStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({
+        detailSet: null,
+        setDetailSet: vi.fn(),
+        detailAutoSpotify: false,
+        setDetailAutoSpotify: vi.fn(),
+      }),
+    { subscribe: vi.fn() },
+  ),
 }));
 
 vi.mock('@festie/shared/hooks', () => ({

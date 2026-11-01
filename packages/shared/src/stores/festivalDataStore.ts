@@ -13,8 +13,8 @@ import { useAuthStore } from './authStore';
 // failing. clientId stays deterministic so multiple offline toggles of the same
 // field collapse to one replayed PUT (the queue upserts by clientId). When
 // online it's a plain PUT. No double-queue: api is the single queue gateway.
-async function offlinePut(url: string, body: unknown, clientId: string): Promise<void> {
-  await api.put(url, body, { clientId, offlineLabel: 'Update picks' });
+async function offlinePut(url: string, body: unknown, clientId: string): Promise<unknown> {
+  return api.put(url, body, { clientId, offlineLabel: 'Update picks' });
 }
 
 /**
@@ -49,6 +49,7 @@ import {
 } from '../types';
 
 import { logicalDayIndexAt } from '../utils/dayOf';
+import { writeOutcomeOf, type WriteOutcome } from '../utils/crewWrites';
 import { resolveFestivalTimeZone } from '../utils/festivalTime';
 import { useFestivalUIStore } from './festivalUIStore';
 import { useUIStore } from './uiStore';
@@ -80,6 +81,20 @@ export interface FestivalDataState {
   _festivalCachedAt: number | null;
   _profilesCachedAt: number | null;
   _cachedFestivalId: string | null;
+  // ── Save state (not persisted) ──────────────────────────────────
+  // Per-set pick write state for the pending clock and the Retry chip. A sent
+  // write deletes its entry; `queued` entries clear when the offline queue drains.
+  pickSync: Record<string, PickSyncEntry>;
+  /** Profile writes (picks/notes/reminders) currently awaiting their PUT. */
+  savesInFlight: number;
+  /** Epoch-ms of the last profile write the server acknowledged. */
+  lastSavedAt: number | null;
+}
+
+export interface PickSyncEntry {
+  state: 'saving' | 'queued' | 'failed';
+  /** The priority this write tried to save (null = clearing the pick). */
+  priority: Priority | null;
 }
 
 export interface FestivalDataActions {
@@ -112,6 +127,14 @@ export interface FestivalDataActions {
   removePick: (festivalId: string, setId: string) => Promise<void>;
   saveNote: (request: SaveNoteRequest) => Promise<void>;
   saveReminder: (request: SaveReminderRequest) => Promise<void>;
+  /** Re-send a failed pick write. No-op when the set has no failed entry. */
+  retryPick: (setId: string) => Promise<void>;
+  /**
+   * Put picks back to `prev` in one write (plan-import undo). An `undefined`
+   * value deletes the key. Shares bulkSavePicks' `bulk-<profileId>` clientId so
+   * an offline import plus undo collapse to one replayed PUT.
+   */
+  restorePicks: (prev: Record<string, Priority | undefined>) => Promise<void>;
   setError: (error: string | null) => void;
 }
 
@@ -164,6 +187,61 @@ function rollbackKeys<T>(
 
 let _lastSelectFestivalId: string | null = null;
 
+/**
+ * Send one profile write and track it for the save-state chip: counts it in
+ * `savesInFlight` while the PUT runs and stamps `lastSavedAt` on a server ack.
+ */
+async function trackedPut(
+  get: () => FestivalDataStore,
+  set: (partial: Partial<FestivalDataStore>) => void,
+  url: string,
+  body: unknown,
+  clientId: string,
+): Promise<WriteOutcome> {
+  set({ savesInFlight: get().savesInFlight + 1 });
+  try {
+    const outcome = writeOutcomeOf(await offlinePut(url, body, clientId));
+    if (outcome === 'sent') set({ lastSavedAt: Date.now() });
+    return outcome;
+  } finally {
+    set({ savesInFlight: Math.max(0, get().savesInFlight - 1) });
+  }
+}
+
+/**
+ * Move a set's pick-sync entry from `from` to `to` (undefined deletes it). A
+ * no-op when a newer write for the same set already replaced `from`, so an
+ * older write that finishes late never hides the newer write's state.
+ */
+function swapPickSync(
+  get: () => FestivalDataStore,
+  set: (partial: Partial<FestivalDataStore>) => void,
+  setId: string,
+  from: PickSyncEntry,
+  to: PickSyncEntry | undefined,
+): void {
+  const cur = get().pickSync;
+  if (cur[setId] !== from) return;
+  const next = { ...cur };
+  if (to) next[setId] = to;
+  else delete next[setId];
+  set({ pickSync: next });
+}
+
+/**
+ * A dropped pick takes its reminder with it, so an unpicked set never fires a
+ * reminder. A separate write (not one combined PUT) keeps each map on its own
+ * offline clientId; a combined body could replay a stale reminders map.
+ */
+async function clearReminderAfterPick(get: () => FestivalDataStore, festivalId: string, setId: string): Promise<void> {
+  if (get().currentProfile?.reminders?.[setId] == null) return;
+  try {
+    await get().saveReminder({ festivalId, setId, minutes: null });
+  } catch (_) {
+    // The pick did save. saveReminder already rolled back its key and set `error`.
+  }
+}
+
 const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   festivals: [],
   currentFestivalId: null,
@@ -178,6 +256,9 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   _festivalCachedAt: null,
   _profilesCachedAt: null,
   _cachedFestivalId: null,
+  pickSync: {},
+  savesInFlight: 0,
+  lastSavedAt: null,
 
   loadFestivals: async () => {
     set({ isLoading: true, error: null });
@@ -271,6 +352,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         _festivalCachedAt: Date.now(),
         _cachedFestivalId: festivalId,
         _profilesCachedAt: profilesAreFresh ? Date.now() : prevState._profilesCachedAt,
+        pickSync: {},
       });
 
       // Default the day selector to the logical festival day containing now, in
@@ -290,7 +372,13 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       });
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load festival');
-      set({ error: message, isLoading: false });
+      // Point the id back at the festival whose data is still loaded, so the id
+      // and the data agree. With no data loaded (cold offline start), keep the
+      // requested id so the next attempt retries it. A superseded call leaves
+      // the newer selection's id alone.
+      const currentFestivalId =
+        _lastSelectFestivalId === festivalId ? (get().currentFestival?.id ?? festivalId) : get().currentFestivalId;
+      set({ error: message, isLoading: false, currentFestivalId });
       throw err;
     }
   },
@@ -356,6 +444,8 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   savePick: async (request: SavePickRequest) => {
     // Snapshot only the ONE key this call owns, not the whole profile (see rollbackKeys).
     const prevPriority = get().currentProfile?.picks[request.setId];
+    const syncEntry: PickSyncEntry = { state: 'saving', priority: request.priority };
+    let started = false;
     set({ error: null });
     try {
       const { currentProfile } = get();
@@ -379,21 +469,28 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
           ...currentProfile,
           picks: mergedPicks,
         },
+        pickSync: { ...get().pickSync, [request.setId]: syncEntry },
       });
+      started = true;
 
-      await offlinePut(
+      const outcome = await trackedPut(
+        get,
+        set,
         `/profiles/${currentProfile.id}`,
         { picks: mergedPicks },
         `pick-${currentProfile.id}-${request.setId}`,
       );
+      swapPickSync(get, set, request.setId, syncEntry, outcome === 'queued' ? { ...syncEntry, state: 'queued' } : undefined);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to save pick');
       // Roll back ONLY this set's pick against the LATEST state so the UI never
       // shows a pick as saved when the write failed, WITHOUT discarding a
       // concurrent sibling mutation that committed while this PUT was in flight.
       rollbackKeys(get, set, 'picks', { [request.setId]: prevPriority }, message);
+      if (started) swapPickSync(get, set, request.setId, syncEntry, { ...syncEntry, state: 'failed' });
       throw err;
     }
+    if (!request.priority) await clearReminderAfterPick(get, request.festivalId, request.setId);
   },
 
   // Bulk pick helper (M2): merge MANY setIds at one priority into the picks map
@@ -445,7 +542,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       // ONE coalesced write. Deterministic clientId keyed only by profile (not
       // per-set) so repeated bulk applies collapse to a single replayed PUT
       // whose body is the latest full map — never N writes.
-      await offlinePut(`/profiles/${currentProfile.id}`, { picks: mergedPicks }, `bulk-${currentProfile.id}`);
+      await trackedPut(get, set, `/profiles/${currentProfile.id}`, { picks: mergedPicks }, `bulk-${currentProfile.id}`);
       return changed;
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to save picks');
@@ -457,9 +554,11 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
 
   // FIX: PUT /profiles/:profileId with full picks map (key removed).
   //      Was incorrectly hitting DELETE /profiles/:festivalId/picks/:setId.
-  removePick: async (_festivalId: string, setId: string) => {
+  removePick: async (festivalId: string, setId: string) => {
     // Snapshot only the removed key, not the whole profile (see rollbackKeys).
     const prevPriority = get().currentProfile?.picks[setId];
+    const syncEntry: PickSyncEntry = { state: 'saving', priority: null };
+    let started = false;
     set({ error: null });
     try {
       const { currentProfile } = get();
@@ -474,17 +573,28 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
           ...currentProfile,
           picks: mergedPicks,
         },
+        pickSync: { ...get().pickSync, [setId]: syncEntry },
       });
+      started = true;
 
       // Same clientId as savePick so a toggle-on-then-off offline sequence
       // collapses to one PUT whose body is the latest map.
-      await offlinePut(`/profiles/${currentProfile.id}`, { picks: mergedPicks }, `pick-${currentProfile.id}-${setId}`);
+      const outcome = await trackedPut(
+        get,
+        set,
+        `/profiles/${currentProfile.id}`,
+        { picks: mergedPicks },
+        `pick-${currentProfile.id}-${setId}`,
+      );
+      swapPickSync(get, set, setId, syncEntry, outcome === 'queued' ? { ...syncEntry, state: 'queued' } : undefined);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to remove pick');
       // Roll back only this set's pick against the latest state.
       rollbackKeys(get, set, 'picks', { [setId]: prevPriority }, message);
+      if (started) swapPickSync(get, set, setId, syncEntry, { ...syncEntry, state: 'failed' });
       throw err;
     }
+    await clearReminderAfterPick(get, festivalId, setId);
   },
 
   // FIX: PUT /profiles/:profileId with full notes map.
@@ -511,7 +621,9 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         },
       });
 
-      await offlinePut(
+      await trackedPut(
+        get,
+        set,
         `/profiles/${currentProfile.id}`,
         { notes: mergedNotes },
         `note-${currentProfile.id}-${request.setId}`,
@@ -553,7 +665,9 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         },
       });
 
-      await offlinePut(
+      await trackedPut(
+        get,
+        set,
         `/profiles/${currentProfile.id}`,
         { reminders: mergedReminders },
         `reminder-${currentProfile.id}-${request.setId}`,
@@ -562,6 +676,47 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       const message = mapErrorToUserMessage(err, 'Failed to save reminder');
       // Roll back only this set's reminder against the latest state.
       rollbackKeys(get, set, 'reminders', { [request.setId]: prevReminder }, message);
+      throw err;
+    }
+  },
+
+  retryPick: async (setId: string) => {
+    const entry = get().pickSync[setId];
+    const festivalId = get().currentFestivalId;
+    if (entry?.state !== 'failed' || !festivalId) return;
+    try {
+      await get().savePick({ festivalId, setId, priority: entry.priority });
+    } catch (_) {
+      // Not silent: savePick marked the entry failed again and set `error`, so the Retry chip stays.
+    }
+  },
+
+  restorePicks: async (prev: Record<string, Priority | undefined>) => {
+    // The pre-call value of each key this call changes, for rollback.
+    const rollback: Record<string, Priority | undefined> = {};
+    set({ error: null });
+    try {
+      const { currentProfile } = get();
+      if (!currentProfile) {
+        throw new Error('No active profile -- select a festival first');
+      }
+      const setIds = Object.keys(prev);
+      if (setIds.length === 0) return;
+
+      const mergedPicks: Record<string, Priority> = { ...(currentProfile.picks || {}) };
+      for (const setId of setIds) {
+        rollback[setId] = mergedPicks[setId];
+        const value = prev[setId];
+        if (value === undefined) delete mergedPicks[setId];
+        else mergedPicks[setId] = value;
+      }
+
+      set({ currentProfile: { ...currentProfile, picks: mergedPicks } });
+
+      await trackedPut(get, set, `/profiles/${currentProfile.id}`, { picks: mergedPicks }, `bulk-${currentProfile.id}`);
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to restore picks');
+      rollbackKeys(get, set, 'picks', rollback, message);
       throw err;
     }
   },
@@ -636,3 +791,13 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
     },
   }),
 );
+
+// A drained offline queue means every queued write was replayed. One that failed
+// for good lands in uiStore.failedSync, which the offline banner already shows
+// (and which the save-state chip ranks above "Saved").
+useUIStore.subscribe((state, prev) => {
+  if (!(prev.pendingSync > 0 && state.pendingSync === 0)) return;
+  const { pickSync } = useFestivalDataStore.getState();
+  const next = Object.fromEntries(Object.entries(pickSync).filter(([, entry]) => entry.state !== 'queued'));
+  useFestivalDataStore.setState({ pickSync: next, lastSavedAt: Date.now() });
+});

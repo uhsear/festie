@@ -2,22 +2,34 @@ import type { Pool } from 'pg';
 
 export default function createNotificationsStore(pool: Pool, _utils: any) {
   const deviceTokens = {
-    async register({ id, userId, token, platform, deviceName }: any) {
+    async register({ id, userId, token, platform, deviceName, localRemindersFestivalId, localRemindersPresent }: any) {
       const now = new Date().toISOString();
       const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
 
       await pool.query(
         `
-        INSERT INTO device_tokens (id, user_id, token, platform, device_name, created_at, last_used_at, expires_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO device_tokens (id, user_id, token, platform, device_name, created_at, last_used_at, expires_at, local_reminders_festival_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT(token) DO UPDATE SET
           user_id = EXCLUDED.user_id,
           platform = EXCLUDED.platform,
           device_name = EXCLUDED.device_name,
           last_used_at = EXCLUDED.last_used_at,
-          expires_at = EXCLUDED.expires_at
+          expires_at = EXCLUDED.expires_at,
+          local_reminders_festival_id = CASE WHEN $10 THEN EXCLUDED.local_reminders_festival_id ELSE device_tokens.local_reminders_festival_id END
       `,
-        [id, userId, token, platform || 'web', deviceName || null, now, now, expiresAt],
+        [
+          id,
+          userId,
+          token,
+          platform || 'web',
+          deviceName || null,
+          now,
+          now,
+          expiresAt,
+          localRemindersFestivalId ?? null,
+          !!localRemindersPresent,
+        ],
       );
     },
 
@@ -36,7 +48,8 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
     async listByUser(userId: string) {
       const result = await pool.query(
         `
-        SELECT id, user_id AS "userId", token, platform, device_name AS "deviceName", created_at AS "createdAt", last_used_at AS "lastUsedAt"
+        SELECT id, user_id AS "userId", token, platform, device_name AS "deviceName", created_at AS "createdAt", last_used_at AS "lastUsedAt",
+          local_reminders_festival_id AS "localRemindersFestivalId"
         FROM device_tokens
         WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > NOW())
         ORDER BY last_used_at DESC

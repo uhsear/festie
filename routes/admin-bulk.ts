@@ -21,6 +21,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     validateParams,
     io,
     invalidateUserSessions,
+    requireRecentAuth,
   } = deps;
   const { adminWriteLimit } = ctx;
 
@@ -125,6 +126,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     '/bulk/deactivate',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     validate(schemas.adminBulkDeactivate),
     async (req: any, res: any) => {
       try {
@@ -175,6 +177,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     '/bulk/archive-festivals',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     validate(schemas.adminBulkArchive),
     async (req: any, res: any) => {
       try {

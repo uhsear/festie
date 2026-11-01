@@ -342,6 +342,7 @@ describe('admin bulk deactivate + archive', () => {
     const server = await startServer(); servers.push(server);
     const adminToken = await loginAdmin(server);
     const user = await registerUser(server, 'todeactivate');
+    await reauthAdmin(server, adminToken);
     const res = await server.request
       .post('/api/v1/admin/bulk/deactivate')
       .set('x-user-token', adminToken)
@@ -368,6 +369,7 @@ describe('admin bulk deactivate + archive', () => {
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ name: 'Archive Test Fest', days: [{ date: '2026-06-01', label: 'Day 1', sets: [] }], stages: [] });
     const festId = createRes.body.data?.id || createRes.body.data?.festival?.id;
+    await reauthAdmin(server, adminToken);
     const res = await server.request
       .post('/api/v1/admin/bulk/archive-festivals')
       .set('x-user-token', adminToken)

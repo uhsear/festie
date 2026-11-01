@@ -8,7 +8,7 @@ import { Stack, useRouter, useSegments, useRootNavigationState, router as global
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
-import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { useAuthStore, useCrewStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
 import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
 import {
@@ -35,6 +35,7 @@ import { useOngoingNotification } from '../hooks/useOngoingNotification';
 import { ensureAndroidChannels } from '../hooks/useMobilePush';
 import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
+import { CREW_MEET_HREF, sosPushCrewId } from '../lib/dayOfRoutes';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
@@ -142,6 +143,17 @@ export function parseDeepLink(raw: string): DeepLinkTarget | null {
 // the warm-tap listener and the cold-start useLastNotificationResponse handler
 // so both paths route identically.
 function routeNotification(r: ReturnType<typeof useRouter>, data: Record<string, unknown> | undefined) {
+  const sosCrewId = sosPushCrewId(data);
+  if (sosCrewId) {
+    // Open that crew's logistics tab, where CrewSos shows the banner with "Get directions".
+    if (sosCrewId !== useCrewStore.getState().activeCrew?.id) {
+      useCrewStore.getState().selectCrew(sosCrewId).catch(() => {});
+    } else {
+      void useLiveLocationStore.getState().loadActiveSos(sosCrewId);
+    }
+    r.push(CREW_MEET_HREF);
+    return;
+  }
   if (typeof data?.deepLink === 'string') {
     const target = parseDeepLink(data.deepLink);
     if (target) r.push(target);

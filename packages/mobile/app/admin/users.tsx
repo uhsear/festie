@@ -179,7 +179,14 @@ export default function AdminUsersScreen() {
         Alert.alert(grant ? 'Admin granted' : 'Admin revoked', `@${user.username} ${grant ? 'now has' : 'no longer has'} admin access.`);
       } else if (pending.kind === 'reset-password') {
         const { user, newPassword: pw } = pending;
-        await api.put<unknown>(`/admin/users/${user.id}/reset-password`, { newPassword: pw });
+        await withReauth(
+          () => api.put<unknown>(`/admin/users/${user.id}/reset-password`, { newPassword: pw }),
+          askPassword,
+        );
+        if (cancelled) {
+          setPending(null);
+          return;
+        }
         setPending(null);
         setExpandedId(null);
         setNewPassword('');

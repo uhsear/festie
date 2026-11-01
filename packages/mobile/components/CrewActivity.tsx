@@ -3,8 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalModeStore } from '@festie/shared/stores';
-import { timeAgoFromIso } from '@festie/shared/utils';
-import { CREW_ACTIVITY_LABELS } from '@festie/shared/constants';
+import { timeAgoFromIso, describeCrewActivity } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
@@ -36,6 +35,8 @@ const ACTIVITY_VISUAL: Record<string, { icon: IconName; tint: Tint }> = {
   'meeting-point-added': { icon: 'location', tint: 'aqua' },
   'meeting-point-removed': { icon: 'location-outline', tint: 'muted' },
   'crew-updated': { icon: 'create-outline', tint: 'amber' },
+  sos_raised: { icon: 'alert-circle', tint: 'coral' },
+  sos_cleared: { icon: 'shield-checkmark-outline', tint: 'green' },
 };
 
 const FALLBACK_VISUAL = { icon: 'ellipse-outline' as IconName, tint: 'muted' as Tint };
@@ -108,7 +109,7 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
   return (
     <View style={styles.container}>
       {visible.map((it, idx) => {
-        const verb = CREW_ACTIVITY_LABELS[it.type] ?? it.type.replace(/-/g, ' ');
+        const { verb, detail } = describeCrewActivity(it);
         const visual = ACTIVITY_VISUAL[it.type] ?? FALLBACK_VISUAL;
         const color = tintColor[visual.tint];
         // R22 staggered reveal — cap the stagger so a full page never feels slow;
@@ -122,7 +123,7 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
             <View style={styles.info}>
               <Text style={styles.line}>
                 <Text style={styles.name}>{it.username || 'Someone'}</Text> <Text style={styles.verb}>{verb}</Text>
-                {it.detail ? <Text style={styles.verb}>: {it.detail}</Text> : null}
+                {detail ? <Text style={styles.verb}>: {detail}</Text> : null}
               </Text>
               <Text style={styles.time}>{timeAgoFromIso(it.created_at)}</Text>
             </View>

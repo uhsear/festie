@@ -381,7 +381,7 @@ A crew member raised an SOS. Sent to the whole `crew:<crewId>` room, including t
 - **Rate limit:** 1 SOS per 120 seconds per userId, on top of a coarser HTTP limit of 10 per window
 
 ### `sos:cleared`
-A crew member cleared the active SOS. Sent to the whole `crew:<crewId>` room.
+A crew member cleared one raiser's active SOS. Sent to the whole `crew:<crewId>` room.
 
 ```json
 {
@@ -395,7 +395,8 @@ A crew member cleared the active SOS. Sent to the whole `crew:<crewId>` room.
 ```
 
 - Raised over HTTP `POST /:crewId/sos/clear`. Clients never emit this event.
-- `clearedBy` is the username; `userId` is that same user's ID
+- `userId` is the raiser whose SOS was cleared. `clearedBy` is the username of the person who cleared it. The raiser clears their own SOS ("I'm safe") or any crew member clears it by sending `raiserId` in the body.
+- A client that connects after the raise reads the active entries with `GET /crews/:crewId/sos`. It returns `{ sos: [...] }`, newest first, each entry shaped like a `sos:raised` payload. Entries expire after one hour.
 - `activityId` is omitted when the activity row could not be written, unlike `sos:raised` which sends an empty string
 
 #### Crew events

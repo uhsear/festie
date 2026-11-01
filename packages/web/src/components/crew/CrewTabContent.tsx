@@ -22,6 +22,8 @@ interface CrewTabContentProps {
   onTransferOwnership: (member: CrewMember) => void;
   onKick?: (member: CrewMember) => void;
   onDestroyCrew?: () => void;
+  /** Raiser to aim the Meet tab's map at (from an SOS banner or push). */
+  focusSosUserId?: string;
 }
 
 export default function CrewTabContent({
@@ -37,6 +39,7 @@ export default function CrewTabContent({
   onTransferOwnership,
   onKick,
   onDestroyCrew,
+  focusSosUserId,
 }: CrewTabContentProps) {
   return (
     <div
@@ -60,7 +63,7 @@ export default function CrewTabContent({
           onDestroyCrew={onDestroyCrew}
         />
       )}
-      {tab === 'meeting' && <MeetingPointsTab crewId={crewId} currentUserId={currentUserId} />}
+      {tab === 'meeting' && <MeetingPointsTab crewId={crewId} currentUserId={currentUserId} focusSosUserId={focusSosUserId} />}
       {tab === 'polls' && <PollsTab crewId={crewId} currentUserId={currentUserId} isOwner={isOwner} />}
       {tab === 'packing' && <PackingTab crewId={crewId} currentUserId={currentUserId} isOwner={isOwner} />}
       {tab === 'rides' && <RidesTab crewId={crewId} currentUserId={currentUserId} isOwner={isOwner} />}

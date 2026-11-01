@@ -272,6 +272,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     '/users/:id/reset-password',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     passwordResetRateLimit,
     validateParams(schemas.genericIdParams),
     validate(schemas.resetPassword),

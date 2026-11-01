@@ -20,7 +20,9 @@ import {
 export function useLiveLocationCrewSync(): void {
   const crewId = useCrewStore((s) => s.activeCrew?.id ?? null);
   useEffect(() => {
-    useLiveLocationStore.getState().setActiveCrew(crewId);
+    const store = useLiveLocationStore.getState();
+    store.setActiveCrew(crewId);
+    if (crewId) void store.loadActiveSos(crewId);
   }, [crewId]);
 }
 

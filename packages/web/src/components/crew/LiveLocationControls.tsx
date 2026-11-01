@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Square, Siren, Navigation, ShieldCheck, X, MapPin } from 'lucide-react';
-import { api } from '@festie/shared';
+import { Square, AlertCircle, Navigation, ShieldCheck, X, MapPin } from 'lucide-react';
+import { clearCrewSos, sosErrorMessage } from '@festie/shared';
 import type { SosEntry } from '@festie/shared/types';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
@@ -15,7 +15,7 @@ import { useSharedSocket } from '../../lib/socketContext';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
-import { inputBase } from '../../lib/styles';
+import SosRaiseButton from './SosRaiseButton';
 
 interface Props {
   crewId: string;
@@ -71,21 +71,6 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
     if (lowPowerMode && sharing) setSharing(false);
   }, [lowPowerMode, sharing]);
 
-  // Reactively track prefers-reduced-motion so the SOS ring class is always in
-  // sync even if the user changes the OS setting while the component is mounted.
-  const prefersReducedMotion = useSyncExternalStore(
-    (cb) => {
-      const mql = typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-      mql?.addEventListener('change', cb);
-      return () => mql?.removeEventListener('change', cb);
-    },
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    () => false,
-  );
-
-  const [sosOpen, setSosOpen] = useState(false);
-  const [sosMessage, setSosMessage] = useState('');
-  const [sosBusy, setSosBusy] = useState(false);
   const [clearBusy, setClearBusy] = useState(false);
   // The SOS pending a clear-confirm. Any member may resolve any SOS (parity with
   // mobile — the raiser's phone may be dead), but a stray tap must not silently
@@ -166,46 +151,6 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
     setSharing(true);
   }
 
-  // Best-effort one-shot fix to attach to the SOS so the crew can actually find
-  // the person. Never blocks the raise — resolves null on denial/timeout.
-  function oneShotPosition(): Promise<{ lat: number; lng: number; accuracy?: number; capturedAt: string } | undefined> {
-    return new Promise((resolve) => {
-      if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(undefined);
-      navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          resolve({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy ?? undefined,
-            capturedAt: new Date(pos.timestamp).toISOString(),
-          }),
-        () => resolve(undefined),
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 8_000 },
-      );
-    });
-  }
-
-  async function raiseSos() {
-    if (sosBusy) return;
-    setSosBusy(true);
-    try {
-      const position = await oneShotPosition();
-      const message = sosMessage.trim();
-      await api.post(`/crews/${crewId}/sos`, {
-        ...(message ? { message } : {}),
-        ...(position ? { position } : {}),
-      });
-      toast('SOS sent to your crew', 'success');
-      setSosOpen(false);
-      setSosMessage('');
-    } catch {
-      // SOS is online-only (never queued). The safe failure is to TELL the user.
-      toast('No signal — SOS not sent. Use your phone or radio.', 'error');
-    } finally {
-      setSosBusy(false);
-    }
-  }
-
   // Clear a specific raiser's SOS. Any crew member may resolve any SOS (the
   // raiser's phone may be dead), so we always target by raiserId — mirroring
   // mobile — rather than assuming the current user is the raiser.
@@ -213,14 +158,12 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
     if (clearBusy) return;
     setClearBusy(true);
     try {
-      await api.post(`/crews/${crewId}/sos/clear`, { raiserId });
-      // The server broadcasts sos:cleared back to the room (we're in it) which
-      // clears the store; clear optimistically too so the banner dismisses now.
-      useLiveLocationStore.getState().clearSos(raiserId);
+      // Also clears the store, so the banner dismisses now.
+      await clearCrewSos(crewId, raiserId);
       toast('SOS cleared', 'success');
       setClearTarget(null);
-    } catch {
-      toast('Couldn’t clear the SOS — check your connection.', 'error');
+    } catch (err) {
+      toast(sosErrorMessage(err, 'clear'), 'error');
     } finally {
       setClearBusy(false);
     }
@@ -229,9 +172,15 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
   const isSharingThisCrew = sharing && sharingCrewId === crewId;
   const showSos = sosList.length > 0;
   const clearMine = clearTarget?.userId === currentUserId;
+  const ownSosActive = sosList.some((e) => e.userId === currentUserId);
 
   return (
     <div className="space-y-2">
+      {/* ── Send SOS: top of the Meet tab. Hidden while your own SOS is active
+          (the banner below carries "I'm safe"), as on mobile. ─────────────── */}
+      {!ownSosActive && <SosRaiseButton crewId={crewId} alerting={showSos} />}
+      <p className="text-xs text-text-muted">For emergencies — alerts your whole crew. Needs signal to send.</p>
+
       {/* ── Active SOS banners (crew-wide, prominent) ──────────────────────────
           One banner per active SOS. With 2+ live, a "{N} active" header labels
           the stack (parity with mobile); a single SOS looks identical to before. */}
@@ -251,7 +200,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
             className="rounded-lg border-2 border-accent-coral bg-accent-coral/15 p-3 space-y-2 animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none"
           >
             <div className="flex items-start gap-2">
-              <Siren className="w-5 h-5 text-accent-coral shrink-0 mt-0.5" aria-hidden="true" />
+              <AlertCircle className="w-5 h-5 text-accent-coral shrink-0 mt-0.5" aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="font-bold text-text-primary">
                   {isMine ? 'You raised an SOS' : `${entry.username} raised an SOS`}
@@ -312,7 +261,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
         </div>
       )}
 
-      {/* ── Share toggle + SOS button ──────────────────────────────────────── */}
+      {/* ── Share toggle ──────────────────────────────────────── */}
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-card p-3">
         <div className="flex items-center gap-3">
           <MapPin className="w-5 h-5 text-text-secondary shrink-0" aria-hidden="true" />
@@ -346,73 +295,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
             />
           </button>
         </div>
-
-        <div className="h-px bg-border" />
-
-        {/* R24: pulse ring ONLY while an active SOS exists (emergency context;
-            continuous animation is justified here). sos-fab-alerting is the
-            animated ring; sos-fab-static-ring is the reduce-motion fallback
-            (high-contrast static outline, no animation). */}
-        <Button
-          variant="danger"
-          onClick={() => setSosOpen(true)}
-          className={`w-full min-h-11${
-            showSos
-              ? prefersReducedMotion
-                ? ' sos-fab-static-ring'
-                : ' sos-fab-alerting'
-              : ''
-          }`}
-          aria-label="Raise an SOS to your crew"
-        >
-          <Siren className="w-4 h-4" aria-hidden="true" /> Raise SOS
-        </Button>
       </div>
-
-      {/* ── SOS confirm dialog (guards against accidental triggers) ─────────── */}
-      <Dialog.Root open={sosOpen} onOpenChange={(o: boolean) => !sosBusy && setSosOpen(o)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <Dialog.Title className="flex items-center gap-2 text-base font-bold text-text-primary">
-                  <Siren className="w-5 h-5 text-accent-coral" aria-hidden="true" /> Raise an SOS?
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                  This alerts everyone in your crew with a push notification and your last-known location. Use it only
-                  in an emergency.
-                </Dialog.Description>
-              </div>
-              <Dialog.Close asChild>
-                <IconButton label="Close" icon={<X className="w-5 h-5" />} disabled={sosBusy} />
-              </Dialog.Close>
-            </div>
-
-            <textarea
-              value={sosMessage}
-              onChange={(e) => setSosMessage(e.target.value)}
-              placeholder="Optional: what's happening? (e.g. 'Lost near Main Stage')"
-              maxLength={280}
-              rows={3}
-              aria-label="Optional SOS message"
-              disabled={sosBusy}
-              className={`${inputBase} resize-none`}
-            />
-
-            <div className="flex gap-2">
-              <Dialog.Close asChild>
-                <Button variant="outline" type="button" className="flex-1 min-h-11" disabled={sosBusy}>
-                  Cancel
-                </Button>
-              </Dialog.Close>
-              <Button type="button" variant="danger" onClick={raiseSos} isLoading={sosBusy} className="flex-1 min-h-11">
-                {sosBusy ? 'Sending…' : 'Send SOS'}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
 
       {/* ── Clear-SOS confirm dialog (parity with the raise: one stray tap must
           not silently resolve a live emergency) ────────────────────────────── */}

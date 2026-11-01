@@ -131,12 +131,11 @@ function PlanQRBody() {
       </div>
 
       <p className="text-sm text-text-secondary text-center">
-        Have your friend open Festie → scan this. Works offline — nothing is sent over the internet. They get a snapshot
-        copy, not a live link.
+        Have your friend open Festie and scan this. Works offline — nothing is sent over the internet.
       </p>
       <p className="text-xs text-text-muted text-center">
-        This shares your current picks{meetingPoint ? ' and the active meeting point' : ''} as a snapshot — your friend
-        gets a copy as it stands now, not a live link.
+        Your friend sees your picks{meetingPoint ? ' and the meeting point' : ''} first, then chooses which to add to
+        their own plan. It's a snapshot, not a live link.
       </p>
     </div>
   );
