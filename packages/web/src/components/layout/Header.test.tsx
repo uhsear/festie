@@ -17,7 +17,9 @@ vi.mock('@tanstack/react-router', () => ({
 // Mock auth store
 const mockAuthStore = vi.fn();
 let mockConnected = true;
+const mockFestival = { scheduleView: null as string | null, sets: [], days: [], currentFestival: null };
 vi.mock('@festie/shared', () => ({
+  useFestivalStore: (selector: (s: typeof mockFestival) => unknown) => selector(mockFestival),
   useAuthStore: (selector: (s: { user: unknown }) => unknown) => selector({ user: mockAuthStore() }),
   useUIStore: (selector: (s: { connected: boolean }) => unknown) => selector({ connected: mockConnected }),
 }));
@@ -45,6 +47,7 @@ describe('Header', () => {
     vi.clearAllMocks();
     mockAuthStore.mockReturnValue(null);
     mockConnected = true;
+    mockFestival.scheduleView = null;
     document.documentElement.removeAttribute('data-theme');
   });
 
@@ -110,6 +113,13 @@ describe('Header', () => {
       render(<Header />);
       expect(screen.queryByRole('button', { name: 'Wrap' })).not.toBeInTheDocument();
     });
+  });
+
+  it('sends the Lineup tab to the remembered view', async () => {
+    mockFestival.scheduleView = 'grid';
+    render(<Header />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Lineup' }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/grid' });
   });
 
   describe('active tab detection', () => {

@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Star, Users, Zap, Sparkles, Map as MapIcon, type LucideIcon } from 'lucide-react';
+import { Star, Users, Zap, Sparkles, Map as MapIcon, X, type LucideIcon } from 'lucide-react';
 import {
   PHASE_ACTION_LABELS,
   PHASE_ACTION_ORDER,
@@ -34,6 +34,7 @@ const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
 
 interface PhaseHomeActionsProps {
   phase: FestivalPhase;
+  onDismiss?: () => void;
 }
 
 /**
@@ -44,7 +45,7 @@ interface PhaseHomeActionsProps {
  * inside /crew), post leads with wrap + settle-up. The destination set is fixed;
  * phase only reorders and emphasizes the lead, so nothing is ever hidden.
  */
-export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
+export default function PhaseHomeActions({ phase, onDismiss }: PhaseHomeActionsProps) {
   const navigate = useNavigate();
   const order = PHASE_ACTION_ORDER[phase];
   const heading = PHASE_HEADING[phase];
@@ -54,9 +55,21 @@ export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
       className="mb-[var(--space-4)] flex flex-col gap-[var(--space-2)]"
       aria-label={`${heading.label} — quick actions`}
     >
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[length:var(--font-size-12)] font-bold uppercase tracking-wide text-text-muted">{heading.label}</span>
-        <span className="text-xs text-text-secondary">{heading.hint}</span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[length:var(--font-size-12)] font-bold uppercase tracking-wide text-text-muted">{heading.label}</span>
+          <span className="text-xs text-text-secondary">{heading.hint}</span>
+        </div>
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Hide these shortcuts"
+            className="inline-flex h-[44px] w-[44px] shrink-0 items-center justify-center -mt-2 -mr-2 cursor-pointer text-text-muted hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
       <div className="flex flex-wrap gap-[var(--space-2)]" role="group" aria-label="Phase actions">
         {order.map((key, i) => {

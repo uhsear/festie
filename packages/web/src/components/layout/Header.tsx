@@ -9,6 +9,7 @@ import Button from '../ui/Button';
 import DaylightToggle from '../features/DaylightToggle';
 import { useThemeSync } from '../../lib/theme';
 import { SECTION_HREF, activeSection } from './sections';
+import { useLineupHref } from '../../hooks/useLineupHref';
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
@@ -18,6 +19,7 @@ export default function Header() {
   // Desktop nav tabs: the five shared sections. Guests skip More because the
   // "Sign in" button in the right section already covers it.
   const current = activeSection(location.pathname);
+  const lineupHref = useLineupHref();
   const desktopTabs = APP_SECTIONS.filter((section) => user || section.key !== 'more');
 
   // Apply the persisted theme (stage | daylight) to <html> and the PWA chrome
@@ -210,7 +212,7 @@ export default function Header() {
                     'border border-transparent',
                     active && 'bg-aqua-a12 text-accent-aqua !border-aqua-a2 !rounded-lg',
                   )}
-                  onClick={() => navigate({ to: SECTION_HREF[tab.key] })}
+                  onClick={() => navigate({ to: tab.key === 'lineup' ? lineupHref : SECTION_HREF[tab.key] })}
                 >
                   {tab.label}
                 </button>

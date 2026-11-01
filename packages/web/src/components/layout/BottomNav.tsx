@@ -5,6 +5,7 @@ import { useAuthStore } from '@festie/shared';
 import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
 import { SECTION_HREF, activeSection } from './sections';
+import { useLineupHref } from '../../hooks/useLineupHref';
 
 // Per-tab chunk prefetchers. Called from onPointerDown so the tap-up navigation
 // happens with the chunk already loaded — no chunk-load pause that made the
@@ -92,6 +93,7 @@ export default function BottomNav() {
   // My Plan/Crew gate in-place via GuestTeaser, and the More slot reads "Sign in"
   // because /account routes a guest to /login.
   const current = activeSection(location.pathname);
+  const lineupHref = useLineupHref();
 
   return (
     <footer
@@ -112,7 +114,7 @@ export default function BottomNav() {
     >
       <nav className="flex justify-around w-full max-md:gap-0.5" aria-label="Primary">
         {APP_SECTIONS.map((section) => {
-          const href = SECTION_HREF[section.key];
+          const href = section.key === 'lineup' ? lineupHref : SECTION_HREF[section.key];
           const label = section.key === 'more' && !user ? 'Sign in' : section.label;
           const active = current === section.key;
           return (

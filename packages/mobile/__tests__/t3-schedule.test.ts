@@ -18,7 +18,7 @@ describe('t3 schedule and picks list source guards', () => {
   });
 
   it('schedule search blames the filters when they hide a selected-day match', () => {
-    expect(read('app/(tabs)/index.tsx')).toContain('searchEmptyCopy');
+    expect(read('app/(tabs)/index.tsx')).toContain('searchHiddenByFilters(');
   });
 
   it('SetCardMobile announces a saving or queued pick', () => {

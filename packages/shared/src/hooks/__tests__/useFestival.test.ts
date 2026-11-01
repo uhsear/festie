@@ -53,6 +53,7 @@ function resetStores() {
     selectedDay: 0,
     activeStages: [],
     searchQuery: '',
+    onlyMine: false,
   });
 }
 
@@ -143,6 +144,30 @@ describe('useFestival hook', () => {
       useFestivalUIStore.setState({ selectedDay: 0, activeStages: ['s1', 's2'], searchQuery: '' });
       const { result } = renderHook(() => useFestival());
       expect(result.current.getFilteredSets()).toHaveLength(2);
+    });
+
+    it('My picks with zero picks returns the whole day', () => {
+      useFestivalDataStore.setState({
+        sets: [set1, set2],
+        days: [day1],
+        stages: [stage1, stage2],
+        currentProfile: { id: 'p', userId: 'u', festivalId: 'f1', picks: {}, notes: {}, updatedAt: '' },
+      });
+      useFestivalUIStore.setState({ selectedDay: 0, activeStages: [], searchQuery: '', onlyMine: true });
+      const { result } = renderHook(() => useFestival());
+      expect(result.current.getFilteredSets()).toHaveLength(2);
+    });
+
+    it('My picks with a pick returns only picked sets', () => {
+      useFestivalDataStore.setState({
+        sets: [set1, set2],
+        days: [day1],
+        stages: [stage1, stage2],
+        currentProfile: { id: 'p', userId: 'u', festivalId: 'f1', picks: { 'set-2': 'must' }, notes: {}, updatedAt: '' },
+      });
+      useFestivalUIStore.setState({ selectedDay: 0, activeStages: [], searchQuery: '', onlyMine: true });
+      const { result } = renderHook(() => useFestival());
+      expect(result.current.getFilteredSets().map((s) => s.id)).toEqual(['set-2']);
     });
 
     it('filters by search query matching artist name', () => {

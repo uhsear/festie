@@ -9,6 +9,7 @@ import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import TimelineGrid from '../features/TimelineGrid';
 import EmptyState from '../components/ui/EmptyState';
+import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import TBASection from '../components/timeline/TBASection';
 import TimelineLegend from '../components/timeline/TimelineLegend';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
@@ -178,11 +179,21 @@ function TimelineViewInner() {
   if (!allDaySets.length || !timeBounds || timeBounds.totalSlots <= 0 || timeBounds.totalSlots > 200) {
     return (
       <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
-        <EmptyState
-          icon={<Music className="w-9 h-9" aria-hidden="true" />}
-          title="No sets scheduled for this day"
-          description="Try switching days above to find scheduled sets."
-        />
+        {allDaySets.length ? (
+          <EmptyState
+            icon={<Music className="w-9 h-9" aria-hidden="true" />}
+            title="No sets scheduled for this day"
+            description="Try switching days above to find scheduled sets."
+          />
+        ) : (
+          <ScheduleEmptyState
+            dayLabel={days[selectedDay]?.label ?? 'this day'}
+            dayFallback={{
+              title: 'No sets scheduled for this day',
+              description: 'Try switching days above to find scheduled sets.',
+            }}
+          />
+        )}
       </RefreshableView>
     );
   }

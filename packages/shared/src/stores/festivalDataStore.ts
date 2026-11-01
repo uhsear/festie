@@ -242,6 +242,23 @@ async function clearReminderAfterPick(get: () => FestivalDataStore, festivalId: 
   }
 }
 
+/**
+ * Load the festival's remembered filters into the UI store. Called with cached
+ * data too (rehydrate, the start of selectFestival), so an offline or slow cold
+ * start shows and saves the remembered filters before any fetch returns.
+ */
+function restoreUIForFestival(
+  festivalId: string,
+  festival: Festival | null,
+  stages: Stage[],
+  days: FestivalDay[],
+): void {
+  const todayIdx = logicalDayIndexAt(days, Date.now(), resolveFestivalTimeZone(festival)) ?? 0;
+  useFestivalUIStore
+    .getState()
+    .restoreForFestival(festivalId, { stageIds: stages.map((s) => s.id), dayCount: days.length, todayIdx });
+}
+
 const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   festivals: [],
   currentFestivalId: null,
@@ -277,6 +294,10 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   //      Removed 3 phantom sub-resource fetches (/sets, /stages, /days).
   selectFestival: async (festivalId: string) => {
     _lastSelectFestivalId = festivalId;
+    const cached = get();
+    if (cached.currentFestival?.id === festivalId && cached.days.length > 0) {
+      restoreUIForFestival(festivalId, cached.currentFestival, cached.stages, cached.days);
+    }
     set({ isLoading: true, error: null, currentFestivalId: festivalId });
     try {
       // Festival detail is public; profiles require auth (401 for guests).
@@ -355,21 +376,10 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         pickSync: {},
       });
 
-      // Default the day selector to the logical festival day containing now, in
-      // the festival zone (01:00 still counts as the night before), else day 0.
-      const todayIdx = logicalDayIndexAt(days, Date.now(), resolveFestivalTimeZone(festival)) ?? 0;
-
-      // Reset UI state in the UI store when selecting a new festival
-      useFestivalUIStore.setState({
-        // Empty array = "all stages" (the schedule UI normalizes all-selected →
-        // []). Storing the FULL stage-id array instead made index.tsx read a
-        // PHANTOM active stage filter on every festival load — force-opening the
-        // filter panel, lighting the active dot, and rendering the results-summary
-        // + Clear-all chip + PhaseHomeActions on a clean load (squeezing the
-        // timeline). [] keeps a fresh load filter-free.
-        activeStages: [],
-        selectedDay: todayIdx,
-      });
+      // Restore this festival's remembered filters (a refresh keeps the live ones).
+      // The day selector opens on the logical festival day containing now, in the
+      // festival zone (01:00 still counts as the night before), else day 0.
+      restoreUIForFestival(festivalId, festival, stages, days);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load festival');
       // Point the id back at the festival whose data is still loaded, so the id
@@ -788,6 +798,12 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
         return { ...current, ...rest };
       }
       return { ...current, ...p };
+    },
+    // A cached festival renders before any fetch (offline, slow start): restore
+    // its remembered filters now so they show and later changes are saved.
+    onRehydrateStorage: () => (state) => {
+      const f = state?.currentFestival;
+      if (f && state.days.length > 0) restoreUIForFestival(f.id, f, state.stages, state.days);
     },
   }),
 );

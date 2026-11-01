@@ -174,7 +174,7 @@ env:
 - takeScreenshot: 08-timeline
 - openLink: "festie://grid"
 - extendedWaitUntil:
-    visible: "Schedule grid"
+    visible: ".*· Grid"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000

@@ -37,10 +37,19 @@ vi.mock('@festie/shared/hooks', () => ({
 }));
 
 vi.mock('../components/ui/EmptyState', () => ({
-  default: ({ title, description }: { title: string; description?: string }) => (
+  default: ({
+    title,
+    description,
+    cta,
+  }: {
+    title: string;
+    description?: string;
+    cta?: { label: string; onClick: () => void };
+  }) => (
     <div data-testid="empty-state">
       <h3>{title}</h3>
       {description && <p>{description}</p>}
+      {cta && <button onClick={cta.onClick}>{cta.label}</button>}
     </div>
   ),
 }));
@@ -98,6 +107,8 @@ vi.mock('lucide-react', () => ({
   CalendarX: () => <span data-testid="calendar-x-icon" />,
   Music: () => <span data-testid="music-icon" />,
   Filter: () => <span data-testid="filter-icon" />,
+  SearchX: () => <span />,
+  Star: () => <span />,
 }));
 
 import TimelineView from './timeline';
@@ -113,6 +124,18 @@ function setFilters(overrides: Partial<typeof mockTimelineFilters> = {}) {
 describe('TimelineView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.keys(storeState).forEach((k) => delete storeState[k]);
+    Object.assign(storeState, {
+      stages: [{ id: 'st1', name: 'Main Stage' }],
+      days: [{ index: 0, label: 'Friday', date: '2026-06-12' }],
+      activeStages: [],
+      searchQuery: '',
+      onlyMine: false,
+      currentProfile: null,
+      setSearchQuery: vi.fn(),
+      setOnlyMine: vi.fn(),
+      setActiveStages: vi.fn(),
+    });
     setFilters();
     vi.mocked(useNowIndicator).mockReturnValue({
       nowIndicator: null,
@@ -153,6 +176,14 @@ describe('TimelineView', () => {
     render(<TimelineView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     expect(screen.getByText('No sets scheduled for this day')).toBeInTheDocument();
+  });
+
+  it('blames My picks when it empties the day', () => {
+    Object.assign(storeState, { sets: [], onlyMine: true, currentProfile: { picks: { other: 'must' } } });
+    setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+    render(<TimelineView />);
+    expect(screen.getByText('No picks for this day yet')).toBeInTheDocument();
+    expect(screen.getByText('Show all sets')).toBeInTheDocument();
   });
 
   it('shows "No sets scheduled" when timeBounds is null', () => {

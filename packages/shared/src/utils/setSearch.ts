@@ -39,37 +39,3 @@ export function searchOtherDays(
     .sort(([a], [b]) => a - b)
     .map(([dayIndex, daySets]) => ({ dayIndex, sets: daySets.sort(byStartTime) }));
 }
-
-/**
- * Empty-state copy for a search that shows no cards on the selected day, shared
- * by web and mobile. A match on the selected day that the stage or "my picks"
- * filters hide gets filter copy (`hiddenByFilters`), never "not in this lineup".
- */
-export function searchEmptyCopy(opts: {
-  sets: FestivalSet[];
-  query: string;
-  selectedDay: number;
-  stages: Stage[];
-  otherDayCount: number;
-  dayLabel?: string;
-}): { hiddenByFilters: boolean; title: string; description: string } {
-  const q = opts.query.trim();
-  const hiddenByFilters = opts.sets.some(
-    (s) => s.dayIndex === opts.selectedDay && setMatchesSearch(s, q, opts.stages),
-  );
-  if (hiddenByFilters) {
-    return {
-      hiddenByFilters,
-      title: `“${q}” is hidden by your filters`,
-      description: 'Your stage or My picks filters hide it. Clear them to see it.',
-    };
-  }
-  if (opts.otherDayCount > 0) {
-    return { hiddenByFilters, title: `No “${q}” on ${opts.dayLabel ?? 'this day'}`, description: 'Found on other days:' };
-  }
-  return {
-    hiddenByFilters,
-    title: `No artist called “${q}” in this lineup`,
-    description: 'Check the spelling, or clear the search to see everyone.',
-  };
-}

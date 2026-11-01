@@ -5,6 +5,10 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestival } from '@festie/shared/hooks';
 import {
   festivalStatus,
+  hasAnyPick,
+  toggleHiddenDay,
+  toggleStageFilter,
+  visibleDayIndexes,
   festivalTimeLabel,
   logicalDayIndexAt,
   resolveFestivalTimeZone,
@@ -12,15 +16,18 @@ import {
   type FestivalStatus,
 } from '@festie/shared/utils';
 import { getStageBadgeStyle } from '../ui/StageBadge';
+import type { FestivalDay } from '@festie/shared/types/domain';
 import { useSwipeDays } from '../../hooks/useSwipeDays';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useSetStatus';
 import { useScrollFade } from '../../hooks/useScrollFade';
 import { useToast } from '../../lib/toastContext';
-import { Filter, Search, Star } from 'lucide-react';
+import { Filter, Search, Star, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
 import SaveStatusChip from '../features/SaveStatusChip';
+import { isSchedulePath } from './ScheduleViewSwitcher';
+import ScheduleResultsRow from './ScheduleResultsRow';
 
 const STATUS_LABEL: Record<FestivalStatus, string> = {
   upcoming: 'Upcoming',
@@ -33,7 +40,7 @@ const STATUS_LABEL: Record<FestivalStatus, string> = {
 const SUB_HEADER_PATHS = ['/', '/cards', '/timeline', '/grid', '/picks', '/wrap', '/compare', '/crew-plan'];
 
 interface SubHeaderProps {
-  /** Show only day tabs (no stage chips or search). Used on /timeline, /grid, /picks. */
+  /** Show only day tabs (no stage chips or search). Used on /picks and /compare. */
   dayOnly: boolean;
   /** Show only festival selector (no day tabs, stage chips, or search). Used on /wrap. */
   festivalOnly: boolean;
@@ -52,6 +59,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
+  const hiddenDays = useFestivalStore((s) => s.hiddenDays);
+  const setHiddenDays = useFestivalStore((s) => s.setHiddenDays);
   const currentProfile = useFestivalStore((s) => s.currentProfile);
   const onlyMine = useFestivalStore((s) => s.onlyMine);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
@@ -77,10 +86,17 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
     canScrollRight: dayCanScrollRight,
   } = useScrollFade<HTMLDivElement>();
 
+  const { pathname } = useLocation();
+  const onSchedulePath = isSchedulePath(pathname);
+  // Hidden days only apply on the Lineup views; /picks and the rest list every day.
+  const visibleDays = onSchedulePath
+    ? visibleDayIndexes(days.length, hiddenDays, selectedDay)
+    : days.map((_, i) => i);
+
   const { bind: swipeDaysBind } = useSwipeDays({
-    days,
-    selectedDay,
-    onSelectDay: setSelectedDay,
+    days: visibleDays.flatMap((i) => (days[i] ? [days[i] as FestivalDay] : [])),
+    selectedDay: visibleDays.indexOf(selectedDay),
+    onSelectDay: (pos) => setSelectedDay(visibleDays[pos] ?? selectedDay),
   });
 
   const handleDaySelect = useCallback(
@@ -107,19 +123,13 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const handleStageToggle = useCallback(
     (stageId: string) => {
       selectHaptic();
-      // Chips select what to SHOW. Empty activeStages means "all stages", so the
-      // first tap narrows to just that stage; later taps add or remove stages,
-      // and emptying (or filling) the selection returns to "all stages" ([]).
-      const allStageIds = stages.map((s) => s.id);
-      if (activeStages.length === 0) {
-        setActiveStages([stageId]);
-        return;
-      }
-      const sel = new Set(activeStages);
-      if (sel.has(stageId)) sel.delete(stageId);
-      else sel.add(stageId);
-      const next = allStageIds.filter((id) => sel.has(id));
-      setActiveStages(next.length === 0 || next.length === allStageIds.length ? [] : next);
+      setActiveStages(
+        toggleStageFilter(
+          activeStages,
+          stages.map((st) => st.id),
+          stageId,
+        ),
+      );
     },
     [activeStages, stages, setActiveStages, selectHaptic],
   );
@@ -134,12 +144,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const showStageFilter = !dayOnly && !festivalOnly && currentFestival && stages.length > 0;
   const showSearch = !dayOnly && !festivalOnly;
   // /picks lists only your picks, so My picks and the stage filter are moot there.
-  const { pathname } = useLocation();
   const showMyPicks = !festivalOnly && !!currentFestival && !!currentProfile && pathname !== '/picks';
-  // Timeline and Grid honour the stage filter but show no chips; surface the
-  // active filter there so sets never vanish without a visible cause.
-  const showStageSummary =
-    dayOnly && (pathname === '/timeline' || pathname === '/grid') && activeStages.length > 0 && stages.length > 0;
+  const canFilterMine = hasAnyPick(currentProfile?.picks);
   // CLS: while currentFestival is still loading, reserve the day-tab and
   // stage-chip rows' height with skeletons instead of letting them pop in
   // once data lands (was growing the sub-header 1 -> 2-3 rows post-paint).
@@ -293,7 +299,9 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
               aria-label="Festival days"
               {...swipeDaysBind()}
             >
-              {days.map((day, i) => {
+              {visibleDays.map((i) => {
+                const day = days[i];
+                if (!day) return null;
                 const isActive = selectedDay === i;
                 const isToday = i === todayIndex;
                 return (
@@ -333,6 +341,24 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   </button>
                 );
               })}
+              {onSchedulePath && hiddenDays.length > 0 && (
+                <button
+                  type="button"
+                  className={cn(
+                    'py-2 px-4 rounded-full text-[length:var(--font-size-14)] font-semibold cursor-pointer',
+                    'whitespace-nowrap snap-center min-h-[44px] inline-flex items-center',
+                    'bg-bg-card border border-border-light text-text-secondary',
+                    'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                  )}
+                  aria-label={`Show ${hiddenDays.length} hidden ${hiddenDays.length === 1 ? 'day' : 'days'}`}
+                  onClick={() => {
+                    selectHaptic();
+                    setHiddenDays([]);
+                  }}
+                >
+                  {`+${hiddenDays.length} hidden`}
+                </button>
+              )}
               {timeLabel && (
                 <span className="self-center shrink-0 whitespace-nowrap text-xs text-text-muted">{timeLabel}</span>
               )}
@@ -349,41 +375,30 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           <button
             type="button"
             onClick={() => {
+              if (!canFilterMine) return;
               selectHaptic();
               setOnlyMine(!onlyMine);
             }}
-            aria-pressed={onlyMine}
-            aria-label="Show only my picks"
+            aria-pressed={canFilterMine && onlyMine}
+            aria-disabled={!canFilterMine || undefined}
+            aria-label={canFilterMine ? 'Show only my picks' : undefined}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
-              'cursor-pointer border-2 transition-[border-color,background-color,color] duration-200',
+              'border-2 transition-[border-color,background-color,color] duration-200',
               'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
-              onlyMine
-                ? 'border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua'
-                : 'border-border text-text-secondary hover:text-text-primary',
+              !canFilterMine
+                ? 'cursor-not-allowed border-border text-text-muted opacity-60'
+                : onlyMine
+                  ? 'cursor-pointer border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua'
+                  : 'cursor-pointer border-border text-text-secondary hover:text-text-primary',
             )}
           >
-            <Star className="w-3.5 h-3.5" fill={onlyMine ? 'currentColor' : 'none'} aria-hidden="true" />
-            My picks
-          </button>
-        )}
-
-        {showStageSummary && (
-          <button
-            type="button"
-            onClick={() => {
-              selectHaptic();
-              setActiveStages([]);
-            }}
-            data-testid="stage-filter-summary"
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
-              'cursor-pointer border-2 border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua',
-              'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
-            )}
-          >
-            <Filter className="w-3.5 h-3.5" aria-hidden="true" />
-            {`${activeStages.length} of ${stages.length} stages · Show all`}
+            <Star
+              className="w-3.5 h-3.5"
+              fill={canFilterMine && onlyMine ? 'currentColor' : 'none'}
+              aria-hidden="true"
+            />
+            {canFilterMine ? 'My picks' : 'Pick a set first'}
           </button>
         )}
 
@@ -460,6 +475,43 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           </div>
         )}
 
+        {onSchedulePath && days.length > 1 && (
+          <div
+            role="group"
+            aria-label="Days I'm going"
+            className="flex items-center gap-[var(--space-3)] flex-wrap w-full"
+          >
+            <span className="type-micro text-text-muted">Days I'm going</span>
+            {days.map((day, i) => {
+              const shown = !hiddenDays.includes(i);
+              const onlyVisible = shown && visibleDays.length === 1;
+              return (
+                <button
+                  key={day.id || i}
+                  type="button"
+                  aria-pressed={shown}
+                  aria-disabled={onlyVisible || undefined}
+                  onClick={() => {
+                    if (onlyVisible) return;
+                    selectHaptic();
+                    setHiddenDays(toggleHiddenDay(hiddenDays, days.length, i));
+                  }}
+                  className={cn(
+                    'inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                    'min-h-[44px] min-w-[44px] cursor-pointer border-2 transition-[border-color,background-color,color] duration-200',
+                    'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                    shown
+                      ? 'border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua'
+                      : 'border-border text-text-secondary hover:text-text-primary',
+                  )}
+                >
+                  {day.label || day.date}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         </div>
 
         {/* Artist search */}
@@ -473,17 +525,37 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             )}
             role="search"
           >
-            <Input
-              variant="search"
-              className="min-h-[44px] w-full text-[length:var(--font-size-14)] sm:max-w-[clamp(100px,30vw,180px)] lg:max-w-none"
-              placeholder="Search artist…"
-              value={searchQuery}
-              aria-label="Search festival artists"
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <div className="relative w-full sm:max-w-[clamp(100px,30vw,180px)] lg:max-w-none">
+              <Input
+                variant="search"
+                className="min-h-[44px] w-full pr-11 text-[length:var(--font-size-14)]"
+                placeholder="Search artists or stages"
+                value={searchQuery}
+                aria-label="Search festival artists"
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery !== '' && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchBoxRef.current?.querySelector('input')?.focus();
+                  }}
+                  className={cn(
+                    'absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center min-h-11 min-w-11',
+                    'text-text-muted hover:text-text-secondary cursor-pointer',
+                    'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                  )}
+                >
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
         )}
       </nav>
+      {onSchedulePath && <ScheduleResultsRow />}
     </div>
   );
 }

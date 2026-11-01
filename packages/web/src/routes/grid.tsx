@@ -9,9 +9,9 @@ import { useGridExport } from '../components/grid/useGridExport';
 import GridStageHeader from '../components/grid/GridStageHeader';
 import GridStageColumn from '../components/grid/GridStageColumn';
 import EmptyState from '../components/ui/EmptyState';
-import { useScheduleFilters } from '../hooks/useScheduleFilters';
+import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import { useNow } from '../hooks/useSetStatus';
-import { CalendarX, Clock } from 'lucide-react';
+import { CalendarX } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function GridView() {
@@ -24,14 +24,13 @@ export default function GridView() {
 
 function GridViewInner() {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const sets = useFestivalStore((s) => s.sets);
   const stages = useFestivalStore((s) => s.stages);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const days = useFestivalStore((s) => s.days);
   const activeStages = useFestivalStore((s) => s.activeStages);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { getMyPick, getOtherPicks } = usePicks();
-  const { getStageColor: getStageColorRaw, getStageName } = useFestival();
+  const { getStageColor: getStageColorRaw, getStageName, getFilteredSets } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
     (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)'),
@@ -80,11 +79,7 @@ function GridViewInner() {
     return stages;
   }, [stages, activeStages]);
 
-  const { filterSets } = useScheduleFilters();
-  const timedSets = useMemo(
-    () => filterSets(sets.filter((s) => s.dayIndex === selectedDay && s.startTime && s.endTime)),
-    [sets, selectedDay, filterSets],
-  );
+  const timedSets = useMemo(() => getFilteredSets().filter((s) => s.startTime && s.endTime), [getFilteredSets]);
 
   // Pre-compute stageId -> sets map once per render instead of filtering inside
   // every column .map() iteration.
@@ -164,10 +159,12 @@ function GridViewInner() {
     );
   if (!timedSets.length || !bounds)
     return (
-      <EmptyState
-        icon={<Clock className="w-9 h-9" aria-hidden="true" />}
-        title="No timed sets to display"
-        description="There are no sets with scheduled times for this day. Try switching days above."
+      <ScheduleEmptyState
+        dayLabel={days?.[selectedDay]?.label ?? 'this day'}
+        dayFallback={{
+          title: 'No timed sets to display',
+          description: 'There are no sets with scheduled times for this day. Try switching days above.',
+        }}
       />
     );
 
