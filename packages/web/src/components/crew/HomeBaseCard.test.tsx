@@ -47,6 +47,17 @@ describe('HomeBaseCard', () => {
     expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: '6:00 PM' });
   });
 
+  it('lets the owner remove Home Base', async () => {
+    const user = userEvent.setup();
+    putMock.mockClear();
+    renderCard('18:00');
+
+    await user.click(screen.getByRole('button'));
+    await user.click(screen.getByRole('button', { name: 'Remove Home Base' }));
+
+    expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: null, time: null });
+  });
+
   it('clears a saved HH:MM time when the field is emptied', async () => {
     const user = userEvent.setup();
     putMock.mockClear();

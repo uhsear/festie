@@ -262,6 +262,15 @@ describe('schemas: pushToken', () => {
 
 // ── Crew schemas ────────────────────────────────────────────────────────
 
+describe('schemas: crewStatus', () => {
+  it('accepts each status value and null, rejects unknown', () => {
+    for (const status of ['on-my-way', 'here', 'delayed', 'at-camp', 'at-stage', 'break', 'lost', null]) {
+      assert.equal(schemas.crewStatus.safeParse({ status }).success, true, String(status));
+    }
+    assert.equal(schemas.crewStatus.safeParse({ status: 'asleep' }).success, false);
+  });
+});
+
 describe('schemas: crewCreate', () => {
   it('accepts valid crew', () => {
     const result = schemas.crewCreate.safeParse({

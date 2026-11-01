@@ -33,6 +33,8 @@ export * from './links';
 export * from './invite';
 export * from './crewWrites';
 export * from './dayOf';
+export * from './crewStatus';
+export * from './meetingPoints';
 export * from './haptics';
 export * from './setSearch';
 export * from './planImport';

@@ -511,6 +511,15 @@ function AuthGate() {
               }}
             />
             <Stack.Screen
+              name="meeting-point-new"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.6, 1.0],
+                sheetGrabberVisible: true,
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
               name="privacy"
               options={{ presentation: 'card', headerShown: true, title: 'Privacy Policy' }}
             />

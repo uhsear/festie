@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatBalance, formatAmount, spendingExpenses, ledgerRows, describePayment } from './money';
+import { settleUpLine, formatBalance, formatAmount, spendingExpenses, ledgerRows, describePayment } from './money';
 
 describe('settlement helpers', () => {
   const rows = [
@@ -78,5 +78,13 @@ describe('formatAmount', () => {
 
   it('does not sign negative amounts (bare formatter)', () => {
     expect(formatAmount(-3.2)).toBe('$-3.20');
+  });
+});
+
+describe('settleUpLine', () => {
+  it('words owe, owed and settled', () => {
+    expect(settleUpLine(-24)).toBe('You owe $24.00');
+    expect(settleUpLine(12.5)).toBe("You're owed $12.50");
+    expect(settleUpLine(0.004)).toBe("You're all settled up");
   });
 });

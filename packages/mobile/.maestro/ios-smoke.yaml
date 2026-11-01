@@ -215,7 +215,7 @@ env:
     id: "map-sos-fab"
 - extendedWaitUntil:
     visible:
-      text: "Drop pin|Map needs the festival downloaded for offline.*"
+      text: "Add meeting point|Map needs the festival downloaded for offline.*"
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 6000

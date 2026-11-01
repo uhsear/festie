@@ -117,17 +117,12 @@ export default function MapScreen() {
     return () => clearInterval(id);
   }, [sweepStale]);
 
-  // Tap-to-create: a long-press on the map deep-links into the crew Find
-  // tab with the pressed coords, where CrewMeetingPoints opens its create form
-  // prefilled with them. No write happens here — the user still confirms "Add".
+  // Tap-to-create: a map tap opens the meeting-point sheet over the map with the
+  // pressed coords prefilled. No write happens here — the user still confirms "Add".
   const handleMapPress = useCallback((coord: { latitude: number; longitude: number }) => {
     router.push({
-      pathname: '/(tabs)/crew',
-      params: {
-        tab: 'find',
-        mpLat: String(coord.latitude),
-        mpLng: String(coord.longitude),
-      },
+      pathname: '/meeting-point-new',
+      params: { lat: String(coord.latitude), lng: String(coord.longitude) },
     });
   }, []);
 
@@ -178,7 +173,7 @@ export default function MapScreen() {
         meetingPoints={crewLayers ? meetingPoints : []}
         peers={crewLayers ? peers : []}
         activeSosList={crewLayers ? crewSosList : []}
-        onMapPress={crewLayers ? handleMapPress : undefined}
+        onMapPress={user && activeCrew ? handleMapPress : undefined}
         festival={mapFestival}
         bottomInset={Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT : 0}
       />

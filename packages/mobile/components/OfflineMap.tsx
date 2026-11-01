@@ -235,7 +235,7 @@ interface OfflineMapProps {
    */
   draftPoints?: { latitude: number; longitude: number }[];
   /**
-   * Extra lift for the floating controls (drop pin, recenter, chip dock) when
+   * Extra lift for the floating controls (add meeting point, recenter, chip dock) when
    * something the map cannot see overlays its bottom edge, such as the iOS
    * native tab bar. Keeps them stacked above the caller's own SOS FAB.
    */
@@ -907,7 +907,7 @@ export default function OfflineMap({
   // Zone drawing + site-plan corner placement need placement ARMED across multiple
   // taps (one vertex/corner per tap), so entering a multi-tap mode arms placement
   // automatically and leaving it disarms. Scoped to multi-tap transitions only —
-  // stage/amenity placement (driven by the "Drop pin" toggle) is never touched,
+  // stage/amenity placement (driven by the "Add meeting point" toggle) is never touched,
   // preserving their one-shot behaviour.
   const isMultiTapMode = (m: AuthoringMode) => m === 'zone' || m === 'siteplan';
   const prevAuthRef = useRef<AuthoringMode>('off');
@@ -1158,7 +1158,7 @@ export default function OfflineMap({
       ) : null}
 
       {/* On-map controls (map phase only). "Find me" recenters to the device's
-          GPS fix; the "Drop pin" toggle puts the map into placement mode so the
+          GPS fix; the "Add meeting point" toggle puts the map into placement mode so the
           next single tap drops a meeting point (reliable on touch, unlike a
           long-press). When armed, a hint tells the user to tap the map. */}
       {phase === 'map' ? (
@@ -1172,7 +1172,7 @@ export default function OfflineMap({
                 <View style={styles.mapHint} pointerEvents="none">
                   <Ionicons name="locate-outline" size={iconSize.compact} color={t.colors.text.onAccent} />
                   <Text style={styles.mapHintText} numberOfLines={1}>
-                    Tap the map to drop a meeting point
+                    Tap the map where you want to meet
                   </Text>
                 </View>
               ) : null}
@@ -1186,7 +1186,7 @@ export default function OfflineMap({
                 onPress={togglePlacement}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={placing ? 'Cancel dropping a meeting point' : 'Drop a meeting point on the map'}
+                accessibilityLabel={placing ? 'Cancel dropping a meeting point' : 'Add a meeting point on the map'}
                 accessibilityState={{ selected: placing }}
               >
                 <Ionicons
@@ -1195,7 +1195,7 @@ export default function OfflineMap({
                   color={placing ? t.colors.text.onAccent : t.colors.accent.aqua}
                 />
                 <Text style={[styles.dropPinText, placing ? styles.dropPinTextActive : null]} numberOfLines={1}>
-                  {placing ? 'Cancel' : 'Drop pin'}
+                  {placing ? 'Cancel' : 'Add meeting point'}
                 </Text>
               </TouchableOpacity>
             </>
@@ -1495,7 +1495,7 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('micro'),
     color: t.colors.text.onAccent,
   },
-  // "Drop pin" placement toggle, pinned bottom-right just above the "find me"
+  // "Add meeting point" placement toggle, pinned bottom-right just above the "find me"
   // FAB. Pill shows the idle (aqua icon + label) vs armed (coral fill) state.
   dropPinButton: {
     position: 'absolute',
