@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
@@ -184,6 +184,21 @@ describe('PicksView', () => {
     expect(screen.getByText('Must See')).toBeInTheDocument();
     expect(screen.getByText('Want to See')).toBeInTheDocument();
     expect(screen.getByText('Maybe')).toBeInTheDocument();
+  });
+
+  it('shows the heart glyph, not the word diamond, in an empty Want bucket', () => {
+    setStoreState({
+      sets: [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }],
+    });
+    vi.mocked(usePicks).mockReturnValue({
+      getMyPick: vi.fn((id: string) => (id === 's1' ? 'must' : null)),
+      savePick: vi.fn(),
+      getMyNote: vi.fn(() => ''),
+    });
+    const { container } = render(<PicksView />);
+    const hint = screen.getByText(/on sets you'd like to catch/).closest('p')!;
+    expect(within(hint).getByTestId('heart-icon')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/diamond/i);
   });
 
   it('renders a pick on an unscheduled (TBA) set regardless of the selected day', () => {

@@ -96,20 +96,20 @@ describe('Header', () => {
       expect(screen.queryByRole('button', { name: 'Grid' })).not.toBeInTheDocument();
     });
 
-    it('shows My Picks and Crew tabs for guests too (parity with mobile)', () => {
+    it('shows Picks and Crew tabs for guests too (parity with mobile)', () => {
       mockAuthStore.mockReturnValue(null);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'My Picks' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Picks' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Crew' })).toBeInTheDocument();
     });
   });
 
   describe('desktop tabs for logged-in users', () => {
-    it('shows Schedule, My Picks, and Crew tabs when logged in', () => {
+    it('shows Schedule, Picks, and Crew tabs when logged in', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
       expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'My Picks' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Picks' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Crew' })).toBeInTheDocument();
     });
   });

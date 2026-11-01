@@ -517,7 +517,7 @@ export default function SetDetailScreen() {
                         style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
                         maxFontSizeMultiplier={MAX_FONT_SCALE}
                       >
-                        {option.label}
+                        {option.short}
                       </Text>
                     </TouchableOpacity>
                   );

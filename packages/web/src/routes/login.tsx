@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { COPY } from '@festie/shared/constants';
 import { ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores/authStore';
 import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -117,7 +118,7 @@ function LoginPageInner() {
         </div>
 
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
-          {isLoading ? 'Signing in…' : 'Sign in'}
+          {isLoading ? COPY.auth.signingIn : COPY.auth.signIn}
         </Button>
 
         <div className="mt-3 text-center">

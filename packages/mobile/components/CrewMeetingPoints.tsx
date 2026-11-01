@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useCrewStore } from '@festie/shared/stores';
+import { COPY, MEETING_POINT_KINDS, meetingPointKind } from '@festie/shared/constants';
 import {
   meetingTimeDisplay,
   meetAtForFestivalDay,
@@ -14,6 +15,7 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, Festival, FestivalDay } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { useHaptics } from '../hooks/useHaptics';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import Button from './Button';
@@ -41,20 +43,6 @@ interface CrewMeetingPointsProps {
    * still fills the label and confirms "Add", so no write happens automatically.
    */
   prefillCoords?: { lat: number; lng: number } | null;
-}
-
-// Server enum (lib/constants MEETING_POINT_TYPES) with mobile-facing labels.
-const TYPES = [
-  { key: 'pre-show', label: 'Pre-show' },
-  { key: 'during', label: 'During' },
-  { key: 'post-show', label: 'Post-show' },
-  { key: 'post-event', label: 'After' },
-  { key: 'emergency', label: 'Emergency' },
-  { key: 'general', label: 'General' },
-] as const;
-
-function typeLabel(type: string): string {
-  return TYPES.find((entry) => entry.key === type)?.label ?? 'During';
 }
 
 /**
@@ -93,7 +81,7 @@ export default function CrewMeetingPoints({
   const [label, setLabel] = useState('');
   const [location, setLocation] = useState('');
   const [stageRef, setStageRef] = useState('');
-  const [type, setType] = useState<string>('during');
+  const [type, setType] = useState<string>(MEETING_POINT_KINDS[0].type);
   // 055: when on, the point repeats every festival day at its time-of-day.
   const [recursDaily, setRecursDaily] = useState(false);
   // Optional meeting time: a festival day (index into `days`) plus a wall-clock time.
@@ -113,7 +101,7 @@ export default function CrewMeetingPoints({
     setLabel('');
     setLocation('');
     setStageRef('');
-    setType('during');
+    setType(MEETING_POINT_KINDS[0].type);
     setRecursDaily(false);
     setDayIndex(null);
     setTime(null);
@@ -130,7 +118,7 @@ export default function CrewMeetingPoints({
     setLabel(point.label);
     setLocation(point.location);
     setStageRef(point.stage_reference ?? '');
-    setType(point.type);
+    setType(meetingPointKind(point.type).type);
     setRecursDaily(!!point.recurs_daily);
     const parsed = point.meet_at ? festivalDayTimeOf(point.meet_at, days, timeZone) : null;
     setDayIndex(parsed ? parsed.dayIndex : null);
@@ -161,7 +149,7 @@ export default function CrewMeetingPoints({
     setLabel('');
     setLocation('');
     setStageRef('');
-    setType('during');
+    setType(MEETING_POINT_KINDS[0].type);
     setRecursDaily(false);
     setDayIndex(null);
     setTime(null);
@@ -295,7 +283,7 @@ export default function CrewMeetingPoints({
       {showForm ? (
         <View style={styles.formBox}>
           <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>{editingId ? 'Edit meeting point' : 'New meeting point'}</Text>
+            <Text style={styles.formTitle}>{editingId ? COPY.meetingPoint.edit : COPY.meetingPoint.add}</Text>
             <TouchableOpacity
               onPress={reset}
               style={styles.iconButton}
@@ -307,18 +295,23 @@ export default function CrewMeetingPoints({
             </TouchableOpacity>
           </View>
           <View style={styles.typeGrid}>
-            {TYPES.map((entry) => {
-              const active = type === entry.key;
+            {MEETING_POINT_KINDS.map((entry) => {
+              const active = type === entry.type;
               return (
                 <TouchableOpacity
-                  key={entry.key}
+                  key={entry.type}
                   style={[styles.typeChip, active && styles.typeChipActive]}
-                  onPress={() => setType(entry.key)}
+                  onPress={() => setType(entry.type)}
                   activeOpacity={0.8}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   accessibilityLabel={`Meeting point type ${entry.label}`}
                 >
+                  <Ionicons
+                    name={CONCEPT_IONICON[entry.icon]}
+                    size={t.iconSize.xs}
+                    color={active ? t.colors.accent.aqua : t.colors.text.secondary}
+                  />
                   <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{entry.label}</Text>
                 </TouchableOpacity>
               );
@@ -529,7 +522,7 @@ export default function CrewMeetingPoints({
                   <Text style={styles.pointLabel} numberOfLines={1}>
                     {point.label}
                   </Text>
-                  <Text style={styles.pointType}>{typeLabel(point.type)}</Text>
+                  <Text style={styles.pointType}>{meetingPointKind(point.type).label}</Text>
                   {point.recurs_daily ? (
                     <View style={styles.recurBadge} accessibilityLabel="Repeats daily">
                       <Ionicons name="repeat" size={t.iconSize.xs} color={t.colors.accent.aqua} />
@@ -639,6 +632,9 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing[2],
   },
   typeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
     paddingHorizontal: t.spacing[3],
     paddingVertical: t.spacing[2],
     borderRadius: t.radii.pill,

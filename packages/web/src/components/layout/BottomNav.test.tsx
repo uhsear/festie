@@ -14,6 +14,7 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 
+let mockFestivalOver = false;
 let mockUser: { id: string; username: string } | null = null;
 vi.mock('@festie/shared', () => ({
   useAuthStore: (selector: (s: { user: typeof mockUser }) => unknown) => selector({ user: mockUser }),
@@ -26,13 +27,14 @@ vi.mock('@festie/shared/stores', () => ({
 
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@festie/shared/utils')>()),
-  isFestivalOver: () => false,
+  isFestivalOver: () => mockFestivalOver,
 }));
 
 describe('BottomNav', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUser = null;
+    mockFestivalOver = false;
     mockLocation.pathname = '/cards';
   });
 
@@ -114,6 +116,16 @@ describe('BottomNav', () => {
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     // Schedule + My Picks + Crew + Me
     expect(within(nav).getAllByRole('link').length).toBe(4);
+  });
+
+  it('gives Picks and Wrap different icons, and neither is the star', () => {
+    mockFestivalOver = true;
+    render(<BottomNav />);
+    const picks = screen.getByLabelText('View Picks').querySelector('svg')!;
+    const wrap = screen.getByLabelText('View Wrap').querySelector('svg')!;
+    expect(picks.getAttribute('class')).toContain('lucide-list-checks');
+    expect(wrap.getAttribute('class')).toContain('lucide-gift');
+    expect(picks.getAttribute('class')).not.toContain('lucide-star');
   });
 
   it('keeps every nav item keyboard-reachable (no roving tabindex)', () => {

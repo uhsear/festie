@@ -65,7 +65,8 @@ env:
       # ── /find FAB ──
       - openLink: festie:///find
       - extendedWaitUntil:
-          visible: "Find each other"
+          visible:
+            id: "find-sos-fab"
           timeout: 20000
       - waitForAnimationToEnd:
           timeout: 1500

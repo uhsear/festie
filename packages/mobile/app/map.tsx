@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useAuthStore, useCrewStore, useLiveLocationStore, useFestivalDataStore } from '@festie/shared/stores';
+import { COPY, signInTo } from '@festie/shared/constants';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -120,7 +121,7 @@ export default function MapScreen() {
     return (
       <View testID="map-screen" style={styles.screen}>
         <Stack.Screen options={{ title: 'Map', headerShown: true }} />
-        <EmptyState icon="lock-closed" title="Sign in required" message="Log in to see the crew map." />
+        <EmptyState icon="lock-closed" title={COPY.auth.signInRequired} message={signInTo('see the crew map')} />
       </View>
     );
   }
@@ -140,10 +141,9 @@ export default function MapScreen() {
 
   return (
     <View testID="map-screen" style={styles.screen}>
-      {/* Drop the " · Map" suffix and shrink-to-fit: the screen context already
-          makes "Map" obvious, and a long crew name + suffix used to clip in the
-          notch-narrowed native title region. */}
-      <Stack.Screen options={{ headerShown: true, headerTitle: () => <HeaderTitle>{activeCrew.name}</HeaderTitle> }} />
+      {/* "Map" with the festival name beneath; shrink-to-fit so a long festival
+          name cannot clip in the notch-narrowed native title region. */}
+      <Stack.Screen options={{ headerShown: true, headerTitle: () => <HeaderTitle subtitle={mapFestival?.name}>Map</HeaderTitle> }} />
       <View style={styles.chipBar}>
         <FreshnessChip surface="crew" />
         {/* Surfaces the shared low-power flag on the map so battery-saving GPS

@@ -19,6 +19,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
 import { useCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
+import { COPY, signInTo } from '@festie/shared/constants';
 import {
   setLabel,
   getInitials,
@@ -527,7 +528,7 @@ export default function CrewScreen() {
         <EmptyState
           icon="lock-closed-outline"
           title="Sign in required"
-          message="Log in to coordinate with your crew."
+          message={signInTo('coordinate with your crew')}
           action={{ label: 'Sign in', onPress: () => router.push('/(auth)/login') }}
         />
       </View>
@@ -857,7 +858,7 @@ export default function CrewScreen() {
                       accessibilityLabel={`Transfer ownership to ${displayName}`}
                     >
                       {/* swap-horizontal reads as "hand over / transfer"; the
-                          star glyph is reserved for the Owner badge so the two
+                          ribbon glyph is reserved for the Owner badge so the two
                           aren't visually conflated. */}
                       <Ionicons name="swap-horizontal" size={18} color={t.colors.accent.aqua} />
                     </TouchableOpacity>
@@ -873,7 +874,7 @@ export default function CrewScreen() {
                   </View>
                 ) : rowIsOwner ? (
                   <View accessible accessibilityLabel="Owner">
-                    <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
+                    <Ionicons name="ribbon" size={16} color={t.colors.aquaAlpha[40]} />
                   </View>
                 ) : null}
               </View>
@@ -1239,12 +1240,12 @@ export default function CrewScreen() {
             onPress={() => router.push('/plan-share')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Share your plan — QR or SMS handoff, works offline"
+            accessibilityLabel="Share offline: QR or text, works without signal"
           >
             <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
             <View style={styles.overlapToggleLabelStack}>
-              <Text style={styles.overlapToggleText}>Share plan</Text>
-              <Text style={styles.overlapToggleHint}>QR / SMS handoff, works offline</Text>
+              <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
+              <Text style={styles.overlapToggleHint}>QR or text, works without signal</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
@@ -1339,7 +1340,7 @@ export default function CrewScreen() {
 
           <CrewHomeBase crewId={crew.id} location={crew.homeBaseLocation} time={crew.homeBaseTime} isOwner={isOwner} />
 
-          {/* "Find each other" — ONE destination that co-locates the crew map,
+          {/* "Find your crew" — ONE destination that co-locates the crew map,
               the meeting-point compass and saved meeting points. */}
           <TouchableOpacity
             testID="crew-action-find"
@@ -1347,10 +1348,10 @@ export default function CrewScreen() {
             onPress={() => router.push('/find')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Find each other — crew map, compass and meeting points"
+            accessibilityLabel="Find your crew: map, compass and meeting points"
           >
             <Ionicons name="location-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>Find each other</Text>
+            <Text style={styles.overlapToggleText}>{COPY.find.action}</Text>
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
 
@@ -1361,10 +1362,10 @@ export default function CrewScreen() {
             onPress={() => router.push('/plan-share')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Share your plan with a friend (QR or text)"
+            accessibilityLabel="Share offline with a friend (QR or text)"
           >
             <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>Share plan (QR / text)</Text>
+            <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
 

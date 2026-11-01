@@ -16,6 +16,7 @@ import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores';
+import { COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
@@ -275,10 +276,10 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.linkButton}
             accessibilityRole="link"
-            accessibilityLabel="Sign up for an account"
+            accessibilityLabel="Create an account"
           >
             <Text style={styles.linkText}>
-              Don't have an account? <Text style={styles.linkTextAccent}>Sign up</Text>
+              Don't have an account? <Text style={styles.linkTextAccent}>{COPY.auth.createAccount}</Text>
             </Text>
           </TouchableOpacity>
         </Link>

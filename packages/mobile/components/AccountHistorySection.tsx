@@ -167,8 +167,8 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
       {/* Lifetime totals */}
       <View style={styles.statGrid}>
         <Stat icon="musical-notes-outline" label="Festivals" value={String(totals.festivalsAttended)} />
-        <Stat icon="star-outline" label="Sets rated" value={String(totals.totalRated)} />
-        <Stat icon="star" label="Avg rating" value={avg} accent />
+        <Stat icon="flame-outline" label="Sets rated" value={String(totals.totalRated)} />
+        <Stat icon="flame" label="Avg rating" value={avg} accent />
         <Stat icon="time-outline" label="Hours" value={(totals.totalHours ?? 0).toFixed(1)} />
       </View>
 
@@ -190,8 +190,8 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
                   {span ? <Text style={styles.festDate}>{span}</Text> : null}
                 </View>
                 <View style={styles.festChips}>
-                  <MetaChip icon="star" text={`${f.totalRated} rated`} />
-                  {f.avgRating != null ? <MetaChip icon="star-half" text={`${f.avgRating.toFixed(1)} avg`} /> : null}
+                  <MetaChip icon="flame" text={`${f.totalRated} rated`} />
+                  {f.avgRating != null ? <MetaChip icon="flame" text={`${f.avgRating.toFixed(1)} avg`} /> : null}
                   <MetaChip icon="location-outline" text={`${f.stagesVisited} ${f.stagesVisited === 1 ? 'stage' : 'stages'}`} />
                   <MetaChip icon="sunny-outline" text={`${f.daysAttended} ${f.daysAttended === 1 ? 'day' : 'days'}`} />
                   <MetaChip icon="time-outline" text={`${(f.totalHours ?? 0).toFixed(1)}h`} />
@@ -218,7 +218,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
                 {a.artist}
               </Text>
               <View style={styles.artistMetaWrap}>
-                <Ionicons name="star" size={11} color={t.colors.accent.amber} />
+                <Ionicons name="flame" size={11} color={t.colors.accent.amber} />
                 <Text style={styles.artistMeta}>
                   {a.bestRating} · {a.timesRated}×
                 </Text>

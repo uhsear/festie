@@ -32,14 +32,10 @@ import {
   Map as MapIcon,
   List,
   Repeat,
-  Tent,
-  Crosshair,
-  Flag,
-  Moon,
-  AlertTriangle,
-  Bookmark,
   Clock,
 } from 'lucide-react';
+import { COPY, MEETING_POINT_KINDS, meetingPointKind } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import IconButton from '../ui/IconButton';
 import { inputBase } from '../../lib/styles';
 import CrewStatus from './CrewStatus';
@@ -55,24 +51,10 @@ const CrewMap = lazy(() => import('./CrewMap'));
 // depth alongside the server's 120s Redis TTL + peer-stopped broadcasts).
 const SWEEP_INTERVAL_MS = 15_000;
 
-// Server enum (lib/constants.js MEETING_POINT_TYPES) + user-facing metadata.
-const TYPES = [
-  { key: 'pre-show', Icon: Tent, label: 'Pre-show' },
-  { key: 'during', Icon: Crosshair, label: 'During' },
-  { key: 'post-show', Icon: Flag, label: 'Post-show' },
-  { key: 'post-event', Icon: Moon, label: 'After' },
-  { key: 'emergency', Icon: AlertTriangle, label: 'Emergency' },
-  { key: 'general', Icon: Bookmark, label: 'General' },
-] as const;
-type TypeKey = (typeof TYPES)[number]['key'];
-
-// Narrow shared CrewMeetingPoint so `type` stays checked against the TYPES enum.
-type MeetingPoint = Omit<CrewMeetingPoint, 'type'> & { type: TypeKey };
-
 interface MeetingPointPayload {
   label: string;
   location: string;
-  type: TypeKey;
+  type: string;
   meetAt?: string | null;
   stageReference?: string | null;
   latitude?: number | null;
@@ -107,7 +89,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   const [label, setLabel] = useState('');
   const [location, setLocation] = useState('');
   const [stageRef, setStageRef] = useState('');
-  const [type, setType] = useState<TypeKey>('during');
+  const [type, setType] = useState<string>('during');
   const [meetAt, setMeetAt] = useState('');
   // 055: repeat this timed point every festival day at meet_at's time-of-day.
   const [recursDaily, setRecursDaily] = useState(false);
@@ -156,10 +138,10 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     isLoading,
     isError,
     refetch,
-  } = useQuery<MeetingPoint[]>({
+  } = useQuery<CrewMeetingPoint[]>({
     queryKey: ['meeting-points', crewId],
     queryFn: async () => {
-      const res = await api.get<MeetingPoint[] | { meetingPoints: MeetingPoint[] }>(`/crews/${crewId}/meeting-points`);
+      const res = await api.get<CrewMeetingPoint[] | { meetingPoints: CrewMeetingPoint[] }>(`/crews/${crewId}/meeting-points`);
       return Array.isArray(res) ? res : res?.meetingPoints || [];
     },
     enabled: !!crewId,
@@ -171,7 +153,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {
         // Queued offline: show the point now, marked "Not sent yet".
-        const placeholder: MeetingPoint = {
+        const placeholder: CrewMeetingPoint = {
           id: (result as { id: string }).id,
           crew_id: crewId,
           created_by: currentUserId,
@@ -187,7 +169,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           created_at: new Date().toISOString(),
           _optimistic: true,
         };
-        qc.setQueryData<MeetingPoint[]>(['meeting-points', crewId], (old = []) => [placeholder, ...old]);
+        qc.setQueryData<CrewMeetingPoint[]>(['meeting-points', crewId], (old = []) => [placeholder, ...old]);
       } else {
         qc.invalidateQueries({ queryKey: ['meeting-points', crewId] });
       }
@@ -213,7 +195,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     const result = await api.delete(`/crews/${crewId}/meeting-points/${id}`);
     const outcome = writeOutcomeOf(result);
     if (outcome === 'queued') {
-      qc.setQueryData<MeetingPoint[]>(['meeting-points', crewId], (old = []) => old.filter((p) => p.id !== id));
+      qc.setQueryData<CrewMeetingPoint[]>(['meeting-points', crewId], (old = []) => old.filter((p) => p.id !== id));
     } else {
       qc.invalidateQueries({ queryKey: ['meeting-points', crewId] });
     }
@@ -232,12 +214,12 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     setShowForm(false);
   }
 
-  function startEdit(p: MeetingPoint) {
+  function startEdit(p: CrewMeetingPoint) {
     setEditingId(p.id);
     setLabel(p.label);
     setLocation(p.location);
     setStageRef(p.stage_reference || '');
-    setType(p.type);
+    setType(meetingPointKind(p.type).type);
     // datetime-local wants "YYYY-MM-DDTHH:mm", shown in the festival zone.
     setMeetAt(p.meet_at ? meetAtToWallInput(p.meet_at, festivalTimeZone) : '');
     setRecursDaily(!!p.recurs_daily);
@@ -386,29 +368,32 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
             <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-text-primary">
-                  {editingId ? 'Edit Meeting Point' : 'New Meeting Point'}
+                  {editingId ? COPY.meetingPoint.edit : COPY.meetingPoint.add}
                 </h3>
                 <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />
               </div>
 
-              <div className="crew-type-grid grid grid-cols-3 gap-2" role="radiogroup" aria-label="Meeting point type">
-                {TYPES.map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    role="radio"
-                    aria-checked={type === t.key}
-                    onClick={() => setType(t.key)}
-                    className={`px-2 py-2 rounded-lg border text-xs font-medium min-h-11 flex flex-col items-center gap-1 transition-colors ${
-                      type === t.key
-                        ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
-                        : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
-                    }`}
-                  >
-                    <t.Icon className="w-4 h-4" aria-hidden="true" />
-                    <span>{t.label}</span>
-                  </button>
-                ))}
+              <div className="crew-type-grid grid grid-cols-2 gap-2" role="radiogroup" aria-label="Meeting point type">
+                {MEETING_POINT_KINDS.map((k) => {
+                  const KindIcon = CONCEPT_ICON[k.icon];
+                  return (
+                    <button
+                      key={k.type}
+                      type="button"
+                      role="radio"
+                      aria-checked={type === k.type}
+                      onClick={() => setType(k.type)}
+                      className={`px-2 py-2 rounded-lg border text-xs font-medium min-h-11 flex flex-col items-center gap-1 transition-colors ${
+                        type === k.type
+                          ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
+                          : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
+                      }`}
+                    >
+                      <KindIcon className="w-4 h-4" aria-hidden="true" />
+                      <span>{k.label}</span>
+                    </button>
+                  );
+                })}
               </div>
 
               <input
@@ -519,7 +504,8 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           ) : (
             <div className="space-y-2">
               {points.filter((p) => !hiddenIds.has(p.id)).map((p) => {
-                const meta = TYPES.find((t) => t.key === p.type) || TYPES[1];
+                const meta = meetingPointKind(p.type);
+                const KindIcon = CONCEPT_ICON[meta.icon];
                 // A queued create has no server id yet, so it cannot be edited or removed.
                 const mine = p.created_by === currentUserId && !isPending(p);
                 const isEmergency = p.type === 'emergency';
@@ -529,7 +515,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
                     className={`p-3 rounded-lg bg-bg-card border animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none ${isEmergency ? 'border-accent-coral' : 'border-border'}`}
                   >
                     <div className="flex items-start gap-3">
-                      <meta.Icon
+                      <KindIcon
                         className={`w-5 h-5 shrink-0 mt-0.5 ${isEmergency ? 'text-accent-coral-strong' : 'text-text-secondary'}`}
                         aria-hidden="true"
                       />

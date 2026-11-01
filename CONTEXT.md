@@ -4,6 +4,8 @@ Real-time festival crew coordination app where friends plan which performances t
 
 ## Language
 
+Screen words and the voice guide: `docs/design/copy-voice.md`.
+
 ### Core entities
 
 **Festival**:
@@ -60,7 +62,8 @@ _Avoid_: review, score
 
 **Conflict**:
 Two picked sets whose time ranges overlap, making it impossible to attend both. Detected client-side and surfaced as warnings.
-_Avoid_: clash, overlap (which means something different in crew context)
+_Avoid_: overlap (which means something different in crew context)
+UI word: clash ("Schedule clash", "Clashes with X"). Code keeps `Conflict`.
 
 ### Crew system
 
@@ -79,9 +82,11 @@ _Avoid_: intersection, match, conflict
 **Home Base**:
 A crew-level meeting location and time (e.g. "by the fountain at 2 PM"). A single persistent rendezvous point for the crew.
 _Avoid_: headquarters, camp
+UI: "Home Base", house icon. Not a meeting point kind.
 
 **Meeting Point**:
-A typed, time-bound rendezvous created by any crew member. Has a type (`emergency`, `pre-show`, `during`, `post-show`, `post-event`), optional stage reference, and expiry.
+A typed, time-bound rendezvous created by any crew member. Has a type (`pre-show`, `during`, `post-show`, `post-event`, `emergency`, `general`), optional stage reference, and expiry.
+UI offers two kinds: Meet-up (stored `during`) and Emergency spot (`emergency`). Other stored types display as Meet-up.
 _Avoid_: pin, waypoint, marker
 
 **Expense**:
@@ -113,6 +118,7 @@ _Avoid_: tiles, list, swipe view
 **Picks view**:
 The filtered view showing only the current user's picked sets, grouped by priority level (must / want-to-see / maybe).
 _Avoid_: my schedule, favorites
+UI: tab "Picks", title "My picks".
 
 **Compare**:
 The crew schedule comparison matrix. Rows are sets on the selected day that any crew member picked; columns are crew members. Cells show each member's priority.
@@ -121,10 +127,12 @@ _Avoid_: diff, side-by-side
 **Festival Mode**:
 A live-day UI mode that shows a countdown to upcoming picked sets, auto-scrolls to "now", and hides past sets. Activates when the festival date range includes today.
 _Avoid_: live mode, day-of mode
+UI name: Now & Next. The route stays `/festival-mode`.
 
 **Wrap**:
 A post-festival summary view showing stats (sets rated, stages visited, days attended, total hours) and the user's top-rated sets. Only available after a festival ends.
 _Avoid_: recap, summary, review
+UI name: Festival Wrap; "Wrap" is the tab label only. Crew version: Crew Wrap.
 
 ### Import & display
 

@@ -17,6 +17,12 @@ describe('FestivalModeToggle', () => {
     useFestivalModeStore.setState({ isFestivalMode: false, lowPowerMode: false });
   });
 
+  it('shows the Now & Next name', () => {
+    mockPathname = '/cards';
+    render(<FestivalModeToggle />);
+    expect(screen.getByText('Now & Next')).toBeInTheDocument();
+  });
+
   it('reads as pressed on /festival-mode even when the store is off, and exits on click', async () => {
     mockPathname = '/festival-mode';
     render(<FestivalModeToggle />);

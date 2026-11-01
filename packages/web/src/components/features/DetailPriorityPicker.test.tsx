@@ -94,6 +94,13 @@ describe('DetailPriorityPicker', () => {
     }
   });
 
+  it('shows the short label visibly and keeps the long label for screen readers', () => {
+    render(<DetailPriorityPicker {...defaultProps} />);
+    const must = screen.getByLabelText('Must See');
+    expect(must).toHaveTextContent('Must');
+    expect(must).not.toHaveTextContent('Must See');
+  });
+
   it('adds active styling when priority is selected', () => {
     render(<DetailPriorityPicker {...defaultProps} myPick="want-to-see" />);
     const btn = screen.getByLabelText('Want to See (selected)');

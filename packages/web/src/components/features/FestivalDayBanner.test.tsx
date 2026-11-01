@@ -37,10 +37,10 @@ describe('FestivalDayBanner', () => {
     expect(screen.getByText(/festival day/i)).toBeInTheDocument();
   });
 
-  it('has an Enter Festival Mode button', () => {
+  it('has an Open Now & Next button', () => {
     render(<FestivalDayBanner />);
     expect(screen.getByTestId('festival-day-banner-enter')).toBeInTheDocument();
-    expect(screen.getByText('Enter Festival Mode')).toBeInTheDocument();
+    expect(screen.getByText('Open Now & Next')).toBeInTheDocument();
   });
 
   it('has a dismiss button', () => {
@@ -71,7 +71,7 @@ describe('FestivalDayBanner', () => {
   it('activates festival mode and navigates on enter click', async () => {
     const user = userEvent.setup();
     render(<FestivalDayBanner />);
-    await user.click(screen.getByText('Enter Festival Mode'));
+    await user.click(screen.getByText('Open Now & Next'));
     expect(mockSetFestivalMode).toHaveBeenCalledWith(true);
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/festival-mode' });
   });
@@ -79,7 +79,7 @@ describe('FestivalDayBanner', () => {
   it('dismisses the banner after entering festival mode', async () => {
     const user = userEvent.setup();
     render(<FestivalDayBanner />);
-    await user.click(screen.getByText('Enter Festival Mode'));
+    await user.click(screen.getByText('Open Now & Next'));
     expect(screen.queryByTestId('festival-day-banner')).not.toBeInTheDocument();
   });
 

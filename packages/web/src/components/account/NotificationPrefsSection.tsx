@@ -3,6 +3,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import { useNotificationPrefsStore, useFestivalStore } from '@festie/shared/stores';
 import { timeZoneCity } from '@festie/shared/utils';
 import { api } from '@festie/shared/services';
+import { COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import { cn } from '../../lib/utils';
 
@@ -154,8 +155,8 @@ export default function NotificationPrefsSection() {
         onChange={(v) => updatePrefs({ crewReformed: v }).catch(() => {})}
       />
       <Toggle
-        label="Wrap-up ready"
-        hint="Your festival recap is ready to view. By push and email."
+        label={COPY.wrap.ready}
+        hint={`${COPY.wrap.readyHint}. By push and email.`}
         checked={prefs.wrapReady}
         onChange={(v) => updatePrefs({ wrapReady: v }).catch(() => {})}
       />

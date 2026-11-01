@@ -3,8 +3,10 @@ import { View, Text, Switch, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useNotificationPrefsStore, useFestivalStore } from '@festie/shared/stores';
 import { api } from '@festie/shared/services';
+import { COPY } from '@festie/shared/constants';
 import { timeZoneCity } from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { formatQuietHours } from '../lib/accountFormat';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -224,11 +226,11 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
     },
     {
       key: 'wrapReady',
-      title: 'Wrap-up ready',
-      icon: 'sparkles-outline',
+      title: COPY.wrap.ready,
+      icon: CONCEPT_IONICON.wrap,
       value: prefs.wrapReady,
       onChange: (v) => set({ wrapReady: v }),
-      hint: 'By push and email.',
+      hint: `${COPY.wrap.readyHint}. By push and email.`,
     },
   ];
 

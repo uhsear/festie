@@ -2,6 +2,8 @@ import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { FestivalPhase } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 
 type ActionKey = 'picks' | 'crew' | 'find' | 'nownext' | 'wrap';
@@ -19,18 +21,18 @@ interface ActionDef {
 // Fixed destination set. Phase never adds or removes a destination — it only
 // reorders and re-emphasizes — so everything stays reachable in every phase.
 const ACTIONS: Record<ActionKey, ActionDef> = {
-  picks: { key: 'picks', label: 'My picks', icon: 'star', href: '/(tabs)/picks', a11y: 'Open my picks' },
+  picks: { key: 'picks', label: COPY.picks.title, icon: CONCEPT_IONICON.picks, href: '/(tabs)/picks', a11y: 'Open my picks' },
   crew: { key: 'crew', label: 'Crew', icon: 'people', href: '/(tabs)/crew', a11y: 'Open crew' },
   find: {
     key: 'find',
-    label: 'Find each other',
+    label: COPY.find.action,
     icon: 'location',
     href: '/find',
-    a11y: 'Find each other — crew map, compass and meeting points',
+    a11y: 'Find your crew: map, compass and meeting points',
     danger: true,
   },
-  nownext: { key: 'nownext', label: 'Now & Next', icon: 'flash', href: '/festival-mode', a11y: 'Open Now and Next' },
-  wrap: { key: 'wrap', label: 'Festival wrap', icon: 'sparkles', href: '/wrap', a11y: 'Open festival wrap-up' },
+  nownext: { key: 'nownext', label: COPY.nowNext.name, icon: CONCEPT_IONICON.nowNext, href: '/festival-mode', a11y: 'Open Now and Next' },
+  wrap: { key: 'wrap', label: COPY.wrap.name, icon: CONCEPT_IONICON.wrap, href: '/wrap', a11y: 'Open your Festival Wrap' },
 };
 
 // Per-phase ordering — the first entry is the emphasized (primary) action.
@@ -46,7 +48,7 @@ const PHASE_ORDER: Record<FestivalPhase, ActionKey[]> = {
 const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
   pre: { label: 'Before the festival', hint: 'Lock in your picks and rally your crew.' },
   live: { label: 'Happening now', hint: 'Find your crew, check Now & Next, stay safe.' },
-  post: { label: 'Festival wrap', hint: 'Relive it and settle up with your crew.' },
+  post: { label: 'After the festival', hint: 'Relive it and settle up with your crew.' },
 };
 
 interface PhaseHomeActionsProps {
@@ -58,7 +60,7 @@ interface PhaseHomeActionsProps {
  * band on the Schedule landing that re-prioritizes the crew's destinations by
  * festival PHASE (derived from the date range vs now via shared `festivalPhase`):
  *  - pre  → picks / crew invites lead
- *  - live → Find each other (map/SOS/meeting) + crew lead; Now & Next stays one tap away
+ *  - live → Find your crew (map/SOS/meeting) + crew lead; Now & Next stays one tap away
  *  - post → festival wrap + settle-up lead
  *
  * The destination set is fixed — phase only reorders —

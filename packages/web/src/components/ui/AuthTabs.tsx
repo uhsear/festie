@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
 
 interface AuthTabsProps {
@@ -14,8 +15,8 @@ interface AuthTabsProps {
 }
 
 const TABS = [
-  { key: 'login', label: 'Sign in', to: '/login' },
-  { key: 'register', label: 'Create Account', to: '/register' },
+  { key: 'login', label: COPY.auth.signIn, to: '/login' },
+  { key: 'register', label: COPY.auth.createAccount, to: '/register' },
 ] as const;
 
 /**

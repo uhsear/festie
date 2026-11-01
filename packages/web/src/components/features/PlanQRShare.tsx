@@ -13,7 +13,7 @@ import {
   MAX_ENCODED_LENGTH,
   type PlanSnapshotInput,
 } from '@festie/shared/utils';
-import { PRIORITY_WEIGHT } from '@festie/shared/constants';
+import { COPY, PRIORITY_WEIGHT } from '@festie/shared/constants';
 import type { CrewMeetingPoint, Priority } from '@festie/shared/types';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
@@ -147,7 +147,7 @@ interface Props {
 }
 
 /**
- * "Share plan (QR)" trigger + modal. The web counterpart of mobile's
+ * "Share by QR" trigger + modal. The web counterpart of mobile's
  * PlanQRShare: renders a QR of the encoded plan snapshot so a nearby friend can
  * scan it onto their own phone with NO internet on either device. Reuses the
  * Radix Dialog primitive (same one ConfirmDialog/PromptDialog build on).
@@ -159,9 +159,9 @@ export default function PlanQRShare({ className }: Props) {
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <Button variant="secondary" size="sm" type="button" className={className} aria-label="Share plan as QR code">
+        <Button variant="secondary" size="sm" type="button" className={className} aria-label="Share your picks by QR code">
           <QrCode className="w-4 h-4" aria-hidden="true" />
-          Share plan (QR)
+          {COPY.picks.shareByQr}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -174,10 +174,10 @@ export default function PlanQRShare({ className }: Props) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="text-base font-bold text-text-primary">
-                {currentFestival?.name ? `Share ${currentFestival.name}` : 'Share plan'}
+                {currentFestival?.name ? `Share ${currentFestival.name}` : COPY.picks.shareByQr}
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                Hand your plan to a friend over the air — no signal needed.
+                Hand your picks to a friend over the air — no signal needed.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>

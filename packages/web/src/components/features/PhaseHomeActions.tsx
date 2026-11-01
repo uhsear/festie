@@ -1,6 +1,8 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Star, Users, Zap, Sparkles, type LucideIcon } from 'lucide-react';
+import { Users, type LucideIcon } from 'lucide-react';
 import type { FestivalPhase } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 
 type ActionKey = 'picks' | 'crew' | 'nownext' | 'wrap';
@@ -18,10 +20,10 @@ interface ActionDef {
 // live map / SOS / meeting points live inside /crew on web, so Crew stays high
 // in the live ordering rather than being buried under planning shortcuts.
 const ACTIONS: Record<ActionKey, ActionDef> = {
-  picks: { key: 'picks', label: 'My picks', Icon: Star, to: '/picks', a11y: 'Go to my picks' },
+  picks: { key: 'picks', label: COPY.picks.title, Icon: CONCEPT_ICON.picks, to: '/picks', a11y: 'Go to my picks' },
   crew: { key: 'crew', label: 'Crew', Icon: Users, to: '/crew', a11y: 'Go to crew' },
-  nownext: { key: 'nownext', label: 'Now & Next', Icon: Zap, to: '/festival-mode', a11y: 'Open Now and Next' },
-  wrap: { key: 'wrap', label: 'Festival wrap', Icon: Sparkles, to: '/wrap', a11y: 'Open festival wrap-up' },
+  nownext: { key: 'nownext', label: COPY.nowNext.name, Icon: CONCEPT_ICON.nowNext, to: '/festival-mode', a11y: 'Open Now and Next' },
+  wrap: { key: 'wrap', label: COPY.wrap.name, Icon: CONCEPT_ICON.wrap, to: '/wrap', a11y: 'Open your Festival Wrap' },
 };
 
 // Per-phase ordering — the first entry is the emphasized (primary) action
@@ -35,7 +37,7 @@ const PHASE_ORDER: Record<FestivalPhase, ActionKey[]> = {
 const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
   pre: { label: 'Before the festival', hint: 'Lock in your picks and rally your crew.' },
   live: { label: 'Happening now', hint: 'Check Now & Next, find your crew, stay safe.' },
-  post: { label: 'Festival wrap', hint: 'Relive it and settle up with your crew.' },
+  post: { label: 'After the festival', hint: 'Relive it and settle up with your crew.' },
 };
 
 interface PhaseHomeActionsProps {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
+import { COPY } from '@festie/shared/constants';
 import { useHaptics } from '../../hooks/useHaptics';
 
 /**
@@ -58,7 +59,7 @@ export default function FestivalDayBanner() {
         onClick={enter}
         data-testid="festival-day-banner-enter"
       >
-        Enter Festival Mode
+        {COPY.nowNext.open}
       </button>
       <button
         type="button"

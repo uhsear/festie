@@ -58,11 +58,11 @@ describe('RegisterPage', () => {
     expect(screen.getByText('Plan your sets. Sync with your crew.')).toBeInTheDocument();
   });
 
-  it('renders Login and Create Account tabs', () => {
+  it('renders Login and Create account tabs', () => {
     render(<RegisterPage />);
-    // Both auth-method segments are nav links now; "Create Account" also appears
+    // Both auth-method segments are nav links now; "Create account" also appears
     // on the submit button, so scope to the link role.
-    expect(screen.getByRole('link', { name: 'Create Account' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create account' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
   });
 
@@ -82,15 +82,15 @@ describe('RegisterPage', () => {
     expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
   });
 
-  it('renders the Create Account button', () => {
+  it('renders the Create account button', () => {
     render(<RegisterPage />);
-    expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
   });
 
   it('shows every field error at once on empty submit, each tied to its field', async () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     const alerts = screen.getAllByRole('alert').map((a) => a.textContent);
     expect(alerts).toEqual(
       expect.arrayContaining([
@@ -112,7 +112,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
     await user.type(screen.getByLabelText('Username'), 'alice');
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(screen.getByLabelText('Password')).toHaveFocus();
   });
 
@@ -120,7 +120,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
     await user.type(screen.getByLabelText('Password'), 'short');
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
   });
 
@@ -129,7 +129,7 @@ describe('RegisterPage', () => {
     render(<RegisterPage />);
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.type(screen.getByLabelText('Confirm password'), 'different99');
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     const confirm = screen.getByLabelText('Confirm password');
     expect(document.getElementById(confirm.getAttribute('aria-describedby')!)).toHaveTextContent('Passwords do not match');
   });
@@ -139,14 +139,14 @@ describe('RegisterPage', () => {
     render(<RegisterPage />);
     const year = new Date().getFullYear() - 10;
     fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: `${year}-01-01` } });
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(screen.getByText('You must be at least 18 to use Festie')).toBeInTheDocument();
   });
 
   it('clears a field error once the user edits that field', async () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(screen.getByText('Username is required')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Username'), 'a');
     expect(screen.queryByText('Username is required')).not.toBeInTheDocument();
@@ -171,7 +171,7 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('Confirm password'), 'password123');
     fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
     await user.click(screen.getByRole('checkbox'));
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Username already taken');
   });
 
@@ -213,7 +213,7 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('Confirm password'), 'password123');
     fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
     await user.click(screen.getByRole('checkbox'));
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(mockRegister).toHaveBeenCalledWith({
       username: 'alice',
       password: 'password123',
@@ -245,7 +245,7 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('Confirm password'), 'password123');
     fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
     await user.click(screen.getByRole('checkbox'));
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ ref: 'tiktok' }));
     sessionStorage.removeItem('festie-ref');
   });

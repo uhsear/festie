@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { COPY } from '@festie/shared/constants';
 import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import Button from '../components/ui/Button';
@@ -239,7 +240,7 @@ function RegisterPageInner() {
         )}
 
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
-          {isLoading ? 'Creating account…' : 'Create Account'}
+          {isLoading ? COPY.auth.creatingAccount : COPY.auth.createAccount}
         </Button>
       </form>
     </>

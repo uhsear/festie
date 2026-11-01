@@ -4,6 +4,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, festivalStartMinutes } from '@festie/shared/utils';
+import { clashPromptCopy } from '@festie/shared/constants';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -122,14 +123,9 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
         const key = pairKey(currentSet.id, c.id);
         const otherName = artistDisplayName(c, b2bSeparator);
         const at = overlapStartLabel(currentSet, c);
-        // Both sides a must-see → escalate to an explicit conflict.
+        // Both sides a must-see → escalate to an explicit clash.
         const hard = getPriority?.(currentSet.id) === 'must' && getPriority?.(c.id) === 'must';
-        const title = hard
-          ? `You have a conflict${at ? ` at ${at}` : ''}: keep one`
-          : `2 acts${at ? ` at ${at}` : ''}: keep one`;
-        const body = hard
-          ? `Both ${currentName} and ${otherName} are must-sees but overlap. Keep one and we'll clear the other.`
-          : `${currentName} and ${otherName} overlap. Keep one and we'll clear the other.`;
+        const { title, body } = clashPromptCopy({ hard, at, currentName, otherName });
         const card = (
           <View style={styles.card} accessibilityRole="alert">
             <View style={styles.header}>

@@ -2,7 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 /**
- * find.tsx — "Find each other" hub (mobile-only).
+ * find.tsx — "Find" hub (mobile-only).
  *
  * Co-locates the previously-scattered finding doors — the crew map (/map), the
  * meeting-point compass (/compass) and the saved meeting points — under ONE
@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useAuthStore, useCrewStore, useLiveLocationStore } from '@festie/shared/stores';
+import { COPY } from '@festie/shared/constants';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -87,11 +88,11 @@ export default function FindScreen() {
   if (!activeCrew) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen options={{ title: 'Find each other', headerShown: true }} />
+        <Stack.Screen options={{ title: COPY.find.name, headerShown: true }} />
         <EmptyState
           icon="people-outline"
           title="No crew selected"
-          message="Open the Crew tab and pick a crew to find each other on the map."
+          message="Open the Crew tab and pick a crew to find your crew on the map."
         />
       </View>
     );
@@ -99,7 +100,7 @@ export default function FindScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Find each other', headerShown: true }} />
+      <Stack.Screen options={{ title: COPY.find.name, headerShown: true }} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
         <Text style={styles.intro}>See where your crew is and navigate to your meeting points. Works offline.</Text>
 

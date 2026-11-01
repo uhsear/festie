@@ -34,6 +34,7 @@ import {
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
+import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import { safeStageColor } from '../../lib/stageColor';
 import { useUI, type ViewMode } from '../../contexts/UIContext';
 import type { TimeBounds } from '../../hooks/useNowIndicator';
@@ -814,7 +815,7 @@ export default function TimelineScreen() {
                 accessibilityState={{ selected: onlyMine }}
                 accessibilityLabel="Show only my picks"
               >
-                <Ionicons name="star" size={12} color={onlyMine ? t.colors.accent.aqua : t.colors.text.muted} />
+                <Ionicons name={CONCEPT_IONICON.picks} size={12} color={onlyMine ? t.colors.accent.aqua : t.colors.text.muted} />
                 <Text
                   style={[styles.filterChipText, onlyMine && styles.filterChipTextTinted]}
                   maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -887,9 +888,7 @@ export default function TimelineScreen() {
     </>
   );
 
-  // DC1 (Option C) — the Switch + Now&Next actions move into the header's
-  // trailing slot, collapsing the former standalone live row. The pulsing
-  // LiveDot stays in the control row below as the now indicator.
+  // The Switch + Now & Next actions live in the header's trailing slot.
   const headerActions = (
     <View style={styles.headerActions}>
       {/* Manual refresh for ALL views — the RefreshControls only cover the Cards

@@ -229,7 +229,7 @@ env:
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 6000
-- assertNotVisible: "Find each other"
+- assertNotVisible: "Find your crew"
 - takeScreenshot: 16-map
 - openLink: "festie://compass"
 - extendedWaitUntil:
@@ -243,7 +243,7 @@ env:
 - takeScreenshot: 17-compass
 - openLink: "festie://plan-share"
 - extendedWaitUntil:
-    visible: "Share plan"
+    visible: "Share offline"
     timeout: 30000
 - tapOn: "Text crew"
 - assertVisible:

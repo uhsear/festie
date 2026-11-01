@@ -5,7 +5,7 @@ import FestivalModeSkeleton from './FestivalModeSkeleton';
 describe('FestivalModeSkeleton', () => {
   it('renders with aria-busy for loading state', () => {
     render(<FestivalModeSkeleton />);
-    expect(screen.getByLabelText('Loading festival mode')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByLabelText('Loading Now & Next')).toHaveAttribute('aria-busy', 'true');
   });
 
   it('renders a header section', () => {

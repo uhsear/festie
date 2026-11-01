@@ -27,6 +27,7 @@ import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import AppPressable from './AppPressable';
 import { priorityColor } from '../lib/priorityColor';
+import { COPY } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS } from '../lib/prioritySymbol';
 
 import Avatar from './Avatar';
@@ -262,7 +263,7 @@ function SetCardMobileImpl({
           {hasConflict ? (
             <View style={styles.conflictBadge}>
               <Ionicons name="warning" size={12} color={t.colors.accent.coral} />
-              <Text style={styles.conflictText}>Conflict</Text>
+              <Text style={styles.conflictText}>{COPY.clash.badge}</Text>
             </View>
           ) : null}
         </View>

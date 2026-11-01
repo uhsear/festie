@@ -7,7 +7,7 @@ export default function FestivalModeSkeleton() {
     <div
       className="px-4 max-w-[500px] mx-auto pb-[calc(20px+env(safe-area-inset-bottom,0px))]"
       aria-busy="true"
-      aria-label="Loading festival mode"
+      aria-label="Loading Now & Next"
     >
       <div className="flex justify-between items-baseline mb-5">
         <div className="skeleton-shimmer h-[18px] w-[180px]" />

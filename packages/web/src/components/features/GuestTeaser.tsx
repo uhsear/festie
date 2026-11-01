@@ -1,5 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Star, Users, Clock, type LucideIcon } from 'lucide-react';
+import { Users, Clock, type LucideIcon } from 'lucide-react';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
 
@@ -11,23 +13,23 @@ interface GuestTeaserProps {
 const CONFIG: Record<GuestTeaserProps['mode'], { Icon: LucideIcon; title: string; description: string; cta: string }> =
   {
     picks: {
-      Icon: Star,
+      Icon: CONCEPT_ICON.picks,
       title: 'Save your festival picks',
       description: 'Sign in to mark Must See, Want to See, or Maybe picks and share them with your crew.',
-      cta: 'Sign Up Free',
+      cta: COPY.auth.createAccount,
     },
     crew: {
       Icon: Users,
       title: 'Plan with your crew',
       description: 'Invite friends, compare picks, and find sets you all want to see.',
-      cta: 'Sign Up Free',
+      cta: COPY.auth.createAccount,
     },
     grid: {
       Icon: Clock,
       title: 'See every stage at once',
       description:
-        'The grid shows every stage and set across the festival. Sign in to track conflicts and plan your day.',
-      cta: 'Sign Up Free',
+        'The grid shows every stage and set across the festival. Sign in to see clashes and plan your day.',
+      cta: COPY.auth.createAccount,
     },
   };
 

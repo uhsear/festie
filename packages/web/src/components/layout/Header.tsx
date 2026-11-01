@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useUIStore } from '@festie/shared';
 import { useFestivalStore } from '@festie/shared/stores';
 import { isFestivalOver } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { cn } from '@/lib/utils';
 import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
@@ -27,9 +28,9 @@ export default function Header() {
   const wrapUnlocked = isFestivalOver(currentFestival, days);
   const desktopTabs = [
     { label: 'Schedule', href: '/cards' },
-    { label: 'My Picks', href: '/picks' },
+    { label: COPY.picks.tab, href: '/picks' },
     { label: 'Crew', href: '/crew' },
-    ...(wrapUnlocked ? [{ label: 'Wrap', href: '/wrap' }] : []),
+    ...(wrapUnlocked ? [{ label: COPY.wrap.tab, href: '/wrap' }] : []),
   ];
 
   const scheduleHrefs = ['/', '/cards', '/timeline', '/grid'];
@@ -268,7 +269,7 @@ export default function Header() {
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             )}
           >
-            Sign in
+            {COPY.auth.signIn}
           </Link>
         )}
       </div>

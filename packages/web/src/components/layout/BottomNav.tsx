@@ -3,6 +3,8 @@ import { Link, useLocation } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
 import { useFestivalStore } from '@festie/shared/stores';
 import { isFestivalOver } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 
 interface NavTab {
@@ -36,13 +38,6 @@ const ScheduleIcon = () => (
   </svg>
 );
 
-/** Picks icon — star */
-const PicksIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-);
-
 /** Crew icon — people */
 const CrewIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -63,14 +58,6 @@ const ProfileIcon = () => (
   </svg>
 );
 
-/** Wrap icon — sparkles (shown only after the festival ends) */
-const WrapIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <path d="M12 3l2.09 5.26L19 9.27l-4 3.87L15.82 19 12 16.77 8.18 19 9 13.14l-4-3.87 4.91-1.01L12 3z" />
-    <path d="M5 3l1 2M19 3l-1 2M5 21l1-2M19 21l-1-2" strokeLinecap="round" />
-  </svg>
-);
-
 // Schedule/Timeline/Grid were three separate tabs; they now collapse into one
 // "Schedule" destination with an in-page ScheduleViewSwitcher (parity with the
 // mobile SegmentedControl). This drops the nav from up-to-7 to ~5 tabs.
@@ -80,12 +67,12 @@ const baseTabs: NavTab[] = [{ label: 'Schedule', href: '/cards', icon: <Schedule
 const SCHEDULE_HREFS = ['/', '/cards', '/timeline', '/grid'];
 
 const authTabs: NavTab[] = [
-  { label: 'Picks', href: '/picks', icon: <PicksIcon /> },
+  { label: COPY.picks.tab, href: '/picks', icon: <CONCEPT_ICON.picks aria-hidden="true" /> },
   { label: 'Crew', href: '/crew', icon: <CrewIcon /> },
   { label: 'Account', href: '/account', icon: <ProfileIcon /> },
 ];
 
-const wrapTab: NavTab = { label: 'Wrap', href: '/wrap', icon: <WrapIcon /> };
+const wrapTab: NavTab = { label: COPY.wrap.tab, href: '/wrap', icon: <CONCEPT_ICON.wrap aria-hidden="true" /> };
 
 export default function BottomNav() {
   const location = useLocation();
@@ -153,7 +140,7 @@ export default function BottomNav() {
               key={tab.href}
               to={tab.href}
               aria-current={active ? 'page' : undefined}
-              aria-label={`View ${tab.href === '/account' && !user ? 'Sign in' : tab.label}`}
+              aria-label={`View ${tab.href === '/account' && !user ? COPY.auth.signIn : tab.label}`}
               className={cn(
                 'flex flex-col items-center gap-1 px-3 py-2',
                 'bg-transparent text-text-muted text-[10px] font-semibold no-underline',
@@ -172,7 +159,7 @@ export default function BottomNav() {
             >
               {tab.icon}
               <span className={cn('max-w-full overflow-hidden text-ellipsis whitespace-nowrap', 'max-[359px]:hidden')}>
-                {tab.href === '/account' && !user ? 'Sign in' : tab.label}
+                {tab.href === '/account' && !user ? COPY.auth.signIn : tab.label}
               </span>
             </Link>
           );

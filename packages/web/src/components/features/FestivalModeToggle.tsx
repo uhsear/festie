@@ -1,7 +1,8 @@
 import { m, useReducedMotion } from 'motion/react';
-import { Flame } from 'lucide-react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useFestivalModeStore } from '@festie/shared';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '@/lib/conceptIcons';
 import { useHaptics } from '../../hooks/useHaptics';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +11,7 @@ import { cn } from '@/lib/utils';
 // correct behavior is to land on the main schedule — matches the legacy
 // experience where turning off just unhid the original content.
 const EXIT_ROUTE = '/cards';
+const NowNextIcon = CONCEPT_ICON.nowNext;
 
 export default function FestivalModeToggle() {
   const isFestivalMode = useFestivalModeStore((state) => state.isFestivalMode);
@@ -45,11 +47,11 @@ export default function FestivalModeToggle() {
     <m.button
       onClick={handleToggle}
       whileTap={{ scale: 0.95 }}
-      // Same name as mobile's Now & Next screen; it contains the visible
-      // "Now" (WCAG 2.5.3), and aria-pressed carries on/off.
-      aria-label="Now & Next"
+      // Same name as mobile's Now & Next screen and as the visible text
+      // (WCAG 2.5.3); aria-pressed carries on/off.
+      aria-label={COPY.nowNext.name}
       aria-pressed={active}
-      title="Now & Next"
+      title={COPY.nowNext.name}
       data-testid="festival-mode-toggle"
       className={cn(
         'relative px-2.5 py-2 rounded-lg transition-[background-color,color,box-shadow] duration-300 min-h-11 min-w-11 flex items-center justify-center',
@@ -67,8 +69,8 @@ export default function FestivalModeToggle() {
       )}
 
       <div className="flex items-center gap-1.5">
-        <Flame className="w-5 h-5" aria-hidden="true" />
-        <span className="text-sm font-semibold">Now</span>
+        <NowNextIcon className="w-5 h-5" aria-hidden="true" />
+        <span className="text-sm font-semibold">{COPY.nowNext.name}</span>
       </div>
     </m.button>
   );
