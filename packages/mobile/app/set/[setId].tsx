@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -7,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   Linking,
+  Alert,
   Share,
   Image,
   BackHandler,
@@ -63,6 +65,27 @@ interface SpotifyPreview {
   embedType: 'artist' | 'track' | null;
   artistName?: string;
   trackName?: string;
+}
+
+const REMINDER_ASK_DISMISSED_KEY = 'festie-reminder-ask-dismissed';
+
+/** Soft ask before the first system permission prompt. The reminder is saved whatever the user picks. */
+async function askNotificationPermission(artist: string): Promise<void> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'undetermined') return;
+    if (await AsyncStorage.getItem(REMINDER_ASK_DISMISSED_KEY)) return;
+    Alert.alert(
+      `Get a heads-up before ${artist}?`,
+      'Allow notifications so Festie can remind you before sets start, even when the app is closed.',
+      [
+        { text: 'Not now', style: 'cancel', onPress: () => void AsyncStorage.setItem(REMINDER_ASK_DISMISSED_KEY, '1') },
+        { text: 'Allow', onPress: () => void Notifications.requestPermissionsAsync() },
+      ],
+    );
+  } catch {
+    // Best effort: the reminder is saved either way and the delivery line explains a missing permission.
+  }
 }
 
 /** Reminder lead-time options (minutes) — must match the server's allowed set. */
@@ -268,21 +291,35 @@ export default function SetDetailScreen() {
   });
 
   // ---- Reminder delivery (OS permission + Account preference). ----
-  // 'undetermined' counts as granted: useLocalReminders asks on the first reminder.
+  // 'undetermined', and 'denied' while the OS can still ask, count as 'default' (not enabled yet).
   const [permission, setPermission] = useState<ReminderPermission>('granted');
   const setRemindersPref = useNotificationPrefsStore((s) => s.prefs.setReminders);
+  const readPermission = useCallback(() => {
+    Notifications.getPermissionsAsync()
+      .then((p) =>
+        setPermission(
+          p.status === 'granted'
+            ? 'granted'
+            : p.status === 'denied' && !p.canAskAgain
+              ? 'denied'
+              : 'default',
+        ),
+      )
+      .catch(() => {});
+  }, []);
   useEffect(() => {
-    const read = () => {
-      Notifications.getPermissionsAsync()
-        .then((p) => setPermission(p.status === 'denied' ? 'denied' : 'granted'))
-        .catch(() => {});
-    };
+    const read = readPermission;
     read();
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') read();
     });
     return () => sub.remove();
-  }, []);
+  }, [readPermission]);
+  const turnOnNotifications = useCallback(() => {
+    Notifications.requestPermissionsAsync()
+      .catch(() => {})
+      .finally(readPermission);
+  }, [readPermission]);
   const deliveryProblem = reminderDeliveryProblem({
     hasReminder: myReminder != null,
     permission,
@@ -335,13 +372,14 @@ export default function SetDetailScreen() {
       if (!set || !currentFestival) return;
       haptics.select();
       setReminderFailed(null);
+      if (minutes != null) void askNotificationPermission(artistName || 'this set');
       saveReminder(currentFestival.id, set.id, minutes).catch((err) => {
         haptics.warning();
         setReminderFailed({ minutes });
         useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your reminder. Try again."), { kind: 'error' });
       });
     },
-    [set, currentFestival, saveReminder, haptics],
+    [set, currentFestival, saveReminder, haptics, artistName],
   );
 
   // Clash-prompt clear — demote one side of a clash to null. savePick is
@@ -581,6 +619,14 @@ export default function SetDetailScreen() {
                     accessibilityLabel="Retry saving reminder"
                   >
                     <Text style={styles.statusActionText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              {deliveryProblem === 'not-enabled' ? (
+                <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                  <Text style={styles.statusWarn}>Notifications are off, so this reminder can't reach you.</Text>
+                  <TouchableOpacity style={styles.statusAction} onPress={turnOnNotifications} accessibilityRole="button">
+                    <Text style={styles.statusActionText}>Turn on</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}

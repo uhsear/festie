@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@festie/shared/services/api';
+import { describeScheduleNotice, type ScheduleNotice } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import LineupImport from './LineupImport';
 import FestivalEditForm, { Festival as FormFestival } from './FestivalEditForm';
@@ -34,6 +35,7 @@ export default function AdminFestivals() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [notifyPickers, setNotifyPickers] = useState(true);
   const [formData, setFormData] = useState<Partial<FormFestival>>({});
   const [initialExpandedDays, setInitialExpandedDays] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,13 +74,17 @@ export default function AdminFestivals() {
 
     try {
       if (editingId) {
-        await api.put<void>(`/admin/festivals/${editingId}`, formData);
-        toast('Festival updated', 'success');
+        const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
+          ...formData,
+          notify: notifyPickers,
+        });
+        toast(res?.scheduleNotice ? describeScheduleNotice(res.scheduleNotice) : 'Festival updated', 'success');
       } else {
         await api.post<void>('/admin/festivals', formData);
         toast('Festival created', 'success');
       }
       setEditingId(null);
+      setNotifyPickers(true);
       setFormData({});
       setInitialExpandedDays(new Set());
       setTab('list');
@@ -117,6 +123,7 @@ export default function AdminFestivals() {
 
   const handleEdit = async (festival: Festival) => {
     setEditingId(festival.id);
+    setNotifyPickers(true);
     setTab('create');
     // List endpoint returns only summary (stageCount, dayCount). Fetch full
     // festival to get nested stages[] and days[] for the edit form.
@@ -264,6 +271,8 @@ export default function AdminFestivals() {
           formData={formData}
           setFormData={setFormData}
           editingId={editingId}
+          notifyPickers={notifyPickers}
+          onNotifyPickersChange={setNotifyPickers}
           initialExpandedDays={initialExpandedDays}
           onSave={handleSave}
           onCancel={handleCancel}

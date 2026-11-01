@@ -14,6 +14,7 @@
  */
 
 import { isInDndWindow } from './notifications/index.js';
+import { appLink } from './notifications/links.js';
 import { FESTIVAL_DAY_START_HOUR, formatClock12, zonedWallTimeToMs } from './time-zone.js';
 
 function createReminderScheduler({ pool, stores, notificationService, log, config }: any) {
@@ -94,7 +95,15 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
       return;
     }
 
-    for (const [setId, minutesBefore] of Object.entries(reminders)) {
+    // Must picks get the user's default lead; an explicit per-set reminder wins.
+    // keep in sync with effectiveReminders in packages/shared/src/utils/reminderSchedule.ts
+    const mustSeeMap: Record<string, number> = {};
+    if (profile.mustSeeLead != null) {
+      const mustSetIds = typeof profile.mustSetIds === 'string' ? JSON.parse(profile.mustSetIds) : profile.mustSetIds || [];
+      for (const id of mustSetIds) mustSeeMap[id] = profile.mustSeeLead;
+    }
+
+    for (const [setId, minutesBefore] of Object.entries({ ...mustSeeMap, ...reminders })) {
       const setInfo = setLookup.get(setId);
       if (!setInfo) continue;
 
@@ -129,7 +138,7 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
             type: 'set_reminder',
             festivalId: festival.id,
             setId,
-            deepLink: `rave://festival/${festival.id}?set=${setId}`,
+            deepLink: appLink(config, `/set/${setId}`),
           },
           threadId: `reminder-${festival.id}`,
         });
@@ -208,14 +217,20 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
             fp.id,
             fp.user_id AS "userId",
             fp.reminders_json AS "remindersJson",
-            fp.picks_json AS "picksJson"
+            fp.picks_json AS "picksJson",
+            np.must_see_reminder_minutes AS "mustSeeLead",
+            CASE WHEN np.must_see_reminder_minutes IS NULL THEN '[]'::jsonb ELSE
+              COALESCE((SELECT jsonb_agg(p.set_id) FROM festival_profile_picks p
+                        WHERE p.profile_id = fp.id AND p.priority = 'must'), '[]'::jsonb)
+            END AS "mustSetIds"
           FROM
             festival_profiles fp
+            LEFT JOIN notification_preferences np ON np.user_id = fp.user_id
           WHERE
             fp.festival_id = $1
-            AND fp.reminders_json IS NOT NULL
-            AND fp.reminders_json != '{}'::jsonb
             AND fp.deleted_at IS NULL
+            AND ((fp.reminders_json IS NOT NULL AND fp.reminders_json != '{}'::jsonb)
+                 OR np.must_see_reminder_minutes IS NOT NULL)
         `,
           [festival.id],
         );

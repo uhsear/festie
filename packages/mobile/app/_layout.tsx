@@ -8,7 +8,8 @@ import { Stack, useRouter, useSegments, useRootNavigationState, router as global
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
-import { useAuthStore, useCrewStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
+import { useAuthStore, useCrewStore, useFestivalStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
+import { resolvePushTarget } from '@festie/shared/utils';
 import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
 import {
@@ -30,12 +31,13 @@ import FirstRunIntro from '../components/FirstRunIntro';
 import ErrorBoundary from '../components/ErrorBoundary';
 import HeaderTitle from '../components/HeaderTitle';
 import { TopBannerContext } from '../components/ScreenHeader';
-import { useLocalReminders } from '../hooks/useLocalReminders';
+import { snoozeReminder, useLocalReminders } from '../hooks/useLocalReminders';
 import { useOngoingNotification } from '../hooks/useOngoingNotification';
 import { ensureAndroidChannels } from '../hooks/useMobilePush';
 import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
 import { CREW_MEET_HREF, sosPushCrewId } from '../lib/dayOfRoutes';
+import { pushTargetHref } from '../lib/pushRoutes';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
@@ -98,47 +100,6 @@ configureApi({
   },
 });
 
-type DeepLinkTarget = string | { pathname: string; params: Record<string, string> };
-
-// Static top-level path segments a push-notification `deepLink` is allowed to
-// resolve to. `crew` lands on the crew tab's logistics sub-tab -- the same
-// {pathname, params} shortcut find.tsx/map.tsx already use to jump straight
-// to the SOS panel (crew.tsx's `tab=logistics` deep-link contract) -- so a
-// crew_sos push actually opens SOS instead of silently no-op'ing.
-const DEEPLINK_ROUTES: Record<string, DeepLinkTarget> = {
-  wrap: '/wrap',
-  crew: { pathname: '/(tabs)/crew', params: { tab: 'logistics' } },
-  'crew-compare': '/crew-compare',
-  'crew-plan': '/crew-plan',
-  'festival-mode': '/festival-mode',
-  find: '/find',
-  grid: '/grid',
-  map: '/map',
-  'plan-share': '/plan-share',
-  privacy: '/privacy',
-  timeline: '/timeline',
-};
-
-// Recognized scheme/origin prefixes a server-emitted deepLink may arrive
-// with: festie:// is the app's registered scheme (app.json), rave:// is a
-// legacy scheme some server producers still emit (routes/crew-sos.ts,
-// lib/reminder-scheduler.ts), and https://festie.us is the web origin used
-// by lib/notifications/reengagement.ts.
-const DEEPLINK_PREFIXES = ['festie://', 'rave://', 'https://festie.us'];
-
-// Validates a push-notification deepLink against the allowlist above instead
-// of trusting it as an expo-router Href. A deepLink with an unrecognized
-// scheme/host, or a path this app has no matching route for, returns null --
-// exactly today's (broken) no-op behavior for those cases, so this can only
-// fix known-good targets, never regress an already-silently-failing one.
-export function parseDeepLink(raw: string): DeepLinkTarget | null {
-  const prefix = DEEPLINK_PREFIXES.find((p) => raw.startsWith(p));
-  if (!prefix) return null;
-  const rest = raw.slice(prefix.length);
-  const segment = (rest.startsWith('/') ? rest.slice(1) : rest).split(/[/?#]/)[0] ?? '';
-  return DEEPLINK_ROUTES[segment] ?? null;
-}
-
 // Route a tapped notification's data payload to its deep-link target. Shared by
 // the warm-tap listener and the cold-start useLastNotificationResponse handler
 // so both paths route identically.
@@ -154,12 +115,10 @@ function routeNotification(r: ReturnType<typeof useRouter>, data: Record<string,
     r.push(CREW_MEET_HREF);
     return;
   }
-  if (typeof data?.deepLink === 'string') {
-    const target = parseDeepLink(data.deepLink);
-    if (target) r.push(target);
-  } else if (typeof data?.setId === 'string') {
-    r.push(`/set/${data.setId}`);
-  }
+  const target = resolvePushTarget(data);
+  if (!target) return;
+  if (target.kind === 'festival') useFestivalStore.getState().selectFestival(target.festivalId).catch(() => {});
+  r.push(pushTargetHref(target));
 }
 
 function AuthGate() {
@@ -251,6 +210,10 @@ function AuthGate() {
   useEffect(() => {
     notificationResponseRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
       handledResponseRef.current = response.notification.request.identifier;
+      if (response.actionIdentifier === 'snooze-5') {
+        snoozeReminder(response.notification.request.content);
+        return;
+      }
       routeNotification(router, response.notification.request.content.data);
     });
     return () => {
@@ -272,6 +235,10 @@ function AuthGate() {
     const data = lastNotificationResponse.notification.request.content.data;
     const raf = requestAnimationFrame(() => {
       handledResponseRef.current = id;
+      if (lastNotificationResponse.actionIdentifier === 'snooze-5') {
+        snoozeReminder(lastNotificationResponse.notification.request.content);
+        return;
+      }
       routeNotification(router, data);
     });
     return () => cancelAnimationFrame(raf);

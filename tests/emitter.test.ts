@@ -39,6 +39,19 @@ function defaultDeps(overrides: any = {}) {
     notificationService: overrides.notificationService || null,
     buildAvatarUrl: overrides.buildAvatarUrl || ((user: any) => user?.avatarKey ? `/avatar/${user.avatarKey}` : null),
     _getUserById: overrides._getUserById || (async () => null),
+    stores: overrides.stores || null,
+    config: overrides.config || { PUBLIC_ORIGIN: 'https://festie.example' },
+  };
+}
+
+function crewStores(membersByCrew: Record<string, string[]>) {
+  return {
+    crews: {
+      listByUserAndFestival: mock.fn(async () => Object.keys(membersByCrew).map((id) => ({ id }))),
+      getMembersForCrews: mock.fn(
+        async (ids: string[]) => new Map(ids.map((id) => [id, (membersByCrew[id] || []).map((userId) => ({ userId }))])),
+      ),
+    },
   };
 }
 
@@ -108,14 +121,15 @@ describe('emitter: profileUpdated', () => {
     emitter.flushAll();
   });
 
-  it('triggers push notification when picks change and notificationService is configured', async () => {
+  it('sends the picks push only to crew-mates, with a compare link', async () => {
     const io = makeIo();
-    const sendToOfflineUsers = mock.fn(async () => {});
+    const sendToOfflineUsers = mock.fn(async (_args: any) => {});
     const notificationService = {
       isConfigured: true,
       sendToOfflineUsers,
     };
-    const emitter = createSocketEmitter(defaultDeps({ io, notificationService }));
+    const stores = crewStores({ c1: ['user-1', 'user-2'], c2: ['user-2', 'user-3'] });
+    const emitter = createSocketEmitter(defaultDeps({ io, notificationService, stores }));
 
     emitter.profileUpdated({
       profile: { festivalId: 'fest-1', id: 'prof-1', name: 'Alice', userId: 'user-1', picks: {} },
@@ -129,7 +143,54 @@ describe('emitter: profileUpdated', () => {
     const call = (sendToOfflineUsers.mock.calls as any[])[0]!.arguments[0];
     assert.equal(call!.festivalId, 'fest-1');
     assert.equal(call!.type, 'crew_update');
-    assert.deepEqual(call!.excludeUserIds, ['user-1']);
+    assert.deepEqual([...call!.userIds].sort(), ['user-2', 'user-3']);
+    assert.equal(call!.data.deepLink, 'https://festie.example/compare');
+    assert.deepEqual(stores.crews.listByUserAndFestival.mock.calls[0]!.arguments, ['user-1', 'fest-1']);
+    emitter.flushAll();
+  });
+
+  it('sends no visible picks push when the user has no crew', async () => {
+    const io = makeIo();
+    const sendToOfflineUsers = mock.fn(async () => {});
+    const sendSilentSync = mock.fn(async () => {});
+    const notificationService = { isConfigured: true, sendToOfflineUsers, sendSilentSync };
+    const emitter = createSocketEmitter(defaultDeps({ io, notificationService, stores: crewStores({}) }));
+
+    emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', name: 'Alice', userId: 'user-1', picks: {} },
+      user: {},
+      changedFields: { picks: true },
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(sendToOfflineUsers.mock.callCount(), 0);
+    assert.equal(sendSilentSync.mock.callCount(), 1, 'silent sync still runs');
+    emitter.flushAll();
+  });
+
+  it('logs and never throws when the crew lookup fails', async () => {
+    const log = makeLog();
+    const sendToOfflineUsers = mock.fn(async () => {});
+    const stores = {
+      crews: {
+        listByUserAndFestival: mock.fn(async () => {
+          throw new Error('db down');
+        }),
+      },
+    };
+    const emitter = createSocketEmitter(
+      defaultDeps({ log, notificationService: { isConfigured: true, sendToOfflineUsers }, stores }),
+    );
+
+    emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', name: 'Alice', userId: 'user-1', picks: {} },
+      user: {},
+      changedFields: { picks: true },
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(sendToOfflineUsers.mock.callCount(), 0);
+    assert.equal(log.warn.mock.calls[0]!.arguments[0], 'crew push failed');
     emitter.flushAll();
   });
 
@@ -205,6 +266,88 @@ describe('emitter: festivalUpdated', () => {
     assert.equal(io.emit.mock.callCount(), 1);
     assert.equal(io._globalEmits[0][0], 'festival:updated');
     assert.equal(io._globalEmits[0][1].id, 'fest-1');
+  });
+
+  it('sends no visible push, only the silent sync', async () => {
+    const sendToOfflineUsers = mock.fn(async () => {});
+    const send = mock.fn(async () => {});
+    const sendSilentSync = mock.fn(async () => {});
+    const notificationService = { isConfigured: true, sendToOfflineUsers, send, sendSilentSync };
+    const emitter = createSocketEmitter(defaultDeps({ notificationService }));
+
+    emitter.festivalUpdated({ festival: { id: 'fest-1', name: 'EDC' } });
+
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(sendToOfflineUsers.mock.callCount(), 0);
+    assert.equal(send.mock.callCount(), 0);
+    assert.equal(sendSilentSync.mock.callCount(), 1);
+  });
+});
+
+describe('emitter: scheduleChanged', () => {
+  const slot = (startTime: string) => ({ dayLabel: 'Sat', startTime, endTime: null, stageName: 'Sahara' });
+  const festival = { id: 'fest-1', name: 'EDC' };
+
+  it('skips topic-muted users and links one moved set to /set/{id}', async () => {
+    const send = mock.fn(async (_args: any) => ({ sent: 1 }));
+    const getUnsubscribedUsers = mock.fn(async () => new Set(['u2']));
+    const emitter = createSocketEmitter(
+      defaultDeps({
+        notificationService: { isConfigured: true, send },
+        stores: { topicSubscriptions: { getUnsubscribedUsers } },
+      }),
+    );
+
+    await emitter.scheduleChanged({
+      festival,
+      changes: [{ kind: 'moved', setId: 'set-1', artist: 'Peggy Gou', before: slot('22:00'), after: slot('23:30') }],
+      pickersBySet: new Map([['set-1', ['u1', 'u2']]]),
+    });
+
+    assert.deepEqual(getUnsubscribedUsers.mock.calls[0]!.arguments, ['fest-1', 'schedule']);
+    assert.equal(send.mock.callCount(), 1);
+    const call = send.mock.calls[0]!.arguments[0];
+    assert.equal(call.userId, 'u1');
+    assert.equal(call.type, 'schedule_change');
+    assert.equal(call.title, 'Peggy Gou moved');
+    assert.equal(call.threadId, 'schedule-fest-1');
+    assert.deepEqual(call.data, {
+      festivalId: 'fest-1',
+      setId: 'set-1',
+      deepLink: 'https://festie.example/set/set-1',
+    });
+  });
+
+  it('links a removal to /picks', async () => {
+    const send = mock.fn(async (_args: any) => ({ sent: 1 }));
+    const emitter = createSocketEmitter(defaultDeps({ notificationService: { isConfigured: true, send } }));
+
+    await emitter.scheduleChanged({
+      festival,
+      changes: [{ kind: 'removed', setId: 'set-1', artist: 'Peggy Gou' }],
+      pickersBySet: new Map([['set-1', ['u1']]]),
+    });
+
+    assert.equal(send.mock.calls[0]!.arguments[0].data.deepLink, 'https://festie.example/picks');
+    assert.equal(send.mock.calls[0]!.arguments[0].data.setId, undefined);
+  });
+
+  it('logs a failed send and keeps sending the rest', async () => {
+    const log = makeLog();
+    const send = mock.fn(async (args: any) => {
+      if (args.userId === 'u1') throw new Error('fcm down');
+      return { sent: 1 };
+    });
+    const emitter = createSocketEmitter(defaultDeps({ log, notificationService: { isConfigured: true, send } }));
+
+    await emitter.scheduleChanged({
+      festival,
+      changes: [{ kind: 'removed', setId: 'set-1', artist: 'A' }],
+      pickersBySet: new Map([['set-1', ['u1', 'u2']]]),
+    });
+
+    assert.equal(send.mock.callCount(), 2);
+    assert.equal(log.warn.mock.callCount(), 1);
   });
 });
 

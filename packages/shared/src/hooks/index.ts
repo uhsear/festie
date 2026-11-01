@@ -14,3 +14,4 @@ export * from './useDayOf';
 export * from './useUndoableRemove';
 export * from './useDebouncedNote';
 export * from './useSaveStatus';
+export * from './useNotificationTopics';

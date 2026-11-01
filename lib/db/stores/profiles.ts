@@ -85,6 +85,34 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return result.rows.map((row: any) => row.userId);
     },
 
+    /** User ids who picked each set, keyed by set id. Sets nobody picked are absent. */
+    async pickersBySet(festivalId: string, setIds: string[]): Promise<Map<string, string[]>> {
+      const bySet = new Map<string, string[]>();
+      if (setIds.length === 0) return bySet;
+      const result = await pool.query(
+        `
+        SELECT
+          p.set_id AS "setId",
+          fp.user_id AS "userId"
+        FROM
+          festival_profile_picks p
+          JOIN festival_profiles fp ON fp.id = p.profile_id
+        WHERE
+          fp.festival_id = $1
+          AND p.set_id = ANY ($2)
+          AND fp.deleted_at IS NULL
+          AND fp.user_id IS NOT NULL
+      `,
+        [festivalId, setIds],
+      );
+      for (const row of result.rows) {
+        const list = bySet.get(row.setId) || [];
+        list.push(row.userId);
+        bySet.set(row.setId, list);
+      }
+      return bySet;
+    },
+
     async getByUserId(userId: string) {
       const result = await pool.query(
         `

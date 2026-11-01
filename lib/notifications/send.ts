@@ -15,6 +15,7 @@ import {
 import { loadConfig as _loadSendConfig } from '../config.js';
 import { withRetry } from '../helpers.js';
 import { isApnsConfigured, getApnsProvider } from './apns.js';
+import { appOrigin } from './links.js';
 
 const require = createRequire(import.meta.url);
 
@@ -85,6 +86,10 @@ const PREF_MAP: Record<string, string> = {
   lineup_drop: 'lineupDrops',
   crew_reformed: 'crewReformed',
   wrap_ready: 'wrapReady',
+  crew_meeting_point: 'crewMeetingPoints',
+  crew_poll: 'crewPolls',
+  crew_money: 'crewMoney',
+  crew_ride: 'crewRides',
 };
 
 /**
@@ -108,7 +113,16 @@ const CRITICAL_CHANNEL: Record<string, { channelId: string; category: string }> 
 const TYPE_CHANNEL_MAP: Record<string, string> = {
   crew_update: 'crew',
   crew_reformed: 'crew',
+  crew_meeting_point: 'crew',
+  crew_poll: 'crew',
+  crew_money: 'crew',
+  crew_ride: 'crew',
+  // Exists on every build since DC7 (useMobilePush.ts); 'updates' was the legacy fallback.
+  set_reminder: 'set-reminders',
 };
+
+/** Time-sensitive types: a browser should show them soon or not at all. */
+const URGENT_WEB_TYPES = new Set(['set_reminder', 'crew_sos']);
 
 /** Check if a stale token error code signals the device is no longer registered */
 function isStaleTokenError(code: any) {
@@ -140,7 +154,7 @@ async function resolveFestivalTargets(stores: any, festivalId: any, excludeUserI
 // are never passed to sendBatch, so they never trigger this check.
 const OUTAGE_ERROR_RATIO = 0.5;
 
-export function createSendService({ stores, config, log, messaging, retryQueue, apnsProvider, promMetrics }: any) {
+export function createSendService({ stores, config, log, messaging, retryQueue, apnsProvider, promMetrics, webPush = null }: any) {
   // Direct APNs provider for iOS device tokens (raw APNs tokens that firebase-admin
   // cannot send). Guarded entirely by isApnsConfigured: when APNs is NOT configured
   // this stays null and iOS tokens are skipped (NOT deleted as stale).
@@ -233,12 +247,6 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
         },
         headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
       },
-      webpush: {
-        headers: { Urgency: 'normal' },
-        fcmOptions: {
-          link: data.deepLink || `${config.PUBLIC_ORIGIN}/festival/${data.festivalId || ''}`,
-        },
-      },
     };
   }
 
@@ -298,6 +306,40 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
       });
       return { sent: false, stale: false };
     }
+  }
+
+  /**
+   * Send to one browser via Web Push. Same { sent, stale } shape as the iOS and
+   * FCM paths. The click URL is the push's deepLink only when it points at our
+   * own origin, else the home page. Logs the notification and never throws.
+   */
+  async function sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData }: any) {
+    const origin = appOrigin(config);
+    const deepLink = safeData.deepLink;
+    const url = typeof deepLink === 'string' && deepLink.startsWith(origin + '/') ? deepLink : origin + '/';
+    const urgent = URGENT_WEB_TYPES.has(type);
+    let result: any;
+    try {
+      result = await webPush.send(
+        device.token,
+        { title: safeTitle, body: safeBody, url, tag: threadId || type },
+        { ttl: urgent ? 3600 : 86400, urgency: urgent ? 'high' : 'normal' },
+      );
+    } catch (error: any) {
+      result = { sent: false, stale: false, error: error.message };
+    }
+    if (!result.sent) log.debug('web push send failed', { userId, error: result.error });
+    await logNotification({
+      userId,
+      type,
+      title: safeTitle,
+      body: safeBody,
+      data: safeData,
+      status: result.sent ? 'sent' : 'failed',
+      platform: 'web',
+      errorMessage: result.sent ? null : result.error || (result.stale ? 'stale subscription' : null),
+    });
+    return { sent: !!result.sent, stale: !!result.stale };
   }
 
   /**
@@ -377,9 +419,9 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
   }
 
   async function send({ userId, type, title, body, data = {}, threadId = null }: any) {
-    // Bail only when NEITHER transport exists. FCM-less + APNs-configured is a
+    // Bail only when NO transport exists. FCM-less + APNs-configured is a
     // valid deploy: the per-device branch below routes iOS to APNs.
-    if (!messaging && !getApns()) return { sent: 0, reason: 'firebase_not_configured' };
+    if (!messaging && !getApns() && !webPush) return { sent: 0, reason: 'firebase_not_configured' };
     if (!ALLOWED_NOTIFICATION_TYPES.has(type)) {
       log.warn('invalid notification type rejected', { type, userId });
       return { sent: 0, reason: 'invalid_type' };
@@ -454,7 +496,20 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
         continue;
       }
 
-      // Android / web (or unknown) → FCM path. Not configured: skip (counted as
+      // Browser PushSubscription → Web Push. FCM cannot deliver to it.
+      if (device.platform === 'web') {
+        if (!webPush) {
+          // Web push not configured: skip, do NOT unregister — mirrors the iOS skip.
+          log.debug('web push not configured — skipping web token', { userId });
+          continue;
+        }
+        const result = await sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData });
+        if (result.sent) sent += 1;
+        if (result.stale) staleTokens.push(device.token);
+        continue;
+      }
+
+      // Android (or unknown) → FCM path. Not configured: skip (counted as
       // not-sent), do NOT unregister — mirrors the iOS/APNs skip above.
       if (!messaging) {
         log.debug('fcm not configured — skipping non-ios token', { userId });
@@ -558,13 +613,18 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     body,
     data = {},
     excludeUserIds = [],
+    userIds = null,
     topic = null,
     threadId = null,
   }: any) {
-    if (!messaging && !getApns()) return { sent: 0 };
+    if (!messaging && !getApns() && !webPush) return { sent: 0 };
     if (!ALLOWED_NOTIFICATION_TYPES.has(type)) return { sent: 0, reason: 'invalid_type' };
 
-    const targetUserIds = await resolveFestivalTargets(stores, festivalId, excludeUserIds);
+    // An explicit recipient list (e.g. one crew) replaces the festival-wide audience.
+    // The topic filter, preferences, quiet hours and MAX_PUSH_BATCH still apply below.
+    const targetUserIds = Array.isArray(userIds)
+      ? userIds.filter((uid: any) => uid && !(excludeUserIds || []).includes(uid))
+      : await resolveFestivalTargets(stores, festivalId, excludeUserIds);
 
     // Filter out topic-unsubscribed users
     const VALID_TOPICS = new Set(['crew', 'schedule']);
@@ -582,11 +642,14 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
 
     const { safeTitle, safeBody, safeData } = enforcePayloadLimits(title, body, data);
     const prefKey = PREF_MAP[type];
+    const channelId = TYPE_CHANNEL_MAP[type] ?? 'updates';
     const apns = getApns();
     const fcmMessages: any[] = [];
     const tokenUserMap = new Map();
     // iOS device tokens routed to per-device APNs (APNs has no multicast).
     const iosSends: any[] = [];
+    // Browser subscriptions routed to per-device Web Push (no multicast either).
+    const webSends: any[] = [];
 
     for (const userId of batch) {
       const prefs = await stores.notificationPrefs.get(userId);
@@ -618,7 +681,15 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
           continue;
         }
 
-        // Android / web → FCM batch. Not configured → skip. sendBatch would
+        if (device.platform === 'web') {
+          // Web push not configured → skip web token (do NOT unregister).
+          if (!webPush) continue;
+          tokenUserMap.set(device.token, userId);
+          webSends.push({ userId, device });
+          continue;
+        }
+
+        // Android → FCM batch. Not configured → skip. sendBatch would
         // no-op anyway, but skipping keeps the token out of tokenUserMap so we
         // don't incrementUnread for a push that was never delivered.
         if (!messaging) continue;
@@ -631,13 +702,14 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
           type,
           badgeCount,
           threadId,
+          channelId,
         });
         enforcePayloadSize(msg, log, 'sendToOfflineUsers');
         fcmMessages.push(msg);
       }
     }
 
-    if (fcmMessages.length === 0 && iosSends.length === 0) return { sent: 0 };
+    if (fcmMessages.length === 0 && iosSends.length === 0 && webSends.length === 0) return { sent: 0 };
 
     const result =
       fcmMessages.length > 0
@@ -661,6 +733,19 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
       });
       if (r.sent) apnsSent += 1;
       if (r.stale) apnsStaleTokens.push(device.token);
+    }
+
+    // Per-device Web Push sends.
+    const webStaleTokens: any[] = [];
+    const webNotified = new Set();
+    let webSent = 0;
+    for (const { userId, device } of webSends) {
+      const r = await sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData });
+      if (r.sent) {
+        webSent += 1;
+        webNotified.add(userId);
+      }
+      if (r.stale) webStaleTokens.push(device.token);
     }
 
     // APNs provider-outage signal: same ratio check as FCM sendBatch.
@@ -687,12 +772,13 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     for (const { userId } of iosSends) {
       notifiedUsers.add(userId);
     }
+    for (const uid of webNotified) notifiedUsers.add(uid);
     for (const uid of notifiedUsers) {
       if (safeData.festivalId) await incrementUnread(uid, safeData.festivalId, type);
     }
 
     // Clean up stale tokens (deferred to avoid blocking the request path)
-    const allStaleTokens = [...result.staleTokens, ...apnsStaleTokens];
+    const allStaleTokens = [...result.staleTokens, ...apnsStaleTokens, ...webStaleTokens];
     if (allStaleTokens.length > 0) {
       const staleTokensCopy = [...allStaleTokens];
       const tokenUserMapCopy = new Map(tokenUserMap);
@@ -711,13 +797,13 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     log.info('sendToOfflineUsers: batch complete', {
       festivalId,
       type,
-      messages: fcmMessages.length + iosSends.length,
-      sent: result.successCount + apnsSent,
-      failed: result.failureCount + (iosSends.length - apnsSent),
+      messages: fcmMessages.length + iosSends.length + webSends.length,
+      sent: result.successCount + apnsSent + webSent,
+      failed: result.failureCount + (iosSends.length - apnsSent) + (webSends.length - webSent),
       stale: allStaleTokens.length,
     });
 
-    return { sent: result.successCount + apnsSent };
+    return { sent: result.successCount + apnsSent + webSent };
   }
 
   // #30: Silent push for background data sync — data-only, no visible notification
@@ -766,7 +852,10 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
           continue;
         }
 
-        // Android / web → FCM path; skip when FCM is not configured.
+        // A silent data push has no meaning for a browser.
+        if (device.platform === 'web') continue;
+
+        // Android → FCM path; skip when FCM is not configured.
         if (!messaging) continue;
         try {
           await messaging.send({
@@ -777,7 +866,6 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
               payload: { aps: { 'content-available': 1 } },
               headers: { 'apns-priority': '5', 'apns-push-type': 'background' },
             },
-            webpush: { headers: { Urgency: 'low' } },
           });
           totalSent += 1;
         } catch (error: any) {

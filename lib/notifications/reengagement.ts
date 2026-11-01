@@ -27,6 +27,7 @@
 import crypto from 'crypto';
 import { sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail } from '../email.js';
 import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
+import { appLink, appOrigin } from './links.js';
 
 /**
  * Backend mirror of `@festie/shared` `isFestivalOver`: true once the festival's
@@ -143,7 +144,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const fresh = await filterFresh(attendeeIds, 'wrap_ready', eventKey);
 
     // Push to ALL fresh attendees in bounded chunks (no MAX_PUSH_BATCH drop).
-    const deepLink = `${origin()}/wrap?festival=${encodeURIComponent(festivalId)}`;
+    const deepLink = `${appOrigin(config)}/wrap?festival=${encodeURIComponent(festivalId)}`;
     const pushSent = await pushFanout(fresh, () => ({
       type: 'wrap_ready',
       title: `${festivalName}: your wrap is ready`,
@@ -220,7 +221,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     // Prior-year attendees are NOT in the new festival, so we push per-user
     // (each respects pref + DND) — now over ALL of them in bounded chunks
     // instead of dropping the tail past MAX_PUSH_BATCH.
-    const deepLink = `${origin()}/festival/${encodeURIComponent(festivalId)}`;
+    const deepLink = appLink(config, '/?festival=' + encodeURIComponent(festivalId));
     const pushSent = await pushFanout(fresh, () => ({
       type: 'lineup_drop',
       title: `${festivalName} lineup just dropped`,
@@ -249,7 +250,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const fresh = await filterFresh(invited, 'crew_reformed', eventKey);
     if (fresh.length === 0) return { sent: 0, reason: 'all_deduped' };
 
-    const reformDeepLink = inviteUrl || `${origin()}/crew/${encodeURIComponent(newCrewId)}`;
+    const reformDeepLink = inviteUrl || appLink(config, '/crew');
     const pushSent = await pushFanout(fresh, () => ({
       type: 'crew_reformed',
       title: `${crewName || 'Your crew'} reformed`,
@@ -275,10 +276,6 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   }
 
   // ── shared helpers ────────────────────────────────────────────────────────
-
-  function origin() {
-    return String(config?.PUBLIC_ORIGIN || 'https://festie.us').replace(/\/+$/, '');
-  }
 
   /**
    * Push to EVERY user in `userIds` via per-user `notify.send` (each respects

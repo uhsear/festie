@@ -21,6 +21,8 @@ export interface FestivalEditFormProps {
   formData: Partial<Festival>;
   setFormData: (next: Partial<Festival>) => void;
   editingId: string | null;
+  notifyPickers: boolean;
+  onNotifyPickersChange: (v: boolean) => void;
   initialExpandedDays?: Set<string>;
   onSave: () => void;
   onCancel: () => void;
@@ -37,6 +39,8 @@ export default function FestivalEditForm({
   formData,
   setFormData,
   editingId,
+  notifyPickers,
+  onNotifyPickersChange,
   initialExpandedDays,
   onSave,
   onCancel,
@@ -259,6 +263,26 @@ export default function FestivalEditForm({
           + Add Day
         </button>
       </div>
+
+      {editingId && (
+        <div className="flex items-start gap-3 border-t border-glass-border pt-4 text-sm text-text-primary">
+          <input
+            id="festival-notify-pickers"
+            type="checkbox"
+            checked={notifyPickers}
+            onChange={(e) => onNotifyPickersChange(e.target.checked)}
+            className="mt-1"
+          />
+          <div className="flex flex-col gap-1">
+            <label htmlFor="festival-notify-pickers" className="font-medium">
+              Tell people whose picks changed
+            </label>
+            <span className="text-xs text-text-muted">
+              Sends one alert to each person who picked a set you moved or removed.
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 justify-end border-t border-glass-border pt-4">
         <button

@@ -206,6 +206,7 @@ function makeMockDeps(overrides: any = {}) {
     emitter: {
       festivalCreated: mock.fn(),
       festivalUpdated: mock.fn(),
+      scheduleChanged: mock.fn(),
       festivalDeleted: mock.fn(),
     },
 
@@ -1481,6 +1482,63 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       assert.equal(res.body.error, null);
       assert.equal(updateFn.mock.calls.length, 1);
       assert.equal(deps.emitter.festivalUpdated.mock.calls.length, 1);
+      assert.deepEqual(res.body.data.scheduleNotice, { changes: 0, people: 0, notified: false });
+      assert.equal(deps.emitter.scheduleChanged.mock.calls.length, 0);
+    });
+
+    describe('schedule notice', () => {
+      const stages = [{ id: 'sahara', name: 'Sahara', color: '#ff0000' }];
+      const set = { id: 'set-1', artist: 'Peggy Gou', stageId: 'sahara', startTime: '22:00', endTime: '23:00' };
+      const existingFestival = { id: 'f-1', name: 'Fest', stages, days: [{ label: 'Sat', date: '2026-04-11', sets: [set] }] };
+      const movedDays = [{ label: 'Sat', date: '2026-04-11', sets: [{ ...set, startTime: '23:30', endTime: '00:30' }] }];
+
+      function depsWithPickers() {
+        const pickersBySet = mock.fn(async () => new Map([['set-1', ['u1']]]));
+        const deps = makeMockDeps({
+          getFestivalById: mock.fn(async () => existingFestival),
+          stores: {
+            festivals: { update: mock.fn(async (id: any, data: any) => ({ id, ...data })) },
+            profiles: { pickersBySet },
+          },
+        });
+        return { deps, pickersBySet };
+      }
+
+      test('a moved picked set alerts its pickers and reports the count', async () => {
+        const { deps, pickersBySet } = depsWithPickers();
+        const app = createApp(createFestivalsRoutes(deps));
+
+        const res = await request(app).put('/f-1').send({ stages, days: movedDays });
+
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.body.data.scheduleNotice, { changes: 1, people: 1, notified: true });
+        assert.deepEqual(pickersBySet.mock.calls[0]!.arguments, ['f-1', ['set-1']]);
+        assert.equal(deps.emitter.scheduleChanged.mock.calls.length, 1);
+        const arg = deps.emitter.scheduleChanged.mock.calls[0]!.arguments[0];
+        assert.equal(arg.changes[0].setId, 'set-1');
+      });
+
+      test('notify: false saves without alerts', async () => {
+        const { deps } = depsWithPickers();
+        const app = createApp(createFestivalsRoutes(deps));
+
+        const res = await request(app).put('/f-1').send({ stages, days: movedDays, notify: false });
+
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.body.data.scheduleNotice, { changes: 1, people: 1, notified: false });
+        assert.equal(deps.emitter.scheduleChanged.mock.calls.length, 0);
+      });
+
+      test('a rename-only save reports no changes and reads no pickers', async () => {
+        const { deps, pickersBySet } = depsWithPickers();
+        const app = createApp(createFestivalsRoutes(deps));
+        const renamed = [{ label: 'Sat', date: '2026-04-11', sets: [{ ...set, artist: 'Peggy Gou (DJ)' }] }];
+
+        const res = await request(app).put('/f-1').send({ stages, days: renamed });
+
+        assert.deepEqual(res.body.data.scheduleNotice, { changes: 0, people: 0, notified: false });
+        assert.equal(pickersBySet.mock.calls.length, 0);
+      });
     });
 
     test('returns 404 when festival not found', async () => {
