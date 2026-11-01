@@ -55,9 +55,7 @@ describe('detectConflicts', () => {
   });
 
   it('handles sets that wrap past midnight', () => {
-    // The +1440 adjustment is per-set, so a 23:00-01:00 set becomes 23:00-25:00
-    // but a 00:00-02:00 set stays 0-120. These ranges don't overlap in this model.
-    // Overlap only detected when both sets are in the same midnight-relative window.
+    // A 23:00-01:00 set spans 1380-1500 minutes of its logical day.
     const sets = [
       makeSet({ id: 's1', startTime: '23:00', endTime: '01:00' }),
       makeSet({ id: 's2', startTime: '23:30', endTime: '00:30' }),
@@ -67,6 +65,18 @@ describe('detectConflicts', () => {
     const conflicts = detectConflicts(sets, getMyPick);
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0]!.overlapMinutes).toBe(60);
+  });
+
+  it('detects a clash with a set that starts after midnight on the same day', () => {
+    // 00:30 belongs to the same night as 23:30 (06:00 rule), so it sits at 1470.
+    const sets = [
+      makeSet({ id: 's1', startTime: '23:30', endTime: '01:00', dayIndex: 0 }),
+      makeSet({ id: 's2', startTime: '00:30', endTime: '01:30', dayIndex: 0 }),
+    ];
+    const picks: Record<string, Priority> = { s1: 'must', s2: 'must' };
+    const conflicts = detectConflicts(sets, (id) => picks[id]);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]!.overlapMinutes).toBe(30);
   });
 
   it('ignores sets without start/end time', () => {

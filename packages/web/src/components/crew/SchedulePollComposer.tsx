@@ -6,6 +6,7 @@ import {
   artistDisplayName,
   formatTime,
   getSetTimeBounds,
+  resolveFestivalTimeZone,
   type FestivalSet,
   type PollSetRef,
 } from '@festie/shared';
@@ -47,6 +48,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
   const { toast, toastError } = useToast();
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
+  const timeZone = useFestivalStore((s) => resolveFestivalTimeZone(s.currentFestival));
   const { getStageName } = useFestival();
   const createPoll = useCrewStore((s) => s.createPoll);
 
@@ -119,7 +121,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
     try {
       const options = chosenSets.map((set) => artistDisplayName(set));
       const setRefs: (PollSetRef | null)[] = chosenSets.map((set) => {
-        const bounds = getSetTimeBounds(set, days);
+        const bounds = getSetTimeBounds(set, days, timeZone);
         return {
           setId: set.id,
           label: artistDisplayName(set),

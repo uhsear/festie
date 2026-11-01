@@ -151,6 +151,15 @@ export type ResetPasswordPublicInput = z.infer<typeof resetPasswordPublicSchema>
 // ════════════════════════════════════════════════════════════════════════════════
 // Notification & Push Schemas
 // ════════════════════════════════════════════════════════════════════════════════
+// Throws RangeError for an unknown IANA zone, which Intl reports for a bad id.
+function isIanaTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
 const dndTime = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:MM (24h)')
@@ -165,6 +174,7 @@ export const notificationPrefsSchema = z
     wrapReady: z.boolean().optional(),
     dndStart: dndTime.optional(),
     dndEnd: dndTime.optional(),
+    dndTimeZone: z.string().max(64).refine(isIanaTimeZone, { message: 'Invalid IANA time zone' }).nullable().optional(),
   })
   .strict();
 export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
@@ -316,18 +326,7 @@ export type DayInput = z.infer<typeof daySchema>;
 const festivalTimeZone = z
   .string()
   .max(64)
-  .refine(
-    (value) => {
-      try {
-        // Throws RangeError for an unknown IANA zone.
-        new Intl.DateTimeFormat('en-US', { timeZone: value });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    { message: 'Invalid IANA time zone' },
-  )
+  .refine(isIanaTimeZone, { message: 'Invalid IANA time zone' })
   .nullable()
   .optional();
 

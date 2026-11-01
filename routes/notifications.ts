@@ -192,6 +192,7 @@ export default function createNotificationRoutes(deps: any) {
         'wrapReady',
         'dndStart',
         'dndEnd',
+        'dndTimeZone',
       ]);
       const bodyKeys = Object.keys(body);
       if (bodyKeys.some((key) => !allowedKeys.has(key))) {
@@ -234,6 +235,11 @@ export default function createNotificationRoutes(deps: any) {
         }
       }
 
+      // Zone is already IANA-validated by schemas.notificationPrefs.
+      if (body.dndTimeZone !== undefined) {
+        update.dndTimeZone = body.dndTimeZone || null;
+      }
+
       if (Object.keys(update).length === 0) {
         return sendError(res, 400, 'No valid preference fields provided', ErrorCodes.INVALID_INPUT);
       }
@@ -251,6 +257,7 @@ export default function createNotificationRoutes(deps: any) {
         wrapReady: update.wrapReady !== undefined ? update.wrapReady : (current.wrapReady ?? true),
         dndStart: update.dndStart !== undefined ? update.dndStart : (current.dndStart ?? null),
         dndEnd: update.dndEnd !== undefined ? update.dndEnd : (current.dndEnd ?? null),
+        dndTimeZone: update.dndTimeZone !== undefined ? update.dndTimeZone : (current.dndTimeZone ?? null),
       });
       const prefs = await stores.notificationPrefs.get(req.user.userId);
       log.info('notification prefs updated', { userId: req.user.userId, ip: getRequestIp(req) });

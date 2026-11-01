@@ -3,7 +3,7 @@ import { View, Text, ScrollView } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
-import { artistDisplayName, formatTime, pickActiveMeetingPoint, buildSlots } from '@festie/shared/utils';
+import { artistDisplayName, formatTime, pickActiveMeetingPoint, buildSlots, CREW_PLAN_SLOTS, resolveFestivalTimeZone } from '@festie/shared/utils';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import type { FestivalDay, FestivalSet, Profile } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -44,9 +44,11 @@ export default function CrewPlanScreen() {
     return allProfiles.filter((p) => memberIds.has(p.userId));
   }, [crewMembers, activeCrew, allProfiles]);
 
+  const timeZone = resolveFestivalTimeZone(useFestivalStore((s) => s.currentFestival));
   const nowMs = useNow();
   const meetingPoint = useMemo(() => pickActiveMeetingPoint(meetingPoints, nowMs), [meetingPoints, nowMs]);
-  const slots = useMemo(() => buildSlots(sets, days, crewProfiles, nowMs), [sets, days, crewProfiles, nowMs]);
+  const slots = useMemo(() => buildSlots(sets, days, crewProfiles, nowMs, CREW_PLAN_SLOTS, timeZone),
+    [sets, days, crewProfiles, nowMs, timeZone],);
   const slotsWithPicks = slots.filter((s) => s.picks.length > 0);
 
   if (!user) {

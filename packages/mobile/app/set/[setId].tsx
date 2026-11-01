@@ -28,6 +28,8 @@ import {
   detectConflicts,
   hasSetStarted,
   buildSetUrl,
+  festivalTimeLabel,
+  resolveFestivalTimeZone,
 } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -39,6 +41,7 @@ import { PRIORITY_BUTTONS, priorityIconName } from '../../lib/prioritySymbol';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import { ensureStageTextContrast } from '../../lib/stageTextContrast';
 import { useHaptics } from '../../hooks/useHaptics';
+import { useNow } from '../../hooks/useNow';
 import Button from '../../components/Button';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
@@ -115,6 +118,7 @@ export default function SetDetailScreen() {
 
   const sets = useFestivalDataStore((s) => s.sets);
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const nowMs = useNow(60_000);
   const currentFestivalId = useFestivalDataStore((s) => s.currentFestivalId);
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
@@ -191,8 +195,11 @@ export default function SetDetailScreen() {
     () => ensureStageTextContrast(stageColor, t.colors.bg.primary),
     [stageColor, t.colors.bg.primary],
   );
+  const zoneLabel = festivalTimeLabel(resolveFestivalTimeZone(currentFestival), nowMs);
   const timeLabel =
-    set && set.startTime && set.endTime ? `${formatTime(set.startTime)} - ${formatTime(set.endTime)}` : 'TBA';
+    set && set.startTime && set.endTime
+      ? `${formatTime(set.startTime)} - ${formatTime(set.endTime)}${zoneLabel ? ` · ${zoneLabel}` : ''}`
+      : 'TBA';
   const myPick = set ? getMyPick(set.id) : undefined;
   const myReminder = set ? getMyReminder(set.id) : undefined;
 

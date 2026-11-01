@@ -36,7 +36,7 @@ import {
   type DayRow,
   type FormState,
 } from './festivalEditState';
-import { amenityCount } from '@festie/shared/utils';
+import { amenityCount, listTimeZones, startsAfterMidnight } from '@festie/shared/utils';
 import type { FestivalMapConfig } from '@festie/shared/types';
 
 /**
@@ -62,21 +62,6 @@ import type { FestivalMapConfig } from '@festie/shared/types';
  *
  * Back-navigates to '/admin' on save / cancel / delete.
  */
-
-// Common IANA zones offered in the editor — mirrors the web form's
-// COMMON_TIME_ZONES. The festival's current value is merged in at render time so
-// an existing custom zone is never dropped.
-const COMMON_TIME_ZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Phoenix',
-  'America/Los_Angeles',
-  'Europe/London',
-  'Europe/Berlin',
-  'Australia/Sydney',
-] as const;
 
 const DEFAULT_STAGE_COLOR = '#6a6a88';
 
@@ -275,13 +260,10 @@ export default function FestivalEditScreen() {
   }));
 
   // Timezone options — merge the festival's current custom zone in if off-list.
-  const timeZoneOptions: SelectOption[] = [
-    { label: 'Device-local (no festival zone)', value: '' },
-    ...Array.from(new Set([...COMMON_TIME_ZONES, ...(form.timeZone ? [form.timeZone] : [])])).map((tz) => ({
-      label: tz,
-      value: tz,
-    })),
-  ];
+  const timeZoneOptions: SelectOption[] = listTimeZones(form.timeZone).map((tz) => ({
+    label: tz,
+    value: tz,
+  }));
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -292,6 +274,10 @@ export default function FestivalEditScreen() {
     }
     if (!form.location.trim()) {
       setFormError('Location is required.');
+      return;
+    }
+    if (!form.timeZone) {
+      setFormError("Choose the festival's time zone. Set times, countdowns and reminders use it.");
       return;
     }
     // Block obviously-malformed dates/times before hitting the server (the
@@ -473,7 +459,9 @@ export default function FestivalEditScreen() {
               value={form.timeZone}
               options={timeZoneOptions}
               onSelect={(v) => updateForm((f) => ({ ...f, timeZone: v }))}
-              hint="Anchors set status & reminders in the festival's zone."
+              placeholder="Choose a time zone…"
+              searchable
+              hint="Set times, countdowns and reminders use this zone."
             />
           </View>
 
@@ -663,6 +651,11 @@ export default function FestivalEditScreen() {
                                     label="Start"
                                     value={s.startTime}
                                     onChangeText={(v) => setSetField(day.id, s.id, 'startTime', v)}
+                                    hint={
+                                      startsAfterMidnight(s.startTime)
+                                        ? `After midnight. Shows as part of ${day.label.trim() || "this day's"} night.`
+                                        : undefined
+                                    }
                                   />
                                 </View>
                                 <View style={styles.flex}>

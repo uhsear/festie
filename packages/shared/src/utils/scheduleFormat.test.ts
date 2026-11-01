@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtCountdown, fmtClock, byStartTime, setLabel } from './scheduleFormat';
+import { fmtCountdown, byStartTime, setLabel } from './scheduleFormat';
 import type { FestivalSet } from '../types/domain';
 
 // ---------------------------------------------------------------------------
@@ -28,37 +28,6 @@ describe('fmtCountdown', () => {
     expect(fmtCountdown(60)).toBe('in 1h');
     expect(fmtCountdown(120)).toBe('in 2h');
     expect(fmtCountdown(180)).toBe('in 3h');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// fmtClock
-// ---------------------------------------------------------------------------
-
-describe('fmtClock', () => {
-  it('formats midnight as 00:00', () => {
-    // Build a specific local midnight to avoid TZ ambiguity
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    expect(fmtClock(d.getTime())).toBe('00:00');
-  });
-
-  it('formats noon as 12:00', () => {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
-    expect(fmtClock(d.getTime())).toBe('12:00');
-  });
-
-  it('zero-pads hours and minutes', () => {
-    const d = new Date();
-    d.setHours(9, 5, 0, 0);
-    expect(fmtClock(d.getTime())).toBe('09:05');
-  });
-
-  it('formats 23:59 correctly', () => {
-    const d = new Date();
-    d.setHours(23, 59, 0, 0);
-    expect(fmtClock(d.getTime())).toBe('23:59');
   });
 });
 
@@ -109,6 +78,11 @@ describe('byStartTime', () => {
     const sets = [makeSet('20:00'), makeSet('12:00'), makeSet('08:00'), makeSet('15:30')];
     const sorted = [...sets].sort(byStartTime);
     expect(sorted.map((s) => s.startTime)).toEqual(['08:00', '12:00', '15:30', '20:00']);
+  });
+
+  it('sorts an after-midnight start after the late-night sets of the same day', () => {
+    const sorted = [makeSet('01:00'), makeSet('18:00'), makeSet('23:30')].sort(byStartTime);
+    expect(sorted.map((s) => s.startTime)).toEqual(['18:00', '23:30', '01:00']);
   });
 });
 

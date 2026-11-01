@@ -349,6 +349,19 @@ describe('isInDndWindow', () => {
     assert.equal(isInDndWindow({ dndStart: '00:00', dndEnd: '00:00' }), false);
   });
 
+  test('reads the window in dndTimeZone', () => {
+    const prefs = { dndStart: '23:00', dndEnd: '08:00', dndTimeZone: 'America/Los_Angeles' };
+    assert.equal(isInDndWindow(prefs, new Date('2026-09-05T09:30:00Z')), true); // 02:30 PT
+    assert.equal(isInDndWindow(prefs, new Date('2026-09-05T16:30:00Z')), false); // 09:30 PT
+  });
+
+  test('a bad dndTimeZone falls back to the server clock without throwing', () => {
+    const now = new Date('2026-09-05T09:30:00Z');
+    const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const expected = hhmm >= '23:00' || hhmm < '08:00';
+    assert.equal(isInDndWindow({ dndStart: '23:00', dndEnd: '08:00', dndTimeZone: 'Mars/Base' }, now), expected);
+  });
+
   test('wrap-around window 22:00-08:00 matches expected inclusion relative to now', () => {
     const d = new Date();
     const nowHHMM = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

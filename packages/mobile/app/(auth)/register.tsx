@@ -263,9 +263,9 @@ export default function RegisterScreen() {
 
   /** Format a Date to the 'YYYY-MM-DD' string the backend expects. */
   const toIso = (d: Date): string => {
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
 
@@ -275,6 +275,7 @@ export default function RegisterScreen() {
     : null;
 
   const today = new Date();
+  const defaultDob = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
 
   // Clears one field's error as soon as the user edits it.
   const clearError = (field: RegisterField) => setErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -292,7 +293,7 @@ export default function RegisterScreen() {
 
   const openAndroidPicker = () => {
     DateTimePickerAndroid.open({
-      value: dob ?? new Date(today.getFullYear() - 18, today.getMonth(), today.getDate()),
+      value: dob ?? defaultDob,
       mode: 'date',
       maximumDate: today,
       onChange: (_evt, selected) => {
@@ -646,7 +647,13 @@ export default function RegisterScreen() {
               <View style={styles.iosPickerHeader}>
                 <Text style={styles.iosPickerLabel}>Date of birth</Text>
                 <TouchableOpacity
-                  onPress={() => setShowIosPicker(false)}
+                  onPress={() => {
+                    if (!dob) {
+                      setDob(defaultDob);
+                      clearError('dob');
+                    }
+                    setShowIosPicker(false);
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel="Done"
                 >
@@ -654,7 +661,7 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
               </View>
               <DateTimePicker
-                value={dob ?? new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())}
+                value={dob ?? defaultDob}
                 mode="date"
                 display="spinner"
                 maximumDate={today}

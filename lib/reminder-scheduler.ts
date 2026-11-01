@@ -14,7 +14,7 @@
  */
 
 import { isInDndWindow } from './notifications/index.js';
-import { zonedWallTimeToMs } from './time-zone.js';
+import { FESTIVAL_DAY_START_HOUR, formatClock12, zonedWallTimeToMs } from './time-zone.js';
 
 function createReminderScheduler({ pool, stores, notificationService, log, config }: any) {
   // ── Leader election (PM2 cluster) ──────────────────────────────────────────
@@ -53,23 +53,29 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
    * right real-world instant for attendees whose device is in another zone. When
    * absent — or invalid — falls back to the bare local parse (the exact prior
    * behavior), so zone-less festivals are unchanged.
+   *
+   * A start before 06:00 belongs to the previous logical day, so it lands on the
+   * next calendar day after `dayDate`.
    */
   function computeSetStartMs(dayDate: any, startTime: any, timeZone?: string | null) {
     if (!dayDate || !startTime) return null;
     const dateStr = typeof dayDate === 'object' ? dayDate.toISOString().slice(0, 10) : String(dayDate).slice(0, 10);
     const [h, m] = startTime.split(':').map(Number);
     if (isNaN(h) || isNaN(m)) return null;
+    const dayShift = h < FESTIVAL_DAY_START_HOUR ? 1 : 0;
 
     if (timeZone) {
       // Anchor the wall-clock in the festival's zone (absolute epoch-ms).
       const [y, mo, d] = dateStr.split('-').map(Number);
-      const ms = zonedWallTimeToMs(y, mo, d, h, m, timeZone);
+      const ms = zonedWallTimeToMs(y, mo, d + dayShift, h, m, timeZone);
       if (!isNaN(ms)) return ms;
       // Invalid zone → fall through to the bare-local parse below.
     }
 
     const dt = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
-    return isNaN(dt.getTime()) ? null : dt.getTime();
+    if (isNaN(dt.getTime())) return null;
+    if (dayShift) dt.setDate(dt.getDate() + 1);
+    return dt.getTime();
   }
 
   async function processProfileReminders(
@@ -116,7 +122,9 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
           userId: profile.userId,
           type: 'set_reminder',
           title: `${setInfo.artistName} in ${minutesBefore} min`,
-          body: `${setInfo.startTime} at ${setInfo.stageName || 'Main Stage'}`,
+          body: setInfo.stageName
+            ? `${formatClock12(setInfo.startTime)} at ${setInfo.stageName}`
+            : `Starts at ${formatClock12(setInfo.startTime)}`,
           data: {
             type: 'set_reminder',
             festivalId: festival.id,

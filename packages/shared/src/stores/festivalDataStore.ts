@@ -48,6 +48,8 @@ import {
   SaveReminderRequest,
 } from '../types';
 
+import { logicalDayIndexAt } from '../utils/dayOf';
+import { resolveFestivalTimeZone } from '../utils/festivalTime';
 import { useFestivalUIStore } from './festivalUIStore';
 import { useUIStore } from './uiStore';
 
@@ -271,10 +273,9 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         _profilesCachedAt: profilesAreFresh ? Date.now() : prevState._profilesCachedAt,
       });
 
-      // Default the day selector to today when the festival is in progress
-      // (local date matches a day), otherwise day 0. en-CA gives YYYY-MM-DD.
-      const todayStr = new Date().toLocaleDateString('en-CA');
-      const todayIdx = days.findIndex((d) => d.date === todayStr);
+      // Default the day selector to the logical festival day containing now, in
+      // the festival zone (01:00 still counts as the night before), else day 0.
+      const todayIdx = logicalDayIndexAt(days, Date.now(), resolveFestivalTimeZone(festival)) ?? 0;
 
       // Reset UI state in the UI store when selecting a new festival
       useFestivalUIStore.setState({
@@ -285,7 +286,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         // + Clear-all chip + PhaseHomeActions on a clean load (squeezing the
         // timeline). [] keeps a fresh load filter-free.
         activeStages: [],
-        selectedDay: todayIdx >= 0 ? todayIdx : 0,
+        selectedDay: todayIdx,
       });
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load festival');

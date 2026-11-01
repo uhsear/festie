@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AppState, type ScrollViewInstance } from 'react-native';
 import { useReduceMotion } from './useReduceMotion';
-import { nowPositionPercent } from '../lib/nowPosition';
+import { nowPositionPercent } from '@festie/shared/utils';
 
 /** Time bounds for the visible day window (minutes-from-midnight). */
 export interface TimeBounds {

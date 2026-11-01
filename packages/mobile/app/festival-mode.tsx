@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter, Stack } from 'expo-router';
 import { useAuthStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
 import type { FestivalSet } from '@festie/shared/types';
-import { fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
+import { festivalTimeLabel, fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
 import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
 import EmptyState from '../components/EmptyState';
@@ -88,7 +88,7 @@ export default function FestivalModeScreen() {
               <Text style={styles.clock} accessibilityLabel={`Festival time ${fmtZonedClock(nowMs, timeZone)}`}>
                 {fmtZonedClock(nowMs, timeZone)}
               </Text>
-              {timeZone ? <Text style={styles.clockCaption}>Festival time</Text> : null}
+              {festivalTimeLabel(timeZone, nowMs) ? <Text style={styles.clockCaption}>Festival time</Text> : null}
             </View>
           </View>
           <View style={styles.metaRow}>
