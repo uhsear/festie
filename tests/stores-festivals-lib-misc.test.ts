@@ -278,8 +278,8 @@ describe('lib/db/stores/festivals.js', () => {
       const { pool, client } = makeTransactionPool([
         { rows: [] }, // BEGIN
         { rows: [] }, // UPDATE festivals
-        { rows: [] }, // DELETE stages
-        { rows: [] }, // INSERT stages batch
+        { rows: [] }, // UPSERT stages batch
+        { rows: [] }, // DELETE unused missing stages
         { rows: [{ id: 'f1' }] }, // SELECT
         { rows: [] }, // COMMIT
       ]);
@@ -288,11 +288,14 @@ describe('lib/db/stores/festivals.js', () => {
       await store.update('f1', {
         stages: [{ id: 's1', name: 'Stage A', color: '#000' }],
       });
-      // Should have DELETE FROM festival_stages call
-      const deleteCall = client.query.mock.calls.find(
-        (c: any) => typeof c.arguments[0] === 'string' && c.arguments[0].includes('DELETE FROM festival_stages'),
-      );
-      assert.ok(deleteCall, 'should delete old stages');
+      const sqls = client.query.mock.calls.map((c: any) => String(c.arguments[0]));
+      const upsertIdx = sqls.findIndex((s: string) => s.includes('ON CONFLICT (festival_id, id) DO UPDATE'));
+      const deleteIdx = sqls.findIndex((s: string) => s.includes('DELETE FROM festival_stages'));
+      assert.ok(upsertIdx > 0, 'should upsert stages');
+      assert.ok(deleteIdx > upsertIdx, 'should delete missing stages after the upsert');
+      // Deleting a stage that sets still use would cascade through festival_sets_stage_fkey.
+      assert.ok(sqls[deleteIdx]!.includes('NOT EXISTS'), 'should skip stages that sets still use');
+      assert.deepEqual(client.query.mock.calls[deleteIdx]!.arguments[1], ['f1', ['s1']]);
     });
 
     it('updates days (with pick/rating preservation) when provided', async () => {

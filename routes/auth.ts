@@ -9,6 +9,7 @@
  * POST /login - Authenticate user and set session cookie
  * POST /logout - Invalidate session and clear cookie
  * POST /change-password - Change password (authenticated)
+ * POST /reauth - Re-enter the password to open the 15-minute window for destructive admin actions
  * (Email routes split to email-auth.js: forgot-password, verify-email, resend-verification.
  *  The unverified-write POST /update-email was removed; POST /api/v1/account/email replaces it.)
  */
@@ -16,6 +17,7 @@
 import crypto from 'crypto';
 import type { Request, Response, Router } from 'express';
 import { sendVerificationEmail } from '../lib/email';
+import { REAUTH_WINDOW_MS } from '../lib/app-context/session';
 // Request augmentation (validatedBody, user, userToken, …) now lives centrally
 // in lib/types/request.ts. Importing the types barrel pulls in its global
 // side-effect so this module sees the augmented Request.
@@ -624,6 +626,33 @@ export default function createAuthRoutes(deps: any): Router {
       } catch (error: any) {
         log.error('change-password failed', { error: error.message });
         return sendError(res, 500, 'Failed to change password', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // Stamp the current session as freshly re-authenticated. requireRecentAuth
+  // (lib/app-context/session.ts) lets destructive admin actions through for
+  // the next 15 minutes. A rotated session token starts without the stamp.
+  router.post(
+    '/reauth',
+    userAuth,
+    rateLimit(5, 'reauth'),
+    validate(schemas.reauth),
+    async (req: Request, res: Response) => {
+      try {
+        const { password } = req.validatedBody as any;
+        const user = await getUserById(req.user.userId);
+        if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+        if (!(await verifyPassword(password, user.passwordHash))) {
+          return sendError(res, 403, 'That password is not right. Try again.', ErrorCodes.PASSWORD_INCORRECT);
+        }
+        const { hashSessionToken: hashToken } = deps;
+        await stores.sessions.markReauthenticated(hashToken(req.userToken));
+        setNoStore(res);
+        return sendSuccess(res, { reauthUntil: new Date(Date.now() + REAUTH_WINDOW_MS).toISOString() });
+      } catch (error: any) {
+        log.error('reauth failed', { error: error.message });
+        return sendError(res, 500, 'Failed to confirm password', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );

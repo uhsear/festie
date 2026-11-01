@@ -1624,7 +1624,7 @@ describe('routes/lineup-import', () => {
       getRequestIp: () => '127.0.0.1',
       stores: {
         pool: storePool,
-        festivals: { insertSets: mock.fn(async () => {}) },
+        festivals: { applyLineupImport: mock.fn(async () => {}) },
       },
       pool: storePool,
       config: {
@@ -1695,21 +1695,34 @@ describe('routes/lineup-import', () => {
 
     const res = await request(app).post('/fest-1/import-lineup').send({ text: csvText, format: 'csv' }).expect(200);
 
-    const sets = res.body.data.sets;
-    assert.equal(sets[0].startTime, '14:00');
-    assert.equal(sets[0].endTime, '15:30');
+    const rows = res.body.data.rows;
+    assert.equal(rows[0].startTime, '14:00');
+    assert.equal(rows[0].endTime, '15:30');
   });
 
-  test('POST /:id/import-lineup — warns on unknown stage', async () => {
+  test('POST /:id/import-lineup — rejects an unknown stage and writes nothing', async () => {
     const deps = buildLineupDeps();
     const app = await mountLineup(deps);
 
     const csvText = 'DJ X,Unknown Stage,Day 1,14:00,15:00';
 
-    const res = await request(app).post('/fest-1/import-lineup').send({ text: csvText, format: 'csv' }).expect(200);
+    await request(app).post('/fest-1/import-lineup').send({ text: csvText, format: 'csv' }).expect(400);
+    assert.equal(deps.stores.festivals.applyLineupImport.mock.callCount(), 0);
+  });
 
-    assert.ok(res.body.data.warnings.length > 0);
-    assert.match(res.body.data.warnings[0], /unknown stage/i);
+  test('POST /:id/import-lineup — dryRun flags an unknown stage as a row error and writes nothing', async () => {
+    const deps = buildLineupDeps();
+    const app = await mountLineup(deps);
+
+    const res = await request(app)
+      .post('/fest-1/import-lineup')
+      .send({ text: 'DJ X,Unknown Stage,Day 1,14:00,15:00', format: 'csv', dryRun: true })
+      .expect(200);
+
+    assert.equal(res.body.data.rows[0].status, 'error');
+    assert.match(res.body.data.rows[0].message, /not in this festival/i);
+    assert.equal(res.body.data.counts.error, 1);
+    assert.equal(deps.stores.festivals.applyLineupImport.mock.callCount(), 0);
   });
 });
 

@@ -75,6 +75,9 @@ function makeMockDeps(overrides: any = {}) {
       req.user = { userId: 'admin-1' };
       next();
     },
+    // Re-auth gate passes by default; the re-auth tests override both.
+    hasRecentAuth: () => true,
+    requireRecentAuth: (_req: any, _res: any, next: any) => next(),
     getUserById: mock.fn(async (id) => ({
       id,
       username: 'testuser',
@@ -107,6 +110,9 @@ function makeMockDeps(overrides: any = {}) {
       RATE_LIMITED: 'RATE_LIMITED',
       TOKEN_EXPIRED: 'TOKEN_EXPIRED',
       ACCOUNT_LOCKED: 'ACCOUNT_LOCKED',
+      REAUTH_REQUIRED: 'REAUTH_REQUIRED',
+      CONFIRM_REMOVALS: 'CONFIRM_REMOVALS',
+      FESTIVAL_CHANGED: 'FESTIVAL_CHANGED',
     },
     rateLimit: () => (_req: any, _res: any, next: any) => next(),
     io: { to: () => ({ emit: () => {} }), sockets: { sockets: new Map() } },
@@ -159,6 +165,7 @@ function makeMockDeps(overrides: any = {}) {
         deleteUserSession: mock.fn(async () => {}),
         deleteUserSessions: mock.fn(async () => {}),
         listUserSessions: mock.fn(async () => []),
+        markReauthenticated: mock.fn(async () => {}),
       },
       refreshTokens: null,
       loginFailures: null,
@@ -1952,5 +1959,145 @@ describe('routes/account.js — POST /email notifies the address on file', () =>
     assert.equal(res.status, 400);
     assert.equal(res.body.error.code, 'ALREADY_EXISTS');
     assert.equal(deps.stores.emailTokens.replaceVerificationToken.mock.calls.length, 0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// T4 P1: festival save guards and re-auth
+// ═══════════════════════════════════════════════════════════════════════
+describe('routes/festivals.js — PUT /:id save guards', () => {
+  const stored = {
+    id: 'f-1',
+    name: 'Fest',
+    updatedAt: '2026-10-01T12:00:00.000Z',
+    days: [
+      { label: 'Fri', sets: [{ id: 's1', artist: 'A', stageId: 'main', startTime: '20:00', endTime: '21:00' }] },
+      { label: 'Sat', sets: [{ id: 's2', artist: 'B', stageId: 'main', startTime: '20:00', endTime: '21:00' }] },
+    ],
+  };
+  const dropSat = {
+    name: 'Fest',
+    days: [{ label: 'Fri', sets: [{ id: 's1', artist: 'A2', stageId: 'main', startTime: '20:00', endTime: '21:00' }] }],
+  };
+
+  function guardDeps(overrides: any = {}) {
+    const updateFn = mock.fn(async (id: any, data: any) => ({ id, ...data }));
+    const insertFn = mock.fn(async () => {});
+    const deps = makeMockDeps({
+      getFestivalById: mock.fn(async () => stored),
+      sendError: (res: any, status: any, message: any, code: any, details: any) =>
+        res.status(status).json({ data: null, error: { message, status, code, ...(details || {}) } }),
+      stores: {
+        festivals: { update: updateFn },
+        auditLog: { insert: insertFn },
+        pool: {
+          query: mock.fn(async (sql: string) => ({
+            rows: [{ count: sql.includes('festival_profile_picks') ? '1' : '0' }],
+          })),
+        },
+      },
+      ...overrides,
+    });
+    return { deps, updateFn, insertFn };
+  }
+
+  test('refuses a save that drops a picked set without confirmRemovals', async () => {
+    const { deps, updateFn } = guardDeps();
+    const res = await request(createApp(createFestivalsRoutes(deps))).put('/f-1').send(dropSat);
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'CONFIRM_REMOVALS');
+    assert.deepEqual(res.body.error.removal, { days: 1, sets: 1, picks: 1, ratings: 0 });
+    assert.equal(res.body.error.message, 'This save removes 1 day, 1 set and 1 pick. Confirm to continue.');
+    assert.equal(updateFn.mock.calls.length, 0);
+  });
+
+  test('confirmRemovals without a recent re-auth returns REAUTH_REQUIRED', async () => {
+    const { deps, updateFn } = guardDeps({ hasRecentAuth: () => false });
+    const res = await request(createApp(createFestivalsRoutes(deps)))
+      .put('/f-1')
+      .send({ ...dropSat, confirmRemovals: true });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'REAUTH_REQUIRED');
+    assert.equal(updateFn.mock.calls.length, 0);
+  });
+
+  test('confirmRemovals after re-auth saves and audits the change counts as admin', async () => {
+    const { deps, updateFn, insertFn } = guardDeps();
+    const res = await request(createApp(createFestivalsRoutes(deps)))
+      .put('/f-1')
+      .send({ ...dropSat, confirmRemovals: true, expectedUpdatedAt: '2026-10-01T12:00:00Z' });
+    assert.equal(res.status, 200);
+    assert.equal(updateFn.mock.calls.length, 1);
+    assert.equal((updateFn.mock.calls[0] as any).arguments[1].days.length, 1);
+    await new Promise((r) => setImmediate(r));
+    const row = (insertFn.mock.calls[0] as any).arguments[0];
+    assert.equal(row.actorType, 'admin');
+    assert.equal(row.actorId, 'admin-1');
+    assert.deepEqual(JSON.parse(row.detailsJson), {
+      name: 'Fest',
+      setsAdded: 0,
+      setsRemoved: 1,
+      setsChanged: 1,
+      picksLost: 1,
+    });
+  });
+
+  test('a stale expectedUpdatedAt returns FESTIVAL_CHANGED', async () => {
+    const { deps, updateFn } = guardDeps();
+    const res = await request(createApp(createFestivalsRoutes(deps)))
+      .put('/f-1')
+      .send({ name: 'Fest', expectedUpdatedAt: '2026-09-01T00:00:00.000Z' });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'FESTIVAL_CHANGED');
+    assert.equal(updateFn.mock.calls.length, 0);
+  });
+
+  test('a save without days leaves days and sets alone and counts nothing', async () => {
+    const { deps, updateFn } = guardDeps();
+    const res = await request(createApp(createFestivalsRoutes(deps)))
+      .put('/f-1')
+      .send({ name: 'Fest', stages: [{ id: 'main', name: 'Main' }] });
+    assert.equal(res.status, 200);
+    assert.equal('days' in (updateFn.mock.calls[0] as any).arguments[1], false);
+    assert.equal(deps.stores.pool.query.mock.calls.length, 0);
+  });
+});
+
+describe('routes/festivals.js — DELETE /:id re-auth gate', () => {
+  test('requireRecentAuth runs before the delete', async () => {
+    const softDelete = mock.fn(async () => {});
+    const deps = makeMockDeps({
+      getFestivalById: mock.fn(async () => ({ id: 'f-1', name: 'Fest' })),
+      requireRecentAuth: (_req: any, res: any) =>
+        res.status(403).json({ data: null, error: { code: 'REAUTH_REQUIRED' } }),
+      stores: { festivals: { softDelete } },
+    });
+    const res = await request(createApp(createFestivalsRoutes(deps))).delete('/f-1');
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'REAUTH_REQUIRED');
+    assert.equal(softDelete.mock.calls.length, 0);
+  });
+});
+
+describe('routes/auth.js — POST /reauth', () => {
+  test('wrong password returns 403 PASSWORD_INCORRECT and stamps nothing', async () => {
+    const deps = makeMockDeps({ verifyPassword: mock.fn(async () => false) });
+    const res = await request(createApp(createAuthRoutes(deps))).post('/reauth').send({ password: 'nope' });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'PASSWORD_INCORRECT');
+    assert.equal(res.body.error.message, 'That password is not right. Try again.');
+    assert.equal(deps.stores.sessions.markReauthenticated.mock.calls.length, 0);
+  });
+
+  test('right password stamps the hashed session token and returns reauthUntil', async () => {
+    const deps = makeMockDeps();
+    const before = Date.now();
+    const res = await request(createApp(createAuthRoutes(deps))).post('/reauth').send({ password: 'right' });
+    assert.equal(res.status, 200);
+    const calls = deps.stores.sessions.markReauthenticated.mock.calls;
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].arguments[0], 'hashed-raw-tok-123');
+    const until = new Date(res.body.data.reauthUntil).getTime();
+    assert.ok(until >= before + 15 * 60 * 1000 - 1000 && until <= Date.now() + 15 * 60 * 1000);
   });
 });

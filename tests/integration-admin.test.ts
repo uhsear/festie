@@ -13,6 +13,15 @@ import {
 
 const servers: any[] = [];
 
+// Gated admin actions need a fresh password confirmation (T4 re-auth window).
+async function reauth(server: any, token: string) {
+  await server.request
+    .post('/api/v1/auth/reauth')
+    .set('x-user-token', token)
+    .send({ password: 'test-admin-password' })
+    .expect(200);
+}
+
 afterEach(async () => {
   while (servers.length > 0) {
     const server = servers.pop();
@@ -53,6 +62,21 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     assert.ok(!('password' in bobEntry));
     assert.equal(bobEntry.profileCount, 1);
 
+    // Both gated actions are refused until the admin confirms the password.
+    // One re-auth opens a 15-minute window for the session, so check before it.
+    const refusedReset = await server.request
+      .put(`/api/v1/admin/users/${bob.user.id}/reset-password`)
+      .set('x-user-token', adminToken)
+      .send({ newPassword: 'resetpass789' })
+      .expect(403);
+    assert.equal(refusedReset.body.error.code, 'REAUTH_REQUIRED');
+    const refusedDelete = await server.request
+      .delete(`/api/v1/admin/users/${bob.user.id}`)
+      .set('x-user-token', adminToken)
+      .expect(403);
+    assert.equal(refusedDelete.body.error.code, 'REAUTH_REQUIRED');
+
+    await reauth(server, adminToken);
     await server.request
       .put(`/api/v1/admin/users/${bob.user.id}/reset-password`)
       .set('x-user-token', adminToken)
@@ -144,6 +168,7 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     await updatedEvent;
 
     const deletedEvent = waitForEvent(socket, 'festival:deleted', (payload) => payload.id === 'fest-2');
+    await reauth(server, adminToken);
     await server.request
       .delete('/api/v1/festivals/fest-2')
       .set('x-user-token', adminToken)
@@ -178,6 +203,11 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     await server.request
       .delete(`/api/v1/admin/users/${bob.user.id}`)
       .set('x-user-token', adminToken)
+      .expect(403);
+    await reauth(server, adminToken);
+    await server.request
+      .delete(`/api/v1/admin/users/${bob.user.id}`)
+      .set('x-user-token', adminToken)
       .expect(200);
 
     await deletedProfileEvent;
@@ -191,6 +221,36 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     assert.equal(profileList.body.data.some((profile: any) => profile.id === bobProfile.id), false);
 
     aliceSocket.close();
+    bobSocket.close();
+  });
+
+  test('force-logout ends the session, revokes refresh tokens and disconnects the live socket', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const bob = await registerUser(server, 'bob');
+    // Only a socket that joined a festival room carries the user id that force-logout disconnects.
+    await joinFestivalProfile(server, bob.token);
+    const adminToken = await loginAdmin(server);
+    const bobSocket = connectSocket(server.baseUrl);
+    await waitForEvent(bobSocket, 'connect');
+    const joined: any = await new Promise((resolve) =>
+      bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token }, resolve),
+    );
+    assert.equal(joined.ok, true, JSON.stringify(joined));
+    const bobDisconnected = waitForEvent(bobSocket, 'disconnect', () => true);
+
+    await reauth(server, adminToken);
+    const res = await server.request
+      .post('/api/v1/admin/bulk/deactivate')
+      .set('x-user-token', adminToken)
+      .send({ userIds: [bob.user.id] })
+      .expect(200);
+    assert.equal(res.body.data.results[0].status, 'logged_out');
+
+    await bobDisconnected;
+    await server.request.get('/api/v1/auth/me').set('x-user-token', bob.token).expect(401);
+    await server.request.post('/api/v1/auth/refresh-token').send({ refreshToken: bob.refreshToken }).expect(401);
     bobSocket.close();
   });
 });
