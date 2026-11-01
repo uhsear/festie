@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import GuestTeaser from './GuestTeaser';
 
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ href: '/crew?x=1' }),
 }));
 
 describe('GuestTeaser', () => {
@@ -13,70 +15,47 @@ describe('GuestTeaser', () => {
     vi.clearAllMocks();
   });
 
-  describe('picks mode', () => {
-    it('renders the picks title', () => {
-      render(<GuestTeaser mode="picks" />);
-      expect(screen.getByText('Save your festival picks')).toBeInTheDocument();
-    });
-
-    it('renders the picks description', () => {
-      render(<GuestTeaser mode="picks" />);
-      expect(screen.getByText(/Must See, Want to See, or Maybe/)).toBeInTheDocument();
-    });
-
-    it('renders Sign Up Free CTA', () => {
-      render(<GuestTeaser mode="picks" />);
-      expect(screen.getByRole('button', { name: 'Sign Up Free' })).toBeInTheDocument();
-    });
-
-    it('has correct aria-labelledby linking heading to section', () => {
-      render(<GuestTeaser mode="picks" />);
-      const section = screen.getByRole('region', { hidden: false }) || document.querySelector('section');
-      expect(section).toHaveAttribute('aria-labelledby', 'guest-teaser-picks-heading');
-      expect(screen.getByText('Save your festival picks')).toHaveAttribute('id', 'guest-teaser-picks-heading');
-    });
+  it.each(['picks', 'crew', 'wrap'] as const)('renders the shared %s title and message', (mode) => {
+    render(<GuestTeaser mode={mode} />);
+    const copy = GUEST_PROMPT_COPY.teasers[mode];
+    expect(screen.getByText(copy.title)).toBeInTheDocument();
+    expect(screen.getByText(copy.message)).toBeInTheDocument();
   });
 
-  describe('crew mode', () => {
-    it('renders the crew title', () => {
-      render(<GuestTeaser mode="crew" />);
-      expect(screen.getByText('Plan with your crew')).toBeInTheDocument();
-    });
-
-    it('renders the crew description', () => {
-      render(<GuestTeaser mode="crew" />);
-      expect(screen.getByText(/Invite friends, compare picks/)).toBeInTheDocument();
-    });
+  it('renders both buttons', () => {
+    render(<GuestTeaser mode="picks" />);
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
-  describe('grid mode', () => {
-    it('renders the grid title', () => {
-      render(<GuestTeaser mode="grid" />);
-      expect(screen.getByText('See every stage at once')).toBeInTheDocument();
-    });
-
-    it('renders the grid description', () => {
-      render(<GuestTeaser mode="grid" />);
-      expect(screen.getByText(/The grid shows every stage/)).toBeInTheDocument();
-    });
+  it('has correct aria-labelledby linking heading to section', () => {
+    render(<GuestTeaser mode="picks" />);
+    const section = document.querySelector('section');
+    expect(section).toHaveAttribute('aria-labelledby', 'guest-teaser-picks-heading');
+    expect(screen.getByText('Save your festival picks')).toHaveAttribute('id', 'guest-teaser-picks-heading');
   });
 
   it('renders icon with aria-hidden', () => {
     const { container } = render(<GuestTeaser mode="picks" />);
-    const icon = container.querySelector('[aria-hidden="true"]');
-    expect(icon).toBeInTheDocument();
+    expect(container.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
   });
 
   it('applies custom className', () => {
     const { container } = render(<GuestTeaser mode="picks" className="mt-10" />);
-    const section = container.querySelector('section');
-    expect(section?.className).toContain('mt-10');
+    expect(container.querySelector('section')?.className).toContain('mt-10');
   });
 
-  it('navigates to /register when CTA is clicked', async () => {
+  it('navigates to /login with the current href as next', async () => {
     const user = userEvent.setup();
-    render(<GuestTeaser mode="picks" />);
-    await user.click(screen.getByRole('button', { name: 'Sign Up Free' }));
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/register' });
+    render(<GuestTeaser mode="crew" />);
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/login', search: { next: '/crew?x=1' } });
+  });
+
+  it('navigates to /register with the current href as next', async () => {
+    const user = userEvent.setup();
+    render(<GuestTeaser mode="crew" />);
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/register', search: { next: '/crew?x=1' } });
   });
 });

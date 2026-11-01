@@ -1,6 +1,7 @@
 import { NativeTabs } from 'expo-router/native-tabs';
 import { colors } from '@festie/shared/tokens';
-import { useUIStore } from '@festie/shared/stores';
+import { useUIStore, useAuthStore } from '@festie/shared/stores';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { useTokens } from '../../hooks/useTokens';
 
@@ -20,6 +21,7 @@ import { useTokens } from '../../hooks/useTokens';
 export default function TabLayout() {
   const { colors } = useTokens();
   const daylight = useUIStore((s) => s.theme) === 'daylight';
+  const user = useAuthStore((s) => s.user);
   // Stage keeps the system-styled bar. Daylight pins a light bar with muted /
   // aqua icons and labels, so a dark OS appearance cannot give the dark #00594f
   // tint a dark bar.
@@ -36,10 +38,10 @@ export default function TabLayout() {
   // flow into the shared Zustand stores automatically. Must stay mounted here.
   useRealtimeSync();
 
-  // All four tabs stay visible for guests: the Account tab is the sign-in entry
-  // (it routes a guest to /login), and Picks/Crew advertise the features +
-  // gate via AuthGate (crew shows an in-place "Sign in required" state). Hiding
-  // them for guests removed the only discoverable sign-in path, so they stay.
+  // All four tabs stay visible for guests: the last tab reads "Sign in" and is
+  // the sign-in entry (AuthGate routes a guest to /login), and Picks/Crew show
+  // a sign-in teaser in place. Hiding them for guests removed the only
+  // discoverable sign-in path, so they stay.
 
   return (
     <NativeTabs
@@ -68,7 +70,7 @@ export default function TabLayout() {
           sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
           md="person"
         />
-        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>{user ? 'Account' : GUEST_PROMPT_COPY.signIn}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

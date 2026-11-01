@@ -40,7 +40,7 @@ env:
             text: "Switch|Timeline|Cards"
           timeout: 90000
 - tapOn:
-    text: "Account"
+    text: "Account|Sign in"
     optional: true
 - waitForAnimationToEnd:
     timeout: 3000

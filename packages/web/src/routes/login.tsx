@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from '@tanstack/react-router';
+import { useNavigate, useSearch, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -20,6 +20,7 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const navigate = useNavigate();
+  const { next } = useSearch({ from: '/login' });
   const { login, isLoading } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -45,7 +46,7 @@ function LoginPageInner() {
 
     try {
       await login({ username, password });
-      await navigate({ to: '/cards' });
+      await (next ? navigate({ href: next }) : navigate({ to: '/cards' }));
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the
       // render before the request failed, so it is still null here.

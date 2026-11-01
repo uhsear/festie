@@ -246,6 +246,27 @@ export const ONBOARDING_SLIDES_SHARED = [
   },
 ] as const;
 
+/** Guest sign-in prompts, single-sourced so web and mobile teasers match. */
+export const GUEST_PROMPT_COPY = {
+  createAccount: 'Create account',
+  signIn: 'Sign in',
+  setSheet: 'Sign in to save picks, keep private notes and compare crew overlap.',
+  teasers: {
+    picks: {
+      title: 'Save your festival picks',
+      message: 'Create a free account to mark sets Must See, Want to See or Maybe, and share them with your crew.',
+    },
+    crew: {
+      title: 'Plan with your crew',
+      message: 'Create a free account to invite friends, compare picks and find the sets you all want to see.',
+    },
+    wrap: {
+      title: 'See your festival recap',
+      message: 'Create a free account to rate sets and get a recap of your festival to share.',
+    },
+  },
+} as const;
+
 export const SOCKET_RECONNECTION_CONFIG = {
   reconnection: true,
   reconnectionDelay: 1000,

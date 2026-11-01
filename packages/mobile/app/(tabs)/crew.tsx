@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
 import { useCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
@@ -525,10 +527,23 @@ export default function CrewScreen() {
       <View style={styles.screen} testID="crew-screen">
         <ScreenHeader title="Crew" icon="people" />
         <EmptyState
-          icon="lock-closed-outline"
-          title="Sign in required"
-          message="Log in to coordinate with your crew."
-          action={{ label: 'Sign in', onPress: () => router.push('/(auth)/login') }}
+          icon="people-outline"
+          title={GUEST_PROMPT_COPY.teasers.crew.title}
+          message={GUEST_PROMPT_COPY.teasers.crew.message}
+          action={{
+            label: GUEST_PROMPT_COPY.createAccount,
+            onPress: () => {
+              setReturnTo('/(tabs)/crew');
+              router.push('/(auth)/register');
+            },
+          }}
+          secondaryAction={{
+            label: GUEST_PROMPT_COPY.signIn,
+            onPress: () => {
+              setReturnTo('/(tabs)/crew');
+              router.push('/(auth)/login');
+            },
+          }}
         />
       </View>
     );

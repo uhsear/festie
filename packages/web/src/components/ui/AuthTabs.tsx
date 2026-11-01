@@ -56,6 +56,7 @@ export default function AuthTabs({ active, variant }: AuthTabsProps) {
           <Link
             key={tab.key}
             to={tab.to}
+            search={true}
             aria-current={isActive ? 'page' : undefined}
             className={cn(segBase, isActive ? activeSeg : inactiveSeg)}
           >

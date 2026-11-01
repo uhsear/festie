@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { api } from '@festie/shared/services';
+import { pickDefaultFestival } from '@festie/shared/utils';
 import { useToast } from '../lib/toastContext';
 
 /**
@@ -24,7 +24,7 @@ export function useFestivalLoader() {
   const selectFestival = useFestivalStore((s) => s.selectFestival);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const currentProfile = useFestivalStore((s) => s.currentProfile);
-  const loadProfiles = useFestivalStore((s) => s.loadProfiles);
+  const joinFestival = useFestivalStore((s) => s.joinFestival);
   const loadCrews = useCrewStore((s) => s.loadCrews);
   const joinByCode = useCrewStore((s) => s.joinByCode);
   const { toast, toastError } = useToast();
@@ -68,7 +68,8 @@ export function useFestivalLoader() {
       .then(() => {
         const fests = useFestivalStore.getState().festivals;
         if (fests.length > 0 && !useFestivalStore.getState().currentFestival) {
-          selectFestival(fests[0]!.id).catch(() => {});
+          const pick = pickDefaultFestival(fests);
+          if (pick) selectFestival(pick.id).catch(() => {});
         }
       })
       .catch(() => {});
@@ -124,8 +125,7 @@ export function useFestivalLoader() {
     setJoinBusy(true);
     try {
       if (!currentProfile) {
-        await api.post('/profiles', { festivalId: currentFestival.id });
-        await loadProfiles(currentFestival.id);
+        await joinFestival(currentFestival.id);
       }
       await joinByCode({ inviteCode: code });
       toast('Joined crew', 'success');

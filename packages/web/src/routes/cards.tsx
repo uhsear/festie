@@ -51,7 +51,6 @@ function usePrefersReducedMotion(): boolean {
 }
 
 function CardsViewInner() {
-  const currentProfile = useFestivalStore((state) => state.currentProfile);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const days = useFestivalStore((state) => state.days);
   const user = useAuthStore((state) => state.user);
@@ -256,7 +255,7 @@ function CardsViewInner() {
                   set={set}
                   onTap={() => setDetailSet(set)}
                   onPreview={() => handlePreview(set)}
-                  showPicks={!!currentProfile}
+                  showPicks={!!user}
                   stageName={sn}
                   stageColor={sc}
                   friendProfiles={others}

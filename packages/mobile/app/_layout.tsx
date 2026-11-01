@@ -4,7 +4,7 @@ import '../bootstrap';
 import { useEffect, useRef, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Appearance } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { Stack, useRouter, useSegments, useRootNavigationState, router as globalRouter } from 'expo-router';
+import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigationState, router as globalRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
@@ -35,6 +35,8 @@ import { useOngoingNotification } from '../hooks/useOngoingNotification';
 import { ensureAndroidChannels } from '../hooks/useMobilePush';
 import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
+import { isGuestBlocked } from '../lib/authRoutes';
+import { setReturnTo, takeReturnTo } from '../lib/returnTo';
 import { CREW_MEET_HREF, sosPushCrewId } from '../lib/dayOfRoutes';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
@@ -170,6 +172,7 @@ function AuthGate() {
   const sessionChecked = useAuthStore((s) => s.sessionChecked);
   const checkSession = useAuthStore((s) => s.checkSession);
   const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
   const navState = useRootNavigationState();
   // Initialize from persist's current hydration state. When Zustand persist has
@@ -349,34 +352,22 @@ function AuthGate() {
 
     const raf = requestAnimationFrame(() => {
       const inAuthGroup = segments[0] === '(auth)';
-      // Guests may browse the schedule, set detail, festival-mode, map, compass,
-      // find, privacy, and the /cards + /timeline deep-link shims — these stay
-      // open so cold deep-links and casual browsing work without an account.
-      // Everything that exposes another user's data or admin surface is gated to
-      // match the web router's guards: wrap, crew-plan, crew-compare, admin, and
-      // the account/picks/crew tabs. (Web /compare === mobile crew-compare; the
-      // segment is 'crew-compare', not 'compare'.) A signed-in non-admin who
-      // reaches admin is bounced to the tabs, mirroring web bouncing them to /.
+      // Which routes a guest may open is documented on isGuestBlocked.
       const seg = segments as string[];
-      const guestBlocked =
-        seg[0] === 'wrap' ||
-        seg[0] === 'crew-plan' ||
-        seg[0] === 'crew-compare' ||
-        seg[0] === 'admin' ||
-        seg[1] === 'account' ||
-        seg[1] === 'picks' ||
-        seg[1] === 'crew';
+      const guestBlocked = isGuestBlocked(seg);
       const adminBlocked = seg[0] === 'admin' && !!user && !isAdmin;
       if (!user && guestBlocked && !inAuthGroup) {
+        // The account tab is the sign-in entry itself, so there is no page to return to.
+        if (seg[1] !== 'account') setReturnTo(pathname);
         router.replace('/(auth)/login');
       } else if (adminBlocked) {
         router.replace('/(tabs)');
       } else if (user && inAuthGroup) {
-        router.replace('/(tabs)');
+        router.replace((takeReturnTo() ?? '/(tabs)') as Href);
       }
     });
     return () => cancelAnimationFrame(raf);
-  }, [user, isAdmin, hydrated, segments, router, navState?.key]);
+  }, [user, isAdmin, hydrated, segments, pathname, router, navState?.key]);
 
   // The navigator (Stack) MUST be mounted on the very first render so the
   // redirect effect above can navigate safely. So rather than swapping the

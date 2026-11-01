@@ -4,9 +4,11 @@ import userEvent from '@testing-library/user-event';
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
+let mockSearch: { next?: string } = {};
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
-  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
+  useSearch: () => mockSearch,
+  Link: ({ to, children, search: _search, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
     <a href={to} {...rest}>
       {children}
     </a>
@@ -35,6 +37,7 @@ import { useAuth } from '@festie/shared';
 describe('RegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearch = {};
     vi.mocked(useAuth).mockReturnValue({
       login: vi.fn(),
       register: vi.fn(),
@@ -191,6 +194,39 @@ describe('RegisterPage', () => {
     expect(screen.getByText('Creating account…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Creating account…' })).toBeDisabled();
     expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+
+  async function submitRegister() {
+    const user = userEvent.setup();
+    vi.mocked(useAuth).mockReturnValue({
+      login: vi.fn(),
+      register: vi.fn().mockResolvedValue(undefined),
+      logout: vi.fn(),
+      forgotPassword: vi.fn(),
+      changePassword: vi.fn(),
+      uploadAvatar: vi.fn(),
+      removeAvatar: vi.fn(),
+      isLoading: false,
+      error: null,
+    });
+    render(<RegisterPage />);
+    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.type(screen.getByLabelText('Confirm password'), 'password123');
+    fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+  }
+
+  it('returns to the next path after sign-up', async () => {
+    mockSearch = { next: '/set/abc' };
+    await submitRegister();
+    expect(mockNavigate).toHaveBeenCalledWith({ href: '/set/abc' });
+  });
+
+  it('goes to /cards after sign-up without a next path', async () => {
+    await submitRegister();
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' });
   });
 
   it('calls register on valid submit', async () => {

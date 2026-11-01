@@ -80,18 +80,6 @@ async function closeDetailPanel(page: Page) {
   await expect(page.locator('[aria-label="Set detail panel"]')).toHaveCount(0);
 }
 
-// Join the current festival. DetailPanel's "Join Festival" button posts a
-// profile then calls onClose() — so the panel closes itself on success. We open
-// any set, click Join, and wait for the panel to disappear. After this the
-// store has a currentProfile, so priority pickers become available everywhere.
-async function joinFestivalViaSet(page: Page, artist: string) {
-  await openSet(page, artist);
-  const panel = page.locator('[aria-label="Set detail panel"]');
-  await panel.getByRole('button', { name: 'Join Festival' }).click();
-  // The join handler closes the panel on success.
-  await expect(panel).toHaveCount(0);
-}
-
 // ── Guest (unauthenticated) journeys ────────────────────────────────────────
 
 // NOTE (2026-07-01): the 4 guest/auth-surface tests below are CI-verified green
@@ -126,9 +114,12 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
     await openSet(page, 'Alpha');
-    // Guests see the "Join this festival to save picks" prompt instead of the
-    // priority picker (DetailPanel currentProfile === null branch).
-    await expect(page.locator('[aria-label="Set detail panel"]')).toContainText('Join this festival');
+    // Guests see the sign-in prompt with both auth buttons, never a Join Festival button.
+    const panel = page.locator('[aria-label="Set detail panel"]');
+    await expect(panel).toContainText('Sign in to save picks');
+    await expect(panel.getByRole('button', { name: 'Create account' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Join Festival' })).toHaveCount(0);
     await closeDetailPanel(page);
   });
 
@@ -180,9 +171,7 @@ test.describe('festival planner browser regression', () => {
     await registerUser(page, app, `picker_${Date.now()}`);
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
-    // Join first (the panel closes on join), then reopen Alpha — now that a
-    // profile exists DetailPanel renders the priority picker.
-    await joinFestivalViaSet(page, 'Alpha');
+    // The first pick creates the profile, so no separate join step is needed.
     await openSet(page, 'Alpha');
     const panel = page.locator('[aria-label="Set detail panel"]');
     await panel.getByRole('button', { name: /^Must See/ }).click();
@@ -205,9 +194,7 @@ test.describe('festival planner browser regression', () => {
   test('saving a pick directly from the card grid toggles its state', async ({ app, page }) => {
     await registerUser(page, app, `carder_${Date.now()}`);
 
-    // Join first (card priority buttons only persist once a profile exists).
-    await joinFestivalViaSet(page, 'Beta');
-
+    // The first pick on a card joins the festival and saves the pick.
     const betaCard = page.locator('[data-testid="set-card"][data-artist="Beta"]');
     const wantBtn = betaCard.getByRole('button', { name: /^Want to See/ });
     await expect(wantBtn).toHaveAttribute('aria-pressed', 'false');
