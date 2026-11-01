@@ -3,6 +3,7 @@ import { Link, useLocation } from '@tanstack/react-router';
 import { Map as MapIcon } from 'lucide-react';
 import { useAuthStore } from '@festie/shared';
 import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
 import { SECTION_HREF, activeSection } from './sections';
 
@@ -90,7 +91,7 @@ export default function BottomNav() {
 
   // All five sections stay visible for guests (parity with mobile's NativeTabs):
   // My Plan/Crew gate in-place via GuestTeaser, and the More slot reads "Sign in"
-  // because /account routes a guest to /login.
+  // and opens /login directly.
   const current = activeSection(location.pathname);
 
   return (
@@ -113,12 +114,14 @@ export default function BottomNav() {
       <nav className="flex justify-around w-full max-md:gap-0.5" aria-label="Primary">
         {APP_SECTIONS.map((section) => {
           const href = SECTION_HREF[section.key];
-          const label = section.key === 'more' && !user ? 'Sign in' : section.label;
+          const isGuestTab = section.key === 'more' && !user;
+          const label = isGuestTab ? GUEST_PROMPT_COPY.signIn : section.label;
           const active = current === section.key;
           return (
             <Link
               key={section.key}
-              to={href}
+              to={isGuestTab ? '/login' : href}
+              search={isGuestTab ? { next: location.href } : undefined}
               aria-current={active ? 'page' : undefined}
               aria-label={`View ${label}`}
               className={cn(

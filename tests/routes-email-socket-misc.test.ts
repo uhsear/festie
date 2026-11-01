@@ -66,6 +66,7 @@ function baseDeps(overrides: any = {}) {
       VALIDATION_ERROR: 'VALIDATION_ERROR',
       CONFLICT: 'CONFLICT',
       SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+      TOKEN_EXPIRED: 'TOKEN_EXPIRED',
     },
     userAuth: (req: any, _res: any, next: any) => {
       req.user = { userId: 'user-1' };
@@ -144,7 +145,7 @@ describe('routes/email-auth', () => {
   // Mock the external modules that email-auth requires internally
   let createEmailAuthRoutes: any;
 
-  // We need to handle the internal require of lib/email and lib/reset-pages.
+  // We need to handle the internal require of lib/email.
   // These modules exist on disk so they'll load, but their email-sending
   // functions will fail gracefully without valid config.
 
@@ -536,7 +537,8 @@ describe('routes/email-auth', () => {
       .send({ token: 'bad-token', newPassword: 'StrongPass1!', confirmPassword: 'StrongPass1!' })
       .expect(400);
 
-    assert.match(res.body.error.message, /invalid or expired/i);
+    assert.match(res.body.error.message, /expired or was already used/i);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
   });
 
   test('POST /reset-password — succeeds with valid DB token', async () => {

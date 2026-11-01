@@ -394,14 +394,14 @@ export default function TimelineScreen() {
   const handlePickChange = useCallback(
     (setId: string, priority: Priority | null) => {
       if (!currentFestival) return;
-      if (!currentProfile) {
-        router.push(user ? `/set/${setId}` : '/(auth)/login');
+      if (!user) {
+        router.push(`/set/${setId}`);
         return;
       }
       // The card shows the Retry chip on failure.
       savePick(currentFestival.id, setId, priority).catch(() => haptics.warning());
     },
-    [currentFestival, currentProfile, user, router, savePick, haptics],
+    [currentFestival, user, router, savePick, haptics],
   );
 
   // One-tap reset for every active schedule filter (search text, my-picks, stage
@@ -490,7 +490,7 @@ export default function TimelineScreen() {
       <TBASection
         sets={timelessSets}
         stages={stages}
-        currentProfile={currentProfile}
+        canPick={!!user}
         currentFestival={currentFestival}
         getMyPick={getMyPick}
         getOtherPicks={getOtherPicks}
@@ -913,19 +913,7 @@ export default function TimelineScreen() {
         </TouchableOpacity>
       ) : null}
       <TouchableOpacity
-        style={[styles.headerIconButton, styles.headerSwitchButton]}
-        onPress={() => setPickingFestival(true)}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Switch festival"
-      >
-        <Ionicons name="swap-horizontal" size={20} color={t.colors.text.secondary} />
-        <Text style={styles.headerSwitchText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          Switch
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.headerIconButton}
+        style={styles.headerNowPill}
         onPress={() => router.push('/festival-mode')}
         activeOpacity={0.7}
         accessibilityRole="button"
@@ -933,6 +921,9 @@ export default function TimelineScreen() {
       >
         {/* "Live" is reserved for location (P1-2); flash = Now & Next. */}
         <Ionicons name="flash" size={20} color={t.colors.accent.aqua} />
+        <Text style={styles.headerNowText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          Now
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -942,7 +933,13 @@ export default function TimelineScreen() {
     // native Tabs nav header is hidden (see (tabs)/_layout.tsx), so this is the
     // single top of the screen, sitting above the consolidated control row.
     <View style={styles.container} testID="schedule-screen">
-      <ScreenHeader title={currentFestival.name} icon="calendar-outline" right={headerActions} />
+      <ScreenHeader
+        title={currentFestival.name}
+        icon="calendar-outline"
+        right={headerActions}
+        onTitlePress={() => setPickingFestival(true)}
+        titleAccessibilityLabel={`${currentFestival.name}. Switch festival`}
+      />
       {/* P1-5 — phase-aware home actions: re-prioritizes the crew's destinations
           (My Plan / crew / map / Now & Next / wrap) by festival phase. Hidden when
           the festival has no usable dates (phase === null). Folds behind the
@@ -1186,14 +1183,19 @@ const useStyles = makeStyles((t) => ({
     minWidth: 44,
     minHeight: 44,
   },
-  headerSwitchButton: {
+  headerNowPill: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: t.spacing[1],
-    paddingHorizontal: t.spacing[1],
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    borderRadius: 22,
   },
-  headerSwitchText: {
-    ...typeStyle('label'),
-    color: t.colors.text.secondary,
+  headerNowText: {
+    ...typeStyle('label', 700),
+    color: t.colors.accent.aqua,
   },
   pickerOffline: {
     ...typeStyle('label'),

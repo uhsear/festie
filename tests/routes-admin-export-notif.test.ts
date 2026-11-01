@@ -1418,7 +1418,7 @@ describe('routes/notifications.js', () => {
     const { app, deps } = await buildNotifApp();
     const res = await request(app)
       .post('/token')
-      .send({ token: 'a'.repeat(30), platform: 'web', deviceName: 'Chrome' })
+      .send({ token: 'a'.repeat(30), platform: 'android', deviceName: 'Pixel' })
       .expect(200);
     assert.equal(res.body.error, null);
     assert.equal(res.body.data.success, true);
@@ -1439,7 +1439,7 @@ describe('routes/notifications.js', () => {
 
   test('POST /token without localRemindersFestivalId passes present=false', async () => {
     const { app, deps } = await buildNotifApp();
-    await request(app).post('/token').send({ token: 'a'.repeat(30), platform: 'web' }).expect(200);
+    await request(app).post('/token').send({ token: 'a'.repeat(30), platform: 'android' }).expect(200);
     const arg = (deps.stores.deviceTokens.register.mock.calls as any[])[0]!.arguments[0];
     assert.equal(arg.localRemindersPresent, false);
   });
@@ -1506,7 +1506,7 @@ describe('routes/notifications.js', () => {
 
     const res = await request(app)
       .post('/token')
-      .send({ token: 'a'.repeat(30), platform: 'web' })
+      .send({ token: 'a'.repeat(30), platform: 'android' })
       .expect(400);
     assert.equal(res.body.data, null);
   });
@@ -1521,7 +1521,7 @@ describe('routes/notifications.js', () => {
 
     const res = await request(app)
       .post('/token')
-      .send({ token: 'a'.repeat(30), platform: 'web' })
+      .send({ token: 'a'.repeat(30), platform: 'android' })
       .expect(200);
     assert.equal(res.body.error, null);
     assert.ok(deps.stores.deviceTokens.unregister.mock.calls.length > 0);
@@ -1538,7 +1538,7 @@ describe('routes/notifications.js', () => {
 
     const res = await request(app)
       .post('/token')
-      .send({ token: 'a'.repeat(30), platform: 'web' })
+      .send({ token: 'a'.repeat(30), platform: 'android' })
       .expect(200);
     assert.equal(res.body.error, null);
   });

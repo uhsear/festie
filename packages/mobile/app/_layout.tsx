@@ -4,11 +4,12 @@ import '../bootstrap';
 import { useEffect, useRef, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Appearance } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { Stack, useRouter, useSegments, useRootNavigationState, router as globalRouter } from 'expo-router';
+import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigationState, router as globalRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
-import { useAuthStore, useCrewStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
+import { useAuthStore, useCrewStore, useFestivalStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
+import { resolvePushTarget } from '@festie/shared/utils';
 import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
 import {
@@ -31,12 +32,15 @@ import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
 import HeaderTitle from '../components/HeaderTitle';
 import { TopBannerContext } from '../components/ScreenHeader';
-import { useLocalReminders } from '../hooks/useLocalReminders';
+import { snoozeReminder, useLocalReminders } from '../hooks/useLocalReminders';
 import { useOngoingNotification } from '../hooks/useOngoingNotification';
 import { ensureAndroidChannels } from '../hooks/useMobilePush';
 import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
+import { isGuestBlocked } from '../lib/authRoutes';
+import { setReturnTo, takeReturnTo } from '../lib/returnTo';
 import { CREW_MEET_HREF, sosPushCrewId } from '../lib/dayOfRoutes';
+import { pushTargetHref } from '../lib/pushRoutes';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
@@ -99,48 +103,6 @@ configureApi({
   },
 });
 
-type DeepLinkTarget = string | { pathname: string; params: Record<string, string> };
-
-// Static top-level path segments a push-notification `deepLink` is allowed to
-// resolve to. `crew` lands on the crew tab's Find sub-tab -- the same
-// {pathname, params} shortcut the Map tab already uses to jump straight
-// to the SOS panel (crew.tsx's `tab=find` deep-link contract) -- so a
-// crew_sos push actually opens SOS instead of silently no-op'ing. `find` is
-// the old "Find each other" hub, which now lives in the Map tab.
-const DEEPLINK_ROUTES: Record<string, DeepLinkTarget> = {
-  wrap: '/wrap',
-  crew: { pathname: '/(tabs)/crew', params: { tab: 'find' } },
-  'crew-compare': '/crew-compare',
-  'crew-plan': '/crew-plan',
-  'festival-mode': '/festival-mode',
-  find: '/map',
-  grid: '/grid',
-  map: '/map',
-  'plan-share': '/plan-share',
-  privacy: '/privacy',
-  timeline: '/timeline',
-};
-
-// Recognized scheme/origin prefixes a server-emitted deepLink may arrive
-// with: festie:// is the app's registered scheme (app.json), rave:// is a
-// legacy scheme some server producers still emit (routes/crew-sos.ts,
-// lib/reminder-scheduler.ts), and https://festie.us is the web origin used
-// by lib/notifications/reengagement.ts.
-const DEEPLINK_PREFIXES = ['festie://', 'rave://', 'https://festie.us'];
-
-// Validates a push-notification deepLink against the allowlist above instead
-// of trusting it as an expo-router Href. A deepLink with an unrecognized
-// scheme/host, or a path this app has no matching route for, returns null --
-// exactly today's (broken) no-op behavior for those cases, so this can only
-// fix known-good targets, never regress an already-silently-failing one.
-export function parseDeepLink(raw: string): DeepLinkTarget | null {
-  const prefix = DEEPLINK_PREFIXES.find((p) => raw.startsWith(p));
-  if (!prefix) return null;
-  const rest = raw.slice(prefix.length);
-  const segment = (rest.startsWith('/') ? rest.slice(1) : rest).split(/[/?#]/)[0] ?? '';
-  return DEEPLINK_ROUTES[segment] ?? null;
-}
-
 // Route a tapped notification's data payload to its deep-link target. Shared by
 // the warm-tap listener and the cold-start useLastNotificationResponse handler
 // so both paths route identically.
@@ -156,12 +118,10 @@ function routeNotification(r: ReturnType<typeof useRouter>, data: Record<string,
     r.push(CREW_MEET_HREF);
     return;
   }
-  if (typeof data?.deepLink === 'string') {
-    const target = parseDeepLink(data.deepLink);
-    if (target) r.push(target);
-  } else if (typeof data?.setId === 'string') {
-    r.push(`/set/${data.setId}`);
-  }
+  const target = resolvePushTarget(data);
+  if (!target) return;
+  if (target.kind === 'festival') useFestivalStore.getState().selectFestival(target.festivalId).catch(() => {});
+  r.push(pushTargetHref(target));
 }
 
 function AuthGate() {
@@ -172,6 +132,7 @@ function AuthGate() {
   const sessionChecked = useAuthStore((s) => s.sessionChecked);
   const checkSession = useAuthStore((s) => s.checkSession);
   const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
   const navState = useRootNavigationState();
   // Initialize from persist's current hydration state. When Zustand persist has
@@ -253,6 +214,10 @@ function AuthGate() {
   useEffect(() => {
     notificationResponseRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
       handledResponseRef.current = response.notification.request.identifier;
+      if (response.actionIdentifier === 'snooze-5') {
+        snoozeReminder(response.notification.request.content);
+        return;
+      }
       routeNotification(router, response.notification.request.content.data);
     });
     return () => {
@@ -274,6 +239,10 @@ function AuthGate() {
     const data = lastNotificationResponse.notification.request.content.data;
     const raf = requestAnimationFrame(() => {
       handledResponseRef.current = id;
+      if (lastNotificationResponse.actionIdentifier === 'snooze-5') {
+        snoozeReminder(lastNotificationResponse.notification.request.content);
+        return;
+      }
       routeNotification(router, data);
     });
     return () => cancelAnimationFrame(raf);
@@ -357,34 +326,22 @@ function AuthGate() {
 
     const raf = requestAnimationFrame(() => {
       const inAuthGroup = segments[0] === '(auth)';
-      // Guests may browse the schedule, set detail, festival-mode, map, compass,
-      // find, privacy, and the /cards + /timeline deep-link shims — these stay
-      // open so cold deep-links and casual browsing work without an account.
-      // Everything that exposes another user's data or admin surface is gated to
-      // match the web router's guards: wrap, crew-plan, crew-compare, admin, and
-      // the account/picks/crew tabs. (Web /compare === mobile crew-compare; the
-      // segment is 'crew-compare', not 'compare'.) A signed-in non-admin who
-      // reaches admin is bounced to the tabs, mirroring web bouncing them to /.
+      // Which routes a guest may open is documented on isGuestBlocked.
       const seg = segments as string[];
-      const guestBlocked =
-        seg[0] === 'wrap' ||
-        seg[0] === 'crew-plan' ||
-        seg[0] === 'crew-compare' ||
-        seg[0] === 'admin' ||
-        seg[1] === 'account' ||
-        seg[1] === 'picks' ||
-        seg[1] === 'crew';
+      const guestBlocked = isGuestBlocked(seg);
       const adminBlocked = seg[0] === 'admin' && !!user && !isAdmin;
       if (!user && guestBlocked && !inAuthGroup) {
+        // The account tab is the sign-in entry itself, so there is no page to return to.
+        if (seg[1] !== 'account') setReturnTo(pathname);
         router.replace('/(auth)/login');
       } else if (adminBlocked) {
         router.replace('/(tabs)');
       } else if (user && inAuthGroup) {
-        router.replace('/(tabs)');
+        router.replace((takeReturnTo() ?? '/(tabs)') as Href);
       }
     });
     return () => cancelAnimationFrame(raf);
-  }, [user, isAdmin, hydrated, segments, router, navState?.key]);
+  }, [user, isAdmin, hydrated, segments, pathname, router, navState?.key]);
 
   // The navigator (Stack) MUST be mounted on the very first render so the
   // redirect effect above can navigate safely. So rather than swapping the

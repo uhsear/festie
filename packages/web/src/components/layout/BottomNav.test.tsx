@@ -51,7 +51,7 @@ describe('BottomNav', () => {
     const nav = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(nav).getAllByRole('link')).toHaveLength(5);
     expect(screen.getByLabelText('View Sign in')).toHaveTextContent('Sign in');
-    expect(screen.getByLabelText('View Sign in')).toHaveAttribute('href', '/account');
+    expect(screen.getByLabelText('View Sign in')).toHaveAttribute('href', '/login');
     expect(screen.queryByLabelText('View More')).not.toBeInTheDocument();
   });
 

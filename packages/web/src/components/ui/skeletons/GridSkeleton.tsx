@@ -10,8 +10,9 @@ export default function GridSkeleton() {
     <div
       className="fk-grid flex flex-col h-full min-h-0 overflow-hidden bg-bg-primary"
       aria-busy="true"
-      aria-label="Loading grid"
+      aria-label="Loading grid" role="status" aria-live="polite"
     >
+      <span className="sr-only">Loading grid…</span>
       {/* sticky header row */}
       <div
         className="fk-grid__head grid shrink-0 bg-bg-primary border-b border-border-light sticky top-0 z-10 grid-cols-[52px_repeat(4,1fr)]"

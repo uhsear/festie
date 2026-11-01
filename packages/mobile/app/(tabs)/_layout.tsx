@@ -1,7 +1,8 @@
 import { NativeTabs, type MaterialIcon, type SFSymbolIcon } from 'expo-router/native-tabs';
 import { colors } from '@festie/shared/tokens';
-import { useUIStore } from '@festie/shared/stores';
+import { useUIStore, useAuthStore } from '@festie/shared/stores';
 import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { useTokens } from '../../hooks/useTokens';
 
@@ -38,6 +39,7 @@ const TAB_ROUTES: Record<AppSectionKey, { name: string; sf: SFSymbolIcon['sf']; 
 export default function TabLayout() {
   const { colors } = useTokens();
   const daylight = useUIStore((s) => s.theme) === 'daylight';
+  const user = useAuthStore((s) => s.user);
   // Stage keeps the system-styled bar. Daylight pins a light bar with muted /
   // aqua icons and labels, so a dark OS appearance cannot give the dark #00594f
   // tint a dark bar.
@@ -71,7 +73,7 @@ export default function TabLayout() {
         return (
           <NativeTabs.Trigger key={key} name={route.name}>
             <NativeTabs.Trigger.Icon sf={route.sf} md={route.md} />
-            <NativeTabs.Trigger.Label>{label}</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Label>{key === 'more' && !user ? GUEST_PROMPT_COPY.signIn : label}</NativeTabs.Trigger.Label>
           </NativeTabs.Trigger>
         );
       })}

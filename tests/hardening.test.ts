@@ -105,7 +105,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
   });
 
   describe('Password Reset Flow', { concurrency: 1 }, () => {
-    test('GET /reset/:token returns 200 for invalid token format', async () => {
+    test('GET /reset/:token redirects 303 to forgot-password for invalid token format', async () => {
       await ensureTestSchema();
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
@@ -120,7 +120,8 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
       server = testServer;
 
       const res = await request(app).get('/reset/invalid-token');
-      assert.equal(res.status, 200);
+      assert.equal(res.status, 303);
+      assert.equal(res.headers.location, '/forgot-password?expired=1');
     });
 
     test('POST /api/v1/auth/reset-password with expired token fails', async () => {

@@ -462,3 +462,44 @@ describe('reminder-scheduler: after-midnight sets', () => {
     assert.equal(calls[0]!.arguments[0].body, 'Starts at 12:30 AM');
   });
 });
+
+describe('reminder-scheduler: must-see reminders and set links', () => {
+  async function runTick(profileRow: any) {
+    const setStartMs = Date.now() + 16 * 60_000;
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
+    const dateStr = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
+    const startTime = `${String(startClock.getHours()).padStart(2, '0')}:${String(startClock.getMinutes()).padStart(2, '0')}`;
+    const queryFn = mock.fn(async (sql: string) => {
+      if (sql.includes('FROM festivals')) return { rows: [{ id: 'fest-1', name: 'Test Fest' }] };
+      if (sql.includes('festival_days')) return { rows: [{ day_index: 0, label: 'Day 1', date: dateStr }] };
+      if (sql.includes('festival_stages')) return { rows: [{ id: 'stage-1', name: 'Main Stage' }] };
+      if (sql.includes('festival_sets')) {
+        return { rows: [{ id: 'set-1', day_index: 0, artist: 'DJ Alpha', artists: null, stage_id: 'stage-1', startTime, endTime: '23:00' }] };
+      }
+      if (sql.includes('festival_profiles')) return { rows: [profileRow] };
+      return { rows: [] };
+    });
+    const notifyFn = mock.fn(async () => ({ sent: 1 }));
+    const deps = makeDeps({ pool: { query: queryFn }, notificationService: { send: notifyFn } });
+    deps.config.PUBLIC_ORIGIN = 'https://example.test/';
+    await createReminderScheduler(deps).tick();
+    return (notifyFn.mock.calls as any[]).map((c) => c.arguments[0]);
+  }
+
+  it('fires a default-lead reminder for a must pick with no explicit reminder', async () => {
+    const calls = await runTick({ id: 'fp-1', userId: 'u1', remindersJson: {}, mustSeeLead: 15, mustSetIds: ['set-1'] });
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].title.includes('15 min'));
+  });
+
+  it('lets an explicit reminder win over the must-see default', async () => {
+    const calls = await runTick({ id: 'fp-1', userId: 'u1', remindersJson: { 'set-1': 5 }, mustSeeLead: 15, mustSetIds: ['set-1'] });
+    assert.equal(calls.length, 0, '5-minute lead is not due yet; the 15-minute default must not fire');
+  });
+
+  it('sends a deepLink on the public origin set route', async () => {
+    const calls = await runTick({ id: 'fp-1', userId: 'u1', remindersJson: { 'set-1': 15 }, mustSeeLead: null, mustSetIds: [] });
+    assert.equal(calls[0].data.deepLink, 'https://example.test/set/set-1');
+  });
+});

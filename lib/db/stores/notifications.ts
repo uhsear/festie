@@ -92,7 +92,7 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
   const notificationPrefs = {
     async get(userId: string) {
       const result = await pool.query(
-        'SELECT user_id AS "userId", crew_updates AS "crewUpdates", set_reminders AS "setReminders", schedule_changes AS "scheduleChanges", lineup_drops AS "lineupDrops", crew_reformed AS "crewReformed", wrap_ready AS "wrapReady", dnd_start AS "dndStart", dnd_end AS "dndEnd", dnd_time_zone AS "dndTimeZone" FROM notification_preferences WHERE user_id = $1',
+        'SELECT user_id AS "userId", crew_updates AS "crewUpdates", set_reminders AS "setReminders", schedule_changes AS "scheduleChanges", lineup_drops AS "lineupDrops", crew_reformed AS "crewReformed", wrap_ready AS "wrapReady", dnd_start AS "dndStart", dnd_end AS "dndEnd", dnd_time_zone AS "dndTimeZone", crew_meeting_points AS "crewMeetingPoints", crew_polls AS "crewPolls", crew_money AS "crewMoney", crew_rides AS "crewRides", must_see_reminder_minutes AS "mustSeeReminderMinutes" FROM notification_preferences WHERE user_id = $1',
         [userId],
       );
       const row = result.rows[0];
@@ -106,18 +106,28 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
           lineupDrops: 1,
           crewReformed: 1,
           wrapReady: 1,
+          crewMeetingPoints: 1,
+          crewPolls: 1,
+          crewMoney: 1,
+          crewRides: 1,
+          mustSeeReminderMinutes: null,
           dndStart: null,
           dndEnd: null,
           dndTimeZone: null,
         };
       }
-      // A row written before migration 048 has NULL for the new columns; treat
-      // NULL as opted-in (1) so re-engagement defaults on, matching DEFAULT 1.
+      // A row written before migration 048 (or 069) has NULL for the newer columns;
+      // treat NULL as opted-in (1), matching DEFAULT 1.
       return {
         ...row,
         lineupDrops: row.lineupDrops == null ? 1 : row.lineupDrops,
         crewReformed: row.crewReformed == null ? 1 : row.crewReformed,
         wrapReady: row.wrapReady == null ? 1 : row.wrapReady,
+        crewMeetingPoints: row.crewMeetingPoints == null ? 1 : row.crewMeetingPoints,
+        crewPolls: row.crewPolls == null ? 1 : row.crewPolls,
+        crewMoney: row.crewMoney == null ? 1 : row.crewMoney,
+        crewRides: row.crewRides == null ? 1 : row.crewRides,
+        mustSeeReminderMinutes: row.mustSeeReminderMinutes ?? null,
       };
     },
 
@@ -132,11 +142,17 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
       dndStart,
       dndEnd,
       dndTimeZone,
+      crewMeetingPoints,
+      crewPolls,
+      crewMoney,
+      crewRides,
+      mustSeeReminderMinutes,
     }: any) {
       await pool.query(
         `
-        INSERT INTO notification_preferences (user_id, crew_updates, set_reminders, schedule_changes, lineup_drops, crew_reformed, wrap_ready, dnd_start, dnd_end, dnd_time_zone)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO notification_preferences (user_id, crew_updates, set_reminders, schedule_changes, lineup_drops, crew_reformed, wrap_ready, dnd_start, dnd_end, dnd_time_zone,
+          crew_meeting_points, crew_polls, crew_money, crew_rides, must_see_reminder_minutes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         ON CONFLICT(user_id) DO UPDATE SET
           crew_updates = EXCLUDED.crew_updates,
           set_reminders = EXCLUDED.set_reminders,
@@ -146,7 +162,12 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
           wrap_ready = EXCLUDED.wrap_ready,
           dnd_start = EXCLUDED.dnd_start,
           dnd_end = EXCLUDED.dnd_end,
-          dnd_time_zone = EXCLUDED.dnd_time_zone
+          dnd_time_zone = EXCLUDED.dnd_time_zone,
+          crew_meeting_points = EXCLUDED.crew_meeting_points,
+          crew_polls = EXCLUDED.crew_polls,
+          crew_money = EXCLUDED.crew_money,
+          crew_rides = EXCLUDED.crew_rides,
+          must_see_reminder_minutes = EXCLUDED.must_see_reminder_minutes
       `,
         [
           userId,
@@ -159,6 +180,12 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
           dndStart || null,
           dndEnd || null,
           dndTimeZone || null,
+          // An omitted crew key stays opted in, matching the column default.
+          (crewMeetingPoints ?? true) ? 1 : 0,
+          (crewPolls ?? true) ? 1 : 0,
+          (crewMoney ?? true) ? 1 : 0,
+          (crewRides ?? true) ? 1 : 0,
+          mustSeeReminderMinutes ?? null,
         ],
       );
     },

@@ -128,17 +128,8 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
     );
   }
 
-  return (
-    <TouchableOpacity
-      style={[styles.card, hasHomeBase ? styles.cardSet : styles.cardEmpty]}
-      onPress={() => {
-        if (isOwner) setEditing(true);
-      }}
-      disabled={!isOwner}
-      activeOpacity={isOwner ? 0.8 : 1}
-      accessibilityRole={isOwner ? 'button' : 'text'}
-      accessibilityLabel={hasHomeBase ? `Home base ${location}${timeDisplay ? ` at ${timeDisplay}` : ''}` : 'Set crew home base'}
-    >
+  const body = (
+    <>
       <Ionicons name="location" size={16} color={hasHomeBase ? t.colors.accent.aqua : t.colors.text.muted} />
       <View style={styles.cardInfo}>
         {hasHomeBase ? (
@@ -153,6 +144,31 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
         )}
       </View>
       {isOwner ? <Ionicons name="pencil" size={t.iconSize.compact} color={t.colors.text.secondary} /> : null}
+    </>
+  );
+
+  if (!isOwner) {
+    return (
+      <View
+        style={[styles.card, styles.cardSet]}
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={`Home base ${location}${timeDisplay ? ` at ${timeDisplay}` : ''}`}
+      >
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      style={[styles.card, hasHomeBase ? styles.cardSet : styles.cardEmpty]}
+      onPress={() => setEditing(true)}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={hasHomeBase ? `Home base ${location}${timeDisplay ? ` at ${timeDisplay}` : ''}` : 'Set crew home base'}
+    >
+      {body}
     </TouchableOpacity>
   );
 }

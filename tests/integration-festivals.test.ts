@@ -174,6 +174,53 @@ describe('Integration — Festivals', { concurrency: 1 }, () => {
       .expect(400);
   });
 
+  test('a save that moves a picked set reports its picker in scheduleNotice', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    const aliceProfile = await joinFestivalProfile(server, alice.token);
+    await server.request
+      .put(`/api/v1/profiles/${aliceProfile.id}`)
+      .set('x-user-token', alice.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ picks: { 'set-a': 'must' } })
+      .expect(200);
+
+    const adminToken = await loginAdmin(server);
+    // The seeded fest-1 (tests/_integration-helpers.ts) with set-a moved earlier.
+    const response = await server.request
+      .put('/api/v1/festivals/fest-1')
+      .set('x-user-token', adminToken)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({
+        name: 'Test Fest',
+        stages: [
+          { id: 'main', name: 'Main Stage', color: '#ff3366' },
+          { id: 'forest', name: 'Forest Stage', color: '#00e8d0' },
+        ],
+        days: [
+          {
+            label: 'Friday',
+            date: '2026-06-05',
+            sets: [
+              { id: 'set-a', artist: 'Alpha', stageId: 'main', startTime: '09:00', endTime: '09:45' },
+              { id: 'set-b', artist: 'Beta', stageId: 'forest', startTime: '10:30', endTime: '11:30' },
+              { id: 'set-c', artist: 'Gamma', stageId: 'main', startTime: '12:00', endTime: '13:00' },
+            ],
+          },
+          {
+            label: 'Saturday',
+            date: '2026-06-06',
+            sets: [{ id: 'set-d', artist: 'Delta', stageId: 'forest', startTime: '14:00', endTime: '15:00' }],
+          },
+        ],
+      })
+      .expect(200);
+
+    assert.deepEqual(response.body.data.scheduleNotice, { changes: 1, people: 1, notified: true });
+  });
+
   test('postgresql stores and serves seeded festival data', async () => {
     const server = await startServer();
     servers.push(server);

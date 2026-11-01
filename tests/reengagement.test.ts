@@ -200,6 +200,8 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
     assert.equal(r.priorAttendees, 2);
     assert.equal(sends[0].type, 'lineup_drop');
     assert.equal(sends[0].data.eventKey, 'lineup:fest-2027');
+    // A real web route: web reads ?festival=, mobile resolves it via pushTarget.
+    assert.equal(sends[0].data.deepLink, 'https://festie.test/?festival=fest-2027');
   });
 
   describe('email opt-out', () => {

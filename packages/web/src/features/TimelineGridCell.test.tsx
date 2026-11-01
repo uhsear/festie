@@ -18,7 +18,7 @@ function makeSet(id: string): FestivalSet {
   };
 }
 
-function renderCell(id: string, topSlot: number, spanSlots: number, myPick: 'want-to-see' | null = null) {
+function renderCell(id: string, topSlot: number, spanSlots: number, myPick: 'want-to-see' | null = null, canPick = true) {
   const { container } = render(
     <TimelineGridCell
       set={makeSet(id)}
@@ -31,7 +31,7 @@ function renderCell(id: string, topSlot: number, spanSlots: number, myPick: 'wan
       myPick={myPick}
       others={[]}
       hasConflict={false}
-      hasProfile
+      canPick={canPick}
       festival={null}
       onSetClick={vi.fn()}
       onSavePick={vi.fn()}
@@ -59,5 +59,11 @@ describe('TimelineGridCell block placement', () => {
     const el = renderCell('c', 0, 4, 'want-to-see');
     const btn = el.querySelector<HTMLElement>('button[aria-pressed="true"]')!;
     expect(btn.className).toContain('--text-on-light-accent');
+    expect(btn.getAttribute('aria-label')).not.toContain('(selected)');
+  });
+
+  it('shows the pick row only when canPick is set', () => {
+    expect(renderCell('d', 0, 4, null, true).querySelectorAll('button[aria-pressed]').length).toBeGreaterThan(0);
+    expect(renderCell('e', 0, 4, null, false).querySelectorAll('button[aria-pressed]').length).toBe(0);
   });
 });
