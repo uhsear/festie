@@ -3,11 +3,14 @@ import { View, Text } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { duration, easing } from '@festie/shared/tokens';
-import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { inkOnFill } from '../lib/inkOnFill';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
 import PressableScale from './PressableScale';
+
+// "Timeline" clips at the 1.4 global cap; 1.2 leaves room in a half-width segment.
+const SEGMENT_FONT_SCALE = 1.2;
 
 export interface SegmentOption<T extends string> {
   value: T;
@@ -47,11 +50,10 @@ function Segment<T extends string>({ option, active, onPress }: SegmentProps<T>)
     >
       <Text
         style={[s.label, active && { color: activeInk }]}
-        maxFontSizeMultiplier={MAX_FONT_SCALE}
+        // A capped scale, not shrink-to-fit: on iOS shrink-to-fit made "Timeline" about 8 pt at XL text.
+        maxFontSizeMultiplier={SEGMENT_FONT_SCALE}
         textBreakStrategy="simple"
         numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
       >
         {/* Trailing NBSP: Android under-measures a center-aligned single-line
             Text node and tail-clips the last glyph ("Timeli…", "Car…") even
