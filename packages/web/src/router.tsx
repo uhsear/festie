@@ -6,7 +6,6 @@ import { authReady, isAuthenticated, isAdmin } from './routes/auth-guard';
 import NotFoundPage from './routes/not-found';
 import CardsSkeleton from './components/ui/skeletons/CardsSkeleton';
 import TimelineSkeleton from './components/ui/skeletons/TimelineSkeleton';
-import GridSkeleton from './components/ui/skeletons/GridSkeleton';
 import FestivalModeSkeleton from './components/ui/skeletons/FestivalModeSkeleton';
 import PicksSkeleton from './components/ui/skeletons/PicksSkeleton';
 import CrewSkeleton from './components/ui/skeletons/CrewSkeleton';
@@ -30,10 +29,9 @@ function withSkeleton(LazyCmp: ComponentType, Skeleton: ComponentType): () => Re
 // Lazy load route components — import promises are cached, so exposing the
 // import factories as named loaders lets us prefetch a chunk before the user
 // taps its nav button. AppShell calls these on idle after first paint so
-// /grid + /timeline etc. are ready the moment the user switches tabs — no
+// /grid etc. are ready the moment the user switches tabs — no
 // more "tab switch → wait for chunk → scroll feels laggy" pattern.
 const loadCards = () => import('./routes/cards');
-const loadTimeline = () => import('./routes/timeline');
 const loadPicks = () => import('./routes/picks');
 const loadCrew = () => import('./routes/crew');
 const loadCrewPlan = () => import('./routes/crew-plan');
@@ -65,7 +63,6 @@ const MinimalFallback = () => (
 // preload() them: a preloaded route renders without suspending, where React.lazy
 // suspended once even with the chunk cached and hit the 300ms fallback throttle.
 const cardsLazy = lazyRouteComponent(loadCards);
-const timelineLazy = lazyRouteComponent(loadTimeline);
 const picksLazy = lazyRouteComponent(loadPicks);
 const crewLazy = lazyRouteComponent(loadCrew);
 const gridLazy = lazyRouteComponent(loadGrid);
@@ -74,11 +71,10 @@ const wrapLazy = lazyRouteComponent(loadWrap);
 const accountLazy = lazyRouteComponent(loadAccount);
 
 const CardsView = withSkeleton(cardsLazy, CardsSkeleton);
-const TimelineView = withSkeleton(timelineLazy, TimelineSkeleton);
 const PicksView = withSkeleton(picksLazy, PicksSkeleton);
 const CrewView = withSkeleton(crewLazy, CrewSkeleton);
 const CrewPlanView = withSkeleton(lazyRouteComponent(loadCrewPlan), CrewPlanSkeleton);
-const GridView = withSkeleton(gridLazy, GridSkeleton);
+const GridView = withSkeleton(gridLazy, TimelineSkeleton);
 const FestivalModeView = withSkeleton(festivalModeLazy, FestivalModeSkeleton);
 const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
@@ -96,7 +92,7 @@ const ForgotPasswordPage = withSkeleton(lazyRouteComponent(loadForgot), MinimalF
  * the chunk-load pause on tab switch.
  */
 export function prefetchMainRoutes() {
-  const routes = [cardsLazy, timelineLazy, gridLazy, festivalModeLazy, picksLazy, crewLazy, accountLazy, wrapLazy];
+  const routes = [cardsLazy, gridLazy, festivalModeLazy, picksLazy, crewLazy, accountLazy, wrapLazy];
   const run = () => routes.forEach((r) => r.preload?.()?.catch(() => {}));
   if ('requestIdleCallback' in window) {
     window.requestIdleCallback(run, { timeout: 2000 });
@@ -126,7 +122,10 @@ const cardsRoute = new Route({
 const timelineRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/timeline',
-  component: TimelineView,
+  // Web has one grid; old /timeline links and the mobile deep-link shim land on it.
+  beforeLoad: () => {
+    throw redirect({ to: '/grid' });
+  },
 });
 
 const picksRoute = new Route({

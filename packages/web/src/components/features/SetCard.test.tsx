@@ -193,6 +193,7 @@ describe('SetCard', () => {
     it('shows conflict badge when conflicts exist', () => {
       render(<SetCard {...defaultProps} conflicts={[makeSet({ id: 'set-2' })]} />);
       expect(screen.getByTestId('set-card').className).toContain('has-conflict');
+      expect(screen.getByText('Clash')).toBeInTheDocument();
     });
 
     it('does not show conflict badge when no conflicts', () => {

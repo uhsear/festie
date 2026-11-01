@@ -14,19 +14,27 @@ import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import {
   setMinuteRange,
+  fmtShort,
   formatTime,
   artistDisplayName,
+  pickClashTarget,
+  type ClashMark,
   resolveFestivalTimeZone,
   selectNowNext,
 } from '@festie/shared/utils';
 import { useFestivalDataStore } from '@festie/shared/stores';
+import { useDayClashes, usePicks } from '@festie/shared/hooks';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
-import { COPY } from '@festie/shared/constants';
+import { COPY, PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { safeStageColor } from '../lib/stageColor';
 import { useNowIndicator, type TimeBounds } from '../hooks/useNowIndicator';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useQuickPick } from '../hooks/useQuickPick';
+import { priorityIconName } from '../lib/prioritySymbol';
 import AppPressable from './AppPressable';
+import ClashHatch from './ClashHatch';
+import ClashChip from './ClashChip';
 
 const SLOT_MINUTES = 15;
 /**
@@ -49,11 +57,9 @@ export interface TimelineViewProps {
   timedSets: FestivalSet[];
   timeBounds: TimeBounds | null;
   selectedDay: number;
-  conflictIds: Set<string>;
   b2bSeparator?: string;
   getMyPick: (setId: string) => Priority | null | undefined;
   getStageColor: (stageId: string) => string;
-  onPickChange: (setId: string, priority: Priority | null) => void;
   onSetPress: (set: FestivalSet) => void;
   /**
    * Live mode inputs (optional so existing callers keep working): the festival
@@ -66,6 +72,12 @@ export interface TimelineViewProps {
   days?: { date: string }[];
   allSets?: FestivalSet[];
   picks?: Record<string, Priority> | null;
+}
+
+/** Block top in px. Shared by the block and the clash chip so they cannot drift. */
+function blockTop(s: FestivalSet, minMin: number): number {
+  const { start } = setMinuteRange(s)!;
+  return ((start - minMin) / SLOT_MINUTES) * ROW_HEIGHT;
 }
 
 function fmtHour(mins: number): string {
@@ -82,7 +94,9 @@ interface StageColumnProps {
   timeBounds: TimeBounds;
   stageColor: string;
   nowIndicator: number | null;
-  conflictIds: Set<string>;
+  marks: Map<string, ClashMark>;
+  crewCountBySet: Map<string, number>;
+  holdToPick: ReturnType<typeof useQuickPick>['holdToPick'];
   b2bSeparator?: string;
   getMyPick: (setId: string) => Priority | null | undefined;
   onSetPress: (set: FestivalSet) => void;
@@ -112,7 +126,9 @@ function StageColumn({
   timeBounds,
   stageColor,
   nowIndicator,
-  conflictIds,
+  marks,
+  crewCountBySet,
+  holdToPick,
   b2bSeparator,
   getMyPick,
   onSetPress,
@@ -188,20 +204,27 @@ function StageColumn({
         {/* Set blocks */}
         {sets.map((s) => {
           const { start: startMin, end: endMin } = setMinuteRange(s)!;
-          const top = ((startMin - timeBounds.minMin) / SLOT_MINUTES) * ROW_HEIGHT;
+          const top = blockTop(s, timeBounds.minMin);
           // DC11 — enforce a 28px visual floor so block (28) + hitSlop (8+8)
           // reaches the 44pt WCAG 2.5.5/2.5.8 touch target even for back-to-back
           // 15-min sets; the px/min time scale still holds for sets ≥19 min.
           const rawHeight = Math.max(ROW_HEIGHT, ((endMin - startMin) / SLOT_MINUTES) * ROW_HEIGHT);
           const height = Math.max(MIN_BLOCK_H, rawHeight - 4);
           const myPick = getMyPick(s.id);
-          const conflict = conflictIds.has(s.id);
+          const mark = marks.get(s.id);
+          const crew = crewCountBySet.get(s.id) ?? 0;
           const name = artistDisplayName(s, b2bSeparator);
           // F49 — express the priority tier on the block: thicken + tint the
-          // left rail by must/want/maybe, mirroring web's P1-3. A conflict keeps
-          // its distinct coral border (incl. the left rail) and the warning icon,
+          // left rail by must/want/maybe, mirroring web's P1-3. A clash keeps
+          // its distinct clash border (incl. the left rail) and the warning icon,
           // so it always wins visually over the priority tint.
           const pickColor = myPick ? t.colors.priority[myPick === 'want-to-see' ? 'want' : myPick] : null;
+          const timeText = s.endTime ? `${fmtShort(s.startTime)}–${fmtShort(s.endTime)}` : fmtShort(s.startTime);
+          const label =
+            `${name}, ${stage.name}, ${formatTime(s.startTime)} to ${formatTime(s.endTime)}` +
+            (myPick ? `, ${PRIORITY_SYMBOLS[myPick].label}` : '') +
+            (crew > 0 ? `, ${crew} crew going` : '') +
+            (mark ? `, ${mark.text}` : '');
           return (
             <AppPressable
               key={s.id}
@@ -216,26 +239,44 @@ function StageColumn({
                   borderLeftWidth: myPick ? 4 : 3,
                   backgroundColor: myPick ? t.colors.bg.hover : t.colors.bg.card,
                 },
-                conflict && { borderColor: t.colors.accent.coral, borderLeftColor: t.colors.accent.coral },
+                mark && { borderColor: t.colors.clash.mark, borderLeftColor: t.colors.clash.mark },
               ]}
               onPress={() => onSetPress(s)}
+              {...holdToPick(s.id, myPick)}
               activeOpacity={0.7}
               // Short slots render at the MIN_BLOCK_H floor (28px); the 8+8
               // vertical hitSlop lifts the effective target to 44pt (WCAG 2.5.5).
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               accessibilityRole="button"
-              accessibilityLabel={`${name}, ${stage.name}, ${formatTime(s.startTime)} to ${formatTime(s.endTime)}`}
+              accessibilityLabel={label}
             >
+              {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
               <Text style={styles.setArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {name}
               </Text>
               {height > ROW_HEIGHT * 1.5 ? (
                 <Text style={styles.setTime} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                  {formatTime(s.startTime)}
+                  {timeText}
                 </Text>
               ) : null}
-              {conflict ? (
-                <Ionicons name="warning" size={t.iconSize.xs} color={t.colors.accent.coral} style={styles.conflictIcon} />
+              {mark && height >= ROW_HEIGHT * 3 ? (
+                <Text style={styles.clashText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {mark.text}
+                </Text>
+              ) : null}
+              {mark || myPick ? (
+                <View style={styles.iconRow}>
+                  {mark ? <Ionicons name="warning-outline" size={t.iconSize.xs} color={t.colors.clash.mark} /> : null}
+                  {myPick && pickColor ? (
+                    <Ionicons name={priorityIconName(myPick)} size={t.iconSize.xs} color={pickColor} />
+                  ) : null}
+                </View>
+              ) : null}
+              {crew > 0 && height >= ROW_HEIGHT * 2 ? (
+                <View style={styles.crewBadge}>
+                  <Ionicons name="people" size={9} color={t.colors.accent.aqua} />
+                  <Text style={styles.crewCount}>{crew}</Text>
+                </View>
               ) : null}
             </AppPressable>
           );
@@ -281,7 +322,6 @@ export default function TimelineView({
   timedSets,
   timeBounds,
   selectedDay,
-  conflictIds,
   b2bSeparator,
   getMyPick,
   getStageColor,
@@ -302,6 +342,14 @@ export default function TimelineView({
     festivalTimeZone,
   );
   const reduceMotion = useReduceMotion();
+  const { count, marks, groups } = useDayClashes();
+  const { getOtherPicks } = usePicks();
+  const { holdToPick } = useQuickPick();
+  const crewCountBySet = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of timedSets) m.set(s.id, getOtherPicks(s.id).length);
+    return m;
+  }, [timedSets, getOtherPicks]);
 
   // --- Live mode ----------------------------------------------------------
   // 60s device-clock tick drives the "up next" countdown + the auto-scroll.
@@ -461,7 +509,9 @@ export default function TimelineView({
         timeBounds={timeBounds!}
         stageColor={safeStageColor(getStageColor(item.id), t.colors.text.muted)}
         nowIndicator={nowIndicator}
-        conflictIds={conflictIds}
+        marks={marks}
+        crewCountBySet={crewCountBySet}
+        holdToPick={holdToPick}
         b2bSeparator={b2bSeparator}
         getMyPick={getMyPick}
         onSetPress={onSetPress}
@@ -481,7 +531,9 @@ export default function TimelineView({
       timeBounds,
       getStageColor,
       nowIndicator,
-      conflictIds,
+      marks,
+      crewCountBySet,
+      holdToPick,
       b2bSeparator,
       getMyPick,
       onSetPress,
@@ -495,15 +547,37 @@ export default function TimelineView({
 
   const keyExtractor = useCallback((s: Stage) => s.id, []);
 
+  const showFirstClash = useCallback(() => {
+    const target = pickClashTarget(groups, new Set(visibleStages.map((st) => st.id)));
+    if (!target) return;
+    if (!target.visible) {
+      onSetPress(target.set);
+      return;
+    }
+    const stageId = target.set.stageId;
+    const index = visibleStages.findIndex((st) => st.id === stageId);
+    const y = Math.max(0, blockTop(target.set, timeBounds!.minMin) - ROW_HEIGHT);
+    // The map entry covers a column that FlatList windowing mounts later.
+    scrollYByStage.current.set(stageId, y);
+    handleUserScroll();
+    jumpToStage(index);
+    requestAnimationFrame(() => columnRefs.current.get(index)?.scrollTo({ y, animated: !reduceMotion }));
+  }, [groups, visibleStages, onSetPress, timeBounds, handleUserScroll, jumpToStage, reduceMotion]);
+
   if (!timeBounds) return null;
 
   return (
     <View style={styles.root}>
-      {/* Only meaningful with >1 stage — a single-stage festival can't swipe. */}
-      {visibleStages.length > 1 ? (
-        <View style={styles.hintRow}>
-          <Ionicons name="swap-horizontal" size={12} color={t.colors.text.muted} />
-          <Text style={styles.hintText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Swipe to change stage</Text>
+      <View style={styles.hintRow}>
+        <Ionicons name="swap-horizontal" size={12} color={t.colors.text.muted} />
+        <Text style={styles.hintText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {visibleStages.length > 1 ? COPY.grid.swipeAndHold : COPY.grid.holdToPick}
+        </Text>
+      </View>
+
+      {count > 0 ? (
+        <View style={styles.chipRow}>
+          <ClashChip count={count} onPress={showFirstClash} />
         </View>
       ) : null}
 
@@ -731,10 +805,37 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.muted,
   },
-  conflictIcon: {
+  clashText: {
+    ...typeStyle('micro'),
+    color: t.colors.text.secondary,
+  },
+  iconRow: {
     position: 'absolute',
     top: 2,
     right: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  crewBadge: {
+    position: 'absolute',
+    bottom: 3,
+    right: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    borderRadius: t.radii.pill,
+    backgroundColor: t.colors.aquaAlpha[12],
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  crewCount: {
+    ...typeStyle('micro'),
+    color: t.colors.accent.aqua,
+  },
+  chipRow: {
+    alignItems: 'center',
+    paddingBottom: t.spacing[2],
   },
   nowLine: {
     position: 'absolute',

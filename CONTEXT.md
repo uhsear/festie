@@ -104,11 +104,11 @@ _Avoid_: feed, log, chat, timeline (which is a schedule view)
 ### Schedule views
 
 **Grid**:
-The matrix schedule view. Stages as columns, time as rows, sets as positioned blocks. Supports pixel-per-minute scaling by viewport width.
+The stage-by-time schedule view. Stages as columns, time as rows, sets as blocks placed by start and end. Three zoom levels. On the web it is the only grid; `/timeline` redirects to it.
 _Avoid_: table, matrix, spreadsheet
 
 **Timeline**:
-The chronological vertical schedule view. Sets grouped by time slot with stage badges, sorted within slots. Shows one day at a time.
+The mobile schedule view that pages through one stage at a time, with time running down the page. Web has no separate Timeline.
 _Avoid_: feed, list view, activity (which is a crew concept)
 
 **Cards**:

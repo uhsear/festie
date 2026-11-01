@@ -16,8 +16,13 @@ import * as Sharing from 'expo-sharing';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
-import { usePicks, useFestival } from '@festie/shared/hooks';
+import { usePicks, useFestival, useDayClashes } from '@festie/shared/hooks';
+import { COPY } from '@festie/shared/constants';
 import {
+  GRID_ZOOM_LEVELS,
+  defaultZoomIndex,
+  twoUpColumnWidth,
+  pickClashTarget,
   nowPositionPercent,
   setMinuteRange,
   fmtHour,
@@ -32,23 +37,26 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE, type Tokens } from '.
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
+import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
+import ClashHatch from '../components/ClashHatch';
+import ClashChip from '../components/ClashChip';
+import TBASection from '../components/TBASection';
 
-// Per-minute vertical scale. The web grid adapts this to viewport width
-// (getPxPerMin), but on a phone the grid is the dense 2D surface — fix it at the
-// shared narrow-phone density (1.6 px/min) so a full day stays scrollable and
-// the column math is stable regardless of rotation.
-const PX_PER_MIN = 1.6;
+// Vertical scale comes from the shared GRID_ZOOM_LEVELS (px per minute, three
+// steps). The screen opens at defaultZoomIndex(windowW), the middle level on a
+// phone. The toolbar's Zoom out / Zoom in buttons step through the levels and
+// keep the time in the middle of the body on screen.
 // Sticky left time gutter. Matches the timeline gutter width (useNowIndicator /
 // TimelineView use 44) so the two schedule surfaces line up visually.
 const GUTTER_W = 44;
-// Fixed stage-column width. The web grid flexes columns to fill desktop width;
-// a phone never has that room, so each stage is a fixed-width column the user
-// scrolls between horizontally.
-const COL_W = 132;
+// Stage-column width is twoUpColumnWidth(windowW, GUTTER_W): two stages fill
+// the width next to the gutter (clamped to 120-220 px), and the horizontal
+// scroll snaps by one column.
 // Header row height (stage name labels) above the scrollable body.
 const HEADER_H = 40;
-// WCAG 2.5.5 — a 15-min set at 1.6 px/min is only 24px; bump cells to a 44px
+// WCAG 2.5.5 — a 15-min set at the smallest zoom is only 21px; bump cells to a 44px
 // minimum tap target (mirrors the web grid's Math.max(..., 44)).
 const MIN_CELL_H = 44;
 
@@ -61,9 +69,13 @@ const MIN_CELL_H = 44;
  *
  * Data comes entirely from the shared stores/hooks (zero new business logic):
  * festival data store for sets/stages/festival, festivalStore for the selected
- * day + active-stage filter, usePicks for the user's pick + crew overlap, and
- * useFestival for stage color/name resolution. The pure grid math (toMin,
+ * day + active-stage filter, usePicks for the user's pick + crew overlap,
+ * useDayClashes for clash marks and the clash chip, and useFestival for stage
+ * color/name resolution. The pure grid math (zoom levels, two-up column width,
  * fmtHour, fmtShort, bounds) is imported from @festie/shared/utils.
+ *
+ * Holding a cell cycles its pick (useQuickPick). A day with only TBA sets shows
+ * the stage-grouped TBA list instead of the empty state.
  *
  * Pick colors are resolved from the design tokens (t.colors.priority) rather
  * than the web grid's CSS `var(--color-accent-*)` strings, which RN can't parse.
@@ -73,10 +85,17 @@ export default function GridScreen() {
   const styles = useStyles();
   const router = useRouter();
   const { width: windowW } = useWindowDimensions(); // re-render on rotation so the body re-measures.
+  const colW = twoUpColumnWidth(windowW, GUTTER_W);
+  const [zoom, setZoom] = useState(() => defaultZoomIndex(windowW));
+  const pxPerMin = GRID_ZOOM_LEVELS[zoom]!;
+  const reduceMotion = useReduceMotion();
+  const { count: clashCount, marks, groups } = useDayClashes();
+  const { holdToPick, setPick } = useQuickPick();
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const allSets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
+  const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const activeStages = useFestivalStore((s) => s.activeStages);
   const { getMyPick, getOtherPicks } = usePicks();
@@ -119,6 +138,22 @@ export default function GridScreen() {
     [allSets, selectedDay, activeStages, stages],
   );
 
+  // Same day and stage filter, but without a start or end time: the TBA list
+  // shown when the day has nothing to place on the grid yet.
+  const untimedSets = useMemo(() => {
+    const sep = currentFestival?.b2bSeparator;
+    return allSets
+      .filter(
+        (s) =>
+          s.dayIndex === selectedDay &&
+          (!s.startTime || !s.endTime) &&
+          (activeStages.length === 0 ||
+            activeStages.length === stages.length ||
+            activeStages.includes(s.stageId)),
+      )
+      .sort((a, b) => artistDisplayName(a, sep).localeCompare(artistDisplayName(b, sep)));
+  }, [allSets, selectedDay, activeStages, stages, currentFestival?.b2bSeparator]);
+
   // Pre-compute stageId -> sets once per render instead of filtering inside each
   // column (web grid's setsByStage).
   const setsByStage = useMemo(() => {
@@ -148,9 +183,9 @@ export default function GridScreen() {
   const hours = useMemo<HourMark[]>(() => {
     if (!bounds) return [];
     const out: HourMark[] = [];
-    for (let m = bounds.lo; m <= bounds.hi; m += 60) out.push({ m, px: (m - bounds.lo) * PX_PER_MIN });
+    for (let m = bounds.lo; m <= bounds.hi; m += 60) out.push({ m, px: (m - bounds.lo) * pxPerMin });
     return out;
-  }, [bounds]);
+  }, [bounds, pxPerMin]);
 
   // Live "now" minute (rolls past midnight to match the bounds). useNow ticks on
   // an interval + on foreground, so the indicator creeps forward without an
@@ -161,21 +196,25 @@ export default function GridScreen() {
   const nowPx = useMemo(() => {
     if (!bounds) return null;
     const pct = nowPositionPercent(nowMs, dayDate, { minMin: bounds.lo, maxMin: bounds.hi }, festivalTimeZone);
-    return pct === null ? null : (pct / 100) * bounds.span * PX_PER_MIN;
-  }, [bounds, nowMs, dayDate, festivalTimeZone]);
+    return pct === null ? null : (pct / 100) * bounds.span * pxPerMin;
+  }, [bounds, nowMs, dayDate, festivalTimeZone, pxPerMin]);
 
-  const totalH = bounds ? bounds.span * PX_PER_MIN : 0;
+  const totalH = bounds ? bounds.span * pxPerMin : 0;
 
   // Auto-scroll the vertical body to NOW on mount (only when NOW is in bounds).
   const bodyScrollRef = useRef<ScrollViewInstance>(null);
   const headerScrollRef = useRef<ScrollViewInstance>(null);
   const gutterScrollRef = useRef<ScrollViewInstance>(null);
+  const colsScrollRef = useRef<ScrollViewInstance>(null);
   const didAutoScroll = useRef(false);
   const [bodyH, setBodyH] = useState(0);
+  // Body scroll offset (kept from onScroll) and the minute to re-centre on after a zoom step.
+  const bodyYRef = useRef(0);
+  const zoomCentreMinRef = useRef<number | null>(null);
   // Horizontal windowing: only stage columns within one column of the viewport
   // mount their gridlines and set cells; the rest are empty same-width spacers.
   const [firstCol, setFirstCol] = useState(0);
-  const lastCol = firstCol + Math.ceil(windowW / COL_W);
+  const lastCol = firstCol + Math.ceil(windowW / colW);
   useEffect(() => {
     if (didAutoScroll.current || nowPx == null || bodyH === 0) return;
     didAutoScroll.current = true;
@@ -183,10 +222,42 @@ export default function GridScreen() {
     bodyScrollRef.current?.scrollTo({ y: target, animated: false });
   }, [nowPx, bodyH]);
 
+  const changeZoom = useCallback(
+    (next: number) => {
+      if (next < 0 || next >= GRID_ZOOM_LEVELS.length || next === zoom) return;
+      if (bounds) zoomCentreMinRef.current = bounds.lo + (bodyYRef.current + bodyH / 2) / pxPerMin;
+      setZoom(next);
+    },
+    [zoom, bounds, bodyH, pxPerMin],
+  );
+
+  // After a zoom step, scroll so the minute that was in the middle stays there.
+  useEffect(() => {
+    const centreMin = zoomCentreMinRef.current;
+    if (centreMin == null || !bounds) return;
+    zoomCentreMinRef.current = null;
+    const y = Math.max(0, (centreMin - bounds.lo) * pxPerMin - bodyH / 2);
+    bodyScrollRef.current?.scrollTo({ y, animated: false });
+  }, [pxPerMin, bounds, bodyH]);
+
+  const showFirstClash = useCallback(() => {
+    const target = pickClashTarget(groups, new Set(visibleStages.map((st) => st.id)));
+    if (!target) return;
+    const range = setMinuteRange(target.set);
+    const colIndex = visibleStages.findIndex((st) => st.id === target.set.stageId);
+    if (!target.visible || !bounds || !range || colIndex < 0) {
+      router.push(`/set/${target.set.id}`);
+      return;
+    }
+    const top = (range.start - bounds.lo) * pxPerMin;
+    colsScrollRef.current?.scrollTo({ x: colIndex * colW, animated: !reduceMotion });
+    bodyScrollRef.current?.scrollTo({ y: Math.max(0, top - 2 * 44), animated: !reduceMotion });
+  }, [groups, visibleStages, bounds, pxPerMin, colW, reduceMotion, router]);
+
   // ── PNG export (replicates wrap.tsx's off-screen captureRef pipeline) ──
   const [sharing, setSharing] = useState(false);
   const posterRef = useRef<HostInstance>(null);
-  const posterW = GUTTER_W + COL_W * Math.max(visibleStages.length, 1);
+  const posterW = GUTTER_W + colW * Math.max(visibleStages.length, 1);
   const posterH = HEADER_H + totalH;
 
   const shareGridText = useCallback(async () => {
@@ -236,6 +307,8 @@ export default function GridScreen() {
     }
   }, [currentFestival, sharing, bounds, posterW, posterH, shareGridText]);
 
+  const openSet = useCallback((s: FestivalSet) => router.push(`/set/${s.id}`), [router]);
+
   // ── Empty states (mirror the web grid) ──
   if (!currentFestival) {
     return (
@@ -250,6 +323,28 @@ export default function GridScreen() {
     );
   }
   if (!timedSets.length || !bounds) {
+    if (untimedSets.length > 0) {
+      return (
+        <View style={styles.screen}>
+          <Stack.Screen options={{ title: 'Schedule grid', headerShown: true }} />
+          <ScrollView>
+            <TBASection
+              sets={untimedSets}
+              stages={stages}
+              currentProfile={currentProfile}
+              currentFestival={currentFestival}
+              getMyPick={getMyPick}
+              getOtherPicks={getOtherPicks}
+              getStageColor={resolveStageColor}
+              onSavePick={setPick}
+              onOpenDetail={openSet}
+              defaultExpanded
+              allTba
+            />
+          </ScrollView>
+        </View>
+      );
+    }
     return (
       <View style={styles.screen}>
         <Stack.Screen options={{ title: 'Schedule grid', headerShown: true }} />
@@ -267,30 +362,32 @@ export default function GridScreen() {
     const stageColor = resolveStageColor(st.id);
     const stageSets = setsByStage.get(st.id) || [];
     return (
-      <View key={st.id} style={[styles.col, { height: totalH }]}>
+      <View key={st.id} style={[styles.col, { width: colW, height: totalH }]}>
         {/* Hour gridlines (and a fainter half-hour line) */}
         {hours.map(({ m, px }) => (
           <View key={m} style={[styles.hourLine, { top: px }]} />
         ))}
         {hours.slice(0, -1).map(({ m, px }) => (
-          <View key={`half-${m}`} style={[styles.halfHourLine, { top: px + 30 * PX_PER_MIN }]} />
+          <View key={`half-${m}`} style={[styles.halfHourLine, { top: px + 30 * pxPerMin }]} />
         ))}
 
         {stageSets.map((set) => {
           const { start: a, end: b } = setMinuteRange(set)!;
-          const top = (a - bounds.lo) * PX_PER_MIN;
-          const height = Math.max((b - a) * PX_PER_MIN, MIN_CELL_H);
+          const top = (a - bounds.lo) * pxPerMin;
+          const height = Math.max((b - a) * pxPerMin, MIN_CELL_H);
           const pick = getMyPick(set.id);
           const pickColor = pick ? t.colors.priority[pick === 'want-to-see' ? 'want' : pick] : null;
           const cellColor = pickColor ?? stageColor;
           const dn = artistDisplayName(set, currentFestival.b2bSeparator);
           const overlap = getOverlapCount(set.id);
+          const mark = marks.get(set.id);
 
           const cellStyle = {
             top,
             height,
             backgroundColor: pickColor ? withAlpha(t, pickColor, 0.28) : withAlpha(t, stageColor, 0.14),
-            borderColor: cellColor,
+            borderColor: mark ? t.colors.clash.mark : cellColor,
+            borderWidth: mark ? 2 : 1,
           };
 
           // The off-screen export poster is captured by react-native-view-shot;
@@ -298,8 +395,12 @@ export default function GridScreen() {
           // but we avoid the press handler / accessibility on the clone).
           const inner = (
             <>
-              {pick ? (
-                <Ionicons name={priorityIconName(pick)} size={11} color={cellColor} style={styles.pickHeart} aria-hidden />
+              {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
+              {mark || pick ? (
+                <View style={styles.iconRow}>
+                  {mark ? <Ionicons name="warning-outline" size={11} color={t.colors.clash.mark} aria-hidden /> : null}
+                  {pick ? <Ionicons name={priorityIconName(pick)} size={11} color={cellColor} aria-hidden /> : null}
+                </View>
               ) : null}
               <Text style={styles.cellArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {dn}
@@ -335,8 +436,9 @@ export default function GridScreen() {
               key={set.id}
               style={[styles.cell, cellStyle]}
               onPress={() => router.push(`/set/${set.id}`)}
+              {...holdToPick(set.id, pick)}
               accessibilityRole="button"
-              accessibilityLabel={`${dn} at ${getStageName(st.id) || st.id}, ${fmtShort(set.startTime!)} to ${fmtShort(set.endTime!)}${pick ? ', ' + pick : ''}${overlapLabel}`}
+              accessibilityLabel={`${dn} at ${getStageName(st.id) || st.id}, ${fmtShort(set.startTime!)} to ${fmtShort(set.endTime!)}${pick ? ', ' + pick : ''}${overlapLabel}${mark ? ', ' + mark.text : ''}`}
             >
               {inner}
             </Pressable>
@@ -371,6 +473,34 @@ export default function GridScreen() {
         }}
       />
 
+      <View style={styles.toolbar}>
+        <ClashChip count={clashCount} onPress={showFirstClash} />
+        <View style={styles.zoomButtons}>
+          <TouchableOpacity
+            onPress={() => changeZoom(zoom - 1)}
+            disabled={zoom === 0}
+            accessibilityRole="button"
+            accessibilityLabel={COPY.grid.zoomOut}
+            accessibilityHint={COPY.grid.zoomOutHint}
+            accessibilityState={{ disabled: zoom === 0 }}
+            style={[styles.zoomButton, zoom === 0 && styles.zoomButtonDisabled]}
+          >
+            <Ionicons name="remove-outline" size={t.iconSize.md} color={t.colors.text.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => changeZoom(zoom + 1)}
+            disabled={zoom === GRID_ZOOM_LEVELS.length - 1}
+            accessibilityRole="button"
+            accessibilityLabel={COPY.grid.zoomIn}
+            accessibilityHint={COPY.grid.zoomInHint}
+            accessibilityState={{ disabled: zoom === GRID_ZOOM_LEVELS.length - 1 }}
+            style={[styles.zoomButton, zoom === GRID_ZOOM_LEVELS.length - 1 && styles.zoomButtonDisabled]}
+          >
+            <Ionicons name="add-outline" size={t.iconSize.md} color={t.colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Sticky chrome: the stage header row and the time gutter are separate,
           non-interactive ScrollViews whose offsets follow the body below, so
           stage names and hour labels stay on screen on both axes. */}
@@ -385,7 +515,7 @@ export default function GridScreen() {
         >
           <View style={styles.headerRow}>
             {visibleStages.map((st) => (
-              <View key={st.id} style={styles.headerCell}>
+              <View key={st.id} style={[styles.headerCell, { width: colW }]}>
                 <View style={[styles.stageDot, { backgroundColor: resolveStageColor(st.id) }]} />
                 <Text style={styles.headerCellText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {getStageName(st.id) || st.id}
@@ -413,18 +543,27 @@ export default function GridScreen() {
           ref={bodyScrollRef}
           style={styles.body}
           showsVerticalScrollIndicator
+          snapToOffsets={hours.map((h) => h.px)}
+          decelerationRate="fast"
           scrollEventThrottle={16}
-          onScroll={(e) => gutterScrollRef.current?.scrollTo({ y: e.nativeEvent.contentOffset.y, animated: false })}
+          onScroll={(e) => {
+            const y = e.nativeEvent.contentOffset.y;
+            bodyYRef.current = y;
+            gutterScrollRef.current?.scrollTo({ y, animated: false });
+          }}
           onLayout={(e) => setBodyH(e.nativeEvent.layout.height)}
         >
           <ScrollView
+            ref={colsScrollRef}
             horizontal
             showsHorizontalScrollIndicator
+            snapToInterval={colW}
+            decelerationRate="fast"
             scrollEventThrottle={16}
             onScroll={(e) => {
               const x = e.nativeEvent.contentOffset.x;
               headerScrollRef.current?.scrollTo({ x, animated: false });
-              const col = Math.max(0, Math.floor(x / COL_W));
+              const col = Math.max(0, Math.floor(x / colW));
               setFirstCol((prev) => (prev === col ? prev : col));
             }}
             // The horizontal scroll lives inside the vertical one so both axes
@@ -435,7 +574,7 @@ export default function GridScreen() {
             <View style={styles.colsRow}>
               {/* Absolute NOW line spanning all columns. */}
               {nowPx != null ? (
-                <View style={[styles.nowLine, { top: nowPx, width: COL_W * visibleStages.length }]} pointerEvents="none">
+                <View style={[styles.nowLine, { top: nowPx, width: colW * visibleStages.length }]} pointerEvents="none">
                   <Text style={styles.nowLabel} aria-hidden>
                     NOW
                   </Text>
@@ -446,7 +585,7 @@ export default function GridScreen() {
                 i >= firstCol - 1 && i <= lastCol + 1 ? (
                   renderColumn(st, false)
                 ) : (
-                  <View key={st.id} style={[styles.col, { height: totalH }]} />
+                  <View key={st.id} style={[styles.col, { width: colW, height: totalH }]} />
                 ),
               )}
             </View>
@@ -480,7 +619,7 @@ export default function GridScreen() {
         <View>
           <View style={styles.headerRow}>
             {visibleStages.map((st) => (
-              <View key={st.id} style={styles.headerCell}>
+              <View key={st.id} style={[styles.headerCell, { width: colW }]}>
                 <View style={[styles.stageDot, { backgroundColor: resolveStageColor(st.id) }]} />
                 <Text style={styles.headerCellText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {getStageName(st.id) || st.id}
@@ -526,6 +665,26 @@ const useStyles = makeStyles((t: Tokens) => ({
   body: {
     flex: 1,
   },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: t.spacing[2],
+    paddingVertical: t.spacing[1],
+    gap: t.spacing[2],
+  },
+  zoomButtons: {
+    flexDirection: 'row',
+    marginLeft: 'auto',
+  },
+  zoomButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomButtonDisabled: {
+    opacity: 0.4,
+  },
   headerBar: {
     flexDirection: 'row',
     height: HEADER_H,
@@ -567,7 +726,6 @@ const useStyles = makeStyles((t: Tokens) => ({
     backgroundColor: t.colors.bg.primary,
   },
   headerCell: {
-    width: COL_W,
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[1],
@@ -590,7 +748,6 @@ const useStyles = makeStyles((t: Tokens) => ({
     position: 'relative',
   },
   col: {
-    width: COL_W,
     borderLeftWidth: 1,
     borderLeftColor: t.colors.border.default,
     position: 'relative',
@@ -620,12 +777,13 @@ const useStyles = makeStyles((t: Tokens) => ({
     overflow: 'hidden',
     gap: 2,
   },
-  pickHeart: {
+  iconRow: {
     position: 'absolute',
     top: 3,
     right: 5,
-    fontSize: 11,
-    lineHeight: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   cellArtist: {
     ...typeStyle('caption'),

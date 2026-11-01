@@ -121,7 +121,6 @@
 }
 
 /* ── CSS containment ─────────────────────────────────────────────────── */
-.fk-grid__body,
 .timeline-grid,
 .crew-page {
   contain: layout style;
@@ -140,26 +139,6 @@
   min-height: 0 !important;
 }
 
-/* ── fk-grid horizontal scroll coupling (all widths) ─────────────────────
-   Head (.fk-grid__head) and body (.fk-grid__body) are separate flex
-   children; scrolling only the body desyncs the stage-name header from its
-   columns once total column width exceeds the 1600px cap. Fix: the outer
-   .fk-grid is the one horizontal scroller (both children forced to their
-   natural max-content width so they overflow identically and move
-   together); .fk-grid__body keeps its own vertical scroll. Previously this
-   coupling only applied under the mobile breakpoint below. */
-.fk-grid {
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-}
-.fk-grid__body {
-  overflow-x: visible !important;
-  min-width: max-content;
-}
-.fk-grid__head {
-  min-width: max-content;
-}
-
 /* ── Viewport-fill routes (mobile) ───────────────────────────────────── */
 @media (max-width: 768px) {
   /* Viewport-fill routes need to override the shell's overflow/height so the
@@ -167,8 +146,7 @@
      inset (that caused content to butt against the chrome with no breathing
      room). Keep the shell's `px-6 py-4` top inset; only neutralize the side pad
      so the full-bleed timeline/grid can use the full width. */
-  #main-content:has(.timeline-view),
-  #main-content:has(.fk-grid) {
+  #main-content:has(.timeline-view) {
     position: relative;
     min-height: 0 !important;
     overflow: hidden !important;
@@ -182,16 +160,6 @@
     min-height: 0;
     overflow: auto !important;
   }
-  #main-content:has(.fk-grid) .fk-grid__col {
-    min-width: 92px !important;
-  }
-  .fk-grid__col-head {
-    white-space: normal !important;
-    text-overflow: clip !important;
-    line-height: 1.15 !important;
-    padding: 4px !important;
-  }
-  #main-content:has(.fk-grid)::after,
   #main-content:has(.timeline-view)::after {
     content: '';
     position: absolute;
@@ -223,7 +191,6 @@
 @media print {
   .sub-header-wrap,
   [data-testid='festival-day-banner'],
-  .fk-grid__share-btn,
   .skip-link,
   .timeline-legend > summary,
   .admin-mobile-only,
@@ -240,8 +207,6 @@
   }
   .set-card,
   .fm-card-enter,
-  .fk-grid__set,
-  .fk-grid__col-head,
   .card-grid .set-card {
     background: #fff !important;
     color: #000 !important;
@@ -251,8 +216,6 @@
     filter: none !important;
   }
   #main-content,
-  .fk-grid,
-  .fk-grid__body,
   .timeline-grid,
   .crew-page {
     overflow: visible !important;
@@ -261,8 +224,7 @@
     contain: none !important;
   }
   .set-card,
-  .fm-card-enter,
-  .fk-grid__set {
+  .fm-card-enter {
     break-inside: avoid;
     page-break-inside: avoid;
   }

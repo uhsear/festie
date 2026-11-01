@@ -20,7 +20,7 @@ import type { Page } from '@playwright/test';
  *   - [aria-label="Set detail panel"] ............ DetailPanel (vaul Drawer.Content)
  *   - "Sign in" / "Create account" buttons ....... login.tsx / register.tsx
  *   - [data-testid="profile-badge"] .............. UserMenu trigger
- *   - "Schedule"/"Cards"/"Timeline"/"Grid" tabs .. Header desktop nav + ScheduleViewSwitcher
+ *   - "Schedule"/"Cards"/"Grid" tabs ............. Header desktop nav + ScheduleViewSwitcher
  *   - "Picks"/"Crew" nav ......................... Header (desktop) / BottomNav (mobile)
  *   - toast role="status"/"alert" ................ Toast.tsx
  *
@@ -58,11 +58,11 @@ async function registerUser(page: Page, app: { baseUrl: string }, username: stri
   await expect(page.locator('[data-testid="profile-badge"]')).toBeVisible();
 }
 
-// Navigate to one of the three schedule views via the in-page ScheduleViewSwitcher.
+// Navigate to one of the schedule views via the in-page ScheduleViewSwitcher.
 // The switcher uses honest nav semantics (plain buttons + aria-current, no
 // tablist — it navigates routes rather than swapping panels), aria-label
-// "Cards view" / "Timeline view" / "Grid view".
-async function openScheduleView(page: Page, label: 'Cards' | 'Timeline' | 'Grid') {
+// "Cards view" / "Grid view".
+async function openScheduleView(page: Page, label: 'Cards' | 'Grid') {
   await page.getByRole('button', { name: `${label} view` }).click();
 }
 
@@ -222,16 +222,36 @@ test.describe('festival planner browser regression', () => {
     // Cards → Grid (the grid renders timed sets as columns/rows).
     await openScheduleView(page, 'Grid');
     await expect(page).toHaveURL(/\/grid$/);
-    await expect(page.getByRole('grid', { name: /Festival schedule grid/ })).toBeVisible();
+    await expect(page.getByRole('group', { name: /Festival schedule grid/ })).toBeVisible();
 
-    // Grid → Timeline.
-    await openScheduleView(page, 'Timeline');
-    await expect(page).toHaveURL(/\/timeline$/);
-
-    // Timeline → Cards (back to the card grid; Alpha visible again).
+    // Grid → Cards (back to the card grid; Alpha visible again).
     await openScheduleView(page, 'Cards');
     await expect(page).toHaveURL(/\/cards$/);
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
+
+    // Web has one grid: old /timeline links land on it.
+    await page.goto(`${app.baseUrl}/timeline`);
+    await expect(page).toHaveURL(/\/grid$/);
+  });
+
+  test('the grid clash chip focuses the first clashing set', async ({ app, page }) => {
+    await registerUser(page, app, `clasher_${Date.now()}`);
+    await joinFestivalViaSet(page, 'Alpha');
+
+    // Alpha (10:00-11:00, Main) and Beta (10:30-11:30, Forest) overlap.
+    for (const artist of ['Alpha', 'Beta']) {
+      const want = page
+        .locator(`[data-testid="set-card"][data-artist="${artist}"]`)
+        .getByRole('button', { name: /^Want to See/ });
+      await want.click();
+      await expect(want).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    await openScheduleView(page, 'Grid');
+    const chip = page.getByRole('button', { name: 'You have 1 schedule clash. Show it.' });
+    await expect(chip).toBeVisible();
+    await chip.click();
+    await expect(page.locator('[data-set-id="set-a"] [data-open]')).toBeFocused();
   });
 
   test('switching the day filter changes the visible sets', async ({ app, page }) => {

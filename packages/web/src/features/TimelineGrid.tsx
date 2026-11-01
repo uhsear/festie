@@ -1,12 +1,22 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FestivalSet, Priority, Stage, Profile, Festival } from '@festie/shared/types';
-import { setMinuteRange } from '@festie/shared/utils';
+import {
+  setMinuteRange,
+  twoUpColumnWidth,
+  gridNeighbour,
+  type ClashMark,
+  type GridNavCell,
+  type GridNavKey,
+} from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { cn } from '../lib/utils';
 import { stageTextColor } from '../components/ui/StageBadge';
 import TimelineGridCell from './TimelineGridCell';
 
 const SLOT_MINUTES = 15;
+
+const NAV_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']);
 
 // Shared frozen empty array so cells with no crew overlap always receive the
 // same reference — keeps the React.memo on TimelineGridCell from re-rendering
@@ -83,6 +93,7 @@ const TimelineStaticLayer = React.memo(function TimelineStaticLayerImpl({
               'flex items-start justify-end whitespace-nowrap',
               'tabular-nums [font-feature-settings:"tnum"_1]',
               'tracking-[0.01em]',
+              mm === 0 && '[scroll-snap-align:start_none]',
             )}
             style={{
               gridRow: i + 2,
@@ -115,7 +126,7 @@ export interface TimelineGridProps {
   rowHeight: number;
   vpW: number;
   nowIndicator: number | null;
-  conflictIds: Set<string>;
+  clashMarks: Map<string, ClashMark>;
   currentProfile: Profile | null;
   currentFestival: Festival | null;
   gridRef: React.RefObject<HTMLDivElement | null>;
@@ -134,7 +145,7 @@ export default function TimelineGrid({
   rowHeight,
   vpW,
   nowIndicator,
-  conflictIds,
+  clashMarks,
   currentProfile,
   currentFestival,
   gridRef,
@@ -175,16 +186,65 @@ export default function TimelineGrid({
   // 52px matches TimelineSkeleton and leaves enough room for labels such as
   // "10:30a" at the 320px viewport without clipping the leading digit.
   const gutterW = vpW <= 430 ? 52 : 70;
+  const compact = vpW < 640;
+
+  // Roving focus: one cell is the tab stop, arrow keys move between cells.
+  const navCells = useMemo<GridNavCell[]>(() => {
+    const cells: GridNavCell[] = [];
+    visibleStages.forEach((st, col) => {
+      for (const s of setsByStage.get(st.id) || []) {
+        const range = setMinuteRange(s);
+        if (range) cells.push({ id: s.id, col, start: range.start });
+      }
+    });
+    return cells;
+  }, [visibleStages, setsByStage]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const movedByKeyboard = useRef(false);
+  const firstId = useMemo(
+    () => [...navCells].sort((a, b) => a.col - b.col || a.start - b.start)[0]?.id ?? null,
+    [navCells],
+  );
+  const tabStopId = navCells.some((c) => c.id === activeId) ? activeId : firstId;
+
+  useEffect(() => {
+    if (!movedByKeyboard.current || !tabStopId) return;
+    movedByKeyboard.current = false;
+    gridRef.current
+      ?.querySelector<HTMLElement>(`[data-set-id="${CSS.escape(tabStopId)}"] [data-open]`)
+      ?.focus();
+  }, [tabStopId, gridRef]);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!NAV_KEYS.has(e.key)) return;
+    const from = (e.target as HTMLElement).closest<HTMLElement>('[data-set-id]')?.dataset.setId;
+    if (!from) return;
+    const next = gridNeighbour(navCells, from, e.key as GridNavKey);
+    if (!next) return;
+    e.preventDefault();
+    movedByKeyboard.current = true;
+    setActiveId(next);
+  };
+  const onClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-set-id]')?.dataset.setId;
+    if (id) setActiveId(id);
+  };
 
   return (
+    // Handlers are delegated from the focusable cell buttons inside; the group itself takes no focus.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       ref={gridRef}
-      className="grid relative min-w-[800px] gap-0"
+      className={cn('grid relative gap-0', !compact && 'min-w-[800px]')}
       role="group"
-      aria-label="Timeline view of festival sets by stage and time"
+      aria-label={COPY.grid.gridLabel}
       data-day={selectedDay}
+      onKeyDown={onKeyDown}
+      onClickCapture={onClickCapture}
       style={{
-        gridTemplateColumns: `${gutterW}px repeat(${visibleStages.length}, minmax(${vpW <= 430 ? '100px' : '140px'}, 1fr))`,
+        gridTemplateColumns: `${gutterW}px repeat(${visibleStages.length}, ${
+          compact ? `${twoUpColumnWidth(vpW, gutterW)}px` : 'minmax(140px, 1fr)'
+        })`,
         gridTemplateRows: `auto repeat(${timeBounds.totalSlots}, ${rowHeight}px)`,
       }}
     >
@@ -223,6 +283,7 @@ export default function TimelineGrid({
               // Desktop: restore full sizing + roomier tracking.
               'md:text-[length:var(--font-size-12)] md:leading-normal md:tracking-[1.5px] md:px-2 md:py-2.5',
               'md:line-clamp-none md:whitespace-normal',
+              compact && '[scroll-snap-align:none_start]',
             )}
             style={{ borderBottom: `3px solid ${color}`, color: stageTextColor(color, theme) }}
             title={st.name}
@@ -259,7 +320,9 @@ export default function TimelineGrid({
               rowHeight={rowHeight}
               myPick={getMyPick(s.id)}
               others={othersBySet.get(s.id) ?? EMPTY_OTHERS}
-              hasConflict={conflictIds.has(s.id)}
+              clash={clashMarks.get(s.id)}
+              compact={compact}
+              tabbable={s.id === tabStopId}
               hasProfile={!!currentProfile}
               festival={currentFestival}
               onSetClick={onSetClick}

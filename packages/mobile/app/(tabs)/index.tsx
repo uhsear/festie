@@ -500,6 +500,7 @@ export default function TimelineScreen() {
         onSavePick={handlePickChange}
         onOpenDetail={handleSetPress}
         defaultExpanded={timedSets.length === 0}
+        allTba={timedSets.length === 0}
       />
     ) : null;
 
@@ -1085,11 +1086,9 @@ export default function TimelineScreen() {
               timedSets={timedSets}
               timeBounds={timeBounds}
               selectedDay={selectedDay}
-              conflictIds={conflictIds}
               b2bSeparator={currentFestival.b2bSeparator}
               getMyPick={getMyPick}
               getStageColor={resolveStageColor}
-              onPickChange={handlePickChange}
               onSetPress={handleSetPress}
               days={days}
               allSets={allSets}

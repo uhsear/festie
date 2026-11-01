@@ -1,8 +1,8 @@
 import React from 'react';
 import { FestivalSet, Priority, Festival } from '@festie/shared/types';
-import { fmtShort, artistDisplayName } from '@festie/shared/utils';
-import { AlertTriangle } from 'lucide-react';
-import { PRIORITY_SYMBOLS, COPY } from '@festie/shared/constants';
+import { fmtShort, artistDisplayName, type ClashMark } from '@festie/shared/utils';
+import { TriangleAlert, Users } from 'lucide-react';
+import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { cn } from '../lib/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
 
@@ -13,6 +13,13 @@ const OVERLAP_STYLE: Record<string, string> = {
   maybe: 'bg-[var(--color-priority-maybe)] text-[var(--text-on-light-accent)]',
 };
 const MAX_OVERLAP_MARKERS = 3;
+
+// Pick-icon ink per priority for the compact cell (no pick buttons there).
+const PICK_ICON_COLOR: Record<string, string> = {
+  must: 'text-[var(--color-accent-coral)]',
+  'want-to-see': 'text-[var(--color-accent-aqua)]',
+  maybe: 'text-[var(--color-accent-amber)]',
+};
 
 const PICK_BUTTONS = ['must', 'want-to-see', 'maybe'] as const;
 
@@ -30,7 +37,9 @@ export interface TimelineGridCellProps {
   rowHeight: number;
   myPick: Priority | null | undefined;
   others: Array<{ profileId: string; priority: Priority; name?: string }>;
-  hasConflict: boolean;
+  clash?: ClashMark;
+  compact: boolean;
+  tabbable: boolean;
   hasProfile: boolean;
   festival: Festival | null;
   onSetClick: (set: FestivalSet) => void;
@@ -47,7 +56,9 @@ function TimelineGridCell({
   rowHeight,
   myPick,
   others,
-  hasConflict,
+  clash,
+  compact,
+  tabbable,
   hasProfile,
   festival,
   onSetClick,
@@ -58,7 +69,8 @@ function TimelineGridCell({
   const rowStart = Math.floor(topSlot);
   const rowEnd = Math.max(rowStart + 1, Math.ceil(topSlot + spanSlots));
   const isShort = blockPx < 44;
-  const hasConflictActive = myPick && hasConflict;
+  const hasConflictActive = !!clash;
+  const tabIndex = tabbable ? 0 : -1;
 
   return (
     <div
@@ -88,7 +100,7 @@ function TimelineGridCell({
         myPick === 'want-to-see' && 'shadow-[inset_0_0_24px_var(--color-aqua-a12)]',
         myPick === 'maybe' && 'shadow-[inset_0_0_24px_var(--color-amber-a12)]',
         // Conflict indicator
-        hasConflictActive && '!border-2 !border-[var(--color-accent-amber)] shadow-[0_0_8px_rgba(245,158,11,0.3)]',
+        hasConflictActive && 'border-2 border-[var(--color-clash)]',
       )}
       style={
         {
@@ -103,23 +115,32 @@ function TimelineGridCell({
       data-set-id={set.id}
       data-short={isShort ? '1' : '0'}
     >
-      {/* Conflict warning icon */}
-      {hasConflictActive && (
+      {/* Clash hatching over each overlapping part of this set */}
+      {clash?.segments.map((seg) => (
+        <span
+          key={`${seg.from}-${seg.to}`}
+          className="absolute left-0 w-1.5 pointer-events-none z-[1] [background:repeating-linear-gradient(135deg,var(--color-clash)_0_2px,transparent_2px_5px)]"
+          style={{ top: `${seg.from * 100}%`, height: `${(seg.to - seg.from) * 100}%` }}
+          aria-hidden="true"
+        />
+      ))}
+
+      {/* Clash badge */}
+      {clash && (
         <span
           className={cn(
             'absolute top-0.5 right-0.5',
             'w-3.5 h-3.5 rounded-full',
             'inline-flex items-center justify-center',
             'text-[length:var(--font-size-10)] leading-none',
-            'text-[var(--color-bg-primary)]',
-            'bg-[var(--color-accent-coral)]',
+            'text-[var(--color-text-on-dark)]',
+            'bg-[var(--color-clash)]',
             'shadow-[0_0_0_1.5px_var(--color-bg-primary)]',
             'pointer-events-none z-[2]',
           )}
           aria-hidden="true"
-          title={COPY.clash.gridHint}
         >
-          <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+          <TriangleAlert className="w-3 h-3" aria-hidden="true" />
         </span>
       )}
 
@@ -132,6 +153,10 @@ function TimelineGridCell({
           'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
         )}
         onClick={() => onSetClick(set)}
+        tabIndex={tabIndex}
+        // The badge above is pointer-events-none, so hovering it lands here and shows this tooltip.
+        title={clash?.text}
+        data-open
       >
         <span
           className={cn(
@@ -161,12 +186,12 @@ function TimelineGridCell({
         <span className="sr-only">
           {`, ${stageName}${myPick ? `, priority: ${myPick}` : ''}${
             others.length ? `, crew: ${others.map((o) => `${o.name || 'Crew member'} (${o.priority})`).join(', ')}` : ''
-          }`}
+          }${clash ? `, ${clash.text}` : ''}`}
         </span>
       </button>
 
       {/* Priority pick buttons */}
-      {hasProfile && !isShort && blockPx >= 60 && (
+      {hasProfile && !compact && !isShort && blockPx >= 60 && (
         <div className="flex gap-[var(--space-1)] mt-0.5">
           {PICK_BUTTONS.map((p) => {
             const active = myPick === p;
@@ -198,6 +223,7 @@ function TimelineGridCell({
                     'bg-[var(--color-priority-maybe)] text-[var(--text-on-light-accent)] border-[var(--color-priority-maybe)] opacity-100',
                 )}
                 type="button"
+                tabIndex={tabIndex}
                 aria-pressed={active ? 'true' : 'false'}
                 aria-label={pickLabel(p) + (active ? ' (selected)' : '')}
                 title={pickLabel(p)}
@@ -214,8 +240,26 @@ function TimelineGridCell({
         </div>
       )}
 
+      {/* Compact cells have no pick buttons: show the pick as an icon (picking happens in the set sheet) */}
+      {compact && myPick && (
+        <span className={cn('absolute top-[3px] pointer-events-none', clash ? 'right-[20px]' : 'right-[5px]')} aria-hidden="true">
+          <PriorityIcon priority={myPick} filled className={cn('w-3 h-3', PICK_ICON_COLOR[myPick])} />
+        </span>
+      )}
+
+      {/* Compact crew marker: people glyph plus count (names are in the button's sr-only text) */}
+      {compact && others.length > 0 && (
+        <span
+          className="absolute bottom-[3px] right-[5px] flex items-center gap-[2px] rounded-full bg-[color-mix(in_srgb,var(--color-accent-aqua)_18%,transparent)] px-1 py-px text-[length:var(--font-size-10)] font-bold leading-none text-accent-aqua pointer-events-none tabular-nums"
+          aria-hidden="true"
+        >
+          <Users className="w-3 h-3" aria-hidden="true" />
+          {others.length}
+        </span>
+      )}
+
       {/* Crew overlap markers: initial on a priority-coloured disc (names are in the button's sr-only text) */}
-      {others.length > 0 && (
+      {!compact && others.length > 0 && (
         <div className="absolute top-[3px] right-[3px] flex gap-px pointer-events-none" aria-hidden="true">
           {others.slice(0, MAX_OVERLAP_MARKERS).map((o) => (
             <span
