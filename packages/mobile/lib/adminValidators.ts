@@ -31,6 +31,12 @@ export function isValidTime(value: string): boolean {
   return TIME_RE.test(value.trim());
 }
 
+/** Case-insensitive substring filter on option labels; a blank query keeps all. */
+export function filterOptions<T extends { label: string }>(options: readonly T[], query: string): T[] {
+  const q = query.trim().toLowerCase();
+  return q ? options.filter((o) => o.label.toLowerCase().includes(q)) : [...options];
+}
+
 /** Empty or a literal "TBA" (case-insensitive) is the permitted fallback. */
 export function isTbaFallback(value: string): boolean {
   const v = value.trim();

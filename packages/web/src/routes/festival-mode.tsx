@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
-import { fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
+import { festivalTimeLabel, fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
 import LowPowerToggle from '../components/features/LowPowerToggle';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
 import EmptyState from '../components/ui/EmptyState';
@@ -47,6 +47,7 @@ function FestivalModeViewInner() {
   }, []);
 
   const timeZone = resolveFestivalTimeZone(currentFestival);
+  const timeLabel = festivalTimeLabel(timeZone, nowMs);
   const lineupMode = !user;
   const selection = useMemo(
     () => selectNowNext({ sets, days, picks: lineupMode ? undefined : (picks ?? {}), nowMs, timeZone }),
@@ -78,9 +79,12 @@ function FestivalModeViewInner() {
         <h1 className="type-display-lg text-text-primary min-w-0 [overflow-wrap:anywhere]">{currentFestival.name}</h1>
         <div className="flex items-center gap-2 shrink-0">
           <LowPowerIndicator />
-          <span className="type-numeral text-text-secondary" aria-label="Festival time">
-            {fmtZonedClock(nowMs, timeZone)}
-          </span>
+          <div className="flex flex-col items-end">
+            <span className="type-numeral text-text-secondary" aria-label="Festival time">
+              {fmtZonedClock(nowMs, timeZone)}
+            </span>
+            {timeLabel && <span className="type-label text-text-muted">{timeLabel}</span>}
+          </div>
         </div>
       </div>
 

@@ -24,6 +24,7 @@
 
 import type { FestivalSet, FestivalDay, CrewMeetingPoint } from '../types/domain';
 import { getSetTimeBounds } from './setStatus';
+import { fmtZonedClock } from './dayOf';
 
 /**
  * Minimal shape the ongoing-notification model needs about a picked set. The
@@ -52,6 +53,8 @@ export interface OngoingNotificationModelInput {
   sets: OngoingSetInput[];
   /** Festival days for TZ-safe date resolution (same array getSetStatus uses). */
   days?: FestivalDay[];
+  /** Festival IANA zone. Set bounds and clock labels use it; device-local when omitted. */
+  timeZone?: string;
   /** Last-cached crew meeting points (offline read-cache; may be empty). */
   meetingPoints?: CrewMeetingPoint[];
   /** Current time, injected for purity/testability. */
@@ -95,10 +98,10 @@ const LEAD_IN_MS = 60 * 60_000; // 1h before first set
 const LINGER_MS = 30 * 60_000; // 30m after last set
 
 /** Resolve picked sets to epoch-ms bounds, dropping TBA/unparseable ones. */
-function toTimedSets(sets: OngoingSetInput[], days: FestivalDay[]): TimedSet[] {
+function toTimedSets(sets: OngoingSetInput[], days: FestivalDay[], timeZone?: string): TimedSet[] {
   const out: TimedSet[] = [];
   for (const entry of sets) {
-    const bounds = getSetTimeBounds(entry.set, days);
+    const bounds = getSetTimeBounds(entry.set, days, timeZone);
     if (!bounds) continue;
     out.push({
       id: entry.set.id,
@@ -147,22 +150,14 @@ function fmtCountdown(ms: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-/** "until 23:30"-style end label in the device's local frame. */
-function fmtClock(ms: number): string {
-  const d = new Date(ms);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-}
-
 /**
  * Build the ongoing-notification model from the on-device set + meeting-point
  * data. Pure: no I/O, no clock read. See OngoingNotificationModel for the shape
  * the platform hook renders.
  */
 export function buildOngoingNotificationModel(input: OngoingNotificationModelInput): OngoingNotificationModel {
-  const { now, days = [], meetingPoints = [] } = input;
-  const timed = toTimedSets(input.sets, days);
+  const { now, days = [], meetingPoints = [], timeZone } = input;
+  const timed = toTimedSets(input.sets, days, timeZone);
 
   const inactive: OngoingNotificationModel = {
     active: false,
@@ -216,11 +211,11 @@ export function buildOngoingNotificationModel(input: OngoingNotificationModelInp
   let setContext: string;
   if (isNow) {
     title = `Now: ${focus.name}`;
-    setContext = `${setLine} · until ${fmtClock(focus.endMs)}`;
+    setContext = `${setLine} · until ${fmtZonedClock(focus.endMs, timeZone)}`;
   } else {
     const inLabel = fmtCountdown(focus.startMs - now);
     title = `Next: ${focus.name} in ${inLabel}`;
-    setContext = `${setLine} · ${fmtClock(focus.startMs)} (in ${inLabel})`;
+    setContext = `${setLine} · ${fmtZonedClock(focus.startMs, timeZone)} (in ${inLabel})`;
   }
 
   const body = mpLine ? `${setContext}\n${mpLine}` : setContext;

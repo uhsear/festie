@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
-import { HEX_RE, isValidDate, isValidTime, isTbaFallback } from '../../lib/adminValidators';
+import { HEX_RE, isValidDate, isValidTime, isTbaFallback, filterOptions } from '../../lib/adminValidators';
 
 // Re-export the pure validators (lifted to lib/adminValidators.ts so they can be
 // unit-tested without RN) so existing importers of this module are unchanged.
@@ -100,6 +100,8 @@ export interface ModalSelectProps {
   placeholder?: string;
   hint?: string;
   editable?: boolean;
+  /** Show a search box above the list that filters options by label. */
+  searchable?: boolean;
 }
 
 export function ModalSelect({
@@ -110,10 +112,13 @@ export function ModalSelect({
   placeholder = 'Select…',
   hint,
   editable = true,
+  searchable = false,
 }: ModalSelectProps) {
   const t = useTokens();
   const styles = useStyles();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const visibleOptions = searchable ? filterOptions(options, query) : options;
 
   const selected = options.find((o) => o.value === value) ?? null;
 
@@ -122,7 +127,11 @@ export function ModalSelect({
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity
         style={[styles.input, styles.selectRow, !editable && styles.inputDisabled]}
-        onPress={() => editable && setOpen(true)}
+        onPress={() => {
+          if (!editable) return;
+          setQuery('');
+          setOpen(true);
+        }}
         activeOpacity={0.7}
         disabled={!editable}
         accessibilityRole="button"
@@ -149,8 +158,20 @@ export function ModalSelect({
             <Text style={styles.sheetTitle} accessibilityRole="header">
               {label}
             </Text>
-            <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
-              {options.map((opt) => {
+            {searchable ? (
+              <TextInput
+                style={styles.input}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search"
+                placeholderTextColor={t.colors.text.placeholder}
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel={`Search ${label}`}
+              />
+            ) : null}
+            <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {visibleOptions.map((opt) => {
                 const isActive = opt.value === value;
                 return (
                   <TouchableOpacity

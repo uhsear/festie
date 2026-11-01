@@ -1,6 +1,6 @@
 import React from 'react';
-import { artistDisplayName } from '@festie/shared/utils';
-import { PICK_COLOR, toMin, fmtShort } from './gridUtils';
+import { artistDisplayName, setMinuteRange } from '@festie/shared/utils';
+import { PICK_COLOR, fmtShort } from './gridUtils';
 import type { GridBounds, HourMark } from './gridUtils';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { Users } from 'lucide-react';
@@ -62,9 +62,9 @@ function GridStageColumn({
       ))}
 
       {stageSets.map((set) => {
-        const a = toMin(set.startTime!);
-        let b = toMin(set.endTime!);
-        if (b <= a) b += 1440;
+        const range = setMinuteRange(set);
+        if (!range) return null;
+        const { start: a, end: b } = range;
         const top = (a - bounds.lo) * pxPerMin;
         // WCAG 2.5.5 -- tap targets should be >= 44px. A 15-min set at
         // PX_PER_MIN=1.6 is only 24px, so bump to 44.

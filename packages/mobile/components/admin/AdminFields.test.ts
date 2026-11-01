@@ -2,7 +2,7 @@
 // lifted into lib/adminValidators.ts — a framework-free module with no react /
 // react-native imports — so this test loads cleanly under node-vitest without
 // stubbing the token runtime. AdminFields.tsx re-exports them for the component.
-import { isValidDate, isValidTime, HEX_RE } from '../../lib/adminValidators';
+import { isValidDate, isValidTime, HEX_RE, filterOptions } from '../../lib/adminValidators';
 
 // Mobile-LOCAL validators for the OTA-able admin write surface (no native
 // datetimepicker / color-picker). These are the pure branches behind
@@ -73,6 +73,23 @@ describe('isValidTime (24h HH:MM)', () => {
 
   it('trims surrounding whitespace before validating', () => {
     expect(isValidTime('  09:05  ')).toBe(true);
+  });
+});
+
+describe('filterOptions (ModalSelect search)', () => {
+  const zones = ['Asia/Tokyo', 'America/New_York', 'Europe/Amsterdam'].map((z) => ({ label: z, value: z }));
+
+  it('keeps only labels containing the query, ignoring case', () => {
+    expect(filterOptions(zones, 'tok').map((o) => o.value)).toEqual(['Asia/Tokyo']);
+    expect(filterOptions(zones, 'AMS').map((o) => o.value)).toEqual(['Europe/Amsterdam']);
+  });
+
+  it('keeps everything for a blank query', () => {
+    expect(filterOptions(zones, '  ')).toHaveLength(3);
+  });
+
+  it('returns nothing when no label matches', () => {
+    expect(filterOptions(zones, 'zzz')).toEqual([]);
   });
 });
 

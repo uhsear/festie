@@ -132,6 +132,19 @@ describe('Integration — Notifications', { concurrency: 1 }, () => {
       .expect(200);
     assert.ok(goodDnd.body.data);
 
+    // dndTimeZone round-trips; an unknown zone is rejected
+    const zoned = await server.request
+      .put('/api/v1/notifications/prefs')
+      .set('x-user-token', alice.token)
+      .send({ dndTimeZone: 'America/Los_Angeles' })
+      .expect(200);
+    assert.equal(zoned.body.data.dndTimeZone, 'America/Los_Angeles');
+    const badZone = await server.request
+      .put('/api/v1/notifications/prefs')
+      .set('x-user-token', alice.token)
+      .send({ dndTimeZone: 'Mars/Base' });
+    assert.equal(badZone.status, 400);
+
     // Empty token registration should fail
     const emptyToken = await server.request
       .post('/api/v1/notifications/token')

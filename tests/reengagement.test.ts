@@ -353,4 +353,21 @@ describe('createReengagementTriggers.sendWrapReady', () => {
     const rFuture = await future.triggers.sendWrapReady('f1');
     assert.equal(rFuture.reason, 'not_over'); // far future → not over in any zone
   });
+
+  it('isFestivalOver waits for 06:00 after the last day (festival zone)', async () => {
+    // Last day 2026-09-06 in Los Angeles (PDT, UTC-7): 06:00 on 09-07 = 13:00Z.
+    const festival = { name: 'FK', days: [{ date: '2026-09-06' }], timeZone: 'America/Los_Angeles' };
+    const realNow = Date.now;
+    try {
+      Date.now = () => Date.parse('2026-09-07T08:00:00Z'); // 01:00 local
+      const early = build({ festival, attendeeIds: ['u1'] });
+      assert.equal((await early.triggers.sendWrapReady('f1')).reason, 'not_over');
+
+      Date.now = () => Date.parse('2026-09-07T13:01:00Z'); // 06:01 local
+      const late = build({ festival, attendeeIds: ['u1'] });
+      assert.equal((await late.triggers.sendWrapReady('f1')).sent, 1);
+    } finally {
+      Date.now = realNow;
+    }
+  });
 });

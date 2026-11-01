@@ -544,7 +544,8 @@ export type CrewActivityEntryResponse = z.infer<typeof crewActivityEntryResponse
  * INTEGER (DEFAULT 1) columns and surfaced AS-IS — i.e. as `0`/`1` NUMBERS, not
  * booleans (the GET serializer never coerces, and a missing row defaults each
  * to the integer `1`). `dndStart`/`dndEnd` are the optional quiet-hours window
- * as `HH:MM` strings (null when unset). Route returns the object directly.
+ * as `HH:MM` strings (null when unset). `dndTimeZone` is the IANA zone the window
+ * was set in (null = server clock). Route returns the object directly.
  */
 export const notificationPrefsResponseSchema = z.object({
   userId: z.string(),
@@ -556,6 +557,7 @@ export const notificationPrefsResponseSchema = z.object({
   wrapReady: z.number(),
   dndStart: z.string().nullable(),
   dndEnd: z.string().nullable(),
+  dndTimeZone: z.string().nullable(),
 });
 export type NotificationPrefsResponse = z.infer<typeof notificationPrefsResponseSchema>;
 

@@ -64,3 +64,19 @@ export function zonedWallTimeToMs(
     return NaN;
   }
 }
+
+// Keep in sync with packages/shared (setStatus.ts FESTIVAL_DAY_START_HOUR / festivalStartMinutes, format.ts formatTime).
+/** Sets starting before this hour belong to the previous festival day (CONTEXT.md "Day"). */
+export const FESTIVAL_DAY_START_HOUR = 6;
+
+/** Minutes since the logical day's midnight; a start before 06:00 counts as after midnight (+1440). */
+export function festivalStartMinutes(hhmm: string): number {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  return h! * 60 + m! + (h! < FESTIVAL_DAY_START_HOUR ? 1440 : 0);
+}
+
+/** `21:30` to `9:30 PM`, `00:15` to `12:15 AM`. */
+export function formatClock12(hhmm: string): string {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  return `${h! % 12 || 12}:${String(m).padStart(2, '0')} ${h! < 12 ? 'AM' : 'PM'}`;
+}

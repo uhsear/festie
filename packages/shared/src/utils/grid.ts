@@ -18,11 +18,6 @@ export function getGutterW(viewportW: number): number {
   return 52;
 }
 
-export function toMin(t: string): number {
-  const [h = 0, m = 0] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-
 export function fmtHour(totalMin: number): string {
   const h = Math.floor(totalMin / 60) % 24;
   return `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;

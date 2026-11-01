@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { pickActiveMeetingPoint, buildSlots, CREW_PLAN_SLOTS } from './crewPlan';
-import { createDateInLocalFrame } from './setStatus';
+import { createDateInLocalFrame, getSetTimeBounds } from './setStatus';
 import type { CrewMeetingPoint, FestivalDay, FestivalSet, Profile } from '../types/domain';
 
 // ── Fixture helpers ────────────────────────────────────────────────────────
@@ -91,5 +91,13 @@ describe('buildSlots', () => {
     const sets = [set('a', '13:00', '14:00'), set('b', '15:00', '16:00')];
     const profiles = [profile('m1', 'Ann', { a: 'must', b: 'must' })];
     expect(buildSlots(sets, days, profiles, nowMs, 1)).toHaveLength(1);
+  });
+
+  it('anchors slot starts in the festival zone when one is passed', () => {
+    const sets = [set('a', '13:00', '14:00')];
+    const profiles = [profile('m1', 'Ann', { a: 'must' })];
+    const [slot] = buildSlots(sets, days, profiles, Date.UTC(2026, 8, 4, 12, 0), CREW_PLAN_SLOTS, 'America/New_York');
+    expect(slot!.startMs).toBe(getSetTimeBounds(sets[0]!, days, 'America/New_York')!.startMs);
+    expect(slot!.startMs).toBe(Date.UTC(2026, 8, 4, 17, 0)); // 13:00 EDT
   });
 });

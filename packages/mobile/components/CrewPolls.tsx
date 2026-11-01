@@ -18,6 +18,7 @@ import {
   formatTime,
   getSetTimeBounds,
   isPending,
+  resolveFestivalTimeZone,
   QUEUED_WRITE_MESSAGE,
 } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
@@ -135,6 +136,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
   const storeStages = useFestivalStore((s) => s.stages);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const crewFestival = festivalForCrew(activeCrew, currentFestival);
+  const timeZone = resolveFestivalTimeZone(crewFestival);
   const sets = crewFestival ? storeSets : EMPTY_SETS;
   const days = crewFestival ? storeDays : EMPTY_DAYS;
   const stages = crewFestival ? storeStages : EMPTY_STAGES;
@@ -218,7 +220,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
     try {
       const opts = chosenSets.map((set) => artistDisplayName(set));
       const setRefs: (PollSetRef | null)[] = chosenSets.map((set) => {
-        const bounds = getSetTimeBounds(set, days);
+        const bounds = getSetTimeBounds(set, days, timeZone);
         return {
           setId: set.id,
           label: artistDisplayName(set),

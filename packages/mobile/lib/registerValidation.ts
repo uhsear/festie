@@ -22,7 +22,7 @@ export const REGISTER_FIELD_ORDER: RegisterField[] = [
 
 // UX-only 18+ guard; the backend Zod schema is authoritative.
 export function isAtLeast18(d: Date, now: number = Date.now()): boolean {
-  const cutoff = new Date(Date.UTC(d.getUTCFullYear() + 18, d.getUTCMonth(), d.getUTCDate()));
+  const cutoff = new Date(d.getFullYear() + 18, d.getMonth(), d.getDate());
   return cutoff.getTime() <= now;
 }
 

@@ -2197,6 +2197,10 @@
           "dndEnd": {
             "nullable": true,
             "type": "string"
+          },
+          "dndTimeZone": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -2208,7 +2212,8 @@
           "crewReformed",
           "wrapReady",
           "dndStart",
-          "dndEnd"
+          "dndEnd",
+          "dndTimeZone"
         ],
         "additionalProperties": false
       },

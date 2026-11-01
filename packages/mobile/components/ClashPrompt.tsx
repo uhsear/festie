@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, timeToMinutes } from '@festie/shared/utils';
+import { formatTime, artistDisplayName, festivalStartMinutes } from '@festie/shared/utils';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -39,8 +39,8 @@ function pairKey(a: string, b: string): string {
 
 /** "2 acts at 8:30" anchors on the later start — when both are first on stage. */
 function overlapStartLabel(a: FestivalSet, b: FestivalSet): string {
-  const aS = timeToMinutes(a.startTime);
-  const bS = timeToMinutes(b.startTime);
+  const aS = festivalStartMinutes(a.startTime);
+  const bS = festivalStartMinutes(b.startTime);
   const later = aS >= bS ? a : b;
   return formatTime(later.startTime);
 }

@@ -79,7 +79,7 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
   const notificationPrefs = {
     async get(userId: string) {
       const result = await pool.query(
-        'SELECT user_id AS "userId", crew_updates AS "crewUpdates", set_reminders AS "setReminders", schedule_changes AS "scheduleChanges", lineup_drops AS "lineupDrops", crew_reformed AS "crewReformed", wrap_ready AS "wrapReady", dnd_start AS "dndStart", dnd_end AS "dndEnd" FROM notification_preferences WHERE user_id = $1',
+        'SELECT user_id AS "userId", crew_updates AS "crewUpdates", set_reminders AS "setReminders", schedule_changes AS "scheduleChanges", lineup_drops AS "lineupDrops", crew_reformed AS "crewReformed", wrap_ready AS "wrapReady", dnd_start AS "dndStart", dnd_end AS "dndEnd", dnd_time_zone AS "dndTimeZone" FROM notification_preferences WHERE user_id = $1',
         [userId],
       );
       const row = result.rows[0];
@@ -95,6 +95,7 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
           wrapReady: 1,
           dndStart: null,
           dndEnd: null,
+          dndTimeZone: null,
         };
       }
       // A row written before migration 048 has NULL for the new columns; treat
@@ -117,11 +118,12 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
       wrapReady,
       dndStart,
       dndEnd,
+      dndTimeZone,
     }: any) {
       await pool.query(
         `
-        INSERT INTO notification_preferences (user_id, crew_updates, set_reminders, schedule_changes, lineup_drops, crew_reformed, wrap_ready, dnd_start, dnd_end)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO notification_preferences (user_id, crew_updates, set_reminders, schedule_changes, lineup_drops, crew_reformed, wrap_ready, dnd_start, dnd_end, dnd_time_zone)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT(user_id) DO UPDATE SET
           crew_updates = EXCLUDED.crew_updates,
           set_reminders = EXCLUDED.set_reminders,
@@ -130,7 +132,8 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
           crew_reformed = EXCLUDED.crew_reformed,
           wrap_ready = EXCLUDED.wrap_ready,
           dnd_start = EXCLUDED.dnd_start,
-          dnd_end = EXCLUDED.dnd_end
+          dnd_end = EXCLUDED.dnd_end,
+          dnd_time_zone = EXCLUDED.dnd_time_zone
       `,
         [
           userId,
@@ -142,6 +145,7 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
           wrapReady ? 1 : 0,
           dndStart || null,
           dndEnd || null,
+          dndTimeZone || null,
         ],
       );
     },

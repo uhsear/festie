@@ -1,6 +1,45 @@
 import { FestivalSet, FestivalDay } from '../types/domain';
 import { formatTime } from './format';
 
+// Sets that start before this hour belong to the previous festival day (CONTEXT.md "Day").
+export const FESTIVAL_DAY_START_HOUR = 6;
+
+/**
+ * A set's start in minutes from its logical day's midnight. A start before
+ * 06:00 belongs to the night before, so it counts from the next calendar day
+ * (`01:00` gives 1500, which sorts after `23:30`).
+ */
+export function festivalStartMinutes(startTime: string): number {
+  const [hh = 0, mm = 0] = startTime.split(':').map((x) => parseInt(x, 10));
+  return hh * 60 + mm + (hh < FESTIVAL_DAY_START_HOUR ? 1440 : 0);
+}
+
+/** True when a set starts after midnight, so it shows as part of the previous day's night. */
+export function startsAfterMidnight(startTime?: string | null): boolean {
+  if (!startTime) return false;
+  const hh = parseInt(startTime.split(':')[0]!, 10);
+  return !Number.isNaN(hh) && hh < FESTIVAL_DAY_START_HOUR;
+}
+
+/**
+ * A set's minute range from its logical day's midnight, for placing it on a
+ * timeline or grid and for overlap math. The start follows
+ * `festivalStartMinutes`; the end rolls forward a day until it is after the
+ * start. 23:30-01:00 gives 1410-1500 and 00:30-02:00 gives 1470-1560.
+ * Returns null when either time is missing.
+ */
+export function setMinuteRange(set: {
+  startTime?: string | null;
+  endTime?: string | null;
+}): { start: number; end: number } | null {
+  if (!set.startTime || !set.endTime) return null;
+  const start = festivalStartMinutes(set.startTime);
+  const [hh = 0, mm = 0] = set.endTime.split(':').map((x) => parseInt(x, 10));
+  let end = hh * 60 + mm;
+  while (end <= start) end += 1440;
+  return { start, end };
+}
+
 export type SetStatus = 'past' | 'live' | 'upcoming' | 'soon' | 'later' | 'tba';
 
 export interface SetStatusResult {
@@ -51,7 +90,7 @@ function addDaysToDateKey(dayKey: string, n: number): string {
 const offsetFormatters = new Map<string, Intl.DateTimeFormat>();
 
 /** The offset (ms) the given IANA zone is from UTC at a particular instant. */
-function zoneOffsetMsAt(utcMs: number, timeZone: string): number {
+export function zoneOffsetMsAt(utcMs: number, timeZone: string): number {
   let dtf = offsetFormatters.get(timeZone);
   if (!dtf) {
     dtf = new Intl.DateTimeFormat('en-US', {
@@ -99,29 +138,31 @@ export function zonedWallTimeToMs(dateStr: string, hours: number, minutes: numbe
 }
 
 /**
- * Resolve a set's start/end to absolute epoch-ms in the device's local frame —
- * the single source of truth for "when does this set happen". Returns `null`
- * when the set has no usable date/time (TBA), so callers can skip it.
+ * Resolve a set's start/end to absolute epoch-ms — the single source of truth
+ * for "when does this set happen". Returns `null` when the set has no usable
+ * date/time (TBA), so callers can skip it.
  *
- * Built on `createDateInLocalFrame` (no JS string-parser TZ skew) and includes
- * the **post-midnight rollover**: when the end wall-clock is at or before the
- * start (e.g. 23:30→01:00), the set runs past midnight, so the end is pushed to
- * the next calendar day. This is the same math `getSetStatus` uses internally,
- * extracted so festival/live mode, clash prompts and local reminders all read
- * identical bounds instead of re-deriving them (the old hand-rolled `parseSetMs`
- * copies in web/mobile festival-mode used a divergent 6am-cutoff heuristic).
+ * Built on `createDateInLocalFrame` / `zonedWallTimeToMs` (no JS string-parser
+ * TZ skew) and applies the festival-day rule:
+ * - **06:00 start roll**: a set that starts before `FESTIVAL_DAY_START_HOUR`
+ *   belongs to the night of its logical day (CONTEXT.md "Day"), so it starts
+ *   on the NEXT calendar date. A Friday 00:30 set starts Saturday 00:30.
+ * - **post-midnight end roll**: when the end wall-clock is at or before the
+ *   start (e.g. 23:30→01:00), the end is pushed to the next calendar day.
+ *
+ * Festival/live mode, clash prompts, status badges and local reminders all
+ * read these bounds instead of re-deriving them.
  *
  * When `endTime` is missing the set is treated as one hour long.
  *
  * `timeZone` (optional IANA id, e.g. `America/New_York`): when supplied, the
  * wall-clock is anchored in the FESTIVAL's zone rather than the device's local
- * frame, so set reminders fire at the correct real-world instant for an
- * attendee whose phone is set to another zone. Omit it (the default) to keep
- * the original device-local behavior — every existing caller is unaffected.
+ * frame, so the bounds are the correct real-world instants for an attendee
+ * whose phone is set to another zone. Omit it to use the device-local frame.
  */
 export function getSetTimeBounds(
   set: Pick<FestivalSet, 'startTime' | 'endTime' | 'date' | 'dayIndex'>,
-  days: FestivalDay[] = [],
+  days: ReadonlyArray<Pick<FestivalDay, 'date'>> = [],
   timeZone?: string,
 ): { startMs: number; endMs: number } | null {
   // Look up the date via the festival days array first (the store flattens sets
@@ -136,13 +177,15 @@ export function getSetTimeBounds(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return null;
 
   const [startHh = 0, startMm = 0] = set.startTime.split(':').map((x) => parseInt(x, 10));
+  // A start before 06:00 is the night of the logical day: it falls on the next calendar date.
+  const anchorKey = startHh < FESTIVAL_DAY_START_HOUR ? addDaysToDateKey(dayKey, 1) : dayKey;
 
   let startMs: number;
   if (timeZone) {
-    startMs = zonedWallTimeToMs(dayKey, startHh, startMm, timeZone);
+    startMs = zonedWallTimeToMs(anchorKey, startHh, startMm, timeZone);
     if (Number.isNaN(startMs)) return null;
   } else {
-    const startDate = createDateInLocalFrame(dayKey, startHh, startMm);
+    const startDate = createDateInLocalFrame(anchorKey, startHh, startMm);
     if (isNaN(startDate.getTime())) return null;
     startMs = startDate.getTime();
   }
@@ -151,11 +194,11 @@ export function getSetTimeBounds(
   if (set.endTime) {
     const [endHh = 0, endMm = 0] = set.endTime.split(':').map((x) => parseInt(x, 10));
     if (timeZone) {
-      endMs = zonedWallTimeToMs(dayKey, endHh, endMm, timeZone);
+      endMs = zonedWallTimeToMs(anchorKey, endHh, endMm, timeZone);
       // End at/before start means the set runs past midnight — push to next day.
-      if (endMs <= startMs) endMs = zonedWallTimeToMs(addDaysToDateKey(dayKey, 1), endHh, endMm, timeZone);
+      if (endMs <= startMs) endMs = zonedWallTimeToMs(addDaysToDateKey(anchorKey, 1), endHh, endMm, timeZone);
     } else {
-      const endDate = createDateInLocalFrame(dayKey, endHh, endMm);
+      const endDate = createDateInLocalFrame(anchorKey, endHh, endMm);
       // End at/before start means the set runs past midnight — push to next day.
       if (endDate.getTime() <= startMs) {
         endDate.setDate(endDate.getDate() + 1);

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { meetAtTimeOfDay, meetingOccurrences, nextMeetingOccurrence, meetingTimeDisplay } from './meetingTime';
+import {
+  meetAtFromWallInput,
+  meetAtTimeOfDay,
+  meetAtToWallInput,
+  meetingOccurrences,
+  nextMeetingOccurrence,
+  meetingTimeDisplay,
+} from './meetingTime';
 
 // Three festival days. Times resolved in UTC in the zoned-path tests so the
 // assertions are deterministic regardless of the CI/host time zone.
@@ -113,5 +120,29 @@ describe('meetingTimeDisplay', () => {
     const d = meetingTimeDisplay(null, true, DAYS, new Date(), 'UTC');
     expect(d.label).toBe('');
     expect(d.next).toBeNull();
+  });
+});
+
+describe('meetAtFromWallInput / meetAtToWallInput', () => {
+  it('reads a datetime-local value as festival wall-clock', () => {
+    // 21:00 PDT (UTC-7) on 2026-09-04 is 04:00Z on 2026-09-05.
+    expect(meetAtFromWallInput('2026-09-04T21:00', 'America/Los_Angeles')).toBe('2026-09-05T04:00:00.000Z');
+  });
+
+  it('round-trips back to the same input in the festival zone', () => {
+    const iso = meetAtFromWallInput('2026-09-04T21:00', 'America/Los_Angeles')!;
+    expect(meetAtToWallInput(iso, 'America/Los_Angeles')).toBe('2026-09-04T21:00');
+  });
+
+  it('uses the device-local frame without a zone', () => {
+    const iso = meetAtFromWallInput('2026-09-04T21:00')!;
+    expect(new Date(iso).getHours()).toBe(21);
+    expect(meetAtToWallInput(iso)).toBe('2026-09-04T21:00');
+  });
+
+  it('returns null or empty for bad input', () => {
+    expect(meetAtFromWallInput('', 'UTC')).toBeNull();
+    expect(meetAtFromWallInput('tonight', 'UTC')).toBeNull();
+    expect(meetAtToWallInput('not-a-date', 'UTC')).toBe('');
   });
 });

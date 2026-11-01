@@ -46,7 +46,12 @@ vi.mock('lucide-react', () => ({
 // calls formatStaleness/etaMinutes from @festie/shared. The store has no rows
 // in these tests (CrewStatus renders only its header/banner), so a minimal
 // selector-backed stub keeps this suite focused on meeting-point behavior.
-vi.mock('@festie/shared', () => {
+const { festivalZone } = vi.hoisted(() => ({ festivalZone: { value: undefined as string | undefined } }));
+
+vi.mock('@festie/shared', async () => {
+  // Real wall-clock helpers: the zoned save/edit round-trip is what these tests check.
+  const { meetAtFromWallInput, meetAtToWallInput } =
+    await vi.importActual<typeof import('@festie/shared/utils')>('@festie/shared/utils');
   const crewState = {
     crewStatuses: [] as unknown[],
     loadStatuses: vi.fn(async () => {}),
@@ -61,7 +66,9 @@ vi.mock('@festie/shared', () => {
     // ("daily <time>") so the component's `.replace(/^daily /, '')` yields the
     // time-of-day rendered after "Daily · ".
     meetingTimeDisplay: () => ({ label: 'daily 3:00 PM', recurring: true, next: null }),
-    resolveFestivalTimeZone: () => undefined,
+    resolveFestivalTimeZone: () => festivalZone.value,
+    meetAtFromWallInput,
+    meetAtToWallInput,
     writeOutcomeOf: (r: { _optimistic?: boolean } | undefined) => (r?._optimistic ? 'queued' : 'sent'),
     writeOutcomeMessage: (_o: string, m: string) => m,
     isPending: (i: { _optimistic?: boolean } | undefined) => i?._optimistic === true,
@@ -137,6 +144,7 @@ function setQuery(overrides: Partial<typeof queryState> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  festivalZone.value = undefined;
   setQuery();
 });
 
@@ -357,6 +365,31 @@ describe('MeetingPointsTab', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
     expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ recursDaily: true }));
   });
+
+  it('saves the meet time as festival wall-clock and labels the field "Festival time"', async () => {
+    festivalZone.value = 'America/Los_Angeles';
+    const user = userEvent.setup();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('button', { name: /add meeting point/i }));
+    await user.type(screen.getByLabelText('Label'), 'Entrance');
+    await user.type(screen.getByLabelText('Location'), 'Front gate');
+
+    expect(screen.getByText('Festival time')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Meet at time, festival time'), '2026-09-04T21:00');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ meetAt: '2026-09-05T04:00:00.000Z' }));
+  });
+
+  it('reopens a stored meet time at festival wall-clock', async () => {
+    festivalZone.value = 'America/Los_Angeles';
+    const user = userEvent.setup();
+    setQuery({ data: [{ ...POINT, meet_at: '2026-09-05T04:00:00.000Z' }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('button', { name: 'Edit meeting point' }));
+    expect(screen.getByLabelText('Meet at time, festival time')).toHaveValue('2026-09-04T21:00');
+  });
+
   // Live Location + SOS used to sit behind VITE_LIVE_LOCATION. It now ships to
   // web unconditionally (parity with mobile); the off-lever is server-side
   // (LIVE_LOCATION_ENABLED / SOS_ENABLED in lib/config.ts). These two assertions

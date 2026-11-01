@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
-import { artistDisplayName, formatTime, pickActiveMeetingPoint, buildSlots } from '@festie/shared/utils';
+import {
+  artistDisplayName,
+  formatTime,
+  pickActiveMeetingPoint,
+  buildSlots,
+  resolveFestivalTimeZone,
+} from '@festie/shared/utils';
+import { useNow } from '../hooks/useSetStatus';
 import type { SlotPick } from '@festie/shared/utils';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import type { FestivalDay, FestivalSet, Priority, Profile } from '@festie/shared/types';
@@ -85,9 +92,13 @@ function CrewPlanInner() {
     return allProfiles.filter((p) => memberIds.has(p.userId));
   }, [crewMembers, activeCrew, allProfiles]);
 
-  const nowMs = Date.now();
+  const nowMs = useNow();
+  const timeZone = useFestivalStore((s) => resolveFestivalTimeZone(s.currentFestival));
   const meetingPoint = useMemo(() => pickActiveMeetingPoint(meetingPoints, nowMs), [meetingPoints, nowMs]);
-  const slots = useMemo(() => buildSlots(sets, days, crewProfiles, nowMs), [sets, days, crewProfiles, nowMs]);
+  const slots = useMemo(
+    () => buildSlots(sets, days, crewProfiles, nowMs, undefined, timeZone),
+    [sets, days, crewProfiles, nowMs, timeZone],
+  );
 
   if (!user) return null;
 

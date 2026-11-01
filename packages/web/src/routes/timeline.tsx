@@ -4,7 +4,7 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
-import { getSetTimeBounds, artistDisplayName, resolveStageColor } from '@festie/shared/utils';
+import { selectNowNext, resolveFestivalTimeZone, artistDisplayName, resolveStageColor } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import TimelineGrid from '../features/TimelineGrid';
@@ -66,7 +66,7 @@ function TimelineViewInner() {
   const { ref: scrollRef, handleScroll: handleBeamScroll } = useScrollProgress<HTMLDivElement>();
 
   // --- Live mode -----------------------------------------------------------
-  // A 60s device-clock tick drives the next-pick countdown and the auto-scroll.
+  // A 60s shared-clock tick drives the next-pick countdown and the auto-scroll.
   // Fully offline-native: reads only cached sets + the local clock, never the
   // network. Set-time math comes from the SHARED getSetTimeBounds (TZ-safe,
   // post-midnight rollover) — never a local parseSetMs. Shares the single
@@ -74,19 +74,15 @@ function TimelineViewInner() {
   const nowMs = useNow();
 
   // Countdown to the next picked set (across all days, like festival-mode's
-  // "up next"), recomputed every tick from the device clock.
+  // "up next"), recomputed every tick from the shared clock in the festival zone.
+  const timeZone = resolveFestivalTimeZone(currentFestival);
   const nextPick = useMemo(() => {
     const picks = currentProfile?.picks;
+    // Without picks selectNowNext would read the whole lineup, so bail first.
     if (!picks) return null;
-    let best: { set: (typeof allSets)[number]; startMs: number } | null = null;
-    for (const s of allSets) {
-      if (!picks[s.id]) continue;
-      const bounds = getSetTimeBounds(s, days);
-      if (!bounds || bounds.startMs <= nowMs) continue;
-      if (!best || bounds.startMs < best.startMs) best = { set: s, startMs: bounds.startMs };
-    }
-    return best;
-  }, [currentProfile?.picks, allSets, days, nowMs]);
+    const next = selectNowNext({ sets: allSets, days, picks, nowMs, timeZone, upcomingLimit: 1 }).upcoming[0];
+    return next ? { set: next.set, startMs: next.start } : null;
+  }, [currentProfile?.picks, allSets, days, nowMs, timeZone]);
 
   const nextPickLabel = useMemo(() => {
     if (!nextPick) return null;

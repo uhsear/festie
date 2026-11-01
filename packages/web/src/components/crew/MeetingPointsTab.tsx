@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   api,
   meetingTimeDisplay,
+  meetAtFromWallInput,
+  meetAtToWallInput,
   resolveFestivalTimeZone,
   writeOutcomeOf,
   writeOutcomeMessage,
@@ -231,8 +233,8 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
     setLocation(p.location);
     setStageRef(p.stage_reference || '');
     setType(p.type);
-    // datetime-local wants "YYYY-MM-DDTHH:mm" in local time.
-    setMeetAt(p.meet_at ? toLocalInput(p.meet_at) : '');
+    // datetime-local wants "YYYY-MM-DDTHH:mm", shown in the festival zone.
+    setMeetAt(p.meet_at ? meetAtToWallInput(p.meet_at, festivalTimeZone) : '');
     setRecursDaily(!!p.recurs_daily);
     setCoords(
       typeof p.latitude === 'number' && typeof p.longitude === 'number' ? { lat: p.latitude, lng: p.longitude } : null,
@@ -267,7 +269,7 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
       label: label.trim(),
       location: location.trim(),
       type,
-      meetAt: meetAt ? new Date(meetAt).toISOString() : null,
+      meetAt: meetAt ? meetAtFromWallInput(meetAt, festivalTimeZone) : null,
       stageReference: stageRef.trim() || null,
       // F4: send captured coords, or null to clear them on edit.
       latitude: coords ? coords.lat : null,
@@ -430,10 +432,11 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
                 type="datetime-local"
                 className={`${inputBase} min-h-11`}
                 placeholder="Meet at (optional)"
-                aria-label="Meet at time"
+                aria-label={festivalTimeZone ? 'Meet at time, festival time' : 'Meet at time'}
                 value={meetAt}
                 onChange={(e) => setMeetAt(e.target.value)}
               />
+              {festivalTimeZone && <p className="text-xs text-text-muted -mt-1">Festival time</p>}
 
               {/* 055: daily-recurrence toggle — only meaningful for a timed point.
                   Aqua = selected (accent discipline); 44px target. */}
@@ -542,7 +545,7 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
                           ) : (
                             <div className="text-xs text-accent-aqua mt-1 inline-flex items-center gap-1">
                               <Clock className="w-3 h-3" aria-hidden="true" />
-                              {new Date(p.meet_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                              {meetingTimeDisplay(p.meet_at, false, festivalDays, new Date(), festivalTimeZone).label}
                             </div>
                           ))}
                       </div>
@@ -579,12 +582,4 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
       </div>
     </div>
   );
-}
-
-// ISO (UTC) → "YYYY-MM-DDTHH:mm" in local time for <input type="datetime-local">.
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

@@ -26,18 +26,18 @@
 
 import crypto from 'crypto';
 import { sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail } from '../email.js';
-import { zonedWallTimeToMs } from '../time-zone.js';
+import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
 
 /**
  * Backend mirror of `@festie/shared` `isFestivalOver`: true once the festival's
- * last day's 23:59 has passed. Kept inline rather than importing shared runtime
- * code across the package boundary (the backend runs via tsx and shared ships
+ * last night has ended, at 06:00 the morning after the last day. Kept inline
+ * rather than importing shared runtime code across the package boundary (the backend runs via tsx and shared ships
  * ESM with .js specifiers). `days` is the festival's day array ([{date}], from
  * festivals.getById).
  *
- * The end-of-day cutoff is anchored in the festival's IANA `timeZone` (the same
+ * The cutoff is anchored in the festival's IANA `timeZone` (the same
  * `zonedWallTimeToMs` the reminder scheduler uses) so "over" reflects the
- * festival's actual local end-of-day, not the server's zone. When `timeZone` is
+ * festival's actual local 06:00, not the server's zone. When `timeZone` is
  * null/absent — or invalid — it falls back to UTC (NOT server-local), so the
  * cutoff is deterministic across deployments.
  */
@@ -53,14 +53,14 @@ function isFestivalOver(days: Array<{ date?: string | null }> | null | undefined
   if (Number.isNaN(y) || Number.isNaN(mo) || Number.isNaN(d)) return false;
   let cutoffMs: number;
   if (timeZone) {
-    cutoffMs = zonedWallTimeToMs(y, mo, d, 23, 59, timeZone);
+    cutoffMs = zonedWallTimeToMs(y, mo, d + 1, FESTIVAL_DAY_START_HOUR, 0, timeZone);
     if (Number.isNaN(cutoffMs)) {
-      // Invalid zone → fall back to UTC end-of-day.
-      cutoffMs = Date.UTC(y, mo - 1, d, 23, 59, 59);
+      // Invalid zone → fall back to UTC.
+      cutoffMs = Date.UTC(y, mo - 1, d + 1, FESTIVAL_DAY_START_HOUR, 0, 0);
     }
   } else {
-    // No festival zone → UTC end-of-day (deterministic, not server-local).
-    cutoffMs = Date.UTC(y, mo - 1, d, 23, 59, 59);
+    // No festival zone → UTC (deterministic, not server-local).
+    cutoffMs = Date.UTC(y, mo - 1, d + 1, FESTIVAL_DAY_START_HOUR, 0, 0);
   }
   return cutoffMs < Date.now();
 }
