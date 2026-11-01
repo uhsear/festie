@@ -39,5 +39,6 @@ export * from './planImport';
 export * from './reminderDelivery';
 export * from './saveStatus';
 export * from './crewActivity';
+export * from './authValidation';
 export * from './pushTarget';
 export * from './notificationSettings';

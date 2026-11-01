@@ -28,7 +28,7 @@ import { prefetchMainRoutes } from '../../router';
 import { cn } from '../../lib/utils';
 import { SocketContext } from '../../lib/socketContext';
 
-const authRoutes = ['/login', '/register', '/forgot-password'];
+const authRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
 
 // Centered branded loader for lazy-route chunk loads. Replaces the bare
 // "Loading..." text the Suspense boundaries used to fall back to.

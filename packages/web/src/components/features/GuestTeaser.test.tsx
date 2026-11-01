@@ -24,9 +24,9 @@ describe('GuestTeaser', () => {
       expect(screen.getByText(/Must See, Want to See, or Maybe/)).toBeInTheDocument();
     });
 
-    it('renders Sign Up Free CTA', () => {
+    it('renders Sign up free CTA', () => {
       render(<GuestTeaser mode="picks" />);
-      expect(screen.getByRole('button', { name: 'Sign Up Free' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Sign up free' })).toBeInTheDocument();
     });
 
     it('has correct aria-labelledby linking heading to section', () => {
@@ -76,7 +76,7 @@ describe('GuestTeaser', () => {
   it('navigates to /register when CTA is clicked', async () => {
     const user = userEvent.setup();
     render(<GuestTeaser mode="picks" />);
-    await user.click(screen.getByRole('button', { name: 'Sign Up Free' }));
+    await user.click(screen.getByRole('button', { name: 'Sign up free' }));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/register' });
   });
 });

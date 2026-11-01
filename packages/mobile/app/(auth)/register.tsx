@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
   Keyboard,
   Linking,
+  Alert,
   Modal,
   Pressable,
   type HostInstance,
@@ -17,11 +18,14 @@ import {
   findNodeHandle,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Link, useRouter } from 'expo-router';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useAuthStore } from '@festie/shared/stores';
+import { mapErrorToUserMessage } from '@festie/shared/services';
+import { registerErrorField, usernameError } from '@festie/shared/utils';
+import { AUTH_COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
@@ -47,13 +51,19 @@ const useStyles = makeStyles((t) => ({
   title: {
     // display-lg = Clash Display 700 — brand wordmark, first impression screen.
     ...typeStyle('display-lg'),
-    color: t.colors.text.primary,
+    color: t.colors.accent.coral,
     textAlign: 'center',
     marginBottom: t.spacing[1],
   },
   subtitle: {
     ...typeStyle('body'),
     color: t.colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: t.spacing[2],
+  },
+  screenLine: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.primary,
     textAlign: 'center',
     marginBottom: t.spacing[8],
   },
@@ -248,6 +258,13 @@ export default function RegisterScreen() {
   const error = useAuthStore((s) => s.error);
   const setError = useAuthStore((s) => s.setError);
 
+  // Drop an error left over from another auth screen (the store is shared).
+  useFocusEffect(
+    useCallback(() => {
+      setError(null);
+    }, [setError]),
+  );
+
   const usernameRef = useRef<TextInputInstance>(null);
   const emailRef = useRef<TextInputInstance>(null);
   const dobRef = useRef<HostInstance>(null);
@@ -316,7 +333,7 @@ export default function RegisterScreen() {
     }
     setError(null);
     try {
-      await register({
+      const { emailVerificationSent } = await register({
         username: username.trim(),
         email: email.trim(),
         password,
@@ -324,11 +341,21 @@ export default function RegisterScreen() {
         tosAccepted,
         dateOfBirth: toIso(dob!),
       });
+      if (emailVerificationSent) {
+        Alert.alert(AUTH_COPY.accountCreated, AUTH_COPY.checkEmailToConfirm(email.trim()));
+      }
       // A guest who arrived through an invite link finishes that join first.
       const invite = getPendingInvite();
       if (invite) router.replace(`/join/${invite}`);
-    } catch {
-      // Error is set in the store.
+    } catch (err) {
+      // Show a field-specific server error under its field; the rest stays in the store error.
+      const msg = mapErrorToUserMessage(err, "Couldn't create your account. Try again.");
+      const field = registerErrorField(msg);
+      if (field) {
+        setErrors((prev) => ({ ...prev, [field]: msg }));
+        setError(null);
+        focusField(field);
+      }
     }
   };
 
@@ -348,10 +375,17 @@ export default function RegisterScreen() {
           style={styles.title}
           maxFontSizeMultiplier={typeScaleCap('display-lg')}
           entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)}>
-          Festie
+          {AUTH_COPY.wordmark}
         </Animated.Text>
         <Animated.Text
           style={styles.subtitle}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+          entering={reduceMotion ? undefined : FadeInDown.delay(360).duration(350)}
+        >
+          {AUTH_COPY.tagline}
+        </Animated.Text>
+        <Animated.Text
+          style={styles.screenLine}
           maxFontSizeMultiplier={MAX_FONT_SCALE}
           entering={reduceMotion ? undefined : FadeInDown.delay(360).duration(350)}
         >
@@ -385,7 +419,13 @@ export default function RegisterScreen() {
           textContentType="username"
           returnKeyType="next"
           onFocus={onFocusOf('username')}
-          onBlur={onBlurOf('username')}
+          onBlur={() => {
+            onBlurOf('username')();
+            if (username.trim()) {
+              const rule = usernameError(username);
+              if (rule) setErrors((prev) => ({ ...prev, username: rule }));
+            }
+          }}
           onSubmitEditing={() => emailRef.current?.focus()}
           blurOnSubmit={false}
         />
@@ -394,9 +434,10 @@ export default function RegisterScreen() {
             {errors.username}
           </Text>
         ) : null}
+        <Text style={styles.hint}>{AUTH_COPY.usernameHint}</Text>
 
         <Text style={styles.label} accessible={false} importantForAccessibility="no">
-          Email
+          {AUTH_COPY.emailLabel}
         </Text>
         <TextInput
           ref={emailRef}
@@ -405,10 +446,7 @@ export default function RegisterScreen() {
             focusedField === 'email' && styles.inputFocused,
             errors.email ? styles.inputError : undefined,
           ]}
-          // F33: placeholder explains WHY email is needed so the required field
-          // isn't a surprise, matching the web label "Email (optional)" intent
-          // but clarifying the mobile policy.
-          placeholder="Email (for password reset)"
+          placeholder={AUTH_COPY.emailLabel}
           placeholderTextColor={t.colors.text.placeholder}
           accessibilityLabel="Email address, required for password reset"
           accessibilityHint={errors.email}
@@ -432,6 +470,7 @@ export default function RegisterScreen() {
             {errors.email}
           </Text>
         ) : null}
+        <Text style={styles.hint}>{AUTH_COPY.emailHint}</Text>
 
         <Text style={styles.label} accessible={false} importantForAccessibility="no">
           Password
@@ -490,7 +529,7 @@ export default function RegisterScreen() {
             focusedField === 'confirm' && styles.inputFocused,
             errors.confirmPassword ? styles.inputError : undefined,
           ]}
-          placeholder="Confirm Password"
+          placeholder="Confirm password"
           placeholderTextColor={t.colors.text.placeholder}
           accessibilityLabel="Confirm password"
           accessibilityHint={errors.confirmPassword}
@@ -600,7 +639,7 @@ export default function RegisterScreen() {
         ) : null}
 
         <Button
-          label="Create account"
+          label={AUTH_COPY.createAccount}
           onPress={handleRegister}
           loading={isLoading}
           accessibilityState={{ disabled: isLoading, busy: isLoading }}

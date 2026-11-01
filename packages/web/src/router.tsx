@@ -2,7 +2,7 @@ import { RootRoute, Route, Router, lazyRouteComponent, redirect } from '@tanstac
 import { Suspense, type ComponentType, type ReactElement } from 'react';
 import AppShell from './components/layout/AppShell';
 import RouteErrorBoundary from './components/layout/RouteErrorBoundary';
-import { authReady, isAuthenticated, isAdmin } from './routes/auth-guard';
+import { authReady, isAuthenticated, isAdmin, redirectIfSignedIn } from './routes/auth-guard';
 import NotFoundPage from './routes/not-found';
 import CardsSkeleton from './components/ui/skeletons/CardsSkeleton';
 import TimelineSkeleton from './components/ui/skeletons/TimelineSkeleton';
@@ -44,6 +44,7 @@ const loadAdmin = () => import('./routes/admin');
 const loadLogin = () => import('./routes/login');
 const loadRegister = () => import('./routes/register');
 const loadForgot = () => import('./routes/forgot-password');
+const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
@@ -88,6 +89,7 @@ const AdminPanel = withSkeleton(lazyRouteComponent(loadAdmin), MinimalFallback);
 const LoginPage = withSkeleton(lazyRouteComponent(loadLogin), MinimalFallback);
 const RegisterPage = withSkeleton(lazyRouteComponent(loadRegister), MinimalFallback);
 const ForgotPasswordPage = withSkeleton(lazyRouteComponent(loadForgot), MinimalFallback);
+const ResetPasswordPage = withSkeleton(lazyRouteComponent(loadReset), MinimalFallback);
 
 /**
  * Prefetch all authenticated main-tab chunks. Called from AppShell on idle
@@ -164,18 +166,33 @@ const loginRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: LoginPage,
+  validateSearch: (s: Record<string, unknown>): { reset?: true } =>
+    s.reset === 1 || s.reset === '1' || s.reset === true ? { reset: true } : {},
+  beforeLoad: redirectIfSignedIn,
 });
 
 const registerRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/register',
   component: RegisterPage,
+  beforeLoad: redirectIfSignedIn,
 });
 
 const forgotPasswordRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/forgot-password',
   component: ForgotPasswordPage,
+  validateSearch: (s: Record<string, unknown>): { expired?: true } =>
+    s.expired === 1 || s.expired === '1' || s.expired === true ? { expired: true } : {},
+});
+
+// Signed-in users may open this: the reset link works from any session.
+const resetPasswordRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/reset-password',
+  component: ResetPasswordPage,
+  validateSearch: (s: Record<string, unknown>): { token?: string } =>
+    typeof s.token === 'string' ? { token: s.token } : {},
 });
 
 // ── Protected routes (redirect to /login if not authenticated) ──────
@@ -259,6 +276,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   registerRoute,
   forgotPasswordRoute,
+  resetPasswordRoute,
   cardsRoute,
   timelineRoute,
   picksRoute,
