@@ -30,8 +30,8 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const navigate = useNavigate();
+  const { next, reset } = useSearch({ from: '/login' });
   const { login, isLoading } = useAuth();
-  const { reset } = useSearch({ from: '/login' });
   const { toast } = useToast();
 
   const [username, setUsername] = useState('');
@@ -58,7 +58,7 @@ function LoginPageInner() {
     try {
       const result = await login({ username, password });
       if (result?.reactivated) toast(ACCOUNT_REACTIVATED_MESSAGE, 'success');
-      await navigate({ to: '/cards' });
+      await (next ? navigate({ href: next }) : navigate({ to: '/cards' }));
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the
       // render before the request failed, so it is still null here.

@@ -3,6 +3,7 @@ import { Link, useLocation } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
 import { useFestivalStore } from '@festie/shared/stores';
 import { isFestivalOver } from '@festie/shared/utils';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
 
 interface NavTab {
@@ -114,10 +115,10 @@ export default function BottomNav() {
   }, []);
 
   // All tabs stay visible for guests (parity with mobile's NativeTabs): Picks/
-  // Crew advertise the features and gate in-place via GuestTeaser, Account is
-  // the sign-in entry (routes a guest to /login). Show Wrap tab ONLY after the
-  // festival has ended — otherwise it's noise. Empty-state inside /wrap handles
-  // the "coming soon" case for a direct URL visit before then.
+  // Crew/Wrap advertise the features and gate in-place via GuestTeaser, and the
+  // guest tab opens /login directly. Show Wrap tab ONLY after the festival has
+  // ended — otherwise it's noise. Empty-state inside /wrap handles the "coming
+  // soon" case for a direct URL visit before then.
   const tabs = useMemo(() => {
     const wrapUnlocked = isFestivalOver(currentFestival, days);
     return wrapUnlocked ? [...baseTabs, ...authTabs, wrapTab] : [...baseTabs, ...authTabs];
@@ -148,12 +149,14 @@ export default function BottomNav() {
       <nav className="flex justify-around w-full max-md:gap-0.5" aria-label="Primary">
         {tabs.map((tab) => {
           const active = isActive(tab.href);
+          const isGuestTab = tab.href === '/account' && !user;
           return (
             <Link
               key={tab.href}
-              to={tab.href}
+              to={isGuestTab ? '/login' : tab.href}
+              search={isGuestTab ? { next: location.href } : undefined}
               aria-current={active ? 'page' : undefined}
-              aria-label={`View ${tab.href === '/account' && !user ? 'Sign in' : tab.label}`}
+              aria-label={`View ${isGuestTab ? GUEST_PROMPT_COPY.signIn : tab.label}`}
               className={cn(
                 'flex flex-col items-center gap-1 px-3 py-2',
                 'bg-transparent text-text-muted text-[10px] font-semibold no-underline',
@@ -172,7 +175,7 @@ export default function BottomNav() {
             >
               {tab.icon}
               <span className={cn('max-w-full overflow-hidden text-ellipsis whitespace-nowrap', 'max-[359px]:hidden')}>
-                {tab.href === '/account' && !user ? 'Sign in' : tab.label}
+                {isGuestTab ? GUEST_PROMPT_COPY.signIn : tab.label}
               </span>
             </Link>
           );

@@ -115,6 +115,7 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     'loadFestivals',
     'selectFestival',
     'loadProfiles',
+    'joinFestival',
     'setCurrentProfile',
     'applyProfilePatch',
     'savePick',

@@ -41,9 +41,10 @@ import {
 import type { Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import DisplayWords from '../../components/DisplayWords';
+import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
-import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
+import { PRIORITY_SYMBOLS, GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS, priorityIconName } from '../../lib/prioritySymbol';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import { ensureStageTextContrast } from '../../lib/stageTextContrast';
@@ -151,7 +152,6 @@ export default function SetDetailScreen() {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const allProfiles = useFestivalDataStore((s) => s.allProfiles);
-  const loadProfiles = useFestivalDataStore((s) => s.loadProfiles);
   const days = useFestivalDataStore((s) => s.days);
 
   const { getMyPick, savePick, getOtherPicks, saveReminder, getMyReminder } = usePicks();
@@ -397,30 +397,13 @@ export default function SetDetailScreen() {
   );
 
   const user = useAuthStore((s) => s.user);
-  const [joinBusy, setJoinBusy] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
-  const handleJoin = useCallback(async () => {
-    if (!currentFestival) return;
-    // A guest has no account yet — send them to sign in first. After auth they
-    // land back on the tabs and can re-open the set to join.
-    if (!user) {
-      router.push('/(auth)/login');
-      return;
-    }
-    setJoinBusy(true);
-    setJoinError(null);
-    try {
-      await api.post('/profiles', { festivalId: currentFestival.id });
-      await loadProfiles(currentFestival.id);
-    } catch (err) {
-      // The store does NOT surface this failure (loadProfiles is never called
-      // when the join itself rejects), so map and show it here — mirrors web's
-      // DetailPanel handleJoinFestival catch (toast on join failure).
-      setJoinError(mapErrorToUserMessage(err, "Couldn't join festival. Try again."));
-    } finally {
-      setJoinBusy(false);
-    }
-  }, [currentFestival, user, router, loadProfiles]);
+  const goToAuth = useCallback(
+    (route: '/(auth)/register' | '/(auth)/login') => {
+      if (set) setReturnTo(`/set/${set.id}`);
+      router.push(route);
+    },
+    [set, router],
+  );
 
   const openLink = useCallback((url: string) => {
     Linking.openURL(url).catch(() => {});
@@ -519,8 +502,8 @@ export default function SetDetailScreen() {
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         <Text style={styles.time}>{timeLabel}</Text>
 
-        {/* Priority picker / Join CTA */}
-        {currentProfile ? (
+        {/* Priority picker / guest sign-in prompt */}
+        {user ? (
           <>
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Your pick</Text>
@@ -655,22 +638,9 @@ export default function SetDetailScreen() {
           </>
         ) : (
           <View style={styles.joinBox}>
-            <Text style={styles.joinCopy}>
-              {user
-                ? 'Join this festival to save picks, keep private notes, and compare crew overlap.'
-                : 'Sign in to save picks, keep private notes, and compare crew overlap.'}
-            </Text>
-            {joinError ? (
-              <Text style={styles.joinErrorText} accessibilityRole="alert" accessibilityLiveRegion="assertive">
-                {joinError}
-              </Text>
-            ) : null}
-            <Button
-              label={user ? 'Join Festival' : 'Sign in to join'}
-              onPress={handleJoin}
-              loading={joinBusy}
-              accessibilityLabel={user ? 'Join festival' : 'Sign in to join'}
-            />
+            <Text style={styles.joinCopy}>{GUEST_PROMPT_COPY.setSheet}</Text>
+            <Button label={GUEST_PROMPT_COPY.createAccount} onPress={() => goToAuth('/(auth)/register')} />
+            <Button variant="ghost" label={GUEST_PROMPT_COPY.signIn} onPress={() => goToAuth('/(auth)/login')} />
           </View>
         )}
 
@@ -1115,11 +1085,6 @@ const useStyles = makeStyles((t) => ({
   joinCopy: {
     ...typeStyle('body'),
     color: t.colors.text.secondary,
-  },
-  // Mirrors app/(auth)/login.tsx's `error` style — same danger token + role.
-  joinErrorText: {
-    ...typeStyle('label'),
-    color: t.colors.text.danger,
   },
   // Join CTA migrated to components/Button (F8).
   crewRow: {
