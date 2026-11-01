@@ -122,7 +122,7 @@ function makeStores(overrides: Record<string, any> = {}): Record<string, any> {
 }
 
 // Default config — FIREBASE_CREDENTIALS_PATH is irrelevant when pushClient is injected,
-// but PUBLIC_ORIGIN is used for webpush link fallback.
+// but PUBLIC_ORIGIN is the base of push links.
 function makeConfig(overrides: Record<string, any> = {}) {
   return {
     FIREBASE_CREDENTIALS_PATH: '',
@@ -449,30 +449,6 @@ describe('send() — core dispatch', () => {
     await svc.send({ userId: 'u1', type: 'crew_update', title: 't', body: 'b', data: { festivalId: 'f1' } });
     assert.equal(messaging.sendCalls[0].android.notification.tag, 'update-f1');
   });
-
-  it('uses data.deepLink for webpush link when present', async () => {
-    stores._state.tokens.set('u1', [{ token: 'x'.repeat(40), platform: 'android' }]);
-    await svc.send({
-      userId: 'u1',
-      type: 'crew_update',
-      title: 't',
-      body: 'b',
-      data: { deepLink: 'https://festie.test/deep/abc' },
-    });
-    assert.equal(messaging.sendCalls[0].webpush.fcmOptions.link, 'https://festie.test/deep/abc');
-  });
-
-  it('falls back to PUBLIC_ORIGIN/festival/{id} webpush link', async () => {
-    stores._state.tokens.set('u1', [{ token: 'x'.repeat(40), platform: 'android' }]);
-    await svc.send({
-      userId: 'u1',
-      type: 'crew_update',
-      title: 't',
-      body: 'b',
-      data: { festivalId: 'f9' },
-    });
-    assert.equal(messaging.sendCalls[0].webpush.fcmOptions.link, 'https://festie.test/festival/f9');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -539,7 +515,7 @@ describe('send() — multi-device fanout', () => {
     stores._state.tokens.set('u1', [
       { token: 'a'.repeat(40), platform: 'android' },
       { token: 'b'.repeat(40), platform: 'android' },
-      { token: 'c'.repeat(40), platform: 'web' },
+      { token: 'c'.repeat(40), platform: 'android' },
     ]);
     const r = await svc.send({ userId: 'u1', type: 'crew_update', title: 't', body: 'b' });
     assert.equal(r.sent, 3);
@@ -550,7 +526,7 @@ describe('send() — multi-device fanout', () => {
     stores._state.tokens.set('u1', [
       { token: 'a'.repeat(40), platform: 'android' },
       { token: 'b'.repeat(40), platform: 'android' },
-      { token: 'c'.repeat(40), platform: 'web' },
+      { token: 'c'.repeat(40), platform: 'android' },
     ]);
     // First send throws a non-retryable error (invalid-argument); others succeed.
     // Using invalid-argument avoids the real withRetry's retry loop consuming more
@@ -890,7 +866,7 @@ describe('sendToOfflineUsers() — topic subscription + per-user filtering', () 
       stores._state.tokens.set(`u${i}`, [
         { token: `a${i}`.padEnd(40, 'x'), platform: 'android' },
         { token: `b${i}`.padEnd(40, 'x'), platform: 'android' },
-        { token: `c${i}`.padEnd(40, 'x'), platform: 'web' },
+        { token: `c${i}`.padEnd(40, 'x'), platform: 'android' },
       ]);
     }
     await svc.sendToOfflineUsers({ festivalId: 'f1', type: 'crew_update', title: 't', body: 'b' });
@@ -1082,6 +1058,16 @@ describe('createNotificationService — service surface', () => {
       log: makeLogger(),
     } as any);
     assert.equal(svc.isConfigured, false);
+  });
+
+  it('isConfigured=true with only a webPushClient (no FCM, no APNs)', () => {
+    const svc = createNotificationService({
+      stores: makeStores(),
+      config: makeConfig({ FIREBASE_CREDENTIALS_PATH: '' }),
+      log: makeLogger(),
+      webPushClient: { publicKey: 'pk', send: async () => ({ sent: true, stale: false }) },
+    } as any);
+    assert.equal(svc.isConfigured, true);
   });
 
   it('send() returns firebase_not_configured when pushClient absent and firebase disabled', async () => {

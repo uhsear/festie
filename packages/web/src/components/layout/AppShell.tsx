@@ -19,6 +19,7 @@ import Onboarding from '../features/Onboarding';
 import JoinCrewSheet from '../crew/JoinCrewSheet';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { usePushLanding } from '../../hooks/usePushLanding';
 import { useScrollReset } from '../../hooks/useScrollReset';
 import { useOfflineQueueBridge } from '../../hooks/useOfflineQueueBridge';
 import { useFestivalLoader } from '../../hooks/useFestivalLoader';
@@ -81,6 +82,7 @@ export default function AppShell() {
   const socket = realtime?.socket ?? null;
   useOffline();
   usePushNotifications();
+  usePushLanding();
   useOfflineQueueBridge();
   const { pendingJoinCode, clearPendingJoin } = useFestivalLoader();
   const { showDayBanner } = useFestivalMode(location.pathname);

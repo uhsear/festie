@@ -5,6 +5,7 @@ import { isInDndWindow } from './dnd.js';
 import { createRetryQueue } from './retry.js';
 import { initFirebase, createSendService } from './send.js';
 import { isApnsConfigured } from './apns.js';
+import { createWebPushSender } from './webpush.js';
 
 /**
  * Create the notification service.
@@ -19,18 +20,23 @@ import { isApnsConfigured } from './apns.js';
  *   `send(message)` and `sendEach(batch)` to match firebase-admin's Messaging surface.
  *   When NOT provided (production path), behavior is identical to before: initFirebase()
  *   runs, lazily requires firebase-admin, and returns null if FIREBASE_CREDENTIALS_PATH is unset.
+ * @param deps.webPushClient - OPTIONAL Web Push sender override for tests (`publicKey`,
+ *   `send(token, payload, opts)`). When NOT provided, createWebPushSender() builds one
+ *   from VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY, or returns null when they are unset.
  */
-export function createNotificationService({ stores, config, log, _io, pushClient, promMetrics }: any) {
+export function createNotificationService({ stores, config, log, _io, pushClient, webPushClient, promMetrics }: any) {
   // DI: if a pushClient is provided (not null/undefined), use it directly.
   // Otherwise fall back to the original initFirebase() path for production.
   const messaging = (pushClient !== undefined && pushClient !== null)
     ? pushClient
     : initFirebase(config, log);
 
+  const webPush = webPushClient ?? createWebPushSender(config, log);
+
   const retryQueue = createRetryQueue({ log });
 
   const { send, sendToOfflineUsers, sendSilentSync, markRead } =
-    createSendService({ stores, config, log, messaging, retryQueue, promMetrics });
+    createSendService({ stores, config, log, messaging, retryQueue, promMetrics, webPush });
 
   return {
     send,
@@ -38,9 +44,9 @@ export function createNotificationService({ stores, config, log, _io, pushClient
     sendSilentSync,
     markRead,
     retryQueue,
-    // Either transport counts — emitter.ts and reengagement.ts gate every push
-    // on this flag, so FCM-only here would keep the APNs path dead.
-    isConfigured: !!messaging || isApnsConfigured(config),
+    // Any transport counts — emitter.ts and reengagement.ts gate every push
+    // on this flag, so FCM-only here would keep the APNs and web paths dead.
+    isConfigured: !!messaging || isApnsConfigured(config) || !!webPush,
   };
 }
 

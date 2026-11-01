@@ -20,6 +20,13 @@ export interface NotificationPreferences {
   crewReformed: boolean;
   /** M3 re-engagement: your festival wrap-up recap is ready. */
   wrapReady: boolean;
+  /** Crew push types. No sender exists yet for these four. */
+  crewMeetingPoints: boolean;
+  crewPolls: boolean;
+  crewMoney: boolean;
+  crewRides: boolean;
+  /** Lead minutes for reminders on every Must-see pick; null = off. */
+  mustSeeReminderMinutes: 5 | 10 | 15 | 30 | 60 | null;
   dndStart: string | null;
   dndEnd: string | null;
   /** IANA zone the quiet-hours window is read in; null = server clock. */
@@ -33,6 +40,11 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
   lineupDrops: true,
   crewReformed: true,
   wrapReady: true,
+  crewMeetingPoints: true,
+  crewPolls: true,
+  crewMoney: true,
+  crewRides: true,
+  mustSeeReminderMinutes: null,
   dndStart: null,
   dndEnd: null,
   dndTimeZone: null,
@@ -41,6 +53,12 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
 function toBool(v: unknown, dflt: boolean): boolean {
   if (v === undefined || v === null) return dflt;
   return v === true || v === 1 || v === '1';
+}
+
+const MUST_SEE_MINUTES = [5, 10, 15, 30, 60] as const;
+
+function toMustSeeMinutes(v: unknown): NotificationPreferences['mustSeeReminderMinutes'] {
+  return (MUST_SEE_MINUTES as readonly unknown[]).includes(v) ? (v as (typeof MUST_SEE_MINUTES)[number]) : null;
 }
 
 function normalize(raw: Record<string, unknown> | null | undefined): NotificationPreferences {
@@ -52,6 +70,11 @@ function normalize(raw: Record<string, unknown> | null | undefined): Notificatio
     lineupDrops: toBool(r.lineupDrops, true),
     crewReformed: toBool(r.crewReformed, true),
     wrapReady: toBool(r.wrapReady, true),
+    crewMeetingPoints: toBool(r.crewMeetingPoints, true),
+    crewPolls: toBool(r.crewPolls, true),
+    crewMoney: toBool(r.crewMoney, true),
+    crewRides: toBool(r.crewRides, true),
+    mustSeeReminderMinutes: toMustSeeMinutes(r.mustSeeReminderMinutes),
     dndStart: (r.dndStart as string) ?? null,
     dndEnd: (r.dndEnd as string) ?? null,
     dndTimeZone: (r.dndTimeZone as string) ?? null,
