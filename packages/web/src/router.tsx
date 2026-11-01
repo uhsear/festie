@@ -183,6 +183,8 @@ const crewRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/crew',
   component: CrewView,
+  validateSearch: (search: Record<string, unknown>): { sos?: string } =>
+    typeof search.sos === 'string' ? { sos: search.sos } : {},
   // No guest guard: /crew renders <GuestTeaser mode="crew"/> in place for
   // unauthenticated visitors (parity with the always-visible nav tabs).
 });

@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import NowHero from '../components/festival-mode/NowHero';
 import UpNextList from '../components/festival-mode/UpNextList';
+import SosRaiseButton from '../components/crew/SosRaiseButton';
 import { CrewNowSection, CrewPrompt, MeetNowCard } from '../components/festival-mode/CrewNow';
 import { CalendarX } from 'lucide-react';
 
@@ -78,6 +79,7 @@ function FestivalModeViewInner() {
       <div className="flex items-baseline justify-between gap-3 mb-4 min-w-0">
         <h1 className="type-display-lg text-text-primary min-w-0 [overflow-wrap:anywhere]">{currentFestival.name}</h1>
         <div className="flex items-center gap-2 shrink-0">
+          {user && crew && <SosRaiseButton crewId={crew.id} compact />}
           <LowPowerIndicator />
           <div className="flex flex-col items-end">
             <span className="type-numeral text-text-secondary" aria-label="Festival time">

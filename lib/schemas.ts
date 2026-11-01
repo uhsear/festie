@@ -794,11 +794,30 @@ export const crewPhotoAlbumSchema = z.object({
 });
 export type CrewPhotoAlbumInput = z.infer<typeof crewPhotoAlbumSchema>;
 
-export const pollCreateSchema = z.object({
-  question: z.string().trim().min(1, 'Question required').max(500),
-  options: z.array(z.string().trim().min(1).max(200)).min(2).max(4),
-  closesAt: z.string().datetime().optional().nullable(),
-});
+// A schedule poll's set link for one option. The server stores these
+// index-aligned with `options` and makes the winner a meeting point on close.
+export const pollSetRefSchema = z
+  .object({
+    setId: z.string().trim().min(1).max(100),
+    // Mirrors the option text (max 200); the close route trims it to the meeting-point label limit.
+    label: z.string().trim().min(1).max(200),
+    stageReference: z.string().trim().max(100).nullable(),
+    meetAt: z.string().datetime().nullable(),
+  })
+  .strip();
+export type PollSetRefInput = z.infer<typeof pollSetRefSchema>;
+
+export const pollCreateSchema = z
+  .object({
+    question: z.string().trim().min(1, 'Question required').max(500),
+    options: z.array(z.string().trim().min(1).max(200)).min(2).max(4),
+    closesAt: z.string().datetime().optional().nullable(),
+    setRefs: z.array(pollSetRefSchema.nullable()).max(4).optional(),
+  })
+  .refine((d) => d.setRefs === undefined || d.setRefs.length === d.options.length, {
+    message: 'setRefs must match options',
+    path: ['setRefs'],
+  });
 export type PollCreateInput = z.infer<typeof pollCreateSchema>;
 
 export const pollVoteSchema = z.object({
@@ -955,9 +974,10 @@ export const sosRaiseSchema = z
   .strip();
 export type SosRaiseInput = z.infer<typeof sosRaiseSchema>;
 
-// SOS clear: the raiser ("I'm safe") or any crew member dismisses an SOS. Body
-// is empty — the actor is req.user; the crew is the path param.
-export const sosClearSchema = z.object({}).strip();
+// SOS clear: the raiser ("I'm safe") or any crew member dismisses an SOS. The
+// actor is req.user; the crew is the path param; `raiserId` names whose SOS to
+// clear and defaults to the caller.
+export const sosClearSchema = z.object({ raiserId: z.string().trim().min(1).max(64).optional() }).strip();
 export type SosClearInput = z.infer<typeof sosClearSchema>;
 
 // ── Crew carpool / ride-board schemas (M2 logistics) ────────────────

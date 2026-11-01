@@ -36,9 +36,10 @@ const MAX_OPTIONS = 4;
 /**
  * Schedule-aware poll composer (M2). BEFORE-planning helper: the crew picks a
  * timeslot from the lineup and the sets clashing in that slot become poll
- * options ("which set at 9pm?"). The option→set linkage rides along in local
- * state (`createPoll`'s `setRefs`, never sent to the server) so that when the
- * poll closes the winning set spawns a shared meeting point + a seeded reminder.
+ * options ("which set at 9pm?"). The option→set linkage (`createPoll`'s
+ * `setRefs`) is stored on the server, so when anyone closes the poll the server
+ * turns the winning set into a shared meeting point; the closer's device seeds
+ * the reminder.
  *
  * Offline-degraded by design: the lineup is read from the persisted festival
  * cache and `createPoll` is offline-create-eligible (queues + reconciles), so
@@ -223,8 +224,8 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
             Create schedule poll
           </Button>
           <p className="text-xs text-text-muted">
-            When this poll closes, the winning set becomes a crew meeting point and a {REMINDER_LEAD_MINUTES}-minute
-            reminder.
+            When the poll closes, the winning set becomes a meeting point for the whole crew. Whoever closes it gets a
+            reminder {REMINDER_LEAD_MINUTES} min before.
           </p>
         </>
       )}

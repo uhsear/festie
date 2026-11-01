@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Linking, Switch, AccessibilityInfo } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Linking, Switch, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useCrewStore } from '@festie/shared/stores';
 import {
   meetingTimeDisplay,
+  meetAtForFestivalDay,
+  festivalDayTimeOf,
   resolveFestivalTimeZone,
   isPending,
   QUEUED_WRITE_MESSAGE,
@@ -93,6 +96,13 @@ export default function CrewMeetingPoints({
   const [type, setType] = useState<string>('during');
   // 055: when on, the point repeats every festival day at its time-of-day.
   const [recursDaily, setRecursDaily] = useState(false);
+  // Optional meeting time: a festival day (index into `days`) plus a wall-clock time.
+  const [dayIndex, setDayIndex] = useState<number | null>(null);
+  const [time, setTime] = useState<{ hours: number; minutes: number } | null>(null);
+  const [showIosTimePicker, setShowIosTimePicker] = useState(false);
+  // An edit sends meetAt/recursDaily only after the user touches the time controls,
+  // so a label edit cannot clear a time the day chips cannot show (or with no days).
+  const [timeTouched, setTimeTouched] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   // F4: optional captured GPS coords. null = no coord (free-text only).
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -105,6 +115,10 @@ export default function CrewMeetingPoints({
     setStageRef('');
     setType('during');
     setRecursDaily(false);
+    setDayIndex(null);
+    setTime(null);
+    setShowIosTimePicker(false);
+    setTimeTouched(false);
     setCoords(null);
     setLocating(false);
     setShowForm(false);
@@ -118,6 +132,11 @@ export default function CrewMeetingPoints({
     setStageRef(point.stage_reference ?? '');
     setType(point.type);
     setRecursDaily(!!point.recurs_daily);
+    const parsed = point.meet_at ? festivalDayTimeOf(point.meet_at, days, timeZone) : null;
+    setDayIndex(parsed ? parsed.dayIndex : null);
+    setTime(parsed ? { hours: parsed.hours, minutes: parsed.minutes } : null);
+    setShowIosTimePicker(false);
+    setTimeTouched(false);
     // F4: pre-fill captured coords on edit (null for legacy free-text points).
     setCoords(
       typeof point.latitude === 'number' && typeof point.longitude === 'number'
@@ -144,6 +163,10 @@ export default function CrewMeetingPoints({
     setStageRef('');
     setType('during');
     setRecursDaily(false);
+    setDayIndex(null);
+    setTime(null);
+    setShowIosTimePicker(false);
+    setTimeTouched(false);
     setCoords({ lat: prefillCoords.lat, lng: prefillCoords.lng });
     setShowForm(true);
   }, [prefillCoords]);
@@ -187,6 +210,35 @@ export default function CrewMeetingPoints({
     Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(q)}`).catch(() => {});
   };
 
+  const timePickerValue = () => {
+    const d = new Date();
+    d.setHours(time?.hours ?? 12, time?.minutes ?? 0, 0, 0);
+    return d;
+  };
+  const timeLabel = time ? timePickerValue().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+
+  const pickTime = () => {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: timePickerValue(),
+        mode: 'time',
+        onChange: (_evt, selected) => {
+          if (selected) {
+            setTime({ hours: selected.getHours(), minutes: selected.getMinutes() });
+            setTimeTouched(true);
+          }
+        },
+      });
+    } else {
+      setShowIosTimePicker((v) => !v);
+    }
+  };
+
+  const meetAt =
+    dayIndex !== null && time && days[dayIndex]
+      ? meetAtForFestivalDay(days[dayIndex], time.hours, time.minutes, timeZone)
+      : null;
+
   const handleCreate = async () => {
     const l = label.trim();
     const loc = location.trim();
@@ -197,6 +249,7 @@ export default function CrewMeetingPoints({
       // F4: send captured coords, or null to clear them on edit.
       const latitude = coords ? coords.lat : null;
       const longitude = coords ? coords.lng : null;
+      const timeFields = { meetAt, recursDaily: meetAt ? recursDaily : false };
       let saved: CrewMeetingPoint;
       if (editingId) {
         saved = await updateMeetingPoint(crewId, editingId, {
@@ -206,7 +259,7 @@ export default function CrewMeetingPoints({
           stageReference,
           latitude,
           longitude,
-          recursDaily,
+          ...(timeTouched ? timeFields : {}),
         });
       } else {
         saved = await createMeetingPoint(crewId, {
@@ -216,7 +269,7 @@ export default function CrewMeetingPoints({
           stageReference,
           latitude,
           longitude,
-          recursDaily,
+          ...timeFields,
         });
       }
       // Queued offline: the row shows "Not sent yet"; say so to screen readers too.
@@ -309,6 +362,75 @@ export default function CrewMeetingPoints({
             onBlur={() => setFocusedField((f) => (f === 'stage' ? null : f))}
             accessibilityLabel="Meeting point stage reference"
           />
+          {days.length > 0 ? (
+            <View style={styles.meetAtBlock}>
+              <Text style={styles.toggleTitle}>Meet at (optional)</Text>
+              <View style={styles.typeGrid}>
+                <TouchableOpacity
+                  style={[styles.typeChip, dayIndex === null && styles.typeChipActive]}
+                  onPress={() => {
+                    setDayIndex(null);
+                    setTime(null);
+                    setShowIosTimePicker(false);
+                    setTimeTouched(true);
+                  }}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: dayIndex === null }}
+                  accessibilityLabel="No meeting time"
+                >
+                  <Text style={[styles.typeChipText, dayIndex === null && styles.typeChipTextActive]}>No time</Text>
+                </TouchableOpacity>
+                {days.map((day, i) => {
+                  const active = dayIndex === i;
+                  const dayText = day.label ?? day.date;
+                  return (
+                    <TouchableOpacity
+                      key={day.id}
+                      style={[styles.typeChip, active && styles.typeChipActive]}
+                      onPress={() => {
+                        setDayIndex(i);
+                        setTimeTouched(true);
+                      }}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`Meet on ${dayText}`}
+                    >
+                      <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{dayText}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {dayIndex !== null ? (
+                <TouchableOpacity
+                  style={styles.input}
+                  onPress={pickTime}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Meeting time"
+                >
+                  <Text style={styles.timeFieldText}>{timeLabel ?? 'Pick a time'}</Text>
+                </TouchableOpacity>
+              ) : null}
+              {dayIndex !== null && Platform.OS === 'ios' && showIosTimePicker ? (
+                <DateTimePicker
+                  value={timePickerValue()}
+                  mode="time"
+                  display="spinner"
+                  onChange={(_evt, selected) => {
+                    if (selected) {
+                      setTime({ hours: selected.getHours(), minutes: selected.getMinutes() });
+                      setTimeTouched(true);
+                    }
+                  }}
+                  themeVariant="dark"
+                  textColor={t.colors.text.primary}
+                />
+              ) : null}
+            </View>
+          ) : null}
+
           {/* F4: optional GPS capture. Falls back to free-text on denial. */}
           <View style={styles.captureRow}>
             <Button
@@ -340,22 +462,27 @@ export default function CrewMeetingPoints({
 
           {/* 055: daily-recurrence toggle. On → the point repeats every festival
               day at its time-of-day (rendered "daily 3:00 PM"). */}
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleBody}>
-              <Text style={styles.toggleTitle}>Repeats daily</Text>
-              <Text style={styles.toggleHint} numberOfLines={2}>
-                Meet here at the same time every festival day.
-              </Text>
+          {meetAt ? (
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleBody}>
+                <Text style={styles.toggleTitle}>Repeats daily</Text>
+                <Text style={styles.toggleHint} numberOfLines={2}>
+                  Meet here at the same time every festival day.
+                </Text>
+              </View>
+              <Switch
+                value={recursDaily}
+                onValueChange={(v) => {
+                  setRecursDaily(v);
+                  setTimeTouched(true);
+                }}
+                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
+                ios_backgroundColor={t.colors.text.muted}
+                thumbColor={t.colors.text.onAccent}
+                accessibilityLabel="Repeats daily"
+              />
             </View>
-            <Switch
-              value={recursDaily}
-              onValueChange={setRecursDaily}
-              trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-              ios_backgroundColor={t.colors.text.muted}
-              thumbColor={t.colors.text.onAccent}
-              accessibilityLabel="Repeats daily"
-            />
-          </View>
+          ) : null}
 
           <Button
             label={editingId ? 'Save' : 'Add'}
@@ -580,6 +707,13 @@ const useStyles = makeStyles((t) => ({
   toggleHint: {
     ...typeStyle('micro'),
     color: t.colors.text.muted,
+  },
+  meetAtBlock: {
+    gap: t.spacing[2],
+  },
+  timeFieldText: {
+    ...typeStyle('body'),
+    color: t.colors.text.primary,
   },
   iconButton: {
     padding: t.spacing[1],

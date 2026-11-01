@@ -196,7 +196,10 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     const handleConnect = () => {
       if (!joinRoom) return;
       const id = getActiveCrewId();
-      if (id) socket.emit('join:crew', { _v: 1, crewId: id }, () => {});
+      if (id) {
+        socket.emit('join:crew', { _v: 1, crewId: id }, () => {});
+        sink.onSosResync?.(id);
+      }
     };
     socket.on('connect', handleConnect);
     if (joinRoom && joinId && socket.connected) {

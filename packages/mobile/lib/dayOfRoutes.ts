@@ -22,3 +22,11 @@ export function meetHref(
   const navigable = Number.isFinite(mp?.latitude ?? NaN) && Number.isFinite(mp?.longitude ?? NaN);
   return navigable ? { pathname: '/compass', params: { mpId: meet.id } } : CREW_MEET_HREF;
 }
+
+/** The crew id of an SOS push (its deepLink points at `/sos`), else null. */
+export function sosPushCrewId(data: Record<string, unknown> | undefined): string | null {
+  const { crewId, deepLink } = data ?? {};
+  return typeof crewId === 'string' && crewId !== '' && typeof deepLink === 'string' && deepLink.includes('/sos')
+    ? crewId
+    : null;
+}

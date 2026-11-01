@@ -14,6 +14,7 @@ function render(ui: React.ReactElement) {
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
+  useSearch: () => ({}),
   Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
     <a href={to} {...rest}>
       {children}
@@ -30,6 +31,8 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
   useFestivalDataStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
+
+vi.mock('../components/crew/SosRaiseButton', () => ({ default: () => <div data-testid="sos-raise" /> }));
 
 vi.mock('../components/features/CrewSelector', () => ({
   default: () => <div data-testid="crew-selector" />,

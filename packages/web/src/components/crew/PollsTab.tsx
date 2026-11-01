@@ -58,11 +58,9 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
 
-  // Schedule-aware close lives in the crewStore (it carries the per-poll
-  // option→set linkage, `_setRefs`). closePoll consumes the winner to spawn a
-  // meeting point + seed a reminder; for a plain poll with no linkage it is a
-  // no-op-equivalent close. saveReminder is injected so crewStore stays
-  // decoupled from the festival store.
+  // Close goes through the crewStore: the server picks the winner from the
+  // poll's stored set_refs and creates the meeting point. saveReminder is
+  // injected so crewStore stays decoupled from the festival store.
   const closePollStore = useCrewStore((s) => s.closePoll);
   const festivalId = useFestivalStore((s) => s.currentFestival?.id ?? null);
 
@@ -118,12 +116,13 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
   });
 
   const close = useMutation({
-    // Route through the crewStore close so a SCHEDULE poll's winning set spawns
-    // a meeting point + seeded reminder (the linkage rides in crewStore._setRefs).
-    // Plain polls close exactly as before. The reminder seeder is bound to the
-    // festival store's saveReminder with the festival's reminder lead default.
-    mutationFn: (pollId: string) =>
-      closePollStore(crewId, pollId, {
+    // The server creates a SCHEDULE poll's meeting point on close (from the
+    // stored set_refs) for the whole crew; the store upserts it and this device
+    // seeds the closer's reminder. Plain polls close exactly as before. The
+    // reminder seeder is bound to the festival store's saveReminder.
+    mutationFn: async (pollId: string) => {
+      const knownPoints = new Set(useCrewStore.getState().meetingPoints.map((m) => m.id));
+      await closePollStore(crewId, pollId, {
         festivalId: festivalId ?? undefined,
         seedReminder: (setId, fId) =>
           useFestivalDataStore.getState().saveReminder({
@@ -131,10 +130,14 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
             setId,
             minutes: SCHEDULE_POLL_REMINDER_LEAD,
           }),
-      }),
-    onSuccess: () => {
+      });
+      // closePoll upserts the new meeting point into the store; find it by id.
+      return useCrewStore.getState().meetingPoints.find((m) => !knownPoints.has(m.id)) ?? null;
+    },
+    onSuccess: (meetingPoint) => {
       qc.invalidateQueries({ queryKey: ['polls', crewId] });
-      toast('Poll closed', 'success');
+      qc.invalidateQueries({ queryKey: ['meeting-points', crewId] });
+      toast(meetingPoint ? `Poll closed. ${meetingPoint.label} is now a meeting point.` : 'Poll closed', 'success');
     },
     onError: (e) => toastError(e, "Couldn't close poll. Try again."),
   });

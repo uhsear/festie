@@ -312,12 +312,11 @@ export interface CrewPollVote {
 }
 
 /**
- * Client-only linkage from a schedule-aware poll OPTION to the lineup set it
- * was prefilled from (M2 "Schedule-aware polls"). Carried in local state /
- * persisted on the poll, NEVER sent to the server (no migration) — so when the
- * poll closes the winning option already knows which set won and can seed a
- * meeting point + reminder. `null` marks a free-text option with no set behind
- * it. Each entry is index-aligned with `CrewPoll.options`.
+ * Linkage from a schedule-aware poll OPTION to the lineup set it was prefilled
+ * from (M2 "Schedule-aware polls"). Sent to the server on create and stored as
+ * `CrewPoll.set_refs`, so the server knows which set won when the poll closes.
+ * `null` marks a free-text option with no set behind it. Each entry is
+ * index-aligned with `CrewPoll.options`.
  */
 export interface PollSetRef {
   setId: string;
@@ -348,13 +347,12 @@ export interface CrewPoll {
    */
   _optimistic?: boolean;
   /**
-   * Client-only set linkage (NOT sent by the server). Index-aligned with
-   * `options`: `_setRefs[i]` is the lineup set behind option `i`, or `null` for
-   * a free-text option. Set by the schedule-aware composer; consumed by
-   * `closePoll` to create the winning set's meeting point + reminder. Persisted
-   * with the poll so close works after a reload. Optional — plain polls omit it.
+   * Set linkage, index-aligned with `options`: `set_refs[i]` is the lineup set
+   * behind option `i`, or `null` for a free-text option. The server stores it
+   * (snake_case, like the column) and creates the winning set's meeting point
+   * when the poll closes. Omitted or null for plain polls.
    */
-  _setRefs?: (PollSetRef | null)[];
+  set_refs?: (PollSetRef | null)[] | null;
 }
 
 export interface CreateCrewPollRequest {
@@ -364,12 +362,10 @@ export interface CreateCrewPollRequest {
 }
 
 /**
- * Options for `closePoll`. When a schedule-aware poll closes, the winning
- * option's linked set (carried in `CrewPoll._setRefs`) becomes a shared meeting
- * point + a seeded reminder. crewStore owns the meeting-point create (same
- * store); the reminder is seeded through the injected `seedReminder` callback so
- * crewStore stays decoupled from festivalDataStore. Omit entirely for a plain
- * close (the legacy `closePoll(crewId, pollId)` behavior is unchanged).
+ * Options for `closePoll`. The server creates the winning set's meeting point on
+ * close; only the reminder runs on the client, seeded through the injected
+ * `seedReminder` callback so crewStore stays decoupled from festivalDataStore.
+ * Omit entirely for a plain close.
  */
 export interface ClosePollOptions {
   /** Active festival id — required to seed a reminder (SaveReminderRequest). */

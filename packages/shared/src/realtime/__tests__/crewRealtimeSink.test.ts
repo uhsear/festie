@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createStoreSink } from '../crewRealtimeSink';
 import { useCrewStore } from '../../stores/crewStore';
 import { useLiveLocationStore } from '../../stores/liveLocationStore';
@@ -48,5 +48,14 @@ describe('crewRealtimeSink: sos:cleared clears only the raiser it names', () => 
     sink.onSosCleared(CREW, 'user-a', 'Alice');
 
     expect(useLiveLocationStore.getState().activeSosList).toHaveLength(1);
+  });
+});
+
+describe('crewRealtimeSink: onSosResync', () => {
+  it('re-reads the active SOS list for the crew', () => {
+    const loadActiveSos = vi.fn().mockResolvedValue(undefined);
+    const api = { getState: () => ({ applyPeerUpdate: vi.fn(), removePeer: vi.fn(), applySos: vi.fn(), clearSos: vi.fn(), loadActiveSos }) };
+    createStoreSink(useCrewStore, api).onSosResync?.('c1');
+    expect(loadActiveSos).toHaveBeenCalledWith('c1');
   });
 });

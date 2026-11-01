@@ -75,6 +75,8 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   'meeting-point-added': 'dropped a meeting point',
   'meeting-point-removed': 'removed a meeting point',
   'crew-updated': 'updated the crew',
+  sos_raised: 'raised an SOS',
+  sos_cleared: 'cleared an SOS',
 };
 
 // ── Expense categories ─────────────────────────────────────────────────────
