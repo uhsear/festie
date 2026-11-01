@@ -106,7 +106,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
       if (s.userId !== currentUserId && !sawNew) sawNew = s;
     }
     if (sawNew) {
-      haptics.warning();
+      haptics.heavy();
       // A haptic is not an announcement. accessibilityRole="alert" alone
       // announces nothing on either platform; the banner carries
       // accessibilityLiveRegion="assertive" for TalkBack (Android-only in RN),
@@ -122,7 +122,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
   const doRaise = useCallback(async () => {
     if (raising) return;
     setRaising(true);
-    haptics.warning();
+    haptics.heavy();
     // Best-effort one-shot fix so the crew can actually find the person. The
     // fix is bounded so it never delays the SOS: seed from the cached
     // last-known position (returns instantly), then race a fresh reading

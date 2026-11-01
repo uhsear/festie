@@ -7,6 +7,7 @@ import { Skeleton } from './Skeleton';
 import { formatQuietHours } from '../lib/accountFormat';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import SectionLabel from './SectionLabel';
 
 /**
  * Per-category notification preferences (crew / set reminders / schedule) plus
@@ -90,11 +91,8 @@ function FestivalTopicsRows() {
 
   return (
     <>
-      <View style={styles.subHeader}>
-        <Text style={styles.subHeaderText} numberOfLines={1}>
-          For {currentFestival.name}
-        </Text>
-      </View>
+      <SectionLabel>For {currentFestival.name}</SectionLabel>
+      <View style={styles.card}>
       {/* Skeleton until the subscription state resolves so the switches never
           show a guessed "on" before the GET confirms it. */}
       {subs === null ? (
@@ -131,6 +129,7 @@ function FestivalTopicsRows() {
         </View>
         ))
       )}
+      </View>
     </>
   );
 }
@@ -233,11 +232,9 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
   const showSkeleton = !loaded && isLoading;
 
   return (
+    <>
+    <SectionLabel>Notification types</SectionLabel>
     <View style={styles.card}>
-      <View style={styles.header}>
-        <Ionicons name="options-outline" size={18} color={t.colors.text.secondary} />
-        <Text style={styles.headerText}>Notification types</Text>
-      </View>
 
       {showSkeleton ? (
         <View style={styles.skeleton}>
@@ -302,8 +299,6 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
             />
           </View>
 
-          <FestivalTopicsRows />
-
           {storeError ? (
             <View style={styles.errorRow} accessibilityLiveRegion="polite">
               <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
@@ -313,6 +308,8 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
         </>
       )}
     </View>
+    <FestivalTopicsRows />
+    </>
   );
 }
 
@@ -324,19 +321,6 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border.default,
     overflow: 'hidden',
     paddingBottom: t.spacing[2],
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    paddingHorizontal: t.spacing[4],
-    paddingTop: t.spacing[3],
-    paddingBottom: t.spacing[1],
-  },
-  headerText: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-    textTransform: 'uppercase',
   },
   row: {
     flexDirection: 'row',
@@ -368,19 +352,6 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.secondary,
     paddingHorizontal: t.spacing[4],
     paddingTop: t.spacing[2],
-  },
-  subHeader: {
-    paddingHorizontal: t.spacing[4],
-    paddingTop: t.spacing[3],
-    paddingBottom: t.spacing[1],
-    marginTop: t.spacing[1],
-    borderTopWidth: 1,
-    borderTopColor: t.colors.border.default,
-  },
-  subHeaderText: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-    textTransform: 'uppercase',
   },
   skeleton: {
     paddingHorizontal: t.spacing[4],

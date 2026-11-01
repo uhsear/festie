@@ -9,7 +9,6 @@ import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import EmptyState from '../components/ui/EmptyState';
-import Button from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import HomeBaseCard from '../components/crew/HomeBaseCard';
 import CrewTotemCard from '../components/crew/CrewTotemCard';
@@ -24,7 +23,7 @@ import { useToast } from '../lib/toastContext';
 import PromptDialog from '../components/ui/PromptDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { Users, Columns3, CalendarClock, ChevronRight } from 'lucide-react';
+import { Columns3, CalendarClock, ChevronRight } from 'lucide-react';
 import { deleteCrewConfirmMessage, leaveCrewConfirmMessage, removeMemberConfirmMessage } from '@festie/shared/utils';
 import type { Crew, CrewMember } from '@festie/shared/types';
 import type { TabKey } from '../components/crew/CrewTabBar';
@@ -55,7 +54,7 @@ function CrewViewInner() {
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   // Day-of first: the Meet tab (status, live location, SOS, meeting points).
   const [tab, setTab] = useState<TabKey>('meeting');
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   const { isAdmin, adminOpen, setAdminOpen, adminAddBusy, submitForceAdd, handleForceAdd } = useCrewAdmin(
     user,
@@ -111,7 +110,7 @@ function CrewViewInner() {
 
   const handleSelectCrew = (crewId: string) => {
     selectCrew(crewId).catch((e: unknown) => {
-      toast(e instanceof Error ? e.message : "Couldn't select crew. Try again.", 'error');
+      toastError(e, "Couldn't select crew. Try again.");
     });
   };
   const handleCreateCrew = () => setCreateOpen(true);
@@ -121,7 +120,7 @@ function CrewViewInner() {
       await createCrew({ name, festivalId: currentFestival?.id });
       setCreateOpen(false);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't create crew. Try again.", 'error');
+      toastError(e, "Couldn't create crew. Try again.");
     } finally {
       setCreateBusy(false);
     }
@@ -134,7 +133,7 @@ function CrewViewInner() {
       await joinByCode({ inviteCode });
       setJoinOpen(false);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't join crew. Try again.", 'error');
+      toastError(e, "Couldn't join crew. Try again.");
     } finally {
       setJoinBusy(false);
     }
@@ -153,14 +152,7 @@ function CrewViewInner() {
       }
       setConfirmOpen(false);
     } catch (e) {
-      toast(
-        e instanceof Error
-          ? e.message
-          : isOwner
-            ? "Couldn't delete crew. Try again."
-            : "Couldn't leave crew. Try again.",
-        'error',
-      );
+      toastError(e, isOwner ? "Couldn't delete crew. Try again." : "Couldn't leave crew. Try again.");
     } finally {
       setConfirmBusy(false);
     }
@@ -176,7 +168,7 @@ function CrewViewInner() {
     transferOwnership(activeCrew.id, transferTarget.userId)
       .then(() => selectCrew(activeCrew.id))
       .catch((e: unknown) => {
-        toast(e instanceof Error ? e.message : "Couldn't transfer ownership. Try again.", 'error');
+        toastError(e, "Couldn't transfer ownership. Try again.");
       })
       .finally(() => setTransferTarget(null));
   };
@@ -191,7 +183,7 @@ function CrewViewInner() {
     kickMember(activeCrew.id, kickTarget.userId)
       .then(() => selectCrew(activeCrew.id))
       .catch((e: unknown) => {
-        toast(e instanceof Error ? e.message : "Couldn't remove member. Try again.", 'error');
+        toastError(e, "Couldn't remove member. Try again.");
       })
       .finally(() => setKickTarget(null));
   };
@@ -216,20 +208,12 @@ function CrewViewInner() {
       {!activeCrew ? (
         <Card padding="lg" className="space-y-4">
           <EmptyState
-            icon={<Users className="w-12 h-12" aria-hidden="true" />}
+            illustration="noCrew"
             title="No crew yet"
-            description="Create a crew or join an existing one to coordinate with friends"
+            description="Plan with your friends. Make a crew, or join one with a code."
+            cta={crews.length === 0 ? { label: 'Create crew', onClick: handleCreateCrew } : undefined}
+            secondaryCta={crews.length === 0 ? { label: 'Join with code', onClick: handleJoinCrew } : undefined}
           />
-          {crews.length === 0 && (
-            <div className="flex gap-4">
-              <Button variant="primary" onClick={handleCreateCrew} className="flex-1 min-h-11">
-                Create Crew
-              </Button>
-              <Button variant="outline" onClick={handleJoinCrew} className="flex-1 min-h-11">
-                Join by Code
-              </Button>
-            </div>
-          )}
         </Card>
       ) : (
         <div className="crew-content space-y-4 min-w-0">

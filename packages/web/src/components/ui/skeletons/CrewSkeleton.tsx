@@ -1,8 +1,11 @@
 /**
- * Skeleton for /crew — crew selector + home-base card + invite bar + tab bar
- * + 3 member rows. Matches the authenticated CrewView layout so the page
- * doesn't jolt when the chunk + crew fetch resolve.
+ * Skeleton for /crew — crew selector + home-base card + 7 tab chips (one per
+ * CrewTabBar tab) + the Meet panel (status card + live-location card). Matches
+ * what CrewView shows first so the page doesn't jolt when the chunk + crew
+ * fetch resolve.
  */
+const TAB_COUNT = 7;
+
 export default function CrewSkeleton() {
   return (
     <div className="crew-page space-y-4 pb-24" aria-busy="true" aria-label="Loading crew">
@@ -15,37 +18,16 @@ export default function CrewSkeleton() {
         {/* home-base card */}
         <div className="skeleton-shimmer h-24 w-full rounded-xl opacity-70" />
 
-        {/* invite bar */}
-        <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-3">
-          <div className="flex flex-1 flex-col gap-1.5">
-            <div className="skeleton-shimmer h-2.5 w-20" />
-            <div className="skeleton-shimmer h-3 w-[60%]" />
-          </div>
-          <div className="skeleton-shimmer h-9 w-[72px] rounded-md" />
-        </div>
-
         {/* tab row */}
-        <div className="flex gap-1.5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="skeleton-shimmer h-10 min-w-16 flex-1 rounded-lg" />
+        <div className="flex gap-1.5 overflow-hidden">
+          {Array.from({ length: TAB_COUNT }).map((_, i) => (
+            <div key={i} className="skeleton-shimmer h-11 w-20 flex-shrink-0 rounded-md" data-testid="crew-tab-chip" />
           ))}
         </div>
 
-        {/* member rows */}
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 rounded-lg border border-[var(--color-aqua-a08)] bg-[var(--color-bg-card)] p-3"
-            >
-              <div className="skeleton-shimmer h-10 w-10 rounded-full" />
-              <div className="flex flex-1 flex-col gap-1.5">
-                <div className="skeleton-shimmer h-3.5 w-[55%]" />
-                <div className="skeleton-shimmer h-2.5 w-[30%]" />
-              </div>
-            </div>
-          ))}
-        </div>
+        {/* Meet panel: status card + live-location card */}
+        <div className="skeleton-shimmer h-32 w-full rounded-xl opacity-70" />
+        <div className="skeleton-shimmer h-40 w-full rounded-xl opacity-70" />
       </div>
     </div>
   );

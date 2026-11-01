@@ -13,10 +13,10 @@ const DISMISS_KEY = 'fp-offline-banner-dismissed';
  *     couldn't sync" with a button that opens the PendingSyncSheet to retry or
  *     dismiss each one. Highest priority because dropped writes are the thing
  *     the user most needs to know about.
- *  2. OFFLINE — offlineMode: amber "You're offline — changes will sync when you
- *     reconnect", plus the pending count.
+ *  2. OFFLINE — offlineMode: amber "You're offline. Showing your saved
+ *     schedule. Changes sync when you reconnect.", plus the pending count.
  *  3. SYNCING — online with pendingSync > 0: aqua "Syncing {n} change(s)…" with
- *     a Flush-now escape hatch.
+ *     a Sync-now escape hatch.
  *
  * Dismissal of the OFFLINE state persists for the session (sessionStorage) so a
  * reload while offline doesn't re-nag; it's cleared on reconnect. The FAILED
@@ -76,7 +76,7 @@ export default function OfflineBanner() {
     message = `${failedCount} change${failedCount === 1 ? '' : 's'} couldn't sync`;
   } else if (showOffline) {
     tone = 'bg-accent-amber/90 border-b border-accent-amber/20 text-bg-primary';
-    message = "You're offline. Changes will sync when you reconnect.";
+    message = "You're offline. Showing your saved schedule. Changes sync when you reconnect.";
   } else {
     tone = 'bg-accent-aqua/90 border-b border-accent-aqua/20 text-bg-primary';
     message = `Syncing ${pendingSync} pending change${pendingSync === 1 ? '' : 's'}…`;
@@ -117,7 +117,7 @@ export default function OfflineBanner() {
               onClick={handleFlush}
               className="text-xs font-bold px-2 py-1 rounded bg-bg-primary/10 hover:bg-bg-primary/20 min-h-[44px]"
             >
-              Flush now
+              Sync now
             </button>
           )}
           {!showFailed && showOffline && (

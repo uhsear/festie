@@ -42,7 +42,7 @@ export default function AdminFestivals() {
   // When set, the dedicated map editor is shown for this festival (Phase D). It
   // owns stage-pin + amenity authoring and persists via the same PUT path.
   const [mapEditingId, setMapEditingId] = useState<string | null>(null);
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   useEffect(() => {
     loadFestivals();
@@ -54,7 +54,7 @@ export default function AdminFestivals() {
       const result = await api.get<Festival[]>('/admin/festivals');
       setFestivals(Array.isArray(result) ? result : []);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't load festivals. Try again.", 'error');
+      toastError(err, "Couldn't load festivals. Try again.");
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,7 @@ export default function AdminFestivals() {
       setTab('list');
       await loadFestivals();
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't save festival. Try again.", 'error');
+      toastError(err, "Couldn't save festival. Try again.");
     }
   };
 
@@ -105,7 +105,7 @@ export default function AdminFestivals() {
       setConfirmDelete(null);
       await loadFestivals();
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't delete festival. Try again.", 'error');
+      toastError(err, "Couldn't delete festival. Try again.");
     } finally {
       setDeleteBusy(false);
     }
@@ -127,7 +127,7 @@ export default function AdminFestivals() {
       // Auto-expand all days so artists are visible immediately
       setInitialExpandedDays(new Set(days.map((d) => d.id)));
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't load festival details. Try again.", 'error');
+      toastError(err, "Couldn't load festival details. Try again.");
       setFormData(festival as Partial<FormFestival>);
     }
   };

@@ -99,7 +99,7 @@ export interface FestivalMapEditorProps {
 }
 
 export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEditorProps) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   const [name, setName] = useState('');
   const [stages, setStages] = useState<StageEdit[]>([]);
@@ -349,7 +349,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       toast('Festival map saved', 'success');
       onClose();
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't save the map. Try again.", 'error');
+      toastError(err, "Couldn't save the map. Try again.");
     } finally {
       setSaving(false);
     }

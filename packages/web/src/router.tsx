@@ -10,6 +10,7 @@ import GridSkeleton from './components/ui/skeletons/GridSkeleton';
 import FestivalModeSkeleton from './components/ui/skeletons/FestivalModeSkeleton';
 import PicksSkeleton from './components/ui/skeletons/PicksSkeleton';
 import CrewSkeleton from './components/ui/skeletons/CrewSkeleton';
+import CrewPlanSkeleton from './components/ui/skeletons/CrewPlanSkeleton';
 import AccountSkeleton from './components/ui/skeletons/AccountSkeleton';
 import WrapSkeleton from './components/ui/skeletons/WrapSkeleton';
 
@@ -76,7 +77,7 @@ const CardsView = withSkeleton(cardsLazy, CardsSkeleton);
 const TimelineView = withSkeleton(timelineLazy, TimelineSkeleton);
 const PicksView = withSkeleton(picksLazy, PicksSkeleton);
 const CrewView = withSkeleton(crewLazy, CrewSkeleton);
-const CrewPlanView = withSkeleton(lazyRouteComponent(loadCrewPlan), CrewSkeleton);
+const CrewPlanView = withSkeleton(lazyRouteComponent(loadCrewPlan), CrewPlanSkeleton);
 const GridView = withSkeleton(gridLazy, GridSkeleton);
 const FestivalModeView = withSkeleton(festivalModeLazy, FestivalModeSkeleton);
 const WrapView = withSkeleton(wrapLazy, WrapSkeleton);

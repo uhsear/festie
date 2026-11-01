@@ -82,4 +82,28 @@ describe('EmptyState', () => {
     expect(el?.className).toContain('items-center');
     expect(el?.className).toContain('text-center');
   });
+
+  it('renders a secondary CTA that calls its handler', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <EmptyState
+        title="Empty"
+        cta={{ label: 'Create', onClick: vi.fn() }}
+        secondaryCta={{ label: 'Join', onClick }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('renders an illustration image with empty alt instead of the icon', () => {
+    const { container } = render(
+      <EmptyState title="Empty" illustration="noPicks" icon={<span data-testid="empty-icon" />} />,
+    );
+    const img = container.querySelector('img');
+    expect(img).toHaveAttribute('alt', '');
+    expect(img?.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
+    expect(screen.queryByTestId('empty-icon')).not.toBeInTheDocument();
+  });
 });

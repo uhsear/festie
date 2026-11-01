@@ -11,7 +11,10 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, Festival, FestivalDay } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import { useHaptics } from '../hooks/useHaptics';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import Button from './Button';
+import EmptyState from './EmptyState';
 import CrewSyncMarker from './CrewSyncMarker';
 
 // F4: capture the device's current GPS position via expo-location to fill
@@ -65,6 +68,7 @@ export default function CrewMeetingPoints({
   prefillCoords = null,
 }: CrewMeetingPointsProps) {
   const t = useTokens();
+  const haptics = useHaptics();
   const styles = useStyles();
 
   // Anchor a recurring point's time-of-day in the festival's zone when known,
@@ -75,6 +79,11 @@ export default function CrewMeetingPoints({
   const createMeetingPoint = useCrewStore((s) => s.createMeetingPoint);
   const updateMeetingPoint = useCrewStore((s) => s.updateMeetingPoint);
   const deleteMeetingPoint = useCrewStore((s) => s.deleteMeetingPoint);
+
+  const { hiddenIds, remove } = useUndoableRemove(
+    (id) => deleteMeetingPoint(crewId, id),
+    "Couldn't remove the meeting point. Try again.",
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -221,18 +230,11 @@ export default function CrewMeetingPoints({
   };
 
   const handleRemove = (point: CrewMeetingPoint) => {
-    Alert.alert('Remove meeting point', `Remove "${point.label}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          deleteMeetingPoint(crewId, point.id).catch(() => {});
-        },
-      },
-    ]);
+    haptics.tap();
+    remove(point.id, point.label);
   };
 
+  const visiblePoints = meetingPoints.filter((p) => !hiddenIds.has(p.id));
   const canCreate = !!label.trim() && !!location.trim();
 
   return (
@@ -378,10 +380,15 @@ export default function CrewMeetingPoints({
         </TouchableOpacity>
       )}
 
-      {meetingPoints.length === 0 ? (
-        <Text style={styles.empty}>No meeting points yet — drop a pin so your crew knows where to meet.</Text>
+      {visiblePoints.length === 0 ? (
+        <EmptyState
+          illustration="emptyList"
+          title="No meeting points yet"
+          message="Drop a pin so your crew knows where to meet."
+          action={{ label: 'Add meeting point', onPress: () => setShowForm(true) }}
+        />
       ) : (
-        meetingPoints.map((point) => {
+        visiblePoints.map((point) => {
           // A queued create has no server id yet, so it cannot be edited or removed.
           const canRemove = !isPending(point) && (point.created_by === currentUserId || isOwner);
           const isEmergency = point.type === 'emergency';
@@ -587,11 +594,6 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[1],
-  },
-  empty: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    paddingHorizontal: t.spacing[2],
   },
   pointRow: {
     flexDirection: 'row',

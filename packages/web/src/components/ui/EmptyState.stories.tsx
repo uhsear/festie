@@ -86,3 +86,26 @@ export const MinimalTitleOnly: Story = {
     title: 'Nothing here',
   },
 };
+
+// -- With illustration --
+
+export const WithIllustration: Story = {
+  args: {
+    illustration: 'noPicks',
+    title: 'No picks yet',
+    description: 'Browse the lineup and tap the sets you want to see.',
+    cta: { label: 'Browse the lineup', onClick: fn() },
+  },
+};
+
+// -- Two buttons --
+
+export const WithTwoButtons: Story = {
+  args: {
+    illustration: 'noCrew',
+    title: 'No crew yet',
+    description: 'Plan with your friends. Make a crew, or join one with a code.',
+    cta: { label: 'Create crew', onClick: fn() },
+    secondaryCta: { label: 'Join with code', onClick: fn() },
+  },
+};

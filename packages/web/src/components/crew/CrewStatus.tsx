@@ -55,7 +55,7 @@ const STATUS_META: Record<string, { Icon: React.ComponentType<{ className?: stri
  * member can type a manual estimate.
  */
 export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   const statuses = useCrewStore((s) => s.crewStatuses);
   const loadStatuses = useCrewStore((s) => s.loadStatuses);
@@ -172,7 +172,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
       toast(writeOutcomeMessage(outcome, 'Status shared'), outcome === 'queued' ? 'info' : 'success');
       reset();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Couldn't share status. Try again.", 'error');
+      toastError(err, "Couldn't share status. Try again.");
     } finally {
       setBusy(false);
     }
@@ -188,7 +188,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
       );
       toast(writeOutcomeMessage(outcome, 'Status cleared'), outcome === 'queued' ? 'info' : 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Couldn't clear status. Try again.", 'error');
+      toastError(err, "Couldn't clear status. Try again.");
     } finally {
       setBusy(false);
     }

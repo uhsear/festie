@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PendingSyncSheet from './PendingSyncSheet';
@@ -41,6 +41,12 @@ function item(overrides: Partial<FailedSyncItem> = {}): FailedSyncItem {
     ...overrides,
   };
 }
+
+// jsdom has no pointer capture; vaul calls it on pointerdown inside the sheet.
+beforeAll(() => {
+  HTMLElement.prototype.setPointerCapture = vi.fn();
+  HTMLElement.prototype.releasePointerCapture = vi.fn();
+});
 
 describe('PendingSyncSheet', () => {
   beforeEach(() => {

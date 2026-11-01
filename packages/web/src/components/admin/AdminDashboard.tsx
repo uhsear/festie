@@ -35,7 +35,7 @@ interface DashboardData {
 export default function AdminDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  const { toastError } = useToast();
 
   useEffect(() => {
     loadDashboard();
@@ -47,7 +47,7 @@ export default function AdminDashboard() {
       const result = await api.get<DashboardData>('/admin/dashboard');
       setData(result);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't load the dashboard. Try again.", 'error');
+      toastError(err, "Couldn't load the dashboard. Try again.");
       setData(null);
     } finally {
       setLoading(false);

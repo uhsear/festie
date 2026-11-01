@@ -84,7 +84,7 @@ interface Props {
 }
 
 export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const qc = useQueryClient();
   // Festival timezone + days so recurring-point badges render the meet time in
   // the FESTIVAL frame (matching mobile), not the viewer's device zone.
@@ -187,7 +187,7 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
       toast(writeOutcomeMessage(outcome, 'Meeting point added'), outcome === 'queued' ? 'info' : 'success');
       reset();
     },
-    onError: (e) => toast(e instanceof Error ? e.message : "Couldn't add meeting point. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't add meeting point. Try again."),
   });
 
   const updatePoint = useMutation({
@@ -199,7 +199,7 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
       toast(writeOutcomeMessage(outcome, 'Meeting point updated'), outcome === 'queued' ? 'info' : 'success');
       reset();
     },
-    onError: (e) => toast(e instanceof Error ? e.message : "Couldn't update meeting point. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't update meeting point. Try again."),
   });
 
   const { hiddenIds, remove: removePoint } = useUndoableRemove(async (id) => {
@@ -499,9 +499,10 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
 
           {points.length === 0 ? (
             <EmptyState
-              icon={<MapPin className="w-12 h-12" aria-hidden="true" />}
+              illustration="emptyList"
               title="No meeting points yet"
               description="Drop a pin so your crew knows where to meet."
+              cta={{ label: 'Add meeting point', onClick: () => setShowForm(true) }}
             />
           ) : (
             <div className="space-y-2">

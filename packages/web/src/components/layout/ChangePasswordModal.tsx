@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import UserMenuPanel from './UserMenuPanel';
+import Dialog from '../ui/Dialog';
 import { inputBase } from '../../lib/styles';
 import Button from '../ui/Button';
 
@@ -35,7 +35,7 @@ export default function ChangePasswordModal({ onClose, onSubmit }: ChangePasswor
   };
 
   return (
-    <UserMenuPanel ariaLabel="Change password" onClose={onClose}>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }} title="Change password">
       <section className="pt-3 mt-3 border-t border-border first-of-type:pt-0 first-of-type:mt-0 first-of-type:border-t-0">
         <div className="text-[length:var(--font-size-12)] font-bold tracking-[1.2px] uppercase text-text-secondary mb-1.5">
           Change Password
@@ -108,6 +108,6 @@ export default function ChangePasswordModal({ onClose, onSubmit }: ChangePasswor
           </div>
         </form>
       </section>
-    </UserMenuPanel>
+    </Dialog>
   );
 }

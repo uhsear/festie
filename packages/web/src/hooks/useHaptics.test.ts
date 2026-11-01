@@ -1,10 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { VIBRATION_PATTERNS } from '@festie/shared/utils';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useHaptics } from './useHaptics';
 
 describe('useHaptics', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useUIStore.setState({ hapticsEnabled: true });
+  });
+
+  it('plays the shared patterns for error and heavy', () => {
+    const { result } = renderHook(() => useHaptics());
+    result.current.error();
+    expect(navigator.vibrate).toHaveBeenCalledWith(VIBRATION_PATTERNS.error);
+    result.current.heavy();
+    expect(navigator.vibrate).toHaveBeenCalledWith(VIBRATION_PATTERNS.heavy);
+  });
+
+  it('is silent when haptics are off, except heavy (SOS)', () => {
+    useUIStore.setState({ hapticsEnabled: false });
+    const { result } = renderHook(() => useHaptics());
+    result.current.tap();
+    expect(navigator.vibrate).not.toHaveBeenCalled();
+    result.current.heavy();
+    expect(navigator.vibrate).toHaveBeenCalledWith(VIBRATION_PATTERNS.heavy);
   });
 
   it('reports isSupported=true when vibrate API exists', () => {

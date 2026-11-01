@@ -34,7 +34,7 @@ vi.mock('vaul', () => ({
 // Mock useToast
 const mockToast = vi.fn();
 vi.mock('../../lib/toastContext', () => ({
-  useToast: () => ({ toast: mockToast }),
+  useToast: () => ({ toast: mockToast, toastError: vi.fn() }),
 }));
 
 // Mock useDetailPanelData

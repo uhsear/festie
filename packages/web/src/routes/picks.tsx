@@ -28,7 +28,7 @@ import PickConflicts from '../components/features/PickConflicts';
 // picks bundle until the user actually opens the share modal.
 const PlanQRShare = lazy(() => import('../components/features/PlanQRShare'));
 import { useToast } from '../lib/toastContext';
-import { Star, CalendarX, UserPlus, CalendarPlus, Share2 } from 'lucide-react';
+import { CalendarX, UserPlus, CalendarPlus, Share2 } from 'lucide-react';
 
 // Each section carries its priority value, label, the dot accent token, and the
 // matching tint-ring Badge variant — mirroring the mobile Picks tab where every
@@ -246,10 +246,10 @@ function PicksViewInner() {
           <CrewSuggestionStrip />
           <PickBulkActions />
           <EmptyState
-            icon={<Star className="w-9 h-9" aria-hidden="true" />}
-            title={`No picks yet${days[selectedDay]?.label ? ` for ${days[selectedDay].label}` : ''}`}
-            description="Browse artists and tap Must, Want, or Maybe to build your plan."
-            cta={{ label: 'Browse Artists', onClick: () => navigate({ to: '/cards' }) }}
+            illustration="noPicks"
+            title="No picks yet"
+            description="Browse the lineup and tap the sets you want to see."
+            cta={{ label: 'Browse the lineup', onClick: () => navigate({ to: '/cards' }) }}
           />
         </div>
       </RefreshableView>

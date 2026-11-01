@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useMobilePush } from '../../hooks/useMobilePush';
 import { useAuth } from '@festie/shared/hooks';
 import { displayInitials, identityLabel } from '@festie/shared/utils';
@@ -70,6 +71,8 @@ export default function AccountScreen() {
   // useTokens()/makeStyles consumer to the high-contrast light palette.
   const daylight = useUIStore((s) => s.theme) === 'daylight';
   const setTheme = useUIStore((s) => s.setTheme);
+  const hapticsEnabled = useUIStore((s) => s.hapticsEnabled);
+  const setHapticsEnabled = useUIStore((s) => s.setHapticsEnabled);
 
   const [loggingOut, setLoggingOut] = useState(false);
   // Pull-to-refresh: a bump signal re-pulls the History card, and we reload
@@ -276,6 +279,34 @@ export default function AccountScreen() {
               testID="daylight-switch"
             />
           </View>
+          <View style={styles.row}>
+            <View style={styles.rowIcon}>
+              <Ionicons
+                name={hapticsEnabled ? 'phone-portrait' : 'phone-portrait-outline'}
+                size={20}
+                color={hapticsEnabled ? t.colors.accent.aqua : t.colors.text.secondary}
+              />
+            </View>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowTitle}>Vibration</Text>
+              <Text style={styles.rowHint} numberOfLines={1}>
+                Taps, saves and clashes
+              </Text>
+            </View>
+            <Switch
+              value={hapticsEnabled}
+              onValueChange={(v) => {
+                setHapticsEnabled(v);
+                haptics.select();
+              }}
+              trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
+              ios_backgroundColor={t.colors.text.muted}
+              thumbColor={t.colors.text.onAccent}
+              accessibilityLabel="Vibration"
+              accessibilityState={{ checked: hapticsEnabled }}
+              testID="haptics-switch"
+            />
+          </View>
         </View>
         <AccountNotificationsSection push={push} />
         <AccountNotificationPrefsSection pushOn={push.registered} />
@@ -309,6 +340,16 @@ export default function AccountScreen() {
             hint="How we handle your data"
             onPress={() => go('/privacy')}
             accessibilityLabel="Open the privacy policy"
+          />
+          <LinkRow
+            icon="document-text-outline"
+            title="Third-party notices"
+            hint="Open-source licences"
+            onPress={() => {
+              haptics.tap();
+              void WebBrowser.openBrowserAsync('https://festie.us/third-party-notices.txt');
+            }}
+            accessibilityLabel="Open the third-party notices"
           />
         </View>
 

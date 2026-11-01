@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { api } from '@festie/shared/services';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useCrewStore } from '@festie/shared/stores';
 import type { User } from '@festie/shared/types';
 import type { ToastType } from '../../lib/toastContext';
@@ -38,9 +39,8 @@ export function useCrewAdmin(
       toast(`Added ${target.username}`, 'success');
       setAdminOpen(false);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed';
-      if (/already/i.test(msg)) toast('User is already in this crew', 'info');
-      else toast(msg, 'error');
+      if (e instanceof Error && /already/i.test(e.message)) toast('User is already in this crew', 'info');
+      else toast(mapErrorToUserMessage(e, "Couldn't add that user. Try again."), 'error');
     } finally { setAdminAddBusy(false); }
   }, [activeCrewId, forceAddMember, selectCrew, toast]);
 

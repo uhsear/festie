@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Toast from './Toast';
+import { ApiClientError } from '@festie/shared/services/api';
 
 // Test Toast in isolation by mocking useToast
 vi.mock('../../lib/toastContext', async (importOriginal) => {
@@ -12,7 +13,8 @@ vi.mock('../../lib/toastContext', async (importOriginal) => {
   };
 });
 
-import { useToast } from '../../lib/toastContext';
+import { useToast, ToastProvider } from '../../lib/toastContext';
+const realUseToast = (await vi.importActual<typeof import('../../lib/toastContext')>('../../lib/toastContext')).useToast;
 const mockUseToast = vi.mocked(useToast);
 
 function setupMockToast(
@@ -27,6 +29,7 @@ function setupMockToast(
     toasts,
     toast: vi.fn(),
     toastUndo: vi.fn(),
+    toastError: vi.fn(),
     removeToast: vi.fn(),
     pauseToast: vi.fn(),
     resumeToast: vi.fn(),
@@ -83,6 +86,7 @@ describe('Toast', () => {
       toasts: [{ id: 'toast-1', message: 'Bye', type: 'info' }],
       toast: vi.fn(),
       toastUndo: vi.fn(),
+      toastError: vi.fn(),
       removeToast: removeMock,
       pauseToast: vi.fn(),
       resumeToast: vi.fn(),
@@ -143,5 +147,53 @@ describe('Toast', () => {
     const { container } = render(<Toast />);
     expect(container.querySelector('[aria-live]')).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('Saved!');
+  });
+
+  it('hides the close icon from assistive tech and drops the solid-white hover', () => {
+    setupMockToast([{ id: '1', message: 'Hi', type: 'info' }]);
+    render(<Toast />);
+    const close = screen.getByLabelText('Close');
+    expect(close.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(close.className).not.toContain('bg-opacity');
+  });
+
+  it('colours error text with the danger token', () => {
+    setupMockToast([{ id: '1', message: 'Failed', type: 'error' }]);
+    render(<Toast />);
+    expect(screen.getByRole('alert').className).toContain('text-[var(--color-text-danger)]');
+  });
+});
+
+describe('toastError', () => {
+  function Probe({ err }: { err: unknown }) {
+    const { toasts, toastError } = realUseToast();
+    return (
+      <div>
+        <button onClick={() => toastError(err, 'Fallback')}>go</button>
+        {toasts.map((t) => (
+          <p key={t.id}>{t.message}</p>
+        ))}
+      </div>
+    );
+  }
+
+  it('shows the error message for a plain Error', async () => {
+    render(
+      <ToastProvider>
+        <Probe err={new Error('x')} />
+      </ToastProvider>,
+    );
+    await userEvent.setup().click(screen.getByText('go'));
+    expect(screen.getByText('x')).toBeInTheDocument();
+  });
+
+  it('shows the friendly 429 copy', async () => {
+    render(
+      <ToastProvider>
+        <Probe err={new ApiClientError('Too many requests', 429, undefined, 30)} />
+      </ToastProvider>,
+    );
+    await userEvent.setup().click(screen.getByText('go'));
+    expect(screen.getByText('Too many tries. Wait 30 seconds and try again.')).toBeInTheDocument();
   });
 });

@@ -27,7 +27,7 @@ export function useFestivalLoader() {
   const loadProfiles = useFestivalStore((s) => s.loadProfiles);
   const loadCrews = useCrewStore((s) => s.loadCrews);
   const joinByCode = useCrewStore((s) => s.joinByCode);
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const joinAttemptedRef = useRef<string | null>(null);
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
@@ -131,11 +131,10 @@ export function useFestivalLoader() {
       toast('Joined crew', 'success');
       navigate({ to: '/crew' });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Couldn't join crew";
-      if (/already/i.test(msg)) {
+      if (e instanceof Error && /already/i.test(e.message)) {
         toast('You are already in this crew', 'info');
       } else {
-        toast("Couldn't join crew: " + msg, 'error');
+        toastError(e, "Couldn't join the crew. Try again.");
       }
     } finally {
       setJoinBusy(false);

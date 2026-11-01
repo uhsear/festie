@@ -53,7 +53,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
     [getStageColorRaw],
   );
   const { select: selectHaptic } = useHaptics();
-  const { toast } = useToast();
+  const { toastError } = useToast();
   const { ref: stageScrollRef, canScrollLeft, canScrollRight } = useScrollFade<HTMLDivElement>();
   const {
     ref: dayScrollRef,
@@ -82,10 +82,10 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
       try {
         await selectFestival(id);
       } catch (err) {
-        toast(err instanceof Error ? err.message : "Couldn't switch festival. Try again.", 'error');
+        toastError(err, "Couldn't switch festival. Try again.");
       }
     },
-    [selectFestival, toast],
+    [selectFestival, toastError],
   );
 
   const handleStageToggle = useCallback(

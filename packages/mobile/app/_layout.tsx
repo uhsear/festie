@@ -24,6 +24,7 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UIProvider } from '../contexts/UIContext';
 import OfflineBanner from '../components/OfflineBanner';
+import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
 import FirstRunIntro from '../components/FirstRunIntro';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -498,6 +499,7 @@ function AuthGate() {
           </ErrorBoundary>
         </View>
       </TopBannerContext.Provider>
+      {!loading && <Toaster />}
       {loading && (
         <View style={[StyleSheet.absoluteFill, styles.splash, { backgroundColor: colors.bg.primary }]} pointerEvents="auto">
           <ActivityIndicator size="large" color={colors.accent.aqua} />

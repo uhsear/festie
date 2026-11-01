@@ -24,6 +24,7 @@ import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import Button from './Button';
+import EmptyState from './EmptyState';
 import CrewSyncMarker from './CrewSyncMarker';
 import { festivalForCrew } from '../lib/crewFestival';
 
@@ -523,7 +524,12 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
       )}
 
       {polls.length === 0 ? (
-        <Text style={styles.empty}>No polls yet — create one to help your crew decide.</Text>
+        <EmptyState
+          illustration="emptyList"
+          title="No polls yet"
+          message="Ask the crew something."
+          action={{ label: 'Create poll', onPress: () => setShowForm(true) }}
+        />
       ) : (
         polls.map((poll) => {
           const { counts, myVote, total, maxCount } = tally(poll, currentUserId);

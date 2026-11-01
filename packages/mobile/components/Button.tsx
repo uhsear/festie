@@ -1,5 +1,6 @@
 import { ActivityIndicator, Text, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import type { ButtonVariant as SharedButtonVariant } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { inkOnFill } from '../lib/inkOnFill';
 import AppPressable, { type AppPressableProps } from './AppPressable';
@@ -22,7 +23,7 @@ import AppPressable, { type AppPressableProps } from './AppPressable';
  *   - danger    — coralStrong fill + white text
  *   - utility   — bordered input-bg tonal button (e.g. "Use my location")
  */
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'utility';
+export type ButtonVariant = SharedButtonVariant;
 export type ButtonSize = 'md' | 'sm';
 
 interface ButtonProps extends Omit<AppPressableProps, 'style'> {
@@ -184,7 +185,7 @@ const useStyles = makeStyles((t) => ({
     marginRight: t.spacing[2],
   },
   label: {
-    ...typeStyle('label'),
+    ...typeStyle('label', 600, { brandFace: true }),
     textAlign: 'center',
   },
   labelPrimary: {

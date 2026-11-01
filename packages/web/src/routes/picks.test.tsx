@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
@@ -103,7 +103,7 @@ vi.mock('lucide-react', () => ({
 
 const mockToast = vi.fn();
 vi.mock('../lib/toastContext', () => ({
-  useToast: () => ({ toast: mockToast }),
+  useToast: () => ({ toast: mockToast, toastError: vi.fn() }),
 }));
 
 import PicksView from './picks';
@@ -158,10 +158,11 @@ describe('PicksView', () => {
     expect(screen.getByText(/No picks yet/)).toBeInTheDocument();
   });
 
-  it('shows "Browse Artists" CTA in empty state', () => {
+  it('"Browse the lineup" CTA in empty state navigates to the schedule', () => {
     setStoreState();
     render(<PicksView />);
-    expect(screen.getByText('Browse Artists')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Browse the lineup'));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' });
   });
 
   it('renders pick sections when user has picks', () => {

@@ -27,7 +27,7 @@ export function formatExpiry(expiresAt: string | null | undefined, now = Date.no
 }
 
 export default function CrewInviteBar({ inviteCode, crewId, isOwner, expiresAt }: CrewInviteBarProps) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const regenerateInvite = useCrewStore((s) => s.regenerateInvite);
   const [copiedCode, setCopiedCode] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
@@ -73,11 +73,11 @@ export default function CrewInviteBar({ inviteCode, crewId, isOwner, expiresAt }
       toast('Invite code regenerated', 'success');
       setConfirmRegen(false);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't regenerate the invite code. Try again.", 'error');
+      toastError(e, "Couldn't regenerate the invite code. Try again.");
     } finally {
       setRegenBusy(false);
     }
-  }, [crewId, regenBusy, regenerateInvite, toast]);
+  }, [crewId, regenBusy, regenerateInvite, toast, toastError]);
 
   return (
     <div className="py-1.5 px-2 rounded-lg bg-bg-card border border-border flex items-center gap-2">

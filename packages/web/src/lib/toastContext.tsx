@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -14,6 +15,8 @@ interface ToastContextType {
   toasts: Toast[];
   toast: (message: string, type: ToastType, duration?: number) => void;
   toastUndo: (message: string, onUndo: () => void, duration?: number) => void;
+  /** Show a plain-sentence error toast for a thrown value (5 s: a sentence needs longer than 3 s to read). */
+  toastError: (err: unknown, fallback: string) => void;
   removeToast: (id: string) => void;
   pauseToast: (id: string) => void;
   resumeToast: (id: string) => void;
@@ -101,9 +104,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [scheduleRemoval],
   );
 
+  const toastError = useCallback(
+    (err: unknown, fallback: string) => toast(mapErrorToUserMessage(err, fallback), 'error', 5000),
+    [toast],
+  );
+
   const value = useMemo(
-    () => ({ toasts, toast, toastUndo, removeToast, pauseToast, resumeToast }),
-    [toasts, toast, toastUndo, removeToast, pauseToast, resumeToast],
+    () => ({ toasts, toast, toastUndo, toastError, removeToast, pauseToast, resumeToast }),
+    [toasts, toast, toastUndo, toastError, removeToast, pauseToast, resumeToast],
   );
 
   return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;

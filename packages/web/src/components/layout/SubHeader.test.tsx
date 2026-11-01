@@ -53,7 +53,7 @@ vi.mock('../../hooks/useScrollFade', () => ({
   useScrollFade: () => ({ ref: { current: null }, canScrollLeft: false, canScrollRight: false }),
 }));
 vi.mock('../../lib/toastContext', () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
 }));
 
 function getNav() {

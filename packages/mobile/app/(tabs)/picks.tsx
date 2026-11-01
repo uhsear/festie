@@ -948,10 +948,10 @@ export default function PicksScreen() {
   const emptyComponent =
     stats.total === 0 ? (
       <EmptyState
-        icon="star-outline"
+        illustration="noPicks"
         title="No picks yet"
-        message="Browse artists and tap Must, Want, or Maybe — or use Bulk add above."
-        action={{ label: 'Browse lineup', onPress: () => router.navigate('/(tabs)') }}
+        message="Browse the lineup and tap the sets you want to see."
+        action={{ label: 'Browse the lineup', onPress: () => router.navigate('/(tabs)') }}
       />
     ) : effectiveFilter === 'clashes' && !search.trim() ? (
       // Only the genuine "no overlaps" case. If a search is active, the clash

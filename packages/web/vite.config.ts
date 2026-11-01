@@ -75,6 +75,7 @@ export default defineConfig({
           /^\/terms/,
           /^\/security-whitepaper/,
           /\.html$/,
+          /^\/third-party-notices\.txt$/,
           /^\/api/,
           /^\/\.well-known/,
           // Server-owned flows: password reset and crew-join links must hit the

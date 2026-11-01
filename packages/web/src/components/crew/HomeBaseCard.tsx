@@ -22,7 +22,7 @@ interface Props {
 // allowed to change it (crew-features.js:23). We render a compact card that
 // shows the pin inline; owners get inline editing, non-owners see read-only.
 export default function HomeBaseCard({ crewId, currentLocation, currentTime, isOwner, onSaved }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [loc, setLoc] = useState(currentLocation || '');
@@ -49,7 +49,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
         /* ignore */
       }
     },
-    onError: (e) => toast(e instanceof Error ? e.message : "Couldn't update home base. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't update home base. Try again."),
   });
 
   const hasHomeBase = !!currentLocation;

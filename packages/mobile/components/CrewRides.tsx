@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, AccessibilityInfo } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, AccessibilityInfo } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
@@ -8,7 +8,9 @@ import { isPending, QUEUED_WRITE_MESSAGE } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import Button from './Button';
+import EmptyState from './EmptyState';
 import CrewSyncMarker from './CrewSyncMarker';
 
 interface CrewRidesProps {
@@ -34,6 +36,11 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
   const createRideOffer = useCrewStore((s) => s.createRideOffer);
   const deleteRideOffer = useCrewStore((s) => s.deleteRideOffer);
 
+  const { hiddenIds, remove } = useUndoableRemove(
+    (id) => deleteRideOffer(crewId, id),
+    "Couldn't remove the ride. Try again.",
+  );
+
   const [showForm, setShowForm] = useState(false);
   const [driver, setDriver] = useState('');
   const [seats, setSeats] = useState('');
@@ -41,7 +48,6 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
   const [departAt, setDepartAt] = useState('');
   const [note, setNote] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<'driver' | 'seats' | 'from' | 'at' | 'note' | null>(null);
 
   const reset = () => {
@@ -86,24 +92,11 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
   };
 
   const handleDelete = (offer: CrewRideOffer) => {
-    // R20 destructive-confirmation haptic: warn before the irreversible prompt
-    // (parity with packing + expenses).
-    haptics.warning();
-    Alert.alert('Remove ride', `Remove ${offer.driver ? `${offer.driver}'s ride` : 'this ride'} from the board?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          setBusyId(offer.id);
-          deleteRideOffer(crewId, offer.id)
-            .catch(() => {})
-            .finally(() => setBusyId(null));
-        },
-      },
-    ]);
+    haptics.tap();
+    remove(offer.id, offer.driver ? `${offer.driver}'s ride` : 'the ride');
   };
 
+  const visibleOffers = offers.filter((o) => !hiddenIds.has(o.id));
   const canCreate = !!driver.trim() || !!departFrom.trim() || !!departAt.trim() || !!note.trim() || !!seats.trim();
 
   return (
@@ -201,10 +194,15 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
         </TouchableOpacity>
       )}
 
-      {offers.length === 0 ? (
-        <Text style={styles.empty}>No rides yet — post a carpool so your crew can ride together.</Text>
+      {visibleOffers.length === 0 ? (
+        <EmptyState
+          illustration="emptyList"
+          title="No rides yet"
+          message="Offer a ride, or ask for one."
+          action={{ label: 'Offer a ride', onPress: () => setShowForm(true) }}
+        />
       ) : (
-        offers.map((offer, idx) => {
+        visibleOffers.map((offer, idx) => {
           // A queued create has no server id yet, so it cannot be removed.
           const canRemove = !isPending(offer) && (offer.created_by === currentUserId || isOwner);
           const title = offer.driver || 'Ride offer';
@@ -241,7 +239,6 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
               {canRemove ? (
                 <TouchableOpacity
                   onPress={() => handleDelete(offer)}
-                  disabled={busyId === offer.id}
                   style={styles.iconButton}
                   activeOpacity={0.7}
                   accessibilityRole="button"
@@ -317,11 +314,6 @@ const useStyles = makeStyles((t) => ({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  empty: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    paddingHorizontal: t.spacing[2],
   },
   itemRow: {
     flexDirection: 'row',

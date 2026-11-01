@@ -7,7 +7,7 @@ vi.mock('@festie/shared', () => ({
   useAuthStore: (sel: (s: Record<string, unknown>) => unknown) =>
     sel({ uploadAvatar: vi.fn(), removeAvatar: vi.fn(), resendVerification: vi.fn() }),
 }));
-vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }) }));
 
 import UserMenuAccountSection from './UserMenuAccountSection';
 
