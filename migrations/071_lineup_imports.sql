@@ -4,7 +4,7 @@
 -- deletes and re-inserts every set row (keeping ids), which would wipe such a column.
 CREATE TABLE IF NOT EXISTS lineup_imports (
   id                  TEXT PRIMARY KEY,
-  festival_id         TEXT NOT NULL REFERENCES festivals(id) ON DELETE RESTRICT,
+  festival_id         TEXT NOT NULL REFERENCES festivals(id) ON DELETE CASCADE,
   created_by          TEXT,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   counts              JSONB NOT NULL DEFAULT '{}'::jsonb,
