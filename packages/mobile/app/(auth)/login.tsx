@@ -21,6 +21,7 @@ import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
 import { getPendingInvite } from '../../lib/pendingInvite';
+import { setReturnTo } from '../../lib/returnTo';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
@@ -172,7 +173,10 @@ export default function LoginScreen() {
       if (result.reactivated) Alert.alert(ACCOUNT_REACTIVATED_MESSAGE);
       // A guest who arrived through an invite link finishes that join first.
       const invite = getPendingInvite();
-      if (invite) router.replace(`/join/${invite}`);
+      if (invite) {
+        setReturnTo(null);
+        router.replace(`/join/${invite}`);
+      }
     } catch {
       // Error is set in the store.
     }

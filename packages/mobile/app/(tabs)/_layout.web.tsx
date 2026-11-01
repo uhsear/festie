@@ -2,6 +2,8 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontSize, spacing } from '@festie/shared/tokens';
+import { useAuthStore } from '@festie/shared/stores';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { useTokens } from '../../hooks/useTokens';
 
@@ -13,6 +15,7 @@ import { useTokens } from '../../hooks/useTokens';
  */
 export default function TabLayoutWeb() {
   useRealtimeSync();
+  const user = useAuthStore((s) => s.user);
   const { colors } = useTokens();
   const insets = useSafeAreaInsets();
   const tabBarBottomInset = Math.max(insets.bottom, spacing[1]);
@@ -58,7 +61,7 @@ export default function TabLayoutWeb() {
       <Tabs.Screen
         name="account"
         options={{
-          title: 'Account',
+          title: user ? 'Account' : GUEST_PROMPT_COPY.signIn,
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color as string} />,
         }}
       />

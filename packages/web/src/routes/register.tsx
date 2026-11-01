@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from '@tanstack/react-router';
+import { useNavigate, useSearch, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { AUTH_COPY } from '@festie/shared/constants';
@@ -41,6 +41,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 function RegisterPageInner() {
   const navigate = useNavigate();
+  const { next } = useSearch({ from: '/register' });
   const { register, isLoading } = useAuth();
   const { toast } = useToast();
 
@@ -84,7 +85,7 @@ function RegisterPageInner() {
         'success',
         emailVerificationSent ? 6000 : undefined,
       );
-      await navigate({ to: '/cards' });
+      await (next ? navigate({ href: next }) : navigate({ to: '/cards' }));
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the
       // render before the request failed, so it is still null here.

@@ -395,14 +395,14 @@ export default function TimelineScreen() {
   const handlePickChange = useCallback(
     (setId: string, priority: Priority | null) => {
       if (!currentFestival) return;
-      if (!currentProfile) {
-        router.push(user ? `/set/${setId}` : '/(auth)/login');
+      if (!user) {
+        router.push(`/set/${setId}`);
         return;
       }
       // The card shows the Retry chip on failure.
       savePick(currentFestival.id, setId, priority).catch(() => haptics.warning());
     },
-    [currentFestival, currentProfile, user, router, savePick, haptics],
+    [currentFestival, user, router, savePick, haptics],
   );
 
   // One-tap reset for every active schedule filter (search text, my-picks, stage
@@ -491,7 +491,7 @@ export default function TimelineScreen() {
       <TBASection
         sets={timelessSets}
         stages={stages}
-        currentProfile={currentProfile}
+        canPick={!!user}
         currentFestival={currentFestival}
         getMyPick={getMyPick}
         getOtherPicks={getOtherPicks}

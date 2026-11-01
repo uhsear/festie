@@ -30,6 +30,7 @@ import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
 import { getPendingInvite } from '../../lib/pendingInvite';
+import { setReturnTo } from '../../lib/returnTo';
 import { firstInvalidField, validateRegister, type RegisterErrors, type RegisterField } from '../../lib/registerValidation';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -346,7 +347,10 @@ export default function RegisterScreen() {
       }
       // A guest who arrived through an invite link finishes that join first.
       const invite = getPendingInvite();
-      if (invite) router.replace(`/join/${invite}`);
+      if (invite) {
+        setReturnTo(null);
+        router.replace(`/join/${invite}`);
+      }
     } catch (err) {
       // Show a field-specific server error under its field; the rest stays in the store error.
       const msg = mapErrorToUserMessage(err, "Couldn't create your account. Try again.");

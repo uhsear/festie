@@ -1,3 +1,4 @@
+import { safeReturnPath } from '@festie/shared/utils';
 import { RootRoute, Route, Router, lazyRouteComponent, redirect } from '@tanstack/react-router';
 import { Suspense, type ComponentType, type ReactElement } from 'react';
 import AppShell from './components/layout/AppShell';
@@ -155,10 +156,8 @@ const wrapRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/wrap',
   component: WrapView,
-  beforeLoad: async () => {
-    await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
-  },
+  // No guest guard: /wrap renders <GuestTeaser mode="wrap"/> in place for
+  // unauthenticated visitors. The wrap queries wait for a user, so a guest sends no request.
 });
 
 // ── Auth routes ─────────────────────────────────────────────────────
@@ -166,8 +165,13 @@ const loginRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: LoginPage,
-  validateSearch: (s: Record<string, unknown>): { reset?: true } =>
-    s.reset === 1 || s.reset === '1' || s.reset === true ? { reset: true } : {},
+  validateSearch: (s: Record<string, unknown>): { next?: string; reset?: true } => {
+    const next = safeReturnPath(s.next);
+    return {
+      ...(next ? { next } : {}),
+      ...(s.reset === 1 || s.reset === '1' || s.reset === true ? { reset: true as const } : {}),
+    };
+  },
   beforeLoad: redirectIfSignedIn,
 });
 
@@ -175,6 +179,10 @@ const registerRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/register',
   component: RegisterPage,
+  validateSearch: (s: Record<string, unknown>): { next?: string } => {
+    const next = safeReturnPath(s.next);
+    return next ? { next } : {};
+  },
   beforeLoad: redirectIfSignedIn,
 });
 
@@ -211,9 +219,9 @@ const crewPlanRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/crew-plan',
   component: CrewPlanView,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
   },
 });
 
@@ -221,9 +229,9 @@ const accountRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/account',
   component: AccountPage,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
   },
 });
 
@@ -233,9 +241,9 @@ const compareRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/compare',
   component: CompareView,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
   },
 });
 
@@ -263,9 +271,9 @@ const adminRoute = new Route({
   component: AdminPanel,
   validateSearch: (search: Record<string, unknown>): { tab?: string } =>
     typeof search.tab === 'string' ? { tab: search.tab } : {},
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
     if (!isAdmin()) throw redirect({ to: '/' });
   },
 });
