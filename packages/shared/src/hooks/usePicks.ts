@@ -1,6 +1,20 @@
 import { useCallback } from 'react';
-import { useFestivalStore } from '../stores/festivalStore';
+import { useFestivalStore, useFestivalDataStore } from '../stores/festivalStore';
+import type { PickSyncEntry } from '../stores/festivalDataStore';
 import { Priority, SavePickRequest, SaveNoteRequest, SaveReminderRequest } from '../types';
+
+export type { PickSyncEntry } from '../stores/festivalDataStore';
+
+/**
+ * One set's pick write state (pending clock / Retry chip). Selects only this
+ * set's entry, so a card re-renders only when its own pick's state changes.
+ */
+export function usePickSync(setId: string): { sync: PickSyncEntry | undefined; retry: () => Promise<void> } {
+  const sync = useFestivalDataStore((s) => s.pickSync[setId]);
+  const retryPick = useFestivalDataStore((s) => s.retryPick);
+  const retry = useCallback(() => retryPick(setId), [retryPick, setId]);
+  return { sync, retry };
+}
 
 export interface UsePicksReturn {
   savePick: (festivalId: string, setId: string, priority: Priority | null) => Promise<void>;

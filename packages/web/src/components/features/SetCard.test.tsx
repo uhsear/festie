@@ -4,7 +4,9 @@ import userEvent from '@testing-library/user-event';
 import type { FestivalSet } from '@festie/shared/types';
 
 // Mock dependencies
+const pickSyncMock = { sync: undefined as { state: string; priority: string | null } | undefined, retry: vi.fn(() => Promise.resolve()) };
 vi.mock('@festie/shared/hooks', () => ({
+  usePickSync: () => pickSyncMock,
   usePicks: vi.fn(() => ({
     getMyPick: vi.fn(() => null),
     savePick: vi.fn(),
@@ -79,6 +81,7 @@ describe('SetCard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    pickSyncMock.sync = undefined;
     festivalStoreState.allProfiles = [];
     crewStoreState.crewMembers = [];
     vi.mocked(useSetStatus).mockReturnValue({
@@ -421,6 +424,36 @@ describe('SetCard', () => {
       const { artist, stage } = renderPast();
       expect(artist).toHaveClass('text-text-primary');
       expect(stage.style.background).not.toBe('');
+    });
+  });
+
+  describe('pick save state', () => {
+    const mustPicked = () =>
+      vi.mocked(usePicks).mockReturnValue({
+        getMyPick: vi.fn(() => 'must'),
+        savePick: vi.fn(),
+        getMyNote: vi.fn(() => ''),
+      });
+
+    it.each(['saving', 'queued'])('shows the clock while %s', (state) => {
+      mustPicked();
+      pickSyncMock.sync = { state, priority: 'must' };
+      render(<SetCard {...defaultProps} />);
+      expect(screen.getByTestId('pick-pending-clock')).toBeInTheDocument();
+    });
+
+    it('shows no clock when synced', () => {
+      mustPicked();
+      render(<SetCard {...defaultProps} />);
+      expect(screen.queryByTestId('pick-pending-clock')).not.toBeInTheDocument();
+    });
+
+    it('shows Retry for a failed pick and calls retry', async () => {
+      pickSyncMock.sync = { state: 'failed', priority: 'must' };
+      render(<SetCard {...defaultProps} />);
+      expect(screen.getByText('Pick not saved.')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(pickSyncMock.retry).toHaveBeenCalledTimes(1);
     });
   });
 });

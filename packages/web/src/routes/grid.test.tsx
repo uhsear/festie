@@ -9,7 +9,7 @@ vi.mock('@festie/shared/stores', () => ({
 }));
 
 vi.mock('@festie/shared/stores/uiStore', () => ({
-  useUIStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+  useUIStore: Object.assign(vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)), { subscribe: vi.fn() }),
 }));
 
 vi.mock('@festie/shared/hooks', () => ({

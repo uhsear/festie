@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, hasSetStarted, buildHomeUrl, festivalTimeLabel, resolveFestivalTimeZone } from '@festie/shared/utils';
+import { useDebouncedNote } from '@festie/shared/hooks';
 import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -53,7 +54,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     whoTitle,
     savePick,
     saveReminder,
-    saveNote,
     getOtherPicks,
     getStageName,
     getMyPick,
@@ -63,8 +63,22 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   const { select: selectHaptic, success: successHaptic, warning: warningHaptic } = useHaptics();
   const { toast, toastError } = useToast();
 
-  const [personalNote, setPersonalNote] = useState(currentProfile?.notes?.[set.id] || '');
-  const [crewNote, setCrewNote] = useState(currentProfile?.notes?.['crew:' + set.id] || '');
+  const personal = useDebouncedNote({
+    festivalId: currentFestival?.id,
+    profileId: currentProfile?.id,
+    noteKey: set.id,
+    initialValue: currentProfile?.notes?.[set.id] || '',
+    onSaved: successHaptic,
+    onError: warningHaptic,
+  });
+  const crew = useDebouncedNote({
+    festivalId: currentFestival?.id,
+    profileId: currentProfile?.id,
+    noteKey: 'crew:' + set.id,
+    initialValue: currentProfile?.notes?.['crew:' + set.id] || '',
+    onSaved: successHaptic,
+    onError: warningHaptic,
+  });
   const [spotifyPreview, setSpotifyPreview] = useState<{
     embedUrl: string;
     label: string;
@@ -75,8 +89,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   const [priorityBusy, setPriorityBusy] = useState<Priority | null | 'clear'>(null);
   const [reminderBusy, setReminderBusy] = useState<number | null | 'clear'>(null);
 
-  const personalNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const crewNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -117,52 +129,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
       cancelled = true;
     };
   }, [set.id, autoOpenSpotify]);
-
-  // Debounced personal note save
-  const handlePersonalNoteChange = useCallback(
-    (value: string) => {
-      setPersonalNote(value);
-      if (personalNoteTimer.current) clearTimeout(personalNoteTimer.current);
-      personalNoteTimer.current = setTimeout(async () => {
-        if (!currentFestival) return;
-        try {
-          await saveNote(currentFestival.id, set.id, value);
-          successHaptic();
-        } catch (err) {
-          warningHaptic();
-          toast(mapErrorToUserMessage(err, "Couldn't save your note. Try again."), 'error');
-        }
-      }, 500);
-    },
-    [currentFestival, set.id, saveNote, successHaptic, warningHaptic, toast],
-  );
-
-  // Debounced crew note save
-  const handleCrewNoteChange = useCallback(
-    (value: string) => {
-      setCrewNote(value);
-      if (crewNoteTimer.current) clearTimeout(crewNoteTimer.current);
-      crewNoteTimer.current = setTimeout(async () => {
-        if (!currentFestival) return;
-        try {
-          await saveNote(currentFestival.id, 'crew:' + set.id, value);
-          successHaptic();
-        } catch (err) {
-          warningHaptic();
-          toast(mapErrorToUserMessage(err, "Couldn't save your crew note. Try again."), 'error');
-        }
-      }, 500);
-    },
-    [currentFestival, set.id, saveNote, successHaptic, warningHaptic, toast],
-  );
-
-  // Cleanup timers
-  useEffect(() => {
-    return () => {
-      if (personalNoteTimer.current) clearTimeout(personalNoteTimer.current);
-      if (crewNoteTimer.current) clearTimeout(crewNoteTimer.current);
-    };
-  }, []);
 
   // Priority picker handler
   const handlePriorityClick = useCallback(
@@ -368,11 +334,12 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             {currentProfile ? (
               <>
                 <DetailPriorityPicker
+                  setId={set.id}
                   myPick={myPick || null}
                   priorityBusy={priorityBusy}
                   onPriorityClick={handlePriorityClick}
                 />
-                {set.startTime && (
+                {set.startTime && !(currentFestival && hasSetStarted(set, currentFestival, festivalDays)) && (
                   <DetailReminderPicker
                     myReminder={myReminder}
                     reminderBusy={reminderBusy}
@@ -413,10 +380,14 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               <>
                 <hr className="border-t border-border -mx-7" />
                 <DetailNotesSection
-                  personalNote={personalNote}
-                  crewNote={crewNote}
-                  onPersonalChange={handlePersonalNoteChange}
-                  onCrewChange={handleCrewNoteChange}
+                  personalNote={personal.value}
+                  crewNote={crew.value}
+                  onPersonalChange={personal.setValue}
+                  onCrewChange={crew.setValue}
+                  personalStatus={personal.status}
+                  crewStatus={crew.status}
+                  onRetryPersonal={personal.retry}
+                  onRetryCrew={crew.retry}
                 />
               </>
             )}

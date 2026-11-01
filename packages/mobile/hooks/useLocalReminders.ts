@@ -3,9 +3,16 @@ import { AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore, useNotificationPrefsStore } from '@festie/shared/stores';
-import { artistDisplayName, buildReminderPlan, diffReminderPlan, resolveFestivalTimeZone } from '@festie/shared/utils';
+import {
+  artistDisplayName,
+  buildReminderPlan,
+  diffReminderPlan,
+  MAX_LOCAL_REMINDERS,
+  resolveFestivalTimeZone,
+} from '@festie/shared/utils';
 import type { ReminderPlanEntry } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
+import { reportLocalRemindersFestival } from './useMobilePush';
 
 /**
  * M1 — Pre-computed LOCAL set reminders (on-device).
@@ -18,8 +25,8 @@ import type { FestivalSet } from '@festie/shared/types';
  *
  * Local-first delivery: these fire even in airplane mode — the core value at a
  * festival with no signal. FCM (see `useMobilePush`) stays as the at-home
- * backstop and is untouched here; the server-side skip when a device is
- * locally-covered is a separate follow-up.
+ * backstop. After each reconcile this hook reports the covered festival to the
+ * server (`reportLocalRemindersFestival`), which then skips the push for it.
  *
  * Behavior:
  * - Reconciles on every change to picks/reminders/sets/days (and on app
@@ -45,6 +52,7 @@ export function useLocalReminders(): void {
   // device-local). Recomputed on every reconcile, so a schedule change or a
   // device-zone change re-derives the correct fire instants.
   const festivalTimeZone = useFestivalDataStore((s) => resolveFestivalTimeZone(s.currentFestival));
+  const festivalId = useFestivalDataStore((s) => s.currentFestival?.id);
 
   const setRemindersPref = useNotificationPrefsStore((s) => s.prefs.setReminders);
   const loadPrefs = useNotificationPrefsStore((s) => s.loadPrefs);
@@ -126,7 +134,15 @@ export function useLocalReminders(): void {
       // (Re)schedule plan entries. Deterministic identifiers make this
       // idempotent — re-scheduling the same id replaces the prior one, so an
       // edited lead time gets the corrected fire date.
-      await Promise.all(toSchedule.map((entry) => scheduleReminder(entry, b2bSeparator, festivalTimeZone)));
+      const results = await Promise.all(
+        toSchedule.map((entry) => scheduleReminder(entry, b2bSeparator, festivalTimeZone)),
+      );
+      if (cancelled) return;
+
+      // Above the iOS slot cap, or after a failed schedule, some reminders are not on
+      // the phone, so the server push must stay on.
+      const fullyLocal = Object.keys(reminders ?? {}).length <= MAX_LOCAL_REMINDERS && results.every(Boolean);
+      await reportLocalRemindersFestival(permissionRef.current.granted && fullyLocal && festivalId ? festivalId : null);
     }
 
     reconcile();
@@ -142,7 +158,7 @@ export function useLocalReminders(): void {
       sub.remove();
     };
     // permissionRef is a ref (stable); intentionally excluded.
-  }, [reminders, picks, sets, days, b2bSeparator, setRemindersPref, festivalTimeZone, ensurePermission]);
+  }, [reminders, picks, sets, days, b2bSeparator, setRemindersPref, festivalTimeZone, festivalId, ensurePermission]);
 }
 
 /**
@@ -151,7 +167,8 @@ export function useLocalReminders(): void {
  * alarms land in the dedicated set-reminders channel that users can tune
  * independently from crew updates.
  */
-async function scheduleReminder(entry: ReminderPlanEntry, b2bSeparator?: string, timeZone?: string): Promise<void> {
+/** Returns false when scheduling failed (already reported to Sentry). */
+async function scheduleReminder(entry: ReminderPlanEntry, b2bSeparator?: string, timeZone?: string): Promise<boolean> {
   const name = artistDisplayName(entry.set, b2bSeparator) || 'Your set';
   // Format in the festival's time zone so the notification body shows the set's
   // local start time, not the device's TZ (which may differ for traveling users).
@@ -183,8 +200,10 @@ async function scheduleReminder(entry: ReminderPlanEntry, b2bSeparator?: string,
         channelId: 'set-reminders',
       },
     });
+    return true;
   } catch (e) {
     Sentry.captureException(e);
+    return false;
   }
 }
 

@@ -19,6 +19,7 @@ import {
   buildOverlapBreakdown,
 } from '@festie/shared/utils';
 import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
+import { usePickSync } from '@festie/shared/hooks';
 import { duration, easing } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useSetStatus } from '../hooks/useSetStatus';
@@ -81,10 +82,12 @@ interface SetCardMobileProps {
 interface PriorityButtonProps {
   option: (typeof PRIORITY_BUTTONS)[number];
   active: boolean;
+  /** The pick is still saving or queued offline: show a clock instead of the symbol. */
+  pending?: 'saving' | 'queued' | null;
   onPress: (priority: Priority | null) => void;
 }
 
-function PriorityButton({ option, active, onPress }: PriorityButtonProps) {
+function PriorityButton({ option, active, pending = null, onPress }: PriorityButtonProps) {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
@@ -151,10 +154,18 @@ function PriorityButton({ option, active, onPress }: PriorityButtonProps) {
       android_ripple={android_ripple}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={active ? `${option.label} (selected)` : option.label}
+      accessibilityLabel={
+        active
+          ? `${option.label} (selected${pending ? (pending === 'queued' ? ', waiting to sync' : ', saving') : ''})`
+          : option.label
+      }
     >
       {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
-      <Ionicons name={option.icon} size={16} color={active ? t.colors.text.onLightAccent : accent} />
+      <Ionicons
+        name={active && pending ? 'time-outline' : option.icon}
+        size={16}
+        color={active ? t.colors.text.onLightAccent : accent}
+      />
       <Text
         style={[styles.priorityLabel, { color: active ? t.colors.text.onLightAccent : t.colors.text.secondary }]}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -185,6 +196,8 @@ function SetCardMobileImpl({
   const t = useTokens();
   const styles = useStyles();
   const setStatus = useSetStatus(set);
+  const { sync, retry } = usePickSync(set.id);
+  const pickPending = sync?.state === 'saving' || sync?.state === 'queued' ? sync.state : null;
 
   const artistName = artistDisplayName(set);
   const subtitle = artistSubtitle(set);
@@ -258,12 +271,37 @@ function SetCardMobileImpl({
       <View style={styles.footer}>
         <View style={styles.priorityGroup}>
           {PRIORITY_BUTTONS.map((option) => (
-            <PriorityButton key={option.value} option={option} active={myPick === option.value} onPress={handlePick} />
+            <PriorityButton key={option.value} option={option} active={myPick === option.value}
+              pending={pickPending}
+              onPress={handlePick}
+            />
           ))}
         </View>
 
         {friendProfiles && friendProfiles.length > 0 ? <CrewCluster friendProfiles={friendProfiles} /> : null}
       </View>
+
+      {sync?.state === 'failed' ? (
+        <View style={styles.failedRow} accessibilityLiveRegion="polite">
+          <Ionicons name="alert-circle" size={16} color={t.colors.accent.amber} />
+          <Text style={styles.failedText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Pick not saved.
+          </Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={() => {
+              // The card keeps its failed state if the retry fails again.
+              retry().catch(() => {});
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Retry saving your pick for ${artistName}`}
+          >
+            <Text style={styles.retryText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Retry
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Live "now" progress — a thin coral fill that tracks how far through the
           currently-playing set we are (setStatus.progress, 60s tick). Mirrors a
@@ -564,6 +602,28 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.light,
     flexShrink: 1,
+  },
+  failedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    marginTop: t.spacing[1],
+  },
+  failedText: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.amber,
+    flexShrink: 1,
+  },
+  retryButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: t.spacing[2],
+  },
+  retryText: {
+    ...typeStyle('label', 700),
+    color: t.colors.accent.amber,
   },
   priorityPressed: {
     opacity: 0.7,

@@ -1,6 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import type { Festival } from '@festie/shared/types';
 import { formatFestivalDateRange, festivalStatus, type FestivalStatus } from '@festie/shared/utils';
@@ -63,6 +64,12 @@ const useStyles = makeStyles((t) => ({
   retryButton: {
     paddingHorizontal: t.spacing[5],
     marginTop: t.spacing[2],
+  },
+  selectError: {
+    ...typeStyle('label'),
+    color: t.colors.status.error,
+    textAlign: 'center',
+    marginTop: t.spacing[3],
   },
   emptyTitle: {
     // F7: festival name uses typeStyle('title') — Space Grotesk 600 brand face.
@@ -246,7 +253,13 @@ function ListSeparator() {
   return <View style={styles.separator} />;
 }
 
-export default function FestivalList() {
+interface FestivalListProps {
+  /** Called after selectFestival resolves, so a picker overlay can close itself. */
+  onSelected?: () => void;
+}
+
+export default function FestivalList({ onSelected }: FestivalListProps = {}) {
+  const [selectError, setSelectError] = useState(false);
   const styles = useStyles();
   const t = useTokens();
   const festivals = useFestivalDataStore((s) => s.festivals);
@@ -284,11 +297,15 @@ export default function FestivalList() {
       // A light selection tick confirms the tap landed before the (possibly
       // brief network) festival load resolves.
       haptics.select();
-      // Failure feedback comes from the store error state (rendered by the
-      // schedule's error empty-state), so the rejection itself is non-fatal.
-      selectFestival(id).catch(() => {});
+      setSelectError(false);
+      selectFestival(id)
+        .then(() => onSelected?.())
+        .catch((err) => {
+          Sentry.captureException(err);
+          setSelectError(true);
+        });
     },
-    [haptics, selectFestival],
+    [haptics, selectFestival, onSelected],
   );
 
   const renderItem = useCallback(
@@ -359,6 +376,13 @@ export default function FestivalList() {
       contentContainerStyle={styles.listContent}
       ItemSeparatorComponent={ListSeparator}
       refreshControl={refreshControl}
+      ListFooterComponent={
+        selectError ? (
+          <Text style={styles.selectError} accessibilityRole="alert">
+            Couldn&apos;t load that festival. Check your signal and try again.
+          </Text>
+        ) : undefined
+      }
     />
   );
 }

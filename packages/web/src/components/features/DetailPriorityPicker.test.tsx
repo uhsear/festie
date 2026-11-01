@@ -1,14 +1,45 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+const mockUsePickSync = vi.fn();
+vi.mock('@festie/shared/hooks', () => ({ usePickSync: (id: string) => mockUsePickSync(id) }));
+
 import DetailPriorityPicker from './DetailPriorityPicker';
 
 describe('DetailPriorityPicker', () => {
   const defaultProps = {
+    setId: 'set-1',
     myPick: null as null,
     priorityBusy: null as null,
     onPriorityClick: vi.fn().mockResolvedValue(undefined),
   };
+
+  beforeEach(() => {
+    mockUsePickSync.mockReturnValue({ sync: undefined, retry: vi.fn() });
+  });
+
+  it('shows the pending clock for saving and queued', () => {
+    for (const state of ['saving', 'queued']) {
+      mockUsePickSync.mockReturnValue({ sync: { state, priority: 'must' }, retry: vi.fn() });
+      const { container, unmount } = render(<DetailPriorityPicker {...defaultProps} myPick="must" />);
+      expect(container.querySelector('svg.lucide-clock')).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('shows no clock when nothing is pending', () => {
+    const { container } = render(<DetailPriorityPicker {...defaultProps} myPick="must" />);
+    expect(container.querySelector('svg.lucide-clock')).not.toBeInTheDocument();
+  });
+
+  it('shows Retry for a failed pick and calls retry', async () => {
+    const retry = vi.fn();
+    mockUsePickSync.mockReturnValue({ sync: { state: 'failed', priority: 'must' }, retry });
+    render(<DetailPriorityPicker {...defaultProps} />);
+    expect(screen.getByText(/Pick not saved\./)).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
 
   it('renders all four priority options', () => {
     render(<DetailPriorityPicker {...defaultProps} />);

@@ -1,11 +1,50 @@
+import type { NoteSaveStatus } from '@festie/shared/hooks';
+import { QUEUED_WRITE_MESSAGE } from '@festie/shared/utils';
+
 interface Props {
   personalNote: string;
   crewNote: string;
   onPersonalChange: (value: string) => void;
   onCrewChange: (value: string) => void;
+  personalStatus?: NoteSaveStatus;
+  crewStatus?: NoteSaveStatus;
+  onRetryPersonal?: () => void;
+  onRetryCrew?: () => void;
 }
 
-export default function DetailNotesSection({ personalNote, crewNote, onPersonalChange, onCrewChange }: Props) {
+function NoteStatusLine({ status, onRetry }: { status: NoteSaveStatus; onRetry?: () => void }) {
+  const failed = status === 'failed';
+  return (
+    <div role="status" aria-live="polite" className={failed ? 'text-xs mt-1 text-accent-amber' : 'text-xs mt-1 text-text-muted'}>
+      {status === 'saving' && 'Saving…'}
+      {status === 'saved' && 'Saved'}
+      {status === 'queued' && QUEUED_WRITE_MESSAGE}
+      {failed && (
+        <>
+          Not saved.{' '}
+          <button
+            type="button"
+            className="min-h-[44px] px-2 underline cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua"
+            onClick={onRetry}
+          >
+            Retry
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function DetailNotesSection({
+  personalNote,
+  crewNote,
+  onPersonalChange,
+  onCrewChange,
+  personalStatus = 'idle',
+  crewStatus = 'idle',
+  onRetryPersonal,
+  onRetryCrew,
+}: Props) {
   return (
     <div>
       <div className="text-xs font-bold text-text-secondary mb-2.5 uppercase tracking-[1px]" id="notes-label">
@@ -18,6 +57,7 @@ export default function DetailNotesSection({ personalNote, crewNote, onPersonalC
         value={personalNote}
         onChange={(e) => onPersonalChange(e.target.value)}
       />
+      <NoteStatusLine status={personalStatus} onRetry={onRetryPersonal} />
 
       <div className="mt-2">
         <div className="text-xs font-bold text-accent-aqua mb-2.5 uppercase tracking-[1px]" id="crew-notes-label">
@@ -30,6 +70,7 @@ export default function DetailNotesSection({ personalNote, crewNote, onPersonalC
           value={crewNote}
           onChange={(e) => onCrewChange(e.target.value)}
         />
+        <NoteStatusLine status={crewStatus} onRetry={onRetryCrew} />
       </div>
     </div>
   );

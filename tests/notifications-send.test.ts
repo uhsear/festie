@@ -517,6 +517,58 @@ describe('notifications/send: platform routing', () => {
     assert.equal(payload.aps.category, 'CREW_UPDATE');
   });
 
+  describe('local reminder skip', () => {
+    const androidToken = 'a'.repeat(64);
+    function build(localRemindersFestivalId: string | null) {
+      const stores = makeStores({
+        notificationPrefs: { get: mock.fn(async () => ({ setReminders: true, crewUpdates: true })) },
+        deviceTokens: {
+          listByUser: mock.fn(async () => [{ token: androidToken, platform: 'android', localRemindersFestivalId }]),
+          unregister: mock.fn(async () => {}),
+        },
+      });
+      const messaging = { send: mock.fn(async () => 'fcm-id') };
+      const svc = createSendService({
+        stores,
+        config: apnsConfig,
+        log: fakeLog,
+        messaging,
+        retryQueue: { enqueue() {} },
+      });
+      return { svc, messaging };
+    }
+    const reminder = (type: string) => ({
+      userId: 'u1',
+      type,
+      title: 'T',
+      body: 'B',
+      data: { festivalId: 'f1' },
+    });
+
+    it('set_reminder to a device covering that festival sends nothing', async () => {
+      const { svc, messaging } = build('f1');
+      const result = await svc.send(reminder('set_reminder'));
+      assert.equal(result.sent, 0);
+      assert.equal(result.localCovered, 1);
+      assert.equal(messaging.send.mock.calls.length, 0);
+    });
+
+    it('set_reminder to a device covering another festival still pushes', async () => {
+      const { svc, messaging } = build('f2');
+      const result = await svc.send(reminder('set_reminder'));
+      assert.equal(result.sent, 1);
+      assert.equal(result.localCovered, 0);
+      assert.equal(messaging.send.mock.calls.length, 1);
+    });
+
+    it('a non-reminder type is never skipped', async () => {
+      const { svc, messaging } = build('f1');
+      const result = await svc.send(reminder('crew_update'));
+      assert.equal(result.sent, 1);
+      assert.equal(messaging.send.mock.calls.length, 1);
+    });
+  });
+
   it('FCM unconfigured + APNs configured → ios still delivered via APNs', async () => {
     const stores = makeStores({
       deviceTokens: {

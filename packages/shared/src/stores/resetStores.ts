@@ -19,6 +19,9 @@ export function resetAllStores(): void {
     stages: [],
     days: [],
     error: null,
+    pickSync: {},
+    savesInFlight: 0,
+    lastSavedAt: null,
   });
   useFestivalUIStore.setState({
     selectedDay: 0,

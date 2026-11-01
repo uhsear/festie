@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFestivalDataStore, useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
+import { useFestivalDataStore, useFestivalStore, useAuthStore, useCrewStore, useUIStore } from '@festie/shared/stores';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import {
   artistDisplayName,
@@ -28,6 +28,8 @@ import {
   festivalTimeLabel,
   logicalDayIndexAt,
   resolveFestivalTimeZone,
+  searchOtherDays,
+  searchEmptyCopy,
 } from '@festie/shared/utils';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -43,6 +45,8 @@ import NowNextStrip from '../../components/NowNextStrip';
 import PhaseHomeActions from '../../components/PhaseHomeActions';
 import FestivalList from '../../components/FestivalList';
 import FreshnessChip from '../../components/FreshnessChip';
+import SaveStatusChip from '../../components/SaveStatusChip';
+import OtherDayMatches from '../../components/OtherDayMatches';
 import SetCardMobile from '../../components/SetCardMobile';
 import EmptyState from '../../components/EmptyState';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -151,19 +155,10 @@ export default function TimelineScreen() {
   // cutoff, festival zone) rather than the device calendar.
   const nowMs = useNow();
 
-  const previousFestivalIdRef = useRef<string | null>(null);
-
-  const clearSelection = useCallback(() => {
-    previousFestivalIdRef.current = currentFestival?.id ?? currentFestivalId;
-    useFestivalDataStore.setState({
-      currentFestivalId: null,
-      currentFestival: null,
-      currentProfile: null,
-      sets: [],
-      stages: [],
-      days: [],
-    });
-  }, [currentFestival?.id, currentFestivalId]);
+  // The swap button opens the festival picker over the loaded lineup instead of
+  // clearing it, so a failed or cancelled switch (or no signal) loses nothing.
+  const [pickingFestival, setPickingFestival] = useState(false);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   useEffect(() => {
     if (festivals.length === 0) {
@@ -171,11 +166,7 @@ export default function TimelineScreen() {
     }
   }, [festivals.length, loadFestivals]);
 
-  // Auto-restore the persisted festival on launch. festivalDataStore persists
-  // only currentFestivalId (not the festival data), so after a cold start the
-  // id is set but currentFestival is null — reload it so the app reopens to the
-  // festival the user was on instead of dropping them on the picker. Guarded on
-  // !isLoading so we don't re-enter while a selection is already in flight.
+  // The persisted festival data is restored; this reloads it when only the id survived.
   useEffect(() => {
     if (currentFestivalId && !currentFestival && !isLoading) {
       selectFestival(currentFestivalId).catch(() => {});
@@ -269,16 +260,14 @@ export default function TimelineScreen() {
           setShowFilters(false);
           return true;
         }
-        if (!currentFestival && previousFestivalIdRef.current) {
-          const festivalId = previousFestivalIdRef.current;
-          previousFestivalIdRef.current = null;
-          selectFestival(festivalId).catch(() => {});
+        if (pickingFestival) {
+          setPickingFestival(false);
           return true;
         }
         return false;
       });
       return () => subscription.remove();
-    }, [currentFestival, handleSearch, selectFestival, showFilters, showSearch]),
+    }, [handleSearch, pickingFestival, showFilters, showSearch]),
   );
 
   const days = useMemo(() => getDays(), [getDays]);
@@ -314,6 +303,32 @@ export default function TimelineScreen() {
     });
     // getFilteredSets is recreated when day/stage/search/sets change.
   }, [getFilteredSets, currentFestival?.b2bSeparator, onlyMine, getMyPick]);
+
+  // Search spans every day: matches on days other than the selected one, plus the
+  // first other day that has any sets (the empty states' "Show another day").
+  const otherDayGroups = useMemo(
+    () => (search.trim() ? searchOtherDays(allSets, search, selectedDay, stages) : []),
+    [allSets, search, selectedDay, stages],
+  );
+  const otherDayWithSets = useMemo(
+    () => days.find((d) => d.index !== selectedDay && allSets.some((s) => s.dayIndex === d.index))?.index,
+    [days, allSets, selectedDay],
+  );
+  const selectedDayInfo = days.find((d) => d.index === selectedDay);
+  const selectedDayLabel = selectedDayInfo?.label ?? selectedDayInfo?.date;
+  const otherDayMatches = (
+    <OtherDayMatches
+      groups={otherDayGroups}
+      days={days}
+      getStageName={getStageName}
+      b2bSeparator={currentFestival?.b2bSeparator}
+      onSelectDay={setSelectedDay}
+    />
+  );
+  const showAnotherDayAction =
+    otherDayWithSets !== undefined
+      ? { label: 'Show another day', onPress: () => setSelectedDay(otherDayWithSets) }
+      : undefined;
 
   // Conflict set IDs — same util the web Cards view uses.
   const conflictIds = useMemo(() => getConflictingSetIds(filteredSets, getMyPick), [filteredSets, getMyPick]);
@@ -384,9 +399,10 @@ export default function TimelineScreen() {
         router.push(user ? `/set/${setId}` : '/(auth)/login');
         return;
       }
-      savePick(currentFestival.id, setId, priority).catch(() => {});
+      // The card shows the Retry chip on failure.
+      savePick(currentFestival.id, setId, priority).catch(() => haptics.warning());
     },
-    [currentFestival, currentProfile, user, router, savePick],
+    [currentFestival, currentProfile, user, router, savePick, haptics],
   );
 
   // One-tap reset for every active schedule filter (search text, my-picks, stage
@@ -514,6 +530,39 @@ export default function TimelineScreen() {
     />
   );
 
+  // Search found nothing on the selected day. A selected-day match hidden by the
+  // stage or my-picks filter says so; a match on another day lists those days;
+  // otherwise the artist is not in the lineup.
+  const searchCopy = searchEmptyCopy({
+    sets: allSets,
+    query: search,
+    selectedDay,
+    stages,
+    otherDayCount: otherDayGroups.length,
+    dayLabel: selectedDayLabel,
+  });
+  const searchEmptyState = (
+    <>
+      <EmptyState
+        icon="search"
+        title={searchCopy.title}
+        message={searchCopy.description}
+        action={
+          searchCopy.hiddenByFilters
+            ? {
+                label: 'Clear filters',
+                onPress: () => {
+                  setOnlyMine(false);
+                  setActiveStages([]);
+                },
+              }
+            : { label: 'Clear search', onPress: () => handleSearch('') }
+        }
+      />
+      {otherDayMatches}
+    </>
+  );
+
   // When "my picks only" filters the timed timeline (and the TBA list) down to
   // nothing, the day still HAS sets — they're just unpicked. Reuse the same
   // onlyMine-aware branch as cardsEmpty ("No picks… / Show all sets") instead of
@@ -527,29 +576,19 @@ export default function TimelineScreen() {
         message="Tap a priority on any set to add it here, or browse the full lineup."
         action={{ label: 'Show all sets', onPress: () => setOnlyMine(false) }}
       />
+    ) : search.length > 0 ? (
+      searchEmptyState
     ) : (
       <EmptyState
-        icon={search.length > 0 ? 'search' : 'musical-notes'}
-        title={
-          search.length > 0
-            ? 'No artists match your search'
-            : timelessSets.length > 0
-              ? 'Set times not announced yet'
-              : 'No sets for this day'
-        }
+        icon="musical-notes"
+        title={timelessSets.length > 0 ? 'Set times not announced yet' : 'No sets for this day'}
         message={
-          search.length > 0
-            ? 'Try a different spelling or clear the search to see the full lineup.'
-            : timelessSets.length > 0
-              ? 'This day’s set times haven’t been posted. Browse the full lineup in the TBA list below, or switch to Cards.'
-              : 'Pick another day from the day selector to browse the schedule.'
+          timelessSets.length > 0
+            ? 'This day’s set times haven’t been posted. Browse the full lineup in the TBA list below, or switch to Cards.'
+            : 'Pick another day from the day selector to browse the schedule.'
         }
         action={
-          search.length > 0
-            ? { label: 'Clear search', onPress: () => handleSearch('') }
-            : timelessSets.length > 0
-              ? { label: 'Show Cards', onPress: () => setViewMode('cards') }
-              : { label: 'Switch festival', onPress: clearSelection }
+          timelessSets.length > 0 ? { label: 'Show Cards', onPress: () => setViewMode('cards') } : showAnotherDayAction
         }
       />
     );
@@ -569,20 +608,14 @@ export default function TimelineScreen() {
       message="Tap a priority on any set to add it here, or browse the full lineup."
       action={{ label: 'Show all sets', onPress: () => setOnlyMine(false) }}
     />
+  ) : search.length > 0 ? (
+    searchEmptyState
   ) : (
     <EmptyState
-      icon={search.length > 0 ? 'search' : 'musical-notes'}
-      title={search.length > 0 ? 'No artists match your search' : 'No sets for this day'}
-      message={
-        search.length > 0
-          ? 'Try a different spelling or clear the search to see the full lineup.'
-          : 'Pick another day from the day selector to browse the schedule.'
-      }
-      action={
-        search.length > 0
-          ? { label: 'Clear search', onPress: () => handleSearch('') }
-          : { label: 'Switch festival', onPress: clearSelection }
-      }
+      icon="musical-notes"
+      title="No sets for this day"
+      message="Pick another day from the day selector to browse the schedule."
+      action={showAnotherDayAction}
     />
   );
 
@@ -590,14 +623,35 @@ export default function TimelineScreen() {
   // loading (skeleton), error, and empty states (F21); the screen no longer
   // pre-empts them with a separate spinner/EmptyState, which produced two
   // different-looking treatments for the identical condition.
-  if (!currentFestival) {
+  if (!currentFestival || pickingFestival) {
     return (
       // ScreenHeader owns the top safe-area inset (insets.top + spacing[4]) — the
       // native Tabs nav header is hidden (see (tabs)/_layout.tsx), so this is the
       // single top of the screen.
       <View style={styles.container}>
-        <ScreenHeader title="Select a Festival" icon="musical-notes" />
-        <FestivalList />
+        <ScreenHeader
+          title="Select a Festival"
+          icon="musical-notes"
+          right={
+            pickingFestival && currentFestival ? (
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => setPickingFestival(false)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Back to ${currentFestival.name}`}
+              >
+                <Ionicons name="close" size={20} color={t.colors.text.secondary} />
+              </TouchableOpacity>
+            ) : undefined
+          }
+        />
+        {pickingFestival && offlineMode ? (
+          <Text style={styles.pickerOffline} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            You&apos;re offline. Switching festivals needs signal. Your current lineup stays saved.
+          </Text>
+        ) : null}
+        <FestivalList onSelected={() => setPickingFestival(false)} />
       </View>
     );
   }
@@ -635,6 +689,7 @@ export default function TimelineScreen() {
           _festivalCachedAt; renders nothing until the schedule is cached once. */}
       <View style={[styles.freshnessRow, { paddingHorizontal: hPad }]}>
         <FreshnessChip surface="schedule" />
+        {currentProfile ? <SaveStatusChip /> : null}
         {/* Cards and fallback views support pull-to-refresh. Timeline owns both
             scroll axes, so narrow phones need this compact manual action after
             the header sheds secondary icons to preserve the festival title. */}
@@ -859,13 +914,16 @@ export default function TimelineScreen() {
         </TouchableOpacity>
       ) : null}
       <TouchableOpacity
-        style={styles.headerIconButton}
-        onPress={clearSelection}
+        style={[styles.headerIconButton, styles.headerSwitchButton]}
+        onPress={() => setPickingFestival(true)}
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel="Switch festival"
       >
         <Ionicons name="swap-horizontal" size={20} color={t.colors.text.secondary} />
+        <Text style={styles.headerSwitchText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          Switch
+        </Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.headerIconButton}
@@ -992,6 +1050,7 @@ export default function TimelineScreen() {
             // F2 — a failed festival load surfaces the error + retry rather than a
             // misleading "No sets" empty state (see cardsEmpty).
             ListEmptyComponent={cardsEmpty}
+            ListFooterComponent={rows.length > 0 ? otherDayMatches : undefined}
             // Perf for big lineups: cap the initial + per-batch render window so a
             // 200-set day paints fast and scrolls without a long first frame.
             initialNumToRender={8}
@@ -1139,6 +1198,21 @@ const useStyles = makeStyles((t) => ({
     // WCAG 2.5.5 / 2.5.8 minimum 44px touch target.
     minWidth: 44,
     minHeight: 44,
+  },
+  headerSwitchButton: {
+    flexDirection: 'row',
+    gap: t.spacing[1],
+    paddingHorizontal: t.spacing[1],
+  },
+  headerSwitchText: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
+  },
+  pickerOffline: {
+    ...typeStyle('label'),
+    color: t.colors.accent.amber,
+    paddingHorizontal: t.spacing[4],
+    paddingBottom: t.spacing[2],
   },
   toggleButton: {
     alignItems: 'center',
