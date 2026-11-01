@@ -138,6 +138,7 @@ export const DEFAULTS = {
   SENTRY_DSN: '',
   SENTRY_TRACES_RATE: 0.05,
   SENTRY_PROFILES_RATE: 0,
+  FESTIE_ENV_LABEL: '',
   APP_VERSION: '', // loaded from package.json at boot
 } as const;
 
@@ -327,6 +328,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   SENTRY_DSN: string;
   SENTRY_TRACES_RATE: number;
   SENTRY_PROFILES_RATE: number;
+  FESTIE_ENV_LABEL: string;
   APP_VERSION: string;
   SESSION_SECRET: string;
 } {
@@ -734,6 +736,9 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     SENTRY_PROFILES_RATE: Number(
       overrides.SENTRY_PROFILES_RATE ?? process.env.SENTRY_PROFILES_RATE ?? DEFAULTS.SENTRY_PROFILES_RATE,
     ),
+    FESTIE_ENV_LABEL: String(
+      overrides.FESTIE_ENV_LABEL ?? process.env.FESTIE_ENV_LABEL ?? DEFAULTS.FESTIE_ENV_LABEL,
+    ).trim().toUpperCase().slice(0, 20),
     APP_VERSION: overrides.APP_VERSION || process.env.APP_VERSION || APP_VERSION || DEFAULTS.APP_VERSION,
 
     // SESSION_SECRET: reserved for future HMAC-signed session tokens.

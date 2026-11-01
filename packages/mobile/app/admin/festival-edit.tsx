@@ -1,9 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api, describeRemovals, removalFromError, withReauth, type RemovalSummary } from '@festie/shared/services';
+import {
+  api,
+  checklistFromError,
+  describeRemovals,
+  fetchAdminFestival,
+  fetchDeleteImpact,
+  issuesFromError,
+  publishFestival,
+  removalFromError,
+  withReauth,
+  type RemovalSummary,
+} from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
@@ -18,6 +29,7 @@ import {
   TimeField,
   isValidDate,
   isValidTime,
+  ShiftTimesDialog,
   type SelectOption,
 } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
@@ -29,7 +41,9 @@ import {
   removeDay as removeDayReducer,
   setDayField as setDayFieldReducer,
   toggleDay as toggleDayReducer,
-  addSet as addSetReducer,
+  prependSet as prependSetReducer,
+  sortFormSets,
+  shiftDaySets,
   removeSet as removeSetReducer,
   setSetField as setSetFieldReducer,
   setSetArtistNames as setSetArtistNamesReducer,
@@ -42,9 +56,21 @@ import {
 import {
   amenityCount,
   artistNamesOf,
+  countFestivalChanges,
+  describeDeleteImpact,
+  describeShiftResult,
+  festivalStatusLine,
+  filterLineup,
+  groupIssues,
+  isPublishBlocked,
+  issueKey,
   joinArtistNames,
   listTimeZones,
+  pickShiftTargets,
   startsAfterMidnight,
+  type ChecklistItem,
+  type DeleteImpact,
+  type FestivalIssue,
 } from '@festie/shared/utils';
 import type { Artist, FestivalMapConfig } from '@festie/shared/types';
 
@@ -59,8 +85,8 @@ import type { Artist, FestivalMapConfig } from '@festie/shared/types';
  * is a token-styled primitive from components/admin (ModalSelect / DateField /
  * TimeField / HexColorField), so the whole surface stays OTA-able.
  *
- *   ?id=<festivalId> → edit (loads via GET /festivals/:id)
- *   no id            → create
+ *   ?id=<festivalId> → edit (loads via GET /admin/festivals/:id, drafts included)
+ *   no id            → create; on success it opens the new draft's editor (?created=1)
  *
  * Save: POST /admin/festivals (create) or PUT /admin/festivals/:id (edit) with
  *       { name, location, timeZone, stages[], days[].sets[] }. The festival's
@@ -73,7 +99,8 @@ import type { Artist, FestivalMapConfig } from '@festie/shared/types';
  * Delete: DELETE /admin/festivals/:id — gated behind ConfirmDialog and a password re-check.
  * Backfill: POST /admin/festivals/:id/backfill-spotify — gated behind ConfirmDialog.
  *
- * Back-navigates to '/admin' on save / cancel / delete.
+ * Edit saves stay on the screen and reload. Back-navigates to '/admin' on cancel / delete.
+ * Publish: POST /admin/festivals/:id/publish once the server checklist has no open item.
  */
 
 const DEFAULT_STAGE_COLOR = '#6a6a88';
@@ -82,10 +109,13 @@ const MAX_ARTISTS_PER_SET = 4;
 // Local editable shapes (StageRow / SetRow / DayRow / FormState) live in
 // ./festivalEditState alongside the pure tree reducers they operate on.
 
-// Detail response from GET /festivals/:id (depth=2). Loosely typed — we only
+// Detail response from GET /admin/festivals/:id (depth=2). Loosely typed — we only
 // read the fields the editor hydrates.
 interface FestivalDetail {
   id: string;
+  publishedAt?: string | null;
+  updatedByUsername?: string | null;
+  checklist?: ChecklistItem[];
   name?: string;
   location?: string;
   timeZone?: string | null;
@@ -120,6 +150,14 @@ const EMPTY_FORM: FormState = {
   days: [],
   mapConfig: null,
 };
+
+const NO_ISSUES: FestivalIssue[] = [];
+
+const CHECK_PREFIX = { done: 'Done', todo: 'To do', warn: 'Warning' } as const;
+
+function plural(n: number): string {
+  return `${n} ${n === 1 ? 'change' : 'changes'}`;
+}
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -162,7 +200,7 @@ export default function FestivalEditScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isAdmin = useAuthStore((s) => s.isAdmin);
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, created } = useLocalSearchParams<{ id?: string; created?: string }>();
   const editingId = typeof id === 'string' && id.length > 0 ? id : null;
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -190,18 +228,50 @@ export default function FestivalEditScreen() {
     summary: RemovalSummary;
     payload: Record<string, unknown>;
   } | null>(null);
+  // What the server last returned: the loaded form (for change counts), the status line and the checklist.
+  const [original, setOriginal] = useState<FormState | null>(null);
+  const [meta, setMeta] = useState<{ publishedAt: string | null; updatedAt?: string; updatedByUsername: string | null } | null>(
+    null,
+  );
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [issues, setIssues] = useState<FestivalIssue[]>(NO_ISSUES);
+  const [banner, setBanner] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const [shiftDayId, setShiftDayId] = useState<string | null>(null);
+  const [impact, setImpact] = useState<DeleteImpact | null>(null);
+  const [confirmPublish, setConfirmPublish] = useState(false);
   const { askPassword: askReauthPassword, reauthDialog } = useReauthPrompt();
   const updateForm = useCallback((updater: (f: FormState) => FormState) => {
     setTouched(true);
     setForm(updater);
   }, []);
 
+  const changes = useMemo(() => countFestivalChanges(original, form), [original, form]);
+  const issuesByKey = useMemo(() => groupIssues(issues), [issues]);
+
+  // Messages the server attached to one field of the stage, set or festival at `key`.
+  const fieldIssues = (key: string, fields: string[]): string | null => {
+    const messages = issues
+      .filter((i) => issueKey(i.target) === key && i.target.field && fields.includes(i.target.field))
+      .map((i) => i.message);
+    return messages.length ? messages.join(' ') : null;
+  };
+  const stageKeys = (stage: StageRow, index: number) => [`stage:${stage.id}`, `stage#${index}`];
+  const setKeys = (s: SetRow, dayIndex: number, setIndex: number) => [`set:${s.id}`, `set#${dayIndex}#${setIndex}`];
+  const fieldIssuesOf = (keys: string[], fields: string[]): string | null => {
+    for (const k of keys) {
+      const found = fieldIssues(k, fields);
+      if (found) return found;
+    }
+    return null;
+  };
+
   // ── Load (edit only) ──────────────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!editingId) return;
     setLoadError(false);
     try {
-      const full = await api.get<FestivalDetail>(`/festivals/${editingId}`);
+      const full = (await fetchAdminFestival(editingId)) as unknown as FestivalDetail;
       const stages: StageRow[] = (full.stages || []).map((s) => ({
         id: s.id || uid('stage'),
         name: s.name || '',
@@ -223,7 +293,7 @@ export default function FestivalEditScreen() {
           artists: (s.artists ?? []).flatMap((a) => (a.name ? [{ ...a, name: a.name }] : [])),
         })),
       }));
-      setForm({
+      const loaded = sortFormSets({
         name: full.name || '',
         location: full.location || '',
         timeZone: full.timeZone || '',
@@ -232,11 +302,20 @@ export default function FestivalEditScreen() {
         days,
         mapConfig: full.mapConfig ?? null,
       });
+      setForm(loaded);
+      setOriginal(loaded);
+      setMeta({
+        publishedAt: full.publishedAt ?? null,
+        updatedAt: full.updatedAt,
+        updatedByUsername: full.updatedByUsername ?? null,
+      });
+      setChecklist(full.checklist ?? []);
+      setIssues(NO_ISSUES);
       setUpdatedAt(full.updatedAt ?? null);
       setArtistDrafts({});
       artistOrigins.current = {};
-      // Auto-expand all days so artists are visible immediately (web parity).
-      setExpandedDays(new Set(days.map((d) => d.id)));
+      // Long lineups scroll forever: open only a single day, the admin opens the rest.
+      setExpandedDays(new Set(days.length === 1 ? [days[0]!.id] : []));
     } catch {
       setLoadError(true);
     }
@@ -316,7 +395,7 @@ export default function FestivalEditScreen() {
   // ── Set editing (nested under each day) ───────────────────────────────────
   const addSet = (dayId: string) =>
     updateForm((f) =>
-      addSetReducer(f, dayId, {
+      prependSetReducer(f, dayId, {
         id: uid('set'),
         artist: '',
         stageId: f.stages[0]?.id || '',
@@ -339,7 +418,7 @@ export default function FestivalEditScreen() {
     updateForm((f) => setSetArtistNamesReducer(f, dayId, s.id, artistOrigins.current[key], names));
   };
 
-  const artistInputs = (dayId: string, s: SetRow) => {
+  const artistInputs = (dayId: string, s: SetRow, artistError: string | null) => {
     const names = artistDrafts[`${dayId}:${s.id}`] ?? artistNamesOf(s);
     return (
       <>
@@ -351,6 +430,7 @@ export default function FestivalEditScreen() {
               onChangeText={(v) => editArtistNames(dayId, s, names.map((n, j) => (j === i ? v : n)))}
               placeholder="Artist name"
               autoCapitalize="words"
+              error={i === 0 ? artistError : null}
             />
             {i > 0 ? (
               <TouchableOpacity
@@ -485,7 +565,9 @@ export default function FestivalEditScreen() {
   // Posts the built payload. `confirmRemovals` is set only after the admin accepted
   // the removal summary, and that path needs a recent password check.
   const send = async (payload: Record<string, unknown>, confirmRemovals: boolean) => {
+    const savedChanges = changes.total;
     setSaving(true);
+    setIssues(NO_ISSUES);
     try {
       if (editingId) {
         const body = confirmRemovals ? { ...payload, confirmRemovals: true } : payload;
@@ -496,22 +578,83 @@ export default function FestivalEditScreen() {
         const done = confirmRemovals ? await withReauth(run, askReauthPassword) : await run();
         if (!done) return; // password prompt cancelled
       } else {
-        await api.post<void>('/admin/festivals', payload);
+        const createdFestival = await api.post<{ id: string }>('/admin/festivals', payload);
+        setTouched(false);
+        router.replace({ pathname: '/admin/festival-edit', params: { id: createdFestival.id, created: '1' } });
+        return;
       }
-      goBack();
+      setTouched(false);
+      await load();
+      setBanner(`Saved ${plural(savedChanges)}.`);
     } catch (err: unknown) {
       const summary = removalFromError(err);
       if (summary) {
         setPendingRemoval({ summary, payload });
       } else {
-        setFormError(err instanceof Error ? err.message : "Couldn't save festival. Try again.");
+        const found = issuesFromError(err);
+        setIssues(found);
+        if (found.length) {
+          setExpandedDays((prev) => {
+            const next = new Set(prev);
+            for (const issue of found) {
+              const day = issue.target.dayIndex === undefined ? undefined : form.days[issue.target.dayIndex];
+              if (day) next.add(day.id);
+            }
+            return next;
+          });
+          setFormError('Fix the highlighted problems, then save again.');
+        } else {
+          setFormError(err instanceof Error ? err.message : "Couldn't save festival. Try again.");
+        }
       }
     } finally {
       setSaving(false);
     }
   };
 
+  // ── Publish ───────────────────────────────────────────────────────────────
+  const doPublish = async () => {
+    if (!editingId) return;
+    setConfirmPublish(false);
+    setBusy(true);
+    setFormError(null);
+    try {
+      await publishFestival(editingId);
+      await load();
+      setBanner(`${form.name} is live.`);
+    } catch (err: unknown) {
+      const blocked = checklistFromError(err);
+      if (blocked) setChecklist(blocked);
+      setFormError(err instanceof Error ? err.message : "Couldn't publish festival. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Shift times ───────────────────────────────────────────────────────────
+  const doShift = (dayId: string, opts: { stageId: string; fromTime: string; minutes: number }) => {
+    setShiftDayId(null);
+    const day = form.days.find((d) => d.id === dayId);
+    if (!day) return;
+    const ids = pickShiftTargets(day.sets, { stageId: opts.stageId || undefined, fromTime: opts.fromTime || undefined });
+    if (ids.length === 0) {
+      setBanner('No sets with a time match that stage and start.');
+      return;
+    }
+    const shifted = shiftDaySets(form, dayId, ids, opts.minutes);
+    updateForm(() => shifted.form);
+    setBanner(describeShiftResult(shifted.result, opts.minutes));
+  };
+
   // ── Delete ────────────────────────────────────────────────────────────────
+  const openDelete = () => {
+    if (!editingId) return;
+    setImpact(null);
+    setConfirm('delete');
+    // No counts is fine: the dialog falls back to copy that does not need them.
+    fetchDeleteImpact(editingId).then(setImpact, () => setImpact(null));
+  };
+
   const doDelete = async () => {
     if (!editingId) return;
     setBusy(true);
@@ -548,6 +691,26 @@ export default function FestivalEditScreen() {
   };
 
   const headerTitle = editingId ? 'Edit festival' : 'Create festival';
+  const status = festivalStatusLine(meta ?? {});
+  const bannerText = banner ?? (created === '1' ? 'Festival created as a draft. Only admins can see it.' : null);
+  const dirty = touched || changes.total > 0;
+  const canPublish = !busy && !dirty && !isPublishBlocked(checklist);
+  const publishHint = dirty ? 'Save your changes first.' : isPublishBlocked(checklist) ? 'Finish the open items first.' : null;
+  const warnings = checklist.filter((c) => c.status === 'warn').map((c) => c.label);
+  const publishMessage =
+    "Everyone can find this festival and join it. You can't turn it back into a draft." +
+    (warnings.length ? ` Warnings: ${warnings.join(' ')}` : '');
+  const saveLabel = !editingId
+    ? 'Create festival'
+    : changes.total === 0
+      ? 'No changes'
+      : `Save ${plural(changes.total)}`;
+
+  // Tapping a line in the "Fix these" card opens the day it points at.
+  const openIssueDay = (issue: FestivalIssue) => {
+    const day = issue.target.dayIndex === undefined ? undefined : form.days[issue.target.dayIndex];
+    if (day) setExpandedDays((prev) => new Set(prev).add(day.id));
+  };
 
   // Non-admins never reach the editor (AuthGate also blocks the route).
   if (!isAdmin) {
@@ -601,6 +764,91 @@ export default function FestivalEditScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {bannerText ? (
+            <Text style={styles.banner} accessibilityLiveRegion="polite">
+              {bannerText}
+            </Text>
+          ) : null}
+
+          {/* Status + publish checklist (edit only) */}
+          {editingId && meta ? (
+            <View style={styles.card}>
+              <View style={styles.statusRow}>
+                <View style={[styles.chip, status.state === 'draft' ? styles.chipDraft : styles.chipLive]}>
+                  <Text style={[styles.chipText, status.state === 'draft' ? styles.chipTextDraft : styles.chipTextLive]}>
+                    {status.chip}
+                  </Text>
+                </View>
+                {status.edited ? <Text style={styles.statusEdited}>{status.edited}</Text> : null}
+              </View>
+              {status.state === 'draft' ? (
+                <>
+                  <Text style={styles.emptyHint}>This festival is a draft. Only admins can see it.</Text>
+                  <View>
+                    <Text style={styles.checklistTitle} accessibilityRole="header">
+                      Before you publish
+                    </Text>
+                    <Text style={styles.emptyHint}>Based on the last save.</Text>
+                  </View>
+                  {checklist.map((item) => (
+                    <View key={item.key} style={styles.checkRow}>
+                      <Ionicons
+                        name={item.status === 'done' ? 'checkmark-circle' : item.status === 'todo' ? 'close-circle' : 'warning'}
+                        size={t.iconSize.md}
+                        color={
+                          item.status === 'done'
+                            ? t.colors.accent.aqua
+                            : item.status === 'todo'
+                              ? t.colors.accent.coral
+                              : t.colors.accent.amber
+                        }
+                      />
+                      <Text style={styles.checkText} accessibilityLabel={`${CHECK_PREFIX[item.status]}: ${item.label}`}>
+                        {item.label}
+                      </Text>
+                      {item.key === 'sets' && item.status !== 'done' ? (
+                        <TouchableOpacity
+                          onPress={() => router.push({ pathname: '/admin/lineup-import', params: { id: editingId } })}
+                          style={styles.locationBtn}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel="Import lineup"
+                        >
+                          <Text style={styles.locationBtnText}>Import lineup</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {item.key === 'pins' && item.status === 'warn' ? (
+                        <TouchableOpacity
+                          onPress={goToMapEditor}
+                          style={styles.locationBtn}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit map"
+                        >
+                          <Text style={styles.locationBtnText}>Edit map</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ))}
+                  <TouchableOpacity
+                    onPress={() => setConfirmPublish(true)}
+                    style={[styles.actionBtn, styles.saveBtn, !canPublish && styles.btnDisabled]}
+                    activeOpacity={0.7}
+                    disabled={!canPublish}
+                    accessibilityRole="button"
+                    accessibilityLabel="Publish festival"
+                    accessibilityState={{ disabled: !canPublish }}
+                  >
+                    <Text style={styles.saveBtnText} maxFontSizeMultiplier={1.4}>
+                      Publish festival
+                    </Text>
+                  </TouchableOpacity>
+                  {publishHint ? <Text style={styles.emptyHint}>{publishHint}</Text> : null}
+                </>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Festival fields */}
           <SectionLabel>Festival</SectionLabel>
           <View style={styles.card}>
@@ -610,6 +858,7 @@ export default function FestivalEditScreen() {
               onChangeText={(v) => updateForm((f) => ({ ...f, name: v }))}
               placeholder="Festival name"
               autoCapitalize="words"
+              error={fieldIssues('festival:name', ['name'])}
             />
             <LabeledTextInput
               label="Location"
@@ -644,8 +893,11 @@ export default function FestivalEditScreen() {
             {form.stages.length === 0 ? (
               <Text style={styles.emptyHint}>No stages yet. Add one below.</Text>
             ) : (
-              form.stages.map((stage) => (
-                <View key={stage.id} style={styles.stageBlock}>
+              form.stages.map((stage, stageIndex) => (
+                <View
+                  key={stage.id}
+                  style={[styles.stageBlock, stageKeys(stage, stageIndex).some((k) => issuesByKey.has(k)) && styles.blockError]}
+                >
                   <View style={styles.stageHeader}>
                     <Text style={styles.stageHeaderText}>Stage</Text>
                     <TouchableOpacity
@@ -665,6 +917,7 @@ export default function FestivalEditScreen() {
                     onChangeText={(v) => setStageField(stage.id, 'name', v)}
                     placeholder="Main Stage"
                     autoCapitalize="words"
+                    error={fieldIssuesOf(stageKeys(stage, stageIndex), ['name'])}
                   />
                   <HexColorField
                     label="Color"
@@ -733,11 +986,19 @@ export default function FestivalEditScreen() {
           {/* Days & Artists */}
           <SectionLabel>Days &amp; artists</SectionLabel>
           <View style={styles.card}>
+            <LabeledTextInput
+              label="Filter"
+              value={filter}
+              onChangeText={setFilter}
+              placeholder="Artist or stage"
+              autoCapitalize="none"
+            />
             {form.days.length === 0 ? (
               <Text style={styles.emptyHint}>No days yet. Add one below.</Text>
             ) : (
-              form.days.map((day) => {
-                const isExpanded = expandedDays.has(day.id);
+              form.days.map((day, dayIndex) => {
+                const visibleSets = filterLineup(day.sets, form.stages, filter);
+                const isExpanded = expandedDays.has(day.id) || (filter.trim() !== '' && visibleSets.length > 0);
                 return (
                   <View key={day.id} style={styles.dayBlock}>
                     <View style={styles.dayHeader}>
@@ -789,11 +1050,31 @@ export default function FestivalEditScreen() {
 
                         {day.sets.length === 0 ? (
                           <Text style={styles.emptyHint}>No artists yet. Add one below.</Text>
+                        ) : visibleSets.length === 0 ? (
+                          <Text style={styles.emptyHint}>No sets match &quot;{filter.trim()}&quot;.</Text>
                         ) : (
-                          day.sets.map((s) => (
-                            <View key={s.id} style={styles.setBlock}>
+                          visibleSets.map((s) => {
+                            const keys = setKeys(s, dayIndex, day.sets.indexOf(s));
+                            const isNew = changes.newSetIds.has(s.id);
+                            const isChanged = changes.changedSetIds.has(s.id);
+                            const stageError = fieldIssuesOf(keys, ['stageId']);
+                            const timeError = fieldIssuesOf(keys, ['startTime', 'endTime']);
+                            return (
+                            <View
+                              key={s.id}
+                              style={[
+                                styles.setBlock,
+                                (isNew || isChanged) && styles.setBlockChanged,
+                                keys.some((k) => issuesByKey.has(k)) && styles.blockError,
+                              ]}
+                            >
                               <View style={styles.setHeader}>
-                                <Text style={styles.setHeaderText}>Artist set</Text>
+                                <Text style={styles.setHeaderText}>
+                                  Artist set
+                                  {isNew || isChanged ? (
+                                    <Text style={styles.changeCaption}>{isNew ? '  New' : '  Changed'}</Text>
+                                  ) : null}
+                                </Text>
                                 <TouchableOpacity
                                   onPress={() => removeSet(day.id, s.id)}
                                   style={styles.removeBtn}
@@ -804,7 +1085,7 @@ export default function FestivalEditScreen() {
                                   <Ionicons name="close" size={t.iconSize.sm} color={t.colors.accent.coral} />
                                 </TouchableOpacity>
                               </View>
-                              {artistInputs(day.id, s)}
+                              {artistInputs(day.id, s, fieldIssuesOf(keys, ['artist']))}
                               <ModalSelect
                                 label="Stage"
                                 value={s.stageId || null}
@@ -812,6 +1093,11 @@ export default function FestivalEditScreen() {
                                 onSelect={(v) => setSetField(day.id, s.id, 'stageId', v)}
                                 placeholder="— Stage —"
                               />
+                              {stageError ? (
+                                <Text style={styles.fieldError} accessibilityLiveRegion="polite">
+                                  {stageError}
+                                </Text>
+                              ) : null}
                               <View style={styles.datePair}>
                                 <View style={styles.flex}>
                                   <TimeField
@@ -833,6 +1119,11 @@ export default function FestivalEditScreen() {
                                   />
                                 </View>
                               </View>
+                              {timeError ? (
+                                <Text style={styles.fieldError} accessibilityLiveRegion="polite">
+                                  {timeError}
+                                </Text>
+                              ) : null}
                               <LabeledTextInput
                                 label="Link (optional)"
                                 value={s.linkUrl}
@@ -843,8 +1134,19 @@ export default function FestivalEditScreen() {
                                 hint="Spotify or SoundCloud URL."
                               />
                             </View>
-                          ))
+                            );
+                          })
                         )}
+                        <TouchableOpacity
+                          onPress={() => setShiftDayId(day.id)}
+                          style={styles.toolBtn}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Shift times for ${day.label || 'this day'}`}
+                        >
+                          <Ionicons name="time-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
+                          <Text style={styles.toolBtnText}>Shift times</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => addSet(day.id)}
                           style={styles.addBtn}
@@ -895,6 +1197,25 @@ export default function FestivalEditScreen() {
             </>
           ) : null}
 
+          {issues.length > 0 ? (
+            <View style={[styles.card, styles.blockError]}>
+              <Text style={styles.checklistTitle} accessibilityRole="header">
+                Fix these before saving
+              </Text>
+              {issues.map((issue, i) => (
+                <TouchableOpacity
+                  key={`${issue.code}-${i}`}
+                  onPress={() => openIssueDay(issue)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={issue.message}
+                >
+                  <Text style={styles.fieldError}>{issue.message}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
           {/* Form error */}
           {formError ? (
             <Text style={styles.formError} accessibilityLiveRegion="polite">
@@ -916,14 +1237,14 @@ export default function FestivalEditScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => void handleSave()}
-              style={[styles.actionBtn, styles.saveBtn, saving && styles.btnDisabled]}
+              style={[styles.actionBtn, styles.saveBtn, (saving || (!!editingId && changes.total === 0)) && styles.btnDisabled]}
               activeOpacity={0.7}
-              disabled={saving}
+              disabled={saving || (!!editingId && changes.total === 0)}
               accessibilityRole="button"
-              accessibilityLabel={editingId ? 'Update festival' : 'Create festival'}
+              accessibilityLabel={saveLabel}
             >
               <Text style={styles.saveBtnText} maxFontSizeMultiplier={1.4}>
-                {saving ? 'Saving…' : editingId ? 'Update festival' : 'Create festival'}
+                {saving ? 'Saving…' : saveLabel}
               </Text>
             </TouchableOpacity>
           </View>
@@ -931,7 +1252,7 @@ export default function FestivalEditScreen() {
           {/* Destructive: delete (edit only) */}
           {editingId ? (
             <TouchableOpacity
-              onPress={() => setConfirm('delete')}
+              onPress={openDelete}
               style={styles.deleteBtn}
               activeOpacity={0.7}
               disabled={saving}
@@ -947,8 +1268,8 @@ export default function FestivalEditScreen() {
 
       <ConfirmDialog
         visible={confirm === 'delete' && !busy}
-        title="Delete this festival?"
-        message="This soft-deletes the festival and hides it from users. Users with picks for it will lose access."
+        title={`Delete ${form.name.trim() || 'this festival'}?`}
+        message={describeDeleteImpact(impact)}
         confirmLabel={busy ? 'Deleting…' : 'Delete'}
         destructive
         onConfirm={() => void doDelete()}
@@ -975,6 +1296,20 @@ export default function FestivalEditScreen() {
           if (pending) void send(pending.payload, true);
         }}
         onCancel={() => setPendingRemoval(null)}
+      />
+      <ConfirmDialog
+        visible={confirmPublish}
+        title={`Publish ${form.name.trim() || 'this festival'}?`}
+        message={publishMessage}
+        confirmLabel="Publish"
+        onConfirm={() => void doPublish()}
+        onCancel={() => setConfirmPublish(false)}
+      />
+      <ShiftTimesDialog
+        visible={shiftDayId !== null}
+        stages={stageOptions}
+        onCancel={() => setShiftDayId(null)}
+        onConfirm={(opts) => shiftDayId && doShift(shiftDayId, opts)}
       />
       {reauthDialog}
       <ConfirmDialog
@@ -1116,6 +1451,74 @@ const useStyles = makeStyles((t) => ({
   setHeaderText: {
     ...typeStyle('label', 600),
     color: t.colors.text.secondary,
+  },
+  setBlockChanged: {
+    borderLeftWidth: 3,
+    borderLeftColor: t.colors.accent.aqua,
+  },
+  blockError: {
+    borderColor: t.colors.accent.coral,
+  },
+  changeCaption: {
+    ...typeStyle('caption', 600),
+    color: t.colors.accent.aqua,
+  },
+  fieldError: {
+    ...typeStyle('caption'),
+    color: t.colors.text.danger,
+  },
+  // Status card --------------------------------------------------------------
+  banner: {
+    ...typeStyle('label', 600),
+    color: t.colors.accent.aqua,
+    paddingHorizontal: t.spacing[1],
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+  },
+  chip: {
+    paddingHorizontal: t.spacing[3],
+    paddingVertical: t.spacing[1],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+  },
+  chipDraft: {
+    borderColor: t.colors.accent.amber,
+  },
+  chipLive: {
+    borderColor: t.colors.accent.aqua,
+  },
+  chipText: {
+    ...typeStyle('caption', 600),
+  },
+  chipTextDraft: {
+    color: t.colors.accent.amber,
+  },
+  chipTextLive: {
+    color: t.colors.accent.aqua,
+  },
+  statusEdited: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+    flex: 1,
+  },
+  checklistTitle: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.primary,
+  },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
+  },
+  checkText: {
+    ...typeStyle('body'),
+    color: t.colors.text.secondary,
+    flex: 1,
+    minWidth: 160,
   },
   // Buttons ------------------------------------------------------------------
   addBtn: {

@@ -85,6 +85,8 @@ export default function createAdminRoutes(deps: any): Router {
     'festival:update': 'Festival Updated',
     'festival:soft-delete': 'Festival Deleted',
     'festival:hard-delete': 'Festival Deleted Permanently',
+    'festival:publish': 'Festival Published',
+    'festival:restore': 'Festival Restored',
     'set:link-update': 'Set Link Changed',
     lineup_import: 'Lineup Imported',
     spotify_backfill: 'Spotify Backfill',

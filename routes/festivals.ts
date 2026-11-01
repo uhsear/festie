@@ -13,7 +13,9 @@ export default function createFestivalsRoutes(deps: any) {
     requireRecentAuth,
     getFestivals,
     getFestivalById,
-    validateFestival,
+    getUserById,
+    validateFestivalIssues,
+    publishChecklist,
     sanitizeFestivalPayload,
     removeFestivalSockets,
     getRequestIp,
@@ -49,21 +51,36 @@ export default function createFestivalsRoutes(deps: any) {
       if (!festival) return;
       invalidateFestivalCache();
       invalidateFestivalListCache();
-      emitter.festivalUpdated({ festival });
+      // A draft has no attendees, and the event goes to every socket.
+      if (festival.publishedAt) emitter.festivalUpdated({ festival });
     } catch (error: any) {
       log.warn('festival venue geocode failed', { festivalId, error: error.message });
     }
   }
 
-  let _festivalListCache: any = null;
-  let _festivalListETag: any = null;
+  // The router is mounted at /festivals and at /admin/festivals; adminAuth sets
+  // req.isAdmin on the admin mount. Drafts (no publishedAt) are visible there only.
+  const isAdminReq = (req: any) => req.isAdmin === true;
+  const visible = (festival: any, req: any) => (festival && (festival.publishedAt || isAdminReq(req)) ? festival : null);
+
+  // 400 with one issue per problem; `message` stays one sentence for old clients.
+  function sendIssues(res: any, issues: any[]) {
+    const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
+    return sendError(res, 400, `${issues[0].message}${more}`, ErrorCodes.INVALID_INPUT, { issues });
+  }
+
+  // Two lists from one build: admins see every festival (drafts too), with
+  // `published` and `updatedAt`; the public list keeps its old shape.
+  let _festivalListCache: { admin: { items: any[]; etag: string }; public: { items: any[]; etag: string } } | null = null;
   let _festivalListVersion: any = null;
 
   function invalidateFestivalListCache() {
     _festivalListCache = null;
-    _festivalListETag = null;
     _festivalListVersion = null;
   }
+
+  const listETag = (items: any[]) =>
+    `"${crypto.createHash('md5').update(JSON.stringify(items)).digest('hex').slice(0, 16)}"`;
 
   /**
    * H1 (festival delete): evict members from every `crew:${crewId}` room under a
@@ -152,9 +169,11 @@ export default function createFestivalsRoutes(deps: any) {
     try {
       const festivals = await getFestivals();
       // Lightweight cache: recompute only when festival data changes
-      const version = festivals.map((f: any) => f.updatedAt || f.createdAt || '').join(',');
-      if (version !== _festivalListVersion) {
-        _festivalListCache = festivals.map((festival: any) => {
+      const version = festivals
+        .map((f: any) => `${f.updatedAt || f.createdAt || ''}|${f.publishedAt ?? ''}`)
+        .join(',');
+      if (!_festivalListCache || version !== _festivalListVersion) {
+        const all = festivals.map((festival: any) => {
           // Derive the date range from the already-loaded day dates (the
           // festivals table has no start/end columns). Lets the picker show the
           // date + an upcoming/past status without a detail fetch.
@@ -170,17 +189,26 @@ export default function createFestivalsRoutes(deps: any) {
             dayCount: festival.days?.length || 0,
             startDate: dates[0] || null,
             endDate: dates[dates.length - 1] || null,
+            published: !!festival.publishedAt,
+            updatedAt: festival.updatedAt,
           };
         });
-        _festivalListETag = `"${crypto.createHash('md5').update(JSON.stringify(_festivalListCache)).digest('hex').slice(0, 16)}"`;
+        const published = all
+          .filter((item: any) => item.published)
+          .map(({ published: _published, updatedAt: _updatedAt, ...item }: any) => item);
+        _festivalListCache = {
+          admin: { items: all, etag: listETag(all) },
+          public: { items: published, etag: listETag(published) },
+        };
         _festivalListVersion = version;
       }
-      res.setHeader('ETag', _festivalListETag);
+      const list = isAdminReq(req) ? _festivalListCache.admin : _festivalListCache.public;
+      res.setHeader('ETag', list.etag);
       res.setHeader('Cache-Control', 'no-cache');
-      if (req.headers['if-none-match'] === _festivalListETag) {
+      if (req.headers['if-none-match'] === list.etag) {
         return res.status(304).end();
       }
-      return sendSuccess(res, _festivalListCache);
+      return sendSuccess(res, list.items);
     } catch (error: any) {
       log.error('festivals list failed', { error: error.message });
       return sendError(res, 500, 'Failed to load festivals', ErrorCodes.INTERNAL_ERROR);
@@ -195,13 +223,27 @@ export default function createFestivalsRoutes(deps: any) {
     try {
       const setId = String(req.params.setId || '');
       if (!setId) return sendError(res, 400, 'Set ID required', ErrorCodes.INVALID_INPUT);
-      const result = await stores.pool.query('SELECT festival_id FROM festival_sets WHERE id = $1 LIMIT 1', [setId]);
+      const result = await stores.pool.query(
+        `SELECT fs.festival_id FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
+         WHERE fs.id = $1 AND f.deleted_at IS NULL AND (f.published_at IS NOT NULL OR $2::boolean) LIMIT 1`,
+        [setId, isAdminReq(req)],
+      );
       if (!result.rows.length) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
       res.setHeader('Cache-Control', 'public, max-age=300');
       return sendSuccess(res, { festivalId: result.rows[0].festival_id });
     } catch (error: any) {
       log.error('locate-set failed', { error: error.message });
       return sendError(res, 500, 'Failed to locate set', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // Deleted festivals for the admin "Archived" view. Declared before `/:id`.
+  router.get('/archived', adminAuth, rateLimit(60, 'festival-archived'), async (_req: any, res: any) => {
+    try {
+      return sendSuccess(res, await stores.festivals.listDeleted());
+    } catch (error: any) {
+      log.error('archived festivals list failed', { error: error.message });
+      return sendError(res, 500, 'Failed to load archived festivals', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
@@ -218,7 +260,7 @@ export default function createFestivalsRoutes(deps: any) {
     try {
       const id = String(req.params.id || '');
       if (!id) return sendError(res, 400, 'Festival ID required', ErrorCodes.INVALID_INPUT);
-      const festival = await getFestivalById(id);
+      const festival = visible(await getFestivalById(id), req);
       if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
       const url = festival.mapConfig?.offlineBasemap?.pmtilesUrl;
@@ -251,7 +293,7 @@ export default function createFestivalsRoutes(deps: any) {
     validateQuery(schemas.festivalDepthQuery),
     async (req: any, res: any) => {
       try {
-        const festival = await getFestivalById(req.validatedParams.id);
+        const festival = visible(await getFestivalById(req.validatedParams.id), req);
         if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
         // Public festival structure (stages/days/sets) — no user data. Use
         // `no-cache` (revalidate) rather than `no-store` (never cache) so the
@@ -294,6 +336,16 @@ export default function createFestivalsRoutes(deps: any) {
         }
 
         // depth=2 or omitted: full festival (backward compatible)
+        if (isAdminReq(req)) {
+          const editorId = await stores.festivals.getEditor(festival.id);
+          const editor = editorId ? await getUserById(editorId) : null;
+          return sendSuccess(res, {
+            ...festival,
+            publishedAt: festival.publishedAt ?? null,
+            updatedByUsername: editor?.username ?? null,
+            checklist: publishChecklist(config, festival),
+          });
+        }
         return sendSuccess(res, festival);
       } catch (error: any) {
         log.error('festival load failed', { error: error.message, festivalId: req.validatedParams?.id });
@@ -309,20 +361,19 @@ export default function createFestivalsRoutes(deps: any) {
     validate(schemas.festivalCreate),
     async (req: any, res: any) => {
       try {
-        const validationErrors = validateFestival(config, req.validatedBody);
-        if (validationErrors.length > 0) {
-          return sendError(res, 400, validationErrors.join('; '), ErrorCodes.INVALID_INPUT);
-        }
+        const issues = validateFestivalIssues(config, req.validatedBody);
+        if (issues.length > 0) return sendIssues(res, issues);
         const festival = sanitizeFestivalPayload(req.validatedBody);
-        await stores.festivals.create(festival);
+        // A new festival is a draft. Attendees see it, and festival:created
+        // goes out, only when an admin publishes it.
+        await stores.festivals.create({ ...festival, publishedAt: null, updatedBy: req.user?.userId ?? null });
         invalidateFestivalCache();
         invalidateFestivalListCache();
         log.info('festival:created', { festivalId: festival.id, name: festival.name });
         audit('festival:create', 'festival', festival.id, req, { name: festival.name });
-        emitter.festivalCreated({ id: festival.id, name: festival.name });
         void fillVenueCoords(festival.id, festival.location);
         res.status(201);
-        return sendSuccess(res, festival);
+        return sendSuccess(res, { ...festival, publishedAt: null });
       } catch (error: any) {
         log.error('festival create failed', { error: error.message });
         return sendError(res, 500, 'Failed to create festival', ErrorCodes.INTERNAL_ERROR);
@@ -339,10 +390,8 @@ export default function createFestivalsRoutes(deps: any) {
     async (req: any, res: any) => {
       try {
         const body = req.validatedBody;
-        const validationErrors = validateFestival(config, body);
-        if (validationErrors.length > 0) {
-          return sendError(res, 400, validationErrors.join('; '), ErrorCodes.INVALID_INPUT);
-        }
+        const issues = validateFestivalIssues(config, body);
+        if (issues.length > 0) return sendIssues(res, issues);
         const existingFestival = await getFestivalById(req.validatedParams.id);
         if (!existingFestival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
@@ -415,13 +464,15 @@ export default function createFestivalsRoutes(deps: any) {
           stages: nextFestival.stages,
           ...(daysSent ? { days: nextFestival.days } : {}),
           mapConfig: nextFestival.mapConfig,
+          updatedBy: req.user?.userId ?? null,
         });
         invalidateFestivalCache();
 
         invalidateFestivalListCache();
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
         audit('festival:update', 'festival', festival.id, req, { name: festival.name, ...stats });
-        emitter.festivalUpdated({ festival });
+        // A draft has no attendees, and the event goes to every socket.
+        if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
         const venueMissing = typeof existingFestival.latitude !== 'number';
         if (venueMissing || nextFestival.location !== existingFestival.location) {
           void fillVenueCoords(festival.id, nextFestival.location);
@@ -430,6 +481,81 @@ export default function createFestivalsRoutes(deps: any) {
       } catch (error: any) {
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // How many people, crews and picks lose access if this festival is deleted.
+  router.get('/:id/impact', adminAuth, validateParams(schemas.genericIdParams), async (req: any, res: any) => {
+    try {
+      const festival = await getFestivalById(req.validatedParams.id);
+      if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      return sendSuccess(res, await stores.festivals.countImpact(festival.id));
+    } catch (error: any) {
+      log.error('festival impact failed', { error: error.message, festivalId: req.validatedParams?.id });
+      return sendError(res, 500, 'Failed to count who uses this festival', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // Publish a draft once the checklist has no 'todo' item. There is no unpublish:
+  // it would cut off attendees with picks. Delete and Restore cover mistakes.
+  router.post(
+    '/:id/publish',
+    adminAuth,
+    rateLimit(10, 'festival-publish'),
+    validateParams(schemas.genericIdParams),
+    async (req: any, res: any) => {
+      try {
+        const festival = await getFestivalById(req.validatedParams.id);
+        if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        const checklist = publishChecklist(config, festival);
+        if (festival.publishedAt) return sendSuccess(res, { publishedAt: festival.publishedAt, checklist });
+        if (checklist.some((item: any) => item.status === 'todo')) {
+          return sendError(res, 409, 'Finish the checklist before you publish.', ErrorCodes.PUBLISH_BLOCKED, {
+            checklist,
+          });
+        }
+        const row = await stores.festivals.publish(festival.id, req.user?.userId ?? null);
+        if (!row) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        invalidateFestivalCache();
+        invalidateFestivalListCache();
+        audit('festival:publish', 'festival', festival.id, req, {
+          name: festival.name,
+          warnings: checklist.filter((item: any) => item.status === 'warn').map((item: any) => item.key),
+        });
+        log.info('festival:published', { festivalId: festival.id, name: festival.name });
+        emitter.festivalCreated({ id: festival.id, name: festival.name });
+        return sendSuccess(res, { publishedAt: row.publishedAt, checklist });
+      } catch (error: any) {
+        log.error('festival publish failed', { error: error.message, festivalId: req.validatedParams?.id });
+        return sendError(res, 500, 'Failed to publish festival', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // Bring a soft-deleted festival back. It keeps its published state.
+  router.post(
+    '/:id/restore',
+    adminAuth,
+    rateLimit(10, 'festival-restore'),
+    validateParams(schemas.genericIdParams),
+    async (req: any, res: any) => {
+      try {
+        const id = req.validatedParams.id;
+        const row = await stores.festivals.restore(id, req.user?.userId ?? null);
+        if (!row) return sendError(res, 404, 'This festival is not in Archived.', ErrorCodes.NOT_FOUND);
+        invalidateFestivalCache();
+        invalidateFestivalListCache();
+        const festival = await getFestivalById(id);
+        const name = festival?.name ?? '';
+        audit('festival:restore', 'festival', id, req, { name });
+        log.info('festival:restored', { festivalId: id, name });
+        const published = !!row.publishedAt;
+        if (published) emitter.festivalCreated({ id, name });
+        return sendSuccess(res, { id, published });
+      } catch (error: any) {
+        log.error('festival restore failed', { error: error.message, festivalId: req.validatedParams?.id });
+        return sendError(res, 500, 'Failed to restore festival', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );

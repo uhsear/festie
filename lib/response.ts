@@ -24,6 +24,7 @@ export const ErrorCodes = {
   REAUTH_REQUIRED: 'REAUTH_REQUIRED',
   CONFIRM_REMOVALS: 'CONFIRM_REMOVALS',
   FESTIVAL_CHANGED: 'FESTIVAL_CHANGED',
+  PUBLISH_BLOCKED: 'PUBLISH_BLOCKED',
 } as const;
 
 // Errors that are safe to retry (transient failures)

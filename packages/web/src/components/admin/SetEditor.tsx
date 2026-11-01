@@ -28,6 +28,12 @@ export interface SetEditorProps {
   onSetArtists: (artists: Artist[]) => void;
   onField: (field: string, value: string | null) => void;
   onRemove: () => void;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  issues?: string[];
+  /** Fields (target.field) the issues name, so the matching input gets aria-invalid. */
+  issueFields?: string[];
+  status?: 'new' | 'changed' | null;
 }
 
 /**
@@ -42,7 +48,13 @@ export default function SetEditor({
   onSetArtists,
   onField,
   onRemove,
+  selected = false,
+  onToggleSelect,
+  issues = [],
+  issueFields = [],
+  status = null,
 }: SetEditorProps) {
+  const invalid = (field: string) => (issueFields.includes(field) ? true : undefined);
   const [drafts, setDrafts] = useState<string[]>(() => artistNamesOf(s));
   const [origin, setOrigin] = useState<Artist[] | undefined>(() => s.artists);
 
@@ -53,7 +65,22 @@ export default function SetEditor({
   };
 
   return (
-    <div className="grid grid-cols-[1fr_140px_90px_90px_auto] gap-2">
+    <div
+      data-issue-key={`set:${s.id}`}
+      data-issue={issues.length > 0 ? 'true' : undefined}
+      className={`grid grid-cols-[auto_1fr_140px_90px_90px_auto] gap-2 rounded ${
+        status ? 'border-l-2 border-accent-aqua pl-2' : ''
+      } ${issues.length > 0 ? 'ring-1 ring-accent-coral p-1' : ''}`}
+    >
+      <div className="flex flex-col items-center gap-1 pt-1.5">
+        <input
+          type="checkbox"
+          aria-label={`Select ${s.artist || 'set'}`}
+          checked={selected}
+          onChange={() => onToggleSelect?.()}
+        />
+        {status && <span className="text-xs text-accent-aqua">{status === 'new' ? 'New' : 'Changed'}</span>}
+      </div>
       <div className="space-y-1">
         {drafts.map((name, i) => {
           const label = i === 0 ? 'Artist' : `B2B artist ${i + 1}`;
@@ -63,6 +90,7 @@ export default function SetEditor({
                 type="text"
                 placeholder={i === 0 ? 'Artist name' : label}
                 aria-label={label}
+                aria-invalid={i === 0 ? invalid('artist') : undefined}
                 value={name}
                 onChange={(e) => changeDrafts(drafts.map((d, j) => (j === i ? e.target.value : d)))}
                 className="flex-1 min-w-0 px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent-aqua"
@@ -98,6 +126,7 @@ export default function SetEditor({
       <select
         value={s.stageId || ''}
         aria-label="Stage"
+        aria-invalid={invalid('stageId')}
         onChange={(e) => onField('stageId', e.target.value)}
         className="px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
       >
@@ -111,6 +140,7 @@ export default function SetEditor({
       <input
         type="time"
         aria-label="Start time"
+        aria-invalid={invalid('startTime')}
         value={s.startTime && s.startTime !== 'TBA' ? s.startTime : ''}
         onChange={(e) => onField('startTime', e.target.value || 'TBA')}
         className="px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
@@ -118,6 +148,7 @@ export default function SetEditor({
       <input
         type="time"
         aria-label="End time"
+        aria-invalid={invalid('endTime')}
         value={s.endTime && s.endTime !== 'TBA' ? s.endTime : ''}
         onChange={(e) => onField('endTime', e.target.value || null)}
         className="px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
@@ -130,6 +161,15 @@ export default function SetEditor({
       >
         ×
       </button>
+      {issues.length > 0 && (
+        <div className="col-span-full space-y-0.5">
+          {issues.map((m, i) => (
+            <p key={i} className="text-xs text-accent-coral">
+              {m}
+            </p>
+          ))}
+        </div>
+      )}
       {startsAfterMidnight(s.startTime) && (
         <p className="col-span-full text-xs text-text-muted">
           After midnight. Shows as part of {dayLabel || "this day's"} night.

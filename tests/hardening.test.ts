@@ -413,8 +413,18 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
         .post('/api/v1/festivals')
         .set('x-user-token', adminToken)
         .set(TRUSTED_MUTATION_HEADER, '1')
-        .send({ name: 'Share Test Fest', location: 'Test', stages: [{ id: 'main', name: 'Main', color: '#ff0000' }], days: [] });
+        .send({
+          name: 'Share Test Fest', location: 'Test', timeZone: 'America/New_York',
+          stages: [{ id: 'main', name: 'Main', color: '#ff0000' }],
+          days: [{ label: 'Fri', date: '2026-06-05', sets: [{ id: 'share-s1', artist: 'A', stageId: 'main', startTime: '20:00', endTime: '21:00' }] }],
+        });
       const festivalId = festivalRes.body.data.id;
+      // A new festival is a draft; attendees can join it once it is published.
+      await request(app)
+        .post(`/api/v1/festivals/${festivalId}/publish`)
+        .set('x-user-token', adminToken)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .expect(200);
 
       const profileRes = await request(app)
         .post('/api/v1/profiles')
@@ -487,8 +497,18 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
         .post('/api/v1/festivals')
         .set('x-user-token', adminToken2)
         .set(TRUSTED_MUTATION_HEADER, '1')
-        .send({ name: 'JSON Fest', location: 'Test', stages: [{ id: 'main', name: 'Main', color: '#00ff00' }], days: [] });
+        .send({
+          name: 'JSON Fest', location: 'Test', timeZone: 'America/New_York',
+          stages: [{ id: 'main', name: 'Main', color: '#00ff00' }],
+          days: [{ label: 'Fri', date: '2026-06-05', sets: [{ id: 'share-s1', artist: 'A', stageId: 'main', startTime: '20:00', endTime: '21:00' }] }],
+        });
       const festivalId = festivalRes.body.data.id;
+      // A new festival is a draft; attendees can join it once it is published.
+      await request(app)
+        .post(`/api/v1/festivals/${festivalId}/publish`)
+        .set('x-user-token', adminToken2)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .expect(200);
 
       const profileRes = await request(app)
         .post('/api/v1/profiles')

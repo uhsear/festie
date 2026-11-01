@@ -63,7 +63,7 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  * against saving over a newer version.
  */
 
-// Detail response from GET /festivals/:id — loosely typed; we read what we need
+// Detail response from GET /admin/festivals/:id — loosely typed; we read what we need
 // to (a) author geo and (b) round-trip the text fields on save.
 interface FestivalDetail {
   id: string;
@@ -172,7 +172,7 @@ export default function FestivalMapEditorScreen() {
     if (!editingId) return;
     setLoadError(false);
     try {
-      const full = await api.get<FestivalDetail>(`/festivals/${editingId}`);
+      const full = await api.get<FestivalDetail>(`/admin/festivals/${editingId}`);
       setDetail(full);
       setName(full.name || '');
       setStages(

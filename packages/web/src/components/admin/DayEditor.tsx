@@ -22,6 +22,20 @@ export interface DayEditorProps {
   onRemoveSet: (setId: string) => void;
   onSetField: (setId: string, field: string, value: string | null) => void;
   onSetArtists: (setId: string, artists: Artist[]) => void;
+  /** Day-level messages. */
+  issues?: string[];
+  /** Set-level messages by `set:{id}`. */
+  issueMap?: Map<string, string[]>;
+  /** Fields the set issues name, by set id. */
+  issueFields?: Map<string, string[]>;
+  changedSetIds?: Set<string>;
+  newSetIds?: Set<string>;
+  selected?: Set<string>;
+  onToggleSelect?: (setId: string) => void;
+  onSelectAll?: (ids: string[], on: boolean) => void;
+  /** Sets to render: day.sets after the filter and sort. */
+  visibleSets?: SetRow[];
+  filterQuery?: string;
 }
 
 /**
@@ -40,8 +54,20 @@ export default function DayEditor({
   onRemoveSet,
   onSetField,
   onSetArtists,
+  issues = [],
+  issueMap,
+  issueFields,
+  changedSetIds,
+  newSetIds,
+  selected,
+  onToggleSelect,
+  onSelectAll,
+  visibleSets,
+  filterQuery = '',
 }: DayEditorProps) {
   const setCount = (day.sets || []).length;
+  const shown = visibleSets ?? day.sets ?? [];
+  const allShownSelected = shown.length > 0 && shown.every((s) => selected?.has(s.id));
 
   return (
     <div className="rounded-lg bg-bg-primary/40 border border-glass-border">
@@ -86,6 +112,15 @@ export default function DayEditor({
           Remove
         </button>
       </div>
+      {issues.length > 0 && (
+        <div className="px-3 pb-2 space-y-0.5">
+          {issues.map((m, i) => (
+            <p key={i} className="text-xs text-accent-coral">
+              {m}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* Expanded: artists/sets list */}
       {isExpanded && (
@@ -94,18 +129,36 @@ export default function DayEditor({
             <p className="text-xs text-text-muted italic">
               No artists yet. Click "Add Artist" to add one, or use Import on the festival list.
             </p>
+          ) : shown.length === 0 ? (
+            <p className="text-xs text-text-muted italic">No sets match "{filterQuery.trim()}".</p>
           ) : (
             <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_140px_90px_90px_auto] gap-2 text-xs text-text-muted px-1">
+              <div className="grid grid-cols-[auto_1fr_140px_90px_90px_auto] gap-2 text-xs text-text-muted px-1">
+                <input
+                  type="checkbox"
+                  aria-label="Select all shown"
+                  checked={allShownSelected}
+                  onChange={(e) =>
+                    onSelectAll?.(
+                      shown.map((s) => s.id),
+                      e.target.checked,
+                    )
+                  }
+                />
                 <div>Artist</div>
                 <div>Stage</div>
                 <div>Start</div>
                 <div>End</div>
                 <div></div>
               </div>
-              {(day.sets || []).map((s) => (
+              {shown.map((s) => (
                 <SetEditor
                   key={s.id}
+                  selected={selected?.has(s.id) ?? false}
+                  onToggleSelect={() => onToggleSelect?.(s.id)}
+                  issues={issueMap?.get(`set:${s.id}`) ?? []}
+                  issueFields={issueFields?.get(s.id) ?? []}
+                  status={newSetIds?.has(s.id) ? 'new' : changedSetIds?.has(s.id) ? 'changed' : null}
                   set={s}
                   dayLabel={day.label}
                   stages={stages}

@@ -37,7 +37,7 @@ describe('lineupImportApi', () => {
   it('exportCsv reads the festival and writes the export columns', async () => {
     get.mockResolvedValue({ stages: [], days: [{ label: 'Fri', sets: [{ id: 's1', artist: 'Kai', startTime: '20:00' }] }] });
     const csv = await lineupImportApi.exportCsv('f 1');
-    expect(get).toHaveBeenCalledWith('/festivals/f%201');
+    expect(get).toHaveBeenCalledWith('/admin/festivals/f%201');
     expect(csv.split(/\r?\n/)).toEqual(['set_id,day,stage,artist,start,end', 's1,Fri,,Kai,20:00,']);
   });
 });
