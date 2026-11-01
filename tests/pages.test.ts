@@ -53,7 +53,11 @@ function mockRes() {
     setHeader(k: any, v: any) { res._headers[k] = v; return res; },
     send(body: any) { res._sent = body; res.headersSent = true; return res; },
     json(body: any) { res._sent = JSON.stringify(body); res.headersSent = true; return res; },
-    redirect(url: any) { res._redirectUrl = url; res.headersSent = true; return res; },
+    redirect(a: any, b?: any) {
+      if (b === undefined) { res._redirectUrl = a; } else { res._status = a; res._redirectUrl = b; }
+      res.headersSent = true;
+      return res;
+    },
     sendFile(filePath: any, cb: any) { res._sentFile = filePath; if (cb) cb(); return res; },
     end() { res.headersSent = true; return res; },
   };
@@ -161,174 +165,84 @@ describe('pages: /join/:code', () => {
   });
 });
 
+const EXPIRED = '/forgot-password?expired=1';
+
 describe('pages: /reset/:token', () => {
-  it('shows error page for invalid token format', async () => {
-    const router = createPageRoutes(buildDeps());
-    const handler = getHandler(router, '/reset/:token');
+  for (const [label, token] of [['malformed', 'short'], ['empty', ''], ['uppercase hex', 'A'.repeat(64)]]) {
+    it(`redirects 303 to forgot-password for a ${label} token`, async () => {
+      const router = createPageRoutes(buildDeps());
+      const handler = getHandler(router, '/reset/:token');
 
-    const res = mockRes();
-    await handler(mockReq({ params: { token: 'short' } }), res);
+      const res = mockRes();
+      await handler(mockReq({ params: { token } }), res);
+      assert.equal(res._status, 303);
+      assert.equal(res._redirectUrl, EXPIRED);
+    });
+  }
 
-    assert.ok(res._sent);
-    assert.ok(res._sent.includes('Invalid or expired'), 'should show error message');
-    assert.equal(res._headers['Content-Type'], 'text/html; charset=utf-8');
-    assert.equal(res._headers['Cache-Control'], 'no-store, no-cache, must-revalidate');
-  });
-
-  it('shows error page for empty token', async () => {
-    const router = createPageRoutes(buildDeps());
-    const handler = getHandler(router, '/reset/:token');
-
-    const res = mockRes();
-    await handler(mockReq({ params: { token: '' } }), res);
-    assert.ok(res._sent.includes('Invalid or expired'));
-  });
-
-  it('shows form page for valid token found in admin reset tokens', async () => {
+  it('redirects 302 to the SPA reset page and keeps no in-memory copy', async () => {
     const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const state = {
-      _adminResetTokens: new Map([
-        [tokenHash, { userId: 'user-1', expiresAt: Date.now() + 3600000 }],
-      ]),
-    };
-    const router = createPageRoutes(buildDeps({ state }));
+    const state = { _adminResetTokens: new Map() };
+    const pool = { query: mock.fn(async () => ({ rows: [{ id: 1 }] })) };
+    const router = createPageRoutes(buildDeps({ state, pool }));
     const handler = getHandler(router, '/reset/:token');
 
     const res = mockRes();
     await handler(mockReq({ params: { token } }), res);
-
-    assert.ok(res._sent);
-    assert.ok(res._sent.includes('Reset Password'), 'should render reset form');
-    assert.ok(res._sent.includes('resetForm'), 'should contain the form element');
-  });
-
-  it('shows error for expired admin token', async () => {
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const state = {
-      _adminResetTokens: new Map([
-        [tokenHash, { userId: 'user-1', expiresAt: Date.now() - 1000 }],
-      ]),
-    };
-    const router = createPageRoutes(buildDeps({ state }));
-    const handler = getHandler(router, '/reset/:token');
-
-    const res = mockRes();
-    await handler(mockReq({ params: { token } }), res);
-    assert.ok(res._sent.includes('Invalid or expired'));
-  });
-
-  it('falls back to database when token is not in admin map', async () => {
-    const token = crypto.randomBytes(32).toString('hex');
-    const pool = {
-      query: mock.fn(async () => ({
-        rows: [{ userId: 'user-1', expiresAt: new Date(Date.now() + 3600000) }],
-      })),
-    };
-    const router = createPageRoutes(buildDeps({ pool }));
-    const handler = getHandler(router, '/reset/:token');
-
-    const res = mockRes();
-    await handler(mockReq({ params: { token } }), res);
-
-    assert.equal(pool.query.mock.callCount(), 1);
-    assert.ok(res._sent.includes('Reset Password'));
-  });
-
-  it('shows error when database returns no rows', async () => {
-    const token = crypto.randomBytes(32).toString('hex');
-    const pool = {
-      query: mock.fn(async () => ({ rows: [] })),
-    };
-    const router = createPageRoutes(buildDeps({ pool }));
-    const handler = getHandler(router, '/reset/:token');
-
-    const res = mockRes();
-    await handler(mockReq({ params: { token } }), res);
-    assert.ok(res._sent.includes('Invalid or expired'));
-  });
-
-  it('shows error page when database query throws', async () => {
-    const token = crypto.randomBytes(32).toString('hex');
-    const pool = {
-      query: mock.fn(async () => { throw new Error('DB down'); }),
-    };
-    const router = createPageRoutes(buildDeps({ pool }));
-    const handler = getHandler(router, '/reset/:token');
-
-    const res = mockRes();
-    await handler(mockReq({ params: { token } }), res);
-    assert.ok(res._sent.includes('Failed to load reset page'));
-  });
-
-  it('sets CSP header on all responses', async () => {
-    const router = createPageRoutes(buildDeps());
-    const handler = getHandler(router, '/reset/:token');
-
-    const res = mockRes();
-    await handler(mockReq({ params: { token: 'x' } }), res);
-    assert.ok(res._headers['Content-Security-Policy']);
+    assert.equal(res._status, 302);
+    assert.equal(res._redirectUrl, `/reset-password?token=${token}`);
+    assert.equal(state._adminResetTokens.size, 0);
+    assert.equal(pool.query.mock.callCount(), 0);
   });
 });
 
 describe('pages: /reset-password', () => {
-  it('shows error for missing token query parameter', async () => {
-    const router = createPageRoutes(buildDeps());
+  async function run(query: any, pool?: any) {
+    const router = createPageRoutes(buildDeps(pool ? { pool } : {}));
     const handler = getHandler(router, '/reset-password');
-
     const res = mockRes();
-    await handler(mockReq({ query: {} }), res);
-    assert.ok(res._sent.includes('Invalid or expired'));
+    const next = mock.fn();
+    await handler(mockReq({ query }), res, next);
+    return { res, next };
+  }
+
+  for (const [label, query] of [['missing', {}], ['malformed', { token: 'bad-token' }], ['non-string', { token: ['a'] }]]) {
+    it(`redirects 303 to forgot-password for a ${label} token`, async () => {
+      const { res, next } = await run(query);
+      assert.equal(res._status, 303);
+      assert.equal(res._redirectUrl, EXPIRED);
+      assert.equal(next.mock.callCount(), 0);
+    });
+  }
+
+  it('redirects 303 when the token is unknown, used or expired', async () => {
+    const pool = { query: mock.fn(async () => ({ rows: [] })) };
+    const { res, next } = await run({ token: crypto.randomBytes(32).toString('hex') }, pool);
+    assert.equal(pool.query.mock.callCount(), 1);
+    assert.equal(res._status, 303);
+    assert.equal(res._redirectUrl, EXPIRED);
+    assert.equal(next.mock.callCount(), 0);
   });
 
-  it('shows error for invalid token format', async () => {
-    const router = createPageRoutes(buildDeps());
-    const handler = getHandler(router, '/reset-password');
-
-    const res = mockRes();
-    await handler(mockReq({ query: { token: 'bad-token' } }), res);
-    assert.ok(res._sent.includes('Invalid or expired'));
-  });
-
-  it('shows form for valid token in database', async () => {
+  it('hands a valid token to the SPA fallback with no-store', async () => {
     const token = crypto.randomBytes(32).toString('hex');
-    const pool = {
-      query: mock.fn(async () => ({ rows: [{ id: 1 }] })),
-    };
-    const router = createPageRoutes(buildDeps({ pool }));
-    const handler = getHandler(router, '/reset-password');
-
-    const res = mockRes();
-    await handler(mockReq({ query: { token } }), res);
-    assert.ok(res._sent.includes('Reset Password'));
-    assert.equal(res._headers['Referrer-Policy'], 'no-referrer');
+    const pool = { query: mock.fn(async () => ({ rows: [{ id: 1 }] })) };
+    const { res, next } = await run({ token }, pool);
+    const [, params] = (pool.query.mock.calls[0]?.arguments ?? []) as any[];
+    assert.deepEqual(params, [crypto.createHash('sha256').update(token).digest('hex')]);
+    assert.equal(next.mock.callCount(), 1);
+    assert.equal(next.mock.calls[0]?.arguments.length, 0);
+    assert.equal(res._sent, null);
+    assert.equal(res._redirectUrl, null);
+    assert.equal(res._headers['Cache-Control'], 'no-store');
+    assert.equal(res._headers['Content-Security-Policy'], undefined);
   });
 
-  it('shows expired message when database returns no rows', async () => {
-    const token = crypto.randomBytes(32).toString('hex');
-    const pool = {
-      query: mock.fn(async () => ({ rows: [] })),
-    };
-    const router = createPageRoutes(buildDeps({ pool }));
-    const handler = getHandler(router, '/reset-password');
-
-    const res = mockRes();
-    await handler(mockReq({ query: { token } }), res);
-    assert.ok(res._sent.includes('expired or already been used'));
-  });
-
-  it('shows error when database throws', async () => {
-    const token = crypto.randomBytes(32).toString('hex');
-    const pool = {
-      query: mock.fn(async () => { throw new Error('fail'); }),
-    };
-    const router = createPageRoutes(buildDeps({ pool }));
-    const handler = getHandler(router, '/reset-password');
-
-    const res = mockRes();
-    await handler(mockReq({ query: { token } }), res);
-    assert.ok(res._sent.includes('Failed to load reset page'));
+  it('falls through to the SPA when the database throws', async () => {
+    const pool = { query: mock.fn(async () => { throw new Error('fail'); }) };
+    const { res, next } = await run({ token: crypto.randomBytes(32).toString('hex') }, pool);
+    assert.equal(next.mock.callCount(), 1);
+    assert.equal(res._sent, null);
   });
 });
 

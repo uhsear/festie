@@ -22,7 +22,7 @@ vi.mock('@festie/shared', () => {
   return { useAuthStore };
 });
 
-import { authReady, isAuthenticated } from './auth-guard';
+import { authReady, isAuthenticated, redirectIfSignedIn } from './auth-guard';
 
 beforeEach(() => {
   state.user = null;
@@ -75,5 +75,17 @@ describe('authReady', () => {
     });
     await expect(authReady()).resolves.toBeUndefined();
     expect(isAuthenticated()).toBe(false);
+  });
+});
+
+describe('redirectIfSignedIn', () => {
+  it('throws a redirect to /cards when a user is set', async () => {
+    state.user = { id: 'u1' };
+    await expect(redirectIfSignedIn()).rejects.toMatchObject({ options: { to: '/cards' } });
+  });
+
+  it('resolves when no user is set', async () => {
+    state.sessionChecked = true;
+    await expect(redirectIfSignedIn()).resolves.toBeUndefined();
   });
 });

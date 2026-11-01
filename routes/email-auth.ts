@@ -8,7 +8,7 @@
  * GET  /verify-email      - Verify email address via token link
  * POST /resend-verification - Resend email verification (authenticated)
  * POST /reset-password    - Reset password via emailed token
- * GET  /reset-password    - Render password reset form page
+ * (GET /reset-password lives in routes/pages.ts: it checks the link and hands it to the SPA.)
  *
  * AUDIT FIX (2026-04-14, DEFERRED FIX AGENT 1):
  *   Added per-email password-reset limiter (`passwordResetRateLimit`) to
@@ -147,9 +147,9 @@ export default function createEmailAuthRoutes(deps: any): Router {
     const accept = String(req.headers?.accept || '');
     const wantsJson = /application\/json/i.test(accept) && !/text\/html/i.test(accept);
 
-    const sendHtml = (status: number, message: string, success: boolean) => {
+    const sendHtml = (status: number, title: string, message: string, action: VerifyAction) => {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(status).send(_verifyEmailPage(message, success));
+      return res.status(status).send(_verifyEmailPage(status, title, message, action));
     };
 
     try {
@@ -157,7 +157,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
       if (!token || !/^[a-f0-9]{64}$/.test(token)) {
         return wantsJson
           ? sendError(res, 400, 'Invalid verification link', ErrorCodes.INVALID_INPUT)
-          : sendHtml(400, 'Invalid verification link.', false);
+          : sendHtml(400, 'Link not valid', 'Invalid verification link.', OPEN_FESTIE);
       }
 
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -168,7 +168,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
       if (!tokenRow) {
         return wantsJson
           ? sendError(res, 400, 'This verification link has expired or already been used', ErrorCodes.INVALID_INPUT)
-          : sendHtml(400, 'This verification link has expired or already been used.', false);
+          : sendHtml(400, 'Link expired', 'This verification link has expired or already been used.', OPEN_FESTIE);
       }
 
       const { user_id: userId, email: verifiedEmail } = tokenRow;
@@ -195,7 +195,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
           'That address is now in use by another account. Request the email change again from your account settings.';
         return wantsJson
           ? sendError(res, 409, takenMsg, ErrorCodes.ALREADY_EXISTS)
-          : sendHtml(409, takenMsg, false);
+          : sendHtml(409, 'Address already in use', takenMsg, OPEN_FESTIE);
       }
       invalidateUserCache();
 
@@ -221,18 +221,19 @@ export default function createEmailAuthRoutes(deps: any): Router {
       log.info('email:verified', { userId, email: verifiedEmail, identityMoved });
       return wantsJson
         ? sendSuccess(res, { verified: true, email: verifiedEmail, sessionsRevoked: identityMoved })
-        : sendHtml(
-            200,
-            identityMoved
-              ? 'Your email address is confirmed. Every device has been signed out for security — please sign in again.'
-              : 'Your email has been verified! You can close this page.',
-            true,
-          );
+        : identityMoved
+          ? sendHtml(
+              200,
+              'Email changed',
+              'Your email address is confirmed. Every device has been signed out for security — please sign in again.',
+              SIGN_IN,
+            )
+          : sendHtml(200, 'Email verified', 'Your email is confirmed. You can keep using Festie.', OPEN_FESTIE);
     } catch (error: any) {
       log.error('verify-email failed', { error: error.message });
       return wantsJson
         ? sendError(res, 500, 'Something went wrong', ErrorCodes.INTERNAL_ERROR)
-        : sendHtml(500, 'Something went wrong. Please try again.', false);
+        : sendHtml(500, 'Something went wrong', 'Something went wrong. Please try again.', OPEN_FESTIE);
     }
   });
 
@@ -311,6 +312,9 @@ export default function createEmailAuthRoutes(deps: any): Router {
    * first, then falls back to self-service DB tokens.
    * Returns { userId } or { error } with status/message/code.
    */
+  // TOKEN_EXPIRED lets clients tell a dead link from a weak password without matching text.
+  const RESET_LINK_EXPIRED = 'This reset link has expired or was already used';
+
   async function resolveResetToken(token: string) {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
@@ -318,7 +322,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
       const tokenData = state._adminResetTokens.get(tokenHash);
       if (Date.now() > tokenData.expiresAt) {
         state._adminResetTokens.delete(tokenHash);
-        return { error: { status: 400, message: 'Reset link has expired', code: ErrorCodes.INVALID_INPUT } };
+        return { error: { status: 400, message: RESET_LINK_EXPIRED, code: ErrorCodes.TOKEN_EXPIRED } };
       }
       return { userId: tokenData.userId };
     }
@@ -326,7 +330,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
     const consumed = await stores.emailTokens.consumeResetToken(tokenHash);
     if (consumed) return { userId: consumed.user_id };
 
-    return { error: { status: 400, message: 'Invalid or expired reset link', code: ErrorCodes.INVALID_INPUT } };
+    return { error: { status: 400, message: RESET_LINK_EXPIRED, code: ErrorCodes.TOKEN_EXPIRED } };
   }
 
   // POST /reset-password — Validate token and reset password (public, no auth)
@@ -391,19 +395,49 @@ export default function createEmailAuthRoutes(deps: any): Router {
 }
 
 // ── Email verification result page ──────────────────────────────────────
-function _verifyEmailPage(message: string, success: boolean) {
+type VerifyAction = { label: string; href: string };
+const OPEN_FESTIE: VerifyAction = { label: 'Open Festie', href: '/' };
+const SIGN_IN: VerifyAction = { label: 'Sign in', href: '/login' };
+
+// Colours: Stage from packages/shared/src/tokens/colors.ts, Daylight from
+// colorsDaylight.ts (bg.primary, text.primary, text.secondary, accent.aqua).
+// `action` carries fixed strings only; `title` too. `message` is escaped.
+function _verifyEmailPage(status: number, title: string, message: string, action: VerifyAction) {
+  const success = status < 400;
   const icon = success ? '&#10003;' : '&#10007;';
   const color = success ? '#22c55e' : '#ef4444';
+  // A 500 is not the link's fault, so it gets no "send another" advice.
+  const retryHint =
+    !success && status !== 500
+      ? '<p class="hint">Need a new link? Sign in to Festie and send another from your account.</p>'
+      : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Email Verification - Festie</title></head>
-<body style="margin:0;padding:0;background:#0a0a0f;font-family:'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh">
-<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:48px;text-align:center;max-width:400px">
-  <div style="font-size:48px;color:${color};margin-bottom:16px">${icon}</div>
-  <h1 style="color:#e4e4e7;font-size:20px;margin:0 0 12px">Festie</h1>
-  <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0">${escapeHtml(message)}</p>
-</div>
+<meta name="color-scheme" content="dark light">
+<title>Email Verification - Festie</title>
+<style>
+  :root { --bg: #0a0a0a; --text: #eaeaf2; --text-2: #9999bb; --accent: #00e8d0; --on-accent: #0a0a0a; --card: rgba(255,255,255,0.05); --border: rgba(255,255,255,0.1); }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f4f7; --text: #0b0b12; --text-2: #2e2e44; --accent: #00594f; --on-accent: #ffffff; --card: #ffffff; --border: rgba(0,0,0,0.1); }
+  }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font-family: 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 48px 32px; text-align: center; max-width: 400px; width: 100%; box-sizing: border-box; }
+  .icon { font-size: 48px; margin-bottom: 16px; color: ${color}; }
+  h1 { font-size: 22px; margin: 0 0 12px; }
+  p { color: var(--text-2); font-size: 15px; line-height: 1.6; margin: 0; }
+  .btn { display: inline-block; margin-top: 24px; padding: 12px 24px; min-height: 44px; box-sizing: border-box; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
+  .btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .hint { margin-top: 16px; font-size: 13px; }
+</style></head>
+<body>
+<main class="card">
+  <div class="icon" aria-hidden="true">${icon}</div>
+  <h1>${title}</h1>
+  <p>${escapeHtml(message)}</p>
+  <a class="btn" href="${action.href}">${action.label}</a>
+  ${retryHint}
+</main>
 </body>
 </html>`;
 }

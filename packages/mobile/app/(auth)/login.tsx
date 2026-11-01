@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,11 @@ import {
   type TextInputInstance,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Link, useRouter } from 'expo-router';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@festie/shared/stores';
+import { AUTH_COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
@@ -35,13 +36,19 @@ const useStyles = makeStyles((t) => ({
   title: {
     // display-lg = Clash Display 700 — brand wordmark, first impression screen.
     ...typeStyle('display-lg'),
-    color: t.colors.text.primary,
+    color: t.colors.accent.coral,
     textAlign: 'center',
     marginBottom: t.spacing[1],
   },
   subtitle: {
     ...typeStyle('body'),
     color: t.colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: t.spacing[2],
+  },
+  screenLine: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.primary,
     textAlign: 'center',
     marginBottom: t.spacing[8],
   },
@@ -139,6 +146,13 @@ export default function LoginScreen() {
   const error = useAuthStore((s) => s.error);
   const setError = useAuthStore((s) => s.setError);
 
+  // Drop an error left over from another auth screen (the store is shared).
+  useFocusEffect(
+    useCallback(() => {
+      setError(null);
+    }, [setError]),
+  );
+
   const passwordRef = useRef<TextInputInstance>(null);
 
   // iOS lacks Android's input ripple, so give TextInputs an explicit focus
@@ -183,10 +197,17 @@ export default function LoginScreen() {
           style={styles.title}
           maxFontSizeMultiplier={typeScaleCap('display-lg')}
           entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)}>
-          Festie
+          {AUTH_COPY.wordmark}
         </Animated.Text>
         <Animated.Text
           style={styles.subtitle}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+          entering={reduceMotion ? undefined : FadeInDown.delay(360).duration(350)}
+        >
+          {AUTH_COPY.tagline}
+        </Animated.Text>
+        <Animated.Text
+          style={styles.screenLine}
           maxFontSizeMultiplier={MAX_FONT_SCALE}
           entering={reduceMotion ? undefined : FadeInDown.delay(360).duration(350)}
         >

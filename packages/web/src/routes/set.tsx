@@ -3,6 +3,7 @@ import { useParams, useNavigate } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { api } from '@festie/shared/services';
+import { useToast } from '../lib/toastContext';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 
 /**
@@ -16,12 +17,14 @@ import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 export default function SetDeepLink() {
   const { setId } = useParams({ from: '/set/$setId' });
   const navigate = useNavigate();
+  const { toast } = useToast();
   const ran = useRef(false);
 
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
     (async () => {
+      let found = false;
       try {
         const store = useFestivalStore.getState();
         if (!store.festivals?.length) {
@@ -37,14 +40,17 @@ export default function SetDeepLink() {
           }
           set = useFestivalStore.getState().sets.find((s) => s.id === setId);
         }
+        found = Boolean(set);
         if (set) useUIStore.getState().setDetailSet(set);
-      } catch {
-        /* fall through — land on the schedule */
+      } catch (err) {
+        // fall through — land on the schedule
+        console.warn('set deep link failed', err);
       } finally {
+        if (!found) toast('That set link is no longer available.', 'info');
         navigate({ to: '/', replace: true });
       }
     })();
-  }, [setId, navigate]);
+  }, [setId, navigate, toast]);
 
   return <CardsSkeleton />;
 }

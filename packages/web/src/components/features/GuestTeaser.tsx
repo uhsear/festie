@@ -14,20 +14,20 @@ const CONFIG: Record<GuestTeaserProps['mode'], { Icon: LucideIcon; title: string
       Icon: Star,
       title: 'Save your festival picks',
       description: 'Sign in to mark Must See, Want to See, or Maybe picks and share them with your crew.',
-      cta: 'Sign Up Free',
+      cta: 'Sign up free',
     },
     crew: {
       Icon: Users,
       title: 'Plan with your crew',
       description: 'Invite friends, compare picks, and find sets you all want to see.',
-      cta: 'Sign Up Free',
+      cta: 'Sign up free',
     },
     grid: {
       Icon: Clock,
       title: 'See every stage at once',
       description:
         'The grid shows every stage and set across the festival. Sign in to track conflicts and plan your day.',
-      cta: 'Sign Up Free',
+      cta: 'Sign up free',
     },
   };
 

@@ -1,3 +1,4 @@
+import { redirect } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
 
 type PersistApi = { hasHydrated: () => boolean; onFinishHydration: (cb: () => void) => () => void };
@@ -34,3 +35,9 @@ export async function authReady(): Promise<void> {
 
 export const isAuthenticated = () => !!useAuthStore.getState().user;
 export const isAdmin = () => useAuthStore.getState().user?.isAdmin || false;
+
+/** beforeLoad for /login and /register: a signed-in user has no use for them. */
+export async function redirectIfSignedIn() {
+  await authReady();
+  if (isAuthenticated()) throw redirect({ to: '/cards' });
+}
