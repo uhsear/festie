@@ -1,6 +1,7 @@
-import { NativeTabs } from 'expo-router/native-tabs';
+import { NativeTabs, type MaterialIcon, type SFSymbolIcon } from 'expo-router/native-tabs';
 import { colors } from '@festie/shared/tokens';
 import { useUIStore } from '@festie/shared/stores';
+import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { useTokens } from '../../hooks/useTokens';
 
@@ -12,11 +13,28 @@ import { useTokens } from '../../hooks/useTokens';
  * tab-bar-bleed workaround are no longer load-bearing.
  *
  * `tintColor` keeps the brand accent rule (aqua = primary/selection) and follows
- * the active theme (daylight aqua is the darkened #00594f). Tab labels
- * are the canonical names (Schedule/Picks/Crew/Account). Web falls back to the JS
+ * the active theme (daylight aqua is the darkened #00594f). Tab labels and
+ * order come from the shared APP_SECTIONS (Lineup/My Plan/Crew/Map/More), so
+ * web and mobile name the sections the same. Five is the iOS limit before the
+ * system "More" overflow: do not add a sixth. Web falls back to the JS
  * <Tabs> in _layout.web.tsx (NativeTabs is native-only; eas update still bundles
  * web for the mobile package).
  */
+// calendar has no plain `.fill` cut in SF Symbols, so the circle pair gives the
+// same outline→fill selected feedback as the other tabs instead of an unchanged
+// glyph on select.
+const TAB_ROUTES: Record<AppSectionKey, { name: string; sf: SFSymbolIcon['sf']; md: MaterialIcon['md'] }> = {
+  lineup: { name: 'index', sf: { default: 'calendar.circle', selected: 'calendar.circle.fill' }, md: 'event' },
+  myPlan: { name: 'picks', sf: { default: 'star', selected: 'star.fill' }, md: 'star' },
+  crew: { name: 'crew', sf: { default: 'person.2', selected: 'person.2.fill' }, md: 'group' },
+  map: { name: 'map', sf: { default: 'map', selected: 'map.fill' }, md: 'map' },
+  more: {
+    name: 'account',
+    sf: { default: 'person.crop.circle', selected: 'person.crop.circle.fill' },
+    md: 'person',
+  },
+};
+
 export default function TabLayout() {
   const { colors } = useTokens();
   const daylight = useUIStore((s) => s.theme) === 'daylight';
@@ -36,8 +54,8 @@ export default function TabLayout() {
   // flow into the shared Zustand stores automatically. Must stay mounted here.
   useRealtimeSync();
 
-  // All four tabs stay visible for guests: the Account tab is the sign-in entry
-  // (it routes a guest to /login), and Picks/Crew advertise the features +
+  // All five tabs stay visible for guests: the More tab is the sign-in entry
+  // (it routes a guest to /login), Map shows stages and amenities, and My Plan/Crew advertise the features +
   // gate via AuthGate (crew shows an in-place "Sign in required" state). Hiding
   // them for guests removed the only discoverable sign-in path, so they stay.
 
@@ -48,28 +66,15 @@ export default function TabLayout() {
       labelVisibilityMode="labeled"
       {...daylightBar}
     >
-      <NativeTabs.Trigger name="index">
-        {/* calendar has no plain `.fill` cut in SF Symbols, so the circle pair
-            gives the same outline→fill selected feedback as the other tabs
-            instead of an unchanged glyph on select. */}
-        <NativeTabs.Trigger.Icon sf={{ default: 'calendar.circle', selected: 'calendar.circle.fill' }} md="event" />
-        <NativeTabs.Trigger.Label>Schedule</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="picks">
-        <NativeTabs.Trigger.Icon sf={{ default: 'star', selected: 'star.fill' }} md="star" />
-        <NativeTabs.Trigger.Label>Picks</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="crew">
-        <NativeTabs.Trigger.Icon sf={{ default: 'person.2', selected: 'person.2.fill' }} md="group" />
-        <NativeTabs.Trigger.Label>Crew</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="account">
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
-          md="person"
-        />
-        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
+      {APP_SECTIONS.map(({ key, label }) => {
+        const route = TAB_ROUTES[key];
+        return (
+          <NativeTabs.Trigger key={key} name={route.name}>
+            <NativeTabs.Trigger.Icon sf={route.sf} md={route.md} />
+            <NativeTabs.Trigger.Label>{label}</NativeTabs.Trigger.Label>
+          </NativeTabs.Trigger>
+        );
+      })}
     </NativeTabs>
   );
 }

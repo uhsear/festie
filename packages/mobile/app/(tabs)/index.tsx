@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFestivalDataStore, useFestivalStore, useAuthStore, useCrewStore, useUIStore } from '@festie/shared/stores';
+import { useFestivalDataStore, useFestivalStore, useAuthStore, useUIStore } from '@festie/shared/stores';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import {
   artistDisplayName,
@@ -121,7 +121,6 @@ export default function TimelineScreen() {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const loadProfiles = useFestivalDataStore((s) => s.loadProfiles);
   const user = useAuthStore((s) => s.user);
-  const activeCrew = useCrewStore((s) => s.activeCrew);
   const isLoading = useFestivalDataStore((s) => s.isLoading);
   const error = useFestivalDataStore((s) => s.error);
   const stages = useFestivalDataStore((s) => s.stages);
@@ -935,19 +934,6 @@ export default function TimelineScreen() {
         {/* "Live" is reserved for location (P1-2); flash = Now & Next. */}
         <Ionicons name="flash" size={20} color={t.colors.accent.aqua} />
       </TouchableOpacity>
-      {activeCrew ? (
-        <TouchableOpacity
-          style={styles.headerIconButton}
-          onPress={() => router.push('/find')}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Find your crew"
-        >
-          {/* Secondary header icon — coral is reserved for danger/SOS, and the
-              SOS affordance itself lives inside /find, not on this trigger. */}
-          <Ionicons name="navigate-circle-outline" size={20} color={t.colors.text.secondary} />
-        </TouchableOpacity>
-      ) : null}
     </View>
   );
 
@@ -958,11 +944,12 @@ export default function TimelineScreen() {
     <View style={styles.container} testID="schedule-screen">
       <ScreenHeader title={currentFestival.name} icon="calendar-outline" right={headerActions} />
       {/* P1-5 — phase-aware home actions: re-prioritizes the crew's destinations
-          (picks / crew / find / Now & Next / wrap) by festival phase. Hidden when
+          (My Plan / crew / map / Now & Next / wrap) by festival phase. Hidden when
           the festival has no usable dates (phase === null). Folds behind the
-          filter toggle (DC1) — it's a setup action, not a mid-crowd one. Sits
+          filter toggle (DC1) — it's a setup action, not a mid-crowd one — except
+          after the festival, when Wrap is the first shortcut. Sits
           above the view switcher so it reads as the head of the Filters panel. */}
-      {phase && filtersOpen ? (
+      {phase && (filtersOpen || phase === 'post') ? (
         <View style={{ paddingHorizontal: hPad }}>
           <PhaseHomeActions phase={phase} />
         </View>

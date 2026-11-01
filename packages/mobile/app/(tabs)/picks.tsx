@@ -1025,7 +1025,7 @@ export default function PicksScreen() {
 
   return (
     <View style={styles.container} testID="picks-screen">
-      <ScreenHeader title="My Picks" icon="star" />
+      <ScreenHeader title="My Plan" icon="star" />
       <View style={styles.body}>{body}</View>
       {showScrollTop ? (
         <Animated.View

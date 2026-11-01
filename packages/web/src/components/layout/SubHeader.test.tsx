@@ -179,6 +179,8 @@ describe('SubHeader stage chips', () => {
     mockPathname = '/timeline';
     render(<SubHeader dayOnly={true} festivalOnly={false} />);
     expect(screen.queryByRole('button', { name: 'Forest' })).not.toBeInTheDocument();
+    // Timeline/Grid have no fold buttons, so the summary must stay visible on phones.
+    expect(screen.getByTestId('stage-filter-summary').closest('[class~="max-md:hidden"]')).toBeNull();
     fireEvent.click(screen.getByTestId('stage-filter-summary'));
     expect(storeState.setActiveStages).toHaveBeenCalledWith([]);
   });
@@ -218,5 +220,48 @@ describe('SubHeader save status chip', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     expect(screen.queryByTestId('save-status-chip')).not.toBeInTheDocument();
     storeState.currentProfile = prev;
+  });
+});
+
+describe('SubHeader phone fold', () => {
+  afterEach(() => {
+    storeState.searchQuery = '';
+    mockPathname = '/cards';
+  });
+
+  it('renders collapsed Search and Filters buttons and folds the filters', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('button', { name: 'Search' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Filters' })).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById('subheader-filters')).toHaveClass('max-md:hidden');
+  });
+
+  it('opens the filters when Filters is clicked', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    expect(screen.getByRole('button', { name: 'Filters' })).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById('subheader-filters')).not.toHaveClass('max-md:hidden');
+  });
+
+  it('opens and focuses the search input when Search is clicked', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(document.getElementById('subheader-search')).toHaveClass('max-md:hidden');
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(document.getElementById('subheader-search')).not.toHaveClass('max-md:hidden');
+    expect(screen.getByLabelText('Search festival artists')).toHaveFocus();
+  });
+
+  it('keeps search open and counts it in Filters when a query is set', () => {
+    storeState.searchQuery = 'foo';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(document.getElementById('subheader-search')).not.toHaveClass('max-md:hidden');
+    expect(screen.getByRole('button', { name: 'Filters (1)' })).toBeInTheDocument();
+  });
+
+  it('renders neither button on /picks', () => {
+    mockPathname = '/picks';
+    render(<SubHeader dayOnly={true} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Filters/ })).not.toBeInTheDocument();
   });
 });

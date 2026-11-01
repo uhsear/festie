@@ -167,7 +167,11 @@ function CardsViewInner() {
     <>
       {/* P1-5 — phase-aware home actions (authed only; matches BottomNav hiding
           crew/picks/wrap from guests). Re-prioritizes destinations by phase. */}
-      {user && phase ? <PhaseHomeActions phase={phase} /> : null}
+      {user && phase ? (
+        <div className={phase === 'post' ? undefined : 'max-md:hidden'}>
+          <PhaseHomeActions phase={phase} />
+        </div>
+      ) : null}
 
       {/* Card grid */}
       {filteredSets.length === 0 ? (

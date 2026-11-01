@@ -3,16 +3,19 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FestivalDayBanner from './FestivalDayBanner';
 
-// Mock the dependencies
-const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => mockNavigate,
-}));
-
-const mockSetFestivalMode = vi.fn();
-vi.mock('@festie/shared/stores/festivalModeStore', () => ({
-  useFestivalModeStore: (selector: (s: { setFestivalMode: typeof mockSetFestivalMode }) => unknown) =>
-    selector({ setFestivalMode: mockSetFestivalMode }),
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
+    <a
+      href={to}
+      {...rest}
+      onClick={(e) => {
+        e.preventDefault();
+        (rest.onClick as (() => void) | undefined)?.();
+      }}
+    >
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock('../../hooks/useHaptics', () => ({
@@ -37,10 +40,11 @@ describe('FestivalDayBanner', () => {
     expect(screen.getByText(/festival day/i)).toBeInTheDocument();
   });
 
-  it('has an Enter Festival Mode button', () => {
+  it('has an Open Now & Next link to /festival-mode', () => {
     render(<FestivalDayBanner />);
-    expect(screen.getByTestId('festival-day-banner-enter')).toBeInTheDocument();
-    expect(screen.getByText('Enter Festival Mode')).toBeInTheDocument();
+    const link = screen.getByTestId('festival-day-banner-enter');
+    expect(link).toHaveAttribute('href', '/festival-mode');
+    expect(link).toHaveTextContent('Open Now & Next');
   });
 
   it('has a dismiss button', () => {
@@ -68,18 +72,10 @@ describe('FestivalDayBanner', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('activates festival mode and navigates on enter click', async () => {
+  it('hides the banner after the link is clicked', async () => {
     const user = userEvent.setup();
     render(<FestivalDayBanner />);
-    await user.click(screen.getByText('Enter Festival Mode'));
-    expect(mockSetFestivalMode).toHaveBeenCalledWith(true);
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/festival-mode' });
-  });
-
-  it('dismisses the banner after entering festival mode', async () => {
-    const user = userEvent.setup();
-    render(<FestivalDayBanner />);
-    await user.click(screen.getByText('Enter Festival Mode'));
+    await user.click(screen.getByTestId('festival-day-banner-enter'));
     expect(screen.queryByTestId('festival-day-banner')).not.toBeInTheDocument();
   });
 

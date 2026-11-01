@@ -37,6 +37,15 @@ vi.mock('lucide-react', () => ({
   ShieldCheck: () => <span data-testid="shield-check-icon" />,
   // SyncMarker (pending / failed row marker).
   CloudOff: () => <span data-testid="cloud-off-icon" />,
+  Maximize2: () => <span data-testid="maximize-icon" />,
+}));
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 // api is unused in assertions (the mutation fns are what we check), but the
@@ -170,6 +179,24 @@ describe('MeetingPointsTab', () => {
     setQuery({ data: [] });
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     expect(screen.getByText('No meeting points yet')).toBeInTheDocument();
+  });
+
+  it('links to the full map page', () => {
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByRole('link', { name: 'Open full map' })).toHaveAttribute('href', '/map');
+  });
+
+  it('warns that the full map stops sharing only while sharing to this crew', () => {
+    useLiveLocationStore.getState().setActiveCrew('c1');
+    useLiveLocationStore.getState().startSharing('c1');
+    const { unmount } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByRole('link', { name: 'Open full map' })).toHaveAccessibleDescription(
+      /stops sharing your location/,
+    );
+    unmount();
+    expect(useLiveLocationStore.getState().sharingCrewId).toBeNull();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.queryByText(/stops sharing your location/)).not.toBeInTheDocument();
   });
 
   it('renders the points list', () => {

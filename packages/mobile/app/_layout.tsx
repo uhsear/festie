@@ -102,17 +102,18 @@ configureApi({
 type DeepLinkTarget = string | { pathname: string; params: Record<string, string> };
 
 // Static top-level path segments a push-notification `deepLink` is allowed to
-// resolve to. `crew` lands on the crew tab's logistics sub-tab -- the same
-// {pathname, params} shortcut find.tsx/map.tsx already use to jump straight
-// to the SOS panel (crew.tsx's `tab=logistics` deep-link contract) -- so a
-// crew_sos push actually opens SOS instead of silently no-op'ing.
+// resolve to. `crew` lands on the crew tab's Find sub-tab -- the same
+// {pathname, params} shortcut the Map tab already uses to jump straight
+// to the SOS panel (crew.tsx's `tab=find` deep-link contract) -- so a
+// crew_sos push actually opens SOS instead of silently no-op'ing. `find` is
+// the old "Find each other" hub, which now lives in the Map tab.
 const DEEPLINK_ROUTES: Record<string, DeepLinkTarget> = {
   wrap: '/wrap',
-  crew: { pathname: '/(tabs)/crew', params: { tab: 'logistics' } },
+  crew: { pathname: '/(tabs)/crew', params: { tab: 'find' } },
   'crew-compare': '/crew-compare',
   'crew-plan': '/crew-plan',
   'festival-mode': '/festival-mode',
-  find: '/find',
+  find: '/map',
   grid: '/grid',
   map: '/map',
   'plan-share': '/plan-share',
@@ -146,7 +147,7 @@ export function parseDeepLink(raw: string): DeepLinkTarget | null {
 function routeNotification(r: ReturnType<typeof useRouter>, data: Record<string, unknown> | undefined) {
   const sosCrewId = sosPushCrewId(data);
   if (sosCrewId) {
-    // Open that crew's logistics tab, where CrewSos shows the banner with "Get directions".
+    // Open that crew's Find tab, where CrewSos shows the banner with "Get directions".
     if (sosCrewId !== useCrewStore.getState().activeCrew?.id) {
       useCrewStore.getState().selectCrew(sosCrewId).catch(() => {});
     } else {
@@ -495,7 +496,7 @@ function AuthGate() {
             */}
             <Stack.Screen name="(tabs)" options={{ gestureResponseDistance: { start: 8 } }} />
             <Stack.Screen name="(auth)" />
-            <Stack.Screen name="grid" options={{ headerBackTitle: 'Schedule' }} />
+            <Stack.Screen name="grid" options={{ headerBackTitle: 'Lineup' }} />
             <Stack.Screen
               name="set/[setId]"
               options={{

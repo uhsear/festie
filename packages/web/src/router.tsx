@@ -13,6 +13,7 @@ import CrewSkeleton from './components/ui/skeletons/CrewSkeleton';
 import CrewPlanSkeleton from './components/ui/skeletons/CrewPlanSkeleton';
 import AccountSkeleton from './components/ui/skeletons/AccountSkeleton';
 import WrapSkeleton from './components/ui/skeletons/WrapSkeleton';
+import { parseCrewTab, type CrewTabKey } from '@festie/shared/utils';
 
 // Wrap a lazy component so React.Suspense shows a layout-matched skeleton
 // while the chunk downloads — this replaces the previous single "Loading..."
@@ -47,6 +48,7 @@ const loadForgot = () => import('./routes/forgot-password');
 const loadAccount = () => import('./routes/account');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
+const loadMap = () => import('./routes/map');
 
 // Generic minimal fallback for auth/admin routes — these chunks are tiny and
 // a layout-matched skeleton isn't worth the bytes. Main-tab routes below get
@@ -84,6 +86,7 @@ const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
 const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton);
+const MapView = withSkeleton(lazyRouteComponent(loadMap), MinimalFallback);
 const AdminPanel = withSkeleton(lazyRouteComponent(loadAdmin), MinimalFallback);
 const LoginPage = withSkeleton(lazyRouteComponent(loadLogin), MinimalFallback);
 const RegisterPage = withSkeleton(lazyRouteComponent(loadRegister), MinimalFallback);
@@ -183,10 +186,23 @@ const crewRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/crew',
   component: CrewView,
-  validateSearch: (search: Record<string, unknown>): { sos?: string } =>
-    typeof search.sos === 'string' ? { sos: search.sos } : {},
+  validateSearch: (search: Record<string, unknown>): { sos?: string; tab?: CrewTabKey } => {
+    const out: { sos?: string; tab?: CrewTabKey } = {};
+    if (typeof search.sos === 'string') out.sos = search.sos;
+    const tab = parseCrewTab(search.tab);
+    if (tab) out.tab = tab;
+    return out;
+  },
   // No guest guard: /crew renders <GuestTeaser mode="crew"/> in place for
   // unauthenticated visitors (parity with the always-visible nav tabs).
+});
+
+// /map — full-page map. Public: guests see stages and amenities; crew layers
+// render inside the route only for a signed-in user with an active crew.
+const mapRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/map',
+  component: MapView,
 });
 
 // /crew-plan — one-screen offline-native "what's my crew's plan" digest.
@@ -264,6 +280,7 @@ const routeTree = rootRoute.addChildren([
   picksRoute,
   crewRoute,
   crewPlanRoute,
+  mapRoute,
   gridRoute,
   festivalModeRoute,
   wrapRoute,

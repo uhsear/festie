@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontSize, spacing } from '@festie/shared/tokens';
+import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { useTokens } from '../../hooks/useTokens';
 
@@ -11,6 +12,14 @@ import { useTokens } from '../../hooks/useTokens';
  * <Tabs>. Festie's shipped web app is the separate @festie/web SPA; this exists
  * purely to keep the mobile web bundle building.
  */
+const TAB_ROUTES: Record<AppSectionKey, { name: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  lineup: { name: 'index', icon: 'calendar-outline' },
+  myPlan: { name: 'picks', icon: 'star-outline' },
+  crew: { name: 'crew', icon: 'people-outline' },
+  map: { name: 'map', icon: 'map-outline' },
+  more: { name: 'account', icon: 'person-outline' },
+};
+
 export default function TabLayoutWeb() {
   useRealtimeSync();
   const { colors } = useTokens();
@@ -34,34 +43,19 @@ export default function TabLayoutWeb() {
         tabBarLabelStyle: { fontSize: fontSize[10], fontWeight: '600' },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Schedule',
-          tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" size={size} color={color as string} />,
-        }}
-      />
-      <Tabs.Screen
-        name="picks"
-        options={{
-          title: 'Picks',
-          tabBarIcon: ({ color, size }) => <Ionicons name="star-outline" size={size} color={color as string} />,
-        }}
-      />
-      <Tabs.Screen
-        name="crew"
-        options={{
-          title: 'Crew',
-          tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color as string} />,
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: 'Account',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color as string} />,
-        }}
-      />
+      {APP_SECTIONS.map(({ key, label }) => {
+        const { name, icon } = TAB_ROUTES[key];
+        return (
+          <Tabs.Screen
+            key={key}
+            name={name}
+            options={{
+              title: label,
+              tabBarIcon: ({ color, size }) => <Ionicons name={icon} size={size} color={color as string} />,
+            }}
+          />
+        );
+      })}
     </Tabs>
   );
 }

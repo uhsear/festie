@@ -20,8 +20,8 @@ import type { Page } from '@playwright/test';
  *   - [aria-label="Set detail panel"] ............ DetailPanel (vaul Drawer.Content)
  *   - "Sign in" / "Create Account" buttons ....... login.tsx / register.tsx
  *   - [data-testid="profile-badge"] .............. UserMenu trigger
- *   - "Schedule"/"Cards"/"Timeline"/"Grid" tabs .. Header desktop nav + ScheduleViewSwitcher
- *   - "Picks"/"Crew" nav ......................... Header (desktop) / BottomNav (mobile)
+ *   - "Lineup"/"Cards"/"Timeline"/"Grid" tabs .. Header desktop nav + ScheduleViewSwitcher
+ *   - "My Plan"/"Crew" nav ......................... Header (desktop) / BottomNav (mobile)
  *   - toast role="status"/"alert" ................ Toast.tsx
  *
  * No screenshot/visual assertions (the CI run uses --grep-invert screenshot).
@@ -113,8 +113,8 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="set-card"][data-artist="Beta"]')).toBeVisible();
 
     // Guests now get the full nav (parity with mobile) instead of a guest
-    // banner: the "My Picks" tab is visible even when logged out.
-    await expect(page.getByRole('button', { name: 'My Picks' })).toBeVisible();
+    // banner: the "My Plan" tab is visible even when logged out.
+    await expect(page.getByRole('button', { name: 'My Plan' })).toBeVisible();
 
     // Switch to fest-2 → Omega appears (Friday/Sunday differ; Sunday is the only day).
     await page.locator('[data-testid="festival-select"]').selectOption('fest-2');
@@ -267,16 +267,16 @@ test.describe('festival planner browser regression', () => {
 
 // ── Nav helpers that tolerate desktop (Header) vs mobile (BottomNav) ─────────
 
-// The desktop Header nav uses plain text buttons ("My Picks", "Crew"); the
-// mobile BottomNav uses buttons with aria-label "View Picks" / "View Crew".
+// The desktop Header nav uses plain text buttons ("My Plan", "Crew"); the
+// mobile BottomNav uses buttons with aria-label "View My Plan" / "View Crew".
 // Click whichever exists for the current viewport.
 async function openMyPicks(page: Page) {
-  const desktop = page.getByRole('button', { name: 'My Picks' });
+  const desktop = page.getByRole('button', { name: 'My Plan' });
   if (await desktop.count()) {
     await desktop.first().click();
     return;
   }
-  await page.getByRole('button', { name: 'View Picks' }).click();
+  await page.getByRole('button', { name: 'View My Plan' }).click();
 }
 
 async function openCrew(page: Page) {

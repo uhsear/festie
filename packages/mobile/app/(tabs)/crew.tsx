@@ -29,6 +29,8 @@ import {
   deleteCrewConfirmMessage,
   leaveCrewConfirmMessage,
   removeMemberConfirmMessage,
+  DEFAULT_CREW_TAB,
+  parseCrewTab,
 } from '@festie/shared/utils';
 import type { Crew, CrewMember, CrewOverlap, FestivalSet } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -55,11 +57,6 @@ import CrewSos from '../../components/CrewSos';
 import InviteQRSheet from '../../components/InviteQRSheet';
 import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
-
-// DC2 deep-link tab whitelist. Module-scoped so its identity is stable across
-// renders (a component-local array would be a new ref each render and force the
-// ?tab effect to re-run / need it as a dep).
-const TAB_KEYS: readonly CrewTabKey[] = ['members', 'plan', 'logistics', 'money'];
 
 export default function CrewScreen() {
   const t = useTokens();
@@ -163,12 +160,12 @@ export default function CrewScreen() {
   const [forceAddId, setForceAddId] = useState('');
   const [forceAddBusy, setForceAddBusy] = useState(false);
   const [reformBusy, setReformBusy] = useState(false);
-  // P1-2: which crew section tab is showing. Members / Plan / Logistics / Money.
+  // P1-2: which crew section tab is showing. Find / Members / Plan / Money.
   // Day-of first: Find (SOS, status, live location, meeting points) opens by default.
-  const [crewTab, setCrewTab] = useState<CrewTabKey>('logistics');
+  const [crewTab, setCrewTab] = useState<CrewTabKey>(DEFAULT_CREW_TAB);
 
   // DC2: a raise-SOS affordance on /find and /map deep-links here with
-  // ?tab=logistics so the user lands on the Find pane where CrewSos lives.
+  // ?tab=find so the user lands on the Find pane where CrewSos lives.
   // mpLat/mpLng: tap-to-create coords deep-linked from the map's long-press —
   // forwarded to CrewMeetingPoints to prefill+open its create form.
   const {
@@ -206,17 +203,18 @@ export default function CrewScreen() {
     setShowOverlap(false);
     setForceAddOpen(false);
     setForceAddId('');
-    setCrewTab('logistics');
+    setCrewTab(DEFAULT_CREW_TAB);
     setTotemEditOpen(false);
   }
 
   // DC2: honor a deep-linked ?tab=... (e.g. the find/map SOS shortcut lands on
   // the Find pane). Runs after the crew-change reset since it keys on the param.
-  // TAB_KEYS is module-scoped (stable), so the param is the only dep.
+  // parseCrewTab also maps old keys (logistics, ...) so old links still work.
   useEffect(() => {
-    if (tabParam && (TAB_KEYS as readonly string[]).includes(tabParam)) {
+    const next = parseCrewTab(tabParam);
+    if (next) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- event-driven: apply the deep-linked ?tab exactly when the URL param changes; not derivable as render state since the user can still switch tabs afterward
-      setCrewTab(tabParam as CrewTabKey);
+      setCrewTab(next);
     }
   }, [tabParam]);
 
@@ -759,11 +757,11 @@ export default function CrewScreen() {
               tab, so this chip jumps there rather than duplicating the raise
               flow — safety must be reachable from every crew tab. */}
           {/* Hidden on Logistics: the Find tab already shows Send SOS. */}
-          {crewTab !== 'logistics' ? (
+          {crewTab !== 'find' ? (
             <TouchableOpacity
               testID="crew-action-sos"
               style={styles.sosChip}
-              onPress={() => setCrewTab('logistics')}
+              onPress={() => setCrewTab('find')}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Open crew safety to send an SOS"
@@ -1293,7 +1291,7 @@ export default function CrewScreen() {
           </View>
           <CrewRides crewId={crew.id} currentUserId={user.id} isOwner={isOwner} />
         </ScrollView>
-      ) : crewTab === 'logistics' ? (
+      ) : crewTab === 'find' ? (
         <ScrollView
           style={styles.flex1}
           contentContainerStyle={tabScrollStyle}
@@ -1306,6 +1304,19 @@ export default function CrewScreen() {
           {/* DC2: SOS must be reachable without any scroll — top of the pane,
               always visible the instant the Find tab opens. */}
           <CrewSos crewId={crew.id} currentUserId={user.id} />
+
+          <TouchableOpacity
+            testID="crew-action-map"
+            style={styles.overlapToggle}
+            onPress={() => router.navigate('/(tabs)/map')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Open the map with your crew and meeting points"
+          >
+            <Ionicons name="map-outline" size={16} color={t.colors.accent.aqua} />
+            <Text style={styles.overlapToggleText}>Open map</Text>
+            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+          </TouchableOpacity>
 
           {/* Live location toggle sits below the SOS button. In low-power mode
               the battery-hungry live-location share is paused (gated by the
@@ -1338,21 +1349,6 @@ export default function CrewScreen() {
           />
 
           <CrewHomeBase crewId={crew.id} location={crew.homeBaseLocation} time={crew.homeBaseTime} isOwner={isOwner} />
-
-          {/* "Find each other" — ONE destination that co-locates the crew map,
-              the meeting-point compass and saved meeting points. */}
-          <TouchableOpacity
-            testID="crew-action-find"
-            style={styles.overlapToggle}
-            onPress={() => router.push('/find')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Find each other — crew map, compass and meeting points"
-          >
-            <Ionicons name="location-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>Find each other</Text>
-            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-          </TouchableOpacity>
 
           {/* M5 P2P plan handoff — QR / scan / SMS when signal is dead. */}
           <TouchableOpacity

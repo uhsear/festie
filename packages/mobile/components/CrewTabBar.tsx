@@ -1,24 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, type ScrollViewInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
-export type CrewTabKey = 'members' | 'plan' | 'logistics' | 'money';
+export type { CrewTabKey };
 
-// DC4: 'Find' owns the mid-festival "where is everyone / where do we meet"
-// cluster (map, compass, live location, SOS, meeting points). Packing + Rides
-// moved into 'Plan' (pre-festival planning), Money kept as-is. The `logistics`
-// key is retained to avoid churning every consumer; only the label/icon changed.
-// Day-of first: Find leads and is the default tab (SOS, status, live location,
-// meeting points); setup tabs follow.
-const TABS: readonly { key: CrewTabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: 'logistics', label: 'Find', icon: 'location-outline' },
-  { key: 'members', label: 'Members', icon: 'people-outline' },
-  { key: 'plan', label: 'Plan', icon: 'calendar-outline' },
-  { key: 'money', label: 'Money', icon: 'cash-outline' },
-];
+// Keys and labels come from @festie/shared so web and mobile stay in step.
+// 'Find' owns the mid-festival "where is everyone / where do we meet" cluster
+// (SOS, live location, meeting points) and is the default tab.
+const TAB_ICONS: Record<CrewTabKey, keyof typeof Ionicons.glyphMap> = {
+  find: 'location-outline',
+  members: 'people-outline',
+  plan: 'calendar-outline',
+  money: 'cash-outline',
+};
 
 interface CrewTabBarProps {
   activeTab: CrewTabKey;
@@ -32,7 +30,7 @@ interface CrewTabBarProps {
 
 /**
  * P1-2 — segmented Crew tab bar (mobile mirror of web's CrewTabBar). Splits the
- * crew screen's many sections into Members / Plan / Logistics / Money tabs so
+ * crew screen's many sections into Find / Members / Plan / Money tabs so
  * the screen reads as tabs instead of one long scroll. Horizontally scrollable
  * for narrow phones; each tab is a >=44pt touch target. Coral is reserved for
  * the badges (open polls / unsettled balance), matching the web pattern.
@@ -73,7 +71,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
         contentContainerStyle={styles.bar}
         accessibilityRole="tablist"
       >
-        {TABS.map((tab) => {
+        {CREW_TABS.map((tab) => {
           const active = tab.key === activeTab;
           const badge = badges?.[tab.key];
           return (
@@ -97,7 +95,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
               }
             >
               {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
-              <Ionicons name={tab.icon} size={16} color={active ? t.colors.accent.aqua : t.colors.text.secondary} />
+              <Ionicons name={TAB_ICONS[tab.key]} size={16} color={active ? t.colors.accent.aqua : t.colors.text.secondary} />
               {!largeText || active ? (
                 <Text style={[styles.label, active && styles.labelActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {tab.label}

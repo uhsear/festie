@@ -19,14 +19,9 @@ vi.mock('@festie/shared', () => ({
   useAuthStore: (selector: (s: { user: typeof mockUser }) => unknown) => selector({ user: mockUser }),
 }));
 
-vi.mock('@festie/shared/stores', () => ({
-  useFestivalStore: (selector: (s: { currentFestival: null; days: never[] }) => unknown) =>
-    selector({ currentFestival: null, days: [] }),
-}));
-
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@festie/shared/utils')>()),
-  isFestivalOver: () => false,
+  isFestivalOver: () => true,
 }));
 
 describe('BottomNav', () => {
@@ -36,64 +31,77 @@ describe('BottomNav', () => {
     mockLocation.pathname = '/cards';
   });
 
-  it('renders a single consolidated Schedule tab for guest users', () => {
-    render(<BottomNav />);
-    expect(screen.getByLabelText('View Schedule')).toBeInTheDocument();
-    // Timeline/Grid folded into the in-page ScheduleViewSwitcher — no longer tabs.
-    expect(screen.queryByLabelText('View Timeline')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('View Grid')).not.toBeInTheDocument();
-  });
-
-  it('shows auth tabs for guest users too (parity with mobile)', () => {
-    render(<BottomNav />);
-    expect(screen.getByLabelText('View Picks')).toBeInTheDocument();
-    expect(screen.getByLabelText('View Crew')).toBeInTheDocument();
-    // Guests see "Sign in" in the Account slot (same target).
-    expect(screen.getByLabelText('View Sign in')).toHaveTextContent('Sign in');
-    expect(screen.queryByLabelText('View Account')).not.toBeInTheDocument();
-  });
-
-  it('shows auth tabs for logged-in users', () => {
+  it('renders the five sections in shared order for a signed-in user', () => {
     mockUser = { id: 'u1', username: 'alice' };
     render(<BottomNav />);
-    expect(screen.getByLabelText('View Picks')).toBeInTheDocument();
-    expect(screen.getByLabelText('View Crew')).toBeInTheDocument();
-    expect(screen.getByLabelText('View Account')).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    const links = within(nav).getAllByRole('link');
+    expect(links.map((l) => l.getAttribute('aria-label'))).toEqual([
+      'View Lineup',
+      'View My Plan',
+      'View Crew',
+      'View Map',
+      'View More',
+    ]);
+    expect(links.map((l) => l.getAttribute('href'))).toEqual(['/cards', '/picks', '/crew', '/map', '/account']);
+  });
+
+  it('shows all five slots for guests, with Sign in in the More slot', () => {
+    render(<BottomNav />);
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    expect(within(nav).getAllByRole('link')).toHaveLength(5);
+    expect(screen.getByLabelText('View Sign in')).toHaveTextContent('Sign in');
+    expect(screen.getByLabelText('View Sign in')).toHaveAttribute('href', '/account');
+    expect(screen.queryByLabelText('View More')).not.toBeInTheDocument();
+  });
+
+  it('never renders a Wrap tab, even when the festival is over', () => {
+    mockUser = { id: 'u1', username: 'alice' };
+    render(<BottomNav />);
+    expect(screen.queryByLabelText('View Wrap')).not.toBeInTheDocument();
   });
 
   it('marks the active item with aria-current=page', () => {
     render(<BottomNav />);
-    const scheduleTab = screen.getByLabelText('View Schedule');
-    expect(scheduleTab).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByLabelText('View Lineup')).toHaveAttribute('aria-current', 'page');
   });
 
   it('does not mark inactive items as current', () => {
     mockUser = { id: 'u1', username: 'alice' };
     render(<BottomNav />);
-    const crewTab = screen.getByLabelText('View Crew');
-    expect(crewTab).not.toHaveAttribute('aria-current');
+    expect(screen.getByLabelText('View Crew')).not.toHaveAttribute('aria-current');
   });
 
   it('treats "/" as equivalent to "/cards" for active state', () => {
     mockLocation.pathname = '/';
     render(<BottomNav />);
-    const scheduleTab = screen.getByLabelText('View Schedule');
-    expect(scheduleTab).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByLabelText('View Lineup')).toHaveAttribute('aria-current', 'page');
   });
 
-  it('keeps the Schedule tab active across the timeline and grid views', () => {
+  it('keeps Lineup active across the timeline and grid views', () => {
     mockLocation.pathname = '/timeline';
     const { unmount } = render(<BottomNav />);
-    expect(screen.getByLabelText('View Schedule')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByLabelText('View Lineup')).toHaveAttribute('aria-current', 'page');
     unmount();
     mockLocation.pathname = '/grid';
     render(<BottomNav />);
-    expect(screen.getByLabelText('View Schedule')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByLabelText('View Lineup')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps Crew active on /compare and /crew-plan', () => {
+    mockUser = { id: 'u1', username: 'alice' };
+    mockLocation.pathname = '/compare';
+    const { unmount } = render(<BottomNav />);
+    expect(screen.getByLabelText('View Crew')).toHaveAttribute('aria-current', 'page');
+    unmount();
+    mockLocation.pathname = '/crew-plan';
+    render(<BottomNav />);
+    expect(screen.getByLabelText('View Crew')).toHaveAttribute('aria-current', 'page');
   });
 
   it('renders tabs as real links with hrefs', () => {
     render(<BottomNav />);
-    expect(screen.getByRole('link', { name: 'View Schedule' })).toHaveAttribute('href', '/cards');
+    expect(screen.getByRole('link', { name: 'View Lineup' })).toHaveAttribute('href', '/cards');
   });
 
   it('renders a navigation landmark', () => {
@@ -101,34 +109,18 @@ describe('BottomNav', () => {
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
   });
 
-  it('renders 4 nav links for guests (Schedule + Picks + Crew + Account)', () => {
-    render(<BottomNav />);
-    const nav = screen.getByRole('navigation', { name: 'Primary' });
-    // Guests get the full tab set now (Wrap stays gated on isFestivalOver=false).
-    expect(within(nav).getAllByRole('link').length).toBe(4);
-  });
-
-  it('renders 4 nav links for logged-in user', () => {
-    mockUser = { id: 'u1', username: 'alice' };
-    render(<BottomNav />);
-    const nav = screen.getByRole('navigation', { name: 'Primary' });
-    // Schedule + My Picks + Crew + Me
-    expect(within(nav).getAllByRole('link').length).toBe(4);
-  });
-
   it('keeps every nav item keyboard-reachable (no roving tabindex)', () => {
     mockUser = { id: 'u1', username: 'alice' };
     render(<BottomNav />);
-    // Regression guard for the old keyboard trap: inactive items must not be
-    // removed from the tab order via tabIndex=-1.
-    expect(screen.getByLabelText('View Schedule')).not.toHaveAttribute('tabindex', '-1');
+    expect(screen.getByLabelText('View Lineup')).not.toHaveAttribute('tabindex', '-1');
     expect(screen.getByLabelText('View Crew')).not.toHaveAttribute('tabindex', '-1');
   });
 
-  it('renders label text for the Schedule tab', () => {
+  it('renders label text for each section', () => {
+    mockUser = { id: 'u1', username: 'alice' };
     render(<BottomNav />);
-    expect(screen.getByText('Schedule')).toBeInTheDocument();
-    expect(screen.queryByText('Timeline')).not.toBeInTheDocument();
-    expect(screen.queryByText('Grid')).not.toBeInTheDocument();
+    for (const label of ['Lineup', 'My Plan', 'Crew', 'Map', 'More']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
   });
 });
