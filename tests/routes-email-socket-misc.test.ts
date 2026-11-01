@@ -1242,7 +1242,7 @@ describe('routes/crew-features', () => {
       .send({ question: 'Too many?', options: ['Yes'] })
       .expect(409);
 
-    assert.match(res.body.error.message, /max 3/i);
+    assert.match(res.body.error.message, /already has 3 open polls/i);
   });
 
   test('POST /:crewId/polls/:pollId/vote — votes on poll', async () => {

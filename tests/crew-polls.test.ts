@@ -420,7 +420,7 @@ describe('routes/crew-polls.js — POST /:crewId/polls', () => {
 
     assert.equal(res.status, 409);
     assert.equal(res.body.error.code, 'CONFLICT');
-    assert.match(res.body.error.message, /Max 3 active polls/i);
+    assert.equal(res.body.error.message, 'This crew already has 3 open polls. Close one to start another.');
   });
 
   test('allows creating a poll when crew has fewer than 3 active polls', async () => {

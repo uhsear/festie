@@ -4,6 +4,7 @@ import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import EmptyState from '../ui/EmptyState';
 import { Users, UserPlus, Crown, UserMinus, Trash2, LogOut } from 'lucide-react';
+import { memberAvatarUrl, memberCountLabel } from '@festie/shared/utils';
 import type { CrewMember } from '@festie/shared/types';
 
 export interface MembersTabProps {
@@ -17,8 +18,11 @@ export interface MembersTabProps {
   onTransferOwnership: (member: CrewMember) => void;
   /** Owner-only kick. Optional so non-owner views can omit it. */
   onKick?: (member: CrewMember) => void;
-  /** Opens the delete (owner) or leave (member) confirm. Omit to hide the danger area. */
-  onDestroyCrew?: () => void;
+  /** Opens the leave flow (every member). Omit to hide the Membership area. */
+  onLeaveCrew?: () => void;
+  /** Opens the delete confirm (owner only). Omit to hide the Danger zone. */
+  onDeleteCrew?: () => void;
+  maxMembers?: number;
 }
 
 export default function MembersTab({
@@ -31,7 +35,9 @@ export default function MembersTab({
   currentUserId,
   onTransferOwnership,
   onKick,
-  onDestroyCrew,
+  onLeaveCrew,
+  onDeleteCrew,
+  maxMembers,
 }: MembersTabProps) {
   return (
     <div className="space-y-1.5 px-4">
@@ -47,6 +53,11 @@ export default function MembersTab({
         </div>
       )}
       {members.length > 0 ? (
+        <>
+        <div className="flex items-baseline justify-between px-1 pb-1">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Members</h3>
+          <span className="text-xs text-text-secondary">{memberCountLabel(members.length, maxMembers)}</span>
+        </div>
         <div className="space-y-0.5">
           {members.map((m, index) => {
             const memberIsOwner = m.role === 'owner' || ownerId === m.userId;
@@ -59,9 +70,11 @@ export default function MembersTab({
                 className="crew-member-row stagger-item relative py-2 px-2.5 rounded-md bg-bg-card border border-glass-border flex items-center gap-2.5 motion-reduce:!animate-none"
                 style={{ '--i': Math.min(index, 6) } as React.CSSProperties}
               >
-                <Avatar name={displayName} size="sm" />
+                <Avatar name={displayName} image={memberAvatarUrl(m)} size="sm" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-text-primary truncate">{m.name || m.username}</div>
+                  <div className="font-semibold text-text-primary truncate">
+                    {m.userId === currentUserId ? `${displayName} (you)` : displayName}
+                  </div>
                   {memberIsOwner && (
                     <div className="text-xs text-text-secondary inline-flex items-center gap-1">
                       <Crown className="w-3 h-3" aria-hidden="true" /> Owner
@@ -91,33 +104,33 @@ export default function MembersTab({
             );
           })}
         </div>
+        </>
       ) : (
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
           title="No members yet"
-          description="Share the invite code below — they'll appear here the moment they join."
+          description="Share the invite link — friends appear here the moment they join."
         />
       )}
-      {onDestroyCrew && (
-        <section aria-labelledby="crew-danger-heading" className="mt-6 pt-4 border-t border-border space-y-2">
-          <h3 id="crew-danger-heading" className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            {isOwner ? 'Danger zone' : 'Membership'}
+      {onLeaveCrew && (
+        <section aria-labelledby="crew-membership-heading" className="mt-6 pt-4 border-t border-border space-y-2">
+          <h3 id="crew-membership-heading" className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Membership
           </h3>
-          <Button
-            variant="outline"
-            onClick={onDestroyCrew}
-            className="min-h-11 text-sm text-[var(--color-text-danger)]"
-          >
-            {isOwner ? (
-              <>
-                <Trash2 className="w-4 h-4" aria-hidden="true" /> Delete crew…
-              </>
-            ) : (
-              <>
-                <LogOut className="w-4 h-4" aria-hidden="true" /> Leave crew…
-              </>
-            )}
+          <Button variant="outline" onClick={onLeaveCrew} className="min-h-11 text-sm text-[var(--color-text-danger)]">
+            <LogOut className="w-4 h-4" aria-hidden="true" /> Leave crew…
           </Button>
+        </section>
+      )}
+      {isOwner && onDeleteCrew && (
+        <section aria-labelledby="crew-danger-heading" className="mt-4 pt-4 border-t border-border space-y-2">
+          <h3 id="crew-danger-heading" className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Danger zone
+          </h3>
+          <Button variant="outline" onClick={onDeleteCrew} className="min-h-11 text-sm text-[var(--color-text-danger)]">
+            <Trash2 className="w-4 h-4" aria-hidden="true" /> Delete crew…
+          </Button>
+          <p className="text-xs text-text-muted">Deletes the crew for everyone.</p>
         </section>
       )}
     </div>

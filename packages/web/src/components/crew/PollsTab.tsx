@@ -7,6 +7,7 @@ import {
   useFestivalDataStore,
   writeOutcomeOf,
   writeOutcomeMessage,
+  openPollState,
 } from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
 import { useHaptics } from '../../hooks/useHaptics';
@@ -170,6 +171,8 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     vote.mutate({ pollId, optionIndex });
   }
 
+  const pollState = openPollState(polls);
+
   if (isLoading)
     return (
       <div className="px-4 space-y-2">
@@ -204,12 +207,29 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
         />
       ) : !showForm ? (
         <div className="space-y-2">
-          <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
+          <Button
+            variant="primary"
+            onClick={() => setShowForm(true)}
+            disabled={pollState.atCap}
+            aria-describedby={pollState.atCap ? 'poll-cap-note' : undefined}
+            className="w-full min-h-11"
+          >
             <Plus className="w-4 h-4" aria-hidden="true" /> Create Poll
           </Button>
-          <Button variant="secondary" onClick={() => setShowSchedule(true)} className="w-full min-h-11">
+          <Button
+            variant="secondary"
+            onClick={() => setShowSchedule(true)}
+            disabled={pollState.atCap}
+            aria-describedby={pollState.atCap ? 'poll-cap-note' : undefined}
+            className="w-full min-h-11"
+          >
             <CalendarClock className="w-4 h-4" aria-hidden="true" /> Schedule poll (which set?)
           </Button>
+          {pollState.text && (
+            <p id="poll-cap-note" className="text-sm text-text-muted">
+              {pollState.text}
+            </p>
+          )}
         </div>
       ) : (
         <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Share,
+  AccessibilityInfo,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
@@ -21,11 +22,16 @@ import { useCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import {
   setLabel,
-  getInitials,
   buildJoinUrl,
   formatInviteExpiry,
   inviteShareMessage,
   parseInviteCode,
+  crewCopy,
+  festivalLabel,
+  handOverCandidates,
+  memberAvatarUrl,
+  memberCountLabel,
+  FESTIE_ORIGIN,
   deleteCrewConfirmMessage,
   leaveCrewConfirmMessage,
   removeMemberConfirmMessage,
@@ -38,6 +44,10 @@ import { useHaptics } from '../../hooks/useHaptics';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import Button from '../../components/Button';
 import ScreenHeader from '../../components/ScreenHeader';
+import Avatar from '../../components/Avatar';
+import CreateCrewForm from '../../components/CreateCrewForm';
+import CrewSwitcherSheet from '../../components/CrewSwitcherSheet';
+import HandOverSheet from '../../components/HandOverSheet';
 import CrewTabBar, { type CrewTabKey } from '../../components/CrewTabBar';
 import EmptyState from '../../components/EmptyState';
 import SectionLabel from '../../components/SectionLabel';
@@ -103,13 +113,13 @@ export default function CrewScreen() {
   const error = useCrewStore((s) => s.error);
   const loadCrews = useCrewStore((s) => s.loadCrews);
   const selectCrew = useCrewStore((s) => s.selectCrew);
-  const createCrew = useCrewStore((s) => s.createCrew);
   const updateCrew = useCrewStore((s) => s.updateCrew);
   const leaveCrew = useCrewStore((s) => s.leaveCrew);
   const deleteCrew = useCrewStore((s) => s.deleteCrew);
   const kickMember = useCrewStore((s) => s.kickMember);
   const transferOwnership = useCrewStore((s) => s.transferOwnership);
-  const forceAddMember = useCrewStore((s) => s.forceAddMember);
+  const forceAddByUsername = useCrewStore((s) => s.forceAddByUsername);
+  const handOverAndLeave = useCrewStore((s) => s.handOverAndLeave);
   const regenerateInvite = useCrewStore((s) => s.regenerateInvite);
   const loadOverlap = useCrewStore((s) => s.loadOverlap);
   const loadPolls = useCrewStore((s) => s.loadPolls);
@@ -137,13 +147,7 @@ export default function CrewScreen() {
   const { getCrewScopedOtherPicks } = useCrew();
   const router = useRouter();
 
-  const [name, setName] = useState('');
-  // Crew totem (rally marker) on the create form — a plain emoji field (no
-  // picker) + short label, both optional. Capped server-side (16 / 40 chars).
-  const [createTotemEmoji, setCreateTotemEmoji] = useState('');
-  const [createTotemName, setCreateTotemName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
-  const [createBusy, setCreateBusy] = useState(false);
   // Owner-only totem editor (in the Manage footer). Opens prefilled from the
   // active crew; `null` while closed so we can re-seed on open.
   const [totemEditOpen, setTotemEditOpen] = useState(false);
@@ -157,9 +161,20 @@ export default function CrewScreen() {
   const [sectionLoadError, setSectionLoadError] = useState<string | null>(null);
   const [showOverlap, setShowOverlap] = useState(false);
   const [forceAddOpen, setForceAddOpen] = useState(false);
-  const [forceAddId, setForceAddId] = useState('');
+  const [forceAddName, setForceAddName] = useState('');
   const [forceAddBusy, setForceAddBusy] = useState(false);
   const [reformBusy, setReformBusy] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [switcherMode, setSwitcherMode] = useState<'list' | 'join'>('list');
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameText, setRenameText] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [handOverOpen, setHandOverOpen] = useState(false);
+  const [handOverBusy, setHandOverBusy] = useState(false);
+  // Short success line in the crew chrome. Cleared after 4s.
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const joinedShown = useRef<string | null>(null);
   // P1-2: which crew section tab is showing. Find / Members / Plan / Money.
   // Day-of first: Find (SOS, status, live location, meeting points) opens by default.
   const [crewTab, setCrewTab] = useState<CrewTabKey>(DEFAULT_CREW_TAB);
@@ -172,7 +187,9 @@ export default function CrewScreen() {
     tab: tabParam,
     mpLat: mpLatParam,
     mpLng: mpLngParam,
-  } = useLocalSearchParams<{ tab?: string; mpLat?: string; mpLng?: string }>();
+    joined: joinedParam,
+    sheet: sheetParam,
+  } = useLocalSearchParams<{ tab?: string; mpLat?: string; mpLng?: string; joined?: string; sheet?: string }>();
   const prefillCoords = useMemo(() => {
     const lat = mpLatParam != null ? Number(mpLatParam) : NaN;
     const lng = mpLngParam != null ? Number(mpLngParam) : NaN;
@@ -202,21 +219,68 @@ export default function CrewScreen() {
     setPrevCrewId(activeCrew?.id);
     setShowOverlap(false);
     setForceAddOpen(false);
-    setForceAddId('');
+    setForceAddName('');
     setCrewTab(DEFAULT_CREW_TAB);
     setTotemEditOpen(false);
+    setRenameOpen(false);
+    setHandOverOpen(false);
   }
 
   // DC2: honor a deep-linked ?tab=... (e.g. the find/map SOS shortcut lands on
   // the Find pane). Runs after the crew-change reset since it keys on the param.
   // parseCrewTab also maps old keys (logistics, ...) so old links still work.
+  // The param is cleared once applied, so a later link with the same ?tab (a
+  // second join landing on Members) changes the value and applies again.
   useEffect(() => {
+    if (!tabParam) return;
     const next = parseCrewTab(tabParam);
     if (next) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- event-driven: apply the deep-linked ?tab exactly when the URL param changes; not derivable as render state since the user can still switch tabs afterward
       setCrewTab(next);
     }
-  }, [tabParam]);
+    router.setParams({ tab: undefined });
+  }, [tabParam, router]);
+
+  const showNotice = useCallback(
+    (text: string) => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+      setNotice(text);
+      haptics.success();
+      AccessibilityInfo.announceForAccessibility(text);
+      noticeTimer.current = setTimeout(() => setNotice(null), 4000);
+    },
+    [haptics],
+  );
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  // Join landing: /(tabs)/crew?joined=<crewId> says so once.
+  useEffect(() => {
+    if (!joinedParam) {
+      joinedShown.current = null;
+      return;
+    }
+    if (!activeCrew || activeCrew.id !== joinedParam) return;
+    if (joinedShown.current === joinedParam) return;
+    joinedShown.current = joinedParam;
+    showNotice(crewCopy.joined(activeCrew.name));
+    router.setParams({ joined: undefined });
+  }, [joinedParam, activeCrew, showNotice, router]);
+
+  // /(tabs)/crew?sheet=join opens the Crews sheet in Join mode, once per link:
+  // the param is cleared so a later activeCrew change cannot reopen it.
+  const hasActiveCrew = !!activeCrew;
+  useEffect(() => {
+    if (sheetParam !== 'join' || !hasActiveCrew) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- event-driven: open the sheet exactly when the deep-link param arrives
+    setSwitcherMode('join');
+    setSwitcherOpen(true);
+    router.setParams({ sheet: undefined });
+  }, [sheetParam, hasActiveCrew, router]);
 
   // Load polls + meeting points for the active crew (best-effort). These five
   // loaders all write the SAME shared store `error` field, so firing them
@@ -268,32 +332,6 @@ export default function CrewScreen() {
     return map;
   }, [sets]);
 
-  const handleCreate = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || createBusy) return;
-    Keyboard.dismiss();
-    setError(null);
-    setCreateBusy(true);
-    try {
-      const emoji = createTotemEmoji.trim();
-      const totemName = createTotemName.trim();
-      await createCrew({
-        name: trimmed,
-        festivalId: currentFestival?.id,
-        // Only send totem fields when the user actually filled them in.
-        ...(emoji ? { totemEmoji: emoji } : {}),
-        ...(totemName ? { totemName } : {}),
-      });
-      setName('');
-      setCreateTotemEmoji('');
-      setCreateTotemName('');
-    } catch {
-      // Error is set in the store.
-    } finally {
-      setCreateBusy(false);
-    }
-  };
-
   // Owner-only totem save (rename the crew's rally marker). Opens the editor
   // seeded from the active crew, then PUTs name + emoji via the shared store.
   const openTotemEditor = (c: Crew) => {
@@ -319,6 +357,23 @@ export default function CrewScreen() {
       // Error is set in the store.
     } finally {
       setTotemBusy(false);
+    }
+  };
+
+  const handleSaveRename = async (crewId: string) => {
+    const trimmed = renameText.trim();
+    if (renameBusy || !trimmed) return;
+    Keyboard.dismiss();
+    setError(null);
+    setRenameBusy(true);
+    try {
+      await updateCrew(crewId, { name: trimmed });
+      setRenameOpen(false);
+      showNotice(crewCopy.renamed);
+    } catch {
+      // Error is set in the store.
+    } finally {
+      setRenameBusy(false);
     }
   };
 
@@ -355,6 +410,7 @@ export default function CrewScreen() {
           setRegenBusy(true);
           try {
             await regenerateInvite(crewId);
+            showNotice(crewCopy.inviteRegenerated);
           } catch {
             // Error is set in the store.
           } finally {
@@ -451,8 +507,13 @@ export default function CrewScreen() {
       {
         text: 'Remove',
         style: 'destructive',
-        onPress: () => {
-          kickMember(crewId, member.userId).catch(() => {});
+        onPress: async () => {
+          try {
+            await kickMember(crewId, member.userId);
+            showNotice(crewCopy.removed(member.name || 'member'));
+          } catch {
+            // Error is set in the store.
+          }
         },
       },
     ]);
@@ -467,8 +528,13 @@ export default function CrewScreen() {
         {
           text: 'Transfer',
           style: 'destructive',
-          onPress: () => {
-            transferOwnership(crewId, member.userId).catch(() => {});
+          onPress: async () => {
+            try {
+              await transferOwnership(crewId, member.userId);
+              showNotice(crewCopy.transferred(member.name || 'Member'));
+            } catch {
+              // Error is set in the store.
+            }
           },
         },
       ],
@@ -476,14 +542,15 @@ export default function CrewScreen() {
   };
 
   const handleForceAdd = async (crewId: string) => {
-    const trimmed = forceAddId.trim();
+    const trimmed = forceAddName.trim();
     if (!trimmed || forceAddBusy) return;
     Keyboard.dismiss();
     setForceAddBusy(true);
     try {
-      await forceAddMember(crewId, trimmed);
-      setForceAddId('');
+      const username = await forceAddByUsername(crewId, trimmed);
+      setForceAddName('');
       setForceAddOpen(false);
+      showNotice(crewCopy.added(username));
     } catch {
       // Error is set in the store.
     } finally {
@@ -516,6 +583,32 @@ export default function CrewScreen() {
         },
       },
     ]);
+  };
+
+  const handleOwnerLeave = (crewId: string, crewName: string, members: CrewMember[], selfId: string) => {
+    if (handOverCandidates(members, selfId).length === 0) {
+      handleDelete(crewId, crewName, members.length);
+      return;
+    }
+    setHandOverOpen(true);
+  };
+
+  const handleHandOver = async (crew: Crew, members: CrewMember[], newOwnerId: string) => {
+    if (handOverBusy) return;
+    const name = members.find((m) => m.userId === newOwnerId)?.name || 'Member';
+    setError(null);
+    setHandOverBusy(true);
+    try {
+      const result = await handOverAndLeave(crew.id, newOwnerId);
+      setHandOverOpen(false);
+      if (result === 'left') showNotice(crewCopy.handedOverAndLeft(crew.name, name));
+      else setError(crewCopy.handOverPartial(crew.name, name));
+    } catch {
+      // Error is set in the store.
+      setHandOverOpen(false);
+    } finally {
+      setHandOverBusy(false);
+    }
   };
 
   if (!user) {
@@ -586,54 +679,16 @@ export default function CrewScreen() {
             message="Plan with your friends. Make a crew, or join one with a code."
           />
 
+          {/* Leaving the only crew lands here, so its notice must show here too. */}
+          {notice ? (
+            <Text style={styles.notice} accessibilityLiveRegion="polite" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {notice}
+            </Text>
+          ) : null}
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Create a crew</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Sunset Squad"
-              placeholderTextColor={t.colors.text.placeholder}
-              value={name}
-              onChangeText={setName}
-              maxLength={60}
-              returnKeyType="done"
-              onSubmitEditing={handleCreate}
-              accessibilityLabel="Crew name"
-            />
-            {/* Crew totem (rally marker) — the flag/emoji the crew holds up so
-                they can find each other. Both optional; a plain emoji text
-                field (no picker) + short label. */}
-            <View style={styles.totemFieldRow}>
-              <TextInput
-                style={[styles.input, styles.totemEmojiInput]}
-                placeholder="Emoji"
-                placeholderTextColor={t.colors.text.placeholder}
-                value={createTotemEmoji}
-                onChangeText={setCreateTotemEmoji}
-                maxLength={16}
-                autoCorrect={false}
-                accessibilityLabel="Crew totem emoji"
-              />
-              <TextInput
-                style={[styles.input, styles.totemNameInput]}
-                placeholder="Totem name (optional)"
-                placeholderTextColor={t.colors.text.placeholder}
-                value={createTotemName}
-                onChangeText={setCreateTotemName}
-                maxLength={40}
-                returnKeyType="done"
-                onSubmitEditing={handleCreate}
-                accessibilityLabel="Crew totem name"
-              />
-            </View>
-            <Button
-              label={createBusy ? 'Creating…' : 'Create Crew'}
-              onPress={handleCreate}
-              disabled={createBusy || !name.trim()}
-              accessibilityLabel="Create crew"
-            />
-          </View>
+          <CreateCrewForm />
 
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Join by code</Text>
@@ -678,6 +733,8 @@ export default function CrewScreen() {
   const isOwner = crew.owner === user.id || myMembership?.role === 'owner';
   const crewFestival = festivalForCrew(crew, currentFestival);
   const inviteExpiry = formatInviteExpiry(crew.inviteExpiresAt);
+  const countText = memberCountLabel(members.length, crew.maxMembers);
+  const headerSubtitle = crewFestival ? `${festivalLabel(crewFestival)} · ${countText}` : countText;
 
   const overlapEntries: CrewOverlap[] = Object.values(crewOverlap)
     .filter((o) => o.memberCount > 0)
@@ -718,8 +775,41 @@ export default function CrewScreen() {
     <View style={styles.screen} testID="crew-screen">
       <ScreenHeader
         title={crew.name}
-        subtitle={`${members.length} ${members.length === 1 ? 'member' : 'members'}`}
+        subtitle={headerSubtitle}
         icon="people"
+        right={
+          <TouchableOpacity
+            testID="crew-action-switcher"
+            style={styles.switcherButton}
+            onPress={() => {
+              setSwitcherMode('list');
+              setSwitcherOpen(true);
+            }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Your crews. Switch, create or join"
+          >
+            <Text style={styles.switcherButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Crews
+            </Text>
+            <Ionicons name="chevron-down" size={t.iconSize.compact} color={t.colors.accent.aqua} />
+          </TouchableOpacity>
+        }
+      />
+
+      <CrewSwitcherSheet
+        visible={switcherOpen}
+        initialMode={switcherMode}
+        onClose={() => setSwitcherOpen(false)}
+      />
+
+      <HandOverSheet
+        visible={handOverOpen}
+        crewName={crew.name}
+        candidates={handOverCandidates(members, user.id)}
+        busy={handOverBusy}
+        onConfirm={(id) => handleHandOver(crew, members, id)}
+        onClose={() => setHandOverOpen(false)}
       />
 
       {crew.inviteCode ? (
@@ -772,37 +862,44 @@ export default function CrewScreen() {
           ) : null}
         </View>
 
-        {crews.length > 1 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.crewSwitcher}>
-            {crews.map((c) => {
-              const active = c.id === crew.id;
-              return (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.crewChip, active && styles.crewChipActive]}
-                  onPress={() => {
-                    if (!active) {
-                      haptics.select();
-                      selectCrew(c.id).catch(() => {});
-                    }
-                  }}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Switch to crew ${c.name}`}
-                  accessibilityState={{ selected: active }}
-                >
-                  {c.totem_emoji ? (
-                    <Text style={styles.crewChipEmoji} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                      {c.totem_emoji}
-                    </Text>
-                  ) : null}
-                  <Text style={[styles.crewChipText, active && styles.crewChipTextActive]} numberOfLines={1}>
-                    {c.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+        {notice ? (
+          <Text
+            style={styles.notice}
+            accessibilityLiveRegion="polite"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          >
+            {notice}
+          </Text>
+        ) : null}
+
+        {members.length <= 1 && crew.inviteCode ? (
+          <View style={styles.inviteCard}>
+            <Text style={styles.inviteCardTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {crewCopy.inviteCardTitle}
+            </Text>
+            <Text style={styles.inviteCardBody} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {crewCopy.inviteCardBody(crew.name)}
+            </Text>
+            <View style={styles.forceAddRow}>
+              <Button
+                label="Share invite link"
+                onPress={() => handleShareInvite(crew.inviteCode!, crew.name)}
+                accessibilityLabel="Share invite link"
+                style={styles.flexButton}
+              />
+              <TouchableOpacity
+                style={[styles.outlineButton, styles.flexButton]}
+                onPress={() => setInviteQrOpen(true)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Show QR code"
+              >
+                <Text style={styles.outlineButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  Show QR code
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : null}
       </View>
 
@@ -835,9 +932,7 @@ export default function CrewScreen() {
             const canManage = isOwner && !rowIsOwner && !isSelf;
             return (
               <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{getInitials(item.name ?? '') || '?'}</Text>
-                </View>
+                <Avatar name={displayName} image={memberAvatarUrl(item, FESTIE_ORIGIN)} size="md" />
                 <View style={styles.memberInfo}>
                   <Text style={styles.memberName} numberOfLines={2}>
                     {displayName}
@@ -1031,36 +1126,89 @@ export default function CrewScreen() {
                   >
                     <Ionicons name="flag-outline" size={16} color={t.colors.accent.aqua} />
                     <Text style={styles.overlapToggleText}>
-                      {crew.totem_emoji || crew.totem_name ? 'Edit crew totem' : 'Add crew totem'}
+                      {crew.totem_emoji || crew.totem_name ? 'Edit crew totem' : crewCopy.addTotem}
                     </Text>
                     <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
                   </TouchableOpacity>
                 )
               ) : null}
+              {isOwner && !totemEditOpen ? <Text style={styles.formHint}>{crewCopy.totemExplainer}</Text> : null}
 
-              {/* Force-add (admin-gated server-side). Shown to owners. */}
+              {/* Rename (owner). */}
               {isOwner ? (
-                forceAddOpen ? (
+                renameOpen ? (
                   <View style={styles.forceAddBox}>
-                    <Text style={styles.formLabel}>Force-add member by user ID</Text>
+                    <Text style={styles.formLabel}>Crew name</Text>
                     <TextInput
                       style={styles.input}
-                      placeholder="user_id"
+                      value={renameText}
+                      onChangeText={setRenameText}
+                      maxLength={60}
+                      returnKeyType="done"
+                      onSubmitEditing={() => handleSaveRename(crew.id)}
+                      accessibilityLabel="Crew name"
+                    />
+                    <View style={styles.forceAddRow}>
+                      <TouchableOpacity
+                        style={[styles.outlineButton, styles.flexButton]}
+                        onPress={() => setRenameOpen(false)}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel rename"
+                      >
+                        <Text style={styles.outlineButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Button
+                        label={renameBusy ? 'Saving…' : 'Save'}
+                        onPress={() => handleSaveRename(crew.id)}
+                        disabled={renameBusy || !renameText.trim() || renameText.trim() === crew.name}
+                        accessibilityLabel="Save crew name"
+                        style={styles.flexButton}
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    testID="crew-action-rename"
+                    style={styles.overlapToggle}
+                    onPress={() => {
+                      setRenameText(crew.name);
+                      setRenameOpen(true);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Rename crew"
+                  >
+                    <Ionicons name="pencil-outline" size={16} color={t.colors.accent.aqua} />
+                    <Text style={styles.overlapToggleText}>Rename crew</Text>
+                    <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+                  </TouchableOpacity>
+                )
+              ) : null}
+
+              {/* Force-add by username (admin-gated server-side). Shown to admins only. */}
+              {user.isAdmin ? (
+                forceAddOpen ? (
+                  <View style={styles.forceAddBox}>
+                    <Text style={styles.formLabel}>Username</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="username"
                       placeholderTextColor={t.colors.text.placeholder}
-                      value={forceAddId}
-                      onChangeText={setForceAddId}
+                      value={forceAddName}
+                      onChangeText={setForceAddName}
                       autoCapitalize="none"
                       autoCorrect={false}
                       returnKeyType="done"
                       onSubmitEditing={() => handleForceAdd(crew.id)}
-                      accessibilityLabel="User ID to force-add"
+                      accessibilityLabel="Username to add"
                     />
                     <View style={styles.forceAddRow}>
                       <TouchableOpacity
                         style={[styles.outlineButton, styles.flexButton]}
                         onPress={() => {
                           setForceAddOpen(false);
-                          setForceAddId('');
+                          setForceAddName('');
                         }}
                         activeOpacity={0.8}
                         accessibilityRole="button"
@@ -1071,7 +1219,7 @@ export default function CrewScreen() {
                       <Button
                         label={forceAddBusy ? 'Adding…' : 'Add'}
                         onPress={() => handleForceAdd(crew.id)}
-                        disabled={forceAddBusy || !forceAddId.trim()}
+                        disabled={forceAddBusy || !forceAddName.trim()}
                         accessibilityLabel="Confirm force-add"
                         style={styles.flexButton}
                       />
@@ -1084,16 +1232,31 @@ export default function CrewScreen() {
                     onPress={() => setForceAddOpen(true)}
                     activeOpacity={0.8}
                     accessibilityRole="button"
-                    accessibilityLabel="Force-add a member by user ID"
+                    accessibilityLabel="Add member by username (admin)"
                   >
                     <Ionicons name="person-add-outline" size={16} color={t.colors.accent.aqua} />
-                    <Text style={styles.overlapToggleText}>Force-add member</Text>
+                    <Text style={styles.overlapToggleText}>Add member by username (admin)</Text>
                   </TouchableOpacity>
                 )
               ) : null}
 
               <View style={styles.footerActions}>
-                {isOwner ? (
+                <TouchableOpacity
+                  testID="crew-action-leave"
+                  style={styles.dangerButton}
+                  onPress={() =>
+                    isOwner ? handleOwnerLeave(crew.id, crew.name, members, user.id) : handleLeave(crew.id)
+                  }
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Leave crew"
+                >
+                  <Ionicons name="exit-outline" size={16} color={t.colors.text.danger} />
+                  <Text style={styles.dangerButtonText}>Leave crew</Text>
+                </TouchableOpacity>
+              </View>
+              {isOwner ? (
+                <View style={styles.footerActions}>
                   <TouchableOpacity
                     testID="crew-action-delete"
                     style={styles.dangerButton}
@@ -1105,20 +1268,9 @@ export default function CrewScreen() {
                     <Ionicons name="trash-outline" size={16} color={t.colors.text.danger} />
                     <Text style={styles.dangerButtonText}>Delete crew</Text>
                   </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    testID="crew-action-leave"
-                    style={styles.dangerButton}
-                    onPress={() => handleLeave(crew.id)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Leave crew"
-                  >
-                    <Ionicons name="exit-outline" size={16} color={t.colors.text.danger} />
-                    <Text style={styles.dangerButtonText}>Leave crew</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                  <Text style={styles.formHint}>Deletes the crew for everyone.</Text>
+                </View>
+              ) : null}
             </View>
           }
         />
@@ -1585,39 +1737,41 @@ const useStyles = makeStyles((t) => ({
     marginLeft: 'auto',
     letterSpacing: 2,
   },
-  crewSwitcher: {
-    gap: t.spacing[2],
-    paddingBottom: t.spacing[1],
-  },
-  crewChip: {
+  switcherButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[1],
-    paddingHorizontal: t.spacing[4],
-    paddingVertical: t.spacing[2],
-    // WCAG 2.5.5 44pt floor (F43) — matches dayChip/filterChip/iconButton.
+    paddingHorizontal: t.spacing[3],
     minHeight: 44,
     justifyContent: 'center',
     borderRadius: t.radii.default,
     borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  // Totem emoji shown inline before the crew name in the switcher chip, so the
-  // crew's rally marker is recognizable at a glance when hopping between crews.
-  crewChipEmoji: {
-    ...typeStyle('caption'),
-  },
-  crewChipActive: {
     borderColor: t.colors.accent.aqua,
-    backgroundColor: t.colors.aquaAlpha[12],
+    backgroundColor: t.colors.aquaAlpha[10],
   },
-  crewChipText: {
+  switcherButtonText: {
     ...typeStyle('label'),
-    color: t.colors.text.secondary,
-  },
-  crewChipTextActive: {
     color: t.colors.accent.aqua,
+  },
+  notice: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
+  },
+  inviteCard: {
+    gap: t.spacing[2],
+    padding: t.spacing[3],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.accent.aqua,
+    backgroundColor: t.colors.aquaAlpha[10],
+  },
+  inviteCardTitle: {
+    ...typeStyle('label', 700),
+    color: t.colors.text.primary,
+  },
+  inviteCardBody: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
   },
   overlapToggle: {
     flexDirection: 'row',
@@ -1816,18 +1970,6 @@ const useStyles = makeStyles((t) => ({
   },
   memberRowWrap: {
     flexWrap: 'wrap',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: t.colors.aquaAlpha[15],
-  },
-  avatarText: {
-    ...typeStyle('label'),
-    color: t.colors.accent.aqua,
   },
   memberInfo: {
     flex: 1,

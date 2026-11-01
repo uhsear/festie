@@ -10,6 +10,7 @@ import {
   LoginRequest,
   RegisterRequest,
   ChangePasswordRequest,
+  CrewHandoverChoice,
   ForgotPasswordRequest,
   AvatarResponse,
 } from '../types';
@@ -38,7 +39,7 @@ export interface AuthActions {
   resendVerification: () => Promise<void>;
   changePassword: (request: ChangePasswordRequest) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
-  deleteAccount: (password: string) => Promise<{ deletionDate: string | null }>;
+  deleteAccount: (password: string, crewHandover?: CrewHandoverChoice[]) => Promise<{ deletionDate: string | null }>;
   uploadAvatar: (file: File | Blob) => Promise<AvatarResponse>;
   removeAvatar: () => Promise<void>;
   setError: (error: string | null) => void;
@@ -379,10 +380,12 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     }
   },
 
-  deleteAccount: async (password: string) => {
+  deleteAccount: async (password: string, crewHandover?: CrewHandoverChoice[]) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await api.delete<{ deletionDate?: string | null }>('/account/', { body: { password } });
+      const res = await api.delete<{ deletionDate?: string | null }>('/account/', {
+        body: crewHandover?.length ? { password, crewHandover } : { password },
+      });
       // logout() clears the token and resets all stores, matching web's flow.
       await get().logout();
       return { deletionDate: res?.deletionDate ?? null };

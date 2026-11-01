@@ -248,6 +248,9 @@ export type PublicScheduleInput = z.infer<typeof publicScheduleSchema>;
 
 export const accountDeleteSchema = z.object({
   password: z.string().min(1, 'Password confirmation required'),
+  // Who takes over each crew the account owns. Optional: the server picks the
+  // earliest-joined active member when a choice is missing or invalid.
+  crewHandover: z.array(z.object({ crewId: identifier, newOwnerId: identifier })).max(50).optional(),
 });
 export type AccountDeleteInput = z.infer<typeof accountDeleteSchema>;
 

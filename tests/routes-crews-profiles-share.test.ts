@@ -181,20 +181,61 @@ describe('routes/crews.js', () => {
       assert.equal(res.body.error.code, 'NOT_FOUND');
     });
 
-    test('returns 403 when user has no festival profile', async () => {
+    test('creates the festival profile when the user has none', async () => {
+      const crewData = {
+        id: 'crew-mock-id', festivalId: 'f1', name: 'Crew',
+        createdBy: 'user-1', maxMembers: 30, inviteCode: 'ABC123',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+      const createProfile = mock.fn(async (p: any) => p);
       const { app } = await buildCrewApp({
         sanitizeString: (s: any) => s,
         sanitizeIdentifier: (s: any) => s,
+        getUserFestivalProfile: mock.fn(async () => null),
         stores: {
           ...makeCrewDeps().stores,
-          profiles: { readByUserAndFestival: mock.fn(async () => null) },
+          crews: {
+            ...makeCrewDeps().stores.crews,
+            getById: mock.fn(async () => crewData),
+            getMembers: mock.fn(async () => [{ userId: 'user-1', username: 'testuser', role: 'owner' }]),
+          },
+          profiles: {
+            claimOrphan: mock.fn(async () => null),
+            countByFestival: mock.fn(async () => 0),
+            create: createProfile,
+          },
         },
       });
       const res = await request(app)
         .post('/crews')
         .send({ name: 'Crew', festivalId: 'f1' });
-      assert.equal(res.status, 403);
-      assert.equal(res.body.error.code, 'FORBIDDEN');
+      assert.equal(res.status, 201);
+      assert.equal(createProfile.mock.calls.length, 1);
+      assert.equal((createProfile.mock.calls as any[])[0].arguments[0].festivalId, 'f1');
+    });
+
+    test('returns 400 when the festival has reached its member limit', async () => {
+      const createCrew = mock.fn(async (d: any) => d);
+      const { app } = await buildCrewApp({
+        sanitizeString: (s: any) => s,
+        sanitizeIdentifier: (s: any) => s,
+        getUserFestivalProfile: mock.fn(async () => null),
+        stores: {
+          ...makeCrewDeps().stores,
+          crews: { ...makeCrewDeps().stores.crews, create: createCrew },
+          profiles: {
+            claimOrphan: mock.fn(async () => null),
+            countByFestival: mock.fn(async () => 500),
+          },
+        },
+      });
+      const res = await request(app)
+        .post('/crews')
+        .send({ name: 'Crew', festivalId: 'f1' });
+      assert.equal(res.status, 400);
+      assert.equal(res.body.error.code, 'MAX_LIMIT_REACHED');
+      assert.equal(res.body.error.message, 'This festival has reached its member limit on Festie.');
+      assert.equal(createCrew.mock.calls.length, 0);
     });
 
     test('returns 400 when user already has max crews for festival', async () => {
@@ -214,6 +255,10 @@ describe('routes/crews.js', () => {
         .send({ name: 'Crew', festivalId: 'f1' });
       assert.equal(res.status, 400);
       assert.equal(res.body.error.code, 'MAX_LIMIT_REACHED');
+      assert.equal(
+        res.body.error.message,
+        "You're already in 3 crews for this festival. Leave one to start another.",
+      );
     });
 
     test('returns 500 when listByUserAndFestival throws', async () => {

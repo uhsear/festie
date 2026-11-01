@@ -255,3 +255,9 @@ export const SOCKET_RECONNECTION_CONFIG = {
   reconnectionDelayMax: 5000,
   reconnectionAttempts: Infinity,
 };
+
+// ── Crew limits ────────────────────────────────────────────────────────────
+// `lib/constants.ts` is the source. `tests/constants-parity.test.ts` guards this copy.
+export const MAX_CREWS_PER_FESTIVAL = 3;
+export const MAX_OPEN_POLLS_PER_CREW = 3;
+export const DEFAULT_CREW_MAX_MEMBERS = 30;

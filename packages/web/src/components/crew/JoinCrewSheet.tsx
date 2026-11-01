@@ -42,10 +42,10 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
       const outcome = await joinByInvite(code);
       if (outcome.kind === 'joined') {
         toast(`Joined ${outcome.crew.name}`, 'success');
-        navigate({ to: '/crew' });
+        navigate({ to: '/crew', search: { tab: 'members' } });
       } else if (outcome.kind === 'already') {
         toast(`You're already in ${outcome.crew.name}`, 'info');
-        navigate({ to: '/crew' });
+        navigate({ to: '/crew', search: { tab: 'members' } });
       } else {
         toast("We'll join you when you're back online.", 'info');
       }

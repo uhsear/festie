@@ -333,6 +333,7 @@ describe('account: soft-delete', { concurrency: 1, skip }, () => {
       .send({ password: DEFAULT_PASSWORD });
     assert.equal(res.status, 200);
     assert.ok(res.body.data?.deletionDate, 'response should include deletionDate');
+    assert.deepEqual(res.body.data.handedOver, [], 'an account that owns no crew hands nothing over');
 
     // Subsequent auth check should fail (session invalidated).
     const verifyRes = await server.request.post('/api/v1/auth/verify').set('x-user-token', user.token);

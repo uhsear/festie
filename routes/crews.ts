@@ -1,6 +1,8 @@
 import type { Crew, CrewMember } from '../lib/types';
 
+import { DEFAULT_CREW_MAX_MEMBERS, MAX_CREWS_PER_FESTIVAL } from '../lib/constants.js';
 import { planReformRoster } from '../lib/crew-reform.js';
+import { ensureFestivalProfile } from '../lib/festival-profile.js';
 import { generateUniqueInviteCode, inviteExpiryFor } from '../lib/invite-code.js';
 import { loadInvitePreview } from '../lib/invite-preview.js';
 import createInviteRoutes from './crew-invites.js';
@@ -71,7 +73,7 @@ export default function createCrewRoutes(deps: any) {
   const router = express.Router();
 
   // ── Helpers ────────────────────────────────────────────────────────
-  const MAX_CREWS_PER_USER_PER_FESTIVAL = 3;
+  const CREW_CAP_MESSAGE = `You're already in ${MAX_CREWS_PER_FESTIVAL} crews for this festival. Leave one to start another.`;
 
   /**
    * Resolve a crew by ID and verify the requesting user is the owner.
@@ -176,7 +178,7 @@ export default function createCrewRoutes(deps: any) {
     resolveCrewOwnership,
     serializeCrew,
     serializeCrewWithMembers,
-    MAX_CREWS_PER_USER_PER_FESTIVAL,
+    MAX_CREWS_PER_USER_PER_FESTIVAL: MAX_CREWS_PER_FESTIVAL,
   };
   const subDeps = { ...deps, _crewHelpers };
 
@@ -222,18 +224,20 @@ export default function createCrewRoutes(deps: any) {
   router.use('/', memberRoutes);
 
   // ── Crew creation helpers ────────────────────────────────────────
-  async function validateCrewCreation(req: any, cleanFestivalId: any) {
+  // Returns the refusal to send, or null when the create may go ahead. The
+  // caller's festival profile is not checked here: POST / creates it after this.
+  async function validateCrewCreation(
+    req: any,
+    cleanFestivalId: any,
+  ): Promise<{ status: number; code: string; message: string } | null> {
     const { rows: festivalRows } = await pool.query('SELECT 1 FROM festivals WHERE id = $1 AND deleted_at IS NULL', [
       cleanFestivalId,
     ]);
-    if (festivalRows.length === 0) return 'Festival not found';
-
-    const profile = await stores.profiles.readByUserAndFestival?.(req.user.userId, cleanFestivalId);
-    if (!profile) return 'Join the festival first';
+    if (festivalRows.length === 0) return { status: 404, code: ErrorCodes.NOT_FOUND, message: 'Festival not found' };
 
     const existingCrews = await stores.crews.listByUserAndFestival(req.user.userId, cleanFestivalId);
-    if (!Array.isArray(existingCrews) || existingCrews.length >= MAX_CREWS_PER_USER_PER_FESTIVAL) {
-      return `Maximum ${MAX_CREWS_PER_USER_PER_FESTIVAL} crews per festival`;
+    if (!Array.isArray(existingCrews) || existingCrews.length >= MAX_CREWS_PER_FESTIVAL) {
+      return { status: 400, code: ErrorCodes.MAX_LIMIT_REACHED, message: CREW_CAP_MESSAGE };
     }
     return null;
   }
@@ -259,16 +263,22 @@ export default function createCrewRoutes(deps: any) {
       if (!cleanName) return sendError(res, 400, 'Crew name required', ErrorCodes.MISSING_FIELD);
       if (!cleanFestivalId) return sendError(res, 400, 'Festival ID required', ErrorCodes.MISSING_FIELD);
 
-      const validationError = await validateCrewCreation(req, cleanFestivalId);
-      if (validationError) {
-        const code = validationError.startsWith('Maximum')
-          ? ErrorCodes.MAX_LIMIT_REACHED
-          : validationError === 'Festival not found'
-            ? ErrorCodes.NOT_FOUND
-            : ErrorCodes.FORBIDDEN;
-        const status =
-          validationError === 'Festival not found' ? 404 : validationError.startsWith('Maximum') ? 400 : 403;
-        return sendError(res, status, validationError, code);
+      const refusal = await validateCrewCreation(req, cleanFestivalId);
+      if (refusal) return sendError(res, refusal.status, refusal.message, refusal.code);
+
+      // Create the caller's profile in this festival if it is missing, as join
+      // does. Runs after the cap check so a refused create leaves no stray profile.
+      const profileResult = await ensureFestivalProfile(deps, req.user, cleanFestivalId);
+      if (profileResult.error === 'limit') {
+        return sendError(
+          res,
+          400,
+          'This festival has reached its member limit on Festie.',
+          ErrorCodes.MAX_LIMIT_REACHED,
+        );
+      }
+      if (profileResult.error === 'user-missing') {
+        return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
       }
 
       const crewId = createOpaqueId('crew');
@@ -280,7 +290,7 @@ export default function createCrewRoutes(deps: any) {
         createdBy: req.user.userId,
         inviteCode,
         inviteExpiresAt: inviteExpiryFor(await getFestivalById(cleanFestivalId)),
-        maxMembers: 30,
+        maxMembers: DEFAULT_CREW_MAX_MEMBERS,
         totemName: cleanTotemName,
         totemEmoji: cleanTotemEmoji,
       };
@@ -353,7 +363,7 @@ export default function createCrewRoutes(deps: any) {
         if (festivalRows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
         // The requester must have a profile in the target festival to own a crew
-        // there (mirrors POST /crews — "Join the festival first").
+        // there. Unlike POST /crews, reform does not create it.
         const requesterProfile = await stores.profiles.readByUserAndFestival?.(req.user.userId, targetFestivalId);
         if (!requesterProfile) return sendError(res, 403, 'Join the festival first', ErrorCodes.FORBIDDEN);
 
@@ -372,13 +382,8 @@ export default function createCrewRoutes(deps: any) {
 
         if (!newCrew) {
           // Honor the per-festival crew cap for the requester.
-          if ((requesterTargetCrews || []).length >= MAX_CREWS_PER_USER_PER_FESTIVAL) {
-            return sendError(
-              res,
-              400,
-              `Maximum ${MAX_CREWS_PER_USER_PER_FESTIVAL} crews per festival`,
-              ErrorCodes.MAX_LIMIT_REACHED,
-            );
+          if ((requesterTargetCrews || []).length >= MAX_CREWS_PER_FESTIVAL) {
+            return sendError(res, 400, CREW_CAP_MESSAGE, ErrorCodes.MAX_LIMIT_REACHED);
           }
           const newCrewId = createOpaqueId('crew');
           const inviteCode = await generateUniqueInviteCode(stores);
@@ -390,7 +395,7 @@ export default function createCrewRoutes(deps: any) {
               createdBy: req.user.userId,
               inviteCode,
               inviteExpiresAt: inviteExpiryFor(await getFestivalById(targetFestivalId)),
-              maxMembers: sourceCrew.maxMembers || 30,
+              maxMembers: sourceCrew.maxMembers || DEFAULT_CREW_MAX_MEMBERS,
               reformedFrom: sourceCrewId,
             });
             newCrew = await stores.crews.getById(newCrewId);
@@ -421,7 +426,7 @@ export default function createCrewRoutes(deps: any) {
         // already-member set so re-running reform never double-adds (idempotent).
         const existingNewMembers = await stores.crews.getMembers(newCrew.id);
         const existingMemberUserIds = existingNewMembers.map((m: any) => m.userId);
-        const memberCap = newCrew.maxMembers || 30;
+        const memberCap = newCrew.maxMembers || DEFAULT_CREW_MAX_MEMBERS;
         const { toAutoAdd, toInvite } = planReformRoster(
           sourceMembers,
           req.user.userId,

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
+import { Pencil } from 'lucide-react';
 import { useCrewStore } from '@festie/shared/stores';
 import { useAuthStore } from '@festie/shared/stores';
 import { useFestivalStore } from '@festie/shared/stores';
@@ -19,6 +20,9 @@ import JoinCrewSheet from '../components/crew/JoinCrewSheet';
 import ReformCrewButton from '../components/crew/ReformCrewButton';
 import CrewTabBar from '../components/crew/CrewTabBar';
 import CrewTabContent from '../components/crew/CrewTabContent';
+import CreateCrewDialog from '../components/crew/CreateCrewDialog';
+import HandOverDialog from '../components/crew/HandOverDialog';
+import IconButton from '../components/ui/IconButton';
 import GuestTeaser from '../components/features/GuestTeaser';
 import { useCrewAdmin } from '../components/crew/useCrewAdmin';
 import { useToast } from '../lib/toastContext';
@@ -27,7 +31,9 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import {
   DEFAULT_CREW_TAB,
+  crewCopy,
   deleteCrewConfirmMessage,
+  handOverCandidates,
   leaveCrewConfirmMessage,
   parseInviteCode,
   removeMemberConfirmMessage,
@@ -52,12 +58,15 @@ function CrewViewInner() {
   const crews = useCrewStore((state) => state.crews);
   const activeCrew = useCrewStore((state) => state.activeCrew);
   const selectCrew = useCrewStore((state) => state.selectCrew);
-  const createCrew = useCrewStore((state) => state.createCrew);
+  const updateCrew = useCrewStore((state) => state.updateCrew);
+  const handOverAndLeave = useCrewStore((state) => state.handOverAndLeave);
   const leaveCrew = useCrewStore((state) => state.leaveCrew);
   const deleteCrew = useCrewStore((state) => state.deleteCrew);
   const kickMember = useCrewStore((state) => state.kickMember);
   const transferOwnership = useCrewStore((state) => state.transferOwnership);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
+  const festivals = useFestivalStore((state) => state.festivals);
+  const loadFestivals = useFestivalStore((state) => state.loadFestivals);
   const { toast, toastError } = useToast();
   const navigate = useNavigate();
   // /crew?tab=<key> keeps the tab across reloads and shared links.
@@ -75,10 +84,12 @@ function CrewViewInner() {
   );
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createBusy, setCreateBusy] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [sheetCode, setSheetCode] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmKind, setConfirmKind] = useState<'leave' | 'delete' | null>(null);
+  const [handOverOpen, setHandOverOpen] = useState(false);
+  const [handOverBusy, setHandOverBusy] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [kickTarget, setKickTarget] = useState<CrewMember | null>(null);
   const [transferTarget, setTransferTarget] = useState<CrewMember | null>(null);
@@ -88,6 +99,11 @@ function CrewViewInner() {
       selectCrew(crews[0]!.id).catch(() => {});
     }
   }, [user?.id, crews, activeCrew, selectCrew]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Group labels in the crew picker need festival names; crews of every festival load at once.
+  useEffect(() => {
+    if (user && crews.length > 0 && festivals.length === 0) loadFestivals().catch(() => {});
+  }, [user?.id, crews.length, festivals.length, loadFestivals]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tab badge counts. These reuse the exact query keys + endpoints the Polls
   // and Expenses tabs use, so the data is shared from the react-query cache
@@ -126,17 +142,6 @@ function CrewViewInner() {
     });
   };
   const handleCreateCrew = () => setCreateOpen(true);
-  const submitCreateCrew = async (name: string) => {
-    setCreateBusy(true);
-    try {
-      await createCrew({ name, festivalId: currentFestival?.id });
-      setCreateOpen(false);
-    } catch (e) {
-      toastError(e, "Couldn't create crew. Try again.");
-    } finally {
-      setCreateBusy(false);
-    }
-  };
 
   const handleJoinCrew = () => setJoinOpen(true);
   const submitJoinCrew = (input: string) => {
@@ -150,21 +155,57 @@ function CrewViewInner() {
   };
 
   const submitDestroy = async () => {
-    if (!activeCrew) return;
+    if (!activeCrew || !confirmKind) return;
+    const deleting = confirmKind === 'delete';
     setConfirmBusy(true);
     try {
-      if (isOwner) {
+      if (deleting) {
         await deleteCrew(activeCrew.id);
         toast('Crew deleted', 'success');
       } else {
         await leaveCrew(activeCrew.id);
         toast('Left crew', 'success');
       }
-      setConfirmOpen(false);
+      setConfirmKind(null);
     } catch (e) {
-      toastError(e, isOwner ? "Couldn't delete crew. Try again." : "Couldn't leave crew. Try again.");
+      toastError(e, deleting ? "Couldn't delete crew. Try again." : "Couldn't leave crew. Try again.");
     } finally {
       setConfirmBusy(false);
+    }
+  };
+
+  // Members leave directly. An owner with company picks a successor first; a solo owner can only delete.
+  const handleLeaveCrew = () => {
+    if (!isOwner) setConfirmKind('leave');
+    else if (handOverCandidates(members, user.id).length === 0) setConfirmKind('delete');
+    else setHandOverOpen(true);
+  };
+
+  const submitHandOver = async (newOwnerId: string) => {
+    if (!activeCrew) return;
+    const heir = members.find((m) => m.userId === newOwnerId);
+    const heirName = heir?.name || heir?.username || 'Your pick';
+    setHandOverBusy(true);
+    try {
+      const outcome = await handOverAndLeave(activeCrew.id, newOwnerId);
+      if (outcome === 'left') toast(crewCopy.handedOverAndLeft(activeCrew.name, heirName), 'success');
+      else toast(crewCopy.handOverPartial(activeCrew.name, heirName), 'error');
+      setHandOverOpen(false);
+    } catch (e) {
+      toastError(e, "Couldn't hand over the crew. Try again.");
+    } finally {
+      setHandOverBusy(false);
+    }
+  };
+
+  const submitRename = async (name: string) => {
+    if (!activeCrew) return;
+    try {
+      await updateCrew(activeCrew.id, { name });
+      toast(crewCopy.renamed, 'success');
+      setRenameOpen(false);
+    } catch (e) {
+      toastError(e, "Couldn't rename crew. Try again.");
     }
   };
 
@@ -175,8 +216,10 @@ function CrewViewInner() {
 
   const submitTransferOwnership = () => {
     if (!activeCrew || !transferTarget) return;
+    const name = transferTarget.name || transferTarget.username || 'Member';
     transferOwnership(activeCrew.id, transferTarget.userId)
       .then(() => selectCrew(activeCrew.id))
+      .then(() => toast(crewCopy.transferred(name), 'success'))
       .catch((e: unknown) => {
         toastError(e, "Couldn't transfer ownership. Try again.");
       })
@@ -190,8 +233,10 @@ function CrewViewInner() {
 
   const submitKick = () => {
     if (!activeCrew || !kickTarget) return;
+    const name = kickTarget.name || kickTarget.username || 'Member';
     kickMember(activeCrew.id, kickTarget.userId)
       .then(() => selectCrew(activeCrew.id))
+      .then(() => toast(crewCopy.removed(name), 'success'))
       .catch((e: unknown) => {
         toastError(e, "Couldn't remove member. Try again.");
       })
@@ -206,13 +251,22 @@ function CrewViewInner() {
   return (
     <div className="crew-page space-y-4 pb-6 max-w-[600px] mx-auto min-w-0 w-full">
       {crews.length > 0 && (
-        <CrewSelector
-          crews={crews}
-          selectedCrewId={activeCrew?.id}
-          onSelectCrew={handleSelectCrew}
-          onCreateCrew={handleCreateCrew}
-          onJoinCrew={handleJoinCrew}
-        />
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <CrewSelector
+              crews={crews}
+              selectedCrewId={activeCrew?.id}
+              onSelectCrew={handleSelectCrew}
+              onCreateCrew={handleCreateCrew}
+              onJoinCrew={handleJoinCrew}
+              festivals={festivals}
+              currentFestivalId={currentFestival?.id}
+            />
+          </div>
+          {activeCrew && isOwner && (
+            <IconButton label="Rename crew" icon={<Pencil className="w-4 h-4" />} onClick={() => setRenameOpen(true)} />
+          )}
+        </div>
       )}
 
       {!activeCrew ? (
@@ -232,6 +286,20 @@ function CrewViewInner() {
             <LastSyncedBadge surface="crew" />
             <SosRaiseButton crewId={activeCrew.id} compact />
           </div>
+
+          {members.length <= 1 && activeCrew.inviteCode && (
+            <Card padding="md" className="space-y-2">
+              <h2 className="text-base font-bold text-text-primary">{crewCopy.inviteCardTitle}</h2>
+              <p className="text-sm text-text-secondary">{crewCopy.inviteCardBody(activeCrew.name)}</p>
+              <CrewInviteBar
+                inviteCode={activeCrew.inviteCode}
+                crewId={activeCrew.id}
+                crewName={activeCrew.name}
+                isOwner={isOwner}
+                expiresAt={activeCrew.inviteExpiresAt}
+              />
+            </Card>
+          )}
 
           <HomeBaseCard
             crewId={activeCrew.id}
@@ -259,7 +327,9 @@ function CrewViewInner() {
             onForceAdd={handleForceAdd}
             onTransferOwnership={handleTransferOwnership}
             onKick={handleKick}
-            onDestroyCrew={() => setConfirmOpen(true)}
+            onLeaveCrew={handleLeaveCrew}
+            onDeleteCrew={() => setConfirmKind('delete')}
+            maxMembers={crew?.maxMembers}
             focusSosUserId={focusSosUserId}
           />
 
@@ -268,7 +338,7 @@ function CrewViewInner() {
             <h2 id="crew-setup-heading" className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
               Plan and setup
             </h2>
-            {activeCrew.inviteCode && (
+            {activeCrew.inviteCode && members.length > 1 && (
               <CrewInviteBar
                 inviteCode={activeCrew.inviteCode}
                 crewId={activeCrew.id}
@@ -301,17 +371,7 @@ function CrewViewInner() {
         </div>
       )}
 
-      <PromptDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        title="New crew"
-        description="Give your crew a name. You can invite others after."
-        placeholder="Sunset Squad"
-        confirmLabel="Create"
-        busy={createBusy}
-        maxLength={60}
-        onConfirm={submitCreateCrew}
-      />
+      <CreateCrewDialog open={createOpen} onOpenChange={setCreateOpen} />
       <PromptDialog
         open={joinOpen}
         onOpenChange={setJoinOpen}
@@ -334,18 +394,38 @@ function CrewViewInner() {
         busy={adminAddBusy}
         onConfirm={submitForceAdd}
       />
+      <PromptDialog
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+        title="Rename crew"
+        description="Everyone in the crew sees the new name."
+        defaultValue={activeCrew?.name ?? ''}
+        confirmLabel="Save"
+        maxLength={60}
+        onConfirm={submitRename}
+      />
+      <HandOverDialog
+        open={handOverOpen}
+        onOpenChange={setHandOverOpen}
+        crewName={activeCrew?.name ?? ''}
+        candidates={handOverCandidates(members, user.id)}
+        busy={handOverBusy}
+        onConfirm={submitHandOver}
+      />
       <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={isOwner ? 'Delete crew' : 'Leave crew'}
+        open={confirmKind !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmKind(null);
+        }}
+        title={confirmKind === 'delete' ? 'Delete crew' : 'Leave crew'}
         description={
           activeCrew
-            ? isOwner
+            ? confirmKind === 'delete'
               ? deleteCrewConfirmMessage(activeCrew.name, members.length)
               : leaveCrewConfirmMessage(activeCrew.name)
             : undefined
         }
-        confirmLabel={isOwner ? 'Delete crew' : 'Leave crew'}
+        confirmLabel={confirmKind === 'delete' ? 'Delete crew' : 'Leave crew'}
         destructive
         busy={confirmBusy}
         onConfirm={submitDestroy}

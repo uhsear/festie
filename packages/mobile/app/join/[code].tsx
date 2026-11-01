@@ -10,6 +10,7 @@ import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
 import DisplayWords from '../../components/DisplayWords';
+import { useHaptics } from '../../hooks/useHaptics';
 import { isValidInviteCode, setPendingInvite } from '../../lib/pendingInvite';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
@@ -46,6 +47,7 @@ export default function JoinInviteScreen() {
   const styles = useStyles();
   const t = useTokens();
   const router = useRouter();
+  const haptics = useHaptics();
   const insets = useSafeAreaInsets();
   const { code } = useLocalSearchParams<{ code?: string }>();
   const user = useAuthStore((s) => s.user);
@@ -79,9 +81,17 @@ export default function JoinInviteScreen() {
     try {
       const outcome = await joinByInvite(validCode);
       setPendingInvite(null);
+      if (outcome.kind === 'joined') {
+        haptics.success();
+        router.replace({ pathname: '/(tabs)/crew', params: { tab: 'members', joined: outcome.crew.id } });
+        return;
+      }
       if (outcome.kind === 'already') {
         AccessibilityInfo.announceForAccessibility(`You're already in ${outcome.crew.name}`);
-      } else if (outcome.kind === 'queued') {
+        router.replace({ pathname: '/(tabs)/crew', params: { tab: 'members' } });
+        return;
+      }
+      if (outcome.kind === 'queued') {
         // A toast, not screen text: the global Toaster outlives the replace below.
         useUIStore.getState().showToast("We'll join you when you're back online.", { kind: 'info' });
       }
@@ -150,7 +160,7 @@ export default function JoinInviteScreen() {
             label="Type an invite code"
             onPress={() => {
               setPendingInvite(null);
-              router.replace('/(tabs)/crew');
+              router.replace({ pathname: '/(tabs)/crew', params: { sheet: 'join' } });
             }}
           />
         ) : null}

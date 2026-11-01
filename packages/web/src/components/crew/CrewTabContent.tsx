@@ -23,7 +23,9 @@ interface CrewTabContentProps {
   onForceAdd: () => void;
   onTransferOwnership: (member: CrewMember) => void;
   onKick?: (member: CrewMember) => void;
-  onDestroyCrew?: () => void;
+  onLeaveCrew?: () => void;
+  onDeleteCrew?: () => void;
+  maxMembers?: number;
   /** Raiser to aim the Find tab's map at (from an SOS banner or push). */
   focusSosUserId?: string;
 }
@@ -42,7 +44,9 @@ export default function CrewTabContent({
   onForceAdd,
   onTransferOwnership,
   onKick,
-  onDestroyCrew,
+  onLeaveCrew,
+  onDeleteCrew,
+  maxMembers,
   focusSosUserId,
 }: CrewTabContentProps) {
   return (
@@ -64,7 +68,9 @@ export default function CrewTabContent({
           currentUserId={currentUserId}
           onTransferOwnership={onTransferOwnership}
           onKick={onKick}
-          onDestroyCrew={onDestroyCrew}
+          onLeaveCrew={onLeaveCrew}
+          onDeleteCrew={onDeleteCrew}
+          maxMembers={maxMembers}
         />
       )}
       {tab === 'find' && (
