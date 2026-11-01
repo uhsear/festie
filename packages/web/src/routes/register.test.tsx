@@ -301,7 +301,7 @@ describe('RegisterPage', () => {
 
   it('sends the ?ref= source stored on this visit', async () => {
     sessionStorage.setItem('festie-ref', 'tiktok');
-    const mockRegister = vi.fn().mockResolvedValue(undefined);
+    const mockRegister = vi.fn().mockResolvedValue({ emailVerificationSent: false });
     vi.mocked(useAuth).mockReturnValue({
       login: vi.fn(),
       register: mockRegister,
@@ -315,12 +315,8 @@ describe('RegisterPage', () => {
     });
     const user = userEvent.setup();
     render(<RegisterPage />);
-    await user.type(screen.getByLabelText('Username'), 'alice');
-    await user.type(screen.getByLabelText('Password'), 'password123');
-    await user.type(screen.getByLabelText('Confirm password'), 'password123');
-    fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
-    await user.click(screen.getByRole('checkbox'));
-    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    await fillValid(user);
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ ref: 'tiktok' }));
     sessionStorage.removeItem('festie-ref');
   });
