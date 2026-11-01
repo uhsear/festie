@@ -185,6 +185,8 @@ export interface User {
   paypalHandle?: string | null;
   // Opt-in public share page at /u/:username; absent/false = private.
   publicSchedule?: boolean;
+  // Address awaiting email-change confirmation (from /auth/me); null/absent = none.
+  pendingEmail?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -234,7 +236,7 @@ export interface Crew {
   id: string;
   name: string;
   inviteCode?: string;
-  /** Sent to the owner only. */
+  /** Sent to every member; regenerate is owner-only. */
   inviteExpiresAt?: string | null;
   owner: string;
   festivalId?: string;

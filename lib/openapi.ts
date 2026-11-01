@@ -322,7 +322,7 @@ export function generateOpenAPISpec(config: any) {
         get: { tags: ['Health'], summary: 'Health check with metrics', responses: { 200: { description: 'Health status' } } },
       },
       '/join/{code}': {
-        get: { tags: ['Deep Links'], summary: 'Crew invite deep link (redirects to app)', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 302: { description: 'Redirect to app with joinCrew param' } } },
+        get: { tags: ['Deep Links'], summary: 'Crew invite page (HTML with share preview)', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Invite page with crew-specific Open Graph tags' }, 404: { description: 'No crew has this code' }, 410: { description: 'The invite code has expired' } } },
       },
     },
     tags: [

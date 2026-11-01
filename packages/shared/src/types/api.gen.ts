@@ -317,6 +317,7 @@ export type paths = {
                         dateOfBirth: string;
                         email?: string | "";
                         password: string;
+                        ref?: string;
                         /** @enum {boolean} */
                         tosAccepted: true;
                         username: string;
@@ -1254,7 +1255,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Crew invite deep link (redirects to app) */
+        /** Crew invite page (HTML with share preview) */
         get: {
             parameters: {
                 query?: never;
@@ -1266,8 +1267,22 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description Redirect to app with joinCrew param */
-                302: {
+                /** @description Invite page with crew-specific Open Graph tags */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No crew has this code */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The invite code has expired */
+                410: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1294,6 +1309,8 @@ export type components = {
             name: string;
         };
         AuthEnvelope: {
+            pendingEmail?: string | null;
+            reactivated?: boolean;
             refreshToken?: string;
             token?: string;
             user: {
@@ -1679,12 +1696,17 @@ export type components = {
             updated_at: string;
         };
         NotificationPrefs: {
+            crewMeetingPoints: number;
+            crewMoney: number;
+            crewPolls: number;
             crewReformed: number;
+            crewRides: number;
             crewUpdates: number;
             dndEnd: string | null;
             dndStart: string | null;
             dndTimeZone: string | null;
             lineupDrops: number;
+            mustSeeReminderMinutes: number | null;
             scheduleChanges: number;
             setReminders: number;
             userId: string;
@@ -1711,6 +1733,8 @@ export type components = {
             userId: string | null;
         };
         RefreshTokenResponse: {
+            pendingEmail?: string | null;
+            reactivated?: boolean;
             refreshToken?: string;
             token?: string;
             user: {

@@ -8,6 +8,7 @@ import PasswordSection from './PasswordSection';
 const mockChangePassword = vi.fn();
 vi.mock('@festie/shared/stores/authStore', () => ({
   useAuthStore: (selector: (s: Record<string, unknown>) => unknown) => selector({ changePassword: mockChangePassword }),
+  PASSWORD_CHANGED_MESSAGE: 'Password changed. Other devices were signed out.',
 }));
 
 const mockToast = vi.fn();
@@ -109,9 +110,13 @@ describe('PasswordSection', () => {
       expect(mockChangePassword).toHaveBeenCalledWith({
         currentPassword: 'oldpass',
         newPassword: 'newpass123',
+        confirmPassword: 'newpass123',
       });
     });
-    expect(mockToast).toHaveBeenCalledWith('Password changed', 'success');
+    expect(mockToast).toHaveBeenCalledWith(
+      'Password changed. Other devices were signed out.',
+      'success',
+    );
   });
 
   it('clears all fields after successful password change', async () => {

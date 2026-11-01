@@ -25,6 +25,7 @@ describe('day-of routes', () => {
     expect(sosPushCrewId({ crewId: 'c1', deepLink: 'rave://crew/c1/sos' })).toBe('c1');
     expect(sosPushCrewId({ deepLink: 'rave://crew/c1/sos' })).toBeNull();
     expect(sosPushCrewId({ crewId: 'c1', deepLink: 'rave://crew/c1' })).toBeNull();
+    expect(sosPushCrewId({ type: 'crew_sos', crewId: 'c1', deepLink: 'https://festie.us/crew?sos=u1' })).toBe('c1');
     expect(sosPushCrewId(undefined)).toBeNull();
   });
 });

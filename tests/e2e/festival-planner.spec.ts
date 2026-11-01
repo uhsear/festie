@@ -48,6 +48,7 @@ async function registerUser(page: Page, app: { baseUrl: string }, username: stri
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByLabel('Confirm password').fill(password);
   await page.getByLabel('Date of birth').fill('1995-01-01');
+  await page.getByLabel('Email', { exact: true }).fill(`${username}@example.test`);
   // TOS checkbox (label wraps a checkbox with id="authTos").
   await page.locator('#authTos').check();
 
@@ -146,6 +147,7 @@ test.describe('festival planner browser regression', () => {
     await page.getByLabel('Password', { exact: true }).fill(DEFAULT_PASSWORD);
     await page.getByLabel('Confirm password').fill(DEFAULT_PASSWORD);
     await page.getByLabel('Date of birth').fill('1995-01-01');
+    await page.getByLabel('Email', { exact: true }).fill('tosskip@example.test');
     // Intentionally do NOT check TOS.
     await page.getByRole('button', { name: 'Create Account' }).click();
 

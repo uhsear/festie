@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { escapeHtml, renderInviteJoinPage, renderInviteErrorPage } from '../lib/invite-pages.js';
-import { generateUniqueInviteCode } from '../lib/invite-code.js';
+import { generateUniqueInviteCode, inviteExpiryFor } from '../lib/invite-code.js';
+import { ensureFestivalProfile } from '../lib/festival-profile.js';
 
 export default function createCrewInviteRoutes(deps: any) {
   const {
-    config,
     log,
     userAuth,
     sanitizeIdentifier,
@@ -37,19 +36,19 @@ export default function createCrewInviteRoutes(deps: any) {
           return sendError(
             res,
             410,
-            'Invite code has expired. Ask the crew owner to regenerate it.',
+            'This invite has expired. Ask the crew owner for a new link.',
             ErrorCodes.NOT_FOUND,
           );
         return sendError(res, 404, 'Invalid invite code', ErrorCodes.NOT_FOUND);
       }
 
-      // Verify user has a profile for this festival
-      const profile = await stores.profiles.readByUserAndFestival?.(req.user.userId, crew.festivalId);
-      if (!profile) return sendError(res, 403, 'Join the festival first', ErrorCodes.FORBIDDEN);
-
-      // Check if already a member
+      // Already a member: succeed so a retried or replayed offline join is
+      // idempotent. No crew:member-joined broadcast, since nothing changed.
       const existing = await stores.crews.getMember(crew.id, req.user.userId);
-      if (existing) return sendError(res, 400, 'Already a member of this crew', ErrorCodes.ALREADY_EXISTS);
+      if (existing) {
+        const members = await stores.crews.getMembers(crew.id);
+        return sendSuccess(res, { ...serializeCrewWithMembers(crew, members, req.user.userId), alreadyMember: true });
+      }
 
       // Limit crews per user per festival
       const userCrews = await stores.crews.listByUserAndFestival(req.user.userId, crew.festivalId);
@@ -57,7 +56,7 @@ export default function createCrewInviteRoutes(deps: any) {
         return sendError(
           res,
           400,
-          `Maximum ${MAX_CREWS_PER_USER_PER_FESTIVAL} crews per festival`,
+          `You're already in ${MAX_CREWS_PER_USER_PER_FESTIVAL} crews for this festival. Leave one to join this crew.`,
           ErrorCodes.MAX_LIMIT_REACHED,
         );
       }
@@ -66,6 +65,21 @@ export default function createCrewInviteRoutes(deps: any) {
       const memberCount = await stores.crews.getMemberCount(crew.id);
       if (memberCount >= crew.maxMembers) {
         return sendError(res, 400, 'Crew is full', ErrorCodes.MAX_LIMIT_REACHED);
+      }
+
+      // Create the caller's profile in the crew's festival if it is missing.
+      // Runs after the cap checks so a refused join leaves no stray profile.
+      const profileResult = await ensureFestivalProfile(deps, req.user, crew.festivalId);
+      if (profileResult.error === 'limit') {
+        return sendError(
+          res,
+          400,
+          'This festival has reached its member limit on Festie.',
+          ErrorCodes.MAX_LIMIT_REACHED,
+        );
+      }
+      if (profileResult.error === 'user-missing') {
+        return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
       }
 
       // Pass the cap so the insert closes the count-then-insert race under a row lock.
@@ -111,10 +125,10 @@ export default function createCrewInviteRoutes(deps: any) {
         if (!resolved) return;
 
         const newCode = await generateUniqueInviteCode(stores);
-        await stores.crews.regenerateInviteCode(crewId, newCode);
+        const inviteExpiresAt = inviteExpiryFor(await getFestivalById(resolved.crew.festivalId));
+        await stores.crews.regenerateInviteCode(crewId, newCode, inviteExpiresAt);
 
         log.info('crew:invite-regenerated', { crewId, userId: req.user.userId });
-        const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         return sendSuccess(res, { inviteCode: newCode, inviteExpiresAt });
       } catch (error: any) {
         log.error('crew invite regen failed', { error: error.message, crewId: req.validatedParams?.crewId });
@@ -123,57 +137,10 @@ export default function createCrewInviteRoutes(deps: any) {
     },
   );
 
-  // ── GET /join/:inviteCode — Public crew invite page (no auth) ─────
-  router.get('/join/:inviteCode', rateLimit(30, 'crew-invite-page'), async (req: any, res: any) => {
-    try {
-      const inviteCode = String(req.params.inviteCode || '').trim();
-      // Sanitize inviteCode: alphanumeric, 4-12 chars
-      if (!inviteCode || inviteCode.length < 4 || inviteCode.length > 12 || !/^[a-zA-Z0-9]+$/.test(inviteCode)) {
-        const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 'public, max-age=60');
-        res.setHeader(
-          'Content-Security-Policy',
-          "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
-        );
-        return res.send(renderInviteErrorPage(escapeHtml(origin), 'Invalid or expired invite link'));
-      }
-
-      const crew = await stores.crews.getByInviteCode(inviteCode);
-      if (!crew) {
-        const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 'public, max-age=60');
-        res.setHeader(
-          'Content-Security-Policy',
-          "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
-        );
-        return res.send(renderInviteErrorPage(escapeHtml(origin), 'Invalid or expired invite link'));
-      }
-
-      // Get festival name for the invite page
-      const festival = await getFestivalById(crew.festivalId);
-      const festivalName = festival?.name || 'Festival';
-
-      const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'public, max-age=300');
-      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
-      return res.send(
-        renderInviteJoinPage({
-          crewName: escapeHtml(crew.name),
-          festivalName: escapeHtml(festivalName),
-          inviteCode: escapeHtml(inviteCode),
-          origin: escapeHtml(origin),
-        }),
-      );
-    } catch (error: any) {
-      log.error('crew invite page failed', { error: error.message, inviteCode: req.params.inviteCode });
-      const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
-      return res.send(renderInviteErrorPage(escapeHtml(origin), 'Failed to load invite'));
-    }
+  // ── GET /join/:inviteCode — Moved to the /join/:code invite page ─
+  router.get('/join/:inviteCode', rateLimit(30, 'crew-invite-page'), (req: any, res: any) => {
+    const code = String(req.params.inviteCode || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+    return res.redirect(301, code ? `/join/${encodeURIComponent(code)}` : '/');
   });
 
   return router;

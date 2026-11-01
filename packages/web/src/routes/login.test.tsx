@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
-let mockSearch: { next?: string } = {};
+let mockSearch: { next?: string; reset?: true } = {};
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
   useSearch: () => mockSearch,
@@ -23,8 +23,9 @@ vi.mock('@festie/shared', () => ({
   })),
 }));
 
+const mockToast = vi.fn();
 vi.mock('../lib/toastContext', () => ({
-  useToast: vi.fn(() => ({ toast: vi.fn() })),
+  useToast: () => ({ toast: mockToast }),
 }));
 
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
@@ -61,12 +62,12 @@ describe('LoginPage', () => {
     expect(screen.getByText('Plan your sets. Sync with your crew.')).toBeInTheDocument();
   });
 
-  it('renders Sign in and Create Account tabs', () => {
+  it('renders Sign in and Create account tabs', () => {
     render(<LoginPage />);
     // Both auth-method segments are nav links now; "Sign in" also appears on the
     // submit button, so scope to the link role.
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create Account' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create account' })).toBeInTheDocument();
   });
 
   it('renders username and password inputs', () => {
@@ -188,5 +189,44 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('shows the password-changed message when arriving from a reset', () => {
+    mockSearch = { reset: true };
+    render(<LoginPage />);
+    expect(screen.getByRole('status')).toHaveTextContent('Password changed. Sign in with your new password.');
+  });
+
+  it('hides the password-changed message otherwise', () => {
+    render(<LoginPage />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('links to the schedule for guests', () => {
+    render(<LoginPage />);
+    expect(screen.getByRole('link', { name: 'Browse without an account' })).toHaveAttribute('href', '/cards');
+  });
+
+  it('shows the reactivated toast when login cancelled a deletion', async () => {
+    const mockLogin = vi.fn().mockResolvedValue({ reactivated: true });
+    vi.mocked(useAuth).mockReturnValue({
+      login: mockLogin,
+      register: vi.fn(),
+      logout: vi.fn(),
+      forgotPassword: vi.fn(),
+      changePassword: vi.fn(),
+      uploadAvatar: vi.fn(),
+      removeAvatar: vi.fn(),
+      isLoading: false,
+      error: null,
+    });
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Password'), 'secret123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith('Welcome back. Your account deletion was cancelled.', 'success'),
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapErrorToUserMessage } from './errors';
+import { mapErrorToUserMessage, isResetLinkExpired } from './errors';
 
 function apiError(status: number, extra: Record<string, unknown> = {}, message = 'Bad thing') {
   return Object.assign(new Error(message), { name: 'ApiClientError', status, isNetworkError: false, ...extra });
@@ -43,5 +43,25 @@ describe('mapErrorToUserMessage', () => {
   it('uses the fallback for a non-error, and the default fallback without one', () => {
     expect(mapErrorToUserMessage('boom', "Couldn't save. Try again.")).toBe("Couldn't save. Try again.");
     expect(mapErrorToUserMessage(null)).toBe('Something went wrong. Try again.');
+  });
+});
+
+describe('423 lockout', () => {
+  it('names the wait in minutes', () => {
+    expect(mapErrorToUserMessage(apiError(423, { retryAfter: '900' }))).toContain('Try again in 15 minutes');
+  });
+  it('rounds a short wait up to 1 minute', () => {
+    expect(mapErrorToUserMessage(apiError(423, { retryAfter: '30' }))).toContain('Try again in 1 minute,');
+  });
+  it('falls back to later without Retry-After', () => {
+    expect(mapErrorToUserMessage(apiError(423))).toContain('Try again later');
+  });
+});
+
+describe('isResetLinkExpired', () => {
+  it('is true only for TOKEN_EXPIRED', () => {
+    expect(isResetLinkExpired(apiError(400, { code: 'TOKEN_EXPIRED' }))).toBe(true);
+    expect(isResetLinkExpired(apiError(400, { code: 'INVALID_INPUT' }))).toBe(false);
+    expect(isResetLinkExpired(new Error('x'))).toBe(false);
   });
 });

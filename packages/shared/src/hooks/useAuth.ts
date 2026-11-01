@@ -8,8 +8,8 @@ import {
 } from '../types';
 
 export interface UseAuthReturn {
-  login: (request: LoginRequest) => Promise<void>;
-  register: (request: RegisterRequest) => Promise<void>;
+  login: (request: LoginRequest) => Promise<{ reactivated: boolean }>;
+  register: (request: RegisterRequest) => Promise<{ emailVerificationSent: boolean }>;
   logout: () => Promise<void>;
   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
   changePassword: (request: ChangePasswordRequest) => Promise<void>;

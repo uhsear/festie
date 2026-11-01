@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen, fireEvent, within } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, within, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // CrewView reads tab badge counts via react-query, so renders need a client.
@@ -24,6 +24,12 @@ vi.mock('@tanstack/react-router', () => ({
 
 // Shared mutable state object used by all store selectors
 const storeState: Record<string, unknown> = {};
+
+// Last props each PromptDialog received, keyed by title, plus the toast spy.
+const h = vi.hoisted(() => ({
+  prompts: {} as Record<string, { description?: string; placeholder?: string; maxLength?: number; parsePaste?: unknown; onConfirm: (v: string) => void }>,
+  toast: vi.fn(),
+}));
 
 vi.mock('@festie/shared/stores', () => ({
   useCrewStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
@@ -124,11 +130,18 @@ vi.mock('../components/crew/useCrewAdmin', () => ({
 }));
 
 vi.mock('../lib/toastContext', () => ({
-  useToast: vi.fn(() => ({ toast: vi.fn(), toastError: vi.fn() })),
+  useToast: vi.fn(() => ({ toast: h.toast, toastError: vi.fn() })),
 }));
 
 vi.mock('../components/ui/PromptDialog', () => ({
-  default: ({ open, title }: { open: boolean; title: string }) => (open ? <div data-testid="prompt-open">{title}</div> : null),
+  default: (props: { open: boolean; title: string } & (typeof h.prompts)[string]) => {
+    h.prompts[props.title] = props;
+    return props.open ? <div data-testid="prompt-open">{props.title}</div> : null;
+  },
+}));
+
+vi.mock('../components/crew/JoinCrewSheet', () => ({
+  default: ({ code }: { code: string | null }) => (code ? <div data-testid="join-sheet">{code}</div> : null),
 }));
 
 vi.mock('../components/ui/ConfirmDialog', () => ({
@@ -201,6 +214,30 @@ describe('CrewView', () => {
     expect(screen.getByTestId('prompt-open')).toHaveTextContent('New crew');
     fireEvent.click(within(empty).getByText('Join with code'));
     expect(screen.getByText('Join crew')).toBeInTheDocument();
+  });
+
+  it('join-by-code prompt asks for a 6-character code and offers Paste', () => {
+    render(<CrewView />);
+    const join = h.prompts['Join crew']!;
+    expect(join.description).toBe('Type the 6-character code, or paste the invite link.');
+    expect(join.placeholder).toBe('K7XQ2M');
+    expect(join.maxLength).toBe(64);
+    expect(join.parsePaste).toBeTypeOf('function');
+    expect(JSON.stringify(join)).not.toMatch(/6-letter|A1B2C3/);
+  });
+
+  it('a pasted invite link opens the join sheet for its code', () => {
+    render(<CrewView />);
+    act(() => h.prompts['Join crew']!.onConfirm('https://festie.us/join/k7xq2m'));
+    expect(screen.getByTestId('join-sheet')).toHaveTextContent('K7XQ2M');
+    expect(storeState.joinByCode).not.toHaveBeenCalled();
+  });
+
+  it('an unparseable code toasts an error and opens no sheet', () => {
+    render(<CrewView />);
+    act(() => h.prompts['Join crew']!.onConfirm('not a code'));
+    expect(h.toast).toHaveBeenCalledWith("That code doesn't look right. Codes have 6 letters and numbers.", 'error');
+    expect(screen.queryByTestId('join-sheet')).not.toBeInTheDocument();
   });
 
   it('renders crew content when active crew is set', () => {

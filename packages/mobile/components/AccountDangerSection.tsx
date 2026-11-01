@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, ACCOUNT_DELETION_EXPLAINER, accountDeletionNotice } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -15,12 +15,14 @@ interface AccountDangerSectionProps {
  * Danger-zone (account deletion) for the Account screen.
  *
  * Wired to the shared authStore.deleteAccount(password) → DELETE /account/
- * with { password }. Deletion is a soft delete with a 30-day grace period;
- * the shared action calls logout() on success (clearing the token + resetting
- * all stores), and this component then invokes onDeleted to route to login.
+ * with { password }. The server schedules deletion for 30 days out and keeps
+ * picks and notes until then; signing in before that cancels it. The shared
+ * action calls logout() on success (clearing the token + resetting all stores)
+ * and returns the deletion date. This component shows that date, then invokes
+ * onDeleted to route to login.
  *
  * Flow: expand the danger row → enter the account password → a double-confirm
- * Alert spells out the 30-day grace window → on confirm we call deleteAccount.
+ * Alert spells out the 30-day window → on confirm we call deleteAccount.
  * A wrong password surfaces inline (server returns PASSWORD_INCORRECT / 403).
  */
 export default function AccountDangerSection({ onDeleted }: AccountDangerSectionProps) {
@@ -56,7 +58,7 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
     haptics.warning();
     Alert.alert(
       'Delete account?',
-      'This soft-deletes your account with a 30-day grace period. You can recover it by signing back in within 30 days; after that it is permanently removed.',
+      'We delete your account in 30 days. Sign in before then to cancel.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -72,8 +74,9 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
     setSubmitting(true);
     setError(null);
     try {
-      await deleteAccount(password);
+      const { deletionDate } = await deleteAccount(password);
       // deleteAccount → logout already cleared token + reset stores.
+      Alert.alert('Account deletion scheduled', accountDeletionNotice(deletionDate));
       onDeleted();
     } catch (err) {
       haptics.warning();
@@ -98,7 +101,7 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
         </View>
         <View style={styles.rowBody}>
           <Text style={[styles.rowTitle, styles.dangerText]}>Delete Account</Text>
-          <Text style={styles.rowHint}>30-day grace period before permanent removal</Text>
+          <Text style={styles.rowHint}>Deleted 30 days after you ask</Text>
         </View>
         <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.danger} />
       </TouchableOpacity>
@@ -109,11 +112,8 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
           <View style={styles.callout}>
             <Ionicons name="warning" size={16} color={t.colors.accent.coral} style={styles.calloutIcon} />
             <View style={styles.calloutBody}>
-              <Text style={styles.calloutTitle}>This removes everything</Text>
-              <Text style={styles.calloutText}>
-                Your profile, crew memberships, picks and ratings are scheduled for deletion. Sign back in within 30
-                days to cancel; after that it’s permanent.
-              </Text>
+              <Text style={styles.calloutTitle}>Deleted after 30 days</Text>
+              <Text style={styles.calloutText}>{ACCOUNT_DELETION_EXPLAINER}</Text>
             </View>
           </View>
 

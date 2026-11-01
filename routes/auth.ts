@@ -207,6 +207,21 @@ export default function createAuthRoutes(deps: any): Router {
     return null;
   }
 
+  // Anonymous ?ref= sign-up count (migration 070): a day and a ref, nothing that
+  // identifies the person. A counting failure is logged and never fails sign-up.
+  async function countSignupRef(ref: string | undefined) {
+    if (!ref) return;
+    try {
+      await stores.pool.query(
+        `INSERT INTO signup_ref_counts (day, ref, signups) VALUES (CURRENT_DATE, $1, 1)
+         ON CONFLICT (day, ref) DO UPDATE SET signups = signup_ref_counts.signups + 1`,
+        [ref],
+      );
+    } catch (error: any) {
+      log.warn('signup ref count failed', { error: error.message });
+    }
+  }
+
   router.post(
     '/register',
     rateLimit(5, 'register'),
@@ -227,6 +242,7 @@ export default function createAuthRoutes(deps: any): Router {
         const newUserId = createOpaqueId('user');
         const dateOfBirth = (req.validatedBody as any).dateOfBirth;
         const user = await createUserWithProfile({ cleanUsername, passwordHash, newUserId, cleanEmail, dateOfBirth }, deps);
+        await countSignupRef((req.validatedBody as any).ref);
 
         const token = await createUserSession(user.id, user.username);
         setNoStore(res);
@@ -259,16 +275,8 @@ export default function createAuthRoutes(deps: any): Router {
   );
 
   async function resolveLoginUser(username: string) {
-    let user = await stores.users.getByUsername(String(username).trim());
-    if (!user) {
-      try {
-        const softDeleted = await stores.users.findByUsername?.(String(username).trim());
-        if (softDeleted?.deletedAt) user = softDeleted;
-      } catch {
-        /* ignored */
-      }
-    }
-    return user;
+    const clean = String(username).trim();
+    return (await stores.users.getByUsername(clean)) ?? stores.users.findDeletedByUsername(clean);
   }
 
   async function checkAccountLockout(user: any, res: Response) {
@@ -314,10 +322,12 @@ export default function createAuthRoutes(deps: any): Router {
 
       if (stores.loginFailures) await stores.loginFailures.reset(user.id);
 
-      if (user.deletedAt) {
-        await stores.users.update(user.id, { deletedAt: null });
+      const reactivated = Boolean(user.deletedAt);
+      if (reactivated) {
+        await stores.users.reactivate(user.id);
+        const restoredProfiles = await stores.profiles.restoreByUserId(user.id);
         invalidateUserCache();
-        log.info('account:reactivated', { userId: user.id, username: user.username });
+        log.info('account:reactivated', { userId: user.id, username: user.username, restoredProfiles });
       }
 
       const token = await createUserSession(user.id, user.username);
@@ -338,6 +348,7 @@ export default function createAuthRoutes(deps: any): Router {
         user: serializePublicUser(user),
         ...(wantsBodyTokens ? { token, refreshToken } : {}),
         roles,
+        ...(reactivated ? { reactivated: true } : {}),
       });
     } catch (error: any) {
       log.error('login failed', { error: error.message });
@@ -373,10 +384,12 @@ export default function createAuthRoutes(deps: any): Router {
         ? await depStores.profiles.getByUserId(req.user.userId)
         : (await deps.getProfiles()).filter((p: any) => p.userId === req.user.userId);
       const roles = await depStores.roles.getUserRoles(req.user.userId);
+      const pendingEmail = await depStores.emailTokens.getPendingEmailChange(user.id, user.email ?? null);
       return sendSuccess(res, {
         user: serializePublicUser(user),
         roles,
         festivals: profiles.map((p: any) => ({ festivalId: p.festivalId, profileId: p.id })),
+        pendingEmail,
       });
     } catch (error: any) {
       log.error('get user failed', { error: error.message });
@@ -623,7 +636,9 @@ export default function createAuthRoutes(deps: any): Router {
         const token = await createUserSession(req.user.userId, req.user.username);
         setNoStore(res);
         setUserSessionCookie(res, token);
-        return sendSuccess(res, { success: true, token });
+        // H4: body token only for the native bearer client (see login).
+        const wantsBodyTokens = req.get('x-festie-client') === 'native' || !req.get('origin');
+        return sendSuccess(res, { success: true, ...(wantsBodyTokens ? { token } : {}) });
       } catch (error: any) {
         log.error('change-password failed', { error: error.message });
         return sendError(res, 500, 'Failed to change password', ErrorCodes.INTERNAL_ERROR);

@@ -1,3 +1,4 @@
+import { AUTH_COPY } from '@festie/shared/constants';
 import { firstInvalidField, isAtLeast18, validateRegister, type RegisterFields } from './registerValidation';
 
 const NOW = Date.UTC(2026, 9, 28);
@@ -35,6 +36,19 @@ describe('validateRegister', () => {
     expect(validateRegister({ ...valid, dob: new Date(Date.UTC(2015, 0, 1)) }, NOW).dob).toBe(
       'You must be at least 18 to use Festie',
     );
+  });
+});
+
+describe('validateRegister username and email rules', () => {
+  it('rejects a short or malformed username with the shared rule text', () => {
+    expect(validateRegister({ ...valid, username: 'a' }, NOW).username).toBe(AUTH_COPY.usernameInvalid);
+    expect(validateRegister({ ...valid, username: 'a.b' }, NOW).username).toBe(AUTH_COPY.usernameInvalid);
+    expect(validateRegister({ ...valid, username: 'dj x' }, NOW).username).toBeUndefined();
+  });
+
+  it('requires a well-formed email', () => {
+    expect(validateRegister({ ...valid, email: '' }, NOW).email).toBe(AUTH_COPY.emailRequired);
+    expect(validateRegister({ ...valid, email: 'nope' }, NOW).email).toBe('Please enter a valid email address');
   });
 });
 

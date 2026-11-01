@@ -14,7 +14,8 @@
 //
 // HARD RULES (enforced here + in send.ts):
 //   - strictly event-gated (called from real events, never a cron sweep);
-//   - per-type opt-out (PREF_MAP → notification_preferences columns, checked in send.ts);
+//   - per-type opt-out (PREF_MAP → notification_preferences columns) gates push
+//     (checked in send.ts) and email (checked in emailFanout);
 //   - DND-respecting (isInDndWindow, checked in send.ts);
 //   - deduped once-per-event-per-user via notification_log.existsForEvent on a
 //     stable `eventKey` we stash in the notification data (data_json.eventKey).
@@ -26,7 +27,9 @@
 
 import crypto from 'crypto';
 import { sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail } from '../email.js';
+import { PREF_MAP } from './send.js';
 import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
+import { appLink, appOrigin } from './links.js';
 
 /**
  * Backend mirror of `@festie/shared` `isFestivalOver`: true once the festival's
@@ -143,7 +146,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const fresh = await filterFresh(attendeeIds, 'wrap_ready', eventKey);
 
     // Push to ALL fresh attendees in bounded chunks (no MAX_PUSH_BATCH drop).
-    const deepLink = `${origin()}/wrap?festival=${encodeURIComponent(festivalId)}`;
+    const deepLink = `${appOrigin(config)}/wrap?festival=${encodeURIComponent(festivalId)}`;
     const pushSent = await pushFanout(fresh, () => ({
       type: 'wrap_ready',
       title: `${festivalName}: your wrap is ready`,
@@ -220,7 +223,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     // Prior-year attendees are NOT in the new festival, so we push per-user
     // (each respects pref + DND) — now over ALL of them in bounded chunks
     // instead of dropping the tail past MAX_PUSH_BATCH.
-    const deepLink = `${origin()}/festival/${encodeURIComponent(festivalId)}`;
+    const deepLink = appLink(config, '/?festival=' + encodeURIComponent(festivalId));
     const pushSent = await pushFanout(fresh, () => ({
       type: 'lineup_drop',
       title: `${festivalName} lineup just dropped`,
@@ -249,7 +252,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const fresh = await filterFresh(invited, 'crew_reformed', eventKey);
     if (fresh.length === 0) return { sent: 0, reason: 'all_deduped' };
 
-    const reformDeepLink = inviteUrl || `${origin()}/crew/${encodeURIComponent(newCrewId)}`;
+    const reformDeepLink = inviteUrl || appLink(config, '/crew');
     const pushSent = await pushFanout(fresh, () => ({
       type: 'crew_reformed',
       title: `${crewName || 'Your crew'} reformed`,
@@ -275,10 +278,6 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   }
 
   // ── shared helpers ────────────────────────────────────────────────────────
-
-  function origin() {
-    return String(config?.PUBLIC_ORIGIN || 'https://festie.us').replace(/\/+$/, '');
-  }
 
   /**
    * Push to EVERY user in `userIds` via per-user `notify.send` (each respects
@@ -328,10 +327,14 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     // than fail-open re-blasting every address.
     const emailEventKey = `${eventKey}#email`;
     const fresh = await filterFresh(userIds, type, emailEventKey);
+    const prefKey = PREF_MAP[type];
     let sent = 0;
     for (const uid of fresh) {
       const user = users.get(uid);
       if (!user?.email) continue;
+      // Per-type opt-out gates email as well as push. Quiet hours do not apply to email.
+      const prefs = await stores?.notificationPrefs?.get?.(uid);
+      if (prefs && prefKey && !prefs[prefKey]) continue; // store returns 0/1, same falsy check as send.ts
       let ok: boolean;
       try {
         ok = await sendFn(user);

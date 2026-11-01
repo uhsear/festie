@@ -281,6 +281,9 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   APNS_TEAM_ID: string;
   APNS_BUNDLE_ID: string;
   APNS_PRODUCTION: boolean;
+  VAPID_PUBLIC_KEY: string;
+  VAPID_PRIVATE_KEY: string;
+  VAPID_SUBJECT: string;
   REDIS_URL: string;
   REDIS_ENABLED: boolean;
   REDIS_PREFIX: string;
@@ -574,6 +577,13 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     APNS_TEAM_ID: overrides.APNS_TEAM_ID || process.env.APNS_TEAM_ID || 'J63QL8R63J',
     APNS_BUNDLE_ID: overrides.APNS_BUNDLE_ID || process.env.APNS_BUNDLE_ID || 'us.festie.app',
     APNS_PRODUCTION: readBool(overrides.APNS_PRODUCTION ?? process.env.APNS_PRODUCTION, true),
+
+    // Web Push VAPID keys (optional — web push disabled unless both keys are set).
+    // base64url P-256 keys: the public key is the 65-byte uncompressed point, the
+    // private key is the 32-byte scalar. Unset = web device tokens are skipped.
+    VAPID_PUBLIC_KEY: overrides.VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || '',
+    VAPID_PRIVATE_KEY: overrides.VAPID_PRIVATE_KEY || process.env.VAPID_PRIVATE_KEY || '',
+    VAPID_SUBJECT: overrides.VAPID_SUBJECT || process.env.VAPID_SUBJECT || publicOrigin || 'https://festie.us',
 
     // Redis (optional — falls back to in-memory when unset or disabled)
     REDIS_URL: overrides.REDIS_URL || process.env.REDIS_URL || 'redis://127.0.0.1:6379',

@@ -28,4 +28,18 @@ describe('UserMenuAccountSection', () => {
     expect(onClose).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/account' });
   });
+
+  it('shows the address that is waiting for confirmation', () => {
+    render(
+      <UserMenuAccountSection
+        user={{ email: 'a@b.co', pendingEmail: 'new@b.co' }}
+        isLoading={false}
+        onClose={vi.fn()}
+        onLogout={vi.fn()}
+        onChangePassword={vi.fn()}
+        onChangeEmail={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Waiting for you to confirm new@b.co. Check that inbox.')).toBeInTheDocument();
+  });
 });

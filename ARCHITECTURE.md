@@ -47,7 +47,6 @@ server.ts ─── orchestrator
 | `planner-db-pg.ts` | PostgreSQL connection pool, migration runner, store factory |
 | `redis.ts` | Redis client, rate limiter, presence store, cache invalidation bus, circuit breaker |
 | `middleware.ts` | Express middleware composition (Helmet, CORS, compression, body parsing, metrics, rate limits) |
-| `reset-pages.ts` | Password reset HTML page templates |
 | `metrics.ts` | Prometheus metrics (prom-client) collection and endpoint |
 | `shutdown.ts` | Graceful shutdown (drain requests, close DB/Redis, clear timers) + background task scheduling |
 | `openapi.ts` | OpenAPI 3.0 spec generation from route metadata |

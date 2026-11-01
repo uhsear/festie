@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useAuthStore } from '@festie/shared/stores/authStore';
+import {
+  useAuthStore,
+  ACCOUNT_DELETION_EXPLAINER,
+  accountDeletionNotice,
+} from '@festie/shared/stores/authStore';
 import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
@@ -11,7 +15,7 @@ import { cn } from '@/lib/utils';
 export default function DangerZone() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const logout = useAuthStore((s) => s.logout);
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
 
   const [exporting, setExporting] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -49,11 +53,8 @@ export default function DangerZone() {
 
     setDeleting(true);
     try {
-      await api.delete<void>('/account/', {
-        body: { password: deletePassword },
-      });
-      await logout();
-      toast('Account deleted', 'info');
+      const { deletionDate } = await deleteAccount(deletePassword);
+      toast(accountDeletionNotice(deletionDate), 'info');
       navigate({ to: '/login' });
     } catch {
       toast("Couldn't delete account. Try again.", 'error');
@@ -99,7 +100,7 @@ export default function DangerZone() {
         </h3>
 
         <p className="text-sm text-text-muted">
-          This will permanently delete your account and all associated data. This action cannot be undone.
+          {ACCOUNT_DELETION_EXPLAINER}
         </p>
 
         {!showDeleteConfirm ? (

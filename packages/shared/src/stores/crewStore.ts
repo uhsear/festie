@@ -13,6 +13,7 @@ import {
   CreateCrewRequest,
   UpdateCrewRequest,
   JoinCrewRequest,
+  JoinCrewResponse,
   ReformCrewResponse,
   CrewPoll,
   CreateCrewPollRequest,
@@ -37,6 +38,28 @@ import {
   CrewSettlementPlan,
   CrewActivityEntry,
 } from '../types';
+
+/** Reads the activity response: bare array, `{ items, nextCursor }` or `{ activity }`. */
+export function parseActivityPage(res: unknown): CrewActivityEntry[] {
+  if (Array.isArray(res)) return res as CrewActivityEntry[];
+  const page = res as { items?: CrewActivityEntry[]; activity?: CrewActivityEntry[] } | null;
+  return page?.items ?? page?.activity ?? [];
+}
+
+/** Reads `{ overlap: { [setId]: member[] } }` into the sets picked by 2+ members. */
+export function overlapFromResponse(res: unknown): Record<string, CrewOverlap> {
+  const raw = (res as { overlap?: Record<string, CrewMember[]> } | null)?.overlap ?? {};
+  const out: Record<string, CrewOverlap> = {};
+  for (const [setId, members] of Object.entries(raw)) {
+    if (!Array.isArray(members) || members.length < 2) continue;
+    out[setId] = {
+      setId,
+      memberCount: members.length,
+      members: members.map(({ userId, username, name }) => ({ userId, username, name: name ?? undefined })),
+    };
+  }
+  return out;
+}
 
 export interface CrewState {
   crews: Crew[];
@@ -79,7 +102,7 @@ export interface CrewActions {
   // body; the snake_case totem_name/totem_emoji come back on the returned crew,
   // merged onto activeCrew + the crews list (mirrors updateHomeBase).
   updateCrew: (crewId: string, request: UpdateCrewRequest) => Promise<Crew>;
-  joinByCode: (request: JoinCrewRequest) => Promise<void>;
+  joinByCode: (request: JoinCrewRequest) => Promise<JoinCrewResponse | null>;
   leaveCrew: (crewId: string) => Promise<void>;
   kickMember: (crewId: string, memberId: string) => Promise<void>;
   transferOwnership: (crewId: string, newOwnerId: string) => Promise<void>;
@@ -138,7 +161,7 @@ export interface CrewActions {
   // Both resolve 'queued' when the write was saved to the offline queue rather
   // than acknowledged by the server, so callers never show "sent" copy for it.
   addExpense: (crewId: string, request: CreateCrewExpenseRequest) => Promise<WriteOutcome>;
-  removeExpense: (crewId: string, expenseId: string) => Promise<void>;
+  removeExpense: (crewId: string, expenseId: string) => Promise<WriteOutcome>;
   settleExpense: (crewId: string, request: SettleCrewExpenseRequest) => Promise<WriteOutcome>;
   // Activity feed (routes/crew-activity.ts).
   loadActivity: (crewId: string) => Promise<void>;
@@ -328,11 +351,6 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   // (`join-<inviteCode>`) so repeated offline taps of the same invite collapse
   // into a single replayed join (replay-safe; the server treats re-joining an
   // already-joined crew as a no-op/idempotent rather than a duplicate).
-  //
-  // NOTE: this only routes to the offline queue once '/crews/join' is added to
-  // OFFLINE_ELIGIBLE_PATTERNS in services/api.ts (a separate file). Until then
-  // the post() runs online-only and onOptimisticCreate is never invoked — the
-  // online path below is unchanged, so this is safe to land independently.
   joinByCode: async (request: JoinCrewRequest) => {
     set({ crewLoading: true, error: null });
     try {
@@ -356,13 +374,14 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
           set((state) => ({ crews: [...state.crews, optimisticCrew as Crew], crewLoading: false }));
         },
       });
-      // Offline: the placeholder is already inserted; nothing more to do.
-      if (optimisticCrew) return;
-      const crew = res as Crew;
+      // Offline: the placeholder is already inserted; the crew is not known yet.
+      if (optimisticCrew) return null;
+      const crew = res as JoinCrewResponse;
       set((state) => ({
         crews: state.crews.some((c) => c.id === crew.id) ? state.crews : [...state.crews, crew],
         crewLoading: false,
       }));
+      return crew;
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to join crew');
       set({ error: message, crewLoading: false });
@@ -491,8 +510,8 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   loadOverlap: async (crewId: string, festivalId: string) => {
     set({ error: null });
     try {
-      const overlap = await api.get<Record<string, CrewOverlap>>(`/crews/${crewId}/overlap?festivalId=${festivalId}`);
-      set({ crewOverlap: overlap });
+      const res = await api.get<unknown>(`/crews/${crewId}/overlap?festivalId=${festivalId}`);
+      set({ crewOverlap: overlapFromResponse(res) });
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load overlap');
       set({ error: message });
@@ -1282,7 +1301,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   removeExpense: async (crewId: string, expenseId: string) => {
     set({ error: null });
     try {
-      await api.delete(`/crews/${crewId}/expenses/${expenseId}`);
+      const res = await api.delete(`/crews/${crewId}/expenses/${expenseId}`);
       set((state) => ({
         expenses: state.expenses.filter((e) => e.id !== expenseId),
       }));
@@ -1291,6 +1310,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       } catch {
         /* refetch is best-effort; the write succeeded */
       }
+      return writeOutcomeOf(res);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to remove expense');
       set({ error: message });
@@ -1323,14 +1343,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   loadActivity: async (crewId: string) => {
     set({ error: null });
     try {
-      // Server returns { items, nextCursor } (paginated). Accept a bare array
-      // or { activity } too, in case the shape changes.
-      const res = await api.get<
-        | CrewActivityEntry[]
-        | { items: CrewActivityEntry[]; nextCursor?: string | null }
-        | { activity: CrewActivityEntry[] }
-      >(`/crews/${crewId}/activity`);
-      const activity = Array.isArray(res) ? res : (('items' in res ? res.items : res.activity) ?? []);
+      const activity = parseActivityPage(await api.get<unknown>(`/crews/${crewId}/activity`));
       set({ activity });
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load activity');

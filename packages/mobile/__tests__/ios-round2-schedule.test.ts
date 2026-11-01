@@ -33,6 +33,6 @@ describe('iOS round 2 — schedule and set sheet (source-level guards)', () => {
   });
 
   it('join screen hides join actions for an invalid invite', () => {
-    expect(read('app/join/[code].tsx')).toContain("inviteStatus !== 'invalid'");
+    expect(read('app/join/[code].tsx')).toContain("inviteStatus === 'invalid' || inviteStatus === 'expired'");
   });
 });

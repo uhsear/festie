@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { useNavigate, useSearch, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { AUTH_COPY } from '@festie/shared/constants';
+import { registerErrorField, usernameError } from '@festie/shared/utils';
 import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import Button from '../components/ui/Button';
@@ -16,6 +18,7 @@ import {
   type RegisterField,
 } from '../components/auth/registerValidation';
 import { cn } from '../lib/utils';
+import { readSignupRef } from '../hooks/useFestivalLoader';
 
 export default function RegisterPage() {
   return (
@@ -66,20 +69,34 @@ function RegisterPageInner() {
     }
 
     try {
-      await register({
+      const { emailVerificationSent } = await register({
         username,
         password,
         confirmPassword,
         dateOfBirth,
         tosAccepted,
-        email: email || undefined,
+        email,
+        ref: readSignupRef(),
       });
-      toast('Account created', 'success');
+      toast(
+        emailVerificationSent
+          ? `${AUTH_COPY.accountCreated}. ${AUTH_COPY.checkEmailToConfirm(email)}`
+          : AUTH_COPY.accountCreated,
+        'success',
+        emailVerificationSent ? 6000 : undefined,
+      );
       await (next ? navigate({ href: next }) : navigate({ to: '/cards' }));
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the
       // render before the request failed, so it is still null here.
-      setFormError(mapErrorToUserMessage(err, "Couldn't create your account. Try again."));
+      const msg = mapErrorToUserMessage(err, "Couldn't create your account. Try again.");
+      const field = registerErrorField(msg);
+      if (field) {
+        setErrors((prev) => ({ ...prev, [field]: msg }));
+        document.getElementById(FIELD_IDS[field])?.focus();
+      } else {
+        setFormError(msg);
+      }
     }
   };
 
@@ -89,17 +106,6 @@ function RegisterPageInner() {
   return (
     <>
       <AuthBrand />
-      <h1
-        className={cn(
-          'font-display text-[clamp(22px,5vw,36px)] font-bold tracking-[6px] uppercase',
-          'text-accent-coral mb-3 relative z-[1]',
-        )}
-      >
-        FESTIE
-      </h1>
-      <p className="text-text-secondary text-[length:var(--font-size-16)] mb-8 tracking-[0.5px] relative z-[1]">
-        Plan your sets. Sync with your crew.
-      </p>
 
       <InviteBanner />
 
@@ -124,6 +130,10 @@ function RegisterPageInner() {
             }}
             disabled={isLoading}
             error={errors.username}
+            helperText={AUTH_COPY.usernameHint}
+            onBlur={() => {
+              if (username) setErrors((prev) => ({ ...prev, username: usernameError(username) ?? undefined }));
+            }}
           />
         </div>
 
@@ -140,7 +150,7 @@ function RegisterPageInner() {
             }}
             disabled={isLoading}
             error={errors.password}
-            helperText="At least 8 characters"
+            helperText={AUTH_COPY.passwordHint}
           />
         </div>
 
@@ -180,9 +190,9 @@ function RegisterPageInner() {
         <div className="mb-3">
           <Input
             id={FIELD_IDS.email}
-            label="Email (optional)"
+            label={AUTH_COPY.emailLabel}
             type="email"
-            helperText="For password recovery"
+            helperText={AUTH_COPY.emailHint}
             autoComplete="email"
             maxLength={254}
             value={email}
@@ -238,8 +248,14 @@ function RegisterPageInner() {
         )}
 
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
-          {isLoading ? 'Creating account…' : 'Create Account'}
+          {isLoading ? 'Creating account…' : AUTH_COPY.createAccount}
         </Button>
+
+        <div className="mt-3 flex flex-col items-center">
+          <Link to="/cards" className={cn(linkClass, 'inline-flex items-center min-h-11 text-[length:var(--font-size-14)]')}>
+            {AUTH_COPY.browseAsGuest}
+          </Link>
+        </div>
       </form>
     </>
   );

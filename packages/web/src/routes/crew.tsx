@@ -15,6 +15,7 @@ import HomeBaseCard from '../components/crew/HomeBaseCard';
 import CrewTotemCard from '../components/crew/CrewTotemCard';
 import CrewPhotosCard from '../components/crew/CrewPhotosCard';
 import CrewInviteBar from '../components/crew/CrewInviteBar';
+import JoinCrewSheet from '../components/crew/JoinCrewSheet';
 import ReformCrewButton from '../components/crew/ReformCrewButton';
 import CrewTabBar from '../components/crew/CrewTabBar';
 import CrewTabContent from '../components/crew/CrewTabContent';
@@ -25,7 +26,12 @@ import PromptDialog from '../components/ui/PromptDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { Columns3, CalendarClock, ChevronRight } from 'lucide-react';
-import { deleteCrewConfirmMessage, leaveCrewConfirmMessage, removeMemberConfirmMessage } from '@festie/shared/utils';
+import {
+  deleteCrewConfirmMessage,
+  leaveCrewConfirmMessage,
+  parseInviteCode,
+  removeMemberConfirmMessage,
+} from '@festie/shared/utils';
 import type { Crew, CrewMember } from '@festie/shared/types';
 import type { TabKey } from '../components/crew/CrewTabBar';
 
@@ -47,7 +53,6 @@ function CrewViewInner() {
   const activeCrew = useCrewStore((state) => state.activeCrew);
   const selectCrew = useCrewStore((state) => state.selectCrew);
   const createCrew = useCrewStore((state) => state.createCrew);
-  const joinByCode = useCrewStore((state) => state.joinByCode);
   const leaveCrew = useCrewStore((state) => state.leaveCrew);
   const deleteCrew = useCrewStore((state) => state.deleteCrew);
   const kickMember = useCrewStore((state) => state.kickMember);
@@ -71,7 +76,7 @@ function CrewViewInner() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
-  const [joinBusy, setJoinBusy] = useState(false);
+  const [sheetCode, setSheetCode] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [kickTarget, setKickTarget] = useState<CrewMember | null>(null);
@@ -133,16 +138,14 @@ function CrewViewInner() {
   };
 
   const handleJoinCrew = () => setJoinOpen(true);
-  const submitJoinCrew = async (inviteCode: string) => {
-    setJoinBusy(true);
-    try {
-      await joinByCode({ inviteCode });
-      setJoinOpen(false);
-    } catch (e) {
-      toastError(e, "Couldn't join crew. Try again.");
-    } finally {
-      setJoinBusy(false);
+  const submitJoinCrew = (input: string) => {
+    const code = parseInviteCode(input);
+    if (!code) {
+      toast("That code doesn't look right. Codes have 6 letters and numbers.", 'error');
+      return;
     }
+    setJoinOpen(false);
+    setSheetCode(code);
   };
 
   const submitDestroy = async () => {
@@ -268,6 +271,7 @@ function CrewViewInner() {
               <CrewInviteBar
                 inviteCode={activeCrew.inviteCode}
                 crewId={activeCrew.id}
+                crewName={activeCrew.name}
                 isOwner={isOwner}
                 expiresAt={activeCrew.inviteExpiresAt}
               />
@@ -331,13 +335,14 @@ function CrewViewInner() {
         open={joinOpen}
         onOpenChange={setJoinOpen}
         title="Join crew"
-        description="Paste the 6-letter invite code your friend shared."
-        placeholder="A1B2C3"
+        description="Type the 6-character code, or paste the invite link."
+        placeholder="K7XQ2M"
         confirmLabel="Join"
-        busy={joinBusy}
-        maxLength={20}
+        maxLength={64}
+        parsePaste={parseInviteCode}
         onConfirm={submitJoinCrew}
       />
+      <JoinCrewSheet code={sheetCode} onClose={() => setSheetCode(null)} />
       <PromptDialog
         open={adminOpen}
         onOpenChange={setAdminOpen}
