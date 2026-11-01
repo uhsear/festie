@@ -2,6 +2,8 @@
 // All Rights Reserved. See the LICENSE file.
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+// Telemetry beacons (web-vitals, /metrics/client, install ping) are not user actions.
+const SKIPPED_PATHS = /^\/api(?:\/v1)?\/(?:metrics|analytics)(?:\/|$)/;
 
 export default function createAuditMiddleware(deps: any) {
   const { stores, log, getRequestIp } = deps;
@@ -11,7 +13,14 @@ export default function createAuditMiddleware(deps: any) {
       return next();
     }
 
+    const path = String(req.originalUrl || req.url || '').split('?')[0] ?? '';
+    if (SKIPPED_PATHS.test(path)) {
+      return next();
+    }
+
     res.on('finish', () => {
+      // A route that wrote its own explicit row sets this flag to avoid a duplicate.
+      if (res.locals?.auditWritten) return;
       logAuditEntry(req, res, res.statusCode || 200);
     });
 
@@ -45,11 +54,11 @@ export default function createAuditMiddleware(deps: any) {
   }
 
   function extractActor(req: any) {
+    if (req.isAdmin && req.user?.userId) {
+      return { type: 'admin', id: req.user.userId };
+    }
     if (req.user?.userId) {
       return { type: 'user', id: req.user.userId };
-    }
-    if (req.adminSession) {
-      return { type: 'admin', id: 'admin' };
     }
     return { type: 'system', id: null };
   }

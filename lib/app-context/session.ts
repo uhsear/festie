@@ -18,6 +18,8 @@ import crypto from 'crypto';
 
 import { hashSessionToken } from '../crypto-auth';
 
+export const REAUTH_WINDOW_MS = 15 * 60 * 1000;
+
 /**
  * Build session + auth helpers bound to the supplied deps.
  */
@@ -96,7 +98,24 @@ export function createSessionHelpers({
     req.userAuthSource = resolved.source;
     const isAdmin = await stores.roles.hasRole(resolved.session.userId, 'admin');
     if (!isAdmin) return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
+    // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
+    req.isAdmin = true;
     res.setHeader('Vary', 'Cookie');
+    return next();
+  }
+
+  // True when the session's password was re-entered (POST /auth/reauth) within
+  // REAUTH_WINDOW_MS. Reads the reauthAt that validateUserSession loaded.
+  function hasRecentAuth(req: any) {
+    const reauthAt = req.user?.reauthAt ? new Date(req.user.reauthAt).getTime() : NaN;
+    return Number.isFinite(reauthAt) && Date.now() - reauthAt <= REAUTH_WINDOW_MS;
+  }
+
+  // Gate for destructive admin actions. Mount after adminAuth/userAuth.
+  function requireRecentAuth(req: any, res: any, next: any) {
+    if (!hasRecentAuth(req)) {
+      return sendError(res, 403, 'Confirm your password to continue.', ErrorCodes.REAUTH_REQUIRED);
+    }
     return next();
   }
 
@@ -120,5 +139,7 @@ export function createSessionHelpers({
     resolveUserRequestSession,
     adminAuth,
     userAuth,
+    hasRecentAuth,
+    requireRecentAuth,
   };
 }

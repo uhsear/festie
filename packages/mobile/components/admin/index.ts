@@ -6,6 +6,8 @@
 export { default as ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
 
+export { useReauthPrompt } from './ReauthDialog';
+
 export {
   LabeledTextInput,
   ModalSelect,

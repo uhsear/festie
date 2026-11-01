@@ -41,7 +41,8 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
           user_id AS "userId",
           username,
           created_at AS "createdAt",
-          last_access AS "lastAccess"
+          last_access AS "lastAccess",
+          reauth_at AS "reauthAt"
         FROM
           user_sessions
         WHERE
@@ -90,6 +91,10 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
         [userId],
       );
       return result.rows;
+    },
+
+    async markReauthenticated(tokenHash: string) {
+      await pool.query('UPDATE user_sessions SET reauth_at = NOW() WHERE token = $1', [tokenHash]);
     },
 
     async deleteUserSession(token: string) {

@@ -27,7 +27,6 @@ export * from './crewPlan';
 export * from './stageColor';
 export * from './email';
 export * from './grid';
-export * from './lineupCsv';
 export * from './analyticsNormalize';
 export * from './scheduleFormat';
 export * from './links';

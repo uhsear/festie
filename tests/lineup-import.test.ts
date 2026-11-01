@@ -2,7 +2,7 @@ import 'dotenv/config';
 /**
  * Integration tests for lineup-import route (routes/lineup-import.js).
  * Covers: CSV parse, TSV parse, header detection, time normalization, stage/day
- *         defaulting, payload validation, admin-only gate, Spotify deferral
+ *         row errors, dryRun, update-in-place, payload validation, admin-only gate, Spotify deferral
  *         (skipSpotify), empty-body rejection, soft-delete behavior on target
  *         festival.
  *
@@ -84,6 +84,7 @@ async function cleanupById(pool: any) {
   await pool.query(`DELETE FROM festival_profiles WHERE festival_id = $1`, [FEST_ID]);
   await pool.query(`DELETE FROM festival_days WHERE festival_id = $1`, [FEST_ID]);
   await pool.query(`DELETE FROM festival_stages WHERE festival_id = $1`, [FEST_ID]);
+  await pool.query(`DELETE FROM audit_log WHERE target_id = $1`, [FEST_ID]);
   await pool.query(`DELETE FROM festivals WHERE id = $1`, [FEST_ID]);
   // Child tables referencing users (FK changed to RESTRICT in migration 031)
   await pool.query(`DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
@@ -182,6 +183,8 @@ afterEach(async () => {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
   try {
     await pool.query(`DELETE FROM festival_sets WHERE festival_id = $1`, [FEST_ID]);
+    // Each commit writes a lineup_import row on FEST_ID; clear them so audit counts are per test.
+    await pool.query(`DELETE FROM audit_log WHERE target_id = $1`, [FEST_ID]);
   } finally {
     await pool.end();
   }
@@ -211,7 +214,7 @@ describe('lineup-import route (admin)', { skip, concurrency: 1 }, () => {
     }).expect(200);
 
     assert.equal(res.body.data.imported, 2);
-    const artists = res.body.data.sets.map((s: any) => s.artist);
+    const artists = res.body.data.rows.map((s: any) => s.artist);
     assert.ok(artists.includes('DJ Alpha'));
     assert.ok(artists.includes('DJ Beta'));
     assert.equal(await countSets(FEST_ID), 2);
@@ -233,8 +236,8 @@ describe('lineup-import route (admin)', { skip, concurrency: 1 }, () => {
     }).expect(200);
 
     assert.equal(res.body.data.imported, 1);
-    assert.equal(res.body.data.sets[0].artist, 'Tab Artist');
-    assert.equal(res.body.data.sets[0].startTime, '10:00');
+    assert.equal(res.body.data.rows[0].artist, 'Tab Artist');
+    assert.equal(res.body.data.rows[0].startTime, '10:00');
   });
 
   test('format:auto detects TSV when tabs outnumber commas', async () => {
@@ -250,7 +253,7 @@ describe('lineup-import route (admin)', { skip, concurrency: 1 }, () => {
     }).expect(200);
 
     assert.equal(res.body.data.imported, 1);
-    assert.equal(res.body.data.sets[0].artist, 'Auto DJ');
+    assert.equal(res.body.data.rows[0].artist, 'Auto DJ');
   });
 
   test('time normalization: 12-hour am/pm and short hours are padded to HH:mm', async () => {
@@ -269,14 +272,14 @@ describe('lineup-import route (admin)', { skip, concurrency: 1 }, () => {
       text: csv, format: 'csv', skipSpotify: true,
     }).expect(200);
 
-    const noon = res.body.data.sets.find((s: any) => s.artist === 'Noon DJ');
-    const night = res.body.data.sets.find((s: any) => s.artist === 'Night DJ');
+    const noon = res.body.data.rows.find((s: any) => s.artist === 'Noon DJ');
+    const night = res.body.data.rows.find((s: any) => s.artist === 'Night DJ');
     assert.equal(noon.startTime, '09:30');
     assert.equal(night.startTime, '23:00');
     assert.equal(night.endTime, '01:00');
   });
 
-  test('unknown stage defaults to first stage with a warning', async () => {
+  test('unknown stage is a row error, commit returns 400 and writes nothing', async () => {
     if (!createFestivalPlanner) return;
     const server = (await startServer())!;
     servers.push(server);
@@ -289,11 +292,166 @@ describe('lineup-import route (admin)', { skip, concurrency: 1 }, () => {
 
     const res = await postImport(server, admin, FEST_ID, {
       text: csv, format: 'csv', skipSpotify: true,
+    }).expect(400);
+
+    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.equal(res.body.error.preview.rows[0].status, 'error');
+    assert.match(res.body.error.preview.rows[0].message, /not in this festival/);
+    assert.equal(await countSets(FEST_ID), 0);
+  });
+
+  test('an empty day is a row error and day numbers are 1-based', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const admin = await loginAdmin(server);
+
+    const csv = [
+      'artist,stage,day,startTime,endTime',
+      'No Day DJ,Main Stage,,20:00,21:00',
+      'One DJ,Main Stage,1,20:00,21:00',
+      'Two DJ,Main Stage,2,20:00,21:00',
+    ].join('\n');
+
+    const res = await postImport(server, admin, FEST_ID, {
+      text: csv, format: 'csv', skipSpotify: true, dryRun: true,
     }).expect(200);
 
-    assert.equal(res.body.data.imported, 1);
-    assert.equal(res.body.data.sets[0].stageId, STAGE_MAIN);
-    assert.ok(res.body.data.warnings.some((w: any) => /unknown stage/i.test(w)));
+    const rows = res.body.data.rows;
+    assert.equal(rows[0].status, 'error');
+    assert.match(rows[0].message, /day "" is not in this festival/);
+    assert.equal(rows[1].dayLabel, 'Friday');
+    assert.equal(rows[2].dayLabel, 'Saturday');
+  });
+
+  test('dryRun with the web payload returns row statuses and writes nothing', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const admin = await loginAdmin(server);
+
+    const csv = 'artist,stage,day,startTime,endTime\nDJ Alpha,Main Stage,Friday,20:00,21:00';
+    const res = await postImport(server, admin, FEST_ID, {
+      text: csv, format: 'auto', dryRun: true,
+    }).expect(200);
+
+    assert.equal(res.body.data.dryRun, true);
+    assert.equal(res.body.data.rows[0].status, 'new');
+    assert.equal(res.body.data.counts.new, 1);
+    assert.equal(res.body.data.imported, 0);
+    assert.equal(await countSets(FEST_ID), 0);
+  });
+
+  test('importing the same CSV twice with updateExisting reports unchanged and adds no sets', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const admin = await loginAdmin(server);
+
+    const csv = [
+      'artist,stage,day,startTime,endTime',
+      'DJ Alpha,Main Stage,Friday,20:00,21:00',
+      'DJ Beta,Forest,Saturday,22:00,23:30',
+    ].join('\n');
+    const body = { text: csv, format: 'csv', skipSpotify: true, updateExisting: true };
+
+    await postImport(server, admin, FEST_ID, body).expect(200);
+    const second = await postImport(server, admin, FEST_ID, body).expect(200);
+
+    assert.deepEqual(second.body.data.rows.map((r: any) => r.status), ['unchanged', 'unchanged']);
+    assert.equal(second.body.data.imported, 0);
+    assert.equal(await countSets(FEST_ID), 2);
+  });
+
+  test('re-import with times fills them in, keeps set ids and keeps picks', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const admin = await loginAdmin(server);
+
+    await postImport(server, admin, FEST_ID, {
+      text: 'artist,stage,day\nDJ Alpha,Main Stage,Friday', format: 'csv', skipSpotify: true,
+    }).expect(200);
+
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      const { rows } = await pool.query(`SELECT id FROM festival_sets WHERE festival_id = $1`, [FEST_ID]);
+      const setId = rows[0].id;
+      const profileId = `prof-${RUN_ID}`;
+      const pickerId = `picker-${RUN_ID}`;
+      // festival_profiles.user_id is NOT NULL (migration 015).
+      await pool.query(
+        `INSERT INTO users (id, username, password_hash, created_at, tos_accepted_at, tos_version)
+         VALUES ($1, $2, 'x', NOW(), NOW(), 1) ON CONFLICT (id) DO NOTHING`,
+        [pickerId, `li-${RUN_ID}-picker`]
+      );
+      await pool.query(
+        `INSERT INTO festival_profiles (id, festival_id, user_id, name) VALUES ($1, $2, $3, 'p') ON CONFLICT DO NOTHING`,
+        [profileId, FEST_ID, pickerId]
+      );
+      await pool.query(
+        `INSERT INTO festival_profile_picks (profile_id, set_id, priority) VALUES ($1, $2, 1) ON CONFLICT DO NOTHING`,
+        [profileId, setId]
+      );
+
+      const res = await postImport(server, admin, FEST_ID, {
+        text: 'artist,stage,day,start,end\nDJ Alpha,Main Stage,Friday,20:00,21:00',
+        format: 'csv', skipSpotify: true, updateExisting: true,
+      }).expect(200);
+      assert.equal(res.body.data.updated, 1);
+
+      const after = await pool.query(
+        `SELECT id, start_time, end_time FROM festival_sets WHERE festival_id = $1`, [FEST_ID]);
+      assert.equal(after.rows.length, 1);
+      assert.equal(after.rows[0].id, setId);
+      assert.equal(after.rows[0].start_time, '20:00');
+      const picks = await pool.query(`SELECT 1 FROM festival_profile_picks WHERE set_id = $1`, [setId]);
+      assert.equal(picks.rows.length, 1);
+      await pool.query(`DELETE FROM festival_profile_picks WHERE set_id = $1`, [setId]);
+      await pool.query(`DELETE FROM festival_profiles WHERE festival_id = $1`, [FEST_ID]);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  test('a row overlapping an existing set on the same stage is a festival-level error', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const admin = await loginAdmin(server);
+
+    await postImport(server, admin, FEST_ID, {
+      text: 'artist,stage,day,start,end\nDJ Alpha,Main Stage,Friday,20:00,21:00', format: 'csv', skipSpotify: true,
+    }).expect(200);
+
+    const res = await postImport(server, admin, FEST_ID, {
+      text: 'artist,stage,day,start,end\nDJ Clash,Main Stage,Friday,20:30,21:30', format: 'csv', skipSpotify: true,
+    }).expect(400);
+
+    assert.ok(res.body.error.preview.errors.some((e: string) => e.startsWith('Stage overlap on')));
+    assert.equal(await countSets(FEST_ID), 1);
+  });
+
+  test('a commit writes exactly one lineup_import audit row', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const admin = await loginAdmin(server);
+
+    await postImport(server, admin, FEST_ID, {
+      text: 'artist,stage,day,start,end\nDJ Alpha,Main Stage,Friday,20:00,21:00', format: 'csv', skipSpotify: true,
+    }).expect(200);
+
+    await new Promise((r) => setTimeout(r, 200));
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      const { rows } = await pool.query(
+        `SELECT actor_type FROM audit_log WHERE action = 'lineup_import' AND target_id = $1`, [FEST_ID]);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].actor_type, 'admin');
+    } finally {
+      await pool.end();
+    }
   });
 
   test('rejects empty body with 400 (zod validation)', async () => {
@@ -361,7 +519,6 @@ describe('lineup-import route (admin)', { skip, concurrency: 1 }, () => {
     }).expect(200);
 
     assert.equal(res.body.data.spotifyMatched, 0);
-    assert.equal(res.body.data.sets[0].linkUrl, null);
   });
 
   test('soft-delete handling: importing into a soft-deleted festival returns 404', async () => {

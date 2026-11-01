@@ -234,6 +234,16 @@ async function loginAdmin(server: any) {
   return loginRes.body.data.token;
 }
 
+// Festival delete needs a password re-entry within 15 minutes (requireRecentAuth).
+async function reauthAdmin(server: any, adminToken: string) {
+  await server.request
+    .post('/api/v1/auth/reauth')
+    .set('x-user-token', adminToken)
+    .set(TRUSTED_MUTATION_HEADER, '1')
+    .send({ password: 'test-admin-password-pass' })
+    .expect(200);
+}
+
 const servers: any[] = [];
 afterEach(async () => {
   while (servers.length > 0) {
@@ -332,6 +342,7 @@ describe('admin bulk deactivate + archive', () => {
     const server = await startServer(); servers.push(server);
     const adminToken = await loginAdmin(server);
     const user = await registerUser(server, 'todeactivate');
+    await reauthAdmin(server, adminToken);
     const res = await server.request
       .post('/api/v1/admin/bulk/deactivate')
       .set('x-user-token', adminToken)
@@ -358,6 +369,7 @@ describe('admin bulk deactivate + archive', () => {
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ name: 'Archive Test Fest', days: [{ date: '2026-06-01', label: 'Day 1', sets: [] }], stages: [] });
     const festId = createRes.body.data?.id || createRes.body.data?.festival?.id;
+    await reauthAdmin(server, adminToken);
     const res = await server.request
       .post('/api/v1/admin/bulk/archive-festivals')
       .set('x-user-token', adminToken)
@@ -392,6 +404,7 @@ describe('admin festival CRUD + cascade + audit', () => {
       .expect(200);
     assert.equal(upd.body.data.name, 'Updated CRUD Fest');
 
+    await reauthAdmin(server, adminToken);
     await server.request
       .delete(`/api/v1/admin/festivals/${festId}`)
       .set('x-user-token', adminToken)
@@ -417,6 +430,7 @@ describe('admin festival CRUD + cascade + audit', () => {
       .expect(201);
     const festId = createRes.body.data.id;
 
+    await reauthAdmin(server, adminToken);
     await server.request
       .delete(`/api/v1/admin/festivals/${festId}?hard=true`)
       .set('x-user-token', adminToken)

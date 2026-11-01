@@ -1,33 +1,39 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, FlatList } from 'react-native';
+import { View, Text, FlatList, Switch } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '@festie/shared/services';
+import {
+  ApiClientError,
+  commitLineupImport,
+  formatImportCounts,
+  previewLineupImport,
+  type LineupImportResult,
+} from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
-import { parseLineupCsv, type LineupRow } from '@festie/shared/utils';
 import ScreenHeader from '../../components/ScreenHeader';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
-import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
 import { ConfirmDialog, LabeledTextInput } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
  * Admin — Lineup import. The native mirror of the web admin LineupImport
- * (packages/web/src/components/admin/LineupImport.tsx): paste CSV/TSV, parse it
- * with the SHARED parseLineupCsv util, preview the parsed rows + any errors,
- * then POST the rows to the same endpoint the web console uses:
- *   POST /admin/festivals/:id/import-lineup  body { sets: LineupRow[] }
+ * (packages/web/src/components/admin/LineupImport.tsx): paste CSV/TSV, then the
+ * server previews every row (stage, day, status) before anything is written:
+ *   POST /admin/festivals/:id/import-lineup  { text, format: 'auto', dryRun: true }
+ * and the commit posts the same text with { updateExisting }.
  *
- * No business logic lives here — parsing is shared, the POST is the generic
- * api.post. This screen is the native UI only.
+ * The import adds new sets and, when "Update sets that match" is on, updates the
+ * stage and times of sets that already exist (same artist and day). Matched sets
+ * keep their ids, so picks survive. It never replaces the lineup and never deletes.
+ *
+ * No business logic lives here: parsing, matching and validation are server-side,
+ * the calls and copy are in @festie/shared/services. This screen is the native UI only.
  *
  * Route: /admin/lineup-import?id=<festivalId>. Lives under app/admin/ so the
- * root AuthGate (seg[0] === 'admin') guards it. The import is destructive (it
- * replaces a festival's lineup), so it is gated behind ConfirmDialog before the
- * api call fires — the same destructive-confirm discipline as the rest of the
- * admin write surface. Back-navigates to '/admin'.
+ * root AuthGate (seg[0] === 'admin') guards it. The commit is gated behind
+ * ConfirmDialog before the api call fires. Back-navigates to '/admin'.
  */
 export default function LineupImportScreen() {
   const t = useTokens();
@@ -38,10 +44,9 @@ export default function LineupImportScreen() {
   const { id: festivalId } = useLocalSearchParams<{ id?: string }>();
 
   const [importText, setImportText] = useState('');
-  const [preview, setPreview] = useState<LineupRow[]>([]);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [parsed, setParsed] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [preview, setPreview] = useState<LineupImportResult | null>(null);
+  const [updateExisting, setUpdateExisting] = useState(false);
+  const [working, setWorking] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [resultError, setResultError] = useState(false);
@@ -56,47 +61,72 @@ export default function LineupImportScreen() {
     }
   }, [router]);
 
-  const handleParse = useCallback(() => {
-    const { rows, errors: parseErrors } = parseLineupCsv(importText);
-    setPreview(rows);
-    setErrors(parseErrors);
-    setParsed(true);
+  // Editing the pasted text makes the previewed rows stale, so drop them.
+  const handleTextChange = useCallback((v: string) => {
+    setImportText(v);
+    setPreview(null);
+  }, []);
+
+  const handlePreview = useCallback(async (nextUpdateExisting: boolean) => {
+    if (!festivalId) return;
+    setWorking(true);
     setResultMessage(null);
     setResultError(false);
-  }, [importText]);
+    try {
+      setPreview(await previewLineupImport(festivalId, importText, { updateExisting: nextUpdateExisting }));
+    } catch (err: unknown) {
+      setPreview(null);
+      setResultMessage(err instanceof Error ? err.message : 'Preview failed. Try again.');
+      setResultError(true);
+    } finally {
+      setWorking(false);
+    }
+  }, [festivalId, importText]);
+
+  // The row statuses depend on this flag, so preview again with the new value.
+  const handleUpdateExistingChange = useCallback(
+    (value: boolean) => {
+      setUpdateExisting(value);
+      void handlePreview(value);
+    },
+    [handlePreview],
+  );
 
   const handleClear = useCallback(() => {
     setImportText('');
-    setPreview([]);
-    setErrors([]);
-    setParsed(false);
+    setPreview(null);
     setResultMessage(null);
     setResultError(false);
   }, []);
 
   const handleImport = useCallback(async () => {
     setConfirmVisible(false);
-    if (!festivalId || preview.length === 0) return;
-    setImporting(true);
+    if (!festivalId || !preview) return;
+    setWorking(true);
     setResultMessage(null);
     setResultError(false);
     try {
-      await api.post<void>(`/admin/festivals/${festivalId}/import-lineup`, { sets: preview });
-      const count = preview.length;
+      const result = await commitLineupImport(festivalId, importText, { updateExisting });
       handleClear();
-      setResultMessage(`Imported ${count} set${count === 1 ? '' : 's'}.`);
-      setResultError(false);
+      setResultMessage(`Imported ${result.imported} new sets and updated ${result.updated}.`);
     } catch (err: unknown) {
+      // A rejected commit carries the same row report, so show what to fix.
+      const rejected = err instanceof ApiClientError ? (err.details?.preview as LineupImportResult | undefined) : undefined;
+      if (rejected) setPreview(rejected);
       setResultMessage(err instanceof Error ? err.message : 'Import failed.');
       setResultError(true);
     } finally {
-      setImporting(false);
+      setWorking(false);
     }
-  }, [festivalId, preview, handleClear]);
+  }, [festivalId, preview, importText, updateExisting, handleClear]);
 
-  const canImport = preview.length > 0 && !importing;
-
-  const headerListData = useMemo(() => preview, [preview]);
+  const rows = useMemo(() => preview?.rows ?? [], [preview]);
+  const blocked = !!preview && (preview.counts.error > 0 || preview.errors.length > 0);
+  const hasWork = !!preview && (preview.counts.new > 0 || (updateExisting && preview.counts.update > 0));
+  const canImport = hasWork && !blocked && !working;
+  const importLabel = preview
+    ? `Import ${preview.counts.new} new${updateExisting ? `, update ${preview.counts.update}` : ''}`
+    : 'Import';
 
   // Non-admins never reach the data; AuthGate already guards the segment, but
   // mirror the index screen's defensive empty state in case of a direct render.
@@ -140,8 +170,8 @@ export default function LineupImportScreen() {
       />
 
       <FlatList
-        data={headerListData}
-        keyExtractor={(_, i) => String(i)}
+        data={rows}
+        keyExtractor={(item, i) => `${item.line}-${i}`}
         contentContainerStyle={[
           styles.scroll,
           { paddingBottom: Math.max(t.spacing[6], insets.bottom + t.spacing[2]) },
@@ -152,32 +182,35 @@ export default function LineupImportScreen() {
           <View style={styles.headerBlock}>
             {/* Paste area + column reference */}
             <View style={styles.card}>
-              <Text style={styles.helpTitle}>Required columns</Text>
-              <Text style={styles.helpMono}>dayLabel  date  artist  stage</Text>
-              <Text style={styles.helpTitle}>Optional columns</Text>
-              <Text style={styles.helpMono}>startTime  endTime  stageColor</Text>
+              <Text style={styles.helpTitle}>Columns</Text>
+              <Text style={styles.helpMono}>artist, stage, day, start, end, link</Text>
+              <Text style={styles.helpNote}>
+                Header optional. Day can be a label, a date (YYYY-MM-DD) or a number.
+              </Text>
             </View>
 
             <LabeledTextInput
               label="CSV / TSV data"
               value={importText}
-              onChangeText={setImportText}
+              onChangeText={handleTextChange}
               placeholder="Paste CSV or TSV data here…"
               autoCapitalize="none"
               multiline
-              hint="First row must be the header. Rows missing an artist are skipped."
+              hint="Stages and days must already exist in this festival."
             />
 
             <View style={styles.actionsRow}>
               <Button
-                label="Parse & preview"
+                label="Preview"
                 variant="secondary"
                 icon="eye-outline"
-                onPress={handleParse}
-                disabled={importText.trim().length === 0}
+                onPress={() => void handlePreview(updateExisting)}
+                loading={working}
+                loadingLabel="Working"
+                disabled={importText.trim().length === 0 || working}
                 style={styles.flexBtn}
               />
-              {parsed ? (
+              {preview ? (
                 <Button
                   label="Clear"
                   variant="ghost"
@@ -197,12 +230,12 @@ export default function LineupImportScreen() {
               </View>
             ) : null}
 
-            {/* Errors from the parse */}
-            {errors.length > 0 ? (
+            {/* Festival-level problems from the server */}
+            {preview && preview.errors.length > 0 ? (
               <>
                 <SectionLabel>Issues found</SectionLabel>
                 <View style={[styles.card, styles.errorCard]}>
-                  {errors.map((e, i) => (
+                  {preview.errors.map((e, i) => (
                     <Text key={i} style={styles.errorLine}>
                       • {e}
                     </Text>
@@ -211,54 +244,74 @@ export default function LineupImportScreen() {
               </>
             ) : null}
 
-            {/* Loading overlay while the POST is in flight */}
-            {importing ? <LoadingState label={`Importing ${preview.length} sets`} /> : null}
-
-            {preview.length > 0 ? (
-              <SectionLabel>Preview ({preview.length} sets)</SectionLabel>
+            {preview ? (
+              <>
+                <SectionLabel>Preview</SectionLabel>
+                <Text style={styles.countsLine}>{formatImportCounts(preview.counts)}</Text>
+                <View style={styles.toggleRow}>
+                  <Text style={styles.toggleLabel}>Update sets that match (keeps everyone's picks)</Text>
+                  <Switch
+                    value={updateExisting}
+                    onValueChange={handleUpdateExistingChange}
+                    disabled={working}
+                    accessibilityLabel="Update sets that match"
+                  />
+                </View>
+                {preview.missing.length > 0 ? (
+                  <Text style={styles.helpNote}>
+                    {preview.missing.length} sets in this festival are not in your file. Import never deletes sets.
+                    Remove them in the editor if you need to.
+                  </Text>
+                ) : null}
+              </>
             ) : null}
           </View>
         }
-        renderItem={({ item, index }) => (
-          <View
-            style={[styles.card, index < preview.length - 1 && styles.previewSpacer]}
-            accessibilityRole="text"
-            accessibilityLabel={`${item.artist}, ${item.stage}, ${item.dayLabel} ${item.date}`}
-          >
-            <View style={styles.previewRow}>
-              <Text style={styles.previewArtist} numberOfLines={1}>
-                {item.artist}
-              </Text>
-              <View style={styles.stagePill}>
-                <Text style={styles.stagePillText} numberOfLines={1}>
-                  {item.stage}
+        renderItem={({ item, index }) => {
+          const isError = item.status === 'error';
+          return (
+            <View
+              style={[styles.card, isError && styles.errorCard, index < rows.length - 1 && styles.previewSpacer]}
+              accessibilityRole="text"
+              accessibilityLabel={`Line ${item.line}, ${item.artist}, ${item.status}`}
+            >
+              <View style={styles.previewRow}>
+                <Text style={styles.previewArtist} numberOfLines={1}>
+                  {item.artist || `Line ${item.line}`}
                 </Text>
+                <View style={[styles.stagePill, isError && styles.statusPillError]}>
+                  <Text style={[styles.stagePillText, isError && styles.errorLine]} numberOfLines={1}>
+                    {item.status}
+                  </Text>
+                </View>
               </View>
+              <Text style={styles.previewMeta} numberOfLines={1}>
+                Line {item.line} · {item.stageName ?? 'No stage'} · {item.dayLabel ?? 'No day'}
+                {item.startTime ? ` · ${item.startTime}` : ''}
+                {item.endTime ? `–${item.endTime}` : ''}
+              </Text>
+              {item.message ? <Text style={styles.errorLine}>{item.message}</Text> : null}
             </View>
-            <Text style={styles.previewMeta} numberOfLines={1}>
-              {item.dayLabel} · {item.date}
-              {item.startTime ? ` · ${item.startTime}` : ''}
-              {item.endTime ? `–${item.endTime}` : ''}
-            </Text>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
-          parsed && errors.length === 0 && !importing ? (
+          preview && !working ? (
             <EmptyState
               icon="document-text-outline"
-              title="No valid rows"
-              message="Nothing parsed from the pasted data. Check the header row and try again."
+              title="No rows found"
+              message="Nothing was read from the pasted data. Check the header row and try again."
             />
           ) : undefined
         }
         ListFooterComponent={
-          preview.length > 0 ? (
+          preview ? (
             <View style={styles.footer}>
+              {blocked ? <Text style={styles.errorLine}>Fix the rows marked in red, then preview again.</Text> : null}
               <Button
-                label={`Import ${preview.length} set${preview.length === 1 ? '' : 's'}`}
+                label={importLabel}
                 icon="cloud-upload-outline"
-                loading={importing}
-                loadingLabel={`Importing ${preview.length} sets`}
+                loading={working}
+                loadingLabel="Importing"
                 disabled={!canImport}
                 onPress={() => setConfirmVisible(true)}
               />
@@ -267,13 +320,12 @@ export default function LineupImportScreen() {
         }
       />
 
-      {/* Destructive confirm: importing replaces the festival's lineup. */}
+      {/* Confirm before the write. The import adds and updates; it never deletes. */}
       <ConfirmDialog
         visible={confirmVisible}
         title="Import lineup?"
-        message={`This will import ${preview.length} set${preview.length === 1 ? '' : 's'} into this festival, replacing its current lineup. This can't be undone.`}
+        message={preview ? formatImportCounts(preview.counts) : ''}
         confirmLabel="Import"
-        destructive
         onConfirm={() => void handleImport()}
         onCancel={() => setConfirmVisible(false)}
       />
@@ -315,6 +367,28 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.muted,
     marginBottom: t.spacing[2],
+  },
+  helpNote: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+  },
+  countsLine: {
+    ...typeStyle('body'),
+    color: t.colors.text.primary,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: t.spacing[3],
+  },
+  toggleLabel: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
+    flex: 1,
+  },
+  statusPillError: {
+    borderColor: t.colors.accent.coral,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -385,5 +459,6 @@ const useStyles = makeStyles((t) => ({
   },
   footer: {
     marginTop: t.spacing[3],
+    gap: t.spacing[2],
   },
 }));

@@ -6,7 +6,11 @@
  * Lineup Import Route — Parse CSV/TSV/text lineup into festival sets
  *
  * POST /api/v1/admin/festivals/:id/import-lineup
- * Body: { text: "...", format: "csv"|"tsv"|"auto" }
+ * Body: { text, format?: "csv"|"tsv"|"auto", skipSpotify?, dryRun?, updateExisting? }
+ *
+ * The import adds new sets and, with updateExisting, updates the stage and times of sets
+ * that already match by artist + day. It never deletes. dryRun returns the same
+ * row-by-row result without writing anything.
  *
  * Expected formats:
  *   CSV: artist,stage,day,startTime,endTime[,linkUrl]
@@ -18,18 +22,24 @@
  * Without header: assumed order is artist, stage, day, startTime, endTime.
  *
  * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, auto-populates
- * link_url with Spotify artist page URLs for sets that don't already have one.
+ * link_url with Spotify artist page URLs for new sets that don't already have one.
  */
 
 import crypto from 'crypto';
 import { z } from 'zod';
 import { sanitizeLinkRecord } from '../lib/schemas.js';
+import { validateFestival, validateTime } from '../lib/helpers/validation.js';
 
 const importLineupSchema = z.object({
   text: z.string().min(1).max(100_000),
   format: z.enum(['csv', 'tsv', 'auto']).default('auto'),
   skipSpotify: z.boolean().default(false),
+  dryRun: z.boolean().default(false),
+  updateExisting: z.boolean().default(false),
 });
+
+// Artist name in lower case with spaces collapsed: the match identity inside a day.
+const normName = (s: any) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 export default function createLineupImportRoute(deps: any) {
   const {
@@ -118,7 +128,284 @@ export default function createLineupImportRoute(deps: any) {
     return stripped;
   }
 
-  router.post('/:id/import-lineup', adminAuth, rateLimit(5, 'lineup-import'), async (req: any, res: any) => {
+  // Returns the normalized time, '' for an empty cell, and records a problem for junk.
+  function readTime(raw: string, label: string, line: number, problems: string[]) {
+    if (!raw) return '';
+    const time = normalizeTime(raw);
+    if (!validateTime(time)) {
+      problems.push(`Line ${line}: ${label} time "${raw}" is not a time. Use HH:MM or 8:00 PM.`);
+      return '';
+    }
+    return time;
+  }
+
+  // Splits the file into data rows. Returns an error message when the file cannot be read at all.
+  function parseRows(text: string, format: string, warnings: string[]) {
+    const lines = text.split(/\r?\n/).filter((l: any) => l.trim());
+    if (lines.length === 0) return { error: 'No data to import', parsed: [] as any[] };
+    const delimiter = format === 'csv' ? ',' : format === 'tsv' ? '\t' : detectDelimiter(lines[0]);
+    const headerLower = parseLine(lines[0], delimiter).map((f: any) => f.toLowerCase().replace(/[^a-z]/g, ''));
+    const hasHeader = headerLower.includes('artist') || headerLower.includes('name');
+
+    let columnMap: any;
+    if (hasHeader) {
+      const HEADER_TO_FIELD: any = {
+        artist: 'artist',
+        name: 'artist',
+        act: 'artist',
+        stage: 'stage',
+        day: 'day',
+        date: 'day',
+        start: 'startTime',
+        starttime: 'startTime',
+        end: 'endTime',
+        endtime: 'endTime',
+        link: 'linkUrl',
+        linkurl: 'linkUrl',
+        url: 'linkUrl',
+        spotify: 'linkUrl',
+      };
+      columnMap = {};
+      for (let i = 0; i < headerLower.length; i++) {
+        const field = HEADER_TO_FIELD[headerLower[i]];
+        if (field && columnMap[field] === undefined) columnMap[field] = i;
+      }
+    } else {
+      columnMap = { artist: 0, stage: 1, day: 2, startTime: 3, endTime: 4 };
+    }
+    if (columnMap.artist === undefined) {
+      return { error: 'Could not find artist/name column in import data', parsed: [] as any[] };
+    }
+
+    const dataLines = hasHeader ? lines.slice(1) : lines;
+    const parsed: any[] = [];
+    for (let i = 0; i < dataLines.length; i++) {
+      const line = hasHeader ? i + 2 : i + 1;
+      const fields = parseLine(dataLines[i], delimiter);
+      if (parsed.length >= config.MAX_IMPORT_SETS) {
+        warnings.push(`Line ${line}: max import limit (${config.MAX_IMPORT_SETS}) reached, remaining lines skipped`);
+        break;
+      }
+      const artist = sanitizeString(fields[columnMap.artist] || '', 300);
+      if (!artist) {
+        warnings.push(`Line ${line}: empty artist, skipped`);
+        continue;
+      }
+      const rawLink = columnMap.linkUrl !== undefined ? (fields[columnMap.linkUrl] || '').trim() : '';
+      // Allowlist link schemes (drop javascript:/data: etc.) before persisting.
+      const safeLinks = rawLink ? sanitizeLinkRecord({ spotify: rawLink }) : {};
+      if (rawLink && !safeLinks.spotify) warnings.push(`Line ${line}: link dropped (unsupported URL scheme)`);
+      parsed.push({
+        line,
+        artist,
+        rawStage: sanitizeString(fields[columnMap.stage] || '', 100),
+        rawDay: sanitizeString(fields[columnMap.day] || '', 100),
+        rawStart: (fields[columnMap.startTime] || '').trim().slice(0, 20),
+        rawEnd: (fields[columnMap.endTime] || '').trim().slice(0, 20),
+        safeLinks,
+        safeLink: safeLinks.spotify || null,
+      });
+    }
+    return { error: null, parsed };
+  }
+
+  // Matches parsed file rows against stored sets and decides each row's status.
+  // Writes nothing. Matched sets keep their ids so picks and ratings survive.
+  function planImport(festival: any, parsed: any[], updateExisting: boolean) {
+    const stages: any[] = festival.stages || [];
+    const days: any[] = festival.days || [];
+    const stageLookup = new Map<string, string>();
+    for (const stage of stages) {
+      stageLookup.set(stage.name.toLowerCase(), stage.id);
+      stageLookup.set(stage.id, stage.id);
+    }
+    const stageName = (id: string | null) => stages.find((s) => s.id === id)?.name ?? null;
+    const dayLookup = new Map<string, number>();
+    // Day numbers are 1-based. Blank labels and dates are not keys, so an empty cell never matches.
+    days.forEach((day, i) => {
+      if (day.label) dayLookup.set(day.label.toLowerCase(), i);
+      if (day.date) dayLookup.set(day.date, i);
+      dayLookup.set(String(i + 1), i);
+    });
+    const stored: any[] = days.flatMap((day, dayIndex) =>
+      (day.sets || []).map((set: any) => ({ ...set, dayIndex, norm: normName(set.artist) })),
+    );
+
+    const matchedIds = new Set<string>();
+    const firstLineOf = new Map<string, number>();
+    const rows: any[] = [];
+    const inserts: any[] = [];
+    const updates: any[] = [];
+
+    for (const p of parsed) {
+      const problems: string[] = [];
+      let stageId: string | null = null;
+      if (p.rawStage) {
+        stageId = stageLookup.get(p.rawStage.toLowerCase()) ?? null;
+        if (!stageId) {
+          problems.push(
+            `Line ${p.line}: stage "${p.rawStage}" is not in this festival. Fix the name or add the stage first.`,
+          );
+        }
+      }
+      const dayIndex = p.rawDay ? (dayLookup.get(p.rawDay.toLowerCase()) ?? dayLookup.get(p.rawDay)) : undefined;
+      if (dayIndex === undefined) {
+        problems.push(
+          `Line ${p.line}: day "${p.rawDay}" is not in this festival. Use a day label, a date (YYYY-MM-DD) or a day number.`,
+        );
+      }
+      const start = readTime(p.rawStart, 'start', p.line, problems);
+      const end = readTime(p.rawEnd, 'end', p.line, problems);
+
+      let match: any = null;
+      let ambiguous = false;
+      if (dayIndex !== undefined) {
+        const cands = stored.filter((s) => s.dayIndex === dayIndex && s.norm === normName(p.artist));
+        if (cands.length === 1) match = cands[0];
+        else if (cands.length > 1) {
+          const narrowed = stageId ? cands.filter((s) => s.stageId === stageId) : [];
+          if (narrowed.length === 1) match = narrowed[0];
+          else {
+            ambiguous = true;
+            cands.forEach((c) => matchedIds.add(c.id));
+            problems.push(
+              `Line ${p.line}: "${p.artist}" matches ${cands.length} sets on ${days[dayIndex].label}. Add the stage column so the row matches one set.`,
+            );
+          }
+        }
+      }
+      if (match) matchedIds.add(match.id);
+      const finalStage = stageId ?? match?.stageId ?? null;
+      if (!match && !ambiguous && !p.rawStage) {
+        problems.push(`Line ${p.line}: stage is empty. Add the stage name for new sets.`);
+      }
+      if (dayIndex !== undefined && !ambiguous) {
+        const dupId = match ? `id:${match.id}` : `new:${normName(p.artist)}|${dayIndex}|${finalStage ?? ''}`;
+        const firstLine = firstLineOf.get(dupId);
+        if (firstLine !== undefined) problems.push(`Line ${p.line} repeats line ${firstLine}.`);
+        else firstLineOf.set(dupId, p.line);
+      }
+
+      // An empty time cell keeps the stored value; it never clears it.
+      const finalStart = start || match?.startTime || '';
+      const finalEnd = end || match?.endTime || '';
+      const row: any = {
+        line: p.line,
+        artist: p.artist,
+        stageName: stageName(finalStage),
+        dayLabel: dayIndex !== undefined ? days[dayIndex].label : null,
+        startTime: finalStart || null,
+        endTime: finalEnd || null,
+        status: 'error',
+      };
+      if (problems.length > 0) {
+        row.message = problems.join(' ');
+      } else if (match) {
+        const changed =
+          finalStage !== match.stageId ||
+          finalStart !== (match.startTime || '') ||
+          finalEnd !== (match.endTime || '');
+        if (!changed) row.status = 'unchanged';
+        else if (updateExisting) {
+          row.status = 'update';
+          updates.push({ id: match.id, dayIndex, stageId: finalStage, startTime: finalStart, endTime: finalEnd });
+        } else {
+          row.status = 'skipped';
+          row.message = 'Differs from the stored set. Turn on "Update sets that match" to apply.';
+        }
+      } else {
+        row.status = 'new';
+        inserts.push({
+          id: `set-import-${crypto.randomBytes(6).toString('hex')}`,
+          artist: p.artist,
+          artists: [{ name: p.artist, links: p.safeLinks }],
+          stageId: finalStage,
+          dayIndex,
+          startTime: finalStart,
+          endTime: finalEnd,
+          linkUrl: p.safeLink,
+        });
+      }
+      rows.push(row);
+    }
+
+    const counts = { new: 0, update: 0, unchanged: 0, error: 0 };
+    for (const row of rows) if (row.status in counts) counts[row.status as keyof typeof counts]++;
+    const missing = stored
+      .filter((s) => !matchedIds.has(s.id))
+      .map((s) => ({ id: s.id, artist: s.artist, dayLabel: days[s.dayIndex].label }));
+    return { rows, inserts, updates, counts, missing };
+  }
+
+  // Festival-level problems that the import itself would add (for example overlaps).
+  // Errors already present in the stored festival are ignored so old data never blocks an import.
+  function newEditorErrors(festival: any, inserts: any[], updates: any[]) {
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    const merged = {
+      ...festival,
+      days: (festival.days || []).map((day: any, dayIndex: number) => ({
+        ...day,
+        sets: [
+          ...(day.sets || []).map((set: any) => (byId.has(set.id) ? { ...set, ...byId.get(set.id) } : set)),
+          ...inserts.filter((s) => s.dayIndex === dayIndex),
+        ],
+      })),
+    };
+    const before = new Set(validateFestival(config, festival));
+    return validateFestival(config, merged).filter((e: string) => !before.has(e));
+  }
+
+  async function writeAuditRow(req: any, res: any, festivalId: string, details: any) {
+    if (stores.auditLog) {
+      try {
+        await stores.auditLog.insert({
+          id: crypto.randomUUID(),
+          actorType: 'admin',
+          actorId: req.user?.userId,
+          action: 'lineup_import',
+          targetType: 'festival',
+          targetId: festivalId,
+          detailsJson: JSON.stringify(details),
+          ip: getRequestIp(req),
+        });
+      } catch (err: any) {
+        log.warn('lineup import audit write failed', { festivalId, error: err?.message });
+      }
+    }
+    // Tells the generic audit middleware this request already has its row.
+    res.locals.auditWritten = true;
+  }
+
+  // Spotify auto-linking — fill gaps where linkUrl is null (new sets only)
+  async function addSpotifyLinks(inserts: any[], warnings: string[]) {
+    let matched = 0;
+    const needsLink = inserts.filter((s) => !s.linkUrl);
+    if (!spotify || needsLink.length === 0) return matched;
+    try {
+      const results = await spotify.bulkSearchArtists(
+        needsLink.map((s) => s.artist),
+        spotifyClientId,
+        spotifyClientSecret,
+        { log },
+      );
+      for (const set of needsLink) {
+        const hit = results.get(set.artist);
+        if (!hit?.spotifyUrl) continue;
+        set.linkUrl = hit.spotifyUrl;
+        set.artists[0].links.spotify = hit.spotifyUrl;
+        if (hit.imageUrl) set.artists[0].photo = hit.imageUrl;
+        if (hit.genres?.length) set.artists[0].genres = hit.genres;
+        matched++;
+      }
+      log.info('spotify auto-linking complete', { total: needsLink.length, matched });
+    } catch (err: any) {
+      log.warn('spotify auto-linking failed, continuing without', { error: err.message });
+      warnings.push('Spotify auto-linking failed — sets imported without Spotify links');
+    }
+    return matched;
+  }
+
+  router.post('/:id/import-lineup', adminAuth, rateLimit(20, 'lineup-import'), async (req: any, res: any) => {
     try {
       setNoStore(res);
       const validation = importLineupSchema.safeParse(req.body);
@@ -126,185 +413,73 @@ export default function createLineupImportRoute(deps: any) {
         return sendError(res, 400, 'Invalid import payload', ErrorCodes.INVALID_INPUT);
       }
 
-      const { text, format, skipSpotify } = validation.data;
+      const { text, format, skipSpotify, dryRun, updateExisting } = validation.data;
       const festivalId = sanitizeIdentifier(req.params.id, 100);
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
       const festival = await getFestivalById(festivalId);
       if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
-      // Build stage lookup from existing festival
-      const stageMap = new Map();
-      for (const stage of festival.stages || []) {
-        stageMap.set(stage.name.toLowerCase(), stage.id);
-        stageMap.set(stage.id, stage.id);
-      }
-
-      // Build day lookup from existing festival
-      const dayMap = new Map();
-      for (let i = 0; i < (festival.days || []).length; i++) {
-        const day = festival.days[i];
-        dayMap.set(day.label.toLowerCase(), i);
-        dayMap.set(day.date, i);
-        dayMap.set(String(i), i);
-        dayMap.set(String(i + 1), i);
-      }
-
-      const lines = text.split(/\r?\n/).filter((l: any) => l.trim());
-      if (lines.length === 0) return sendError(res, 400, 'No data to import', ErrorCodes.INVALID_INPUT);
-
-      const delimiter = format === 'csv' ? ',' : format === 'tsv' ? '\t' : detectDelimiter(lines[0]);
-
-      // Detect header row
-      const firstFields = parseLine(lines[0], delimiter);
-      const headerLower = firstFields.map((f: any) => f.toLowerCase().replace(/[^a-z]/g, ''));
-      const hasHeader = headerLower.includes('artist') || headerLower.includes('name');
-
-      let columnMap: any;
-      if (hasHeader) {
-        const HEADER_TO_FIELD: any = {
-          artist: 'artist',
-          name: 'artist',
-          act: 'artist',
-          stage: 'stage',
-          day: 'day',
-          date: 'day',
-          start: 'startTime',
-          starttime: 'startTime',
-          end: 'endTime',
-          endtime: 'endTime',
-          link: 'linkUrl',
-          linkurl: 'linkUrl',
-          url: 'linkUrl',
-          spotify: 'linkUrl',
-        };
-        columnMap = {};
-        for (let i = 0; i < headerLower.length; i++) {
-          const field = HEADER_TO_FIELD[headerLower[i]];
-          if (field && columnMap[field] === undefined) columnMap[field] = i;
-        }
-      } else {
-        columnMap = { artist: 0, stage: 1, day: 2, startTime: 3, endTime: 4 };
-      }
-
-      if (columnMap.artist === undefined) {
-        return sendError(res, 400, 'Could not find artist/name column in import data', ErrorCodes.INVALID_INPUT);
-      }
-
-      const dataLines = hasHeader ? lines.slice(1) : lines;
-      const imported: any[] = [];
-      const warnings: any[] = [];
-
-      for (let i = 0; i < dataLines.length; i++) {
-        const lineNum = hasHeader ? i + 2 : i + 1;
-        const fields = parseLine(dataLines[i], delimiter);
-        if (imported.length >= config.MAX_IMPORT_SETS) {
-          warnings.push(
-            `Line ${lineNum}: max import limit (${config.MAX_IMPORT_SETS}) reached, remaining lines skipped`,
-          );
-          break;
-        }
-
-        const rawArtist = sanitizeString(fields[columnMap.artist] || '', 300);
-        if (!rawArtist) {
-          warnings.push(`Line ${lineNum}: empty artist, skipped`);
-          continue;
-        }
-        const artist = rawArtist;
-
-        const rawStage = sanitizeString(fields[columnMap.stage] || '', 100);
-        const rawDay = sanitizeString(fields[columnMap.day] || '', 100);
-        const rawStart = (fields[columnMap.startTime] || '').trim().slice(0, 20);
-        const rawEnd = (fields[columnMap.endTime] || '').trim().slice(0, 20);
-        const rawLink = columnMap.linkUrl !== undefined ? (fields[columnMap.linkUrl] || '').trim() : '';
-
-        const stageId = stageMap.get((rawStage || '').toLowerCase()) || festival.stages?.[0]?.id || null;
-        if (rawStage && !stageMap.has(rawStage.toLowerCase())) {
-          warnings.push(`Line ${lineNum}: unknown stage, defaulting to first stage`);
-        }
-
-        let dayIndex = dayMap.get((rawDay || '').toLowerCase());
-        if (dayIndex === undefined) dayIndex = dayMap.get(rawDay);
-        if (dayIndex === undefined) {
-          dayIndex = 0;
-          if (rawDay) warnings.push(`Line ${lineNum}: unknown day, defaulting to first day`);
-        }
-
-        const startTime = normalizeTime(rawStart);
-        const endTime = normalizeTime(rawEnd);
-
-        // Allowlist link schemes (drop javascript:/data: etc.) before persisting.
-        const safeLinks = rawLink ? sanitizeLinkRecord({ spotify: rawLink }) : {};
-        const safeLink = safeLinks.spotify || null;
-        if (rawLink && !safeLink) {
-          warnings.push(`Line ${lineNum}: link dropped (unsupported URL scheme)`);
-        }
-
-        imported.push({
-          id: `set-import-${crypto.randomBytes(6).toString('hex')}`,
-          artist,
-          artists: [{ name: artist, links: safeLinks }],
-          stageId,
-          dayIndex,
-          startTime,
-          endTime,
-          linkUrl: safeLink,
-        });
-      }
-
-      if (imported.length === 0) {
+      const warnings: string[] = [];
+      const { error: parseError, parsed } = parseRows(text, format, warnings);
+      if (parseError) return sendError(res, 400, parseError, ErrorCodes.INVALID_INPUT);
+      if (parsed.length === 0) {
         return sendError(res, 400, 'No valid sets found in import data', ErrorCodes.INVALID_INPUT);
       }
 
-      // Spotify auto-linking — fill gaps where linkUrl is null
-      let spotifyMatched = 0;
-      if (spotify && !skipSpotify) {
-        const needsLink = imported.filter((s) => !s.linkUrl);
-        if (needsLink.length > 0) {
-          try {
-            const artistNames = needsLink.map((s) => s.artist);
-            const spotifyResults = await spotify.bulkSearchArtists(artistNames, spotifyClientId, spotifyClientSecret, {
-              log,
-            });
-            for (const set of needsLink) {
-              const match = spotifyResults.get(set.artist);
-              if (match?.spotifyUrl) {
-                set.linkUrl = match.spotifyUrl;
-                if (set.artists?.[0]) {
-                  set.artists[0].links.spotify = match.spotifyUrl;
-                  if (match.imageUrl) set.artists[0].photo = match.imageUrl;
-                  if (match.genres?.length) set.artists[0].genres = match.genres;
-                }
-                spotifyMatched++;
-              }
-            }
-            log.info('spotify auto-linking complete', { total: needsLink.length, matched: spotifyMatched });
-          } catch (err: any) {
-            log.warn('spotify auto-linking failed, continuing without', { error: err.message });
-            warnings.push('Spotify auto-linking failed — sets imported without Spotify links');
-          }
-        }
+      const errors: string[] = [];
+      if (!(festival.stages || []).length) {
+        errors.push('This festival has no stages yet. Add the stages in the editor first.');
+      }
+      if (!(festival.days || []).length) errors.push('This festival has no days yet. Add the days in the editor first.');
+      const plan =
+        errors.length > 0
+          ? { rows: [] as any[], inserts: [] as any[], updates: [] as any[], counts: { new: 0, update: 0, unchanged: 0, error: 0 }, missing: [] as any[] }
+          : planImport(festival, parsed, updateExisting);
+      if (errors.length === 0) errors.push(...newEditorErrors(festival, plan.inserts, plan.updates));
+
+      const data: any = {
+        dryRun,
+        counts: plan.counts,
+        rows: plan.rows,
+        missing: plan.missing,
+        errors,
+        warnings,
+        imported: 0,
+        updated: 0,
+        spotifyMatched: 0,
+      };
+      if (dryRun) return sendSuccess(res, data);
+      if (plan.counts.error > 0 || errors.length > 0) {
+        return sendError(res, 400, 'Fix the rows marked in red, then import again.', ErrorCodes.INVALID_INPUT, {
+          preview: data,
+        });
       }
 
-      // Insert imported sets via centralized store method
-      const setsWithSortOrder = imported.map((set) => {
-        const existingDay = festival.days?.[set.dayIndex];
-        const sortOrder =
-          (existingDay?.sets?.length || 0) +
-          imported.filter((s) => s.dayIndex === set.dayIndex && imported.indexOf(s) < imported.indexOf(set)).length;
-        return { ...set, sortOrder };
+      if (!skipSpotify) data.spotifyMatched = await addSpotifyLinks(plan.inserts, warnings);
+      const nextOrder = new Map<number, number>();
+      const inserts = plan.inserts.map((set) => {
+        const next = nextOrder.get(set.dayIndex) ?? (festival.days[set.dayIndex].sets?.length || 0);
+        nextOrder.set(set.dayIndex, next + 1);
+        return { ...set, sortOrder: next };
       });
-      await stores.festivals.insertSets(festivalId, setsWithSortOrder);
-
-      // Update festival timestamp
-      await stores.pool.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
+      await stores.festivals.applyLineupImport(festivalId, inserts, plan.updates);
       invalidateFestivalCache();
+      data.imported = inserts.length;
+      data.updated = plan.updates.length;
 
       log.info('lineup imported', {
         festivalId,
-        count: imported.length,
-        spotifyMatched,
+        imported: data.imported,
+        updated: data.updated,
+        spotifyMatched: data.spotifyMatched,
         warnings: warnings.length,
         ip: getRequestIp(req),
+      });
+      await writeAuditRow(req, res, festivalId, {
+        imported: data.imported,
+        updated: data.updated,
+        unchanged: plan.counts.unchanged,
+        skipped: plan.rows.filter((r) => r.status === 'skipped').length,
       });
 
       // M3 re-engagement: a recurring festival just published its lineup → notify
@@ -312,25 +487,12 @@ export default function createLineupImportRoute(deps: any) {
       // event-gated, per-type opt-out + DND + deduped, full fan-out). When Redis is
       // up this enqueues onto the durable re-engagement queue (issue #20) so delivery
       // survives restarts + retries; otherwise it runs inline. Fire-and-forget here.
-      if (reengagement?.sendLineupDrop) {
+      if (data.imported > 0 && reengagement?.sendLineupDrop) {
         reengagement
           .sendLineupDrop(festivalId)
           .catch((err: any) => log.warn('lineup_drop notify failed', { festivalId, error: err?.message }));
       }
-      return sendSuccess(res, {
-        imported: imported.length,
-        spotifyMatched,
-        warnings,
-        sets: imported.map((s) => ({
-          id: s.id,
-          artist: s.artist,
-          stageId: s.stageId,
-          dayIndex: s.dayIndex,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          linkUrl: s.linkUrl,
-        })),
-      });
+      return sendSuccess(res, data);
     } catch (error: any) {
       log.error('lineup import failed', { error: error.message, festivalId: req.params.id });
       return sendError(res, 500, 'Failed to import lineup', ErrorCodes.INTERNAL_ERROR);

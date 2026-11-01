@@ -439,6 +439,13 @@ describe('Database Transaction Rollback — profiles', { concurrency: 1 }, () =>
     const userToken = userResponse.token;
     await joinFestivalProfile(server, userToken, 'fest-1');
     const adminToken = await loginAdmin(server);
+    // User delete is gated by the T4 re-auth window.
+    await server.request
+      .post('/api/v1/auth/reauth')
+      .set('x-user-token', adminToken)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ password: 'test-admin-password' })
+      .expect(200);
 
     // Delete user
     const deleteRes = await server.request

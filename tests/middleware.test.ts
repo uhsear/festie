@@ -193,16 +193,17 @@ describe('middleware: audit-middleware', () => {
     assert.ok(deps.log.error.mock.calls.length >= 1);
   });
 
-  it('extracts admin actor from adminSession', async () => {
+  it('extracts admin actor when adminAuth marked the request', async () => {
     const deps = makeDeps();
     const middleware = createAuditMiddleware(deps);
-    const req = mockReq({ method: 'PATCH', adminSession: true });
+    const req = mockReq({ method: 'PATCH', isAdmin: true, user: { userId: 'admin-1' } });
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
     await new Promise((r) => setTimeout(r, 50));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.actor_type, 'admin');
+    assert.equal(entry.actor_id, 'admin-1');
   });
 
   it('extracts system actor when no user and no admin', async () => {

@@ -395,6 +395,8 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     resolveUserRequestSession,
     adminAuth,
     userAuth,
+    hasRecentAuth,
+    requireRecentAuth,
   } = sessionHelpers;
 
   // ── Self-test ─────────────────────────────────────────────────────────
@@ -474,6 +476,8 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     resolveUserRequestSession,
     userAuth,
     adminAuth,
+    hasRecentAuth,
+    requireRecentAuth,
     hashSessionToken,
 
     // Request helpers
