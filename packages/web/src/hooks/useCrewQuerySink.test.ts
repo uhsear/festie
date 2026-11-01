@@ -186,4 +186,24 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['crew-activity', crewId] });
     expect(invalidate).toHaveBeenCalledTimes(9);
   });
+
+  it('reloads crewStore meeting points and polls on their events', () => {
+    const loadMeetingPoints = vi.fn().mockResolvedValue(undefined);
+    const loadPolls = vi.fn().mockRejectedValue(new Error('offline'));
+    const state = useCrewStore.getState();
+    const spy = vi.spyOn(useCrewStore, 'getState').mockReturnValue({ ...state, loadMeetingPoints, loadPolls });
+    const sink = buildCrewQuerySink(queryClient);
+
+    sink.onMeetingPointUpsert('c1', {} as never);
+    sink.onMeetingPointRemoved('c1', 'mp1');
+    expect(loadMeetingPoints).toHaveBeenCalledTimes(2);
+    expect(loadMeetingPoints).toHaveBeenCalledWith('c1');
+
+    sink.onPollCreated('c1', { pollId: 'p', question: 'q', options: [], createdBy: 'u' });
+    sink.onPollVoted('c1', 'p', 'u', 0);
+    sink.onPollClosed('c1', 'p');
+    expect(loadPolls).toHaveBeenCalledTimes(3);
+    expect(loadPolls).toHaveBeenCalledWith('c1');
+    spy.mockRestore();
+  });
 });

@@ -27,7 +27,7 @@ import Button from './Button';
  * in-memory for the screen's lifetime (React Native has no per-session web
  * storage; ClashPrompt uses the same pattern). Renders nothing when there is nothing to suggest.
  */
-export default function CrewSuggestionStrip() {
+export default function CrewSuggestionStrip({ title = 'Your crew is seeing these' }: { title?: string }) {
   const nudges = useCrewNudges();
   const t = useTokens();
   const styles = useStyles();
@@ -68,7 +68,7 @@ export default function CrewSuggestionStrip() {
   return (
     <Animated.View style={styles.card} entering={reduceMotion ? undefined : FadeIn.duration(motionDuration.med)}>
       <Text style={styles.headingText} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityRole="header">
-        Your crew is seeing these
+        {title}
       </Text>
       {/* RN's AccessibilityRole has no 'listitem', so the rows stay unroled and
           the named list carries the grouping (OfflineReadinessCard's pattern). */}

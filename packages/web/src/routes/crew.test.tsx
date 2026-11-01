@@ -30,6 +30,8 @@ const h = vi.hoisted(() => ({
   prompts: {} as Record<string, { description?: string; placeholder?: string; maxLength?: number; parsePaste?: unknown; onConfirm: (v: string) => void }>,
   toast: vi.fn(),
   search: {} as Record<string, unknown>,
+  status: undefined as string | undefined,
+  retry: vi.fn(),
 }));
 
 vi.mock('@festie/shared/stores', () => ({
@@ -99,8 +101,15 @@ vi.mock('../components/features/FreshnessChip', () => ({
   default: () => <div data-testid="freshness-chip" />,
 }));
 
-vi.mock('../components/features/LastSyncedBadge', () => ({
-  default: () => <div data-testid="last-synced-badge" />,
+vi.mock('../components/ui/skeletons/CrewSkeleton', () => ({
+  default: () => <div data-testid="crew-skeleton" />,
+}));
+
+vi.mock('@festie/shared/hooks', () => ({
+  useActiveCrew: () => ({
+    status: h.status ?? (storeState.activeCrew ? 'ready' : 'none'),
+    retry: h.retry,
+  }),
 }));
 
 vi.mock('../components/crew/CrewInviteBar', () => ({
@@ -199,6 +208,7 @@ describe('CrewView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.search = {};
+    h.status = undefined;
     setStoreState();
   });
 
@@ -215,6 +225,22 @@ describe('CrewView', () => {
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     expect(screen.getByText('No crew yet')).toBeInTheDocument();
     expect(screen.getByText(/Make a crew, or join one with a code/)).toBeInTheDocument();
+  });
+
+  it('renders the skeleton while the crew loads', () => {
+    h.status = 'loading';
+    render(<CrewView />);
+    expect(screen.getByTestId('crew-skeleton')).toBeInTheDocument();
+    expect(screen.queryByText('No crew yet')).not.toBeInTheDocument();
+  });
+
+  it('renders a Try again card on error and retries', () => {
+    h.status = 'error';
+    render(<CrewView />);
+    expect(screen.getByText("Couldn't load your crew")).toBeInTheDocument();
+    expect(screen.queryByText('No crew yet')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(h.retry).toHaveBeenCalledTimes(1);
   });
 
   it('shows Create crew and Join with code inside the empty state and opens their prompts', () => {
@@ -267,6 +293,8 @@ describe('CrewView', () => {
     expect(screen.getByTestId('crew-invite-bar')).toBeInTheDocument();
     expect(screen.getByTestId('crew-tab-bar')).toBeInTheDocument();
     expect(screen.getByRole('tabpanel')).toBeInTheDocument();
+    expect(screen.queryByTestId('last-synced-badge')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Squad' })).toBeInTheDocument();
   });
 
   it('renders crew selector when crews exist', () => {
@@ -308,6 +336,13 @@ describe('CrewView', () => {
     const footer = document.querySelector('[aria-labelledby="crew-setup-heading"]') as HTMLElement;
     expect(within(footer).queryByText('Crew plan')).not.toBeInTheDocument();
     expect(within(footer).queryByText('Compare schedules')).not.toBeInTheDocument();
+  });
+
+  it('opens Members from the header faces', () => {
+    crewWithActive();
+    render(<CrewView />);
+    fireEvent.click(screen.getByRole('button', { name: /See all \d+ members/ }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'members' }, replace: true });
   });
 
   it('puts the tab in the URL when a tab is clicked', () => {

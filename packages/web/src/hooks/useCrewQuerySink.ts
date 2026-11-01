@@ -9,9 +9,10 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
  * Web adapter for the shared CrewRealtimeSink.
  *
  * Web crew sub-features (polls, meeting points, expenses) are TanStack-Query
- * backed — they live in PollsTab / MeetingPointsTab / ExpensesTab, NOT in the
- * crewStore (unlike mobile). So the sink's job is to invalidate the matching
- * query keys and let TanStack Query refetch. Home base is the exception: the
+ * backed — they live in PollsTab / MeetingPointsTab / ExpensesTab. So the
+ * sink's job is to invalidate the matching query keys and let TanStack Query
+ * refetch. Meeting points and polls are also read from the crewStore by the
+ * crew plan, so the store reloads on those events as well. Home base is the exception: the
  * web crew route reads activeCrew.homeBaseLocation/Time straight from the
  * crewStore, so that intent applies to the store instead.
  *
@@ -33,18 +34,23 @@ export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
     },
     onMeetingPointUpsert: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['meeting-points', crewId] });
+      useCrewStore.getState().loadMeetingPoints(crewId).catch(() => {});
     },
     onMeetingPointRemoved: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['meeting-points', crewId] });
+      useCrewStore.getState().loadMeetingPoints(crewId).catch(() => {});
     },
     onPollCreated: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
+      useCrewStore.getState().loadPolls(crewId).catch(() => {});
     },
     onPollVoted: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
+      useCrewStore.getState().loadPolls(crewId).catch(() => {});
     },
     onPollClosed: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
+      useCrewStore.getState().loadPolls(crewId).catch(() => {});
     },
     onExpensesChanged: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['expenses', crewId] });

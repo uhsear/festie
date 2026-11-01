@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { vi } from 'vitest';
 import CompareRow from './CompareRow';
 import type { FestivalSet, Priority } from '@festie/shared/types';
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to, params, ...rest }: { children: React.ReactNode; to: string; params?: { setId: string } }) => (
+    <a href={to.replace('$setId', params?.setId ?? '')} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
   return {
@@ -29,7 +38,8 @@ describe('CompareRow', () => {
   const defaultProps = {
     set: makeSet(),
     mine: 'must' as Priority,
-    others: [] as Array<{ profileId: string; priority: Priority }>,
+    picks: { me: 'must' as Priority | undefined, other: undefined as Priority | undefined },
+    topPriority: 'must' as Priority,
     columns: [
       { id: 'me', isMe: true },
       { id: 'other', isMe: false },
@@ -58,7 +68,7 @@ describe('CompareRow', () => {
 
   it('shows "N of M picked" with the crew overlap count, not an amber badge', () => {
     renderInTable(
-      <CompareRow {...defaultProps} others={[{ profileId: 'other', priority: 'want-to-see' }]} isConsensus />,
+      <CompareRow {...defaultProps} picks={{ me: 'must', other: 'want-to-see' }} isConsensus />,
     );
     const badge = screen.getByTestId('compare-picked-count');
     expect(badge).toHaveTextContent('2 of 2 picked');
@@ -85,7 +95,7 @@ describe('CompareRow', () => {
   });
 
   it('renders other user pick when present', () => {
-    renderInTable(<CompareRow {...defaultProps} others={[{ profileId: 'other', priority: 'maybe' }]} />);
+    renderInTable(<CompareRow {...defaultProps} picks={{ me: 'must', other: 'maybe' }} />);
     expect(screen.getByText('Maybe')).toBeInTheDocument();
   });
 
@@ -95,5 +105,30 @@ describe('CompareRow', () => {
     renderInTable(<CompareRow {...defaultProps} />);
     const stageEl = screen.getByText('Main Stage');
     expect(stageEl.style.color).toBe('rgb(255, 51, 102)');
+  });
+
+  it('links the artist to the set page', () => {
+    renderInTable(<CompareRow {...defaultProps} />);
+    expect(screen.getByRole('link', { name: 'Open Daft Punk' })).toHaveAttribute('href', '/set/set-1');
+  });
+
+  it('shows both names for a B2B set', () => {
+    renderInTable(<CompareRow {...defaultProps} set={makeSet({ artist: 'A b2b B', artists: [{ name: 'A' }, { name: 'B' }] } as unknown as Partial<FestivalSet>)} />);
+    expect(screen.getByText(/A b2b B/)).toBeInTheDocument();
+  });
+
+  it('offers Add in my cell when I have no pick, and calls onAdd with the top priority', () => {
+    const onAdd = vi.fn();
+    renderInTable(
+      <CompareRow
+        {...defaultProps}
+        mine={undefined}
+        picks={{ me: undefined, other: 'want-to-see' }}
+        topPriority="want-to-see"
+        onAdd={onAdd}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add Daft Punk to my picks' }));
+    expect(onAdd).toHaveBeenCalledWith('set-1', 'want-to-see');
   });
 });

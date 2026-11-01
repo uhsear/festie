@@ -3,17 +3,19 @@ import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Platform } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
-import { useCrew, useFestival } from '@festie/shared/hooks';
-import { artistDisplayName, formatTime, byStartTime } from '@festie/shared/utils';
+import { useAuthStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
+import { useActiveCrew, useCrewCompare, useCrewFestival, useFestival, usePicks } from '@festie/shared/hooks';
+import { mapErrorToUserMessage } from '@festie/shared/services';
+import { artistDisplayName, formatTime } from '@festie/shared/utils';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
-import type { FestivalSet, Priority, Profile } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
+import CrewSuggestionStrip from '../components/CrewSuggestionStrip';
+import CrewCompareSummary from '../components/CrewCompareSummary';
 
 const ROW_HEADER_W = 168;
 const CELL_W = 76;
@@ -22,8 +24,6 @@ const CELL_W = 76;
 const HEADER_H = 56;
 const ROW_H = 64;
 
-type Column = { id: string; name: string; isMe: boolean; avatarName?: string };
-
 export default function CrewCompareScreen() {
   const t = useTokens();
   const styles = useStyles();
@@ -31,81 +31,57 @@ export default function CrewCompareScreen() {
   const insets = useSafeAreaInsets();
 
   const user = useAuthStore((s) => s.user);
-  const activeCrew = useCrewStore((s) => s.activeCrew);
-  const crewLoading = useCrewStore((s) => s.crewLoading);
-  const error = useCrewStore((s) => s.error);
-  const loadOverlap = useCrewStore((s) => s.loadOverlap);
+  const { status, crew: activeCrew, retry: retryCrew } = useActiveCrew();
+  const festivalSwitch = useCrewFestival(activeCrew);
 
   const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const currentProfile = useFestivalStore((s) => s.currentProfile);
-  const sets = useFestivalStore((s) => s.sets) as FestivalSet[];
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
 
-  const { getCrewScopedProfiles } = useCrew();
+  const [sort, setSort] = useState<'time' | 'mix'>('time');
+  const { columns, rows, freeTogether, split, together, timeZone } = useCrewCompare(sort);
+  const { savePick } = usePicks();
   const { getDays, getStageColor } = useFestival();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Refresh crew overlap (drives the "going" count + keeps the crew picks/profiles
-  // fresh). The grid is derived from those picks. Reused by mount + pull-to-refresh
-  // + the error retry (F41).
-  // The narrow deps (activeCrew?.id / ?.festivalId, not the whole activeCrew
-  // object) are deliberate and load-bearing: `refresh` feeds useEffect([refresh])
-  // below, so widening to `activeCrew` (what the compiler infers) would re-fire
-  // the mount fetch on every store-driven object-identity change. React Compiler
-  // is not enabled here, so we keep the manual memo and suppress its readiness warning.
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- intentional narrower deps; widening would cause redundant overlap refetches
+  // The grid reads the festival store's `allProfiles`, so refresh reloads those
+  // (loadOverlap only fed the crew store). It waits until the festival store
+  // follows the crew's festival.
+  const festivalId = currentFestival?.id;
+  const ready = festivalSwitch.state === 'match' && status === 'ready';
   const refresh = useCallback(async () => {
-    const festivalId = activeCrew?.festivalId ?? currentFestival?.id;
-    if (!activeCrew?.id || !festivalId) return;
+    if (!festivalId) return;
     setRefreshing(true);
+    setError(null);
     try {
-      await loadOverlap(activeCrew.id, festivalId);
-    } catch {
-      // Error is surfaced via the crew store's `error`.
+      await useFestivalStore.getState().loadProfiles(festivalId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't load crew picks.");
     } finally {
       setRefreshing(false);
     }
-  }, [activeCrew?.id, activeCrew?.festivalId, currentFestival?.id, loadOverlap]);
+  }, [festivalId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: refresh() flips the refreshing flag before its async overlap GET; not derivable from render inputs
-    void refresh();
-  }, [refresh]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: refresh() flips the refreshing flag before its async profiles GET; not derivable from render inputs
+    if (ready) void refresh();
+  }, [refresh, ready]);
 
   const days = useMemo(() => getDays(), [getDays]);
 
-  const profileById = useMemo(() => {
-    const map = new Map<string, Profile>();
-    for (const p of getCrewScopedProfiles()) map.set(p.id, p);
-    if (currentProfile) map.set(currentProfile.id, currentProfile);
-    return map;
-  }, [getCrewScopedProfiles, currentProfile]);
-
-  // Columns: you first, then the rest of the crew.
-  const columns = useMemo<Column[]>(() => {
-    const profiles = getCrewScopedProfiles();
-    const others = profiles.filter((p) => p.id !== currentProfile?.id);
-    const cols: Column[] = [];
-    if (currentProfile) {
-      cols.push({ id: currentProfile.id, name: 'You', isMe: true, avatarName: currentProfile.name });
-    }
-    for (const p of others) {
-      cols.push({ id: p.id, name: p.name || 'Member', isMe: false, avatarName: p.name });
-    }
-    return cols;
-  }, [getCrewScopedProfiles, currentProfile]);
-
-  // Rows: this day's sets that at least one crew member picked, time-sorted.
-  const rows = useMemo<FestivalSet[]>(() => {
-    return sets
-      .filter((s) => s.dayIndex === selectedDay)
-      .filter((s) => columns.some((c) => profileById.get(c.id)?.picks?.[s.id]))
-      .sort(byStartTime);
-  }, [sets, selectedDay, columns, profileById]);
-
-  const pickFor = (col: Column, setId: string): Priority | undefined => profileById.get(col.id)?.picks?.[setId];
+  const handleAdd = useCallback(
+    (setId: string, priority: Parameters<typeof savePick>[2]) => {
+      if (!festivalId) return;
+      savePick(festivalId, setId, priority).catch((err) => {
+        useUIStore
+          .getState()
+          .showToast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), { kind: 'error' });
+      });
+    },
+    [festivalId, savePick],
+  );
 
   if (!user) {
     return (
@@ -114,25 +90,64 @@ export default function CrewCompareScreen() {
       </Wrapper>
     );
   }
-  if (!activeCrew) {
+  if (status === 'loading') {
     return (
       <Wrapper>
-        <EmptyState icon="people-outline" title="No crew" message="Join or create a crew to compare schedules." />
+        <LoadingState label="Loading your crew…" />
+      </Wrapper>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <Wrapper>
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Couldn't load your crew"
+          message="Check your connection, then try again."
+          action={{ label: 'Try again', onPress: retryCrew }}
+        />
+      </Wrapper>
+    );
+  }
+  if (status === 'none' || !activeCrew) {
+    return (
+      <Wrapper>
+        <EmptyState
+          icon="people-outline"
+          title="No crew yet"
+          message="Make a crew or join one with a code to plan together."
+          action={{ label: 'Create or join a crew', onPress: () => router.navigate('/(tabs)/crew') }}
+        />
+      </Wrapper>
+    );
+  }
+  if (festivalSwitch.state === 'switching') {
+    return (
+      <Wrapper>
+        <LoadingState label={`Opening ${festivalSwitch.festivalName}…`} />
+      </Wrapper>
+    );
+  }
+  if (festivalSwitch.state === 'failed') {
+    return (
+      <Wrapper>
+        <EmptyState
+          icon="cloud-offline-outline"
+          title={`Couldn't open ${festivalSwitch.festivalName}`}
+          message={`${activeCrew.name} is planning ${festivalSwitch.festivalName}. Connect to the internet, then try again.`}
+          action={{ label: 'Try again', onPress: festivalSwitch.retry }}
+        />
       </Wrapper>
     );
   }
   if (columns.length <= 1) {
     return (
       <Wrapper>
-        {crewLoading ? (
-          <LoadingState label="Loading crew picks…" />
-        ) : (
-          <EmptyState
-            icon="git-compare-outline"
-            title="No crew picks yet"
-            message="Once your crewmates save picks for this festival, their schedules show up here side by side."
-          />
-        )}
+        <EmptyState
+          icon="git-compare-outline"
+          title="No crew picks yet"
+          message="Once your crewmates save picks for this festival, their schedules show up here side by side."
+        />
       </Wrapper>
     );
   }
@@ -152,8 +167,18 @@ export default function CrewCompareScreen() {
 
   return (
     <Wrapper>
+      <View style={styles.topWrap}>
+        <CrewSuggestionStrip title="Your crew is seeing, you're missing" />
+        <CrewCompareSummary
+          columns={columns}
+          freeTogether={freeTogether}
+          split={split}
+          together={together}
+          timeZone={timeZone}
+        />
+      </View>
 
-      {/* Day selector */}
+      {/* Day selector + sort */}
       {days.length > 1 ? (
         <View style={styles.daysWrap}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daysContent}>
@@ -183,6 +208,36 @@ export default function CrewCompareScreen() {
           </ScrollView>
         </View>
       ) : null}
+      <View style={styles.sortRow}>
+        {(
+          [
+            ['time', 'Time'],
+            ['mix', 'Most picked'],
+          ] as const
+        ).map(([key, label]) => {
+          const active = sort === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={styles.dayChip}
+              onPress={() => setSort(key)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`Sort by ${label}`}
+            >
+              <View style={[styles.dayChipBg, active && styles.dayChipBgActive]} pointerEvents="none" />
+              <Text
+                style={[styles.dayText, active && styles.dayTextActive]}
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                textBreakStrategy="simple"
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       {rows.length === 0 ? (
         // Refreshable empty state (F41): a crewmate's picks may still be syncing,
@@ -227,10 +282,8 @@ export default function CrewCompareScreen() {
               <View style={[styles.rowHeaderCell, styles.cornerCell]}>
                 <Text style={styles.cornerText}>Set</Text>
               </View>
-              {rows.map((set) => {
+              {rows.map(({ set, pickers: pickedBy }) => {
                 const name = artistDisplayName(set, currentFestival?.b2bSeparator);
-                // Crew Overlap: how many members picked this set.
-                const pickedBy = columns.filter((c) => pickFor(c, set.id)).length;
                 return (
                   <TouchableOpacity
                     key={set.id}
@@ -266,21 +319,40 @@ export default function CrewCompareScreen() {
                 {/* Column headers */}
                 <View style={styles.headerRow}>
                   {columns.map((col) => (
-                    <View key={col.id} style={styles.colHeader}>
-                      <Avatar name={col.avatarName} size="xs" />
+                    <View key={col.profileId} style={styles.colHeader}>
+                      <Avatar name={col.name} size="xs" />
                       <Text style={styles.colHeaderText} numberOfLines={1}>
-                        {col.name}
+                        {col.isMe ? 'You' : col.name}
                       </Text>
+                      <View style={[styles.colBar, { backgroundColor: col.color }]} />
                     </View>
                   ))}
                 </View>
-                {rows.map((set) => (
+                {rows.map(({ set, picks, topPriority }) => (
                   <View key={set.id} style={[styles.gridRow, styles.gridRowHeight]}>
                     {columns.map((col) => {
-                      const p = pickFor(col, set.id);
+                      const p = picks[col.profileId];
+                      if (!p && col.isMe) {
+                        const artist = artistDisplayName(set, currentFestival?.b2bSeparator);
+                        return (
+                          <TouchableOpacity
+                            key={col.profileId}
+                            style={[styles.cell, styles.addCell]}
+                            onPress={() => handleAdd(set.id, topPriority)}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Add ${artist} to my picks`}
+                          >
+                            <Ionicons name="add-circle-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
+                            <Text style={styles.addText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                              Add
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }
                       return (
                         <View
-                          key={col.id}
+                          key={col.profileId}
                           style={styles.cell}
                           // Preserve the table relation (member × set → pick) for
                           // screen readers; without a label the cell reads as empty.
@@ -300,7 +372,11 @@ export default function CrewCompareScreen() {
                                 },
                               ]}
                             >
-                              <Ionicons name={priorityIconName(p)} size={t.iconSize.xs} color={t.colors.text.onLightAccent} />
+                              <Ionicons
+                                name={priorityIconName(p)}
+                                size={t.iconSize.xs}
+                                color={t.colors.text.onLightAccent}
+                              />
                               <Text style={styles.pillText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                                 {PRIORITY_LABEL[p]}
                               </Text>
@@ -385,6 +461,29 @@ const useStyles = makeStyles((t) => ({
   },
   dayTextActive: {
     color: t.colors.text.onLightAccent,
+  },
+  topWrap: {
+    paddingHorizontal: t.spacing[4],
+    paddingTop: t.spacing[3],
+  },
+  sortRow: {
+    flexDirection: 'row',
+    paddingHorizontal: t.spacing[4],
+    gap: t.spacing[2],
+    paddingBottom: t.spacing[2],
+  },
+  colBar: {
+    height: 3,
+    width: CELL_W - 24,
+    borderRadius: 2,
+  },
+  addCell: {
+    height: ROW_H,
+    gap: 2,
+  },
+  addText: {
+    ...typeStyle('caption', 700),
+    color: t.colors.accent.aqua,
   },
   gridWrap: {
     flexDirection: 'row',

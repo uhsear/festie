@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
@@ -7,7 +7,8 @@ import { useAuthStore } from '@festie/shared/stores';
 import { useFestivalStore } from '@festie/shared/stores';
 import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
-import LastSyncedBadge from '../components/features/LastSyncedBadge';
+import CrewHeader from '../components/crew/CrewHeader';
+import CrewSkeleton from '../components/ui/skeletons/CrewSkeleton';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
@@ -25,6 +26,7 @@ import { useToast } from '../lib/toastContext';
 import PromptDialog from '../components/ui/PromptDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
+import { useActiveCrew } from '@festie/shared/hooks';
 import {
   DEFAULT_CREW_TAB,
   deleteCrewConfirmMessage,
@@ -83,11 +85,7 @@ function CrewViewInner() {
   const [kickTarget, setKickTarget] = useState<CrewMember | null>(null);
   const [transferTarget, setTransferTarget] = useState<CrewMember | null>(null);
 
-  useEffect(() => {
-    if (user && crews.length > 0 && !activeCrew) {
-      selectCrew(crews[0]!.id).catch(() => {});
-    }
-  }, [user?.id, crews, activeCrew, selectCrew]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { status, retry } = useActiveCrew();
 
   // Tab badge counts. These reuse the exact query keys + endpoints the Polls
   // and Expenses tabs use, so the data is shared from the react-query cache
@@ -205,6 +203,10 @@ function CrewViewInner() {
 
   return (
     <div className="crew-page space-y-4 pb-6 max-w-[600px] mx-auto min-w-0 w-full">
+      {activeCrew && (
+        <CrewHeader crew={activeCrew} members={members} onOpenMembers={() => handleTabChange('members')} />
+      )}
+
       {crews.length > 0 && (
         <CrewSelector
           crews={crews}
@@ -216,20 +218,32 @@ function CrewViewInner() {
       )}
 
       {!activeCrew ? (
-        <Card padding="lg" className="space-y-4">
-          <EmptyState
-            illustration="noCrew"
-            title="No crew yet"
-            description="Plan with your friends. Make a crew, or join one with a code."
-            cta={crews.length === 0 ? { label: 'Create crew', onClick: handleCreateCrew } : undefined}
-            secondaryCta={crews.length === 0 ? { label: 'Join with code', onClick: handleJoinCrew } : undefined}
-          />
-        </Card>
+        status === 'loading' ? (
+          <CrewSkeleton />
+        ) : status === 'error' ? (
+          <Card padding="lg" className="space-y-4">
+            <EmptyState
+              illustration="noCrew"
+              title="Couldn't load your crew"
+              description="Check your connection, then try again."
+              cta={{ label: 'Try again', onClick: retry }}
+            />
+          </Card>
+        ) : (
+          <Card padding="lg" className="space-y-4">
+            <EmptyState
+              illustration="noCrew"
+              title="No crew yet"
+              description="Plan with your friends. Make a crew, or join one with a code."
+              cta={{ label: 'Create crew', onClick: handleCreateCrew }}
+              secondaryCta={{ label: 'Join with code', onClick: handleJoinCrew }}
+            />
+          </Card>
+        )
       ) : (
         <div className="crew-content space-y-4 min-w-0">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <FreshnessChip surface="crew" />
-            <LastSyncedBadge surface="crew" />
             <SosRaiseButton crewId={activeCrew.id} compact />
           </div>
 

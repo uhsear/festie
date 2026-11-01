@@ -207,3 +207,95 @@ export function buildPickConflicts(input: BuildPickConflictsInput): ConflictGrou
 
   return groups;
 }
+
+// ── Crew split / together ─────────────────────────────────────────────────────
+// Across the crew's picks on one day: where members split up (overlapping
+// different sets) and which sets two or more of them see together, clash-free.
+
+/** One set inside a split, and the crew profiles that picked it. */
+export interface CrewSplitSide {
+  set: FestivalSet;
+  memberIds: string[];
+}
+
+/** A time range where crew members picked different, overlapping sets. */
+export interface CrewSplit {
+  startMs: number;
+  endMs: number;
+  /** Sides sorted by start time, then id. length >= 2. */
+  sides: CrewSplitSide[];
+}
+
+/** A set two or more members picked, where none of them has another pick at that time. */
+export interface CrewTogether {
+  set: FestivalSet;
+  startMs: number;
+  memberIds: string[];
+}
+
+export interface BuildCrewSplitsInput {
+  sets: FestivalSet[];
+  days: FestivalDay[];
+  /** Crew profiles; `id` is what `memberIds` hold. */
+  profiles: Array<{ id: string; picks?: Record<string, Priority> }>;
+  dayIndex: number;
+  timeZone?: string;
+}
+
+/**
+ * The "Split" and "Together" lists for crew compare on `dayIndex`. Both are
+ * empty for a crew of one. Overlap is strict, as in buildPickConflicts:
+ * back-to-back sets do not split anyone.
+ */
+export function buildCrewSplits(input: BuildCrewSplitsInput): { split: CrewSplit[]; together: CrewTogether[] } {
+  const { sets, days, profiles, dayIndex, timeZone } = input;
+  if (profiles.length < 2) return { split: [], together: [] };
+
+  const picked: Array<{ set: FestivalSet; startMs: number; endMs: number; memberIds: string[] }> = [];
+  for (const set of sets) {
+    if ((set.dayIndex ?? 0) !== dayIndex) continue;
+    const memberIds = profiles.filter((p) => p.picks?.[set.id]).map((p) => p.id);
+    if (memberIds.length === 0) continue;
+    const bounds = getSetTimeBounds(set, days, timeZone);
+    if (!bounds) continue;
+    picked.push({ set, startMs: bounds.startMs, endMs: bounds.endMs, memberIds });
+  }
+  picked.sort((a, b) => a.startMs - b.startMs || (a.set.id < b.set.id ? -1 : a.set.id > b.set.id ? 1 : 0));
+
+  const overlaps = (a: (typeof picked)[number], b: (typeof picked)[number]) =>
+    a.startMs < b.endMs && b.startMs < a.endMs;
+
+  // Sorted by start, so a set joins the current cluster when it starts before the cluster ends.
+  const clusters: Array<typeof picked> = [];
+  let clusterEnd = -Infinity;
+  for (const p of picked) {
+    if (p.startMs < clusterEnd) {
+      clusters[clusters.length - 1]!.push(p);
+      clusterEnd = Math.max(clusterEnd, p.endMs);
+    } else {
+      clusters.push([p]);
+      clusterEnd = p.endMs;
+    }
+  }
+
+  const split: CrewSplit[] = [];
+  for (const c of clusters) {
+    if (c.length < 2) continue;
+    if (new Set(c.flatMap((p) => p.memberIds)).size < 2) continue;
+    split.push({
+      startMs: c[0]!.startMs,
+      endMs: Math.max(...c.map((p) => p.endMs)),
+      sides: c.map(({ set, memberIds }) => ({ set, memberIds })),
+    });
+  }
+
+  const together: CrewTogether[] = picked
+    .filter(
+      (p) =>
+        p.memberIds.length >= 2 &&
+        !picked.some((q) => q !== p && overlaps(p, q) && q.memberIds.some((id) => p.memberIds.includes(id))),
+    )
+    .map(({ set, startMs, memberIds }) => ({ set, startMs, memberIds }));
+
+  return { split, together };
+}
