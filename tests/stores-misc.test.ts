@@ -121,21 +121,34 @@ describe('ActivityStore', () => {
     it('supports cursor-based pagination', async () => {
       const pool = mockPool([{ rows: [] }]);
       const store = createActivityStore(pool);
-      await store.getByCrew('c1', { cursor: 'cur123', limit: 10 });
+      await store.getByCrew('c1', { cursor: '2026-06-15T14:00:00.000Z|a9', limit: 10 });
 
-      assert.ok(pool.queries[0].sql.includes('AND a.id < $3'));
-      assert.equal(pool.queries[0].params[2], 'cur123');
-      assert.equal(pool.queries[0].params[1], 11); // limit + 1
+      assert.ok(pool.queries[0].sql.includes('AND (a.created_at, a.id) < ($3::timestamptz, $4)'));
+      assert.deepEqual(pool.queries[0].params, ['c1', 11, '2026-06-15T14:00:00.000Z', 'a9']); // limit + 1
+    });
+
+    it('ignores a cursor without the created_at part', async () => {
+      const pool = mockPool([{ rows: [] }]);
+      const store = createActivityStore(pool);
+      await store.getByCrew('c1', { cursor: 'a9', limit: 10 });
+
+      assert.ok(!pool.queries[0].sql.includes('$3'));
+      assert.deepEqual(pool.queries[0].params, ['c1', 11]);
     });
 
     it('pops extra row and returns nextCursor when hasMore', async () => {
-      const rows = Array.from({ length: 4 }, (_, i) => ({ id: `a${i}`, crew_id: 'c1', username: 'u' }));
+      const rows = Array.from({ length: 4 }, (_, i) => ({
+        id: `a${i}`,
+        crew_id: 'c1',
+        username: 'u',
+        created_at: new Date(Date.UTC(2026, 5, 15, 14, 0, 4 - i)),
+      }));
       const pool = mockPool([{ rows }]);
       const store = createActivityStore(pool);
       const result = await store.getByCrew('c1', { limit: 3 });
 
       assert.equal(result.items.length, 3);
-      assert.equal(result.nextCursor, 'a2'); // last item after pop
+      assert.equal(result.nextCursor, '2026-06-15T14:00:02.000Z|a2'); // last item after pop
     });
   });
 });
@@ -629,19 +642,19 @@ describe('PollsStore', () => {
       const row = { poll_id: 'p1', user_id: 'u1', option_index: 2 };
       const pool = mockPool([{ rows: [row] }]);
       const store = createPollsStore(pool, mockUtils);
-      const result = await store.vote('p1', 'u1', 2);
+      const result = await store.vote('p1', 'u1', [2]);
 
       assert.equal(result.option_index, 2);
       assert.ok(pool.queries[0].sql.includes('ON CONFLICT'));
-      assert.deepEqual(pool.queries[0].params, ['p1', 'u1', 2]);
+      assert.deepEqual(pool.queries[0].params, ['p1', 'u1', 2, [2]]);
     });
 
     it('passes correct params for different option index', async () => {
       const pool = mockPool([{ rows: [{ poll_id: 'p1', user_id: 'u2', option_index: 0 }] }]);
       const store = createPollsStore(pool, mockUtils);
-      await store.vote('p1', 'u2', 0);
+      await store.vote('p1', 'u2', [0]);
 
-      assert.deepEqual(pool.queries[0].params, ['p1', 'u2', 0]);
+      assert.deepEqual(pool.queries[0].params, ['p1', 'u2', 0, [0]]);
     });
   });
 

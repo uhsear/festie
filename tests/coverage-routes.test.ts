@@ -910,7 +910,9 @@ describe('Crew Polls', () => {
       .get(`/api/v1/crews/${crew.id}/polls`)
       .set('x-user-token', alice.token)
       .expect(200);
-    assert.equal(listAfter.body.data.polls.length, 0);
+    // Closed polls stay listed as decided (open polls plus the last 10 decided).
+    assert.equal(listAfter.body.data.polls.length, 1);
+    assert.equal(listAfter.body.data.polls[0].closed, true);
   });
 
   test('rejects poll creation with invalid data', async () => {

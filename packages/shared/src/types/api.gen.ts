@@ -1418,11 +1418,14 @@ export type components = {
         };
         CrewPoll: {
             closed: boolean;
+            closed_at?: string | null;
             closes_at: string | null;
             created_at: string;
             created_by: string;
             crew_id: string;
             id: string;
+            multi_answer?: boolean;
+            nudged_at?: string | null;
             options: string[];
             question: string;
             vote_count?: string;

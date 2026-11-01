@@ -46,6 +46,31 @@ export function parseActivityPage(res: unknown): CrewActivityEntry[] {
   return page?.items ?? page?.activity ?? [];
 }
 
+/** Reads `nextCursor` from an activity response; null when absent. */
+function parseActivityCursor(res: unknown): string | null {
+  const cursor = (res as { nextCursor?: unknown } | null)?.nextCursor;
+  return typeof cursor === 'string' && cursor ? cursor : null;
+}
+
+/** Merge activity pages: de-duplicate by id (later wins), newest first by `created_at` then `id`. */
+function mergeActivity(...lists: CrewActivityEntry[][]): CrewActivityEntry[] {
+  const byId = new Map<string, CrewActivityEntry>();
+  for (const list of lists) for (const item of list) byId.set(item.id, item);
+  return [...byId.values()].sort(
+    (a, b) => String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id)),
+  );
+}
+
+/** Replace the user's votes on a poll with one entry per chosen index. */
+function withMyVotes(p: CrewPoll, userId: string, optionIndexes: number[]): CrewPoll {
+  const others = (p.votes ?? []).filter((v) => v.user_id !== userId);
+  return { ...p, votes: [...others, ...optionIndexes.map((option) => ({ option, user_id: userId }))] };
+}
+
+function markPollClosed(p: CrewPoll): CrewPoll {
+  return p.closed ? p : { ...p, closed: true, closed_at: new Date().toISOString() };
+}
+
 /** Reads `{ overlap: { [setId]: member[] } }` into the sets picked by 2+ members. */
 export function overlapFromResponse(res: unknown): Record<string, CrewOverlap> {
   const raw = (res as { overlap?: Record<string, CrewMember[]> } | null)?.overlap ?? {};
@@ -82,6 +107,8 @@ export interface CrewState {
   // alongside balances from the settlement-plan endpoint.
   settlements: CrewSettlement[];
   activity: CrewActivityEntry[];
+  // Cursor for the next older activity page; null when there is none. Not persisted.
+  activityNextCursor: string | null;
   crewLoading: boolean;
   error: string | null;
   // ── Offline read-cache bookkeeping (persisted) ──────────────────
@@ -123,7 +150,8 @@ export interface CrewActions {
   // only and never sent to the server — closePoll consumes it to spawn the
   // winning set's meeting point + reminder. Plain polls omit it.
   createPoll: (crewId: string, request: CreateCrewPollRequest, setRefs?: (PollSetRef | null)[]) => Promise<CrewPoll>;
-  votePoll: (crewId: string, pollId: string, optionIndex: number) => Promise<void>;
+  votePoll: (crewId: string, pollId: string, optionIndexes: number[]) => Promise<void>;
+  nudgePoll: (crewId: string, pollId: string) => Promise<number>;
   // `opts` (optional) lets a schedule-aware poll, on close, materialize the
   // winning option's linked set as a meeting point + seeded reminder. Omitted →
   // legacy close (just drop the poll).
@@ -165,6 +193,7 @@ export interface CrewActions {
   settleExpense: (crewId: string, request: SettleCrewExpenseRequest) => Promise<WriteOutcome>;
   // Activity feed (routes/crew-activity.ts).
   loadActivity: (crewId: string) => Promise<void>;
+  loadOlderActivity: (crewId: string) => Promise<void>;
   // Home base (owner-only PUT /crews/:id/home-base).
   updateHomeBase: (crewId: string, payload: { location: string | null; time: string | null }) => Promise<void>;
   // M6 Crew Photo Wall (Phase 1, link-out): set/clear the crew shared-album URL
@@ -181,7 +210,7 @@ export interface CrewActions {
   applyMeetingPointUpsert: (meetingPoint: CrewMeetingPoint) => void;
   applyMeetingPointRemoval: (mpId: string) => void;
   applyPollCreated: (poll: CrewPoll) => void;
-  applyPollVote: (pollId: string, userId: string, optionIndex: number) => void;
+  applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => void;
   applyPollClosed: (pollId: string) => void;
   // M5: upsert a crew member's last-synced status from a remote
   // crew:status-updated event. Replaces any prior row for that user (one row
@@ -242,6 +271,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   expenseBalances: [],
   settlements: [],
   activity: [],
+  activityNextCursor: null,
   crewLoading: false,
   error: null,
   _cachedAt: null,
@@ -283,6 +313,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
         expenseBalances: sameCrew ? state.expenseBalances : [],
         settlements: sameCrew ? state.settlements : [],
         activity: sameCrew ? state.activity : [],
+        activityNextCursor: sameCrew ? state.activityNextCursor : null,
       };
     });
     try {
@@ -588,6 +619,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
               votes: [],
               closes_at: request.closesAt ?? null,
               closed: false,
+              multi_answer: request.multiAnswer ?? false,
               created_at: new Date().toISOString(),
               _optimistic: true,
               ...(localSetRefs ? { set_refs: localSetRefs } : {}),
@@ -616,49 +648,43 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   // option fills instantly (mirrors savePick) — critical on festival-grade signal
   // where the refetch may never complete. Snapshot + roll back on error; the
   // best-effort refetch then reconciles to the server-authoritative counts.
-  votePoll: async (crewId: string, pollId: string, optionIndex: number) => {
+  votePoll: async (crewId: string, pollId: string, optionIndexes: number[]) => {
     set({ error: null });
 
     const userId = useAuthStore.getState().user?.id ?? null;
-    // Capture ONLY my prior vote on this poll (the delta this action touches),
-    // not a whole-array snapshot — so a failure rolls my vote back against the
+    // Capture ONLY my prior votes on this poll (the delta this action touches),
+    // not a whole-array snapshot — so a failure rolls my votes back against the
     // LATEST state and never clobbers a concurrent socket-applied vote (another
     // member voting on the same poll via applyPollVote) that landed during the
     // round-trip.
-    const prevVote = userId
-      ? ((useCrewStore.getState().polls.find((p) => p.id === pollId)?.votes ?? []).find((v) => v.user_id === userId) ??
-        null)
-      : null;
+    const prevVotes = userId
+      ? (useCrewStore.getState().polls.find((p) => p.id === pollId)?.votes ?? []).filter((v) => v.user_id === userId)
+      : [];
 
     if (userId) {
       set((state) => ({
-        polls: state.polls.map((p) => {
-          if (p.id !== pollId) return p;
-          // One vote per user: drop this user's prior vote, then add the new one.
-          const others = (p.votes ?? []).filter((v) => v.user_id !== userId);
-          return { ...p, votes: [...others, { option: optionIndex, user_id: userId }] };
-        }),
+        polls: state.polls.map((p) => (p.id === pollId ? withMyVotes(p, userId, optionIndexes) : p)),
       }));
     }
 
     try {
-      await api.post(`/crews/${crewId}/polls/${pollId}/vote`, { optionIndex });
+      await api.post(`/crews/${crewId}/polls/${pollId}/vote`, { optionIndexes });
       try {
         await useCrewStore.getState().loadPolls(crewId);
       } catch {
         /* refetch is best-effort; the write succeeded */
       }
     } catch (err) {
-      // Roll back ONLY my vote against the LATEST polls: drop my optimistic vote
-      // and restore my prior one (if any), leaving other members' votes and any
-      // other poll that changed mid-flight intact. A poll concurrently closed/
-      // removed is simply absent here and not resurrected.
+      // Roll back ONLY my votes against the LATEST polls: drop my optimistic
+      // votes and restore my prior ones, leaving other members' votes and any
+      // other poll that changed mid-flight intact. A poll concurrently removed
+      // is simply absent here and not resurrected.
       if (userId) {
         set((state) => ({
           polls: state.polls.map((p) => {
             if (p.id !== pollId) return p;
             const others = (p.votes ?? []).filter((v) => v.user_id !== userId);
-            return { ...p, votes: prevVote ? [...others, prevVote] : others };
+            return { ...p, votes: [...others, ...prevVotes] };
           }),
         }));
       }
@@ -668,7 +694,28 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     }
   },
 
-  // DELETE /crews/:crewId/polls/:pollId (close). Drop it from local state.
+  // POST /crews/:crewId/polls/:pollId/nudge -> { nudged }. One reminder per poll.
+  nudgePoll: async (crewId: string, pollId: string) => {
+    set({ error: null });
+    try {
+      // Online-only: a queued nudge would report "sent to 0" now and fire later, maybe after the poll ends.
+      const res = await api.post<{ nudged: number }>(
+        `/crews/${crewId}/polls/${pollId}/nudge`,
+        {},
+        { _bypassOfflineQueue: true },
+      );
+      const nudgedAt = new Date().toISOString();
+      set((state) => ({ polls: state.polls.map((p) => (p.id === pollId ? { ...p, nudged_at: nudgedAt } : p)) }));
+      return res?.nudged ?? 0;
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, "Couldn't send the reminder. Try again.");
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // DELETE /crews/:crewId/polls/:pollId (end). Mark it closed in local state so
+  // it moves to the Decided group.
   //
   // The server tallies the votes and, for a schedule-aware poll, creates the
   // winning set's meeting point and broadcasts it. We upsert the returned point
@@ -685,7 +732,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       res = await api.delete<{ closed: unknown; meetingPoint: CrewMeetingPoint | null; winningSetId: string | null }>(
         `/crews/${crewId}/polls/${pollId}`,
       );
-      set((state) => ({ polls: state.polls.filter((p) => p.id !== pollId) }));
+      set((state) => ({ polls: state.polls.map((p) => (p.id === pollId ? markPollClosed(p) : p)) }));
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to close poll');
       set({ error: message });
@@ -1339,12 +1386,38 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   },
 
   // ── Activity feed ──────────────────────────────────────────────
-  // GET /crews/:crewId/activity -> array of crew events.
+  // GET /crews/:crewId/activity -> { items, nextCursor }. Merge the first page
+  // into the list so a periodic refresh keeps older pages already loaded.
   loadActivity: async (crewId: string) => {
     set({ error: null });
     try {
-      const activity = parseActivityPage(await api.get<unknown>(`/crews/${crewId}/activity`));
-      set({ activity });
+      const res = await api.get<unknown>(`/crews/${crewId}/activity`);
+      const page = parseActivityPage(res);
+      const nextCursor = parseActivityCursor(res);
+      set((state) => ({
+        activity: mergeActivity(state.activity, page),
+        // Older pages are loaded when the list is longer than this page: keep their cursor.
+        activityNextCursor: state.activity.length > page.length ? state.activityNextCursor : nextCursor,
+      }));
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to load activity');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // GET /crews/:crewId/activity?cursor=... -> the next older page.
+  loadOlderActivity: async (crewId: string) => {
+    const cursor = useCrewStore.getState().activityNextCursor;
+    if (!cursor) return;
+    set({ error: null });
+    try {
+      const res = await api.get<unknown>(`/crews/${crewId}/activity?cursor=${encodeURIComponent(cursor)}`);
+      const page = parseActivityPage(res);
+      set((state) => ({
+        activity: mergeActivity(state.activity, page),
+        activityNextCursor: parseActivityCursor(res),
+      }));
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load activity');
       set({ error: message });
@@ -1447,24 +1520,17 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     });
   },
 
-  // Apply a single remote vote: one-vote-per-user, so replace any prior vote
-  // by this user on this poll, then add the new one.
-  applyPollVote: (pollId: string, userId: string, optionIndex: number) => {
+  // Apply a single remote vote: replace this user's prior votes on the poll with
+  // one entry per chosen index (none when they took the vote back).
+  applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => {
     set((state) => ({
-      polls: state.polls.map((p) => {
-        if (p.id !== pollId) return p;
-        const others = (p.votes || []).filter((v) => v.user_id !== userId);
-        return {
-          ...p,
-          votes: [...others, { option: optionIndex, user_id: userId }],
-        };
-      }),
+      polls: state.polls.map((p) => (p.id === pollId ? withMyVotes(p, userId, optionIndexes) : p)),
     }));
   },
 
-  // Drop a closed poll from local state (mirrors closePoll's local effect).
+  // Mark a poll ended (mirrors closePoll's local effect); it stays for the Decided group.
   applyPollClosed: (pollId: string) => {
-    set((state) => ({ polls: state.polls.filter((p) => p.id !== pollId) }));
+    set((state) => ({ polls: state.polls.map((p) => (p.id === pollId ? markPollClosed(p) : p)) }));
   },
 
   // M5: upsert a member's last-synced status from a remote crew:status-updated

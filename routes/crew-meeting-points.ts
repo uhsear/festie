@@ -12,6 +12,7 @@ import type {
   meetingPointUpdateSchema,
 } from '../lib/schemas';
 import { MAX_MEETING_POINTS_PER_CREW } from '../lib/constants';
+import { logCrewActivity } from '../lib/db/stores/activity';
 
 export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
   const {
@@ -29,6 +30,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     validateParams,
     io,
     emitter,
+    crewNotify,
   } = deps;
 
   const router = Router({ mergeParams: true });
@@ -173,6 +175,15 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         }));
 
         io.to('crew:' + crewId).emit('crew:meeting-point-created', point);
+        await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'meeting-point-added', detail: label });
+        await crewNotify?.now({
+          crewId,
+          actorId: req.user.userId,
+          kind: 'meeting-point',
+          key: 'mp:' + id,
+          meetAt,
+          text: `${req.user.username} set a meeting point: ${label}`,
+        });
         res.status(201);
         return sendSuccess(res, { meetingPoint: point });
       } catch (err) {
@@ -221,6 +232,28 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
 
         const updated = await stores.crews.meetingPoints.update(mpId, { ...body, expiresAt });
         io.to('crew:' + crewId).emit('crew:meeting-point-updated', updated);
+        const label = String((updated as { label?: string } | null)?.label ?? existing.label);
+        await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'meeting-point-updated', detail: label });
+        const moved =
+          // pg returns TIMESTAMPTZ as a Date and the body sends an ISO string, so compare instants.
+          (body.meetAt !== undefined &&
+            (body.meetAt ? Date.parse(body.meetAt) : null) !==
+              (existing.meet_at ? new Date(existing.meet_at as string | Date).getTime() : null)) ||
+          (body.location !== undefined && body.location !== existing.location) ||
+          (body.latitude !== undefined && body.latitude !== existing.latitude) ||
+          (body.longitude !== undefined && body.longitude !== existing.longitude);
+        if (moved) {
+          await crewNotify?.now({
+            crewId,
+            actorId: req.user.userId,
+            kind: 'meeting-point',
+            key: 'mp:' + mpId,
+            meetAt: body.meetAt ?? null,
+            text: body.meetAt
+              ? `${req.user.username} moved ${label} to`
+              : `${req.user.username} changed the meeting point ${label}`,
+          });
+        }
         return sendSuccess(res, { meetingPoint: updated });
       } catch (err) {
         log.error('update meeting point failed', { error: (err as Error).message });
@@ -255,6 +288,12 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
 
         await stores.crews.meetingPoints.deactivate(mpId);
         io.to('crew:' + crewId).emit('crew:meeting-point-removed', { id: mpId, crewId });
+        await logCrewActivity(deps, {
+          crewId,
+          userId: req.user.userId,
+          type: 'meeting-point-removed',
+          detail: String(existing.label),
+        });
         return sendSuccess(res, { removed: true });
       } catch (err) {
         log.error('delete meeting point failed', { error: (err as Error).message });

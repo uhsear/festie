@@ -20,7 +20,7 @@
  *   crew:meeting-point-updated  <raw DB row> { crew_id, ... }
  *   crew:meeting-point-removed  { id, crewId }
  *   crew:poll-created           { pollId, question, options, createdBy }   (no crewId)
- *   crew:poll-voted             { pollId, userId, optionIndex }            (no crewId)
+ *   crew:poll-voted             { pollId, userId, optionIndex, optionIndexes } (no crewId)
  *   crew:poll-closed            { pollId }                                 (no crewId)
  *   crew:expense-added          { _v, crewId, expense }
  *   crew:expense-deleted        { _v, crewId, expenseId }
@@ -99,6 +99,8 @@ export interface PollVotedIntent {
   pollId: string;
   userId: string;
   optionIndex: number;
+  /** All chosen options; empty when the vote was taken back. */
+  optionIndexes: number[];
 }
 
 export interface PollClosedIntent {
@@ -248,6 +250,12 @@ export function routePollVoted(payload: CrewPollVotedPayload, activeCrewId: stri
     pollId: payload.pollId,
     userId: payload.userId,
     optionIndex: payload.optionIndex,
+    // Old servers send only optionIndex (-1 means the vote was taken back).
+    optionIndexes: Array.isArray(payload.optionIndexes)
+      ? payload.optionIndexes
+      : payload.optionIndex >= 0
+        ? [payload.optionIndex]
+        : [],
   };
 }
 

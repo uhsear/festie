@@ -21,7 +21,8 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
-import { afterEach, describe, test } from 'node:test';
+import { afterEach, describe, mock, test } from 'node:test';
+import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
@@ -604,5 +605,59 @@ describe('crews routes', { concurrency: 1, skip }, () => {
       }
       await pool.end();
     }
+  });
+});
+
+// Mock-based: no database needed, so this block runs even when the DB suite above is skipped.
+describe('routes/crews.ts -- DELETE /:crewId feed push (mocked deps)', () => {
+  test('emits crew:deleted with deletedBy and pushes members except the owner', async () => {
+    const emit = mock.fn();
+    const io = { to: mock.fn(() => ({ emit })) };
+    const crewNotify = { toUsers: mock.fn(async () => {}) };
+    const crew = { id: 'crew-1', festivalId: 'fest-1', name: 'Desert Rats' };
+    const deps: any = {
+      express,
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      userAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'owner-1', username: 'boss' };
+        next();
+      },
+      sanitizeIdentifier: (v: any) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: any, msg: any) => res.status(status).json({ data: null, error: { message: msg } }),
+      ErrorCodes: {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      validate: () => (req: any, _res: any, next: any) => next(),
+      validateQuery: () => (_req: any, _res: any, next: any) => next(),
+      validateParams: () => (req: any, _res: any, next: any) => {
+        req.validatedParams = req.params;
+        next();
+      },
+      schemas: {},
+      io,
+      crewNotify,
+      stores: {
+        crews: {
+          getById: mock.fn(async () => crew),
+          getMember: mock.fn(async () => ({ userId: 'owner-1', role: 'owner' })),
+          getMembers: mock.fn(async () => [{ userId: 'owner-1' }, { userId: 'u2' }, { userId: 'u3' }]),
+          delete: mock.fn(async () => {}),
+        },
+      },
+    };
+    const { default: createCrewRoutes } = await import('../routes/crews.js');
+    const app = express();
+    app.use('/', createCrewRoutes(deps));
+
+    const res = await request(app).delete('/crew-1');
+
+    assert.equal(res.status, 200);
+    assert.deepEqual((emit.mock.calls as any[])[0].arguments, [
+      'crew:deleted',
+      { crewId: 'crew-1', festivalId: 'fest-1', deletedBy: 'owner-1' },
+    ]);
+    const push = (crewNotify.toUsers.mock.calls as any[])[0].arguments[0];
+    assert.deepEqual(push.userIds, ['u2', 'u3']);
+    assert.equal(push.text, 'Desert Rats was deleted by its owner.');
   });
 });

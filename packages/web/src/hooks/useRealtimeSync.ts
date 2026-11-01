@@ -8,6 +8,7 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import type { OnlineUser } from '@festie/shared/types';
+import { useToast } from '../lib/toastContext';
 import { useCrewQuerySink } from './useCrewQuerySink';
 import type {
   ProfileUpdatedPayload,
@@ -78,11 +79,13 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
   // session:revoked / crew:access-revoked / crew:member-kicked. State teardown
   // lives in @festie/shared; only the navigation is web-specific.
   const navigate = useNavigate();
+  const { toast } = useToast();
   useRevocationRealtime({
     socket,
     onSessionRevoked: () => {
       void navigate({ to: '/login' });
     },
+    onCrewNotice: ({ message }) => toast(message, 'info'),
   });
 
   // Set up Socket.IO event listeners

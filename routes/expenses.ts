@@ -251,13 +251,15 @@ export default function createExpenseRoutes(deps: any) {
           splitWith: [toUserId],
           category: 'settlement',
         });
+        const settled = {
+          crewId,
+          userId: req.user.userId,
+          type: 'expense-settled',
+          detail: paymentDetail(amount, recipient),
+        };
         stores.activity
-          .log({
-            crewId,
-            userId: req.user.userId,
-            type: 'expense-settled',
-            detail: paymentDetail(amount, recipient),
-          })
+          .log(settled)
+          .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...settled } }))
           .catch((err: any) => log.warn('settlement activity log failed', { error: err.message }));
         emitter.crewExpenseAdded({ crewId, expense: settlement });
         res.status(201);
