@@ -48,7 +48,8 @@ export interface Slot {
 
 /**
  * Group future sets into the next `limit` start-time slots and, for each crew
- * member, surface their single highest-priority pick in that slot.
+ * member, surface their single highest-priority pick in that slot. Pass the
+ * festival `timeZone` so slot times are real instants for a phone in another zone.
  */
 export function buildSlots(
   sets: FestivalSet[],
@@ -56,10 +57,11 @@ export function buildSlots(
   profiles: Profile[],
   nowMs: number,
   limit: number = CREW_PLAN_SLOTS,
+  timeZone?: string,
 ): Slot[] {
   // Resolve each set's bounds once; keep only sets that haven't ended yet.
   const timed = sets
-    .map((set) => ({ set, bounds: getSetTimeBounds(set, days) }))
+    .map((set) => ({ set, bounds: getSetTimeBounds(set, days, timeZone) }))
     .filter((x): x is { set: FestivalSet; bounds: { startMs: number; endMs: number } } => x.bounds != null)
     .filter((x) => x.bounds.endMs > nowMs);
 

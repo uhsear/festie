@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
-import { getSetTimeBounds } from '@festie/shared/utils';
+import { getSetTimeBounds, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 
 /** A picked set resolved to absolute epoch-ms bounds + its priority. */
@@ -40,6 +40,7 @@ export function useNowNext(upcomingLimit = 5): NowNext {
   const sets = useFestivalDataStore((s) => s.sets) as FestivalSet[];
   const days = useFestivalDataStore((s) => s.days);
   const picks = useFestivalDataStore((s) => s.currentProfile?.picks);
+  const timeZone = useFestivalDataStore((s) => resolveFestivalTimeZone(s.currentFestival));
 
   const [now, setNow] = useState<Date>(() => new Date());
   useEffect(() => {
@@ -65,7 +66,7 @@ export function useNowNext(upcomingLimit = 5): NowNext {
       const priority = picks[s.id];
       if (!priority) continue;
       // Shared TZ-safe bounds (incl. post-midnight rollover); null = TBA.
-      const bounds = getSetTimeBounds(s, days);
+      const bounds = getSetTimeBounds(s, days, timeZone);
       if (!bounds) continue;
       timed.push({ set: s, start: bounds.startMs, end: bounds.endMs, priority });
     }
@@ -77,5 +78,5 @@ export function useNowNext(upcomingLimit = 5): NowNext {
         .sort((a, b) => a.start - b.start)
         .slice(0, upcomingLimit),
     };
-  }, [picks, sets, days, now, upcomingLimit]);
+  }, [picks, sets, days, now, upcomingLimit, timeZone]);
 }

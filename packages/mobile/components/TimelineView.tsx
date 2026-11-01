@@ -11,13 +11,13 @@ import {
   type ScrollViewInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { FestivalDay, FestivalSet, Priority, Stage } from '@festie/shared/types';
+import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import {
-  timeToMinutes,
+  setMinuteRange,
   formatTime,
   artistDisplayName,
-  getSetTimeBounds,
   resolveFestivalTimeZone,
+  selectNowNext,
 } from '@festie/shared/utils';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -182,9 +182,7 @@ function StageColumn({
 
         {/* Set blocks */}
         {sets.map((s) => {
-          const startMin = timeToMinutes(s.startTime);
-          let endMin = timeToMinutes(s.endTime);
-          if (endMin <= startMin) endMin += 24 * 60;
+          const { start: startMin, end: endMin } = setMinuteRange(s)!;
           const top = ((startMin - timeBounds.minMin) / SLOT_MINUTES) * ROW_HEIGHT;
           // DC11 — enforce a 28px visual floor so block (28) + hitSlop (8+8)
           // reaches the 44pt WCAG 2.5.5/2.5.8 touch target even for back-to-back
@@ -317,23 +315,15 @@ export default function TimelineView({
     };
   }, []);
 
-  // Next picked set across all days, via the SHARED getSetTimeBounds (TZ-safe,
-  // post-midnight rollover) — never a local parseSetMs.
+  // Next picked set across all days, via the SHARED selectNowNext (TZ-safe,
+  // post-midnight rollover), the same selector web's timeline uses.
   const nextPick = useMemo(() => {
+    // Without picks selectNowNext would read the whole lineup, so bail first.
     if (!picks || !allSets || !days) return null;
-    // getSetTimeBounds indexes days[dayIndex]?.date — only `.date` is read, so
-    // the screen's lightweight `{ date }[]` is structurally sufficient. The cast
-    // satisfies the FestivalDay[] param without dragging the full record through.
-    const dayRecords = days as unknown as FestivalDay[];
-    let best: { set: FestivalSet; startMs: number } | null = null;
-    for (const s of allSets) {
-      if (!picks[s.id]) continue;
-      const bounds = getSetTimeBounds(s, dayRecords);
-      if (!bounds || bounds.startMs <= nowMs) continue;
-      if (!best || bounds.startMs < best.startMs) best = { set: s, startMs: bounds.startMs };
-    }
-    return best;
-  }, [picks, allSets, days, nowMs]);
+    const next = selectNowNext({ sets: allSets, days, picks, nowMs, timeZone: festivalTimeZone, upcomingLimit: 1 })
+      .upcoming[0];
+    return next ? { set: next.set, startMs: next.start } : null;
+  }, [picks, allSets, days, nowMs, festivalTimeZone]);
 
   const nextPickLabel = useMemo(() => {
     if (!nextPick) return null;
@@ -425,9 +415,7 @@ export default function TimelineView({
     if (nowIndicator === null || !timeBounds) return ids;
     const nowMin = timeBounds.minMin + (nowIndicator / 100) * (timeBounds.maxMin - timeBounds.minMin);
     for (const s of timedSets) {
-      const start = timeToMinutes(s.startTime);
-      let end = timeToMinutes(s.endTime);
-      if (end <= start) end += 24 * 60;
+      const { start, end } = setMinuteRange(s)!;
       if (start <= nowMin && nowMin < end) ids.add(s.stageId);
     }
     return ids;

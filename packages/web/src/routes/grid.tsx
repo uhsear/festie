@@ -2,9 +2,9 @@ import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { usePicks, useFestival } from '@festie/shared/hooks';
-import { resolveStageColor, resolveFestivalTimeZone, createDateInLocalFrame, zonedWallTimeToMs } from '@festie/shared/utils';
+import { resolveStageColor, setMinuteRange, resolveFestivalTimeZone, createDateInLocalFrame, zonedWallTimeToMs } from '@festie/shared/utils';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { getPxPerMin, getGutterW, toMin, fmtHour } from '../components/grid/gridUtils';
+import { getPxPerMin, getGutterW, fmtHour } from '../components/grid/gridUtils';
 import { useGridExport } from '../components/grid/useGridExport';
 import GridStageHeader from '../components/grid/GridStageHeader';
 import GridStageColumn from '../components/grid/GridStageColumn';
@@ -103,10 +103,10 @@ function GridViewInner() {
     let lo = Infinity,
       hi = 0;
     for (const s of timedSets) {
-      const a = toMin(s.startTime!);
-      const b = toMin(s.endTime!);
-      lo = Math.min(lo, a);
-      hi = Math.max(hi, b <= a ? b + 1440 : b);
+      const range = setMinuteRange(s);
+      if (!range) continue;
+      lo = Math.min(lo, range.start);
+      hi = Math.max(hi, range.end);
     }
     lo = Math.floor(lo / 60) * 60;
     hi = Math.ceil(hi / 60) * 60;

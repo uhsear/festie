@@ -124,6 +124,43 @@ export function nextMeetingOccurrence(
   return upcoming ?? occ[occ.length - 1]!;
 }
 
+/**
+ * ISO string for a `datetime-local` value (`YYYY-MM-DDTHH:mm`) typed as festival
+ * wall-clock. Reads it in `timeZone` when supplied, else device-local. Returns
+ * null for an empty or malformed value.
+ */
+export function meetAtFromWallInput(value: string, timeZone?: string): string | null {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(value);
+  if (!m) return null;
+  const [, date, hh, mm] = m;
+  const ms = timeZone
+    ? zonedWallTimeToMs(date!, Number(hh), Number(mm), timeZone)
+    : createDateInLocalFrame(date!, Number(hh), Number(mm)).getTime();
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+}
+
+/**
+ * `datetime-local` value (`YYYY-MM-DDTHH:mm`) for an ISO instant, as wall-clock
+ * in `timeZone` (device-local when omitted). The inverse of
+ * `meetAtFromWallInput`. Returns '' for a malformed ISO string.
+ */
+export function meetAtToWallInput(iso: string, timeZone?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    ...(timeZone ? { timeZone } : {}),
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(d);
+  const map: Record<string, string> = {};
+  for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
+  return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}`;
+}
+
 export interface MeetingTimeDisplay {
   /** Short human label, e.g. `"daily 3:00 PM"` or `"Sat 3:00 PM"`. */
   label: string;

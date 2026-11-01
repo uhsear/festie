@@ -3,7 +3,7 @@ import { useFestivalStore } from '@festie/shared/stores';
 import { usePicks } from '@festie/shared/hooks';
 import { applyScheduleFilters } from './useScheduleFilters';
 import { FestivalSet, Stage } from '@festie/shared/types';
-import { timeToMinutes, artistDisplayName, getConflictingSetIds } from '@festie/shared/utils';
+import { setMinuteRange, artistDisplayName, getConflictingSetIds } from '@festie/shared/utils';
 
 const SLOT_MINUTES = 15;
 
@@ -65,15 +65,14 @@ export function useTimelineFilters() {
   const timeBounds = useMemo((): TimeBounds | null => {
     if (timedSets.length === 0) return null;
 
-    let minMin = 24 * 60;
+    let minMin = Infinity;
     let maxMin = 0;
 
     timedSets.forEach((s: FestivalSet) => {
-      const start = timeToMinutes(s.startTime!);
-      let end = timeToMinutes(s.endTime!);
-      if (end <= start) end += 24 * 60;
-      if (start < minMin) minMin = start;
-      if (end > maxMin) maxMin = end;
+      const range = setMinuteRange(s);
+      if (!range) return;
+      if (range.start < minMin) minMin = range.start;
+      if (range.end > maxMin) maxMin = range.end;
     });
 
     minMin = Math.floor(minMin / SLOT_MINUTES) * SLOT_MINUTES;

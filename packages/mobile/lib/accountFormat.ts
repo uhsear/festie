@@ -71,17 +71,17 @@ export function formatClockTime(hhmm: string | null | undefined): string | null 
 }
 
 /**
- * Human label for a quiet-hours / DND window, e.g. "11:00 PM – 8:00 AM".
+ * Human label for a quiet-hours / DND window, e.g. "11 PM–8 AM" or "11:30 PM–8 AM".
  * Returns null when either bound is missing so callers can fall back.
  */
 export function formatQuietHours(
   start: string | null | undefined,
   end: string | null | undefined,
 ): string | null {
-  const a = formatClockTime(start);
-  const b = formatClockTime(end);
+  const a = formatClockTime(start)?.replace(':00 ', ' ');
+  const b = formatClockTime(end)?.replace(':00 ', ' ');
   if (!a || !b) return null;
-  return `${a} – ${b}`;
+  return `${a}–${b}`;
 }
 
 export interface PasswordStrength {

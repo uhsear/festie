@@ -18,7 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import {
-  toMin,
+  nowPositionPercent,
+  setMinuteRange,
   fmtHour,
   fmtShort,
   artistDisplayName,
@@ -31,7 +32,6 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE, type Tokens } from '.
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
-import { nowPositionPercent } from '../lib/nowPosition';
 import EmptyState from '../components/EmptyState';
 
 // Per-minute vertical scale. The web grid adapts this to viewport width
@@ -136,10 +136,9 @@ export default function GridScreen() {
     let lo = Infinity;
     let hi = 0;
     for (const s of timedSets) {
-      const a = toMin(s.startTime!);
-      const b = toMin(s.endTime!);
-      lo = Math.min(lo, a);
-      hi = Math.max(hi, b <= a ? b + 1440 : b);
+      const { start, end } = setMinuteRange(s)!;
+      lo = Math.min(lo, start);
+      hi = Math.max(hi, end);
     }
     lo = Math.floor(lo / 60) * 60;
     hi = Math.ceil(hi / 60) * 60;
@@ -278,9 +277,7 @@ export default function GridScreen() {
         ))}
 
         {stageSets.map((set) => {
-          const a = toMin(set.startTime!);
-          let b = toMin(set.endTime!);
-          if (b <= a) b += 1440;
+          const { start: a, end: b } = setMinuteRange(set)!;
           const top = (a - bounds.lo) * PX_PER_MIN;
           const height = Math.max((b - a) * PX_PER_MIN, MIN_CELL_H);
           const pick = getMyPick(set.id);

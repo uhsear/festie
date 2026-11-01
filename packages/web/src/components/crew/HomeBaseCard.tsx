@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, writeOutcomeOf, writeOutcomeMessage } from '@festie/shared';
+import { api, formatTime, writeOutcomeOf, writeOutcomeMessage } from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import { MapPin, X, Clock } from 'lucide-react';
@@ -21,18 +21,22 @@ interface Props {
 // Server: PUT /crews/:crewId/home-base { location, time }. Only the owner is
 // allowed to change it (crew-features.js:23). We render a compact card that
 // shows the pin inline; owners get inline editing, non-owners see read-only.
+// Legacy free-text values ("6pm") are not valid for <input type="time">, so they stay
+// out of the field and are kept on save instead.
+const HHMM = /^\d{2}:\d{2}$/;
+
 export default function HomeBaseCard({ crewId, currentLocation, currentTime, isOwner, onSaved }: Props) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [loc, setLoc] = useState(currentLocation || '');
-  const [time, setTime] = useState(currentTime || '');
+  const [time, setTime] = useState(currentTime && HHMM.test(currentTime) ? currentTime : '');
 
   // Keep form in sync if the parent-supplied values change (e.g. after another
   // user/tab saves a home base via socket).
   useEffect(() => {
     setLoc(currentLocation || '');
-    setTime(currentTime || '');
+    setTime(currentTime && HHMM.test(currentTime) ? currentTime : '');
   }, [currentLocation, currentTime]);
 
   const save = useMutation({
@@ -89,7 +93,12 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
           variant="primary"
           isLoading={save.isPending}
           disabled={!loc.trim()}
-          onClick={() => save.mutate({ location: loc.trim(), time: time || null })}
+          onClick={() =>
+            save.mutate({
+              location: loc.trim(),
+              time: time || (currentTime && !HHMM.test(currentTime) ? currentTime : null),
+            })
+          }
           className="w-full min-h-11"
         >
           Save
@@ -119,7 +128,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
               {currentTime && (
                 <span className="text-xs text-accent-aqua flex-shrink-0 inline-flex items-center gap-1">
                   <Clock className="w-3 h-3" aria-hidden="true" />
-                  {currentTime}
+                  {HHMM.test(currentTime) ? formatTime(currentTime) : currentTime}
                 </span>
               )}
             </div>

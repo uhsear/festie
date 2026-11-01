@@ -9,7 +9,13 @@ import type {
   Priority,
   SosEntry,
 } from '../types/domain';
-import { createDateInLocalFrame, getSetTimeBounds, zonedWallTimeToMs } from './setStatus';
+import {
+  FESTIVAL_DAY_START_HOUR,
+  createDateInLocalFrame,
+  getSetTimeBounds,
+  zoneOffsetMsAt,
+  zonedWallTimeToMs,
+} from './setStatus';
 import { nextMeetingOccurrence } from './meetingTime';
 import { isPeerStale } from './liveLocation';
 import { timeAgo } from './timeAgo';
@@ -57,8 +63,6 @@ export interface NowNextSelection {
 // A logical festival day runs 06:00 to 06:00 the next morning, because sets
 // before 6 AM belong to the previous day (CONTEXT.md). Hour 30 of a date is
 // 06:00 the next day: both converters normalize overflowing hours.
-const DAY_START_HOUR = 6;
-
 function wallMs(date: string, hours: number, timeZone?: string): number {
   return timeZone ? zonedWallTimeToMs(date, hours, 0, timeZone) : createDateInLocalFrame(date, hours, 0).getTime();
 }
@@ -68,16 +72,39 @@ export function logicalDayIndexAt(days: ReadonlyArray<Pick<FestivalDay, 'date'>>
   for (let i = 0; i < days.length; i++) {
     const date = days[i]?.date;
     if (!date) continue;
-    const start = wallMs(date, DAY_START_HOUR, timeZone);
-    const end = wallMs(date, DAY_START_HOUR + 24, timeZone);
+    const start = wallMs(date, FESTIVAL_DAY_START_HOUR, timeZone);
+    const end = wallMs(date, FESTIVAL_DAY_START_HOUR + 24, timeZone);
     if (nowMs >= start && nowMs < end) return i;
   }
   return null;
 }
 
+/**
+ * Where "now" sits (0-100 %) inside the displayed festival day's time window,
+ * or null when now is outside it. The window runs from `dayDate` 00:00 in the
+ * festival's zone (device-local when `timeZone` is omitted) plus minMin..maxMin;
+ * maxMin > 1440 covers sets that run past midnight into the next calendar day.
+ * Date-aware, so a past or future festival never draws the line.
+ */
+export function nowPositionPercent(
+  nowMs: number,
+  dayDate: string | null | undefined,
+  bounds: { minMin: number; maxMin: number },
+  timeZone?: string,
+): number | null {
+  if (!dayDate || bounds.maxMin <= bounds.minMin) return null;
+  const dayStartMs = timeZone
+    ? zonedWallTimeToMs(dayDate, 0, 0, timeZone)
+    : createDateInLocalFrame(dayDate, 0, 0).getTime();
+  if (Number.isNaN(dayStartMs)) return null;
+  const nowMin = (nowMs - dayStartMs) / 60_000;
+  if (nowMin < bounds.minMin || nowMin > bounds.maxMin) return null;
+  return ((nowMin - bounds.minMin) / (bounds.maxMin - bounds.minMin)) * 100;
+}
+
 export interface SelectNowNextInput {
   sets: FestivalSet[];
-  days: FestivalDay[];
+  days: ReadonlyArray<Pick<FestivalDay, 'date'>>;
   /** The user's picks. Omit (guest) to read NOW/NEXT from the whole lineup. */
   picks?: Record<string, Priority> | null;
   nowMs: number;
@@ -113,8 +140,8 @@ export function selectNowNext({
     if (!picks || priority) source.push(timed);
   }
 
-  const firstStart = wallMs(dated[0]!.date, DAY_START_HOUR, timeZone);
-  const lastEnd = wallMs(dated[dated.length - 1]!.date, DAY_START_HOUR + 24, timeZone);
+  const firstStart = wallMs(dated[0]!.date, FESTIVAL_DAY_START_HOUR, timeZone);
+  const lastEnd = wallMs(dated[dated.length - 1]!.date, FESTIVAL_DAY_START_HOUR + 24, timeZone);
   // A late set can run past the 06:00 boundary; it is still "during".
   const lastSetEnd = lineup.reduce((max, s) => Math.max(max, s.end), lastEnd);
   const earliestSet = lineup.reduce((min, s) => Math.min(min, s.start), Infinity);
@@ -164,6 +191,15 @@ export function fmtZonedDayClock(ms: number, timeZone?: string): string {
 /** `Sat` in the festival zone, or device-local when no zone is known. */
 export function fmtZonedWeekday(ms: number, timeZone?: string): string {
   return new Intl.DateTimeFormat('en-US', { weekday: 'short', ...(timeZone ? { timeZone } : {}) }).format(new Date(ms));
+}
+
+/** Calendar days from `fromMs` to `targetMs` in the festival zone (device-local when no zone is known): 1 = tomorrow. */
+export function zonedCalendarDayDiff(fromMs: number, targetMs: number, timeZone?: string): number {
+  const dayNumber = (ms: number) => {
+    const offset = timeZone ? zoneOffsetMsAt(ms, timeZone) : -new Date(ms).getTimezoneOffset() * 60_000;
+    return Math.floor((ms + offset) / 86_400_000);
+  };
+  return dayNumber(targetMs) - dayNumber(fromMs);
 }
 
 /**

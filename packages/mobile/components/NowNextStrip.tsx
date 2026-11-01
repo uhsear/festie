@@ -3,7 +3,14 @@ import { AccessibilityInfo, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { useFestival } from '@festie/shared/hooks';
-import { artistDisplayName, fmtClock, fmtCountdown } from '@festie/shared/utils';
+import {
+  artistDisplayName,
+  fmtZonedClock,
+  fmtZonedWeekday,
+  fmtCountdown,
+  resolveFestivalTimeZone,
+  zonedCalendarDayDiff,
+} from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useNowNext } from '../hooks/useNowNext';
 import LiveDot from './LiveDot';
@@ -32,6 +39,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
   const styles = useStyles();
   const { getStageName } = useFestival();
   const b2bSeparator = useFestivalDataStore((s) => s.currentFestival?.b2bSeparator);
+  const timeZone = useFestivalDataStore((s) => resolveFestivalTimeZone(s.currentFestival));
   const { now, current, upcoming } = useNowNext(1);
 
   // DC26: announce "Now playing: <artist> at <stage>" exactly once when a
@@ -64,19 +72,14 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
   // day boundary. When the next set starts on a LATER calendar day, surface the
   // day + clock ("Tomorrow 14:00" / "Sat 14:00") instead so the wait reads
   // honestly; same-day picks keep the compact live countdown.
-  const toMidnightMs = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const startDate = new Date(focus.start);
-  const dayDiff = isNow ? 0 : Math.round((toMidnightMs(startDate) - toMidnightMs(now)) / 86_400_000);
+  // Day and clock both come from the festival zone so one label never mixes two zones.
+  const dayDiff = isNow ? 0 : zonedCalendarDayDiff(now.getTime(), focus.start, timeZone);
   const laterDay = dayDiff >= 1;
-  const dayLabel = !laterDay
-    ? ''
-    : dayDiff === 1
-      ? 'Tomorrow'
-      : startDate.toLocaleDateString(undefined, { weekday: 'short' });
+  const dayLabel = !laterDay ? '' : dayDiff === 1 ? 'Tomorrow' : fmtZonedWeekday(focus.start, timeZone);
   const timing = isNow
-    ? `until ${fmtClock(focus.end)}`
+    ? `until ${fmtZonedClock(focus.end, timeZone)}`
     : laterDay
-      ? `${dayLabel} ${fmtClock(focus.start)}`
+      ? `${dayLabel} ${fmtZonedClock(focus.start, timeZone)}`
       : fmtCountdown(Math.round((focus.start - now.getTime()) / 60_000));
 
   // How far through the currently-playing pick we are (0–1), advancing on the

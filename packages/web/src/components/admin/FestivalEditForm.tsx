@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { listTimeZones } from '@festie/shared/utils';
 import DayEditor, { Day } from './DayEditor';
 import { Stage } from './SetEditor';
 
@@ -15,20 +16,6 @@ export interface Festival {
   days?: Day[];
   [key: string]: unknown;
 }
-
-// Common IANA zones offered in the festival editor. The festival's current
-// value is merged in at render time so an existing custom zone is never dropped.
-const COMMON_TIME_ZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Phoenix',
-  'America/Los_Angeles',
-  'Europe/London',
-  'Europe/Berlin',
-  'Australia/Sydney',
-];
 
 export interface FestivalEditFormProps {
   formData: Partial<Festival>;
@@ -194,17 +181,17 @@ export default function FestivalEditForm({
             onChange={(e) => setFormData({ ...formData, timeZone: e.target.value || null })}
             className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           >
-            {/* Empty = use each attendee's device zone (the prior behavior). */}
-            <option value="">Device-local (no festival zone)</option>
-            {/* Merge in the festival's current value so a custom zone isn't lost. */}
-            {Array.from(new Set([...COMMON_TIME_ZONES, ...(formData.timeZone ? [formData.timeZone] : [])])).map(
-              (tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ),
-            )}
+            <option value="" disabled>
+              Choose a time zone…
+            </option>
+            {/* listTimeZones merges in the festival's current value so a custom zone isn't lost. */}
+            {listTimeZones(formData.timeZone).map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
           </select>
+          <span>Set times, countdowns and reminders use this zone.</span>
         </label>
       </div>
 

@@ -65,6 +65,10 @@ export default function AdminFestivals() {
       toast('Name and location are required', 'error');
       return;
     }
+    if (!formData.timeZone) {
+      toast("Choose the festival's time zone. Set times, countdowns and reminders use it.", 'error');
+      return;
+    }
 
     try {
       if (editingId) {

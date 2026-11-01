@@ -44,3 +44,18 @@ describe('firstInvalidField', () => {
     expect(firstInvalidField({})).toBeUndefined();
   });
 });
+
+describe('isAtLeast18 in a non-UTC zone', () => {
+  const originalTz = process.env.TZ;
+  afterAll(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
+  it('uses local calendar parts under Asia/Tokyo', () => {
+    process.env.TZ = 'Asia/Tokyo';
+    const dob = new Date(2008, 9, 31, 8, 0); // local 08:00 on the 18th birthday
+    expect(isAtLeast18(dob, new Date(2026, 9, 31, 8, 0).getTime())).toBe(true);
+    expect(isAtLeast18(dob, new Date(2026, 9, 30, 23, 0).getTime())).toBe(false);
+  });
+});

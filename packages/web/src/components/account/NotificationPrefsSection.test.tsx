@@ -115,7 +115,7 @@ describe('NotificationPrefsSection', () => {
   it('shows quiet hours OFF when no DND window is set', () => {
     render(<NotificationPrefsSection />);
     expect(screen.getByRole('switch', { name: 'Quiet hours' })).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText('Mute 11pm–8am')).toBeInTheDocument();
+    expect(screen.getByText('Mute 11 PM–8 AM')).toBeInTheDocument();
   });
 
   it('shows quiet hours ON when a DND window is set', () => {
@@ -130,6 +130,21 @@ describe('NotificationPrefsSection', () => {
     });
     render(<NotificationPrefsSection />);
     expect(screen.getByRole('switch', { name: 'Quiet hours' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('names the quiet-hours zone in the caption when one is stored', () => {
+    resetStore({
+      prefs: {
+        crewUpdates: true,
+        setReminders: true,
+        scheduleChanges: true,
+        dndStart: '23:00',
+        dndEnd: '08:00',
+        dndTimeZone: 'America/Los_Angeles',
+      },
+    });
+    render(<NotificationPrefsSection />);
+    expect(screen.getByText('Mute 11 PM–8 AM (Los Angeles time)')).toBeInTheDocument();
   });
 
   it('enabling quiet hours sends a DND start/end window to updatePrefs', async () => {

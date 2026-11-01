@@ -234,6 +234,14 @@ describe('getSetLinks', () => {
 });
 
 describe('getSetHotness', () => {
+  // A set's date is its logical festival day: a start before 06:00 belongs to
+  // the previous calendar day, so date it there or the window lands a day late.
+  const logicalDate = (start: Date) => {
+    const d = new Date(start.getTime());
+    if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
   it('returns 0 when no date', () => {
     const set = makeSet({ date: undefined });
     expect(getSetHotness(set)).toBe(0);
@@ -254,7 +262,7 @@ describe('getSetHotness', () => {
     // previous day, and dating the set by `now` would push the rolled-over
     // window past `now` and report hotness 0. (Pre-existing flake, unrelated to
     // the timezone change.)
-    const date = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
+    const date = logicalDate(startDate);
     const set = makeSet({
       id: 'hotness-playing',
       date,
@@ -283,7 +291,7 @@ describe('getSetHotness', () => {
     const end = new Date(now.getTime() + 30 * 60000); // 30m from now
     // Only meaningful as a rollover when "now" is shortly after local midnight,
     // but the assertion holds in every TZ: a live window around `now` => 1000.
-    const date = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+    const date = logicalDate(start);
     const set = makeSet({
       id: 'hotness-rollover',
       date,

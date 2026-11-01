@@ -229,4 +229,17 @@ describe('useTimelineFilters — timeBounds', () => {
       totalSlots: (1470 - 600) / 15, // 58
     });
   });
+
+  it('places an after-midnight start below the evening sets (22:00-23:30 + 00:30-01:30)', () => {
+    setStore({
+      sets: [
+        makeSet({ id: 'evening', startTime: '22:00', endTime: '23:30' }),
+        makeSet({ id: 'after-midnight', startTime: '00:30', endTime: '01:30' }),
+      ],
+    });
+
+    const { result } = renderHook(() => useTimelineFilters());
+
+    expect(result.current.timeBounds).toEqual({ minMin: 1320, maxMin: 1530, totalSlots: (1530 - 1320) / 15 });
+  });
 });

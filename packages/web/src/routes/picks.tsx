@@ -7,6 +7,7 @@ import { usePicks, useFestival } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
 import {
   formatTime,
+  byStartTime,
   artistDisplayName,
   buildPicksIcs,
   buildPicksShareUrl,
@@ -93,15 +94,13 @@ function PicksViewInner() {
     // Sort each group by time, then name
     Object.keys(groups).forEach((key) => {
       groups[key as Priority].sort((a, b) => {
-        const timeA = a.startTime || '';
-        const timeB = b.startTime || '';
-        if (timeA && timeB) return timeA.localeCompare(timeB);
-        if (timeA && !timeB) return -1;
-        if (!timeA && timeB) return 1;
-        return artistDisplayName(a, currentFestival?.b2bSeparator).localeCompare(
-          artistDisplayName(b, currentFestival?.b2bSeparator),
-          undefined,
-          { sensitivity: 'base' },
+        return (
+          byStartTime(a, b) ||
+          artistDisplayName(a, currentFestival?.b2bSeparator).localeCompare(
+            artistDisplayName(b, currentFestival?.b2bSeparator),
+            undefined,
+            { sensitivity: 'base' },
+          )
         );
       });
     });

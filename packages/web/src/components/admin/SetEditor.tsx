@@ -1,3 +1,5 @@
+import { startsAfterMidnight } from '@festie/shared/utils';
+
 export interface SetRow {
   id: string;
   artist?: string;
@@ -16,6 +18,7 @@ export interface Stage {
 
 export interface SetEditorProps {
   set: SetRow;
+  dayLabel?: string;
   stages: Stage[];
   onField: (field: string, value: string | null) => void;
   onRemove: () => void;
@@ -24,7 +27,7 @@ export interface SetEditorProps {
 /**
  * Edits one set row (artist, stage, startTime, endTime) inside a day.
  */
-export default function SetEditor({ set: s, stages, onField, onRemove }: SetEditorProps) {
+export default function SetEditor({ set: s, dayLabel, stages, onField, onRemove }: SetEditorProps) {
   return (
     <div className="grid grid-cols-[1fr_140px_90px_90px_auto] gap-2">
       <input
@@ -70,6 +73,11 @@ export default function SetEditor({ set: s, stages, onField, onRemove }: SetEdit
       >
         ×
       </button>
+      {startsAfterMidnight(s.startTime) && (
+        <p className="col-span-full text-xs text-text-muted">
+          After midnight. Shows as part of {dayLabel || "this day's"} night.
+        </p>
+      )}
     </div>
   );
 }

@@ -2,10 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
   festivalStatus,
   festivalPhase,
+  festivalTimeLabel,
   isFestivalOver,
   hasSetStarted,
   isValidTimeZone,
+  listTimeZones,
   resolveFestivalTimeZone,
+  timeZoneCity,
 } from './festivalTime';
 import type { Festival } from '../types/domain';
 
@@ -48,8 +51,12 @@ describe('resolveFestivalTimeZone', () => {
 });
 
 describe('festivalStatus', () => {
-  it("returns 'past' after the final day's 23:59", () => {
-    expect(festivalStatus(fest(), undefined, new Date('2026-09-07T00:00:00'))).toBe('past');
+  it("returns 'past' from 06:00 after the final day", () => {
+    expect(festivalStatus(fest(), undefined, new Date('2026-09-07T06:00:00'))).toBe('past');
+  });
+
+  it("stays 'ongoing' through the last night (before 06:00 after the final day)", () => {
+    expect(festivalStatus(fest(), undefined, new Date('2026-09-07T05:59:00'))).toBe('ongoing');
   });
 
   it("returns 'upcoming' before the first day", () => {
@@ -63,7 +70,7 @@ describe('festivalStatus', () => {
   it('prefers inline days[] over start/end dates', () => {
     const f = fest({ startDate: '', endDate: '' });
     const days = [{ date: '2026-09-04' }, { date: '2026-09-06' }];
-    expect(festivalStatus(f, days, new Date('2026-09-07T00:00:00'))).toBe('past');
+    expect(festivalStatus(f, days, new Date('2026-09-07T06:00:00'))).toBe('past');
     expect(festivalStatus(f, days, new Date('2026-08-01T00:00:00'))).toBe('upcoming');
   });
 
@@ -72,15 +79,15 @@ describe('festivalStatus', () => {
     expect(festivalStatus(null)).toBeNull();
   });
 
-  // Regression: festival bounds must be anchored to the device's LOCAL wall
-  // clock, not a UTC-parsed instant. The injected `now` is built from local
-  // calendar fields, so the comparison must agree with local midnight/23:59
-  // regardless of the machine's UTC offset (CI runs UTC; users do not).
+  // Regression: with no festival zone, bounds must be anchored to the device's
+  // LOCAL wall clock, not a UTC-parsed instant. The injected `now` is built from
+  // local calendar fields, so the comparison must agree with local midnight and
+  // 06:00 regardless of the machine's UTC offset (CI runs UTC; users do not).
   it('anchors bounds to the local wall clock (non-UTC safe)', () => {
-    // `now` constructed via local fields — one minute past the last day's 23:59.
+    // `now` constructed via local fields — 06:00 after the last day.
     const justPast = new Date();
     justPast.setFullYear(2026, 8, 7); // 2026-09-07 (month is 0-based)
-    justPast.setHours(0, 0, 0, 0);
+    justPast.setHours(6, 0, 0, 0);
     expect(festivalStatus(fest(), undefined, justPast)).toBe('past');
 
     // The prior local day, 23:59 — still before the first day's 00:00.
@@ -96,6 +103,13 @@ describe('festivalStatus', () => {
     lateNight.setHours(23, 30, 0, 0);
     expect(festivalStatus(fest(), undefined, lateNight)).toBe('ongoing');
   });
+
+  it('ends at 06:00 after the last day in the festival zone, not the device zone', () => {
+    const la = fest({ timeZone: 'America/Los_Angeles' });
+    // 2026-09-07 is PDT (UTC-7): 01:30 local = 08:30Z, 06:01 local = 13:01Z.
+    expect(festivalStatus(la, undefined, new Date(Date.UTC(2026, 8, 7, 8, 30)))).toBe('ongoing');
+    expect(festivalStatus(la, undefined, new Date(Date.UTC(2026, 8, 7, 13, 1)))).toBe('past');
+  });
 });
 
 describe('festivalPhase', () => {
@@ -108,7 +122,7 @@ describe('festivalPhase', () => {
   });
 
   it("maps past → 'post'", () => {
-    expect(festivalPhase(fest(), undefined, new Date('2026-09-07T00:00:00'))).toBe('post');
+    expect(festivalPhase(fest(), undefined, new Date('2026-09-07T06:00:00'))).toBe('post');
   });
 
   it('prefers inline days[] over start/end dates', () => {
@@ -126,7 +140,7 @@ describe('festivalPhase', () => {
 describe('isFestivalOver / hasSetStarted (local-frame)', () => {
   const days = [{ date: '2026-09-04' }, { date: '2026-09-05' }, { date: '2026-09-06' }];
 
-  it('isFestivalOver flips at the last day local 23:59', () => {
+  it('isFestivalOver flips at 06:00 after the last day', () => {
     // A long-past festival is over; a far-future one is not — independent of TZ
     // because both bounds and `new Date()` share the same local frame.
     // (isFestivalOver reads the days array, not startDate/endDate.)
@@ -152,5 +166,77 @@ describe('isFestivalOver / hasSetStarted (local-frame)', () => {
 
   it('hasSetStarted falls back to isFestivalOver when the set has no time', () => {
     expect(hasSetStarted({ startTime: null, dayIndex: 0 }, fest(), days)).toBe(isFestivalOver(fest(), days));
+  });
+
+  it('isFestivalOver is false through the last night and true after 06:00, in the festival zone', () => {
+    const la = fest({ timeZone: 'America/Los_Angeles' });
+    expect(isFestivalOver(la, days, new Date(Date.UTC(2026, 8, 7, 8, 0)))).toBe(false); // 01:00 PDT
+    expect(isFestivalOver(la, days, new Date(Date.UTC(2026, 8, 7, 13, 1)))).toBe(true); // 06:01 PDT
+  });
+
+  it('hasSetStarted puts a 01:00 set on the night of its day, in the festival zone', () => {
+    const la = fest({ timeZone: 'America/Los_Angeles' });
+    const set = { startTime: '01:00', dayIndex: 0 };
+    // Day 0 is 2026-09-04, so the set starts 2026-09-05 01:00 PDT (08:00Z).
+    expect(hasSetStarted(set, la, days, new Date(Date.UTC(2026, 8, 5, 6, 0)))).toBe(false); // day 0 23:00 PDT
+    expect(hasSetStarted(set, la, days, new Date(Date.UTC(2026, 8, 5, 8, 5)))).toBe(true); // 09-05 01:05 PDT
+  });
+});
+
+describe('festivalTimeLabel', () => {
+  const ms = Date.UTC(2026, 8, 5, 12, 0);
+  const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // An Etc/GMT zone 9 hours from the host (Etc/GMT signs are inverted), so the case holds under any TZ.
+  const hostHours = Math.round(-new Date(ms).getTimezoneOffset() / 60);
+  const awayHours = hostHours + 9 > 14 ? hostHours + 9 - 24 : hostHours + 9;
+  const awayZone = `Etc/GMT${awayHours > 0 ? '-' : '+'}${Math.abs(awayHours)}`;
+
+  it('is null when the festival zone has the device offset', () => {
+    expect(festivalTimeLabel(deviceZone, ms)).toBeNull();
+    if (new Date(ms).getTimezoneOffset() === 0) expect(festivalTimeLabel('UTC', ms)).toBeNull();
+  });
+
+  it("is 'Festival time' when the offsets differ", () => {
+    expect(isValidTimeZone(awayZone)).toBe(true);
+    expect(festivalTimeLabel(awayZone, ms)).toBe('Festival time');
+  });
+
+  it('is null without a valid zone', () => {
+    expect(festivalTimeLabel(undefined, ms)).toBeNull();
+    expect(festivalTimeLabel('Mars/Base', ms)).toBeNull();
+  });
+});
+
+describe('timeZoneCity', () => {
+  it('returns the city part with spaces', () => {
+    expect(timeZoneCity('America/Los_Angeles')).toBe('Los Angeles');
+    expect(timeZoneCity('America/Argentina/Buenos_Aires')).toBe('Buenos Aires');
+    expect(timeZoneCity('UTC')).toBe('UTC');
+  });
+});
+
+describe('listTimeZones', () => {
+  const intl = Intl as { supportedValuesOf?: unknown };
+
+  it('lists the runtime zones and merges a valid current zone that is missing', () => {
+    const zones = listTimeZones('US/Eastern');
+    expect(zones).toContain('Asia/Tokyo');
+    expect(zones).toContain('US/Eastern');
+    expect(listTimeZones('Mars/Base')).not.toContain('Mars/Base');
+  });
+
+  it('falls back to a fixed list when Intl.supportedValuesOf is missing', () => {
+    const original = intl.supportedValuesOf;
+    intl.supportedValuesOf = undefined;
+    try {
+      const zones = listTimeZones('Asia/Kolkata');
+      expect(zones.slice(0, 2)).toEqual(['UTC', 'America/New_York']);
+      expect(zones).toContain('Europe/Amsterdam');
+      expect(zones).toContain('Pacific/Auckland');
+      expect(zones[zones.length - 1]).toBe('Asia/Kolkata');
+      expect(listTimeZones('Asia/Tokyo').filter((z) => z === 'Asia/Tokyo')).toHaveLength(1);
+    } finally {
+      intl.supportedValuesOf = original;
+    }
   });
 });

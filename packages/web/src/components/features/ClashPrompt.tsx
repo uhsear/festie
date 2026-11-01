@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, timeToMinutes } from '@festie/shared/utils';
+import { formatTime, artistDisplayName, festivalStartMinutes } from '@festie/shared/utils';
 import { AlertTriangle } from 'lucide-react';
 import Button from '../ui/Button';
 
@@ -42,8 +42,8 @@ function pairKey(a: string, b: string): string {
  * overlapStart math in conflicts.ts.
  */
 function overlapStartLabel(a: FestivalSet, b: FestivalSet): string {
-  const aS = timeToMinutes(a.startTime);
-  const bS = timeToMinutes(b.startTime);
+  const aS = festivalStartMinutes(a.startTime);
+  const bS = festivalStartMinutes(b.startTime);
   const later = aS >= bS ? a : b;
   return formatTime(later.startTime);
 }

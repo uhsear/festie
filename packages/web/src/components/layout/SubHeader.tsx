@@ -3,10 +3,18 @@ import { useLocation } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestival } from '@festie/shared/hooks';
-import { festivalStatus, resolveStageColor, type FestivalStatus } from '@festie/shared/utils';
+import {
+  festivalStatus,
+  festivalTimeLabel,
+  logicalDayIndexAt,
+  resolveFestivalTimeZone,
+  resolveStageColor,
+  type FestivalStatus,
+} from '@festie/shared/utils';
 import { getStageBadgeStyle } from '../ui/StageBadge';
 import { useSwipeDays } from '../../hooks/useSwipeDays';
 import { useHaptics } from '../../hooks/useHaptics';
+import { useNow } from '../../hooks/useSetStatus';
 import { useScrollFade } from '../../hooks/useScrollFade';
 import { useToast } from '../../lib/toastContext';
 import { Filter, Star } from 'lucide-react';
@@ -108,8 +116,11 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
     [activeStages, stages, setActiveStages, selectHaptic],
   );
 
-  // Matches the default-to-today logic in selectFestival (day.date is en-CA YYYY-MM-DD).
-  const todayStr = new Date().toLocaleDateString('en-CA');
+  // Same logical-day rule as selectFestival: 06:00 in the festival zone, so a 1 AM clock is still the previous night.
+  const nowMs = useNow();
+  const timeZone = resolveFestivalTimeZone(currentFestival);
+  const todayIndex = logicalDayIndexAt(days, nowMs, timeZone);
+  const timeLabel = festivalTimeLabel(timeZone, nowMs);
 
   const showDayTabs = !festivalOnly && currentFestival && days.length > 0;
   const showStageFilter = !dayOnly && !festivalOnly && currentFestival && stages.length > 0;
@@ -234,7 +245,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             >
               {days.map((day, i) => {
                 const isActive = selectedDay === i;
-                const isToday = !!day.date && day.date === todayStr;
+                const isToday = i === todayIndex;
                 return (
                   <button
                     key={day.id || i}
@@ -272,6 +283,9 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   </button>
                 );
               })}
+              {timeLabel && (
+                <span className="self-center shrink-0 whitespace-nowrap text-xs text-text-muted">{timeLabel}</span>
+              )}
             </div>
           </div>
         )}
