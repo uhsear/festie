@@ -1,37 +1,30 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Check, Copy, RefreshCw, Share2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
+import { Check, Copy, QrCode, RefreshCw, Share2 } from 'lucide-react';
 import { useCrewStore } from '@festie/shared/stores';
-import { buildJoinUrl } from '@festie/shared/utils';
+import { buildJoinUrl, formatInviteExpiry, inviteShareMessage } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useToast } from '../../lib/toastContext';
 
+// Lazy: keeps qrcode.react out of the crew route chunk until someone opens the QR.
+const InviteQRDialog = lazy(() => import('./InviteQRDialog'));
+
 interface CrewInviteBarProps {
   inviteCode: string;
   crewId: string;
+  crewName: string;
   isOwner: boolean;
   /** ISO timestamp from the crew's `inviteExpiresAt`; omitted when the invite does not expire. */
   expiresAt?: string | null;
 }
 
-// timeAgo in @festie/shared only formats the past; invites expire in the future.
-export function formatExpiry(expiresAt: string | null | undefined, now = Date.now()): string | null {
-  if (!expiresAt) return null;
-  const diff = new Date(expiresAt).getTime() - now;
-  if (!Number.isFinite(diff)) return null;
-  if (diff <= 0) return 'Expired';
-  const m = Math.floor(diff / 60_000);
-  if (m < 60) return `Expires in ${Math.max(m, 1)}m`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `Expires in ${h}h` : `Expires in ${Math.floor(h / 24)}d`;
-}
-
-export default function CrewInviteBar({ inviteCode, crewId, isOwner, expiresAt }: CrewInviteBarProps) {
+export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, expiresAt }: CrewInviteBarProps) {
   const { toast, toastError } = useToast();
   const regenerateInvite = useCrewStore((s) => s.regenerateInvite);
   const [copiedCode, setCopiedCode] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -53,16 +46,17 @@ export default function CrewInviteBar({ inviteCode, crewId, isOwner, expiresAt }
     const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
     if (typeof nav.share === 'function') {
       try {
-        await nav.share({ title: 'Join my Festie crew', text: 'Join my crew on Festie', url });
+        await nav.share({ title: `Join ${crewName} on Festie`, text: inviteShareMessage(crewName), url });
         return;
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
       }
     }
     handleCopy();
-  }, [inviteCode, handleCopy]);
+  }, [inviteCode, crewName, handleCopy]);
 
-  const expiry = formatExpiry(expiresAt);
+  const expiry = formatInviteExpiry(expiresAt);
+  const expiryText = expiry === 'Expired' && !isOwner ? 'Expired. Ask the crew owner for a new link.' : expiry;
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
   const handleRegenerate = useCallback(async () => {
@@ -85,7 +79,7 @@ export default function CrewInviteBar({ inviteCode, crewId, isOwner, expiresAt }
       <span className="text-xs text-text-secondary truncate">
         Invite: <span className="text-text-primary font-mono">{inviteCode}</span>
       </span>
-      {expiry && <span className="text-xs text-text-muted whitespace-nowrap">{expiry}</span>}
+      {expiryText && <span className="text-xs text-text-muted whitespace-nowrap">{expiryText}</span>}
       <div className="flex items-center gap-2 ml-auto flex-shrink-0">
         {isOwner && (
           <Button
@@ -109,13 +103,26 @@ export default function CrewInviteBar({ inviteCode, crewId, isOwner, expiresAt }
           </Button>
         )}
         <Button
+          variant="outline"
+          onClick={() => setQrOpen(true)}
+          aria-label="Show QR code"
+          className="!py-1 !px-2.5 min-w-11 text-xs"
+        >
+          <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+        </Button>
+        <Button
           variant={copiedCode ? 'primary' : 'outline'}
           onClick={handleCopy}
           className={`!py-1 !px-2.5 text-xs ${copiedCode ? 'animate-[crew-copy-pulse_260ms_var(--ease-out,ease-out)] motion-reduce:!animate-none' : ''}`}
         >
-          {copiedCode ? <><Check className="w-4 h-4" aria-hidden="true" /> Copied</> : 'Copy'}
+          {copiedCode ? <><Check className="w-4 h-4" aria-hidden="true" /> Copied</> : 'Copy link'}
         </Button>
       </div>
+      {qrOpen && (
+        <Suspense fallback={null}>
+          <InviteQRDialog open={qrOpen} onOpenChange={setQrOpen} crewName={crewName} code={inviteCode} />
+        </Suspense>
+      )}
       <ConfirmDialog
         open={confirmRegen}
         onOpenChange={setConfirmRegen}

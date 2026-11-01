@@ -13,6 +13,7 @@ import {
   CreateCrewRequest,
   UpdateCrewRequest,
   JoinCrewRequest,
+  JoinCrewResponse,
   ReformCrewResponse,
   CrewPoll,
   CreateCrewPollRequest,
@@ -79,7 +80,7 @@ export interface CrewActions {
   // body; the snake_case totem_name/totem_emoji come back on the returned crew,
   // merged onto activeCrew + the crews list (mirrors updateHomeBase).
   updateCrew: (crewId: string, request: UpdateCrewRequest) => Promise<Crew>;
-  joinByCode: (request: JoinCrewRequest) => Promise<void>;
+  joinByCode: (request: JoinCrewRequest) => Promise<JoinCrewResponse | null>;
   leaveCrew: (crewId: string) => Promise<void>;
   kickMember: (crewId: string, memberId: string) => Promise<void>;
   transferOwnership: (crewId: string, newOwnerId: string) => Promise<void>;
@@ -328,11 +329,6 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   // (`join-<inviteCode>`) so repeated offline taps of the same invite collapse
   // into a single replayed join (replay-safe; the server treats re-joining an
   // already-joined crew as a no-op/idempotent rather than a duplicate).
-  //
-  // NOTE: this only routes to the offline queue once '/crews/join' is added to
-  // OFFLINE_ELIGIBLE_PATTERNS in services/api.ts (a separate file). Until then
-  // the post() runs online-only and onOptimisticCreate is never invoked — the
-  // online path below is unchanged, so this is safe to land independently.
   joinByCode: async (request: JoinCrewRequest) => {
     set({ crewLoading: true, error: null });
     try {
@@ -356,13 +352,14 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
           set((state) => ({ crews: [...state.crews, optimisticCrew as Crew], crewLoading: false }));
         },
       });
-      // Offline: the placeholder is already inserted; nothing more to do.
-      if (optimisticCrew) return;
-      const crew = res as Crew;
+      // Offline: the placeholder is already inserted; the crew is not known yet.
+      if (optimisticCrew) return null;
+      const crew = res as JoinCrewResponse;
       set((state) => ({
         crews: state.crews.some((c) => c.id === crew.id) ? state.crews : [...state.crews, crew],
         crewLoading: false,
       }));
+      return crew;
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to join crew');
       set({ error: message, crewLoading: false });

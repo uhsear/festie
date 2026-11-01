@@ -166,56 +166,23 @@ describe('routes/pages.js: createPageRoutes factory', () => {
 });
 
 describe('routes/pages.js: /join/:code handler', () => {
-  it('redirects to /?joinCrew=CODE for valid alphanumeric code', () => {
-    const deps = buildPageDeps();
+  // Full coverage of the invite page lives in tests/pages.test.ts.
+  it('renders the invite page instead of redirecting', async () => {
+    const deps = buildPageDeps({
+      stores: { crews: { getByInviteCode: async () => null, getExpiredByInviteCode: async () => null } },
+      getFestivalById: async () => null,
+    });
     const router = createPageRoutes(deps);
     const joinRoute = router._routes.find((r: any) => r.path === '/join/:code');
     const handler = joinRoute.handlers[joinRoute.handlers.length - 1];
 
     const req = mockReq({ params: { code: 'ABC123' } });
     const res = mockRes();
-    handler(req, res);
+    await handler(req, res);
 
-    assert.equal(res._redirectUrl, '/?joinCrew=ABC123');
-  });
-
-  it('redirects to / for empty code', () => {
-    const deps = buildPageDeps();
-    const router = createPageRoutes(deps);
-    const joinRoute = router._routes.find((r: any) => r.path === '/join/:code');
-    const handler = joinRoute.handlers[joinRoute.handlers.length - 1];
-
-    const req = mockReq({ params: { code: '' } });
-    const res = mockRes();
-    handler(req, res);
-
-    assert.equal(res._redirectUrl, '/');
-  });
-
-  it('strips non-alphanumeric characters from code', () => {
-    const deps = buildPageDeps();
-    const router = createPageRoutes(deps);
-    const joinRoute = router._routes.find((r: any) => r.path === '/join/:code');
-    const handler = joinRoute.handlers[joinRoute.handlers.length - 1];
-
-    const req = mockReq({ params: { code: 'AB--CD!!12' } });
-    const res = mockRes();
-    handler(req, res);
-
-    assert.equal(res._redirectUrl, '/?joinCrew=ABCD12');
-  });
-
-  it('truncates code to 10 characters', () => {
-    const deps = buildPageDeps();
-    const router = createPageRoutes(deps);
-    const joinRoute = router._routes.find((r: any) => r.path === '/join/:code');
-    const handler = joinRoute.handlers[joinRoute.handlers.length - 1];
-
-    const req = mockReq({ params: { code: 'ABCDEFGHIJKLMNOP' } });
-    const res = mockRes();
-    handler(req, res);
-
-    assert.equal(res._redirectUrl, '/?joinCrew=ABCDEFGHIJ');
+    assert.equal(res._redirectUrl, null);
+    assert.equal(res._status, 404);
+    assert.match(res._sent, /This invite doesn't work/);
   });
 });
 

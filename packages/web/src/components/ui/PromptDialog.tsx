@@ -18,6 +18,8 @@ interface Props {
   busy?: boolean;
   maxLength?: number;
   error?: string;
+  /** Shows a Paste button when the clipboard API exists. Maps the clipboard text to the field value; null leaves the field alone. */
+  parsePaste?: (text: string) => string | null;
 }
 
 /**
@@ -40,6 +42,7 @@ export default function PromptDialog({
   busy = false,
   maxLength = 200,
   error,
+  parsePaste,
 }: Props) {
   const [value, setValue] = useState(defaultValue);
   useEffect(() => { if (open) setValue(defaultValue); }, [open, defaultValue]);
@@ -51,6 +54,18 @@ export default function PromptDialog({
     if (open) inputRef.current?.focus();
   }, [open]);
 
+  const canPaste = !!parsePaste && typeof navigator !== 'undefined' && !!navigator.clipboard?.readText;
+
+  // Reads the clipboard only on tap. A denied permission leaves the field as it is.
+  async function paste() {
+    try {
+      const parsed = parsePaste?.(await navigator.clipboard.readText());
+      if (parsed) setValue(parsed);
+    } catch {
+      /* clipboard read denied or unavailable */
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!value.trim() || busy) return;
@@ -60,18 +75,25 @@ export default function PromptDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={title} description={description}>
       <form onSubmit={submit} className="space-y-3" {...(busy ? { 'aria-busy': true } : {})}>
-        <input
-          ref={inputRef}
-          type={inputType}
-          value={value}
-          maxLength={maxLength}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder}
-          disabled={busy}
-          aria-label={title}
-          {...(error ? { 'aria-invalid': true, 'aria-describedby': errorId } : {})}
-          className={`${inputBase} min-h-11`}
-        />
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            type={inputType}
+            value={value}
+            maxLength={maxLength}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={placeholder}
+            disabled={busy}
+            aria-label={title}
+            {...(error ? { 'aria-invalid': true, 'aria-describedby': errorId } : {})}
+            className={`${inputBase} min-h-11 min-w-0`}
+          />
+          {canPaste && (
+            <Button variant="secondary" type="button" className="min-h-11 shrink-0" disabled={busy} onClick={paste}>
+              Paste
+            </Button>
+          )}
+        </div>
         {error && (
           <p
             id={errorId}
@@ -83,7 +105,9 @@ export default function PromptDialog({
         )}
         <div className="flex gap-2">
           <RadixDialog.Close asChild>
-            <Button variant="secondary" type="button" className="flex-1 min-h-11">{cancelLabel}</Button>
+            <Button variant="secondary" type="button" className="flex-1 min-h-11">
+              {cancelLabel}
+            </Button>
           </RadixDialog.Close>
           <Button
             type="submit"

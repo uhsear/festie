@@ -1,7 +1,7 @@
 /**
  * Mock-based route tests for routes/crew-invites.js
  *
- * Covers: POST /join, POST /:crewId/invite, GET /join/:inviteCode
+ * Covers: POST /join, POST /:crewId/invite, GET /join/:inviteCode (301)
  * Mounts the route factory on a minimal Express app with fully stubbed deps.
  * No database required — all stores are mock.fn() stubs.
  */
@@ -15,6 +15,7 @@ import request from 'supertest';
 
 function noop() {}
 const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function makeIo() {
   const emitFn = mock.fn(() => {});
@@ -60,6 +61,9 @@ function makeInviteDeps(overrides: any = {}) {
     },
     profiles: {
       readByUserAndFestival: mock.fn(async () => ({ id: 'prof-1', userId: 'user-1' })),
+      claimOrphan: mock.fn(async () => null),
+      countByFestival: mock.fn(async () => 0),
+      create: mock.fn(async (p: any) => p),
     },
   };
 
@@ -98,8 +102,14 @@ function makeInviteDeps(overrides: any = {}) {
 
   const deps = {
     express,
-    config: { NODE_ENV: 'test', PUBLIC_ORIGIN: 'http://localhost:3000' },
+    config: { NODE_ENV: 'test', PUBLIC_ORIGIN: 'http://localhost:3000', MAX_PROFILES_PER_FESTIVAL: 100 },
     log: noopLog,
+    // ensureFestivalProfile (lib/festival-profile.ts) reads these.
+    getUserFestivalProfile: overrides.getUserFestivalProfile || mock.fn(async () => ({ id: 'prof-1', userId: 'user-1' })),
+    getUserById: mock.fn(async (id: any) => ({ id, username: 'testuser' })),
+    getProfiles: mock.fn(async () => []),
+    createOpaqueId: (prefix: any) => `${prefix}-new`,
+    emitter: { profileCreated: mock.fn() },
     userAuth: overrides.userAuth || ((req: any, _res: any, next: any) => {
       req.user = { userId: 'user-1', username: 'testuser' };
       next();
@@ -283,19 +293,21 @@ describe('routes/crew-invites.js — POST /join', () => {
 
     assert.equal(res.status, 410);
     assert.equal(res.body.error.code, 'NOT_FOUND');
-    assert.match(res.body.error.message, /expired/i);
+    assert.equal(res.body.error.message, 'This invite has expired. Ask the crew owner for a new link.');
   });
 
   // ── Edge case: user has no festival profile ───────────────────────
-  test('returns 403 when user has not joined the festival', async () => {
-    const { app } = await buildInviteApp({
+  test('creates the profile in crew.festivalId, then joins', async () => {
+    const create = mock.fn(async (p: any) => p);
+    const addMember = mock.fn(async () => {});
+    const { app, deps } = await buildInviteApp({
+      getUserFestivalProfile: mock.fn(async () => null),
       stores: {
         crews: {
-          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW, festivalId: 'fest-crew' })),
+          addMember,
         },
-        profiles: {
-          readByUserAndFestival: mock.fn(async () => null),
-        },
+        profiles: { create },
       },
     });
 
@@ -303,19 +315,26 @@ describe('routes/crew-invites.js — POST /join', () => {
       .post('/join')
       .send({ inviteCode: 'ABC123' });
 
-    assert.equal(res.status, 403);
-    assert.equal(res.body.error.code, 'FORBIDDEN');
-    assert.match(res.body.error.message, /Join the festival first/i);
+    assert.equal(res.status, 200);
+    assert.equal(create.mock.calls.length, 1);
+    const created = (create.mock.calls as any[])[0].arguments[0];
+    assert.equal(created.festivalId, 'fest-crew');
+    assert.equal(created.userId, 'user-1');
+    assert.equal(deps.emitter.profileCreated.mock.calls.length, 1);
+    assert.equal(addMember.mock.calls.length, 1);
   });
 
-  // ── Edge case: already a member ───────────────────────────────────
-  test('returns 400 when user is already a member of the crew', async () => {
+  test('returns 400 MAX_LIMIT_REACHED when the festival is at its profile cap', async () => {
+    const create = mock.fn(async (p: any) => p);
+    const addMember = mock.fn(async () => {});
     const { app } = await buildInviteApp({
+      getUserFestivalProfile: mock.fn(async () => null),
       stores: {
         crews: {
           getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })),
-          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          addMember,
         },
+        profiles: { countByFestival: mock.fn(async () => 100), create },
       },
     });
 
@@ -324,8 +343,78 @@ describe('routes/crew-invites.js — POST /join', () => {
       .send({ inviteCode: 'ABC123' });
 
     assert.equal(res.status, 400);
-    assert.equal(res.body.error.code, 'ALREADY_EXISTS');
-    assert.match(res.body.error.message, /Already a member/i);
+    assert.equal(res.body.error.code, 'MAX_LIMIT_REACHED');
+    assert.equal(res.body.error.message, 'This festival has reached its member limit on Festie.');
+    assert.equal(create.mock.calls.length, 0);
+    assert.equal(addMember.mock.calls.length, 0);
+  });
+
+  test('no profile is created when the crew is full', async () => {
+    const create = mock.fn(async (p: any) => p);
+    const getUserFestivalProfile = mock.fn(async () => null);
+    const { app } = await buildInviteApp({
+      getUserFestivalProfile,
+      stores: {
+        crews: {
+          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW, maxMembers: 5 })),
+          getMemberCount: mock.fn(async () => 5),
+        },
+        profiles: { create },
+      },
+    });
+
+    const res = await request(app)
+      .post('/join')
+      .send({ inviteCode: 'ABC123' });
+
+    assert.equal(res.status, 400);
+    assert.match(res.body.error.message, /full/i);
+    assert.equal(getUserFestivalProfile.mock.calls.length, 0);
+    assert.equal(create.mock.calls.length, 0);
+  });
+
+  // ── Edge case: already a member ───────────────────────────────────
+  test('returns 200 + alreadyMember when the user is already in the crew', async () => {
+    const ioObj = makeIo();
+    const addMember = mock.fn(async () => {});
+    const getUserFestivalProfile = mock.fn(async () => null);
+    const { app } = await buildInviteApp({
+      io: ioObj,
+      getUserFestivalProfile,
+      stores: {
+        crews: {
+          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          getMembers: mock.fn(async () => [
+            ...DEFAULT_MEMBERS,
+            { userId: 'user-1', username: 'testuser', role: 'member', joinedAt: '2026-05-08' },
+          ]),
+          addMember,
+        },
+      },
+    });
+
+    const res = await request(app)
+      .post('/join')
+      .send({ inviteCode: 'ABC123' });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.error, null);
+    assert.equal(res.body.data.id, 'crew-1');
+    assert.equal(res.body.data.alreadyMember, true);
+    assert.equal(res.body.data.memberCount, 2);
+    assert.equal(addMember.mock.calls.length, 0);
+    assert.equal(getUserFestivalProfile.mock.calls.length, 0);
+    assert.equal(ioObj._emit.mock.calls.length, 0, 'no crew:member-joined for an existing member');
+  });
+
+  test('a fresh join has no alreadyMember flag', async () => {
+    const { app } = await buildInviteApp({
+      stores: { crews: { getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })) } },
+    });
+    const res = await request(app).post('/join').send({ inviteCode: 'ABC123' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.alreadyMember, undefined);
   });
 
   // ── Edge case: max crews per festival ─────────────────────────────
@@ -349,7 +438,7 @@ describe('routes/crew-invites.js — POST /join', () => {
 
     assert.equal(res.status, 400);
     assert.equal(res.body.error.code, 'MAX_LIMIT_REACHED');
-    assert.match(res.body.error.message, /Maximum 3 crews/i);
+    assert.equal(res.body.error.message, "You're already in 3 crews for this festival. Leave one to join this crew.");
   });
 
   // ── Edge case: crew is full ───────────────────────────────────────
@@ -451,6 +540,27 @@ describe('routes/crew-invites.js — POST /:crewId/invite', () => {
     assert.equal(regenerateInviteCode.mock.calls.length, 1);
   });
 
+  test('passes inviteExpiryFor(crew festival) to the store', async () => {
+    const regenerateInviteCode = mock.fn(async () => {});
+    const lastDay = new Date(Date.now() + 30 * DAY_MS).toISOString().slice(0, 10);
+    const getFestivalById = mock.fn(async (id: any) => ({ id, name: 'F', days: [{ date: lastDay }] }));
+    const { app } = await buildInviteApp({
+      getFestivalById,
+      stores: { crews: { getByInviteCode: mock.fn(async () => null), regenerateInviteCode } },
+      resolveCrewOwnership: mock.fn(async () => ({ crew: { ...DEFAULT_CREW }, membership: { role: 'owner' } })),
+    });
+
+    const res = await request(app).post('/crew-1/invite');
+
+    assert.equal(res.status, 200);
+    assert.equal((getFestivalById.mock.calls as any[])[0].arguments[0], 'fest-1');
+    const [, newCode, expiresAt] = (regenerateInviteCode.mock.calls as any[])[0].arguments;
+    assert.equal(newCode, res.body.data.inviteCode);
+    assert.ok(expiresAt instanceof Date);
+    assert.equal(expiresAt.getTime(), Date.parse(`${lastDay}T00:00:00Z`) + 2 * DAY_MS);
+    assert.equal(res.body.data.inviteExpiresAt, expiresAt.toISOString());
+  });
+
   // ── Invalid crew ID ───────────────────────────────────────────────
   test('returns 400 for empty/invalid crew ID', async () => {
     const { app } = await buildInviteApp({
@@ -520,140 +630,29 @@ describe('routes/crew-invites.js — POST /:crewId/invite', () => {
 });
 
 // =====================================================================
-//  GET /join/:inviteCode — Public invite page (no auth required)
+//  GET /join/:inviteCode — moved to the /join/:code invite page (301)
 // =====================================================================
 describe('routes/crew-invites.js — GET /join/:inviteCode', () => {
-
-  // ── Happy path: valid invite code renders join page ────────────────
-  test('renders crew invite join page for valid code', async () => {
-    const { app } = await buildInviteApp({
-      stores: {
-        crews: {
-          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })),
-        },
-      },
-      getFestivalById: mock.fn(async () => ({ id: 'fest-1', name: 'Summer Fest' })),
-    });
-
-    const res = await request(app)
-      .get('/join/ABC123');
-
-    assert.equal(res.status, 200);
-    assert.match(res.headers['content-type']!, /text\/html/);
-    assert.match(res.text, /Test Crew/);
-    assert.match(res.text, /Summer Fest/);
-    assert.match(res.text, /joinCrew=ABC123/);
-    assert.equal(res.headers['cache-control'], 'public, max-age=300');
-    assert.match(res.headers['content-security-policy']!, /default-src 'none'/);
-  });
-
-  // ── Code too short ────────────────────────────────────────────────
-  test('renders error page when invite code is too short', async () => {
+  test('301s a valid code to /join/:code', async () => {
     const { app } = await buildInviteApp();
-
-    const res = await request(app)
-      .get('/join/AB');
-
-    assert.equal(res.status, 200);
-    assert.match(res.headers['content-type']!, /text\/html/);
-    assert.match(res.text, /Invalid or expired/i);
-    assert.equal(res.headers['cache-control'], 'public, max-age=60');
+    const res = await request(app).get('/join/ABC123');
+    assert.equal(res.status, 301);
+    assert.equal(res.headers.location, '/join/ABC123');
   });
 
-  // ── Code too long ─────────────────────────────────────────────────
-  test('renders error page when invite code is too long', async () => {
+  test('strips non-alphanumeric characters and caps the code at 12', async () => {
     const { app } = await buildInviteApp();
-
-    const res = await request(app)
-      .get('/join/ABCDEFGHIJKLM');
-
-    assert.equal(res.status, 200);
-    assert.match(res.headers['content-type']!, /text\/html/);
-    assert.match(res.text, /Invalid or expired/i);
+    const stripped = await request(app).get('/join/AB-C!23');
+    assert.equal(stripped.headers.location, '/join/ABC23');
+    const long = await request(app).get('/join/ABCDEFGHIJKLMNOP');
+    assert.equal(long.headers.location, '/join/ABCDEFGHIJKL');
   });
 
-  // ── Code with invalid characters ──────────────────────────────────
-  test('renders error page when invite code has non-alphanumeric chars', async () => {
+  test('301s to / when nothing is left of the code', async () => {
     const { app } = await buildInviteApp();
-
-    const res = await request(app)
-      .get('/join/AB-C!23');
-
-    assert.equal(res.status, 200);
-    assert.match(res.headers['content-type']!, /text\/html/);
-    assert.match(res.text, /Invalid or expired/i);
-  });
-
-  // ── Code not found in DB ──────────────────────────────────────────
-  test('renders error page when invite code not found in database', async () => {
-    const { app } = await buildInviteApp({
-      stores: {
-        crews: {
-          getByInviteCode: mock.fn(async () => null),
-        },
-      },
-    });
-
-    const res = await request(app)
-      .get('/join/XXXXXX');
-
-    assert.equal(res.status, 200);
-    assert.match(res.headers['content-type']!, /text\/html/);
-    assert.match(res.text, /Invalid or expired/i);
-    assert.equal(res.headers['cache-control'], 'public, max-age=60');
-  });
-
-  // ── Festival not found uses fallback name ─────────────────────────
-  test('uses fallback festival name when festival not found', async () => {
-    const { app } = await buildInviteApp({
-      stores: {
-        crews: {
-          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })),
-        },
-      },
-      getFestivalById: mock.fn(async () => null),
-    });
-
-    const res = await request(app)
-      .get('/join/ABC123');
-
-    assert.equal(res.status, 200);
-    assert.match(res.text, /Festival/);
-  });
-
-  // ── Internal error renders error page ─────────────────────────────
-  test('renders error page on internal error', async () => {
-    const { app } = await buildInviteApp({
-      stores: {
-        crews: {
-          getByInviteCode: mock.fn(async () => { throw new Error('db down'); }),
-        },
-      },
-    });
-
-    const res = await request(app)
-      .get('/join/VALID1');
-
-    assert.equal(res.status, 200);
-    assert.match(res.headers['content-type']!, /text\/html/);
-    assert.match(res.text, /Failed to load invite/i);
-  });
-
-  // ── CSP headers always set ────────────────────────────────────────
-  test('sets Content-Security-Policy header on all responses', async () => {
-    const { app } = await buildInviteApp({
-      stores: {
-        crews: {
-          getByInviteCode: mock.fn(async () => null),
-        },
-      },
-    });
-
-    const res = await request(app)
-      .get('/join/XXXXXX');
-
-    assert.ok(res.headers['content-security-policy']);
-    assert.match(res.headers['content-security-policy']!, /frame-ancestors 'none'/);
+    const res = await request(app).get('/join/!!!');
+    assert.equal(res.status, 301);
+    assert.equal(res.headers.location, '/');
   });
 });
 
@@ -734,6 +733,31 @@ describe('routes/crew-invites.js — rate limiting', () => {
 //  Exported helper: generateUniqueInviteCode
 // =====================================================================
 describe('invite-code.js — generateUniqueInviteCode export', () => {
+
+  test('inviteExpiryFor: a future festival expires 2 days after its last day', async () => {
+    const { inviteExpiryFor } = await import('../lib/invite-code.js');
+    const now = Date.parse('2026-11-01T12:00:00Z');
+    const festival = { days: [{ date: '2026-12-01' }, { date: '2026-11-29' }, { date: '2026-11-30' }] };
+    assert.equal(inviteExpiryFor(festival, now).toISOString(), '2026-12-03T00:00:00.000Z');
+  });
+
+  test('inviteExpiryFor: a past or near festival gets now + 7 days', async () => {
+    const { inviteExpiryFor } = await import('../lib/invite-code.js');
+    const now = Date.parse('2026-11-01T12:00:00Z');
+    const sevenDays = new Date(now + 7 * DAY_MS).toISOString();
+    assert.equal(inviteExpiryFor({ days: [{ date: '2026-06-01' }] }, now).toISOString(), sevenDays);
+    assert.equal(inviteExpiryFor({ days: [{ date: '2026-11-03' }] }, now).toISOString(), sevenDays);
+  });
+
+  test('inviteExpiryFor: no festival or no days gives now + 7 days', async () => {
+    const { inviteExpiryFor } = await import('../lib/invite-code.js');
+    const now = Date.parse('2026-11-01T12:00:00Z');
+    const sevenDays = new Date(now + 7 * DAY_MS).toISOString();
+    assert.equal(inviteExpiryFor(null, now).toISOString(), sevenDays);
+    assert.equal(inviteExpiryFor(undefined, now).toISOString(), sevenDays);
+    assert.equal(inviteExpiryFor({ days: [] }, now).toISOString(), sevenDays);
+    assert.equal(inviteExpiryFor({ days: [{ date: null }, { date: 'garbage' }] }, now).toISOString(), sevenDays);
+  });
 
   test('module exports generateUniqueInviteCode function', async () => {
     const mod = await import('../lib/invite-code.js');

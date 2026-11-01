@@ -397,8 +397,9 @@ describe('crews routes', { concurrency: 1, skip }, () => {
 
     assert.equal(res.body.data.id, crew.id);
     assert.equal(res.body.data.role, 'member');
-    // Non-owner should not receive invite code (serializeCrew gates on role).
-    assert.equal(res.body.data.inviteCode, undefined);
+    // Every member can share the invite (serializeCrew gates on membership).
+    assert.equal(res.body.data.inviteCode, crew.inviteCode);
+    assert.ok(res.body.data.inviteExpiresAt);
   });
 
   test('POST /api/v1/crews/join rejects unknown codes with 404', async () => {
@@ -414,7 +415,7 @@ describe('crews routes', { concurrency: 1, skip }, () => {
     assert.equal(res.status, 404);
   });
 
-  test('POST /api/v1/crews/join rejects duplicate join (owner re-joining own crew) with 400', async () => {
+  test('POST /api/v1/crews/join is idempotent for an existing member (owner re-joining own crew)', async () => {
     const server = await startServer();
     servers.push(server);
     const owner = await createMember(server, 'owner');
@@ -425,7 +426,9 @@ describe('crews routes', { concurrency: 1, skip }, () => {
       .set('x-user-token', owner.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ inviteCode: crew.inviteCode });
-    assert.equal(res.status, 400);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.id, crew.id);
+    assert.equal(res.body.data.alreadyMember, true);
   });
 
   test('expired invite code returns 410 Gone', async () => {

@@ -1,6 +1,6 @@
 /**
  * Mock-based tests for GET /join-preview/:inviteCode in routes/crews.ts.
- * Public (no auth) route: returns only crew name, owner name, member count and expiry.
+ * Public (no auth) route: returns the crew, owner name, size, festival, dates and expiry.
  * No database required.
  */
 
@@ -13,7 +13,9 @@ import { crewInviteCodeParams } from '../lib/schemas.js';
 const noop = () => {};
 const EXPIRY = '2026-12-01T00:00:00.000Z';
 
-async function buildApp(opts: { crew?: any; expired?: any; members?: any[]; rateCalls?: any[]; throws?: boolean } = {}) {
+async function buildApp(
+  opts: { crew?: any; expired?: any; members?: any[]; festival?: any; rateCalls?: any[]; throws?: boolean } = {},
+) {
   const crews = {
     getByInviteCode: mock.fn(async () => {
       if (opts.throws) throw new Error('db down');
@@ -47,6 +49,7 @@ async function buildApp(opts: { crew?: any; expired?: any; members?: any[]; rate
     validateQuery: () => passThrough,
     schemas: { crewInviteCodeParams },
     stores: { crews },
+    getFestivalById: async () => opts.festival ?? null,
     pool: { query: async () => ({ rows: [] }) },
   };
   const { default: createCrewRoutes } = await import('../routes/crews.js');
@@ -55,12 +58,14 @@ async function buildApp(opts: { crew?: any; expired?: any; members?: any[]; rate
   return { app, crews };
 }
 
-const CREW = { id: 'c1', name: 'Bass Gang', inviteExpiresAt: EXPIRY };
+const CREW = { id: 'c1', name: 'Bass Gang', festivalId: 'fest-1', maxMembers: 8, inviteExpiresAt: EXPIRY };
+const FESTIVAL = { id: 'fest-1', name: 'EDC Orlando', days: [{ date: '2026-11-08' }, { date: '2026-11-06' }] };
 
 describe('routes/crews.ts — GET /join-preview/:inviteCode', () => {
-  test('returns only crew name, owner name, member count and expiry without auth', async () => {
+  test('returns the preview contract without auth', async () => {
     const { app } = await buildApp({
       crew: CREW,
+      festival: FESTIVAL,
       members: [
         { userId: 'u1', role: 'owner', username: 'dj', name: 'DJ Dana' },
         { userId: 'u2', role: 'member', username: 'x', name: 'X' },
@@ -68,7 +73,36 @@ describe('routes/crews.ts — GET /join-preview/:inviteCode', () => {
     });
     const res = await request(app).get('/join-preview/abc123');
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.data, { crewName: 'Bass Gang', ownerName: 'DJ Dana', memberCount: 2, expiresAt: EXPIRY });
+    assert.equal(res.headers['cache-control'], 'no-store');
+    assert.deepEqual(res.body.data, {
+      crewName: 'Bass Gang',
+      ownerName: 'DJ Dana',
+      memberCount: 2,
+      maxMembers: 8,
+      spotsLeft: 6,
+      festivalId: 'fest-1',
+      festivalName: 'EDC Orlando',
+      startDate: '2026-11-06',
+      endDate: '2026-11-08',
+      expiresAt: EXPIRY,
+    });
+  });
+
+  test('spotsLeft never goes below 0', async () => {
+    const members = Array.from({ length: 9 }, (_, i) => ({ userId: `u${i}`, role: i ? 'member' : 'owner', username: `u${i}` }));
+    const { app } = await buildApp({ crew: CREW, members });
+    const res = await request(app).get('/join-preview/ABC123');
+    assert.equal(res.body.data.memberCount, 9);
+    assert.equal(res.body.data.spotsLeft, 0);
+  });
+
+  test('null festival name and dates when the festival is missing', async () => {
+    const { app } = await buildApp({ crew: CREW, members: [] });
+    const res = await request(app).get('/join-preview/ABC123');
+    assert.equal(res.body.data.festivalId, 'fest-1');
+    assert.equal(res.body.data.festivalName, null);
+    assert.equal(res.body.data.startDate, null);
+    assert.equal(res.body.data.endDate, null);
   });
 
   test('falls back to the owner username when there is no display name', async () => {

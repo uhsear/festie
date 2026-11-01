@@ -16,6 +16,7 @@ import {
   type RegisterField,
 } from '../components/auth/registerValidation';
 import { cn } from '../lib/utils';
+import { readSignupRef } from '../hooks/useFestivalLoader';
 
 export default function RegisterPage() {
   return (
@@ -72,6 +73,7 @@ function RegisterPageInner() {
         dateOfBirth,
         tosAccepted,
         email: email || undefined,
+        ref: readSignupRef(),
       });
       toast('Account created', 'success');
       await navigate({ to: '/cards' });

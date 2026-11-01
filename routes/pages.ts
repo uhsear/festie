@@ -1,25 +1,44 @@
 /**
- * Static page routes — join redirect, password reset forms, static pages, SPA catch-all
+ * Static page routes — crew invite page, password reset forms, static pages, SPA catch-all
  */
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 
 import { renderResetFormPage, renderResetErrorPage } from '../lib/reset-pages.js';
+import { renderInviteJoinPage, renderInviteErrorPage, INVITE_ERROR_MESSAGES } from '../lib/invite-pages.js';
+import { loadInvitePreview } from '../lib/invite-preview.js';
 
 export default function createPageRoutes(deps: any) {
   const {
-    express, config, rateLimit, pool, state, log,
+    express, config, rateLimit, pool, state, log, stores, getFestivalById,
     _sendError, _ErrorCodes,
   } = deps;
 
   const router = express.Router();
 
-  // Crew invite deep link — /join/:code redirects to app with invite code
-  router.get('/join/:code', (req: any, res: any) => {
-    const code = (req.params.code || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
-    if (!code) return res.redirect('/');
-    res.redirect(`/?joinCrew=${encodeURIComponent(code)}`);
+  // Crew invite page — server-rendered so link scrapers get crew-specific OG
+  // tags. No auto-redirect: some scrapers follow a meta refresh and would lose
+  // the tags. The Join button opens the app with ?joinCrew=CODE.
+  router.get('/join/:code', rateLimit(30, 'crew-invite-page'), async (req: any, res: any) => {
+    const code = String(req.params.code || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase();
+    const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    try {
+      const result = await loadInvitePreview({ stores, getFestivalById }, code);
+      if (result.status === 'ok') {
+        return res.status(200).send(renderInviteJoinPage({ ...result.preview, inviteCode: code, origin }));
+      }
+      return res
+        .status(result.status === 'expired' ? 410 : 404)
+        .send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES[result.status]));
+    } catch (error: any) {
+      log.error('crew invite page failed', { error: error.message });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(500).send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES.failed));
+    }
   });
 
   // GET /reset/:token — Password reset form page (admin-initiated)
