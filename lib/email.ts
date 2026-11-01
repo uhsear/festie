@@ -189,7 +189,18 @@ function _origin(config: any) {
 // reset, email verification) is exempt and does NOT set this. The server-side
 // opt-out + DND checks in lib/notifications/reengagement.ts are the enforcement
 // layer; this header is the inbox-client one-tap surface.
-const REENGAGEMENT_HEADERS = { 'List-Unsubscribe': '<mailto:unsubscribe@festie.us?subject=unsubscribe>' };
+function reengagementHeaders(config: any) {
+  return { 'List-Unsubscribe': `<${_origin(config)}/account>` };
+}
+
+// Footer + plain-text line naming the notification setting that gates this email.
+function _reengagementFooter(label: string, config: any) {
+  const url = `${_origin(config)}/account`;
+  return {
+    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${url}" style="color:rgba(255,255,255,0.5)">Turn it off</a>.`,
+    text: `You get this email because "${label}" is on in your Festie notification settings. Turn it off: ${url}`,
+  };
+}
 
 /**
  * "Your wrap-up is ready" — deep-links to /wrap for the finished festival.
@@ -203,9 +214,10 @@ export async function sendWrapReadyEmail({ to, username, festivalName, festivalI
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(name)} wrapped up. Your recap is ready: top sets, crew superlatives, and your numbers.</p>
     ${_buttonHtml(wrapUrl, 'See your wrap-up')}
     ${_urlFallback(wrapUrl)}`;
-  const html = _wrapTemplate('Your Festival Wrap-Up', bodyHtml);
-  const text = `Hey ${username || 'there'},\n\n${name} wrapped up. Your recap is ready.\n\nSee your wrap-up: ${wrapUrl}`;
-  return sendEmail({ to, subject: `Your ${name} wrap-up is ready`, html, text, headers: REENGAGEMENT_HEADERS, config, log, _client });
+  const footer = _reengagementFooter('Wrap-up ready', config);
+  const html = _wrapTemplate('Your Festival Wrap-Up', bodyHtml, footer.html);
+  const text = `Hey ${username || 'there'},\n\n${name} wrapped up. Your recap is ready.\n\nSee your wrap-up: ${wrapUrl}\n\n${footer.text}`;
+  return sendEmail({ to, subject: `Your ${name} wrap-up is ready`, html, text, headers: reengagementHeaders(config), config, log, _client });
 }
 
 /**
@@ -213,16 +225,17 @@ export async function sendWrapReadyEmail({ to, username, festivalName, festivalI
  */
 export async function sendLineupDropEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
   const origin = _origin(config);
-  const festivalUrl = `${origin}/festival/${encodeURIComponent(festivalId || '')}`;
+  const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'a festival you love';
   const bodyHtml = `
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The lineup for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> is out. Start picking your sets before tickets move.</p>
     ${_buttonHtml(festivalUrl, 'See the lineup')}
     ${_urlFallback(festivalUrl)}`;
-  const html = _wrapTemplate('New Lineup', bodyHtml);
-  const text = `Hey ${username || 'there'},\n\nThe lineup for ${name} just dropped.\n\nSee the lineup: ${festivalUrl}`;
-  return sendEmail({ to, subject: `${name} lineup just dropped`, html, text, headers: REENGAGEMENT_HEADERS, config, log, _client });
+  const footer = _reengagementFooter('New lineups', config);
+  const html = _wrapTemplate('New Lineup', bodyHtml, footer.html);
+  const text = `Hey ${username || 'there'},\n\nThe lineup for ${name} just dropped.\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
+  return sendEmail({ to, subject: `${name} lineup just dropped`, html, text, headers: reengagementHeaders(config), config, log, _client });
 }
 
 /**
@@ -250,7 +263,8 @@ export async function sendCrewReformEmail({
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px"><strong style="color:#e4e4e7">${escapeHtml(crew)}</strong> is getting back together${escapeHtml(fest)}. Jump in to plan picks, meeting points, and logistics with the crew.</p>
     ${_buttonHtml(url, 'Join the crew')}
     ${_urlFallback(url)}`;
-  const html = _wrapTemplate('Your Crew Reformed', bodyHtml);
-  const text = `Hey ${username || 'there'},\n\n${crew} is getting back together${fest}.\n\nJoin the crew: ${url}`;
-  return sendEmail({ to, subject: `${crew} reformed${fest}`, html, text, headers: REENGAGEMENT_HEADERS, config, log, _client });
+  const footer = _reengagementFooter('Crew re-forms', config);
+  const html = _wrapTemplate('Your Crew Reformed', bodyHtml, footer.html);
+  const text = `Hey ${username || 'there'},\n\n${crew} is getting back together${fest}.\n\nJoin the crew: ${url}\n\n${footer.text}`;
+  return sendEmail({ to, subject: `${crew} reformed${fest}`, html, text, headers: reengagementHeaders(config), config, log, _client });
 }

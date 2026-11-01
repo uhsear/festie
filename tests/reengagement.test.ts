@@ -200,6 +200,34 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
     assert.equal(r.priorAttendees, 2);
     assert.equal(sends[0].type, 'lineup_drop');
     assert.equal(sends[0].data.eventKey, 'lineup:fest-2027');
+    // A real web route: web reads ?festival=, mobile resolves it via pushTarget.
+    assert.equal(sends[0].data.deepLink, 'https://festie.test/?festival=fest-2027');
+  });
+
+  describe('email opt-out', () => {
+    // RESEND_API_KEY is unset, so sendEmail logs 'email:skip' (and sends nothing).
+    // That log line shows whether the fan-out reached the email sender.
+    async function run(prefs: any) {
+      const skips: any[] = [];
+      const emailLog = { ...log, warn: (msg: string) => { if (msg === 'email:skip') skips.push(msg); } };
+      const stores = {
+        users: { getByIds: async () => new Map([['p1', { email: 'p1@example.com', username: 'p1' }]]) },
+        notificationPrefs: { get: async () => prefs },
+        notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {} },
+      };
+      const pool = { query: async (_sql: string) => ({ rows: _sql.includes('SELECT name') ? [{ name: 'North Coast' }] : [{ userId: 'p1' }] }) };
+      const triggers = createReengagementTriggers({ stores, config: { ...config, RESEND_API_KEY: '' }, log: emailLog, pool });
+      await triggers.sendLineupDrop('fest-2027');
+      return skips.length;
+    }
+
+    it('sends no email when lineupDrops is off', async () => {
+      assert.equal(await run({ lineupDrops: false }), 0);
+    });
+
+    it('sends the email when lineupDrops is on', async () => {
+      assert.equal(await run({ lineupDrops: true }), 1);
+    });
   });
 
   it('no prior attendees → nothing sent', async () => {

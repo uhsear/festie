@@ -540,12 +540,13 @@ export type CrewActivityEntryResponse = z.infer<typeof crewActivityEntryResponse
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * A user's notification preferences. The six category toggles are stored as
+ * A user's notification preferences. The ten category toggles are stored as
  * INTEGER (DEFAULT 1) columns and surfaced AS-IS — i.e. as `0`/`1` NUMBERS, not
  * booleans (the GET serializer never coerces, and a missing row defaults each
  * to the integer `1`). `dndStart`/`dndEnd` are the optional quiet-hours window
  * as `HH:MM` strings (null when unset). `dndTimeZone` is the IANA zone the window
- * was set in (null = server clock). Route returns the object directly.
+ * was set in (null = server clock). `mustSeeReminderMinutes` is the lead time for
+ * automatic must-see reminders (null = off). Route returns the object directly.
  */
 export const notificationPrefsResponseSchema = z.object({
   userId: z.string(),
@@ -555,6 +556,11 @@ export const notificationPrefsResponseSchema = z.object({
   lineupDrops: z.number(),
   crewReformed: z.number(),
   wrapReady: z.number(),
+  crewMeetingPoints: z.number(),
+  crewPolls: z.number(),
+  crewMoney: z.number(),
+  crewRides: z.number(),
+  mustSeeReminderMinutes: z.number().nullable(),
   dndStart: z.string().nullable(),
   dndEnd: z.string().nullable(),
   dndTimeZone: z.string().nullable(),
@@ -577,6 +583,8 @@ export const authEnvelopeResponseSchema = z.object({
   user: userResponseSchema,
   token: z.string().optional(),
   refreshToken: z.string().optional(),
+  reactivated: z.boolean().optional(),
+  pendingEmail: z.string().nullable().optional(),
 });
 export type AuthEnvelopeResponse = z.infer<typeof authEnvelopeResponseSchema>;
 

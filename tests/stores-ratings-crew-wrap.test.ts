@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { aggregateCrewWrap, createRatingsStore } from '../lib/db/stores/ratings.js';
-import type { CrewWrapMember, CrewHighRating, CrewWrapBalance } from '../lib/db/stores/ratings.js';
+import type { CrewWrapMember, CrewHighRating, CrewWrapExpense } from '../lib/db/stores/ratings.js';
 
 // ---------------------------------------------------------------------------
 // aggregateCrewWrap — pure superlative math (no DB)
@@ -25,16 +25,15 @@ const highRatings: CrewHighRating[] = [
   { userId: 'c', setId: 's3', artist: 'Caribou', rating: 4 },
 ];
 
-const expenses = [{ amount: '25.50' }, { amount: 10 }, { amount: '4.49' }];
-const balances: CrewWrapBalance[] = [
-  { userId: 'a', username: 'Alice', balance: 26.66 },
-  { userId: 'b', username: 'Bob', balance: -13.33 },
-  { userId: 'c', username: 'Cara', balance: -13.33 },
+const expenses: CrewWrapExpense[] = [
+  { amount: '25.50', paid_by: 'a' },
+  { amount: 10, paid_by: 'b' },
+  { amount: '4.49', paid_by: 'a' },
 ];
 
 describe('aggregateCrewWrap — superlative math', () => {
   it('picks the most-overlapping pair (shared ≥4★ sets)', () => {
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses, balances);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses);
     assert.ok(wrap.topOverlap);
     assert.strictEqual(wrap.topOverlap!.shared, 2);
     const pair = [wrap.topOverlap!.aName, wrap.topOverlap!.bName].sort();
@@ -43,7 +42,7 @@ describe('aggregateCrewWrap — superlative math', () => {
   });
 
   it('lists all non-zero overlap pairs sorted by shared desc', () => {
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses, balances);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses);
     // Alice-Bob (2), Alice-Cara (1). Bob-Cara share nothing.
     assert.strictEqual(wrap.overlapMatrix.length, 2);
     assert.strictEqual(wrap.overlapMatrix[0]!.shared, 2);
@@ -51,27 +50,76 @@ describe('aggregateCrewWrap — superlative math', () => {
   });
 
   it('computes sets seen together (≥2 members rated ≥4★)', () => {
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses, balances);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses);
     // s1 (Alice,Bob), s2 (Alice,Bob), s3 (Alice,Cara) → all 3 sets, count 2.
     assert.strictEqual(wrap.setsSeenTogether.length, 3);
     assert.ok(wrap.setsSeenTogether.every((s) => s.count === 2));
   });
 
   it('sums totalSplit in cents (no float drift)', () => {
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses, balances);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses);
     assert.strictEqual(wrap.totalSplit, 39.99);
   });
 
-  it('names the biggest spender (largest positive balance)', () => {
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses, balances);
+  it('names the biggest spender (most paid)', () => {
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses);
     assert.ok(wrap.biggestSpender);
     assert.strictEqual(wrap.biggestSpender!.userId, 'a');
     assert.strictEqual(wrap.biggestSpender!.name, 'Alice');
-    assert.strictEqual(wrap.biggestSpender!.amount, 26.66);
+    assert.strictEqual(wrap.biggestSpender!.amount, 29.99);
+  });
+
+  it('a settled-up crew still names the biggest spender; settlements do not count', () => {
+    // A paid $90 for all three. B and C each settled $30 with A, so every balance is 0.
+    const settled: CrewWrapExpense[] = [
+      { amount: '90.00', paid_by: 'a', category: 'food' },
+      { amount: '30.00', paid_by: 'b', category: 'settlement' },
+      { amount: '30.00', paid_by: 'c', category: 'settlement' },
+    ];
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, settled);
+    assert.deepStrictEqual(wrap.biggestSpender, { userId: 'a', name: 'Alice', amount: 90 });
+    assert.strictEqual(wrap.totalSplit, 90);
+  });
+
+  it('planned rows do not count', () => {
+    const withPlanned: CrewWrapExpense[] = [
+      { amount: '20.00', paid_by: 'a' },
+      { amount: '500.00', paid_by: 'b', planned: true },
+    ];
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, withPlanned);
+    assert.strictEqual(wrap.totalSplit, 20);
+    assert.strictEqual(wrap.biggestSpender!.userId, 'a');
+  });
+
+  it('only planned or settlement rows → no biggest spender', () => {
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, [
+      { amount: '50.00', paid_by: 'a', planned: true },
+      { amount: '25.00', paid_by: 'b', category: 'settlement' },
+    ]);
+    assert.strictEqual(wrap.totalSplit, 0);
+    assert.strictEqual(wrap.biggestSpender, null);
+  });
+
+  it('names a top payer who left the crew by their username, never the user id', () => {
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, [
+      { amount: '80.00', paid_by: 'gone', paid_by_name: 'dana' },
+      { amount: '10.00', paid_by: 'a', paid_by_name: 'alice' },
+    ]);
+    assert.deepStrictEqual(wrap.biggestSpender, { userId: 'gone', name: 'dana', amount: 80 });
+    const noName = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, [{ amount: '80.00', paid_by: 'gone' }]);
+    assert.strictEqual(noName.biggestSpender!.name, 'A crewmate');
+  });
+
+  it('breaks a spending tie by name', () => {
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, [
+      { amount: '10.00', paid_by: 'c' },
+      { amount: '10.00', paid_by: 'b' },
+    ]);
+    assert.strictEqual(wrap.biggestSpender!.name, 'Bob');
   });
 
   it('gives each member their top-3 high-rated sets', () => {
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses, balances);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, expenses);
     const alice = wrap.perMember.find((m) => m.userId === 'a')!;
     assert.strictEqual(alice.topSets.length, 3);
     assert.strictEqual(alice.topSets[0]!.rating, 5); // sorted rating desc
@@ -81,7 +129,7 @@ describe('aggregateCrewWrap — superlative math', () => {
 
   it('ignores ratings from non-members (defensive)', () => {
     const withStranger: CrewHighRating[] = [...highRatings, { userId: 'zzz', setId: 's1', artist: 'Aphex', rating: 5 }];
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, withStranger, expenses, balances);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, withStranger, expenses);
     // s1 still only has 2 member raters, not 3.
     const s1 = wrap.setsSeenTogether.find((s) => s.setId === 's1')!;
     assert.strictEqual(s1.count, 2);
@@ -90,7 +138,7 @@ describe('aggregateCrewWrap — superlative math', () => {
 
 describe('aggregateCrewWrap — graceful degradation', () => {
   it('empty crew → zeroed counts, null superlatives, no NaN', () => {
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', [], [], [], []);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', [], [], []);
     assert.strictEqual(wrap.memberCount, 0);
     assert.strictEqual(wrap.topOverlap, null);
     assert.deepStrictEqual(wrap.overlapMatrix, []);
@@ -104,7 +152,7 @@ describe('aggregateCrewWrap — graceful degradation', () => {
   it('single-member crew → no overlap, no sets-seen-together', () => {
     const solo: CrewWrapMember[] = [{ userId: 'a', name: 'Alice' }];
     const soloRatings: CrewHighRating[] = [{ userId: 'a', setId: 's1', artist: 'Aphex', rating: 5 }];
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', solo, soloRatings, [], []);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', solo, soloRatings, []);
     assert.strictEqual(wrap.memberCount, 1);
     assert.strictEqual(wrap.topOverlap, null);
     assert.deepStrictEqual(wrap.setsSeenTogether, []);
@@ -112,7 +160,7 @@ describe('aggregateCrewWrap — graceful degradation', () => {
   });
 
   it('no expenses → totalSplit 0 and no biggest spender', () => {
-    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, [], []);
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, []);
     assert.strictEqual(wrap.totalSplit, 0);
     assert.strictEqual(wrap.biggestSpender, null);
   });
@@ -124,7 +172,6 @@ describe('aggregateCrewWrap — graceful degradation', () => {
       members,
       highRatings,
       [{ amount: '10.00' }, { amount: 'not-a-number' }],
-      balances,
     );
     assert.strictEqual(wrap.totalSplit, 10);
   });
@@ -166,11 +213,7 @@ describe('createRatingsStore.getCrewWrap — SQL wiring', () => {
     ]);
     const store = createRatingsStore(pool);
     const wrap = await store.getCrewWrap('crew-1', 'fest-1', {
-      expenses: [{ amount: '12.00' }],
-      balances: [
-        { userId: 'a', username: 'Alice', balance: 6 },
-        { userId: 'b', username: 'Bob', balance: -6 },
-      ],
+      expenses: [{ amount: '12.00', paid_by: 'a' }],
     });
 
     assert.strictEqual(wrap.memberCount, 2);
@@ -187,7 +230,7 @@ describe('createRatingsStore.getCrewWrap — SQL wiring', () => {
     assert.ok(pool.queries[1].sql.includes('r.rating >= 4'));
   });
 
-  it('defaults expenses/balances to empty when omitted', async () => {
+  it('defaults expenses to empty when omitted', async () => {
     const pool = mockPool([{ rows: [] }, { rows: [] }]);
     const store = createRatingsStore(pool);
     const wrap = await store.getCrewWrap('crew-1', 'fest-1');

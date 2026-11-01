@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
 import { useCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
@@ -23,6 +25,9 @@ import {
   setLabel,
   getInitials,
   buildJoinUrl,
+  formatInviteExpiry,
+  inviteShareMessage,
+  parseInviteCode,
   deleteCrewConfirmMessage,
   leaveCrewConfirmMessage,
   removeMemberConfirmMessage,
@@ -49,6 +54,7 @@ import CrewExpenses from '../../components/CrewExpenses';
 import CrewActivity from '../../components/CrewActivity';
 import CrewLiveLocation from '../../components/CrewLiveLocation';
 import CrewSos from '../../components/CrewSos';
+import InviteQRSheet from '../../components/InviteQRSheet';
 import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
 
@@ -104,7 +110,6 @@ export default function CrewScreen() {
   const selectCrew = useCrewStore((s) => s.selectCrew);
   const createCrew = useCrewStore((s) => s.createCrew);
   const updateCrew = useCrewStore((s) => s.updateCrew);
-  const joinByCode = useCrewStore((s) => s.joinByCode);
   const leaveCrew = useCrewStore((s) => s.leaveCrew);
   const deleteCrew = useCrewStore((s) => s.deleteCrew);
   const kickMember = useCrewStore((s) => s.kickMember);
@@ -150,7 +155,7 @@ export default function CrewScreen() {
   const [editTotemEmoji, setEditTotemEmoji] = useState('');
   const [editTotemName, setEditTotemName] = useState('');
   const [totemBusy, setTotemBusy] = useState(false);
-  const [joinBusy, setJoinBusy] = useState(false);
+  const [inviteQrOpen, setInviteQrOpen] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
   const [overlapBusy, setOverlapBusy] = useState(false);
   const [overlapError, setOverlapError] = useState<string | null>(null);
@@ -322,28 +327,25 @@ export default function CrewScreen() {
     }
   };
 
-  const handleJoin = async () => {
-    const trimmed = inviteCode.trim();
-    if (!trimmed || joinBusy) return;
+  const handleJoin = () => {
     Keyboard.dismiss();
-    setError(null);
-    setJoinBusy(true);
-    try {
-      await joinByCode({ inviteCode: trimmed });
-      setInviteCode('');
-    } catch {
-      // Error is set in the store.
-    } finally {
-      setJoinBusy(false);
+    const code = parseInviteCode(inviteCode);
+    if (!code) {
+      setError("That code doesn't look right. Codes have 6 letters and numbers.");
+      return;
     }
+    setError(null);
+    setInviteCode('');
+    // The join screen shows the preview and the single Join button.
+    router.push(`/join/${code}`);
   };
 
   const handleShareInvite = useCallback((code: string, crewName: string) => {
-    // Friendly join link (DC15): festie.us/join/CODE 302-redirects into the app
-    // (routes/pages.ts) instead of exposing the machiney /api/v1/crews/join URL.
+    // festie.us/join/CODE is a server-rendered invite page (routes/pages.ts) that
+    // opens the app when installed, instead of the machiney /api/v1/crews/join URL.
     const url = buildJoinUrl(code);
     Share.share({
-      message: `Join "${crewName}" on Festie — tap to join: ${url}`,
+      message: inviteShareMessage(crewName, url),
       url,
     }).catch(() => {});
   }, []);
@@ -526,10 +528,23 @@ export default function CrewScreen() {
       <View style={styles.screen} testID="crew-screen">
         <ScreenHeader title="Crew" icon="people" />
         <EmptyState
-          icon="lock-closed-outline"
-          title="Sign in required"
-          message="Log in to coordinate with your crew."
-          action={{ label: 'Sign in', onPress: () => router.push('/(auth)/login') }}
+          icon="people-outline"
+          title={GUEST_PROMPT_COPY.teasers.crew.title}
+          message={GUEST_PROMPT_COPY.teasers.crew.message}
+          action={{
+            label: GUEST_PROMPT_COPY.createAccount,
+            onPress: () => {
+              setReturnTo('/(tabs)/crew');
+              router.push('/(auth)/register');
+            },
+          }}
+          secondaryAction={{
+            label: GUEST_PROMPT_COPY.signIn,
+            onPress: () => {
+              setReturnTo('/(tabs)/crew');
+              router.push('/(auth)/login');
+            },
+          }}
         />
       </View>
     );
@@ -640,28 +655,31 @@ export default function CrewScreen() {
 
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Join by code</Text>
+            <Text style={styles.formHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              6-character code, or paste the invite link
+            </Text>
             <TextInput
               style={styles.input}
-              placeholder="A1B2C3"
+              placeholder="K7XQ2M"
               placeholderTextColor={t.colors.text.placeholder}
               value={inviteCode}
               onChangeText={setInviteCode}
               autoCapitalize="characters"
               autoCorrect={false}
-              maxLength={20}
+              maxLength={64}
               returnKeyType="done"
               onSubmitEditing={handleJoin}
               accessibilityLabel="Invite code"
             />
             <TouchableOpacity
-              style={[styles.outlineButton, joinBusy && styles.buttonDisabled]}
+              style={[styles.outlineButton, !inviteCode.trim() && styles.buttonDisabled]}
               onPress={handleJoin}
-              disabled={joinBusy || !inviteCode.trim()}
+              disabled={!inviteCode.trim()}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="Join crew by code"
             >
-              <Text style={styles.outlineButtonText}>{joinBusy ? 'Joining…' : 'Join by Code'}</Text>
+              <Text style={styles.outlineButtonText}>Join by Code</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -677,6 +695,7 @@ export default function CrewScreen() {
   const myMembership = members.find((m) => m.userId === user.id);
   const isOwner = crew.owner === user.id || myMembership?.role === 'owner';
   const crewFestival = festivalForCrew(crew, currentFestival);
+  const inviteExpiry = formatInviteExpiry(crew.inviteExpiresAt);
 
   const overlapEntries: CrewOverlap[] = Object.values(crewOverlap)
     .filter((o) => o.memberCount > 0)
@@ -720,6 +739,15 @@ export default function CrewScreen() {
         subtitle={`${members.length} ${members.length === 1 ? 'member' : 'members'}`}
         icon="people"
       />
+
+      {crew.inviteCode ? (
+        <InviteQRSheet
+          visible={inviteQrOpen}
+          crewName={crew.name}
+          code={crew.inviteCode}
+          onClose={() => setInviteQrOpen(false)}
+        />
+      ) : null}
 
       {/* Persistent crew chrome — one status row (totem, freshness, SOS) and
           the crew switcher. The invite code is setup, so it lives in the
@@ -874,6 +902,13 @@ export default function CrewScreen() {
                   <Text style={styles.inviteCode} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityLabel={`Invite code ${crew.inviteCode}`}>
                     {crew.inviteCode}
                   </Text>
+                  {inviteExpiry ? (
+                    <Text style={styles.inviteExpiry} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {inviteExpiry === 'Expired' && !isOwner
+                        ? 'Expired. Ask the crew owner for a new link.'
+                        : inviteExpiry}
+                    </Text>
+                  ) : null}
                   <View style={[styles.inviteActions, largeText && styles.inviteActionsWrap]}>
                     <TouchableOpacity
                       testID="crew-action-share-invite"
@@ -884,6 +919,16 @@ export default function CrewScreen() {
                       accessibilityLabel="Share invite link"
                     >
                       <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      testID="crew-action-show-invite-qr"
+                      onPress={() => setInviteQrOpen(true)}
+                      style={styles.iconButton}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel="Show QR code"
+                    >
+                      <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
                     </TouchableOpacity>
                     {isOwner ? (
                       <TouchableOpacity
@@ -1482,6 +1527,10 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label'),
     color: t.colors.text.primary,
   },
+  formHint: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+  },
   input: {
     backgroundColor: t.colors.bg.input,
     borderWidth: 1,
@@ -1543,6 +1592,10 @@ const useStyles = makeStyles((t) => ({
   inviteLabel: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  inviteExpiry: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
   },
   inviteCode: {
     ...typeStyle('label'),

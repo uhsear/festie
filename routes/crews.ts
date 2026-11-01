@@ -1,7 +1,8 @@
 import type { Crew, CrewMember } from '../lib/types';
 
 import { planReformRoster } from '../lib/crew-reform.js';
-import { generateUniqueInviteCode } from '../lib/invite-code.js';
+import { generateUniqueInviteCode, inviteExpiryFor } from '../lib/invite-code.js';
+import { loadInvitePreview } from '../lib/invite-preview.js';
 import createInviteRoutes from './crew-invites.js';
 import createMeetingPointRoutes from './crew-meeting-points.js';
 import createPollRoutes from './crew-polls.js';
@@ -14,8 +15,8 @@ import createCrewMemberRoutes from './crew-members.js';
 /**
  * The crew shape this route actually serializes: the shared `Crew` minus
  * `members` (added by serializeCrewWithMembers), plus backend-only extras
- * (`createdBy`, `maxMembers`) and the owner-only / membership-conditional
- * fields. Typing the literal against this catches drift such as the historical
+ * (`createdBy`, `maxMembers`) and the membership-conditional fields
+ * (`role`, `joinedAt`, and the invite code and its expiry). Typing the literal against this catches drift such as the historical
  * "Crew serialized without `owner`" bug at compile time.
  */
 type SerializedCrew = Omit<Crew, 'members'> & {
@@ -54,6 +55,7 @@ export default function createCrewRoutes(deps: any) {
     sanitizeString,
     sanitizeIdentifier,
     createOpaqueId,
+    getFestivalById,
     sendSuccess,
     sendError,
     ErrorCodes,
@@ -143,11 +145,11 @@ export default function createCrewRoutes(deps: any) {
       totem_name: crew.totemName ?? null,
       totem_emoji: crew.totemEmoji ?? null,
     };
+    // Every member can share the invite; only the owner can regenerate it.
+    // Broadcasts pass no requester, so they never carry the code.
     if (membership) {
       result.role = membership.role || crew.role;
       result.joinedAt = membership.joinedAt || crew.joinedAt;
-    }
-    if (result.role === 'owner') {
       result.inviteCode = crew.inviteCode;
       result.inviteExpiresAt = crew.inviteExpiresAt || null;
     }
@@ -179,31 +181,20 @@ export default function createCrewRoutes(deps: any) {
   const subDeps = { ...deps, _crewHelpers };
 
   // ── GET /join-preview/:inviteCode — Public invite context (no auth) ─
-  // Lets a guest see who invited them before signing up. Exposes only the crew
-  // name, owner display name, member count and expiry; registered ahead of the
-  // sub-routers so no `/:crewId/...` pattern can shadow it.
+  // Lets a guest see what they are joining before signing up: crew, owner
+  // display name, size, festival and dates (lib/invite-preview.ts). Registered
+  // ahead of the sub-routers so no `/:crewId/...` pattern can shadow it.
   router.get(
     '/join-preview/:inviteCode',
     rateLimit(30, 'crew-join-preview'),
     validateParams(schemas.crewInviteCodeParams),
     async (req: any, res: any) => {
       try {
-        const code = req.validatedParams.inviteCode.toUpperCase();
-        const crew = await stores.crews.getByInviteCode(code);
-        if (!crew) {
-          const expired = await stores.crews.getExpiredByInviteCode(code);
-          if (expired) return sendError(res, 410, 'Invite code has expired', ErrorCodes.NOT_FOUND);
-          return sendError(res, 404, 'Invalid invite code', ErrorCodes.NOT_FOUND);
-        }
-        const members = await stores.crews.getMembers(crew.id);
-        const owner = members.find((m: any) => m.role === 'owner');
+        const result = await loadInvitePreview({ stores, getFestivalById }, req.validatedParams.inviteCode);
+        if (result.status === 'expired') return sendError(res, 410, 'Invite code has expired', ErrorCodes.NOT_FOUND);
+        if (result.status === 'invalid') return sendError(res, 404, 'Invalid invite code', ErrorCodes.NOT_FOUND);
         res.setHeader('Cache-Control', 'no-store');
-        return sendSuccess(res, {
-          crewName: crew.name,
-          ownerName: owner?.name || owner?.username || null,
-          memberCount: members.length,
-          expiresAt: crew.inviteExpiresAt || null,
-        });
+        return sendSuccess(res, result.preview);
       } catch (error: any) {
         log.error('crew join preview failed', { error: error.message });
         return sendError(res, 500, 'Failed to load invite', ErrorCodes.INTERNAL_ERROR);
@@ -288,7 +279,7 @@ export default function createCrewRoutes(deps: any) {
         name: cleanName,
         createdBy: req.user.userId,
         inviteCode,
-        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        inviteExpiresAt: inviteExpiryFor(await getFestivalById(cleanFestivalId)),
         maxMembers: 30,
         totemName: cleanTotemName,
         totemEmoji: cleanTotemEmoji,
@@ -398,7 +389,7 @@ export default function createCrewRoutes(deps: any) {
               name: sanitizeString(sourceCrew.name, 60) || sourceCrew.name,
               createdBy: req.user.userId,
               inviteCode,
-              inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              inviteExpiresAt: inviteExpiryFor(await getFestivalById(targetFestivalId)),
               maxMembers: sourceCrew.maxMembers || 30,
               reformedFrom: sourceCrewId,
             });

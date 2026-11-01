@@ -28,23 +28,38 @@ export interface AuthState {
 }
 
 export interface AuthActions {
-  login: (request: LoginRequest) => Promise<void>;
-  register: (request: RegisterRequest) => Promise<void>;
+  login: (request: LoginRequest) => Promise<{ reactivated: boolean }>;
+  register: (request: RegisterRequest) => Promise<{ emailVerificationSent: boolean }>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   setUser: (user: User | null) => void;
   checkSession: () => Promise<boolean>;
   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
+  resetPassword: (request: { token: string; newPassword: string; confirmPassword: string }) => Promise<void>;
   resendVerification: () => Promise<void>;
   changePassword: (request: ChangePasswordRequest) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
-  deleteAccount: (password: string) => Promise<void>;
+  deleteAccount: (password: string) => Promise<{ deletionDate: string | null }>;
   uploadAvatar: (file: File | Blob) => Promise<AvatarResponse>;
   removeAvatar: () => Promise<void>;
   setError: (error: string | null) => void;
 }
 
 export type AuthStore = AuthState & AuthActions;
+
+export const PASSWORD_CHANGED_MESSAGE = 'Password changed. Other devices were signed out.';
+export const ACCOUNT_REACTIVATED_MESSAGE = 'Welcome back. Your account deletion was cancelled.';
+export const ACCOUNT_DELETION_EXPLAINER =
+  'We delete your account 30 days after you ask. Sign in before then to cancel and keep your picks, notes and crews. After 30 days, everything is removed and cannot be recovered.';
+
+export function accountDeletionNotice(deletionDate: string | null): string {
+  const date = deletionDate ? new Date(deletionDate) : null;
+  const when =
+    date && !Number.isNaN(date.getTime())
+      ? `on ${date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}`
+      : 'in 30 days';
+  return `Your account will be deleted ${when}. Sign in before then to keep it.`;
+}
 
 // Credential fields kept OUT of the regular (AsyncStorage / localStorage) blob
 // and stored via the secure adapter (Keychain/Keystore on native) instead.
@@ -185,7 +200,10 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
   login: async (request: LoginRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.post<{ user: User; token?: string; roles?: string[] }>('/auth/login', request);
+      const response = await api.post<{ user: User; token?: string; roles?: string[]; reactivated?: boolean }>(
+        '/auth/login',
+        request,
+      );
       const { user, token, roles } = response;
       if (token) {
         setAuthToken(token);
@@ -197,6 +215,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
         isAdmin,
         isLoading: false,
       });
+      return { reactivated: response.reactivated === true };
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Login failed');
       set({ error: message, isLoading: false });
@@ -207,7 +226,10 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
   register: async (request: RegisterRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.post<{ user: User; token?: string }>('/auth/register', request);
+      const response = await api.post<{ user: User; token?: string; emailVerificationSent?: boolean }>(
+        '/auth/register',
+        request,
+      );
       const { user, token } = response;
       if (token) {
         setAuthToken(token);
@@ -217,6 +239,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
         userToken: token || null,
         isLoading: false,
       });
+      return { emailVerificationSent: response.emailVerificationSent ?? false };
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Registration failed');
       set({ error: message, isLoading: false });
@@ -269,10 +292,14 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
 
   checkSession: async (): Promise<boolean> => {
     try {
-      const response = await api.get<{ user: User; roles?: string[] }>('/auth/me');
+      const response = await api.get<{ user: User; roles?: string[]; pendingEmail?: string | null }>('/auth/me');
       if (response && response.user) {
         const isAdmin = response.roles?.includes('admin') || response.user.isAdmin || false;
-        set({ user: { ...response.user, isAdmin }, isAdmin, sessionChecked: true });
+        set({
+          user: { ...response.user, isAdmin, pendingEmail: response.pendingEmail ?? null },
+          isAdmin,
+          sessionChecked: true,
+        });
         return true;
       }
       // Authenticated probe succeeded but returned no user -- genuinely logged out.
@@ -313,6 +340,13 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     }
   },
 
+  resetPassword: async (request) => {
+    // No isLoading/error writes: the caller maps the thrown error, so it cannot leak onto other screens.
+    await api.post('/auth/reset-password', request);
+    // The server revoked every session for the account, so the local copy is stale.
+    if (get().user) await get().logout();
+  },
+
   resendVerification: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -328,7 +362,12 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
   changePassword: async (request: ChangePasswordRequest) => {
     set({ isLoading: true, error: null });
     try {
-      await api.post('/auth/change-password', request);
+      const res = await api.post<{ token?: string }>('/auth/change-password', request);
+      // The server revokes every session and issues a fresh token to native clients.
+      if (res?.token) {
+        setAuthToken(res.token);
+        set({ userToken: res.token });
+      }
       set({ isLoading: false });
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Change password failed');
@@ -355,9 +394,10 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
   deleteAccount: async (password: string) => {
     set({ isLoading: true, error: null });
     try {
-      await api.delete('/account/', { body: { password } });
+      const res = await api.delete<{ deletionDate?: string | null }>('/account/', { body: { password } });
       // logout() clears the token and resets all stores, matching web's flow.
       await get().logout();
+      return { deletionDate: res?.deletionDate ?? null };
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Account deletion failed');
       set({ error: message, isLoading: false });

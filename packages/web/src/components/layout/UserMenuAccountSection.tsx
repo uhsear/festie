@@ -8,6 +8,7 @@ interface UserMenuAccountSectionProps {
   user: {
     email?: string;
     emailVerified?: boolean;
+    pendingEmail?: string | null;
     avatarUrl?: string;
     isAdmin?: boolean;
   };
@@ -130,6 +131,11 @@ export default function UserMenuAccountSection({
           ) : (
             <span className="text-[length:var(--font-size-14)] text-text-muted italic overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-[var(--space-3)]">
               Not set
+            </span>
+          )}
+          {user.pendingEmail && (
+            <span className="text-xs text-text-muted">
+              Waiting for you to confirm {user.pendingEmail}. Check that inbox.
             </span>
           )}
         </div>

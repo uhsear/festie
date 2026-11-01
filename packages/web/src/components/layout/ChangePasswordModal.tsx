@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 
 interface ChangePasswordModalProps {
   onClose: () => void;
-  onSubmit: (currentPassword: string, newPassword: string) => Promise<void>;
+  onSubmit: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
 }
 
 export default function ChangePasswordModal({ onClose, onSubmit }: ChangePasswordModalProps) {
@@ -28,7 +28,7 @@ export default function ChangePasswordModal({ onClose, onSubmit }: ChangePasswor
     }
     setBusy(true);
     try {
-      await onSubmit(currentPassword, newPassword);
+      await onSubmit(currentPassword, newPassword, confirmPassword);
     } finally {
       setBusy(false);
     }

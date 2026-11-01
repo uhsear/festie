@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@festie/shared/services/api';
 import { describeRemovals, removalFromError, withReauth } from '@festie/shared/services/admin';
+import { describeScheduleNotice, type ScheduleNotice } from '@festie/shared/utils';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import { useToast } from '../../lib/toastContext';
 import LineupImport from './LineupImport';
@@ -36,6 +37,7 @@ export default function AdminFestivals() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [notifyPickers, setNotifyPickers] = useState(true);
   const [formData, setFormData] = useState<Partial<FormFestival>>({});
   const [initialExpandedDays, setInitialExpandedDays] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,9 +67,10 @@ export default function AdminFestivals() {
     }
   };
 
-  const finishSave = async (created: boolean) => {
-    toast(created ? 'Festival created' : 'Festival updated', 'success');
+  const finishSave = async (created: boolean, notice?: ScheduleNotice) => {
+    toast(created ? 'Festival created' : notice ? describeScheduleNotice(notice) : 'Festival updated', 'success');
     setEditingId(null);
+    setNotifyPickers(true);
     setFormData({});
     setInitialExpandedDays(new Set());
     setTab('list');
@@ -86,8 +89,12 @@ export default function AdminFestivals() {
 
     try {
       if (editingId) {
-        await api.put<void>(`/admin/festivals/${editingId}`, { ...formData, expectedUpdatedAt: formData.updatedAt });
-        await finishSave(false);
+        const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
+          ...formData,
+          expectedUpdatedAt: formData.updatedAt,
+          notify: notifyPickers,
+        });
+        await finishSave(false, res?.scheduleNotice);
       } else {
         await api.post<void>('/admin/festivals', formData);
         await finishSave(true);
@@ -108,18 +115,19 @@ export default function AdminFestivals() {
     try {
       const done = await withReauth(
         async () => {
-          await api.put<void>(`/admin/festivals/${editingId}`, {
+          const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
             ...formData,
             expectedUpdatedAt: formData.updatedAt,
             confirmRemovals: true,
+            notify: notifyPickers,
           });
-          return true;
+          return { notice: res?.scheduleNotice };
         },
         askPassword,
       );
       if (done === null) return;
       setPendingRemoval(null);
-      await finishSave(false);
+      await finishSave(false, done.notice);
     } catch (err: unknown) {
       setPendingRemoval(null);
       toastError(err, "Couldn't save festival. Try again.");
@@ -161,6 +169,7 @@ export default function AdminFestivals() {
 
   const handleEdit = async (festival: Festival) => {
     setEditingId(festival.id);
+    setNotifyPickers(true);
     setTab('create');
     // List endpoint returns only summary (stageCount, dayCount). Fetch full
     // festival to get nested stages[] and days[] for the edit form.
@@ -308,6 +317,8 @@ export default function AdminFestivals() {
           formData={formData}
           setFormData={setFormData}
           editingId={editingId}
+          notifyPickers={notifyPickers}
+          onNotifyPickersChange={setNotifyPickers}
           initialExpandedDays={initialExpandedDays}
           onSave={handleSave}
           onCancel={handleCancel}

@@ -3,9 +3,11 @@ import { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, hasSetStarted, buildHomeUrl, festivalTimeLabel, resolveFestivalTimeZone } from '@festie/shared/utils';
 import { useDebouncedNote } from '@festie/shared/hooks';
 import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
-import { useFestivalStore } from '@festie/shared/stores/festivalStore';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { Drawer } from 'vaul';
+import { useNavigate } from '@tanstack/react-router';
 import RatingButtons from './RatingButtons';
 import DetailArtistHeader from './DetailArtistHeader';
 import DetailSpotifySection from './DetailSpotifySection';
@@ -33,6 +35,8 @@ interface DetailPanelProps {
 export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: DetailPanelProps) {
   const theme = useUIStore((s) => s.theme);
   const isLg = useMediaQuery('(min-width: 1024px)');
+  const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const {
     currentFestival,
     festivalDays,
@@ -61,7 +65,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   const timeLabel = festivalTimeLabel(resolveFestivalTimeZone(currentFestival), useNow());
 
   const { select: selectHaptic, success: successHaptic, warning: warningHaptic } = useHaptics();
-  const { toast, toastError } = useToast();
+  const { toast } = useToast();
 
   const personal = useDebouncedNote({
     festivalId: currentFestival?.id,
@@ -85,7 +89,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     embedType: string;
   } | null>(null);
   const [spotifyVisible, setSpotifyVisible] = useState(false);
-  const [joinBusy, setJoinBusy] = useState(false);
   const [priorityBusy, setPriorityBusy] = useState<Priority | null | 'clear'>(null);
   const [reminderBusy, setReminderBusy] = useState<number | null | 'clear'>(null);
 
@@ -194,20 +197,13 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     [currentFestival, savePick, selectHaptic, toast],
   );
 
-  // Join festival handler
-  const handleJoinFestival = useCallback(async () => {
-    if (!currentFestival) return;
-    setJoinBusy(true);
-    try {
-      await api.post(`/profiles`, { festivalId: currentFestival.id });
-      await useFestivalStore.getState().loadProfiles(currentFestival.id);
+  const goToAuth = useCallback(
+    (to: '/login' | '/register') => {
       onClose();
-    } catch (e) {
-      toastError(e, "Couldn't join the festival. Try again.");
-    } finally {
-      setJoinBusy(false);
-    }
-  }, [currentFestival, onClose, toastError]);
+      navigate({ to, search: { next: `/set/${set.id}` } });
+    },
+    [onClose, navigate, set.id],
+  );
 
   return (
     <Drawer.Root
@@ -331,7 +327,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
 
             <hr className="border-t border-border -mx-7" />
 
-            {currentProfile ? (
+            {user ? (
               <>
                 <DetailPriorityPicker
                   setId={set.id}
@@ -350,17 +346,16 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             ) : (
               <div className="p-4 rounded-DEFAULT bg-[var(--color-overlay-2)] border border-glass-border">
                 <p className="text-[length:var(--font-size-14)] text-text-secondary leading-normal mb-3">
-                  Join this festival to save picks, keep private notes, and compare crew overlap.
+                  {GUEST_PROMPT_COPY.setSheet}
                 </p>
-                <Button
-                  variant="primary"
-                  type="button"
-                  disabled={joinBusy}
-                  isLoading={joinBusy}
-                  onClick={handleJoinFestival}
-                >
-                  {joinBusy ? 'Joining…' : 'Join Festival'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="primary" type="button" onClick={() => goToAuth('/register')}>
+                    {GUEST_PROMPT_COPY.createAccount}
+                  </Button>
+                  <Button variant="secondary" type="button" onClick={() => goToAuth('/login')}>
+                    {GUEST_PROMPT_COPY.signIn}
+                  </Button>
+                </div>
               </div>
             )}
 

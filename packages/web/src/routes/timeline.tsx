@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useFestivalStore } from '@festie/shared/stores';
+import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { selectNowNext, resolveFestivalTimeZone, artistDisplayName, resolveStageColor } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -20,6 +21,7 @@ import { useScrollProgress } from '../hooks/useScrollProgress';
 import { useNow } from '../hooks/useSetStatus';
 import { CalendarX, Music, Filter } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useToast } from '../lib/toastContext';
 
 export default function TimelineView() {
   return (
@@ -34,6 +36,7 @@ export default function TimelineView() {
 
 function TimelineViewInner() {
   const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const user = useAuthStore((state) => state.user);
   const days = useFestivalStore((state) => state.days);
   const allSets = useFestivalStore((state) => state.sets);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
@@ -41,6 +44,7 @@ function TimelineViewInner() {
   // battery-costing reflow loop). The manual "Now" button stays available.
   const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
   const { getMyPick, getOtherPicks, savePick } = usePicks();
+  const { toast } = useToast();
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
@@ -134,11 +138,15 @@ function TimelineViewInner() {
 
   const handleSavePick = useCallback(
     async (setId: string, priority: string | null) => {
-      if (currentFestival) {
+      if (!currentFestival) return;
+      try {
         await savePick(currentFestival.id, setId, priority as Priority | null);
+      } catch (err) {
+        // Grid and TBA cells show no failed chip, so a failed save (first-pick join included) toasts.
+        toast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), 'error');
       }
     },
-    [currentFestival, savePick],
+    [currentFestival, savePick, toast],
   );
 
   if (!currentFestival) {
@@ -167,7 +175,7 @@ function TimelineViewInner() {
             getMyPick={getMyPick}
             getOtherPicks={getOtherPicks}
             conflictIds={conflictIds}
-            currentProfile={currentProfile}
+            canPick={!!user}
             currentFestival={currentFestival}
             getStageColor={getStageColor}
             onSavePick={handleSavePick}
@@ -252,7 +260,7 @@ function TimelineViewInner() {
             vpW={vpW}
             nowIndicator={nowIndicator}
             conflictIds={conflictIds}
-            currentProfile={currentProfile}
+            canPick={!!user}
             currentFestival={currentFestival}
             gridRef={gridRef}
             getMyPick={getMyPick}
@@ -296,7 +304,7 @@ function TimelineViewInner() {
               getMyPick={getMyPick}
               getOtherPicks={getOtherPicks}
               conflictIds={conflictIds}
-              currentProfile={currentProfile}
+              canPick={!!user}
               currentFestival={currentFestival}
               getStageColor={getStageColor}
               onSavePick={handleSavePick}

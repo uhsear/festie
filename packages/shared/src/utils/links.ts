@@ -40,9 +40,10 @@ function absolute(path: string, origin: string = FESTIE_ORIGIN): string {
 /**
  * Crew-invite join link: `<origin>/join/<inviteCode>`.
  *
- * `festie.us/join/CODE` 302-redirects into the app (server routes/pages.ts)
- * rather than exposing the machinery `/api/v1/crews/join` URL. The code is
- * percent-encoded so odd codes can't break the URL.
+ * `festie.us/join/CODE` is a server-rendered invite page (routes/pages.ts) with
+ * a share preview and a Join button, rather than the machinery
+ * `/api/v1/crews/join` URL. The code is percent-encoded so odd codes can't
+ * break the URL.
  */
 export function buildJoinUrl(inviteCode: string, origin?: string): string {
   return absolute(`/join/${encodeURIComponent(inviteCode)}`, origin);
@@ -93,4 +94,21 @@ export function buildHomeUrl(origin: string = FESTIE_ORIGIN): string {
  */
 export function buildAppDeepLink(path: string): string {
   return `${FESTIE_SCHEME}${path}`;
+}
+
+const AUTH_PATH_PREFIXES = ['/login', '/register', '/forgot-password', '/(auth)'];
+
+/**
+ * Validate a post-sign-in return path. This is the open-redirect trust
+ * boundary: only a same-origin absolute path (at most 512 characters, no
+ * leading `//` or `/\`, no control characters) passes. Auth screens return
+ * null so sign-in never loops back to itself.
+ */
+export function safeReturnPath(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > 512 || raw[0] !== '/') return null;
+  if (raw[1] === '/' || raw[1] === '\\') return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
+  if (AUTH_PATH_PREFIXES.some((prefix) => raw.startsWith(prefix))) return null;
+  return raw;
 }

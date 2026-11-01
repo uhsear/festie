@@ -23,6 +23,11 @@ export const ALLOWED_NOTIFICATION_TYPES = new Set([
   'lineup_drop',
   'crew_reformed',
   'wrap_ready',
+  // Finer crew types. Each has its own opt-out (PREF_MAP) and routes to the Android 'crew' channel.
+  'crew_meeting_point',
+  'crew_poll',
+  'crew_money',
+  'crew_ride',
   // Safety-critical crew SOS. Deliberately NOT added to PREF_MAP (send.ts) — an
   // emergency has no per-type opt-out and bypasses DND (see CRITICAL_TYPES).
   'crew_sos',

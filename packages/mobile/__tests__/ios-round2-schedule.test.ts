@@ -6,11 +6,11 @@ import path from 'node:path';
 const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 describe('iOS round 2 — schedule and set sheet (source-level guards)', () => {
-  it('Schedule tab: guest pick routes to login, TBA empty state offers Cards, Cards header cancels hPad', () => {
+  it('Schedule tab: guest pick opens the set sheet, TBA empty state offers Cards, Cards header cancels hPad', () => {
     const src = read('app/(tabs)/index.tsx');
     const handler = src.slice(src.indexOf('const handlePickChange'), src.indexOf('clearAllFilters'));
-    expect(handler).toContain('if (!currentProfile)');
-    expect(handler).toContain('/(auth)/login');
+    expect(handler).toContain('if (!user)');
+    expect(handler).toContain('/set/${setId}');
     expect(src).toContain("label: 'Show Cards'");
     expect(src).toContain('ListHeaderComponentStyle');
   });
@@ -33,6 +33,6 @@ describe('iOS round 2 — schedule and set sheet (source-level guards)', () => {
   });
 
   it('join screen hides join actions for an invalid invite', () => {
-    expect(read('app/join/[code].tsx')).toContain("inviteStatus !== 'invalid'");
+    expect(read('app/join/[code].tsx')).toContain("inviteStatus === 'invalid' || inviteStatus === 'expired'");
   });
 });

@@ -44,6 +44,8 @@ interface ButtonProps extends Omit<AppPressableProps, 'style'> {
    * ("Switch fest…"). Pass an explicit value only if a hard line cap is required.
    */
   numberOfLines?: number;
+  /** Caps the label's Dynamic Type scaling, e.g. `MAX_FONT_SCALE` to keep a label on one line. */
+  maxFontSizeMultiplier?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -57,6 +59,7 @@ export default function Button({
   icon,
   loadingLabel,
   numberOfLines,
+  maxFontSizeMultiplier,
   style,
   accessibilityLabel,
   ...rest
@@ -93,6 +96,7 @@ export default function Button({
           <Text
             style={[styles.label, VARIANT_TEXT[variant](styles), variant === 'primary' && { color: primaryInkColor }]}
             numberOfLines={numberOfLines}
+            maxFontSizeMultiplier={maxFontSizeMultiplier}
           >
             {/* Trailing NBSP when a leading icon exists: Android under-measures
                 a Text following an icon-font sibling and clips the last glyph;

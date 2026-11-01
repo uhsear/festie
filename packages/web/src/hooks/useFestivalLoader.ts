@@ -3,8 +3,37 @@ import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { api } from '@festie/shared/services';
+import { pickDefaultFestival } from '@festie/shared/utils';
+import { PENDING_JOIN_KEY } from '../components/auth/invite';
 import { useToast } from '../lib/toastContext';
+
+const REF_KEY = 'festie-ref';
+const REF_PATTERN = /^[a-z0-9_-]{1,40}$/;
+
+function stripJoinCrewParam() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('joinCrew');
+  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+}
+
+/** Remembers an anonymous ?ref= source for sign-up counts. The first valid value wins. */
+function captureRef() {
+  try {
+    const ref = new URLSearchParams(window.location.search).get('ref')?.toLowerCase();
+    if (ref && REF_PATTERN.test(ref) && !sessionStorage.getItem(REF_KEY)) sessionStorage.setItem(REF_KEY, ref);
+  } catch {
+    /* sessionStorage unavailable */
+  }
+}
+
+/** The ?ref= source captured on this visit, for the register request. */
+export function readSignupRef(): string | undefined {
+  try {
+    return sessionStorage.getItem(REF_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Handles all festival/session/crew bootstrapping logic:
@@ -12,8 +41,9 @@ import { useToast } from '../lib/toastContext';
  * - Auto-load festivals + select first one
  * - Load crews when user logs in
  * - ?joinCrew=<code> deep-link handling: stages the code as `pendingJoinCode`
- *   for the caller to confirm via `confirmJoinCrew()` -- it is never joined
- *   automatically without explicit user consent -- + post-login replay
+ *   for JoinCrewSheet to confirm -- it is never joined automatically without
+ *   explicit user consent -- including the code a guest carried through sign-up
+ * - ?ref=<source> capture for anonymous sign-up counts
  * - Re-fetch profiles on login
  */
 export function useFestivalLoader() {
@@ -23,14 +53,12 @@ export function useFestivalLoader() {
   const loadFestivals = useFestivalStore((s) => s.loadFestivals);
   const selectFestival = useFestivalStore((s) => s.selectFestival);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const currentProfile = useFestivalStore((s) => s.currentProfile);
-  const loadProfiles = useFestivalStore((s) => s.loadProfiles);
   const loadCrews = useCrewStore((s) => s.loadCrews);
-  const joinByCode = useCrewStore((s) => s.joinByCode);
-  const { toast, toastError } = useToast();
+  const { toast } = useToast();
   const joinAttemptedRef = useRef<string | null>(null);
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
-  const [joinBusy, setJoinBusy] = useState(false);
+
+  useEffect(captureRef, []);
 
   // Check session on mount — but only if a user was persisted. A cold guest
   // boot has no stored user, so an unconditional checkSession() guarantees a
@@ -68,7 +96,8 @@ export function useFestivalLoader() {
       .then(() => {
         const fests = useFestivalStore.getState().festivals;
         if (fests.length > 0 && !useFestivalStore.getState().currentFestival) {
-          selectFestival(fests[0]!.id).catch(() => {});
+          const pick = pickDefaultFestival(fests);
+          if (pick) selectFestival(pick.id).catch(() => {});
         }
       })
       .catch(() => {});
@@ -82,19 +111,18 @@ export function useFestivalLoader() {
   }, [user?.id, loadCrews]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: use user.id to avoid re-fetching on every auth object change
 
   // ?joinCrew=<inviteCode> deep-link handler. Validates the code's shape
-  // (mirrors routes/crew-invites.ts:156's own check) and STAGES it for
-  // explicit confirmation -- see confirmJoinCrew/cancelJoinCrew below -- a
-  // bare link must never be able to silently enroll a logged-in visitor.
+  // (mirrors routes/crew-invites.ts:156's own check) and STAGES it for explicit
+  // confirmation in JoinCrewSheet -- a bare link must never silently enroll a
+  // logged-in visitor. A guest's code is stashed in sessionStorage across
+  // sign-up/sign-in; once signed in it is read back here and staged. The server
+  // creates the festival profile on join, so no festival context is awaited.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get('joinCrew');
-    if (!raw) return;
-    if (joinAttemptedRef.current === raw) return;
+    const raw = new URLSearchParams(window.location.search).get('joinCrew');
 
-    // Unauthenticated: stash and redirect to /register
     if (!user) {
+      if (!raw || joinAttemptedRef.current === raw) return;
       try {
-        sessionStorage.setItem('fk.pendingJoinCrew', raw);
+        sessionStorage.setItem(PENDING_JOIN_KEY, raw);
       } catch {
         /* sessionStorage unavailable */
       }
@@ -102,77 +130,34 @@ export function useFestivalLoader() {
       navigate({ to: '/register' });
       return;
     }
-    // Authenticated: wait for festival context to be ready
-    if (!currentFestival) return;
 
-    joinAttemptedRef.current = raw;
-    if (!/^[a-zA-Z0-9]{4,12}$/.test(raw)) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('joinCrew');
-      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    let stashed: string | null = null;
+    try {
+      stashed = sessionStorage.getItem(PENDING_JOIN_KEY);
+      sessionStorage.removeItem(PENDING_JOIN_KEY);
+    } catch {
+      /* sessionStorage unavailable */
+    }
+    const code = raw ?? stashed;
+    // The guard only dedupes a live URL code. A stashed code was already removed
+    // from storage, and the guest branch set the ref to that same code before
+    // sign-up, so guarding it would drop the invite.
+    if (!code || (raw && joinAttemptedRef.current === raw)) return;
+
+    joinAttemptedRef.current = code;
+    if (!/^[a-zA-Z0-9]{4,12}$/.test(code)) {
+      stripJoinCrewParam();
       toast('Invalid invite link', 'error');
       return;
     }
-    setPendingJoinCode(raw);
-  }, [user?.id, currentFestival?.id, navigate, toast]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: use ?.id to avoid re-running on every object reference change
+    setPendingJoinCode(code);
+  }, [user?.id, navigate, toast]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: user.id avoids re-running on every auth object change
 
-  // Performs the join after the user explicitly confirms the pending
-  // ?joinCrew= code staged above.
-  const confirmJoinCrew = async () => {
-    const code = pendingJoinCode;
-    if (!code || !currentFestival) return;
-    setJoinBusy(true);
-    try {
-      if (!currentProfile) {
-        await api.post('/profiles', { festivalId: currentFestival.id });
-        await loadProfiles(currentFestival.id);
-      }
-      await joinByCode({ inviteCode: code });
-      toast('Joined crew', 'success');
-      navigate({ to: '/crew' });
-    } catch (e) {
-      if (e instanceof Error && /already/i.test(e.message)) {
-        toast('You are already in this crew', 'info');
-      } else {
-        toastError(e, "Couldn't join the crew. Try again.");
-      }
-    } finally {
-      setJoinBusy(false);
-      setPendingJoinCode(null);
-      const url = new URL(window.location.href);
-      url.searchParams.delete('joinCrew');
-      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    }
-  };
-
-  // Dismisses the pending join prompt without joining.
-  const cancelJoinCrew = () => {
+  // Dismisses the pending join sheet, whether or not the join happened.
+  const clearPendingJoin = () => {
     setPendingJoinCode(null);
-    const url = new URL(window.location.href);
-    url.searchParams.delete('joinCrew');
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    stripJoinCrewParam();
   };
-
-  // Replay pending crew join after registration/login
-  useEffect(() => {
-    if (!user) return;
-    let pending: string | null = null;
-    try {
-      pending = sessionStorage.getItem('fk.pendingJoinCrew');
-    } catch {
-      /* sessionStorage unavailable */
-    }
-    if (!pending) return;
-    try {
-      sessionStorage.removeItem('fk.pendingJoinCrew');
-    } catch {
-      /* sessionStorage unavailable */
-    }
-    const url = new URL(window.location.href);
-    url.searchParams.set('joinCrew', pending);
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    joinAttemptedRef.current = null;
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: only replay on login, not on every user object change
 
   // Re-fetch festival profiles on login once a festival is selected
   useEffect(() => {
@@ -181,5 +166,5 @@ export function useFestivalLoader() {
     }
   }, [user?.id, currentFestival?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { pendingJoinCode, joinBusy, confirmJoinCrew, cancelJoinCrew };
+  return { pendingJoinCode, clearPendingJoin };
 }

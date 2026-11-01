@@ -94,6 +94,8 @@ export default defineConfig({
         // of the install-time precache.
         globIgnores: ['og-image.png'],
         cleanupOutdatedCaches: true,
+        // Web Push push/notificationclick handlers live in public/push-sw.js.
+        importScripts: ['push-sw.js'],
         clientsClaim: true,
         skipWaiting: true,
         // THE GATE: the runtimeCaching rules are the single source of truth in
