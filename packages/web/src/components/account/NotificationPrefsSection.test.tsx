@@ -193,4 +193,9 @@ describe('NotificationPrefsSection', () => {
     // No unhandled rejection / thrown error reaching the test.
     expect(screen.getByText('Notification types')).toBeInTheDocument();
   });
+
+  it('says the lineup, reform and wrap-up toggles cover email as well as push', () => {
+    render(<NotificationPrefsSection />);
+    expect(screen.getAllByText(/By push and email\./)).toHaveLength(3);
+  });
 });

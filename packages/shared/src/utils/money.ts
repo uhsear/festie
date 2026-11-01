@@ -29,3 +29,40 @@ export function formatBalance(value: number): string {
 export function formatAmount(value: string | number): string {
   return `$${Number(value).toFixed(2)}`;
 }
+
+export function isSettlement(e: { category?: string | null }): boolean {
+  return e.category === 'settlement';
+}
+
+/** Rows that count as spending: not planned, not a settle-up payment. */
+export function spendingExpenses<T extends { planned?: boolean; category?: string | null }>(list: T[]): T[] {
+  return list.filter((e) => !e.planned && !isSettlement(e));
+}
+
+export function settlementPayments<T extends { category?: string | null }>(list: T[]): T[] {
+  return list.filter(isSettlement);
+}
+
+export function ledgerRows<T extends { planned?: boolean; category?: string | null }>(
+  list: T[],
+  view: 'all' | 'actual' | 'planned',
+): T[] {
+  if (view === 'actual') return spendingExpenses(list);
+  if (view === 'planned') return list.filter((e) => e.planned);
+  return list.filter((e) => !isSettlement(e));
+}
+
+/** "You paid Sam $12.00" | "Sam paid you $12.00" | "Sam paid Alex $12.00". */
+export function describePayment(
+  e: { paid_by: string; paid_by_name?: string; split_with: string[]; amount: string | number },
+  currentUserId: string,
+  nameOf: (userId: string) => string | undefined,
+): string {
+  const recipientId = e.split_with[0];
+  const payer = nameOf(e.paid_by) ?? e.paid_by_name ?? 'A crewmate';
+  const recipient = (recipientId ? nameOf(recipientId) : undefined) ?? 'a crewmate';
+  const amount = formatAmount(e.amount);
+  if (e.paid_by === currentUserId) return `You paid ${recipient} ${amount}`;
+  if (recipientId === currentUserId) return `${payer} paid you ${amount}`;
+  return `${payer} paid ${recipient} ${amount}`;
+}

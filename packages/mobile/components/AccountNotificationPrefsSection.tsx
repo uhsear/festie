@@ -183,6 +183,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
     icon: keyof typeof Ionicons.glyphMap;
     value: boolean;
     onChange: (v: boolean) => void;
+    hint?: string;
   }[] = [
     {
       key: 'setReminders',
@@ -211,6 +212,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
       icon: 'megaphone-outline',
       value: prefs.lineupDrops,
       onChange: (v) => set({ lineupDrops: v }),
+      hint: 'By push and email.',
     },
     {
       key: 'crewReformed',
@@ -218,6 +220,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
       icon: 'refresh-outline',
       value: prefs.crewReformed,
       onChange: (v) => set({ crewReformed: v }),
+      hint: 'By push and email.',
     },
     {
       key: 'wrapReady',
@@ -225,6 +228,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
       icon: 'sparkles-outline',
       value: prefs.wrapReady,
       onChange: (v) => set({ wrapReady: v }),
+      hint: 'By push and email.',
     },
   ];
 
@@ -257,7 +261,14 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
               <View style={styles.rowIcon}>
                 <Ionicons name={r.icon} size={18} color={r.value ? t.colors.accent.aqua : t.colors.text.secondary} />
               </View>
-              <Text style={styles.rowTitle}>{r.title}</Text>
+              {r.hint ? (
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>{r.title}</Text>
+                  <Text style={styles.rowHint}>{r.hint}</Text>
+                </View>
+              ) : (
+                <Text style={styles.rowTitle}>{r.title}</Text>
+              )}
               <Switch
                 value={r.value}
                 onValueChange={r.onChange}

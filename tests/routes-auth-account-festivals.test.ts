@@ -144,16 +144,19 @@ function makeMockDeps(overrides: any = {}) {
         getByUsername: mock.fn(async () => null),
         countActive: mock.fn(async () => 0),
         update: mock.fn(async (id, data) => ({ id, username: data.username || 'testuser', ...data })),
-        findByUsername: mock.fn(async () => null),
+        findDeletedByUsername: mock.fn(async () => null),
+        reactivate: mock.fn(async () => {}),
       },
       profiles: {
         update: mock.fn(async () => {}),
         deleteByUserId: mock.fn(async () => {}),
+        restoreByUserId: mock.fn(async () => 0),
         claimOrphanProfiles: mock.fn(async () => {}),
       },
       pool: { query: mock.fn(async () => ({ rows: [] })) },
       roles: { getUserRoles: mock.fn(async () => []) },
       emailTokens: {
+        getPendingEmailChange: mock.fn(async () => null),
         checkEmailExists: mock.fn(async () => false),
         replaceVerificationToken: mock.fn(async () => {}),
         invalidatePendingEmailChanges: mock.fn(async () => {}),
@@ -410,7 +413,6 @@ describe('routes/auth.js — createAuthRoutes', () => {
         username: 'testuser',
         passwordHash: 'hashed-pw',
       }));
-      deps.stores.users.findByUsername = mock.fn(async () => null);
       deps.stores.roles = { getUserRoles: mock.fn(async () => ['user']) };
       const router = createAuthRoutes(deps);
       const app = createApp(router);
@@ -420,6 +422,8 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
       assert.ok(res.body.data.token);
+      // A normal login carries no reactivated flag.
+      assert.equal('reactivated' in res.body.data, false);
     });
 
     test('returns 400 when username or password missing', async () => {
@@ -438,7 +442,7 @@ describe('routes/auth.js — createAuthRoutes', () => {
         verifyPassword: mock.fn(async () => false),
       });
       deps.stores.users.getByUsername = mock.fn(async () => null);
-      deps.stores.users.findByUsername = mock.fn(async () => null);
+      deps.stores.users.findDeletedByUsername = mock.fn(async () => null);
       const router = createAuthRoutes(deps);
       const app = createApp(router);
 
@@ -468,16 +472,18 @@ describe('routes/auth.js — createAuthRoutes', () => {
     });
 
     test('reactivates soft-deleted account on successful login', async () => {
-      const updateFn = mock.fn(async () => {});
+      const reactivate = mock.fn(async () => {});
+      const restore = mock.fn(async () => 2);
       const deps = makeMockDeps();
       deps.stores.users.getByUsername = mock.fn(async () => null);
-      deps.stores.users.findByUsername = mock.fn(async () => ({
+      deps.stores.users.findDeletedByUsername = mock.fn(async () => ({
         id: 'u-deleted',
         username: 'testuser',
         passwordHash: 'hashed-pw',
         deletedAt: '2026-01-01T00:00:00.000Z',
       }));
-      deps.stores.users.update = updateFn;
+      deps.stores.users.reactivate = reactivate;
+      deps.stores.profiles.restoreByUserId = restore;
       deps.stores.roles = { getUserRoles: mock.fn(async () => []) };
       const router = createAuthRoutes(deps);
       const app = createApp(router);
@@ -485,8 +491,27 @@ describe('routes/auth.js — createAuthRoutes', () => {
       const res = await request(app).post('/login').send({ username: 'testuser', password: 'Str0ngTest!Pw' });
 
       assert.equal(res.status, 200);
-      assert.equal(updateFn.mock.calls.length, 1);
-      assert.equal((updateFn.mock.calls[0]!.arguments as any)[1].deletedAt, null);
+      assert.equal(res.body.data.reactivated, true);
+      assert.deepEqual(reactivate.mock.calls[0]!.arguments, ['u-deleted']);
+      assert.deepEqual(restore.mock.calls[0]!.arguments, ['u-deleted']);
+    });
+
+    test('a soft-deleted account with a wrong password is not reactivated', async () => {
+      const reactivate = mock.fn(async () => {});
+      const deps = makeMockDeps({ verifyPassword: mock.fn(async () => false) });
+      deps.stores.users.findDeletedByUsername = mock.fn(async () => ({
+        id: 'u-deleted',
+        username: 'testuser',
+        passwordHash: 'hashed-pw',
+        deletedAt: '2026-01-01T00:00:00.000Z',
+      }));
+      deps.stores.users.reactivate = reactivate;
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app).post('/login').send({ username: 'testuser', password: 'wrong' });
+
+      assert.equal(res.status, 401);
+      assert.equal(reactivate.mock.calls.length, 0);
     });
 
     test('returns 500 on internal error', async () => {
@@ -570,6 +595,22 @@ describe('routes/auth.js — createAuthRoutes', () => {
       // Should only include profiles for user-1
       assert.equal(res.body.data.festivals.length, 1);
       assert.equal(res.body.data.festivals[0].festivalId, 'f-1');
+      assert.equal(res.body.data.pendingEmail, null);
+    });
+
+    test('returns the address of a pending email change', async () => {
+      const deps = makeMockDeps();
+      deps.stores.emailTokens.getPendingEmailChange = mock.fn(async () => 'new@example.com');
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app).get('/me');
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.pendingEmail, 'new@example.com');
+      assert.deepEqual(deps.stores.emailTokens.getPendingEmailChange.mock.calls[0]!.arguments, [
+        'user-1',
+        'test@example.com',
+      ]);
     });
 
     test('returns 401 when user not found', async () => {
@@ -652,6 +693,21 @@ describe('routes/auth.js — createAuthRoutes', () => {
       const revoked = deps.stores.emailTokens.invalidatePendingEmailChanges.mock.calls;
       assert.equal(revoked.length, 1);
       assert.deepEqual(revoked[0]!.arguments, ['user-1', 'test@example.com']);
+    });
+
+    test('a browser (cookie) client gets no body token', async () => {
+      const deps = makeMockDeps();
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app)
+        .post('/change-password')
+        .set('Origin', 'https://festie.us')
+        .send({ currentPassword: 'old123456', newPassword: 'new1234567', confirmPassword: 'new1234567' });
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.success, true);
+      assert.equal('token' in res.body.data, false);
+      assert.equal(deps.setUserSessionCookie.mock.calls.length, 1);
     });
 
     test('returns 400 when fields are missing', async () => {
@@ -1055,6 +1111,7 @@ describe('routes/account.js — createAccountRoutes', () => {
   describe('DELETE / (soft-delete account)', () => {
     test('soft-deletes account with correct password', async () => {
       const updateUser = mock.fn(async () => {});
+      const deleteProfiles = mock.fn(async () => {});
       const deps = makeMockDeps({
         getUserById: mock.fn(async () => ({
           id: 'user-1',
@@ -1069,7 +1126,7 @@ describe('routes/account.js — createAccountRoutes', () => {
         clearUserSessionCookie: mock.fn(),
         stores: {
           users: { create: mock.fn(async (d) => d), update: updateUser },
-          profiles: { update: mock.fn(async () => {}), deleteByUserId: mock.fn(async () => {}) },
+          profiles: { update: mock.fn(async () => {}), deleteByUserId: deleteProfiles },
           pool: { query: mock.fn(async () => ({ rows: [] })) },
           roles: { getUserRoles: mock.fn(async () => []) },
           sessions: { deleteUserSession: mock.fn(async () => {}), listUserSessions: mock.fn(async () => []) },
@@ -1084,6 +1141,13 @@ describe('routes/account.js — createAccountRoutes', () => {
       assert.equal(res.body.error, null);
       assert.ok(res.body.data.deletionDate);
       assert.equal(updateUser.mock.calls.length, 1);
+      // Picks and notes stay for the grace window so a sign-in can restore them.
+      assert.deepEqual(deleteProfiles.mock.calls[0]!.arguments, [
+        'user-1',
+        { reason: 'account-deleted', keepPicks: true },
+      ]);
+      const year = new Date(res.body.data.deletionDate).getFullYear();
+      assert.match(res.body.data.message, new RegExp(`^Your account will be deleted on .*${year}\\. Sign in before then to keep it\\.$`));
     });
 
     test('returns 404 when user not found', async () => {

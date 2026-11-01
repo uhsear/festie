@@ -115,6 +115,14 @@ export default function createCrewRidesRoutes(deps: any) {
         if (!existing || existing.crew_id !== crewId) {
           return sendError(res, 404, 'Ride offer not found', ErrorCodes.NOT_FOUND);
         }
+        if (existing.created_by !== userId && membership.role !== 'owner') {
+          return sendError(
+            res,
+            403,
+            'Only the person who offered this ride or the crew owner can edit it.',
+            ErrorCodes.FORBIDDEN,
+          );
+        }
 
         const offer = await stores.crewRides.update(itemId, req.validatedBody);
         io.to('crew:' + crewId).emit('crew:ride-updated', { offer });

@@ -129,7 +129,7 @@ function configureSocketIO(app: Application, ctx: any) {
 
   // Centralized event emitter for Socket.IO + push notifications
   const emitter = createSocketEmitter({
-    io, log, notificationService, buildAvatarUrl, getUserById,
+    io, log, notificationService, buildAvatarUrl, getUserById, stores,
   });
 
   // Post-connection auth timeout: sockets must authenticate (join a festival

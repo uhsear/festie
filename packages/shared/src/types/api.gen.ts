@@ -1294,6 +1294,8 @@ export type components = {
             name: string;
         };
         AuthEnvelope: {
+            pendingEmail?: string | null;
+            reactivated?: boolean;
             refreshToken?: string;
             token?: string;
             user: {
@@ -1711,6 +1713,8 @@ export type components = {
             userId: string | null;
         };
         RefreshTokenResponse: {
+            pendingEmail?: string | null;
+            reactivated?: boolean;
             refreshToken?: string;
             token?: string;
             user: {

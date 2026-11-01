@@ -14,7 +14,8 @@
 //
 // HARD RULES (enforced here + in send.ts):
 //   - strictly event-gated (called from real events, never a cron sweep);
-//   - per-type opt-out (PREF_MAP → notification_preferences columns, checked in send.ts);
+//   - per-type opt-out (PREF_MAP → notification_preferences columns) gates push
+//     (checked in send.ts) and email (checked in emailFanout);
 //   - DND-respecting (isInDndWindow, checked in send.ts);
 //   - deduped once-per-event-per-user via notification_log.existsForEvent on a
 //     stable `eventKey` we stash in the notification data (data_json.eventKey).
@@ -26,6 +27,7 @@
 
 import crypto from 'crypto';
 import { sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail } from '../email.js';
+import { PREF_MAP } from './send.js';
 import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
 
 /**
@@ -328,10 +330,14 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     // than fail-open re-blasting every address.
     const emailEventKey = `${eventKey}#email`;
     const fresh = await filterFresh(userIds, type, emailEventKey);
+    const prefKey = PREF_MAP[type];
     let sent = 0;
     for (const uid of fresh) {
       const user = users.get(uid);
       if (!user?.email) continue;
+      // Per-type opt-out gates email as well as push. Quiet hours do not apply to email.
+      const prefs = await stores?.notificationPrefs?.get?.(uid);
+      if (prefs && prefKey && !prefs[prefKey]) continue; // store returns 0/1, same falsy check as send.ts
       let ok: boolean;
       try {
         ok = await sendFn(user);

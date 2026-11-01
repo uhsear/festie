@@ -560,6 +560,49 @@ describe('routes/crew-rides.js — PUT /:crewId/rides/:itemId', () => {
     assert.equal((updateFn.mock.calls as any[])[0].arguments[0], 'ride-1');
   });
 
+  // ── Permission: only the creator or the owner may edit ────────────
+  test('returns 403 when a member edits a ride someone else offered', async () => {
+    const updateFn = mock.fn(async () => ({ ...DEFAULT_OFFER }));
+    const { app } = await buildRidesApp({
+      stores: {
+        crews: {
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+        },
+        crewRides: {
+          getById: mock.fn(async () => ({ ...DEFAULT_OFFER, created_by: 'user-2' })),
+          update: updateFn,
+        },
+      },
+    });
+
+    const res = await request(app).put('/crew-1/rides/ride-1').send({ seats: 1 });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'FORBIDDEN');
+    assert.equal(res.body.error.message, 'Only the person who offered this ride or the crew owner can edit it.');
+    assert.equal(updateFn.mock.calls.length, 0);
+  });
+
+  test('the crew owner can edit a ride someone else offered', async () => {
+    const updateFn = mock.fn(async () => ({ ...DEFAULT_OFFER, seats: 1 }));
+    const { app } = await buildRidesApp({
+      stores: {
+        crews: {
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'owner' })),
+        },
+        crewRides: {
+          getById: mock.fn(async () => ({ ...DEFAULT_OFFER, created_by: 'user-2' })),
+          update: updateFn,
+        },
+      },
+    });
+
+    const res = await request(app).put('/crew-1/rides/ride-1').send({ seats: 1 });
+
+    assert.equal(res.status, 200);
+    assert.equal(updateFn.mock.calls.length, 1);
+  });
+
   // ── Socket.IO broadcast ───────────────────────────────────────────
   test('broadcasts crew:ride-updated via Socket.IO', async () => {
     const ioObj = makeIo();

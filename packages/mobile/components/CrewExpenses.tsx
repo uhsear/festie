@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, Alert, Linking, AccessibilityInfo } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { useCrewStore } from '@festie/shared/stores';
+import { useCrewStore, useUIStore } from '@festie/shared/stores';
 import type { CrewExpense, CrewMember, CrewSettlement } from '@festie/shared/types';
 import {
   formatBalance,
@@ -11,7 +11,10 @@ import {
   payOptionsFor,
   createSettleUpFlow,
   confirmPaidMessage,
+  settlementPayments,
+  describePayment,
   QUEUED_WRITE_MESSAGE,
+  writeOutcomeMessage,
 } from '@festie/shared/utils';
 import { EXPENSE_CATEGORIES, expenseCategoryFor } from '@festie/shared/constants';
 import {
@@ -96,6 +99,8 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   const totalSpent = sumExpenseAmounts(actualExpenses);
   const totalPlanned = sumExpenseAmounts(plannedExpenses);
   const visibleExpenses = selectVisibleExpenses(expenses, view);
+  const payments = settlementPayments(expenses);
+  const nameOf = (userId: string) => members.find((m) => m.userId === userId)?.name || undefined;
   const nonZeroBalances = selectNonZeroBalances(balances);
   // My net position from the netted plan, one actionable line per crew member:
   //   myPayments — "You owe {toName} ${amt}" (settle-able by me)
@@ -150,6 +155,30 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
           removeExpense(crewId, expense.id).catch(() => {});
         },
       },
+      ],
+    );
+  };
+
+  const handleUndoPayment = (payment: CrewExpense) => {
+    haptics.warning();
+    Alert.alert(
+      'Undo this payment?',
+      `${describePayment(payment, currentUserId, nameOf)}. Undo it only if it was recorded by mistake. Balances go back to what they were before.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Undo payment',
+          style: 'destructive',
+          onPress: () => {
+            removeExpense(crewId, payment.id)
+              .then((outcome) =>
+                useUIStore.getState().showToast(writeOutcomeMessage(outcome, 'Payment undone'), {
+                  kind: outcome === 'queued' ? 'info' : 'success',
+                }),
+              )
+              .catch(() => {});
+          },
+        },
       ],
     );
   };
@@ -545,7 +574,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                   </View>
                   <Text style={styles.expenseMeta} numberOfLines={1}>
                     {e.planned ? 'planned' : `${e.paid_by === currentUserId ? 'You' : e.paid_by_name} paid`} · split{' '}
-                    {e.split_with.length}
+                    {e.split_with.length} {e.split_with.length === 1 ? 'way' : 'ways'}
                   </Text>
                   <CrewSyncMarker item={e} />
                 </View>
@@ -566,6 +595,28 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
           );
         })
       )}
+
+      {view !== 'planned' && payments.length > 0 ? (
+        <View style={styles.ledger}>
+          <Text style={styles.ledgerLabel}>Payments</Text>
+          <Text style={styles.splitHint}>Settle-up payments. Not counted in Total spent.</Text>
+          {payments.map((p) => (
+            <View key={p.id} style={styles.ledgerRow}>
+              <Text style={[styles.ledgerName, styles.tabularNums]}>{describePayment(p, currentUserId, nameOf)}</Text>
+              {p.paid_by === currentUserId && !isPending(p) ? (
+                <TouchableOpacity
+                  onPress={() => handleUndoPayment(p)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Undo payment: ${describePayment(p, currentUserId, nameOf)}`}
+                >
+                  <Text style={styles.undoText}>Undo payment</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -717,6 +768,11 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.primary,
     flexShrink: 1,
+  },
+  undoText: {
+    ...typeStyle('caption'),
+    color: t.colors.text.danger,
+    paddingVertical: t.spacing[2],
   },
   settleButton: {
     flexDirection: 'row',

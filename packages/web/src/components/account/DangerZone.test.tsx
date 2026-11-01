@@ -10,10 +10,13 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-const mockLogout = vi.fn().mockResolvedValue(undefined);
+const mockDeleteAccount = vi.fn();
 vi.mock('@festie/shared/stores/authStore', () => ({
   useAuthStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ logout: mockLogout }),
+    selector({ deleteAccount: mockDeleteAccount }),
+  ACCOUNT_DELETION_EXPLAINER: 'explainer',
+  accountDeletionNotice: (d: string | null) =>
+    `Your account will be deleted on ${d}. Sign in before then to keep it.`,
 }));
 
 const mockToast = vi.fn();
@@ -21,11 +24,9 @@ vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
-const mockApiDelete = vi.fn();
 const mockApiGet = vi.fn();
 vi.mock('@festie/shared/services/api', () => ({
   api: {
-    delete: (...args: unknown[]) => mockApiDelete(...args),
     get: (...args: unknown[]) => mockApiGet(...args),
   },
   mapErrorToUserMessage: (_err: unknown, fallback: string) => fallback,
@@ -137,9 +138,9 @@ describe('DangerZone', () => {
     expect(screen.getByText('Delete My Account')).toBeInTheDocument();
   });
 
-  it('calls API delete, logout, and navigates on successful deletion', async () => {
+  it('deletes through the store, shows the deletion notice, and navigates', async () => {
     const user = userEvent.setup();
-    mockApiDelete.mockResolvedValue(undefined);
+    mockDeleteAccount.mockResolvedValue({ deletionDate: '30 November 2026' });
 
     render(<DangerZone />);
     await user.click(screen.getByText('Delete My Account'));
@@ -147,18 +148,18 @@ describe('DangerZone', () => {
     await user.click(screen.getByText('Confirm Delete'));
 
     await waitFor(() => {
-      expect(mockApiDelete).toHaveBeenCalledWith('/account/', {
-        body: { password: 'mypassword' },
-      });
+      expect(mockDeleteAccount).toHaveBeenCalledWith('mypassword');
     });
-    expect(mockLogout).toHaveBeenCalled();
-    expect(mockToast).toHaveBeenCalledWith('Account deleted', 'info');
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.stringContaining('Sign in before then to keep it.'),
+      'info',
+    );
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
   });
 
   it('shows error toast when account deletion fails', async () => {
     const user = userEvent.setup();
-    mockApiDelete.mockRejectedValue(new Error('fail'));
+    mockDeleteAccount.mockRejectedValue(new Error('fail'));
 
     render(<DangerZone />);
     await user.click(screen.getByText('Delete My Account'));
@@ -182,6 +183,6 @@ describe('DangerZone', () => {
     const form = screen.getByPlaceholderText('Password').closest('form')!;
     form.dispatchEvent(new Event('submit', { bubbles: true }));
 
-    expect(mockApiDelete).not.toHaveBeenCalled();
+    expect(mockDeleteAccount).not.toHaveBeenCalled();
   });
 });
