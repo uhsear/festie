@@ -31,6 +31,8 @@ interface ApiOptions {
    */
   onOptimisticCreate?: (result: unknown) => void;
   _bypassOfflineQueue?: boolean;
+  /** Return the whole `{ data, meta }` body instead of unwrapping `data`. */
+  _envelope?: boolean;
 }
 
 let _apiBase = API_BASE;
@@ -242,6 +244,8 @@ export class ApiClientError extends Error implements ApiError {
   message: string;
   retryAfter?: number | string | null;
   isNetworkError?: boolean;
+  /** The whole `error` object from the response body (e.g. `removal`, `preview`). */
+  details?: Record<string, unknown>;
 
   constructor(
     message: string,
@@ -249,6 +253,7 @@ export class ApiClientError extends Error implements ApiError {
     code?: string,
     retryAfter?: number | string | null,
     isNetworkError?: boolean,
+    details?: Record<string, unknown>,
   ) {
     super(message);
     this.message = message;
@@ -256,6 +261,7 @@ export class ApiClientError extends Error implements ApiError {
     this.code = code;
     this.retryAfter = retryAfter;
     this.isNetworkError = isNetworkError;
+    this.details = details;
   }
 }
 
@@ -340,6 +346,8 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
         response.status,
         errInfo.code || errorBody.code || undefined,
         response.headers.get('Retry-After') || undefined,
+        undefined,
+        errInfo && typeof errInfo === 'object' ? (errInfo as Record<string, unknown>) : undefined,
       );
       throw error;
     }
@@ -349,6 +357,7 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
     markOnlineAndDrain(path);
 
     const body = await response.json();
+    if (options._envelope) return body as T;
     if (body !== null && typeof body === 'object' && 'data' in body && 'error' in body) {
       return body.data as T;
     }
@@ -389,6 +398,16 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
 export const api = {
   async get<T>(path: string, options: ApiOptions = {}): Promise<T> {
     return apiRequest<T>(path, { ...options, method: 'GET' });
+  },
+
+  /** GET that keeps the `meta` block (paging cursors, totals). */
+  async getEnvelope<T>(path: string, options: ApiOptions = {}): Promise<{ data: T; meta: Record<string, unknown> }> {
+    const body = await apiRequest<{ data: T; meta?: Record<string, unknown> }>(path, {
+      ...options,
+      method: 'GET',
+      _envelope: true,
+    });
+    return { data: body.data, meta: body.meta ?? {} };
   },
 
   async post<T>(path: string, body?: unknown, options: ApiOptions = {}): Promise<T> {

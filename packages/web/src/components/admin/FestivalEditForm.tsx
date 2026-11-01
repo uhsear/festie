@@ -12,6 +12,7 @@ export interface Festival {
   b2bSeparator?: string;
   /** Optional IANA zone — anchors set status + reminders in the festival's zone. */
   timeZone?: string | null;
+  updatedAt?: string;
   stages?: Stage[];
   days?: Day[];
   [key: string]: unknown;

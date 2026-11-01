@@ -1,25 +1,12 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@festie/shared';
+import { api, parseActivityPage } from '@festie/shared';
+import type { CrewActivityEntry } from '@festie/shared/types';
 import { timeAgo, describeCrewActivity } from '@festie/shared/utils';
 import EmptyState from '../ui/EmptyState';
 import Avatar from '../ui/Avatar';
 import Skeleton from '../ui/Skeleton';
 import { Activity } from 'lucide-react';
-
-// Server shape: rows from crew_activity joined with users. The `type` column is
-// a free-form string written by the emitter when events happen — examples seen
-// in the codebase: 'member-joined', 'member-left', 'poll-created', 'poll-voted',
-// 'pick-set', 'expense-added', 'home-base-updated', 'meeting-point-added'.
-interface ActivityItem {
-  id: string;
-  crew_id: string;
-  user_id: string;
-  username: string;
-  type: string;
-  detail: string | null;
-  created_at: string;
-}
 
 interface Props {
   crewId: string;
@@ -31,12 +18,9 @@ export default function ActivityTab({ crewId }: Props) {
     isLoading,
     isError,
     refetch,
-  } = useQuery<ActivityItem[]>({
+  } = useQuery<CrewActivityEntry[]>({
     queryKey: ['crew-activity', crewId],
-    queryFn: async () => {
-      const res = await api.get<ActivityItem[]>(`/crews/${crewId}/activity`);
-      return Array.isArray(res) ? res : [];
-    },
+    queryFn: async () => parseActivityPage(await api.get<unknown>(`/crews/${crewId}/activity`)),
     enabled: !!crewId,
     // crew:activity (lib/emitter.ts) now pushes new events and useCrewQuerySink
     // invalidates ['crew-activity', crewId] on it. The 30s poll stays as the

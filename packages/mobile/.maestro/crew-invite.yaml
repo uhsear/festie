@@ -173,7 +173,7 @@ env:
       visible: "Join by code"
     commands:
       - tapOn:
-          text: "A1B2C3"
+          text: "K7XQ2M"
           optional: true
       - tapOn:
           accessibility id: "Invite code"
@@ -182,6 +182,12 @@ env:
       - hideKeyboard
       - tapOn:
           text: "Join by Code"
+      # Join by Code opens the invite screen; the join happens only on "Join crew".
+      - extendedWaitUntil:
+          visible: "Join crew"
+          timeout: 20000
+      - tapOn:
+          text: "Join crew"
       - waitForAnimationToEnd:
           timeout: 8000
       - takeScreenshot: ci-09-join-submitted

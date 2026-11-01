@@ -140,6 +140,7 @@ function makeDeps(overrides: any = {}) {
       p && p.length >= 8 && p.length <= 100 ? null : 'Password must be at least 8 characters',
     hashPassword: mock.fn(async () => 'hashed-password'),
     invalidateUserSessions: mock.fn(async () => {}),
+    requireRecentAuth: (_req: any, _res: any, next: any) => next(),
     disconnectUserSockets: mock.fn(),
     removeAvatarFile: mock.fn(async () => {}),
     removeProfileSockets: mock.fn(),
@@ -645,21 +646,21 @@ describe('routes/admin-audit.js', () => {
     const { default: mountAdminAuditRoutes } = await import('../routes/admin-audit.js');
     const deps = makeDeps();
     const router = express.Router();
-    mountAdminAuditRoutes({ router, deps });
+    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
     const app = buildApp(router);
 
     const res = await request(app).get('/audit').expect(200);
     assert.equal(res.body.error, null);
     assert.ok(Array.isArray(res.body.data));
     assert.ok(res.body.meta);
-    assert.equal(res.body.meta.meta.total, 1);
+    assert.equal(res.body.meta.total, 1);
   });
 
   test('GET /audit passes query filters to store', async () => {
     const { default: mountAdminAuditRoutes } = await import('../routes/admin-audit.js');
     const deps = makeDeps();
     const router = express.Router();
-    mountAdminAuditRoutes({ router, deps });
+    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
     const app = buildApp(router);
 
     await request(app).get('/audit?actor_id=user-1&action=login&limit=10').expect(200);
@@ -676,7 +677,7 @@ describe('routes/admin-audit.js', () => {
       throw new Error('DB down');
     });
     const router = express.Router();
-    mountAdminAuditRoutes({ router, deps });
+    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
     const app = buildApp(router);
 
     const res = await request(app).get('/audit').expect(500);
@@ -837,6 +838,19 @@ describe('routes/admin-users.js', () => {
     assert.ok(deps.invalidateUserSessions.mock.calls.length > 0);
   });
 
+  test('PUT /users/:id/reset-password returns 403 REAUTH_REQUIRED without a recent re-auth', async () => {
+    const { app, deps } = await buildUserRouter({
+      requireRecentAuth: (_req: any, res: any) =>
+        res.status(403).json({ data: null, error: { code: 'REAUTH_REQUIRED' } }),
+    });
+    const res = await request(app)
+      .put('/users/user-2/reset-password')
+      .send({ newPassword: 'newpass12345' })
+      .expect(403);
+    assert.equal(res.body.error.code, 'REAUTH_REQUIRED');
+    assert.equal(deps.stores.users.update.mock.calls.length, 0);
+  });
+
   test('PUT /users/:id/reset-password rejects weak password', async () => {
     const { app } = await buildUserRouter();
     const res = await request(app).put('/users/user-2/reset-password').send({ newPassword: 'short' }).expect(400);
@@ -860,6 +874,17 @@ describe('routes/admin-users.js', () => {
     assert.equal(res.body.error, null);
     assert.equal(res.body.data.success, true);
     assert.ok(deps.invalidateUserCache.mock.calls.length > 0);
+    assert.ok(deps.invalidateUserSessions.mock.calls.length > 0);
+  });
+
+  test('DELETE /users/:id still succeeds and cleans up when the audit insert fails', async () => {
+    const { app, deps } = await buildUserRouter();
+    deps.stores.auditLog.insert = mock.fn(async () => {
+      throw new Error('audit down');
+    });
+    const res = await request(app).delete('/users/user-2').expect(200);
+    assert.equal(res.body.data.success, true);
+    assert.equal(deps.stores.auditLog.insert.mock.calls.length, 1);
     assert.ok(deps.invalidateUserSessions.mock.calls.length > 0);
   });
 
@@ -918,7 +943,7 @@ describe('routes/admin-bulk.js', () => {
     const { app } = await buildBulkRouter();
     let callCount = 0;
     const deps2 = makeDeps();
-    deps2.stores.sessions.deleteUserSessions = mock.fn(async () => {
+    deps2.invalidateUserSessions = mock.fn(async () => {
       callCount++;
       if (callCount === 2) throw new Error('Session delete failed');
     });
@@ -1716,5 +1741,48 @@ describe('routes/notifications.js', () => {
 
     const res = await request(app).put('/topics/%20').send({ crew: true }).expect(400);
     assert.equal(res.body.data, null);
+  });
+});
+
+// =====================================================================
+// admin.js — GET /ref-counts (anonymous sign-up counts, migration 070)
+// =====================================================================
+describe('routes/admin.js — GET /ref-counts', () => {
+  test('returns { day, ref, signups } rows newest first for the requested window', async () => {
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    const rows = [
+      { day: '2026-11-01', ref: 'insta', signups: 3 },
+      { day: '2026-10-31', ref: 'tiktok', signups: 1 },
+    ];
+    const deps = makeDeps();
+    deps.stores.pool.query = mock.fn(async () => ({ rows }));
+    const app = buildApp(createAdminRoutes(deps));
+
+    const res = await request(app).get('/ref-counts?days=7').expect(200);
+
+    assert.deepEqual(res.body.data, rows);
+    const [sql, params] = (deps.stores.pool.query.mock.calls[0] as any).arguments;
+    assert.match(sql, /FROM\s+signup_ref_counts/);
+    assert.match(sql, /ORDER BY\s+day DESC/);
+    assert.deepEqual(params, ['7']);
+  });
+
+  test('is admin-only', async () => {
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    const deps = makeDeps({
+      adminAuth: (_req: any, res: any) => res.status(403).json({ data: null, error: { code: 'FORBIDDEN' } }),
+    });
+    deps.stores.pool.query = mock.fn(async () => ({ rows: [] }));
+    const app = buildApp(createAdminRoutes(deps));
+
+    await request(app).get('/ref-counts').expect(403);
+    assert.equal(deps.stores.pool.query.mock.calls.length, 0);
+  });
+
+  test('defaults to 30 days and rejects an out-of-range window with the real schema', async () => {
+    const { adminRefCountsQuery } = await import('../lib/schemas.js');
+    assert.equal(adminRefCountsQuery.parse({}).days, 30);
+    assert.equal(adminRefCountsQuery.safeParse({ days: '0' }).success, false);
+    assert.equal(adminRefCountsQuery.safeParse({ days: '366' }).success, false);
   });
 });

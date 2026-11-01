@@ -266,4 +266,9 @@ describe('NotificationPrefsSection', () => {
     await user.selectOptions(screen.getByLabelText(/Must-see reminders/), '15');
     expect(mockUpdatePrefs).toHaveBeenCalledWith({ mustSeeReminderMinutes: 15 });
   });
+
+  it('says the lineup, reform and wrap-up toggles cover email as well as push', () => {
+    render(<NotificationPrefsSection />);
+    expect(screen.getAllByText(/By push and email\./)).toHaveLength(3);
+  });
 });

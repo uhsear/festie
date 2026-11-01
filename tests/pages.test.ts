@@ -124,40 +124,92 @@ describe('pages: route registration', () => {
 });
 
 describe('pages: /join/:code', () => {
-  it('redirects with valid code', () => {
-    const router = createPageRoutes(buildDeps());
-    const handler = getHandler(router, '/join/:code');
+  const CREW = { id: 'c1', name: 'Bass Gang', festivalId: 'fest-1', maxMembers: 8, inviteExpiresAt: null };
 
+  function inviteDeps(opts: { crew?: any; expired?: any; throws?: boolean; rateCalls?: any[] } = {}) {
+    const getByInviteCode = mock.fn(async () => {
+      if (opts.throws) throw new Error('db down');
+      return opts.crew ?? null;
+    });
+    return buildDeps({
+      stores: {
+        crews: {
+          getByInviteCode,
+          getExpiredByInviteCode: mock.fn(async () => opts.expired ?? null),
+          getMembers: mock.fn(async () => [{ userId: 'u1', role: 'owner', username: 'dj', name: 'DJ Dana' }]),
+        },
+      },
+      getFestivalById: mock.fn(async () => ({ id: 'fest-1', name: 'EDC Orlando', days: [{ date: '2026-11-06' }] })),
+      rateLimit: (max: any, key: any) => {
+        opts.rateCalls?.push({ max, key });
+        return (_req: any, _res: any, next: any) => next();
+      },
+    });
+  }
+
+  async function get(deps: any, code: string) {
+    const handler = getHandler(createPageRoutes(deps), '/join/:code');
     const res = mockRes();
-    handler(mockReq({ params: { code: 'ABC123' } }), res);
-    assert.equal(res._redirectUrl, '/?joinCrew=ABC123');
+    await handler(mockReq({ params: { code } }), res);
+    return res;
+  }
+
+  it('renders 200 HTML with og:title for a valid code', async () => {
+    const res = await get(inviteDeps({ crew: CREW }), 'abc123');
+    assert.equal(res._status, 200);
+    assert.ok(res._sent.includes('og:title" content="Join Bass Gang on Festie"'));
+    assert.ok(res._sent.includes('EDC Orlando'));
+    assert.ok(res._sent.includes('href="https://festie.us/?joinCrew=ABC123"'));
+    assert.ok(res._sent.includes('og:url" content="https://festie.us/join/ABC123"'));
+    assert.equal(res._redirectUrl, null);
+    assert.equal(res._headers['Content-Type'], 'text/html; charset=utf-8');
+    assert.equal(res._headers['Cache-Control'], 'public, max-age=60');
+    assert.equal(res._headers['Content-Security-Policy'], "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
   });
 
-  it('redirects to / for empty code', () => {
-    const router = createPageRoutes(buildDeps());
-    const handler = getHandler(router, '/join/:code');
-
-    const res = mockRes();
-    handler(mockReq({ params: { code: '' } }), res);
-    assert.equal(res._redirectUrl, '/');
+  it('returns 404 with the error page for an unknown code', async () => {
+    const res = await get(inviteDeps(), 'NOPE99');
+    assert.equal(res._status, 404);
+    assert.ok(res._sent.includes("This invite doesn't work"));
+    assert.ok(res._sent.includes('We couldn&#39;t find a crew with this code.'));
   });
 
-  it('strips special characters', () => {
-    const router = createPageRoutes(buildDeps());
-    const handler = getHandler(router, '/join/:code');
-
-    const res = mockRes();
-    handler(mockReq({ params: { code: 'AB<script>12' } }), res);
-    assert.equal(res._redirectUrl, '/?joinCrew=ABscript12');
+  it('returns 404 when nothing is left of the code', async () => {
+    const res = await get(inviteDeps({ crew: CREW }), '<>');
+    assert.equal(res._status, 404);
   });
 
-  it('truncates to 10 chars', () => {
-    const router = createPageRoutes(buildDeps());
-    const handler = getHandler(router, '/join/:code');
+  it('returns 410 for an expired code', async () => {
+    const res = await get(inviteDeps({ expired: { id: 'c1' } }), 'OLD123');
+    assert.equal(res._status, 410);
+    assert.ok(res._sent.includes('This invite has expired. Ask someone in the crew for a new link.'));
+  });
 
-    const res = mockRes();
-    handler(mockReq({ params: { code: 'A'.repeat(20) } }), res);
-    assert.equal(res._redirectUrl, '/?joinCrew=' + 'A'.repeat(10));
+  it('escapes a <script> crew name', async () => {
+    const res = await get(inviteDeps({ crew: { ...CREW, name: '<script>alert(1)</script>' } }), 'ABC123');
+    assert.equal(res._status, 200);
+    assert.ok(!res._sent.includes('<script>alert(1)</script>'));
+    assert.ok(res._sent.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+  });
+
+  it('strips special characters and caps the code at 12 before the lookup', async () => {
+    const deps: any = inviteDeps({ crew: CREW });
+    await get(deps, 'ab<script>12' + 'X'.repeat(20));
+    const looked = (deps.stores.crews.getByInviteCode.mock.calls[0] as any).arguments[0];
+    assert.equal(looked, 'ABSCRIPT12XX');
+  });
+
+  it('returns 500 with no-store when the store throws', async () => {
+    const res = await get(inviteDeps({ throws: true }), 'ABC123');
+    assert.equal(res._status, 500);
+    assert.equal(res._headers['Cache-Control'], 'no-store');
+    assert.ok(res._sent.includes("This invite doesn't work"));
+  });
+
+  it('applies the crew-invite-page rate limit', () => {
+    const rateCalls: any[] = [];
+    createPageRoutes(inviteDeps({ rateCalls }));
+    assert.ok(rateCalls.some((c) => c.key === 'crew-invite-page' && c.max === 30));
   });
 });
 

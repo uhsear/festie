@@ -2300,6 +2300,13 @@
           },
           "refreshToken": {
             "type": "string"
+          },
+          "reactivated": {
+            "type": "boolean"
+          },
+          "pendingEmail": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -2369,6 +2376,13 @@
           },
           "refreshToken": {
             "type": "string"
+          },
+          "reactivated": {
+            "type": "boolean"
+          },
+          "pendingEmail": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -2429,6 +2443,10 @@
                     "enum": [
                       true
                     ]
+                  },
+                  "ref": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_-]{1,40}$"
                   }
                 },
                 "required": [
@@ -3505,7 +3523,7 @@
         "tags": [
           "Deep Links"
         ],
-        "summary": "Crew invite deep link (redirects to app)",
+        "summary": "Crew invite page (HTML with share preview)",
         "parameters": [
           {
             "name": "code",
@@ -3517,8 +3535,14 @@
           }
         ],
         "responses": {
-          "302": {
-            "description": "Redirect to app with joinCrew param"
+          "200": {
+            "description": "Invite page with crew-specific Open Graph tags"
+          },
+          "404": {
+            "description": "No crew has this code"
+          },
+          "410": {
+            "description": "The invite code has expired"
           }
         }
       }

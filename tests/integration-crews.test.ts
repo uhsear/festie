@@ -268,7 +268,7 @@ describe('Crew System', { concurrency: 1 }, () => {
     assert.match(res.body.error.message, /Invalid invite code/i);
   });
 
-  test('cannot join crew if already a member', async () => {
+  test('joining a crew you are already in succeeds (idempotent)', async () => {
     const server = await startServer();
     servers.push(server);
 
@@ -292,14 +292,15 @@ describe('Crew System', { concurrency: 1 }, () => {
       .send({ inviteCode })
       .expect(200);
 
-    // Bob tries to join again
+    // Bob joins again: succeeds without a second membership
     const res = await server.request
       .post('/api/v1/crews/join')
       .set('x-user-token', bob.token)
       .send({ inviteCode })
-      .expect(400);
+      .expect(200);
 
-    assert.equal(res.body.error.code, 'ALREADY_EXISTS');
+    assert.equal(res.body.data.alreadyMember, true);
+    assert.equal(res.body.data.memberCount, 2);
   });
 
   test('non-owner cannot delete crew', async () => {
@@ -673,8 +674,9 @@ describe('Crew System', { concurrency: 1 }, () => {
       .set('x-user-token', bob.token)
       .expect(200);
 
-    // Bob should not see the invite code
-    assert.equal(detailRes.body.data.inviteCode, undefined);
+    // Bob, a plain member, can share the invite too
+    assert.equal(detailRes.body.data.inviteCode, inviteCode);
+    assert.ok(detailRes.body.data.inviteExpiresAt);
 
     // But Alice should see it
     const aliceDetailRes = await server.request

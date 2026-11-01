@@ -15,6 +15,7 @@ import express from 'express';
 import createAuthRoutes from '../routes/auth.js';
 import createAccountRoutes from '../routes/account.js';
 import createFestivalsRoutes from '../routes/festivals.js';
+import { schemas as realSchemas } from '../lib/schemas.js';
 
 // ── Shared mock helpers ────────────────────────────────────────────────
 
@@ -75,6 +76,9 @@ function makeMockDeps(overrides: any = {}) {
       req.user = { userId: 'admin-1' };
       next();
     },
+    // Re-auth gate passes by default; the re-auth tests override both.
+    hasRecentAuth: () => true,
+    requireRecentAuth: (_req: any, _res: any, next: any) => next(),
     getUserById: mock.fn(async (id) => ({
       id,
       username: 'testuser',
@@ -107,6 +111,9 @@ function makeMockDeps(overrides: any = {}) {
       RATE_LIMITED: 'RATE_LIMITED',
       TOKEN_EXPIRED: 'TOKEN_EXPIRED',
       ACCOUNT_LOCKED: 'ACCOUNT_LOCKED',
+      REAUTH_REQUIRED: 'REAUTH_REQUIRED',
+      CONFIRM_REMOVALS: 'CONFIRM_REMOVALS',
+      FESTIVAL_CHANGED: 'FESTIVAL_CHANGED',
     },
     rateLimit: () => (_req: any, _res: any, next: any) => next(),
     io: { to: () => ({ emit: () => {} }), sockets: { sockets: new Map() } },
@@ -138,16 +145,19 @@ function makeMockDeps(overrides: any = {}) {
         getByUsername: mock.fn(async () => null),
         countActive: mock.fn(async () => 0),
         update: mock.fn(async (id, data) => ({ id, username: data.username || 'testuser', ...data })),
-        findByUsername: mock.fn(async () => null),
+        findDeletedByUsername: mock.fn(async () => null),
+        reactivate: mock.fn(async () => {}),
       },
       profiles: {
         update: mock.fn(async () => {}),
         deleteByUserId: mock.fn(async () => {}),
+        restoreByUserId: mock.fn(async () => 0),
         claimOrphanProfiles: mock.fn(async () => {}),
       },
       pool: { query: mock.fn(async () => ({ rows: [] })) },
       roles: { getUserRoles: mock.fn(async () => []) },
       emailTokens: {
+        getPendingEmailChange: mock.fn(async () => null),
         checkEmailExists: mock.fn(async () => false),
         replaceVerificationToken: mock.fn(async () => {}),
         invalidatePendingEmailChanges: mock.fn(async () => {}),
@@ -156,6 +166,7 @@ function makeMockDeps(overrides: any = {}) {
         deleteUserSession: mock.fn(async () => {}),
         deleteUserSessions: mock.fn(async () => {}),
         listUserSessions: mock.fn(async () => []),
+        markReauthenticated: mock.fn(async () => {}),
       },
       refreshTokens: null,
       loginFailures: null,
@@ -404,7 +415,6 @@ describe('routes/auth.js — createAuthRoutes', () => {
         username: 'testuser',
         passwordHash: 'hashed-pw',
       }));
-      deps.stores.users.findByUsername = mock.fn(async () => null);
       deps.stores.roles = { getUserRoles: mock.fn(async () => ['user']) };
       const router = createAuthRoutes(deps);
       const app = createApp(router);
@@ -414,6 +424,8 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
       assert.ok(res.body.data.token);
+      // A normal login carries no reactivated flag.
+      assert.equal('reactivated' in res.body.data, false);
     });
 
     test('returns 400 when username or password missing', async () => {
@@ -432,7 +444,7 @@ describe('routes/auth.js — createAuthRoutes', () => {
         verifyPassword: mock.fn(async () => false),
       });
       deps.stores.users.getByUsername = mock.fn(async () => null);
-      deps.stores.users.findByUsername = mock.fn(async () => null);
+      deps.stores.users.findDeletedByUsername = mock.fn(async () => null);
       const router = createAuthRoutes(deps);
       const app = createApp(router);
 
@@ -462,16 +474,18 @@ describe('routes/auth.js — createAuthRoutes', () => {
     });
 
     test('reactivates soft-deleted account on successful login', async () => {
-      const updateFn = mock.fn(async () => {});
+      const reactivate = mock.fn(async () => {});
+      const restore = mock.fn(async () => 2);
       const deps = makeMockDeps();
       deps.stores.users.getByUsername = mock.fn(async () => null);
-      deps.stores.users.findByUsername = mock.fn(async () => ({
+      deps.stores.users.findDeletedByUsername = mock.fn(async () => ({
         id: 'u-deleted',
         username: 'testuser',
         passwordHash: 'hashed-pw',
         deletedAt: '2026-01-01T00:00:00.000Z',
       }));
-      deps.stores.users.update = updateFn;
+      deps.stores.users.reactivate = reactivate;
+      deps.stores.profiles.restoreByUserId = restore;
       deps.stores.roles = { getUserRoles: mock.fn(async () => []) };
       const router = createAuthRoutes(deps);
       const app = createApp(router);
@@ -479,8 +493,27 @@ describe('routes/auth.js — createAuthRoutes', () => {
       const res = await request(app).post('/login').send({ username: 'testuser', password: 'Str0ngTest!Pw' });
 
       assert.equal(res.status, 200);
-      assert.equal(updateFn.mock.calls.length, 1);
-      assert.equal((updateFn.mock.calls[0]!.arguments as any)[1].deletedAt, null);
+      assert.equal(res.body.data.reactivated, true);
+      assert.deepEqual(reactivate.mock.calls[0]!.arguments, ['u-deleted']);
+      assert.deepEqual(restore.mock.calls[0]!.arguments, ['u-deleted']);
+    });
+
+    test('a soft-deleted account with a wrong password is not reactivated', async () => {
+      const reactivate = mock.fn(async () => {});
+      const deps = makeMockDeps({ verifyPassword: mock.fn(async () => false) });
+      deps.stores.users.findDeletedByUsername = mock.fn(async () => ({
+        id: 'u-deleted',
+        username: 'testuser',
+        passwordHash: 'hashed-pw',
+        deletedAt: '2026-01-01T00:00:00.000Z',
+      }));
+      deps.stores.users.reactivate = reactivate;
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app).post('/login').send({ username: 'testuser', password: 'wrong' });
+
+      assert.equal(res.status, 401);
+      assert.equal(reactivate.mock.calls.length, 0);
     });
 
     test('returns 500 on internal error', async () => {
@@ -564,6 +597,22 @@ describe('routes/auth.js — createAuthRoutes', () => {
       // Should only include profiles for user-1
       assert.equal(res.body.data.festivals.length, 1);
       assert.equal(res.body.data.festivals[0].festivalId, 'f-1');
+      assert.equal(res.body.data.pendingEmail, null);
+    });
+
+    test('returns the address of a pending email change', async () => {
+      const deps = makeMockDeps();
+      deps.stores.emailTokens.getPendingEmailChange = mock.fn(async () => 'new@example.com');
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app).get('/me');
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.pendingEmail, 'new@example.com');
+      assert.deepEqual(deps.stores.emailTokens.getPendingEmailChange.mock.calls[0]!.arguments, [
+        'user-1',
+        'test@example.com',
+      ]);
     });
 
     test('returns 401 when user not found', async () => {
@@ -646,6 +695,21 @@ describe('routes/auth.js — createAuthRoutes', () => {
       const revoked = deps.stores.emailTokens.invalidatePendingEmailChanges.mock.calls;
       assert.equal(revoked.length, 1);
       assert.deepEqual(revoked[0]!.arguments, ['user-1', 'test@example.com']);
+    });
+
+    test('a browser (cookie) client gets no body token', async () => {
+      const deps = makeMockDeps();
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app)
+        .post('/change-password')
+        .set('Origin', 'https://festie.us')
+        .send({ currentPassword: 'old123456', newPassword: 'new1234567', confirmPassword: 'new1234567' });
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.success, true);
+      assert.equal('token' in res.body.data, false);
+      assert.equal(deps.setUserSessionCookie.mock.calls.length, 1);
     });
 
     test('returns 400 when fields are missing', async () => {
@@ -1049,6 +1113,7 @@ describe('routes/account.js — createAccountRoutes', () => {
   describe('DELETE / (soft-delete account)', () => {
     test('soft-deletes account with correct password', async () => {
       const updateUser = mock.fn(async () => {});
+      const deleteProfiles = mock.fn(async () => {});
       const deps = makeMockDeps({
         getUserById: mock.fn(async () => ({
           id: 'user-1',
@@ -1063,7 +1128,7 @@ describe('routes/account.js — createAccountRoutes', () => {
         clearUserSessionCookie: mock.fn(),
         stores: {
           users: { create: mock.fn(async (d) => d), update: updateUser },
-          profiles: { update: mock.fn(async () => {}), deleteByUserId: mock.fn(async () => {}) },
+          profiles: { update: mock.fn(async () => {}), deleteByUserId: deleteProfiles },
           pool: { query: mock.fn(async () => ({ rows: [] })) },
           roles: { getUserRoles: mock.fn(async () => []) },
           sessions: { deleteUserSession: mock.fn(async () => {}), listUserSessions: mock.fn(async () => []) },
@@ -1078,6 +1143,13 @@ describe('routes/account.js — createAccountRoutes', () => {
       assert.equal(res.body.error, null);
       assert.ok(res.body.data.deletionDate);
       assert.equal(updateUser.mock.calls.length, 1);
+      // Picks and notes stay for the grace window so a sign-in can restore them.
+      assert.deepEqual(deleteProfiles.mock.calls[0]!.arguments, [
+        'user-1',
+        { reason: 'account-deleted', keepPicks: true },
+      ]);
+      const year = new Date(res.body.data.deletionDate).getFullYear();
+      assert.match(res.body.data.message, new RegExp(`^Your account will be deleted on .*${year}\\. Sign in before then to keep it\\.$`));
     });
 
     test('returns 404 when user not found', async () => {
@@ -1946,5 +2018,221 @@ describe('routes/account.js — POST /email notifies the address on file', () =>
     assert.equal(res.status, 400);
     assert.equal(res.body.error.code, 'ALREADY_EXISTS');
     assert.equal(deps.stores.emailTokens.replaceVerificationToken.mock.calls.length, 0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// T4 P1: festival save guards and re-auth
+// ═══════════════════════════════════════════════════════════════════════
+describe('routes/festivals.js — PUT /:id save guards', () => {
+  const stored = {
+    id: 'f-1',
+    name: 'Fest',
+    updatedAt: '2026-10-01T12:00:00.000Z',
+    days: [
+      { label: 'Fri', sets: [{ id: 's1', artist: 'A', stageId: 'main', startTime: '20:00', endTime: '21:00' }] },
+      { label: 'Sat', sets: [{ id: 's2', artist: 'B', stageId: 'main', startTime: '20:00', endTime: '21:00' }] },
+    ],
+  };
+  const dropSat = {
+    name: 'Fest',
+    days: [{ label: 'Fri', sets: [{ id: 's1', artist: 'A2', stageId: 'main', startTime: '20:00', endTime: '21:00' }] }],
+  };
+
+  function guardDeps(overrides: any = {}) {
+    const updateFn = mock.fn(async (id: any, data: any) => ({ id, ...data }));
+    const insertFn = mock.fn(async () => {});
+    const deps = makeMockDeps({
+      getFestivalById: mock.fn(async () => stored),
+      sendError: (res: any, status: any, message: any, code: any, details: any) =>
+        res.status(status).json({ data: null, error: { message, status, code, ...(details || {}) } }),
+      stores: {
+        festivals: { update: updateFn },
+        auditLog: { insert: insertFn },
+        pool: {
+          query: mock.fn(async (sql: string) => ({
+            rows: [{ count: sql.includes('festival_profile_picks') ? '1' : '0' }],
+          })),
+        },
+      },
+      ...overrides,
+    });
+    return { deps, updateFn, insertFn };
+  }
+
+  test('refuses a save that drops a picked set without confirmRemovals', async () => {
+    const { deps, updateFn } = guardDeps();
+    const res = await request(createApp(createFestivalsRoutes(deps))).put('/f-1').send(dropSat);
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'CONFIRM_REMOVALS');
+    assert.deepEqual(res.body.error.removal, { days: 1, sets: 1, picks: 1, ratings: 0 });
+    assert.equal(res.body.error.message, 'This save removes 1 day, 1 set and 1 pick. Confirm to continue.');
+    assert.equal(updateFn.mock.calls.length, 0);
+  });
+
+  test('confirmRemovals without a recent re-auth returns REAUTH_REQUIRED', async () => {
+    const { deps, updateFn } = guardDeps({ hasRecentAuth: () => false });
+    const res = await request(createApp(createFestivalsRoutes(deps)))
+      .put('/f-1')
+      .send({ ...dropSat, confirmRemovals: true });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'REAUTH_REQUIRED');
+    assert.equal(updateFn.mock.calls.length, 0);
+  });
+
+  test('confirmRemovals after re-auth saves and audits the change counts as admin', async () => {
+    const { deps, updateFn, insertFn } = guardDeps();
+    const res = await request(createApp(createFestivalsRoutes(deps)))
+      .put('/f-1')
+      .send({ ...dropSat, confirmRemovals: true, expectedUpdatedAt: '2026-10-01T12:00:00Z' });
+    assert.equal(res.status, 200);
+    assert.equal(updateFn.mock.calls.length, 1);
+    assert.equal((updateFn.mock.calls[0] as any).arguments[1].days.length, 1);
+    await new Promise((r) => setImmediate(r));
+    const row = (insertFn.mock.calls[0] as any).arguments[0];
+    assert.equal(row.actorType, 'admin');
+    assert.equal(row.actorId, 'admin-1');
+    assert.deepEqual(JSON.parse(row.detailsJson), {
+      name: 'Fest',
+      setsAdded: 0,
+      setsRemoved: 1,
+      setsChanged: 1,
+      picksLost: 1,
+    });
+  });
+
+  test('a stale expectedUpdatedAt returns FESTIVAL_CHANGED', async () => {
+    const { deps, updateFn } = guardDeps();
+    const res = await request(createApp(createFestivalsRoutes(deps)))
+      .put('/f-1')
+      .send({ name: 'Fest', expectedUpdatedAt: '2026-09-01T00:00:00.000Z' });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'FESTIVAL_CHANGED');
+    assert.equal(updateFn.mock.calls.length, 0);
+  });
+
+  test('a save without days leaves days and sets alone and counts nothing', async () => {
+    const { deps, updateFn } = guardDeps();
+    const res = await request(createApp(createFestivalsRoutes(deps)))
+      .put('/f-1')
+      .send({ name: 'Fest', stages: [{ id: 'main', name: 'Main' }] });
+    assert.equal(res.status, 200);
+    assert.equal('days' in (updateFn.mock.calls[0] as any).arguments[1], false);
+    assert.equal(deps.stores.pool.query.mock.calls.length, 0);
+  });
+});
+
+describe('routes/festivals.js — DELETE /:id re-auth gate', () => {
+  test('requireRecentAuth runs before the delete', async () => {
+    const softDelete = mock.fn(async () => {});
+    const deps = makeMockDeps({
+      getFestivalById: mock.fn(async () => ({ id: 'f-1', name: 'Fest' })),
+      requireRecentAuth: (_req: any, res: any) =>
+        res.status(403).json({ data: null, error: { code: 'REAUTH_REQUIRED' } }),
+      stores: { festivals: { softDelete } },
+    });
+    const res = await request(createApp(createFestivalsRoutes(deps))).delete('/f-1');
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'REAUTH_REQUIRED');
+    assert.equal(softDelete.mock.calls.length, 0);
+  });
+});
+
+describe('routes/auth.js — POST /reauth', () => {
+  test('wrong password returns 403 PASSWORD_INCORRECT and stamps nothing', async () => {
+    const deps = makeMockDeps({ verifyPassword: mock.fn(async () => false) });
+    const res = await request(createApp(createAuthRoutes(deps))).post('/reauth').send({ password: 'nope' });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'PASSWORD_INCORRECT');
+    assert.equal(res.body.error.message, 'That password is not right. Try again.');
+    assert.equal(deps.stores.sessions.markReauthenticated.mock.calls.length, 0);
+  });
+
+  test('right password stamps the hashed session token and returns reauthUntil', async () => {
+    const deps = makeMockDeps();
+    const before = Date.now();
+    const res = await request(createApp(createAuthRoutes(deps))).post('/reauth').send({ password: 'right' });
+    assert.equal(res.status, 200);
+    const calls = deps.stores.sessions.markReauthenticated.mock.calls;
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].arguments[0], 'hashed-raw-tok-123');
+    const until = new Date(res.body.data.reauthUntil).getTime();
+    assert.ok(until >= before + 15 * 60 * 1000 - 1000 && until <= Date.now() + 15 * 60 * 1000);
+  });
+});
+
+// ── POST /register — anonymous ?ref= sign-up counts (migration 070) ────
+describe('POST /register — signup ref counts', () => {
+  const BODY = {
+    username: 'newuser',
+    password: 'Str0ngTest!Pw',
+    confirmPassword: 'Str0ngTest!Pw',
+    dateOfBirth: '1990-01-01',
+    tosAccepted: true,
+  };
+
+  function refDeps(query: any, overrides: any = {}) {
+    return makeMockDeps({
+      // The real register schema, so the ref is normalized as in production.
+      schemas: { register: realSchemas.register },
+      validate: (schema: any) => (req: any, res: any, next: any) => {
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ data: null, error: { status: 400 } });
+        req.validatedBody = parsed.data;
+        next();
+      },
+      stores: {
+        users: {
+          create: mock.fn(async (d: any) => d),
+          getByUsername: mock.fn(async () => null),
+          countActive: mock.fn(async () => 0),
+        },
+        profiles: { claimOrphanProfiles: mock.fn(async () => {}) },
+        pool: { query },
+        roles: { getUserRoles: mock.fn(async () => ['user']) },
+      },
+      ...overrides,
+    });
+  }
+
+  const refInserts = (query: any) =>
+    query.mock.calls.filter((c: any) => String(c.arguments[0]).includes('signup_ref_counts'));
+
+  test('a valid ref is lower-cased and counted once', async () => {
+    const query = mock.fn(async () => ({ rows: [] }));
+    const app = createApp(createAuthRoutes(refDeps(query)));
+    const res = await request(app).post('/register').send({ ...BODY, ref: 'Insta_Story' });
+    assert.equal(res.status, 201);
+    const inserts = refInserts(query);
+    assert.equal(inserts.length, 1);
+    assert.deepEqual(inserts[0].arguments[1], ['insta_story']);
+    assert.match(inserts[0].arguments[0], /ON CONFLICT \(day, ref\) DO UPDATE SET signups = signup_ref_counts\.signups \+ 1/);
+  });
+
+  test('an invalid ref is ignored and sign-up still succeeds', async () => {
+    const query = mock.fn(async () => ({ rows: [] }));
+    const app = createApp(createAuthRoutes(refDeps(query)));
+    const res = await request(app).post('/register').send({ ...BODY, ref: 'bad ref!<script>' });
+    assert.equal(res.status, 201);
+    assert.equal(refInserts(query).length, 0);
+  });
+
+  test('a failed register does not count', async () => {
+    const query = mock.fn(async () => ({ rows: [] }));
+    const app = createApp(createAuthRoutes(refDeps(query, { validateUsername: () => false })));
+    const res = await request(app).post('/register').send({ ...BODY, ref: 'insta' });
+    assert.equal(res.status, 400);
+    assert.equal(refInserts(query).length, 0);
+  });
+
+  test('a counting error does not fail register', async () => {
+    const query = mock.fn(async (sql: string) => {
+      if (sql.includes('signup_ref_counts')) throw new Error('relation does not exist');
+      return { rows: [] };
+    });
+    const app = createApp(createAuthRoutes(refDeps(query)));
+    const res = await request(app).post('/register').send({ ...BODY, ref: 'insta' });
+    assert.equal(res.status, 201);
+    assert.equal(refInserts(query).length, 1);
   });
 });

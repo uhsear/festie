@@ -121,13 +121,81 @@ describe('emitter: profileUpdated', () => {
     emitter.flushAll();
   });
 
-  it('sends the picks push only to crew-mates, with a compare link', async () => {
-    const io = makeIo();
-    const sendToOfflineUsers = mock.fn(async (_args: any) => {});
-    const notificationService = {
-      isConfigured: true,
-      sendToOfflineUsers,
+  it('digests crew pick pushes: one per crewmate, none for author or outsider', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const send = mock.fn(async (_a: any) => ({ sent: 1 }));
+    const notificationService = { isConfigured: true, send };
+    const stores = {
+      crews: {
+        listByUserAndFestival: mock.fn(async () => [{ id: 'c1' }, { id: 'c2' }]),
+        getMembersForCrews: mock.fn(async () => new Map([
+          ['c1', [{ userId: 'user-1' }, { userId: 'bob' }]],
+          ['c2', [{ userId: 'user-1' }, { userId: 'bob' }, { userId: 'cara' }]],
+        ])),
+      },
+      topicSubscriptions: { getUnsubscribedUsers: mock.fn(async () => ['cara']) },
     };
+    const emitter = createSocketEmitter({ ...defaultDeps({ notificationService }), stores });
+    stores.topicSubscriptions.getUnsubscribedUsers.mock.mockImplementation(async () => []);
+
+    for (let i = 0; i < 10; i++) {
+      emitter.profileUpdated({
+        profile: { festivalId: 'fest-1', id: 'prof-1', name: `Alice${i}`, userId: 'user-1', picks: {} },
+        user: {},
+        changedFields: { picks: true },
+      });
+    }
+    t.mock.timers.tick(4 * 60 * 1000);
+    assert.equal(send.mock.callCount(), 0);
+    t.mock.timers.tick(60 * 1000);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+
+    const calls = send.mock.calls.map((c: any) => c.arguments[0]);
+    assert.deepEqual(calls.map((c: any) => c.userId).sort(), ['bob', 'cara']);
+    assert.equal(calls[0].type, 'crew_update');
+    assert.equal(calls[0].title, 'Crew update');
+    assert.equal(calls[0].body, 'Alice9 updated their picks.');
+    // Push links are absolute web URLs so one link opens on web and on mobile.
+    assert.equal(calls[0].data.deepLink, 'https://festie.example/compare');
+    assert.equal(calls[0].threadId, 'crew-fest-1');
+    emitter.flushAll();
+  });
+
+  it('skips crewmates who muted the festival crew topic and sends nothing without crews', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const send = mock.fn(async (_a: any) => ({ sent: 1 }));
+    let crews: any[] = [{ id: 'c1' }];
+    const stores = {
+      crews: {
+        listByUserAndFestival: async () => crews,
+        getMembersForCrews: async () => new Map([['c1', [{ userId: 'user-1' }, { userId: 'bob' }, { userId: 'cara' }]]]),
+      },
+      topicSubscriptions: { getUnsubscribedUsers: async () => ['cara'] },
+    };
+    const emitter = createSocketEmitter({ ...defaultDeps({ notificationService: { isConfigured: true, send } }), stores });
+    const save = () => emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', name: 'Alice', userId: 'user-1', picks: {} },
+      user: {},
+      changedFields: { picks: true },
+    });
+    save();
+    t.mock.timers.tick(5 * 60 * 1000);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert.deepEqual(send.mock.calls.map((c: any) => c.arguments[0].userId), ['bob']);
+
+    crews = [];
+    save();
+    t.mock.timers.tick(5 * 60 * 1000);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert.equal(send.mock.callCount(), 1);
+    emitter.flushAll();
+  });
+
+  it('sends the picks push only to crew-mates, with a compare link', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const io = makeIo();
+    const send = mock.fn(async (_a: any) => ({ sent: 1 }));
+    const notificationService = { isConfigured: true, send };
     const stores = crewStores({ c1: ['user-1', 'user-2'], c2: ['user-2', 'user-3'] });
     const emitter = createSocketEmitter(defaultDeps({ io, notificationService, stores }));
 
@@ -137,23 +205,25 @@ describe('emitter: profileUpdated', () => {
       changedFields: { picks: true },
     });
 
-    // Let the async push fire
-    await new Promise((r) => setTimeout(r, 50));
-    assert.equal(sendToOfflineUsers.mock.callCount(), 1);
-    const call = (sendToOfflineUsers.mock.calls as any[])[0]!.arguments[0];
-    assert.equal(call!.festivalId, 'fest-1');
-    assert.equal(call!.type, 'crew_update');
-    assert.deepEqual([...call!.userIds].sort(), ['user-2', 'user-3']);
-    assert.equal(call!.data.deepLink, 'https://festie.example/compare');
+    t.mock.timers.tick(5 * 60 * 1000);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    const calls = send.mock.calls.map((c: any) => c.arguments[0]);
+    assert.deepEqual(calls.map((c: any) => c.userId).sort(), ['user-2', 'user-3']);
+    for (const call of calls) {
+      assert.equal(call.type, 'crew_update');
+      assert.equal(call.data.festivalId, 'fest-1');
+      assert.equal(call.data.deepLink, 'https://festie.example/compare');
+    }
     assert.deepEqual(stores.crews.listByUserAndFestival.mock.calls[0]!.arguments, ['user-1', 'fest-1']);
     emitter.flushAll();
   });
 
-  it('sends no visible picks push when the user has no crew', async () => {
+  it('sends no visible picks push when the user has no crew', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
-    const sendToOfflineUsers = mock.fn(async () => {});
+    const send = mock.fn(async () => ({ sent: 1 }));
     const sendSilentSync = mock.fn(async () => {});
-    const notificationService = { isConfigured: true, sendToOfflineUsers, sendSilentSync };
+    const notificationService = { isConfigured: true, send, sendSilentSync };
     const emitter = createSocketEmitter(defaultDeps({ io, notificationService, stores: crewStores({}) }));
 
     emitter.profileUpdated({
@@ -162,15 +232,17 @@ describe('emitter: profileUpdated', () => {
       changedFields: { picks: true },
     });
 
-    await new Promise((r) => setTimeout(r, 50));
-    assert.equal(sendToOfflineUsers.mock.callCount(), 0);
+    t.mock.timers.tick(5 * 60 * 1000);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert.equal(send.mock.callCount(), 0);
     assert.equal(sendSilentSync.mock.callCount(), 1, 'silent sync still runs');
     emitter.flushAll();
   });
 
-  it('logs and never throws when the crew lookup fails', async () => {
+  it('logs and never throws when the crew lookup fails', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const log = makeLog();
-    const sendToOfflineUsers = mock.fn(async () => {});
+    const send = mock.fn(async () => ({ sent: 1 }));
     const stores = {
       crews: {
         listByUserAndFestival: mock.fn(async () => {
@@ -179,7 +251,7 @@ describe('emitter: profileUpdated', () => {
       },
     };
     const emitter = createSocketEmitter(
-      defaultDeps({ log, notificationService: { isConfigured: true, sendToOfflineUsers }, stores }),
+      defaultDeps({ log, notificationService: { isConfigured: true, send }, stores }),
     );
 
     emitter.profileUpdated({
@@ -188,8 +260,9 @@ describe('emitter: profileUpdated', () => {
       changedFields: { picks: true },
     });
 
-    await new Promise((r) => setTimeout(r, 50));
-    assert.equal(sendToOfflineUsers.mock.callCount(), 0);
+    t.mock.timers.tick(5 * 60 * 1000);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert.equal(send.mock.callCount(), 0);
     assert.equal(log.warn.mock.calls[0]!.arguments[0], 'crew push failed');
     emitter.flushAll();
   });

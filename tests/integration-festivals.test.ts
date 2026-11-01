@@ -290,6 +290,13 @@ describe('Database Transaction Rollback — festival', { concurrency: 1 }, () =>
     const user = await registerUser(server, 'fest-cascade');
     await joinFestivalProfile(server, user.token, 'fest-1');
     const adminToken = await loginAdmin(server);
+    // Festival delete needs a password re-entry within 15 minutes.
+    await server.request
+      .post('/api/v1/auth/reauth')
+      .set('x-user-token', adminToken)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ password: 'test-admin-password' })
+      .expect(200);
 
     const deleteRes = await server.request
       .delete('/api/v1/festivals/fest-1')

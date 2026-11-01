@@ -11,6 +11,10 @@ import {
   createSettleUpFlow,
   confirmPaidMessage,
   payOptionsFor,
+  spendingExpenses,
+  ledgerRows,
+  settlementPayments,
+  describePayment,
 } from '@festie/shared/utils';
 import { EXPENSE_CATEGORIES, expenseCategoryFor } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
@@ -73,6 +77,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   // payee's links show first. Records the exact netted plan amount.
   const [paidTarget, setPaidTarget] = useState<CrewSettlement | null>(null);
   const [removeTarget, setRemoveTarget] = useState<RawExpense | null>(null);
+  const [undoTarget, setUndoTarget] = useState<RawExpense | null>(null);
 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -172,8 +177,13 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         qc.invalidateQueries({ queryKey: ['settlement-plan', crewId] });
         qc.invalidateQueries({ queryKey: ['expense-balances', crewId] });
       }
+      const wasPayment = expenses.some((e) => e.id === id && e.category === 'settlement');
       setRemoveTarget(null);
-      toast(writeOutcomeMessage(outcome, 'Expense removed'), outcome === 'queued' ? 'info' : 'success');
+      setUndoTarget(null);
+      toast(
+        writeOutcomeMessage(outcome, wasPayment ? 'Payment undone' : 'Expense removed'),
+        outcome === 'queued' ? 'info' : 'success',
+      );
     },
     onError: (e) => toastError(e, "Couldn't remove expense. Try again."),
   });
@@ -222,13 +232,18 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   const myBalance = balances.find((b) => b.userId === currentUserId)?.balance ?? 0;
   // Actual spend feeds the ledger; planned is the forecast/budget total. Keep
   // them separate so a budget row never inflates "total spent".
-  const actualExpenses = expenses.filter((e) => !e.planned);
+  const actualExpenses = spendingExpenses(expenses);
   const plannedExpenses = expenses.filter((e) => e.planned);
+  const payments = settlementPayments(expenses);
+  const nameOf = (userId: string) => {
+    const m = members.find((x) => x.userId === userId);
+    return m ? m.name || m.username : undefined;
+  };
   const totalSpent = actualExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
   const totalPlanned = plannedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
   // N1: tween the headline total when the live ledger changes instead of hard-cutting.
   const animatedTotalSpent = useAnimatedNumber(totalSpent, { decimals: 2 });
-  const visibleExpenses = view === 'actual' ? actualExpenses : view === 'planned' ? plannedExpenses : expenses;
+  const visibleExpenses = ledgerRows(expenses, view);
   const nonZeroBalances = balances.filter((b) => Math.abs(b.balance) > 0.01);
 
   if (isLoading)
@@ -584,6 +599,51 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       )}
       </div>
 
+      {view !== 'planned' && payments.length > 0 && (
+        <div className="space-y-2">
+          <div>
+            <h3 className="text-xs text-text-muted uppercase tracking-wide">Payments</h3>
+            <p className="text-xs text-text-secondary">Settle-up payments. Not counted in Total spent.</p>
+          </div>
+          {payments.map((p) => (
+            <div
+              key={p.id}
+              className="p-3 rounded-lg bg-bg-card border border-glass-border flex items-center justify-between gap-3"
+            >
+              <span className="text-sm text-text-primary">{describePayment(p, currentUserId, nameOf)}</span>
+              {p.paid_by === currentUserId && !p._optimistic && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setUndoTarget(p)}
+                  disabled={removeExpense.isPending}
+                  className="!py-1 !px-3 text-xs min-h-11"
+                >
+                  Undo payment
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={undoTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setUndoTarget(null);
+        }}
+        title="Undo this payment?"
+        description={
+          undoTarget
+            ? `${describePayment(undoTarget, currentUserId, nameOf)}. Undo it only if it was recorded by mistake. Balances go back to what they were before.`
+            : undefined
+        }
+        confirmLabel="Undo payment"
+        destructive
+        busy={removeExpense.isPending}
+        onConfirm={() => {
+          if (undoTarget) removeExpense.mutate(undoTarget.id);
+        }}
+      />
       <ConfirmDialog
         open={removeTarget !== null}
         onOpenChange={(open) => {

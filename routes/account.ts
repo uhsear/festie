@@ -251,23 +251,52 @@ export default function createAccountRoutes(deps: RouteDeps) {
     message: 'Too many verification emails sent to this address. Try again later.',
   });
 
-  // Rate limiter for GDPR data exports (1 per 24 hours per user)
-  const exportRateLimits = new Map<string, number>();
+  // GDPR data exports: 1 per 24 hours per user. Redis holds the slot so the
+  // limit covers every PM2 process and survives restarts. The slot is reserved
+  // before collecting and released if the export fails, so a failure does not
+  // use up the day. Without Redis, a per-process Map applies the same rules.
+  const localExportReservations = new Map<string, number>();
   const EXPORT_RATE_LIMIT_MS = 24 * 60 * 60 * 1000; // 24 hours
   const MAX_EXPORT_RATE_ENTRIES = 1000;
+  // The shared ioredis client applies REDIS_PREFIX itself (lib/redis.ts keyPrefix).
+  const exportKey = (userId: string) => `export:${userId}`;
 
-  function canExportData(userId: string) {
-    const lastExport = exportRateLimits.get(userId);
-    if (!lastExport) return true;
-    return Date.now() - lastExport >= EXPORT_RATE_LIMIT_MS;
+  function reserveLocalExport(userId: string): number {
+    const last = localExportReservations.get(userId);
+    if (last !== undefined && Date.now() - last < EXPORT_RATE_LIMIT_MS) return last + EXPORT_RATE_LIMIT_MS - Date.now();
+    localExportReservations.delete(userId);
+    localExportReservations.set(userId, Date.now());
+    // Cap Map size with FIFO eviction
+    if (localExportReservations.size > MAX_EXPORT_RATE_ENTRIES) {
+      localExportReservations.delete(localExportReservations.keys().next().value as string);
+    }
+    return 0;
   }
 
-  function recordExport(userId: string) {
-    exportRateLimits.set(userId, Date.now());
-    // Cap Map size with FIFO eviction
-    if (exportRateLimits.size > MAX_EXPORT_RATE_ENTRIES) {
-      const oldest = exportRateLimits.keys().next().value as string;
-      exportRateLimits.delete(oldest);
+  /** Returns 0 when the slot is reserved, else the ms until the next export is allowed. */
+  async function reserveExport(userId: string): Promise<number> {
+    const { redis } = deps;
+    if (redis) {
+      try {
+        const key = exportKey(userId);
+        if ((await redis.set(key, String(Date.now()), 'PX', EXPORT_RATE_LIMIT_MS, 'NX')) === 'OK') return 0;
+        return Math.max(1, await redis.pttl(key));
+      } catch (error) {
+        log.warn('account:export-limit-fallback', { userId, error: (error as Error).message });
+      }
+    } else {
+      log.warn('account:export-limit-fallback', { userId, error: 'redis unavailable' });
+    }
+    return reserveLocalExport(userId);
+  }
+
+  async function releaseExport(userId: string) {
+    localExportReservations.delete(userId);
+    if (!deps.redis) return;
+    try {
+      await deps.redis.del(exportKey(userId));
+    } catch (error) {
+      log.warn('account:export-limit-release-failed', { userId, error: (error as Error).message });
     }
   }
 
@@ -582,7 +611,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
           return sendError(res, 403, 'Incorrect password', ErrorCodes.PASSWORD_INCORRECT);
         }
 
-        // Soft-delete: set deleted_at, keep all data for 30-day grace period.
+        // Soft-delete: set deleted_at and hide the profiles. Picks and notes stay
+        // until the 30-day purge, so a sign-in before then restores them.
+        // Sessions, refresh tokens and device tokens go now.
         // Retry once on deadlock (PG 40P01) — concurrent test cleanup can trigger this.
         const performSoftDelete = async () => {
           await stores.users.update(req.user.userId, { deletedAt: new Date().toISOString() });
@@ -590,7 +621,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
           await invalidateUserSessions(req.user.userId);
           if (stores.refreshTokens) await stores.refreshTokens.revokeAll(req.user.userId);
           if (stores.deviceTokens) await stores.deviceTokens.deleteByUser(req.user.userId);
-          if (stores.profiles) await stores.profiles.deleteByUserId(req.user.userId);
+          if (stores.profiles) {
+            await stores.profiles.deleteByUserId(req.user.userId, { reason: 'account-deleted', keepPicks: true });
+          }
           disconnectUserSockets(req.user.userId, io);
         };
         try {
@@ -609,10 +642,13 @@ export default function createAccountRoutes(deps: RouteDeps) {
           ip: getRequestIp(req),
         });
         deps.clearUserSessionCookie(res);
+        const deletionDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        // Same text as accountDeletionNotice() in @festie/shared authStore.
+        const deletionDay = deletionDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
         return sendSuccess(res, {
           success: true,
-          message: 'Account scheduled for deletion. You have 30 days to reactivate by logging in.',
-          deletionDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          message: `Your account will be deleted on ${deletionDay}. Sign in before then to keep it.`,
+          deletionDate: deletionDate.toISOString(),
         });
       } catch (error) {
         log.error('account soft-delete failed', { error: (error as Error).message, userId: req.user.userId });
@@ -623,14 +659,17 @@ export default function createAccountRoutes(deps: RouteDeps) {
 
   // ── GET /export — GDPR data export ────────────────────────────────────────
   router.get('/export', userAuth, rateLimit(10, 'account-export'), async (req: Request, res: Response) => {
+    let reserved = false;
     try {
       const userId = req.user.userId;
 
-      // Check rate limit: 1 export per 24 hours
-      if (!canExportData(userId)) {
-        // canExportData returned false, so an entry exists for this user.
-        const lastExport = exportRateLimits.get(userId)!;
-        const nextAvailable = new Date(lastExport + EXPORT_RATE_LIMIT_MS);
+      const currentUser = await getUserById(userId);
+      if (!currentUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+
+      // Rate limit: 1 export per 24 hours
+      const retryMs = await reserveExport(userId);
+      if (retryMs > 0) {
+        const nextAvailable = new Date(Date.now() + retryMs);
         return sendError(
           res,
           429,
@@ -638,13 +677,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
           ErrorCodes.RATE_LIMITED,
         );
       }
-
-      const currentUser = await getUserById(userId);
-      if (!currentUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+      reserved = true;
 
       const exportData = await collectGdprData(userId, currentUser, deps);
-
-      recordExport(userId);
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `festie-data-${timestamp}.json`;
@@ -658,6 +693,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
       log.info('account:gdpr-export', { userId, username: currentUser.username });
       return sendSuccess(res, exportData);
     } catch (error) {
+      if (reserved) await releaseExport(req.user.userId);
       log.error('account export failed', { error: (error as Error).message, userId: req.user.userId });
       return sendError(res, 500, 'Failed to export data', ErrorCodes.INTERNAL_ERROR);
     }

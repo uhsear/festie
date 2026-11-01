@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { View, Text } from 'react-native';
-import { describeInvite, fetchInvitePreview, type InvitePreview } from '../lib/pendingInvite';
+import { useAuthStore } from '@festie/shared/stores';
+import { useInvitePreview } from '@festie/shared/hooks';
+import { describeInvitePreview, inviteStatusMessage, type InviteStatus } from '@festie/shared/utils';
+import type { InvitePreview } from '@festie/shared/types';
 import { makeStyles, typeStyle } from '../hooks/useTokens';
 import DisplayWords from './DisplayWords';
 
@@ -30,10 +33,8 @@ const useStyles = makeStyles((t) => ({
   },
 }));
 
-type State = { status: 'loading' } | { status: 'ready'; preview: InvitePreview } | { status: 'invalid' };
-
 /**
- * Shows a guest who invited them: crew name, inviter and member count. Renders
+ * Shows who started the invite: crew name, spots left, festival and dates. Renders
  * nothing without a code or while loading, so it is safe on every auth screen.
  */
 export default function InviteCard({
@@ -41,52 +42,41 @@ export default function InviteCard({
   onStatus,
 }: {
   code: string | null;
-  onStatus?: (s: 'ready' | 'invalid') => void;
+  onStatus?: (status: InviteStatus, preview: InvitePreview | null) => void;
 }) {
   const styles = useStyles();
-  const [state, setState] = useState<State>({ status: 'loading' });
+  const user = useAuthStore((s) => s.user);
+  const { status, preview } = useInvitePreview(code);
 
   useEffect(() => {
-    if (!code) return;
-    let cancelled = false;
-    fetchInvitePreview(code)
-      .then((preview) => {
-        if (cancelled) return;
-        setState({ status: 'ready', preview });
-        onStatus?.('ready');
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setState({ status: 'invalid' });
-        onStatus?.('invalid');
-      });
-    return () => {
-      cancelled = true;
-    };
-    // onStatus is a state setter in the only caller; excluding it avoids refetching on identity changes.
+    onStatus?.(status, preview);
+    // onStatus is a state setter in the only caller that passes it; excluding it avoids loops on identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  }, [status, preview]);
 
-  if (!code || state.status === 'loading') return null;
+  if (!code || status === 'loading') return null;
 
-  if (state.status === 'invalid') {
+  if (status !== 'ready' || !preview) {
     return (
       <View style={styles.card} accessibilityRole="alert">
-        <Text style={styles.detail}>
-          This invite link has expired or is no longer valid. Ask the crew owner for a new link.
-        </Text>
+        <Text style={styles.detail}>{inviteStatusMessage(status, !!user)}</Text>
       </View>
     );
   }
 
-  const { title, detail } = describeInvite(state.preview);
+  const { title, stateLine, festivalLine, ownerLine } = describeInvitePreview(preview);
+  const lines = [stateLine, festivalLine, ownerLine].filter((l): l is string => !!l);
   return (
-    <View style={styles.card} accessible accessibilityLabel={`Crew invitation. ${title}. ${detail}`}>
-      <Text style={styles.eyebrow}>You are invited</Text>
+    <View style={styles.card} accessible accessibilityLabel={['Crew invitation', title, ...lines].join('. ')}>
+      <Text style={styles.eyebrow}>You're invited</Text>
       <Text style={styles.title}>
         <DisplayWords text={title} fontSize={styles.title.fontSize} />
       </Text>
-      <Text style={styles.detail}>{detail}</Text>
+      {lines.map((line) => (
+        <Text key={line} style={styles.detail}>
+          {line}
+        </Text>
+      ))}
     </View>
   );
 }

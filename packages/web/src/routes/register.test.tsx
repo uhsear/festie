@@ -223,4 +223,30 @@ describe('RegisterPage', () => {
       email: undefined,
     });
   });
+
+  it('sends the ?ref= source stored on this visit', async () => {
+    sessionStorage.setItem('festie-ref', 'tiktok');
+    const mockRegister = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useAuth).mockReturnValue({
+      login: vi.fn(),
+      register: mockRegister,
+      logout: vi.fn(),
+      forgotPassword: vi.fn(),
+      changePassword: vi.fn(),
+      uploadAvatar: vi.fn(),
+      removeAvatar: vi.fn(),
+      isLoading: false,
+      error: null,
+    });
+    const user = userEvent.setup();
+    render(<RegisterPage />);
+    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.type(screen.getByLabelText('Confirm password'), 'password123');
+    fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ ref: 'tiktok' }));
+    sessionStorage.removeItem('festie-ref');
+  });
 });

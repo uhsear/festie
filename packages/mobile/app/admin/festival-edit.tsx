@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, View, Text, ScrollView, Switch, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '@festie/shared/services';
+import { api, describeRemovals, removalFromError, withReauth, type RemovalSummary } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
@@ -11,6 +11,7 @@ import SectionLabel from '../../components/SectionLabel';
 import {
   ConfirmDialog,
   LabeledTextInput,
+  useReauthPrompt,
   ModalSelect,
   HexColorField,
   DateField,
@@ -58,7 +59,11 @@ import type { FestivalMapConfig } from '@festie/shared/types';
  *       { name, location, timeZone, stages[], days[].sets[] }. The festival's
  *       date range is NOT a top-level field — the server derives start/end from
  *       the day dates (days[].date), matching festivalCreateSchema/festivalUpdateSchema.
- * Delete: DELETE /admin/festivals/:id — gated behind ConfirmDialog.
+ *       Sends expectedUpdatedAt so a stale form gets FESTIVAL_CHANGED instead of
+ *       overwriting. A save that removes sets people picked gets CONFIRM_REMOVALS;
+ *       the admin confirms, re-enters their password if asked, and it re-sends with
+ *       confirmRemovals: true.
+ * Delete: DELETE /admin/festivals/:id — gated behind ConfirmDialog and a password re-check.
  * Backfill: POST /admin/festivals/:id/backfill-spotify — gated behind ConfirmDialog.
  *
  * Back-navigates to '/admin' on save / cancel / delete.
@@ -76,6 +81,7 @@ interface FestivalDetail {
   name?: string;
   location?: string;
   timeZone?: string | null;
+  updatedAt?: string;
   mapConfig?: FestivalMapConfig | null;
   stages?: { id?: string; name?: string; color?: string; latitude?: number | null; longitude?: number | null }[];
   days?: {
@@ -143,6 +149,14 @@ export default function FestivalEditScreen() {
   // unsaved edits. Simplest honest signal — no deep compare.
   const [touched, setTouched] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  // Festival version the form was loaded from; sent back as expectedUpdatedAt.
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  // Set when the server says the save would remove picked sets; holds what to re-send.
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    summary: RemovalSummary;
+    payload: Record<string, unknown>;
+  } | null>(null);
+  const { askPassword: askReauthPassword, reauthDialog } = useReauthPrompt();
   const updateForm = useCallback((updater: (f: FormState) => FormState) => {
     setTouched(true);
     setForm(updater);
@@ -182,6 +196,7 @@ export default function FestivalEditScreen() {
         days,
         mapConfig: full.mapConfig ?? null,
       });
+      setUpdatedAt(full.updatedAt ?? null);
       // Auto-expand all days so artists are visible immediately (web parity).
       setExpandedDays(new Set(days.map((d) => d.id)));
     } catch {
@@ -205,6 +220,23 @@ export default function FestivalEditScreen() {
     };
   }, [isAdmin, editingId, load]);
 
+  // Coming back from the map editor, pick up the pins it saved. Skipped while the
+  // form has unsaved edits (reloading would discard them) and on first mount.
+  const touchedRef = useRef(touched);
+  useEffect(() => {
+    touchedRef.current = touched;
+  }, [touched]);
+  const seenFirstFocus = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!seenFirstFocus.current) {
+        seenFirstFocus.current = true;
+        return;
+      }
+      if (isAdmin && editingId && !touchedRef.current) void load();
+    }, [isAdmin, editingId, load]),
+  );
+
   // ── Navigation ────────────────────────────────────────────────────────────
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -216,8 +248,12 @@ export default function FestivalEditScreen() {
   // is fully owned there (this text-form screen never needs the map). Edit-only.
   const goToMapEditor = useCallback(() => {
     if (!editingId) return;
+    if (touched) {
+      setFormError('Save your changes before you edit the map.');
+      return;
+    }
     router.push({ pathname: '/admin/festival-map', params: { id: editingId } });
-  }, [router, editingId]);
+  }, [router, editingId, touched]);
 
   // ── Stage editing ─────────────────────────────────────────────────────────
   const addStage = () =>
@@ -337,13 +373,21 @@ export default function FestivalEditScreen() {
       })),
     };
 
+    if (editingId && updatedAt) payload.expectedUpdatedAt = updatedAt;
+    await send(payload, false);
+  };
+
+  // Posts the built payload. `confirmRemovals` is set only after the admin accepted
+  // the removal summary, and that path needs a recent password check.
+  const send = async (payload: Record<string, unknown>, confirmRemovals: boolean) => {
     setSaving(true);
     try {
       if (editingId) {
-        const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
-          ...payload,
-          notify: notifyPickers,
-        });
+        const body = { ...payload, notify: notifyPickers, ...(confirmRemovals ? { confirmRemovals: true } : {}) };
+        const run = () =>
+          api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, body);
+        const res = confirmRemovals ? await withReauth(run, askReauthPassword) : await run();
+        if (confirmRemovals && res === null) return; // password prompt cancelled
         // The screen closes on save and has no inline success message, so every save confirms in an alert.
         if (res?.scheduleNotice) Alert.alert(describeScheduleNotice(res.scheduleNotice));
       } else {
@@ -351,7 +395,12 @@ export default function FestivalEditScreen() {
       }
       goBack();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Couldn't save festival. Try again.");
+      const summary = removalFromError(err);
+      if (summary) {
+        setPendingRemoval({ summary, payload });
+      } else {
+        setFormError(err instanceof Error ? err.message : "Couldn't save festival. Try again.");
+      }
     } finally {
       setSaving(false);
     }
@@ -362,9 +411,12 @@ export default function FestivalEditScreen() {
     if (!editingId) return;
     setBusy(true);
     try {
-      await api.delete<void>(`/admin/festivals/${editingId}`);
       setConfirm(null);
-      goBack();
+      const done = await withReauth(async () => {
+        await api.delete<void>(`/admin/festivals/${editingId}`);
+        return true;
+      }, askReauthPassword);
+      if (done) goBack();
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Couldn't delete festival. Try again.");
       setConfirm(null);
@@ -821,6 +873,20 @@ export default function FestivalEditScreen() {
         onConfirm={() => void doBackfill()}
         onCancel={() => !busy && setConfirm(null)}
       />
+      <ConfirmDialog
+        visible={pendingRemoval !== null}
+        title="Remove sets with picks?"
+        message={pendingRemoval ? describeRemovals(pendingRemoval.summary) : ''}
+        confirmLabel="Remove and save"
+        destructive
+        onConfirm={() => {
+          const pending = pendingRemoval;
+          setPendingRemoval(null);
+          if (pending) void send(pending.payload, true);
+        }}
+        onCancel={() => setPendingRemoval(null)}
+      />
+      {reauthDialog}
       <ConfirmDialog
         visible={showCancelConfirm}
         title="Discard changes?"

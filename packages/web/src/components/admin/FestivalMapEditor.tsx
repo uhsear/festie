@@ -43,8 +43,8 @@ const CrewMap = lazy(() => import('../crew/CrewMap'));
  * the stage rows + festival.mapConfig. All authoring math is the shared pure
  * `@festie/shared` mapAuthoring helpers, so web + mobile stay in parity.
  *
- * Loads the FULL festival (stages/days/timeZone) and round-trips the non-geo
- * fields on save so editing the map never drops lineup data.
+ * Loads the FULL festival (stages/timeZone) and round-trips the non-geo fields
+ * on save. The save never sends `days`, so it never touches lineup data.
  */
 
 interface FestivalDetail {
@@ -52,24 +52,11 @@ interface FestivalDetail {
   name?: string;
   location?: string;
   timeZone?: string | null;
+  updatedAt?: string;
   latitude?: number | null;
   longitude?: number | null;
   mapConfig?: FestivalMapConfig | null;
   stages?: { id?: string; name?: string; color?: string; latitude?: number | null; longitude?: number | null }[];
-  days?: {
-    id?: string;
-    label?: string;
-    date?: string;
-    sets?: {
-      id?: string;
-      artist?: string;
-      stageId?: string | null;
-      startTime?: string | null;
-      endTime?: string | null;
-      linkUrl?: string | null;
-      artists?: { name?: string; links?: Record<string, string> }[];
-    }[];
-  }[];
 }
 
 interface StageEdit {
@@ -312,10 +299,6 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
 
   const handleSave = async () => {
     if (!detail) return;
-    const normTime = (v: string | null | undefined) => {
-      const x = (v ?? '').trim();
-      return x === '' || x.toLowerCase() === 'tba' ? '' : x;
-    };
     const payload: Record<string, unknown> = {
       name: detail.name?.trim() || name.trim(),
       location: detail.location?.trim() || '',
@@ -327,19 +310,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
         latitude: s.latitude,
         longitude: s.longitude,
       })),
-      days: (detail.days || []).map((d) => ({
-        id: d.id,
-        label: (d.label || '').trim(),
-        date: (d.date || '').trim(),
-        sets: (d.sets || []).map((s) => ({
-          id: s.id,
-          artist: (s.artist || s.artists?.[0]?.name || '').trim(),
-          stageId: s.stageId || null,
-          startTime: normTime(s.startTime),
-          endTime: normTime(s.endTime),
-          linkUrl: (s.linkUrl || '').trim() || null,
-        })),
-      })),
+      expectedUpdatedAt: detail.updatedAt,
       mapConfig,
     };
 
@@ -392,6 +363,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
             festival={mapFestival}
             onMapClick={armed ? handleMapClick : undefined}
             draftPoints={draftPoints}
+            authoring
           />
         </Suspense>
         {armed && (

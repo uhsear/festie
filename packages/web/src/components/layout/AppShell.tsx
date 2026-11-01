@@ -16,7 +16,7 @@ import IOSInstallSheet from '../features/IOSInstallSheet';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
 import Onboarding from '../features/Onboarding';
-import ConfirmDialog from '../ui/ConfirmDialog';
+import JoinCrewSheet from '../crew/JoinCrewSheet';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { usePushLanding } from '../../hooks/usePushLanding';
@@ -84,28 +84,15 @@ export default function AppShell() {
   usePushNotifications();
   usePushLanding();
   useOfflineQueueBridge();
-  const { pendingJoinCode, joinBusy, confirmJoinCrew, cancelJoinCrew } = useFestivalLoader();
+  const { pendingJoinCode, clearPendingJoin } = useFestivalLoader();
   const { showDayBanner } = useFestivalMode(location.pathname);
 
   // A ?joinCrew= link stages its code instead of enrolling the visitor outright;
-  // this is the consent step that completes it. Rendered in BOTH the auth-route
-  // and main branches below because the post-registration replay can re-stage the
-  // code while the user is still on /register — and a prompt that never paints
+  // this sheet is the consent step that completes it. Rendered in BOTH the auth-route
+  // and main branches below because a guest's code is staged right after sign-up
+  // while the user may still be on /register -- a sheet that never paints
   // there would leave the invite link silently doing nothing.
-  const joinCrewPrompt = (
-    <ConfirmDialog
-      open={!!pendingJoinCode}
-      onOpenChange={(next) => {
-        if (!next) cancelJoinCrew();
-      }}
-      title="Join this crew?"
-      description="Someone shared a crew invite link with you. Crew members can see your picks and your status."
-      confirmLabel="Join crew"
-      cancelLabel="Not now"
-      onConfirm={confirmJoinCrew}
-      busy={joinBusy}
-    />
-  );
+  const joinCrewSheet = <JoinCrewSheet code={pendingJoinCode} onClose={clearPendingJoin} />;
 
   // Prefetch main-tab chunks on idle so switching between tabs is instant.
   useEffect(() => {
@@ -135,7 +122,7 @@ export default function AppShell() {
         <Suspense fallback={<RouteFallback />}>
           <Outlet />
         </Suspense>
-        {joinCrewPrompt}
+        {joinCrewSheet}
       </main>
     );
   }
@@ -167,7 +154,7 @@ export default function AppShell() {
         <UpdatePrompt />
         <IOSInstallSheet />
         <Onboarding suspended={!!pendingJoinCode} />
-        {joinCrewPrompt}
+        {joinCrewSheet}
         <Header />
         <SosBanner />
 

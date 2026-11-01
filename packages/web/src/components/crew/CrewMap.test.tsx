@@ -125,6 +125,14 @@ describe('CrewMap', () => {
     expect(mapInstances).toHaveLength(0);
   });
 
+  it('renders the map container, not the empty state, when authoring with nothing to plot', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    render(<CrewMap meetingPoints={[]} authoring />);
+    expect(screen.queryByText('No mapped meeting points yet')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Crew map with meeting points and live locations')).toBeInTheDocument();
+    expect(screen.getByText('Click Set location, then click the map.')).toBeInTheDocument();
+  });
+
   it('surfaces the honest "not mapped yet" note in the empty state', () => {
     extractMeetingPointPins.mockReturnValue([]);
     render(<CrewMap meetingPoints={[]} />);

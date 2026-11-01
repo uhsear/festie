@@ -583,6 +583,8 @@ export const authEnvelopeResponseSchema = z.object({
   user: userResponseSchema,
   token: z.string().optional(),
   refreshToken: z.string().optional(),
+  reactivated: z.boolean().optional(),
+  pendingEmail: z.string().nullable().optional(),
 });
 export type AuthEnvelopeResponse = z.infer<typeof authEnvelopeResponseSchema>;
 

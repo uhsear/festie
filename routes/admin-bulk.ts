@@ -20,6 +20,8 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     validate,
     validateParams,
     io,
+    invalidateUserSessions,
+    requireRecentAuth,
   } = deps;
   const { adminWriteLimit } = ctx;
 
@@ -111,7 +113,8 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
 
   // ── POST /bulk/deactivate — force-logout multiple users ──────────
   // NOTE (M1, security-review-2026-06-06): this endpoint's only effect is
-  // clearing the targeted users' sessions (a force-logout). It does NOT
+  // ending the targeted users' sessions, refresh tokens and live sockets (a
+  // force-logout). It does NOT
   // deactivate/disable the account — there is no is_active/deactivated_at
   // column and login has no disabled-account gate, so a "deactivated" user
   // can log straight back in with unchanged credentials. A real deactivation
@@ -123,6 +126,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     '/bulk/deactivate',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     validate(schemas.adminBulkDeactivate),
     async (req: any, res: any) => {
       try {
@@ -131,7 +135,12 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
           return sendError(res, 400, 'Provide 1-50 user IDs', ErrorCodes.INVALID_INPUT);
         }
         const settled = await Promise.allSettled(
-          userIds.map((userId: string) => stores.sessions.deleteUserSessions(userId).then(() => userId)),
+          userIds.map(async (userId: string) => {
+            // Sessions and sockets first, then refresh tokens so the user cannot mint a new session.
+            await invalidateUserSessions(userId);
+            if (stores.refreshTokens) await stores.refreshTokens.revokeAll(userId);
+            return userId;
+          }),
         );
         const results = settled.map((r: any, i: number) =>
           r.status === 'fulfilled'
@@ -150,9 +159,10 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             action: 'force_logout',
             targetType: 'users',
             targetId: userIds.join(','),
-            detailsJson: JSON.stringify({ count: userIds.length }),
+            detailsJson: JSON.stringify({ count: userIds.length, results }),
             ip: getRequestIp(req),
           });
+          res.locals.auditWritten = true;
         }
         return sendSuccess(res, { results });
       } catch (error: any) {
@@ -167,6 +177,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     '/bulk/archive-festivals',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     validate(schemas.adminBulkArchive),
     async (req: any, res: any) => {
       try {
@@ -197,6 +208,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             detailsJson: JSON.stringify({ count: festivalIds.length }),
             ip: getRequestIp(req),
           });
+          res.locals.auditWritten = true;
         }
         return sendSuccess(res, { results });
       } catch (error: any) {
@@ -310,6 +322,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             detailsJson: JSON.stringify({ crewId, userId: targetUserId }),
             ip: getRequestIp(req),
           });
+          res.locals.auditWritten = true;
         }
 
         log.info('admin:crew-remove-member', { crewId, userId: targetUserId });
@@ -352,6 +365,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             detailsJson: JSON.stringify({ crewName: crew.name, festivalId: crew.festivalId }),
             ip: getRequestIp(req),
           });
+          res.locals.auditWritten = true;
         }
 
         log.warn('admin:crew-delete', { crewId, crewName: crew.name });

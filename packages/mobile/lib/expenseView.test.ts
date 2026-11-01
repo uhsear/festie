@@ -141,8 +141,24 @@ describe('visibleExpenses', () => {
   it("'planned' → planned rows only", () => {
     expect(visibleExpenses(list, 'planned').map((e) => e.id)).toEqual(['b']);
   });
-  it("'all' → the original list", () => {
-    expect(visibleExpenses(list, 'all')).toBe(list);
+  it("'all' → every row", () => {
+    expect(visibleExpenses(list, 'all').map((e) => e.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('settle-up payments', () => {
+  const list = [
+    expense({ id: 'a', amount: 10 }),
+    expense({ id: 's', amount: 12, category: 'settlement' }),
+  ];
+  it('is not in actualExpenses', () => {
+    expect(actualExpenses(list).map((e) => e.id)).toEqual(['a']);
+  });
+  it("is not in visibleExpenses(..., 'all')", () => {
+    expect(visibleExpenses(list, 'all').map((e) => e.id)).toEqual(['a']);
+  });
+  it('does not count in the total spent', () => {
+    expect(sumExpenseAmounts(actualExpenses(list))).toBe(10);
   });
 });
 

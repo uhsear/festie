@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PromptDialog from './PromptDialog';
 
@@ -140,6 +140,50 @@ describe('PromptDialog', () => {
     );
     await waitFor(() => {
       expect(screen.getByRole('textbox')).toHaveValue('initial');
+    });
+  });
+
+  describe('Paste button', () => {
+    const parse = (t: string) => (t.startsWith('code:') ? t.slice(5) : null);
+    // fireEvent, not userEvent: userEvent.setup() swaps in its own navigator.clipboard stub.
+    function mockClipboard(readText: () => Promise<string>) {
+      Object.defineProperty(navigator, 'clipboard', { value: { readText }, configurable: true });
+    }
+
+    it('is hidden without parsePaste or a clipboard API', () => {
+      mockClipboard(async () => '');
+      render(<PromptDialog {...defaultProps} />);
+      expect(screen.queryByRole('button', { name: 'Paste' })).not.toBeInTheDocument();
+      Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+      render(<PromptDialog {...defaultProps} parsePaste={parse} />);
+      expect(screen.queryByRole('button', { name: 'Paste' })).not.toBeInTheDocument();
+    });
+
+    it('fills the field with the parsed clipboard text', async () => {
+      const readText = vi.fn(async () => 'code:K7XQ2M');
+      mockClipboard(readText);
+      render(<PromptDialog {...defaultProps} parsePaste={parse} />);
+      expect(readText).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Paste' }));
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('K7XQ2M'));
+    });
+
+    it('leaves the field alone when the clipboard holds garbage', async () => {
+      mockClipboard(async () => 'not a code');
+      render(<PromptDialog {...defaultProps} parsePaste={parse} defaultValue="AB" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Paste' }));
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('AB'));
+    });
+
+    it('changes nothing when clipboard permission is denied', async () => {
+      const readText = vi.fn(async () => {
+        throw new DOMException('denied', 'NotAllowedError');
+      });
+      mockClipboard(readText);
+      render(<PromptDialog {...defaultProps} parsePaste={parse} defaultValue="AB" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Paste' }));
+      await waitFor(() => expect(readText).toHaveBeenCalled());
+      expect(screen.getByRole('textbox')).toHaveValue('AB');
     });
   });
 });

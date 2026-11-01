@@ -29,9 +29,9 @@ export const NOTIFICATION_TYPE_ROWS: readonly NotificationTypeRow[] = [
   { key: 'crewPolls', label: 'Polls', hint: 'When your crew starts or closes a poll.', onDevice: false, live: false },
   { key: 'crewMoney', label: 'Money', hint: 'Expenses and settle-up in your crew.', onDevice: false, live: false },
   { key: 'crewRides', label: 'Rides', hint: 'Ride offers and changes in your crew.', onDevice: false, live: false },
-  { key: 'lineupDrops', label: 'New lineups', hint: "A festival you've been to before posts its lineup.", onDevice: false, live: true },
-  { key: 'crewReformed', label: 'Crew re-forms', hint: 'A past crew reunites for a new festival.', onDevice: false, live: true },
-  { key: 'wrapReady', label: 'Wrap-up ready', hint: 'Your festival recap is ready to view.', onDevice: false, live: true },
+  { key: 'lineupDrops', label: 'New lineups', hint: "A festival you've been to before posts its lineup. By push and email.", onDevice: false, live: true },
+  { key: 'crewReformed', label: 'Crew re-forms', hint: 'A past crew reunites for a new festival. By push and email.', onDevice: false, live: true },
+  { key: 'wrapReady', label: 'Wrap-up ready', hint: 'Your festival recap is ready to view. By push and email.', onDevice: false, live: true },
 ];
 
 export function visibleNotificationRows(): NotificationTypeRow[] {

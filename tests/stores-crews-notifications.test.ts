@@ -346,7 +346,18 @@ describe('createCrewsStore — crews', () => {
     const result = await crews.regenerateInviteCode('c1', 'newcode');
 
     assert.deepStrictEqual(result, { id: 'c1', inviteCode: 'newcode' });
-    assert.deepStrictEqual(pool.queries[0].params, ['newcode', 'c1']);
+    assert.deepStrictEqual(pool.queries[0].params, ['newcode', 'c1', null]);
+  });
+
+  it('regenerateInviteCode passes the expiry as a parameter', async () => {
+    const pool = mockPool([{ rows: [] }, { rows: [{ id: 'c1' }] }]);
+    const { crews } = createCrewsStore(pool, mockUtils);
+    const expiresAt = new Date('2027-01-01T00:00:00.000Z');
+
+    await crews.regenerateInviteCode('c1', 'newcode', expiresAt);
+
+    assert.deepStrictEqual(pool.queries[0].params, ['newcode', 'c1', expiresAt]);
+    assert.ok(norm(pool.queries[0].sql).includes('COALESCE($3::timestamptz'));
   });
 
   it('addMember inserts into crew_members', async () => {

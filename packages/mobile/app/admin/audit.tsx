@@ -11,7 +11,7 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '@festie/shared/services';
+import { fetchAuditPage, type AuditEntry } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import { timeAgoFromIso } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -23,8 +23,8 @@ import SectionLabel from '../../components/SectionLabel';
 /**
  * Admin Audit Log — filtered, cursor-paginated view of GET /admin/audit.
  *
- * Filters: action (free text), username/actor_id (free text), from/to date
- * (YYYY-MM-DD, coerced to ISO strings). Pagination uses the cursor the server
+ * A toggle picks Admin actions (default) or User activity. Filters: action
+ * (free text), username (free text), from/to date (YYYY-MM-DD, coerced to ISO strings). Pagination uses the cursor the server
  * returns in meta.nextCursor; Prev goes back through a local stack of cursors.
  *
  * Each row is expandable to show the full detail object as formatted JSON.
@@ -32,44 +32,7 @@ import SectionLabel from '../../components/SectionLabel';
  * (AuthGate in the admin segment also gates the whole folder).
  */
 
-interface AuditEntry {
-  id: string;
-  action: string;
-  friendlyAction?: string;
-  actorUsername?: string;
-  actorId?: string;
-  resourceType?: string;
-  resourceId?: string;
-  detail?: unknown;
-  createdAt: string;
-}
-
-interface AuditMeta {
-  total: number;
-  limit: number;
-  nextCursor: string | null;
-}
-
-/** Build a query string from non-empty filter values + optional cursor. */
-function buildQuery(
-  params: {
-    action: string;
-    actor: string;
-    from: string;
-    to: string;
-  },
-  cursor: string | null,
-): string {
-  const p = new URLSearchParams();
-  if (params.action.trim()) p.set('action', params.action.trim());
-  if (params.actor.trim()) p.set('actor_id', params.actor.trim());
-  if (params.from.trim()) p.set('from', new Date(params.from.trim()).toISOString());
-  if (params.to.trim()) p.set('to', new Date(params.to.trim()).toISOString());
-  if (cursor) p.set('cursor', cursor);
-  p.set('limit', '25');
-  const qs = p.toString();
-  return qs ? `/admin/audit?${qs}` : '/admin/audit?limit=25';
-}
+type AuditScope = 'admin' | 'user';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function isValidDate(s: string): boolean {
@@ -96,6 +59,9 @@ export default function AdminAuditScreen() {
   const [appliedActor, setAppliedActor] = useState('');
   const [appliedFrom, setAppliedFrom] = useState('');
   const [appliedTo, setAppliedTo] = useState('');
+
+  // Which log to show: admin actions by default, or what users did.
+  const [scope, setScope] = useState<AuditScope>('admin');
 
   // Pagination
   const [currentCursor, setCurrentCursor] = useState<string | null>(null);
@@ -124,38 +90,25 @@ export default function AdminAuditScreen() {
   const toError = filterTo.trim() && !isValidDate(filterTo) ? 'Use YYYY-MM-DD' : null;
 
   const fetchAudit = useCallback(
-    async (cursor: string | null, applied: { action: string; actor: string; from: string; to: string }) => {
+    async (
+      cursor: string | null,
+      applied: { action: string; actor: string; from: string; to: string },
+      auditScope: AuditScope,
+    ) => {
       setError(false);
       try {
-        const url = buildQuery(applied, cursor);
-        // The API wrapper unwraps { data, error } envelopes, but audit returns
-        // { entries, meta } directly inside data — handle both shapes.
-        const raw = await api.get<unknown>(url);
-        let entriesArr: AuditEntry[] = [];
-        let metaObj: AuditMeta = { total: 0, limit: 25, nextCursor: null };
-
-        if (raw && typeof raw === 'object') {
-          const r = raw as Record<string, unknown>;
-          if (Array.isArray(r.entries ?? r)) {
-            // Shape: { entries: [...], meta: { ... } }
-            entriesArr = Array.isArray(r.entries) ? (r.entries as AuditEntry[]) : [];
-            if (r.meta && typeof r.meta === 'object') {
-              const m = r.meta as Record<string, unknown>;
-              metaObj = {
-                total: typeof m.total === 'number' ? m.total : 0,
-                limit: typeof m.limit === 'number' ? m.limit : 25,
-                nextCursor: typeof m.nextCursor === 'string' ? m.nextCursor : null,
-              };
-            }
-          } else if (Array.isArray(raw)) {
-            // Fallback: bare array (legacy wrapper)
-            entriesArr = raw as AuditEntry[];
-          }
-        }
-
-        setEntries(entriesArr);
-        setTotal(metaObj.total);
-        setNextCursor(metaObj.nextCursor);
+        const page = await fetchAuditPage({
+          scope: auditScope,
+          action: applied.action.trim(),
+          actor: applied.actor.trim(),
+          from: applied.from.trim() ? new Date(applied.from.trim()).toISOString() : undefined,
+          to: applied.to.trim() ? new Date(applied.to.trim()).toISOString() : undefined,
+          cursor,
+          limit: 25,
+        });
+        setEntries(page.entries);
+        setTotal(page.total);
+        setNextCursor(page.nextCursor);
       } catch {
         setError(true);
       }
@@ -173,20 +126,20 @@ export default function AdminAuditScreen() {
     }
     let cancelled = false;
     setLoading(true);
-    fetchAudit(currentCursor, applied).finally(() => {
+    fetchAudit(currentCursor, applied, scope).finally(() => {
       if (!cancelled) setLoading(false);
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only re-fetch when applied filters or cursor change
-  }, [isAdmin, appliedAction, appliedActor, appliedFrom, appliedTo, currentCursor]);
+  }, [isAdmin, appliedAction, appliedActor, appliedFrom, appliedTo, currentCursor, scope]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    void fetchAudit(currentCursor, applied).finally(() => setRefreshing(false));
+    void fetchAudit(currentCursor, applied, scope).finally(() => setRefreshing(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCursor, appliedAction, appliedActor, appliedFrom, appliedTo]);
+  }, [currentCursor, appliedAction, appliedActor, appliedFrom, appliedTo, scope]);
 
   const applyFilters = useCallback(() => {
     if (fromError || toError) return;
@@ -214,6 +167,14 @@ export default function AdminAuditScreen() {
     setAppliedFrom('');
     setAppliedTo('');
     setFiltersOpen(false);
+  }, []);
+
+  const changeScope = useCallback((next: AuditScope) => {
+    cursorStack.current = [];
+    setIsPrevAvailable(false);
+    setCurrentCursor(null);
+    setExpandedIds(new Set());
+    setScope(next);
   }, []);
 
   const goNext = useCallback(() => {
@@ -305,6 +266,25 @@ export default function AdminAuditScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.scopeRow} accessibilityRole="tablist">
+        {(['admin', 'user'] as const).map((value) => {
+          const active = scope === value;
+          return (
+            <TouchableOpacity
+              key={value}
+              style={[styles.scopeBtn, active && styles.scopeBtnActive]}
+              onPress={() => changeScope(value)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+            >
+              <Text style={[styles.scopeLabel, active && styles.scopeLabelActive]}>
+                {value === 'admin' ? 'Admin actions' : 'User activity'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       {/* Filter panel (collapsible) */}
       {filtersOpen ? (
         <View style={styles.filterPanel}>
@@ -316,10 +296,10 @@ export default function AdminAuditScreen() {
               placeholder="e.g. user.login"
             />
             <FilterInput
-              label="User"
+              label="Username"
               value={filterActor}
               onChangeText={setFilterActor}
-              placeholder="username or ID"
+              placeholder="username"
             />
           </View>
           <View style={styles.filterRow}>
@@ -401,7 +381,11 @@ export default function AdminAuditScreen() {
             <View style={styles.card}>
               <View style={styles.row}>
                 <Text style={styles.rowHint}>
-                  {hasActiveFilters ? 'No entries match the current filters.' : 'No audit entries found.'}
+                  {hasActiveFilters
+                    ? 'No entries match the current filters.'
+                    : scope === 'admin'
+                      ? 'No admin actions yet. Role changes, deletes and imports appear here.'
+                      : 'No audit entries found.'}
                 </Text>
               </View>
             </View>
@@ -425,16 +409,17 @@ export default function AdminAuditScreen() {
                         </Text>
                         <Text style={styles.rowHint} numberOfLines={1}>
                           {entry.actorUsername ?? 'system'}
-                          {entry.resourceType ? ` · ${entry.resourceType}` : ''}
+                          {entry.targetLabel ? ` · ${entry.targetLabel}` : ''}
                           {' · '}
                           {timeAgoFromIso(entry.createdAt)}
                         </Text>
                         {isExpanded ? (
                           <View style={styles.detailBox}>
-                            {entry.resourceId ? (
+                            {entry.targetId ? (
                               <Text style={styles.detailLine} selectable>
-                                <Text style={styles.detailKey}>ID: </Text>
-                                {entry.resourceId}
+                                <Text style={styles.detailKey}>Target: </Text>
+                                {entry.targetType ? `${entry.targetType} ` : ''}
+                                {entry.targetId}
                               </Text>
                             ) : null}
                             {entry.actorId ? (
@@ -447,10 +432,10 @@ export default function AdminAuditScreen() {
                               <Text style={styles.detailKey}>Timestamp: </Text>
                               {new Date(entry.createdAt).toLocaleString()}
                             </Text>
-                            {entry.detail !== undefined && entry.detail !== null ? (
+                            {entry.details ? (
                               <Text style={styles.detailLine} selectable>
-                                <Text style={styles.detailKey}>Detail: </Text>
-                                {JSON.stringify(entry.detail, null, 2)}
+                                <Text style={styles.detailKey}>Details: </Text>
+                                {JSON.stringify(entry.details, null, 2)}
                               </Text>
                             ) : null}
                           </View>
@@ -622,6 +607,33 @@ const useStyles = makeStyles((t) => ({
   headerSubtitle: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  scopeRow: {
+    flexDirection: 'row',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[4],
+    paddingBottom: t.spacing[3],
+  },
+  scopeBtn: {
+    minHeight: 44,
+    paddingHorizontal: t.spacing[4],
+    borderRadius: t.radii.default,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  scopeBtnActive: {
+    borderColor: t.colors.accent.aqua,
+    backgroundColor: t.colors.ring.aqua,
+  },
+  scopeLabel: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.secondary,
+  },
+  scopeLabelActive: {
+    color: t.colors.accent.aqua,
   },
   filterButton: {
     width: 44,

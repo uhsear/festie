@@ -346,10 +346,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       return result.rows;
     },
 
-    async regenerateInviteCode(crewId: string, newCode: string) {
+    async regenerateInviteCode(crewId: string, newCode: string, expiresAt?: Date) {
       await pool.query(
-        "UPDATE crews SET invite_code = $1, invite_expires_at = NOW() + INTERVAL '7 days', updated_at = NOW() WHERE id = $2",
-        [newCode, crewId],
+        "UPDATE crews SET invite_code = $1, invite_expires_at = COALESCE($3::timestamptz, NOW() + INTERVAL '7 days'), updated_at = NOW() WHERE id = $2",
+        [newCode, crewId, expiresAt ?? null],
       );
       const result = await pool.query(`SELECT ${CREW_COLUMNS} FROM crews WHERE id = $1`, [crewId]);
       return result.rows[0] || null;

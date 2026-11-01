@@ -78,7 +78,7 @@ function enforcePayloadSize(msg: any, log: any, context = '') {
 }
 
 /** Map notification type -> user pref key */
-const PREF_MAP: Record<string, string> = {
+export const PREF_MAP: Record<string, string> = {
   crew_update: 'crewUpdates',
   schedule_change: 'scheduleChanges',
   set_reminder: 'setReminders',

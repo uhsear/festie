@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@festie/shared/services/api';
+import { describeRemovals, removalFromError, withReauth } from '@festie/shared/services/admin';
 import { describeScheduleNotice, type ScheduleNotice } from '@festie/shared/utils';
+import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import { useToast } from '../../lib/toastContext';
 import LineupImport from './LineupImport';
 import FestivalEditForm, { Festival as FormFestival } from './FestivalEditForm';
@@ -44,7 +46,10 @@ export default function AdminFestivals() {
   // When set, the dedicated map editor is shown for this festival (Phase D). It
   // owns stage-pin + amenity authoring and persists via the same PUT path.
   const [mapEditingId, setMapEditingId] = useState<string | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
+  const [removalBusy, setRemovalBusy] = useState(false);
   const { toast, toastError } = useToast();
+  const { askPassword, reauthDialog } = useReauthPrompt();
 
   useEffect(() => {
     loadFestivals();
@@ -62,6 +67,16 @@ export default function AdminFestivals() {
     }
   };
 
+  const finishSave = async (created: boolean, notice?: ScheduleNotice) => {
+    toast(created ? 'Festival created' : notice ? describeScheduleNotice(notice) : 'Festival updated', 'success');
+    setEditingId(null);
+    setNotifyPickers(true);
+    setFormData({});
+    setInitialExpandedDays(new Set());
+    setTab('list');
+    await loadFestivals();
+  };
+
   const handleSave = async () => {
     if (!formData.name || !formData.location) {
       toast('Name and location are required', 'error');
@@ -76,21 +91,48 @@ export default function AdminFestivals() {
       if (editingId) {
         const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
           ...formData,
+          expectedUpdatedAt: formData.updatedAt,
           notify: notifyPickers,
         });
-        toast(res?.scheduleNotice ? describeScheduleNotice(res.scheduleNotice) : 'Festival updated', 'success');
+        await finishSave(false, res?.scheduleNotice);
       } else {
         await api.post<void>('/admin/festivals', formData);
-        toast('Festival created', 'success');
+        await finishSave(true);
       }
-      setEditingId(null);
-      setNotifyPickers(true);
-      setFormData({});
-      setInitialExpandedDays(new Set());
-      setTab('list');
-      await loadFestivals();
     } catch (err: unknown) {
+      const removal = removalFromError(err);
+      if (removal) {
+        setPendingRemoval(describeRemovals(removal));
+        return;
+      }
       toastError(err, "Couldn't save festival. Try again.");
+    }
+  };
+
+  const confirmRemovals = async () => {
+    if (!editingId) return;
+    setRemovalBusy(true);
+    try {
+      const done = await withReauth(
+        async () => {
+          const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
+            ...formData,
+            expectedUpdatedAt: formData.updatedAt,
+            confirmRemovals: true,
+            notify: notifyPickers,
+          });
+          return { notice: res?.scheduleNotice };
+        },
+        askPassword,
+      );
+      if (done === null) return;
+      setPendingRemoval(null);
+      await finishSave(false, done.notice);
+    } catch (err: unknown) {
+      setPendingRemoval(null);
+      toastError(err, "Couldn't save festival. Try again.");
+    } finally {
+      setRemovalBusy(false);
     }
   };
 
@@ -110,7 +152,11 @@ export default function AdminFestivals() {
     const name = festivals.find((f) => f.id === id)?.name || 'this festival';
     setDeleteBusy(true);
     try {
-      await api.delete<void>(`/admin/festivals/${id}`);
+      const done = await withReauth(async () => {
+        await api.delete<void>(`/admin/festivals/${id}`);
+        return true;
+      }, askPassword);
+      if (done === null) return;
       toast(`Deleted ${name}`, 'success');
       setConfirmDelete(null);
       await loadFestivals();
@@ -302,6 +348,17 @@ export default function AdminFestivals() {
         busy={deleteBusy}
         onConfirm={doDelete}
       />
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        onOpenChange={(o) => !o && setPendingRemoval(null)}
+        title="Remove sets with picks?"
+        description={pendingRemoval ?? ''}
+        confirmLabel="Remove and save"
+        destructive
+        busy={removalBusy}
+        onConfirm={confirmRemovals}
+      />
+      {reauthDialog}
     </div>
   );
 }

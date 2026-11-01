@@ -57,10 +57,10 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  *
  *   ?id=<festivalId>  (required — there's nothing to map without a festival)
  *
- * Save: PUT /admin/festivals/:id with the festival's existing text fields
- * preserved verbatim + the edited stage coords + mapConfig. We load the FULL
- * festival (stages/days/timeZone) and round-trip the non-geo fields so saving the
- * map never drops lineup data.
+ * Save: PUT /admin/festivals/:id with name, location, timeZone, the edited stage
+ * coords and mapConfig. The map save never sends lineup data: it leaves out `days`,
+ * so the server keeps every day and set untouched. expectedUpdatedAt guards
+ * against saving over a newer version.
  */
 
 // Detail response from GET /festivals/:id — loosely typed; we read what we need
@@ -70,6 +70,7 @@ interface FestivalDetail {
   name?: string;
   location?: string;
   timeZone?: string | null;
+  updatedAt?: string;
   latitude?: number | null;
   longitude?: number | null;
   mapConfig?: FestivalMapConfig | null;
@@ -382,11 +383,6 @@ export default function FestivalMapEditorScreen() {
   const handleSave = async () => {
     if (!editingId || !detail) return;
     setFormError(null);
-    // Round-trip the text fields verbatim; only the geo bits changed here.
-    const normTime = (v: string | null | undefined) => {
-      const x = (v ?? '').trim();
-      return x === '' || x.toLowerCase() === 'tba' ? '' : x;
-    };
     const payload: Record<string, unknown> = {
       name: detail.name?.trim() || name.trim(),
       location: detail.location?.trim() || '',
@@ -398,19 +394,7 @@ export default function FestivalMapEditorScreen() {
         latitude: s.latitude,
         longitude: s.longitude,
       })),
-      days: (detail.days || []).map((d) => ({
-        id: d.id,
-        label: (d.label || '').trim(),
-        date: (d.date || '').trim(),
-        sets: (d.sets || []).map((s) => ({
-          id: s.id,
-          artist: (s.artist || s.artists?.[0]?.name || '').trim(),
-          stageId: s.stageId || null,
-          startTime: normTime(s.startTime),
-          endTime: normTime(s.endTime),
-          linkUrl: (s.linkUrl || '').trim() || null,
-        })),
-      })),
+      expectedUpdatedAt: detail.updatedAt,
       // object = replace, null = clear (Phase A write path).
       mapConfig: mapConfig,
     };
