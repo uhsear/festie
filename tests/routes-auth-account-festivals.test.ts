@@ -2049,6 +2049,7 @@ describe('routes/festivals.js — PUT /:id save guards', () => {
       stores: {
         festivals: { update: updateFn },
         auditLog: { insert: insertFn },
+        profiles: { pickersBySet: mock.fn(async () => new Map([['s2', ['user-2']]])) },
         pool: {
           query: mock.fn(async (sql: string) => ({
             rows: [{ count: sql.includes('festival_profile_picks') ? '1' : '0' }],
@@ -2098,6 +2099,8 @@ describe('routes/festivals.js — PUT /:id save guards', () => {
       setsRemoved: 1,
       setsChanged: 1,
       picksLost: 1,
+      scheduleChanges: 1,
+      notifiedPeople: 1,
     });
   });
 

@@ -194,6 +194,7 @@ describe('Integration — Festivals', { concurrency: 1 }, () => {
       .set('x-user-token', adminToken)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({
+        name: 'Test Fest',
         stages: [
           { id: 'main', name: 'Main Stage', color: '#ff3366' },
           { id: 'forest', name: 'Forest Stage', color: '#00e8d0' },
