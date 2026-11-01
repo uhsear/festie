@@ -1,16 +1,21 @@
-import { useState } from 'react';
-import { View, Text, Switch } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Linking, Share, View, Text, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '@festie/shared/stores';
-import { api } from '@festie/shared/services';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { api, fetchSharingStatus, resetShareLinks, type SharingStatus } from '@festie/shared/services';
 import { buildPublicScheduleUrl } from '@festie/shared/utils';
 import type { User } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import Button from './Button';
+
+const RESET_LABEL = 'Reset my share links';
 
 /**
  * Opt-in switch for the public schedule page (PUT /account/public-schedule).
- * Off by default; when on, shows the link so it can be long-pressed and copied.
+ * Off by default; when on, shows the link (selectable, with Share and Open buttons)
+ * and names the festival the page shows. Also holds "Reset my share links", which
+ * revokes every picks link and calendar feed the user has sent.
  */
 export default function AccountPublicScheduleSection() {
   const t = useTokens();
@@ -20,9 +25,21 @@ export default function AccountPublicScheduleSection() {
   const setUser = useAuthStore((s) => s.setUser);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<SharingStatus | null>(null);
+  const on = user?.publicSchedule === true;
+
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    fetchSharingStatus()
+      .then((s) => live && setStatus(s))
+      .catch(() => live && setStatus(null));
+    return () => {
+      live = false;
+    };
+  }, [on]);
 
   if (!user) return null;
-  const on = user.publicSchedule === true;
 
   const onChange = async (next: boolean) => {
     haptics.select();
@@ -38,6 +55,34 @@ export default function AccountPublicScheduleSection() {
     }
   };
 
+  const url = buildPublicScheduleUrl(user.username);
+  const festivalName = status?.publicFestival?.name;
+
+  const doReset = async () => {
+    try {
+      await resetShareLinks();
+      useUIStore
+        .getState()
+        .showToast('Done. Your old links no longer work. Share picks makes a new one.', { kind: 'success' });
+    } catch {
+      useUIStore
+        .getState()
+        .showToast("Couldn't reset your links. Check your connection and try again.", { kind: 'error' });
+    }
+  };
+
+  const onReset = () => {
+    haptics.warning();
+    Alert.alert(
+      'Reset all your share links?',
+      "Every picks link and calendar subscription you've sent stops working right away. Anyone who has one will need a new link from you. Calendars you subscribed will stop updating; subscribe again from Picks › Add to calendar.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset links', style: 'destructive', onPress: () => void doReset() },
+      ],
+    );
+  };
+
   return (
     <View style={styles.card}>
       <View style={styles.row}>
@@ -46,7 +91,7 @@ export default function AccountPublicScheduleSection() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Public schedule page</Text>
-          <Text style={styles.rowHint}>Anyone with the link can see your picks. Turning it off hides this link; picks links you already shared keep working.</Text>
+          <Text style={styles.rowHint}>Anyone with the link can see your picks for your newest festival. Turning it off hides this page. Links you sent from Share picks keep working until you reset them below.</Text>
         </View>
         <Switch
           value={on}
@@ -61,10 +106,45 @@ export default function AccountPublicScheduleSection() {
         />
       </View>
       {on ? (
-        <Text style={styles.link} selectable numberOfLines={1}>
-          {buildPublicScheduleUrl(user.username)}
-        </Text>
+        <>
+          <Text style={styles.link} selectable numberOfLines={1}>
+            {url}
+          </Text>
+          {status ? (
+            <Text style={styles.note}>
+              {festivalName
+                ? `Shows your picks for ${festivalName}. To share another festival, use Share picks on that festival's Picks.`
+                : 'Join a festival and pick a set to fill this page.'}
+            </Text>
+          ) : null}
+          <View style={styles.actions}>
+            <Button
+              label="Share"
+              size="sm"
+              variant="secondary"
+              onPress={() => void Share.share({ message: url, url }).catch(() => undefined)}
+            />
+            <Button
+              label="Open"
+              size="sm"
+              variant="secondary"
+              onPress={() => void Linking.openURL(url).catch(() => undefined)}
+            />
+          </View>
+        </>
       ) : null}
+      <View style={styles.row}>
+        <View style={styles.rowIcon}>
+          <Ionicons name="refresh-outline" size={20} color={t.colors.text.secondary} />
+        </View>
+        <View style={styles.rowBody}>
+          <Text style={styles.rowTitle}>{RESET_LABEL}</Text>
+          <Text style={styles.rowHint}>
+            Stops every picks link and calendar subscription you've shared. Your public schedule page is not affected; turn it off above.
+          </Text>
+        </View>
+        <Button label={RESET_LABEL} size="sm" variant="danger" onPress={onReset} testID="reset-share-links" />
+      </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -93,6 +173,18 @@ const useStyles = makeStyles((t) => ({
   link: {
     ...typeStyle('caption'),
     color: t.colors.accent.aqua,
+    paddingHorizontal: t.spacing[4],
+    paddingBottom: t.spacing[3],
+  },
+  note: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+    paddingHorizontal: t.spacing[4],
+    paddingBottom: t.spacing[2],
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: t.spacing[2],
     paddingHorizontal: t.spacing[4],
     paddingBottom: t.spacing[3],
   },

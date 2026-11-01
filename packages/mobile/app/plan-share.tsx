@@ -2,38 +2,41 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Stack } from 'expo-router';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COPY } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import PlanLinkPanel from '../components/PlanLinkPanel';
 import PlanQRShare from '../components/PlanQRShare';
 import PlanQRScan from '../components/PlanQRScan';
 import SmsHandoff from '../components/SmsHandoff';
 
-// ── Share offline (M5 P2P) ────────────────────────────────────────────────────
-// One screen, three offline-honest ways to get a friend onto the same plan when
-// signal is dead:
+// ── Share picks (link + M5 P2P) ───────────────────────────────────────────────
+// One screen, four ways to get a friend onto the same plan:
+//   • Link     — revocable online link to your picks (PlanLinkPanel)
 //   • Show QR  — render your plan as a QR for a friend to scan (PlanQRShare)
 //   • Scan QR  — scan a friend's plan into your local cache (PlanQRScan)
-//   • Text     — last-resort SMS handoff of the meeting point (SmsHandoff)
-// All three consume the shared, versioned planSnapshot codec / meeting-point
-// data; none of them require the internet.
+//   • Text meeting point — last-resort SMS handoff of the meeting point (SmsHandoff)
+// The last three consume the shared, versioned planSnapshot codec / meeting-point
+// data and need no internet. `?tab=` picks the starting tab; default is Show QR.
 
-type Tab = 'show' | 'scan' | 'text';
+type Tab = 'link' | 'show' | 'scan' | 'text';
 
-const TABS: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: 'show', label: 'Show QR', icon: 'qr-code' },
-  { key: 'scan', label: 'Scan QR', icon: 'scan' },
-  { key: 'text', label: 'Text crew', icon: 'chatbubble-ellipses' },
+const TABS: { key: Tab; testID: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'link', testID: 'plan-share-tab-link', label: 'Link', icon: 'link-outline' },
+  { key: 'show', testID: 'plan-share-tab-show', label: 'Show QR', icon: 'qr-code' },
+  { key: 'scan', testID: 'plan-share-tab-scan', label: 'Scan QR', icon: 'scan' },
+  { key: 'text', testID: 'plan-share-tab-text', label: 'Text meeting point', icon: 'chatbubble-ellipses' },
 ];
 
 export default function PlanShareScreen() {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
-  const [tab, setTab] = useState<Tab>('show');
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<Tab>(TABS.some((x) => x.key === tabParam) ? (tabParam as Tab) : 'show');
 
   const selectTab = (key: Tab) => {
     if (key !== tab) {
@@ -44,15 +47,20 @@ export default function PlanShareScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: COPY.picks.shareOffline, headerShown: true }} />
+      <Stack.Screen options={{ title: COPY.picks.share, headerShown: true }} />
 
-      <View style={styles.tabBar}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabScroll}
+        contentContainerStyle={styles.tabBar}
+      >
         {TABS.map((item) => {
           const active = tab === item.key;
           return (
             <TouchableOpacity
               key={item.key}
-              testID={`plan-share-tab-${item.key}`}
+              testID={item.testID}
               style={[styles.tab, active && styles.tabActive]}
               activeOpacity={0.7}
               onPress={() => selectTab(item.key)}
@@ -75,9 +83,10 @@ export default function PlanShareScreen() {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       <View style={styles.body}>
+        {tab === 'link' ? <PlanLinkPanel /> : null}
         {tab === 'show' ? <PlanQRShare /> : null}
         {tab === 'scan' ? <PlanQRScan /> : null}
         {tab === 'text' ? <SmsHandoff /> : null}
@@ -91,16 +100,19 @@ const useStyles = makeStyles((t) => ({
     flex: 1,
     backgroundColor: t.colors.bg.primary,
   },
+  tabScroll: {
+    flexGrow: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: t.colors.border.default,
+  },
   tabBar: {
     flexDirection: 'row',
     gap: t.spacing[2],
     padding: t.spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: t.colors.border.default,
   },
   tab: {
-    flex: 1,
     flexDirection: 'row',
+    paddingHorizontal: t.spacing[3],
     alignItems: 'center',
     justifyContent: 'center',
     gap: t.spacing[1],

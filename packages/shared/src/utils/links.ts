@@ -61,11 +61,41 @@ export function buildSetUrl(setId: string, origin?: string): string {
 }
 
 /**
- * Public read-only picks link: `<origin>/s/<profileId>`.
- * Mirrors the server route `GET /s/:profileId`.
+ * Public read-only picks link: `<origin>/s/<token>`.
+ * Mirrors the server route `GET /s/:shareId`.
  */
-export function buildPicksShareUrl(profileId: string, origin?: string): string {
-  return absolute(`/s/${encodeURIComponent(profileId)}`, origin);
+export function buildPicksShareUrl(token: string, origin?: string): string {
+  return absolute(`/s/${encodeURIComponent(token)}`, origin);
+}
+
+/**
+ * Plan-snapshot QR value: `<origin>/p#<encoded>`. The snapshot rides in the
+ * hash so it never reaches the server. base64url is already URL-safe.
+ */
+export function buildPlanQrUrl(encoded: string, origin?: string): string {
+  return `${absolute('/p', origin)}#${encoded}`;
+}
+
+const PLAN_QR_URL_RE = /^https?:\/\/[^/?#]+\/p\/?#([A-Za-z0-9_-]+)$/;
+
+/**
+ * Pull the snapshot text out of a scanned plan-QR URL; anything else is
+ * returned unchanged. Regex, not `URL`: Hermes's `URL` has no `hash`.
+ */
+export function extractPlanSnapshotText(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  const match = PLAN_QR_URL_RE.exec(raw.trim());
+  return match ? match[1] : raw;
+}
+
+/** Calendar-subscribe links for a `GET /cal/<token>.ics` feed URL. */
+export function buildCalendarLinks(feedUrl: string): { httpsUrl: string; webcalUrl: string; googleUrl: string } {
+  const webcalUrl = feedUrl.replace(/^https?:/, 'webcal:');
+  return {
+    httpsUrl: feedUrl,
+    webcalUrl,
+    googleUrl: `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcalUrl)}`,
+  };
 }
 
 /**
