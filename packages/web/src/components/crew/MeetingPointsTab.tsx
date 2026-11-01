@@ -370,9 +370,12 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
       {view === 'list' && (
         <>
           {!showForm ? (
-            <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
-              <Plus className="w-4 h-4" aria-hidden="true" /> Add Meeting Point
-            </Button>
+            // With no points the empty state carries the only Add button.
+            points.length > 0 && (
+              <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
+                <Plus className="w-4 h-4" aria-hidden="true" /> Add Meeting Point
+              </Button>
+            )
           ) : (
             <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
               <div className="flex items-center justify-between">
@@ -501,7 +504,7 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
           )}
 
           {points.length === 0 ? (
-            <EmptyState
+            !showForm && <EmptyState
               illustration="emptyList"
               title="No meeting points yet"
               description="Drop a pin so your crew knows where to meet."
