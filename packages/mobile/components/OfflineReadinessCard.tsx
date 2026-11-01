@@ -312,7 +312,7 @@ export default function OfflineReadinessCard({ festivalId, pmtilesUrl = null, fe
           </Text>
           <Ionicons name="chevron-down" size={14} color={t.colors.text.muted} />
         </TouchableOpacity>
-      ) : (
+      ) : !summary.notStarted || expanded ? (
         <View style={styles.stepList} accessibilityRole="list">
           {steps.map(({ key, label, section, onRetry }, i) => (
             <View key={key} style={i < steps.length - 1 ? styles.stepBorder : undefined}>
@@ -325,7 +325,7 @@ export default function OfflineReadinessCard({ festivalId, pmtilesUrl = null, fe
             </View>
           ))}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -345,7 +345,9 @@ const useCardStyles = makeStyles((t) => ({
     gap: t.spacing[3],
   },
   headerText: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 180,
     gap: t.spacing[1],
   },
   title: {

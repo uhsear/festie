@@ -10,9 +10,13 @@ vi.mock('@festie/shared/stores', () => ({
   useUIStore: (select: (s: typeof storeState) => unknown) => select(storeState),
 }));
 vi.mock('react', () => ({ useMemo: (fn: () => unknown) => fn() }));
-vi.mock('react-native', () => ({ StyleSheet: { create: <T>(s: T) => s } }));
+vi.mock('react-native', () => ({
+  StyleSheet: { create: <T>(s: T) => s },
+  useWindowDimensions: () => ({ fontScale: 1 }),
+}));
 
-const { makeStyles, tokensForTheme, typeStyle, useTokens } = await import('./useTokens');
+const { MAX_FONT_SCALE, isLargeText, makeStyles, tokensForTheme, typeScaleCap, typeStyle, useTokens } =
+  await import('./useTokens');
 
 beforeEach(() => {
   storeState.theme = 'stage';
@@ -79,5 +83,37 @@ describe('typeStyle — label face', () => {
     const style = typeStyle('label', 600, { brandFace: true });
     expect(style.fontFamily).toBe('SpaceGrotesk_600SemiBold');
     expect(style.fontWeight).toBeUndefined();
+  });
+});
+
+describe('isLargeText — large-text layout switch', () => {
+  it('turns on at OS font scale 1.3', () => {
+    expect(isLargeText(1)).toBe(false);
+    expect(isLargeText(1.29)).toBe(false);
+    expect(isLargeText(1.3)).toBe(true);
+    expect(isLargeText(2.35)).toBe(true);
+  });
+});
+
+describe('typeScaleCap — per-role Dynamic Type cap', () => {
+  it('caps display and title roles and leaves body roles uncapped', () => {
+    expect(typeScaleCap('display-xl')).toBe(1.2);
+    expect(typeScaleCap('heading')).toBe(MAX_FONT_SCALE);
+    expect(typeScaleCap('title')).toBe(1.6);
+    expect(typeScaleCap('body')).toBeUndefined();
+    expect(typeScaleCap('caption')).toBeUndefined();
+    expect(typeScaleCap('label')).toBeUndefined();
+  });
+
+  it('keeps every cap in (1, 1.6] and never lets a bigger role grow more', () => {
+    const order = ['display-xl', 'display-lg', 'heading', 'title'] as const;
+    const caps = order.map((role) => typeScaleCap(role));
+    for (const cap of caps) {
+      expect(cap).toBeGreaterThan(1);
+      expect(cap).toBeLessThanOrEqual(1.6);
+    }
+    for (let i = 1; i < caps.length; i++) {
+      expect(caps[i - 1]!).toBeLessThanOrEqual(caps[i]!);
+    }
   });
 });

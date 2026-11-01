@@ -28,7 +28,7 @@ import {
   removeMemberConfirmMessage,
 } from '@festie/shared/utils';
 import type { Crew, CrewMember, CrewOverlap, FestivalSet } from '@festie/shared/types';
-import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useTokens, makeStyles, typeStyle, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import Button from '../../components/Button';
@@ -59,6 +59,7 @@ const TAB_KEYS: readonly CrewTabKey[] = ['members', 'plan', 'logistics', 'money'
 
 export default function CrewScreen() {
   const t = useTokens();
+  const largeText = useLargeText();
   const styles = useStyles();
   const haptics = useHaptics();
 
@@ -822,7 +823,7 @@ export default function CrewScreen() {
             // these controls hit admin-gated shared store actions.
             const canManage = isOwner && !rowIsOwner && !isSelf;
             return (
-              <View style={styles.memberRow}>
+              <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{getInitials(item.name ?? '') || '?'}</Text>
                 </View>
@@ -834,7 +835,7 @@ export default function CrewScreen() {
                   {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
                 </View>
                 {canManage ? (
-                  <View style={styles.memberActions}>
+                  <View style={[styles.memberActions, largeText && styles.memberActionsWrap]}>
                     <TouchableOpacity
                       onPress={() => handleTransfer(crew.id, item)}
                       style={styles.iconButton}
@@ -870,37 +871,39 @@ export default function CrewScreen() {
               {crew.inviteCode ? (
                 <View style={styles.inviteBar}>
                   <Ionicons name="key-outline" size={16} color={t.colors.accent.aqua} />
-                  <Text style={styles.inviteLabel}>Invite code</Text>
+                  <Text style={styles.inviteLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>Invite code</Text>
                   <Text style={styles.inviteCode} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityLabel={`Invite code ${crew.inviteCode}`}>
                     {crew.inviteCode}
                   </Text>
-                  <TouchableOpacity
-                    testID="crew-action-share-invite"
-                    onPress={() => handleShareInvite(crew.inviteCode!, crew.name)}
-                    style={styles.iconButton}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel="Share invite link"
-                  >
-                    <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
-                  </TouchableOpacity>
-                  {isOwner ? (
+                  <View style={[styles.inviteActions, largeText && styles.inviteActionsWrap]}>
                     <TouchableOpacity
-                      testID="crew-action-regenerate-invite"
-                      onPress={() => handleRegenerate(crew.id)}
-                      disabled={regenBusy}
+                      testID="crew-action-share-invite"
+                      onPress={() => handleShareInvite(crew.inviteCode!, crew.name)}
                       style={styles.iconButton}
                       activeOpacity={0.7}
                       accessibilityRole="button"
-                      accessibilityLabel="Regenerate invite code"
+                      accessibilityLabel="Share invite link"
                     >
-                      {regenBusy ? (
-                        <ActivityIndicator size="small" color={t.colors.accent.aqua} />
-                      ) : (
-                        <Ionicons name="refresh" size={16} color={t.colors.accent.aqua} />
-                      )}
+                      <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
                     </TouchableOpacity>
-                  ) : null}
+                    {isOwner ? (
+                      <TouchableOpacity
+                        testID="crew-action-regenerate-invite"
+                        onPress={() => handleRegenerate(crew.id)}
+                        disabled={regenBusy}
+                        style={styles.iconButton}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel="Regenerate invite code"
+                      >
+                        {regenBusy ? (
+                          <ActivityIndicator size="small" color={t.colors.accent.aqua} />
+                        ) : (
+                          <Ionicons name="refresh" size={16} color={t.colors.accent.aqua} />
+                        )}
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               ) : null}
             </View>
@@ -1530,6 +1533,14 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.accent.aqua,
     backgroundColor: t.colors.aquaAlpha[10],
   },
+  inviteActions: {
+    flexDirection: 'row',
+    gap: t.spacing[2],
+  },
+  inviteActionsWrap: {
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
   inviteLabel: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
@@ -1769,6 +1780,9 @@ const useStyles = makeStyles((t) => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: t.colors.border.default,
   },
+  memberRowWrap: {
+    flexWrap: 'wrap',
+  },
   avatar: {
     width: 40,
     height: 40,
@@ -1797,6 +1811,10 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[2],
+  },
+  memberActionsWrap: {
+    width: '100%',
+    justifyContent: 'flex-end',
   },
   liveSafetyBlock: {
     gap: t.spacing[3],

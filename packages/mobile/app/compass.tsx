@@ -105,19 +105,21 @@ export default function CompassScreen() {
           <MeetingPointCompass target={target} />
         </ScrollView>
       ) : (
-        <EmptyState
-          icon="navigate-outline"
-          title="No meeting point to point at"
-          message={
-            activeCrew
-              ? 'Save a meeting point with a captured location (the map pin), then open the compass to walk toward it.'
-              : 'Pick a crew and save a meeting point with a captured location to use the compass.'
-          }
-          action={{
-            label: 'Set a meeting point',
-            onPress: () => router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } }),
-          }}
-        />
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
+          <EmptyState
+            icon="navigate-outline"
+            title="No meeting point to point at"
+            message={
+              activeCrew
+                ? 'Save a meeting point with a captured location (the map pin), then open the compass to walk toward it.'
+                : 'Pick a crew and save a meeting point with a captured location to use the compass.'
+            }
+            action={{
+              label: 'Set a meeting point',
+              onPress: () => router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } }),
+            }}
+          />
+        </ScrollView>
       )}
     </View>
   );

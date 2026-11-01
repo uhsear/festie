@@ -191,7 +191,7 @@ A monochrome venue lit by four signal colours, each with exactly one job.
 
 ## Layout
 
-A 4 pt spacing base (steps 4, 8, 12, 16, 24, 32, 48, 80), read through `useTokens()` and `makeStyles()`. Single-column screens inside safe areas. Navigation is native tabs (Schedule, Picks, Crew, Account) with stacks above them, and detail views push or present as native sheets. Lists use `FlatList` with `useListBottomInset` so content clears the tab bar. Text scales with the OS font size up to `MAX_FONT_SCALE` (1.4); layouts must not clip or overlap at that scale or on a 320 pt wide screen.
+A 4 pt spacing base (steps 4, 8, 12, 16, 24, 32, 48, 80), read through `useTokens()` and `makeStyles()`. Single-column screens inside safe areas. Navigation is native tabs (Schedule, Picks, Crew, Account) with stacks above them, and detail views push or present as native sheets. Lists use `FlatList` with `useListBottomInset` so content clears the tab bar. Body, caption and label text scale fully with the OS font size. Display and title text stop at `typeScaleCap(role)`, and chips, pills and badges stop at `MAX_FONT_SCALE` (1.4). Use `useLargeText()` (OS font scale 1.3 or more) to change a layout at large text, for example to hide a decorative image or to put buttons on their own line. The share posters are fixed-pixel images: they set `allowFontScaling={false}` and use literal pixel sizes. Layouts must not clip or overlap at the largest OS text size or on a 320 pt wide screen.
 
 ### Named Rules
 **The Platform Shell Rule.** Structure, navigation and gestures follow the platform: iOS Human Interface Guidelines on iOS, Material 3 on Android. Festie's identity lives in colour, type, iconography and detail, never in a custom replacement for a native control.

@@ -200,10 +200,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
       </View>
 
       {/* Honesty banner: this is NEVER live. */}
-      <Text style={styles.banner}>
-        Last-synced positions, not live tracking. Sent when signal returns; shown “as of” when each crewmate last
-        synced.
-      </Text>
+      <Text style={styles.banner}>Not live: each status shows when that crewmate last had signal.</Text>
 
       {showForm ? (
         <View style={styles.formBox}>
@@ -420,7 +417,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
               <Avatar key={m.userId} name={m.name || m.username || 'Crew'} size="xs" borderColor={t.colors.bg.card} />
             ))}
           </View>
-          <Text style={styles.emptyText} numberOfLines={1}>
+          <Text style={styles.emptyText}>
             No one has shared a status yet · {members.length} member{members.length === 1 ? '' : 's'}
           </Text>
         </View>

@@ -20,7 +20,7 @@ import {
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
 import { useFestivalDataStore } from '@festie/shared/stores';
-import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
 import { useNowIndicator, type TimeBounds } from '../hooks/useNowIndicator';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -38,6 +38,8 @@ const ROW_HEIGHT = 22;
 // any set ≥19 min (everything shorter snaps up to this floor).
 const MIN_BLOCK_H = 28;
 const GUTTER_W = 44;
+// Fits "12:30P" in the micro role at the 1.4 cap plus the 4px left padding.
+const GUTTER_W_LARGE = 56;
 const STAGE_HEADER_H = 40;
 
 export interface TimelineViewProps {
@@ -120,6 +122,7 @@ function StageColumn({
 }: StageColumnProps) {
   const t = useTokens();
   const styles = useStyles();
+  const gutterW = useLargeText() ? GUTTER_W_LARGE : GUTTER_W;
   const totalHeight = timeBounds.totalSlots * ROW_HEIGHT;
   // Read once at mount: a later prop change must not move a column already on screen.
   const [startY] = useState(initialScrollY);
@@ -176,7 +179,7 @@ function StageColumn({
               },
             ]}
           >
-            <Text style={styles.timeLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>{tl.label}</Text>
+            <Text style={[styles.timeLabel, { width: gutterW }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{tl.label}</Text>
           </View>
         ))}
 
@@ -207,7 +210,7 @@ function StageColumn({
                 {
                   top: top + 2,
                   height,
-                  left: GUTTER_W + 2,
+                  left: gutterW + 2,
                   right: 2,
                   borderLeftColor: pickColor ?? stageColor,
                   borderLeftWidth: myPick ? 4 : 3,
@@ -244,6 +247,7 @@ function StageColumn({
             style={[
               styles.nowLine,
               {
+                left: gutterW,
                 top: (nowIndicator / 100) * totalHeight,
                 backgroundColor: t.colors.accent.coral,
               },
@@ -509,7 +513,7 @@ export default function TimelineView({
       {visibleStages.length > 1 ? (
         <View style={styles.hintRow}>
           <Ionicons name="swap-horizontal" size={12} color={t.colors.text.muted} />
-          <Text style={styles.hintText}>Swipe to change stage</Text>
+          <Text style={styles.hintText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Swipe to change stage</Text>
         </View>
       ) : null}
 
@@ -718,7 +722,6 @@ const useStyles = makeStyles((t) => ({
   timeLabel: {
     ...typeStyle('micro'),
     color: t.colors.text.muted,
-    width: GUTTER_W,
   },
   setBlock: {
     position: 'absolute',
@@ -745,7 +748,6 @@ const useStyles = makeStyles((t) => ({
   },
   nowLine: {
     position: 'absolute',
-    left: GUTTER_W,
     right: 0,
     height: 2,
     zIndex: 8,

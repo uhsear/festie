@@ -310,7 +310,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
         </TouchableOpacity>
       ) : null}
 
-      <Text style={styles.note}>For emergencies — alerts your whole crew. Needs signal to send.</Text>
+      <Text style={styles.note}>Alerts your whole crew. Needs signal to send.</Text>
 
       {/* Navigate-to-SOS compass modal (reuses the on-device meeting-point compass). */}
       <Modal

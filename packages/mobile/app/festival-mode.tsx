@@ -6,7 +6,7 @@ import { useAuthStore, useCrewStore, useFestivalDataStore } from '@festie/shared
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
 import type { FestivalSet } from '@festie/shared/types';
 import { fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
-import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
 import EmptyState from '../components/EmptyState';
 import FreshnessChip from '../components/FreshnessChip';
@@ -25,6 +25,7 @@ import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref } from '../lib/dayOfRoutes';
 export default function FestivalModeScreen() {
   const t = useTokens();
   const styles = useStyles();
+  const largeText = useLargeText();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -79,11 +80,11 @@ export default function FestivalModeScreen() {
             { paddingBottom: Math.max(t.spacing[4], insets.bottom + t.spacing[2]) },
           ]}
         >
-          <View style={styles.headerRow}>
-            <Text style={styles.festivalName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+          <View style={[styles.headerRow, largeText && { flexDirection: 'column', alignItems: 'flex-start' }]}>
+            <Text style={styles.festivalName} numberOfLines={2} maxFontSizeMultiplier={typeScaleCap('title')}>
               {currentFestival.name}
             </Text>
-            <View style={styles.clockWrap}>
+            <View style={[styles.clockWrap, largeText && { alignItems: 'flex-start' }]}>
               <Text style={styles.clock} accessibilityLabel={`Festival time ${fmtZonedClock(nowMs, timeZone)}`}>
                 {fmtZonedClock(nowMs, timeZone)}
               </Text>

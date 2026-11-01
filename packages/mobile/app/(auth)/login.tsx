@@ -20,7 +20,7 @@ import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
+import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
 const useStyles = makeStyles((t) => ({
   container: {
@@ -179,11 +179,15 @@ export default function LoginScreen() {
         {/* R25: hero staggered reveal — brand word (300ms) then subtitle (360ms).
             FadeInDown gives translateY+fade per spec. Gated on reduceMotion. */}
         <BrandMark />
-        <Animated.Text style={styles.title} entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)}>
+        <Animated.Text
+          style={styles.title}
+          maxFontSizeMultiplier={typeScaleCap('display-lg')}
+          entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)}>
           Festie
         </Animated.Text>
         <Animated.Text
           style={styles.subtitle}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
           entering={reduceMotion ? undefined : FadeInDown.delay(360).duration(350)}
         >
           Sign in to your account

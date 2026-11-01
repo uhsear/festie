@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import type { Festival } from '@festie/shared/types';
 import { formatFestivalDateRange, festivalStatus, type FestivalStatus } from '@festie/shared/utils';
-import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
 import { Skeleton } from './Skeleton';
@@ -156,6 +156,7 @@ const useStyles = makeStyles((t) => ({
 function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
   const styles = useStyles();
   const t = useTokens();
+  const largeText = useLargeText();
   const dateRange = formatFestivalDateRange(festival.startDate, festival.endDate);
   const status = festivalStatus(festival);
   const badgeSpec = statusBadge(status);
@@ -177,7 +178,7 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
   return (
     <TouchableOpacity
       testID={`festival-card-${festival.id}`}
-      style={[styles.card, isPast && styles.cardPast]}
+      style={[styles.card, isPast && styles.cardPast, largeText && { padding: t.spacing[3] }]}
       onPress={() => onPress(festival.id)}
       activeOpacity={0.7}
       disabled={isSelecting}
@@ -187,7 +188,12 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
     >
       <View style={styles.cardContent}>
         <View style={styles.titleRow}>
-          <Text style={styles.festivalName} numberOfLines={3} ellipsizeMode="tail">
+          <Text
+            style={styles.festivalName}
+            numberOfLines={3}
+            ellipsizeMode="tail"
+            maxFontSizeMultiplier={typeScaleCap('title')}
+          >
             {festival.name}
           </Text>
           {badgeSpec ? (
@@ -217,7 +223,7 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
             />
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Text style={styles.metaText} numberOfLines={2}>
               {festival.location}
             </Text>
           </View>

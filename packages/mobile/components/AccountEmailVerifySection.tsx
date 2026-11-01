@@ -84,7 +84,7 @@ export default function AccountEmailVerifySection() {
           </View>
           <View style={styles.rowBody}>
             <Text style={styles.rowTitle}>Verify your email</Text>
-            <Text style={styles.rowHint} numberOfLines={1} ellipsizeMode="middle">
+            <Text style={styles.rowHint} numberOfLines={3}>
               {user.email}
             </Text>
           </View>

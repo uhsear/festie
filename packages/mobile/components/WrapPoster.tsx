@@ -41,6 +41,7 @@ interface Props {
  * identical regardless of device. RN can't gradient-clip text or do CSS radial
  * gradients, so the FESTIE wordmark is solid coral and the background is flat
  * #080810 (close enough; the web poster is the high-fidelity version).
+ * Fixed-pixel image: text ignores the OS font size (documented exception to the typeStyle() rule).
  */
 export default function WrapPoster({ festivalName, topSets, stats }: Props) {
   const statCells = [
@@ -53,32 +54,32 @@ export default function WrapPoster({ festivalName, topSets, stats }: Props) {
     <View style={s.poster}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.wordmark}>FESTIE</Text>
-        <Text style={s.kicker}>YOUR FESTIVAL WRAP</Text>
-        <Text style={s.festival} numberOfLines={2}>
+        <Text allowFontScaling={false} style={s.wordmark}>FESTIE</Text>
+        <Text allowFontScaling={false} style={s.kicker}>YOUR FESTIVAL WRAP</Text>
+        <Text allowFontScaling={false} style={s.festival} numberOfLines={2}>
           {festivalName}
         </Text>
       </View>
 
       {/* Top sets */}
       <View style={s.topWrap}>
-        <Text style={s.topHeading}>TOP SETS</Text>
+        <Text allowFontScaling={false} style={s.topHeading}>TOP SETS</Text>
         {topSets.slice(0, 5).map((set, i) => (
           <View key={set.artist || i} style={s.topRow}>
             <View style={s.topIcon}>
               <Ionicons name={RATING_IONICON[set.rating] ?? 'trophy'} size={56} color={colors.accent.aqua} />
             </View>
             <View style={s.topInfo}>
-              <Text style={s.topArtist} numberOfLines={1}>
+              <Text allowFontScaling={false} style={s.topArtist} numberOfLines={1}>
                 {set.artist}
               </Text>
               {set.stageName ? (
-                <Text style={s.topStage} numberOfLines={1}>
+                <Text allowFontScaling={false} style={s.topStage} numberOfLines={1}>
                   {set.stageName}
                 </Text>
               ) : null}
             </View>
-            <Text style={s.topRank}>#{i + 1}</Text>
+            <Text allowFontScaling={false} style={s.topRank}>#{i + 1}</Text>
           </View>
         ))}
       </View>
@@ -87,13 +88,13 @@ export default function WrapPoster({ festivalName, topSets, stats }: Props) {
       <View style={s.statsGrid}>
         {statCells.map((cell) => (
           <View key={cell.label} style={s.statCell}>
-            <Text style={s.statValue}>{cell.value}</Text>
-            <Text style={s.statLabel}>{cell.label.toUpperCase()}</Text>
+            <Text allowFontScaling={false} style={s.statValue}>{cell.value}</Text>
+            <Text allowFontScaling={false} style={s.statLabel}>{cell.label.toUpperCase()}</Text>
           </View>
         ))}
       </View>
 
-      <Text style={s.footer}>FESTIE.US</Text>
+      <Text allowFontScaling={false} style={s.footer}>FESTIE.US</Text>
     </View>
   );
 }

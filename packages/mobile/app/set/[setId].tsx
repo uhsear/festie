@@ -30,7 +30,7 @@ import {
   buildSetUrl,
 } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
-import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useTokens, makeStyles, typeStyle, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import DisplayWords from '../../components/DisplayWords';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
@@ -80,6 +80,7 @@ const REMINDER_OPTIONS: readonly { value: number; label: string }[] = [
  */
 export default function SetDetailScreen() {
   const t = useTokens();
+  const largeText = useLargeText();
   const styles = useStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -442,7 +443,7 @@ export default function SetDetailScreen() {
               expo-linear-gradient) only obscured the portrait subject. The
               photo now reads clean, with no scrim: a flat low-alpha band
               also showed as a hard gray stripe on Daylight (iOS sweep). */}
-        {artistPhoto ? (
+        {artistPhoto && !largeText ? (
           <View style={styles.artistPhotoContainer}>
             <Image
               source={{ uri: artistPhoto }}
@@ -461,7 +462,7 @@ export default function SetDetailScreen() {
         </View>
 
         {/* Artist header */}
-        <Text style={styles.artist} accessibilityRole="header">
+        <Text style={styles.artist} accessibilityRole="header" maxFontSizeMultiplier={typeScaleCap('display-lg')}>
           <DisplayWords text={artistName} fontSize={styles.artist.fontSize} />
         </Text>
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -804,7 +805,7 @@ const useStyles = makeStyles((t) => ({
   // (t.spacing[5]) that would shrink the image, so we pull the container out
   // to the edges.
   artistPhotoContainer: {
-    height: 200,
+    height: 120,
     borderRadius: t.radii.default,
     marginBottom: t.spacing[3],
     marginHorizontal: -t.spacing[5],
