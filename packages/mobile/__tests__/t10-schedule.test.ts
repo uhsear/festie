@@ -12,10 +12,10 @@ describe('T10 schedule large-text guards', () => {
     expect(src).toContain('useLargeText()');
   });
 
-  it('SegmentedControl shrinks the label to fit', () => {
+  it('SegmentedControl caps the label scale instead of shrinking it', () => {
     const src = read('components/SegmentedControl.tsx');
-    expect(src).toContain('adjustsFontSizeToFit');
-    expect(src).toContain('minimumFontScale={0.75}');
+    expect(src).toContain('SEGMENT_FONT_SCALE = 1.2');
+    expect(src).not.toContain('adjustsFontSizeToFit');
   });
 
   it('FestivalList caps the name and allows two location lines', () => {
