@@ -135,7 +135,7 @@ export default function createFeatureRoutes({ pool, redis, config, io, log }: Ap
 | `account.ts` | Profile settings, avatar upload/delete, display name |
 | `admin-users.ts` | Admin user management, search, ban, password reset |
 | `festivals.ts` | Festival CRUD, clone, stage/day/set management |
-| `lineup-import.ts` | Festival lineup import (CSV, JSON, Clashfinder) |
+| `lineup-import.ts` | Lineup import: preview, commit, history and undo. The client parses CSV or TSV and posts JSON rows. |
 | `notifications.ts` | Push tokens, notification preferences, mark read |
 | `admin.ts` | Admin login, session management, role checks |
 | `admin-metrics.ts` | Prometheus metrics endpoint, custom dashboards |

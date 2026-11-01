@@ -228,6 +228,26 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
     });
   });
 
+  it('countLineupDrop returns the fresh count and sends nothing', async () => {
+    const { triggers, sends } = build(mockPool('North Coast', ['p1', 'p2']));
+    const r = await triggers.countLineupDrop('fest-2027');
+    assert.deepEqual(r, { festivalName: 'North Coast', recipients: 2 });
+    assert.equal(sends.length, 0);
+  });
+
+  it('edition match ignores a trailing year', async () => {
+    const sqls: string[] = [];
+    const pool = {
+      query: async (sql: string) => {
+        sqls.push(sql);
+        return { rows: sql.includes('SELECT name') ? [{ name: 'North Coast 2027' }] : [] };
+      },
+    };
+    const { triggers } = build(pool);
+    await triggers.countLineupDrop('fest-2027');
+    assert.ok(sqls.some((q) => q.includes('regexp_replace(lower(fp.name)')));
+  });
+
   it('no prior attendees → nothing sent', async () => {
     const { triggers, sends } = build(mockPool('North Coast', []));
     const r = await triggers.sendLineupDrop('fest-2027');

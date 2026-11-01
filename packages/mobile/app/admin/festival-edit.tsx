@@ -32,13 +32,21 @@ import {
   addSet as addSetReducer,
   removeSet as removeSetReducer,
   setSetField as setSetFieldReducer,
+  setSetArtistNames as setSetArtistNamesReducer,
+  withoutIndex,
   type StageRow,
   type SetRow,
   type DayRow,
   type FormState,
 } from './festivalEditState';
-import { amenityCount, listTimeZones, startsAfterMidnight } from '@festie/shared/utils';
-import type { FestivalMapConfig } from '@festie/shared/types';
+import {
+  amenityCount,
+  artistNamesOf,
+  joinArtistNames,
+  listTimeZones,
+  startsAfterMidnight,
+} from '@festie/shared/utils';
+import type { Artist, FestivalMapConfig } from '@festie/shared/types';
 
 /**
  * Admin — Festival editor (native UI parity for the web FestivalEditForm →
@@ -69,6 +77,7 @@ import type { FestivalMapConfig } from '@festie/shared/types';
  */
 
 const DEFAULT_STAGE_COLOR = '#6a6a88';
+const MAX_ARTISTS_PER_SET = 4;
 
 // Local editable shapes (StageRow / SetRow / DayRow / FormState) live in
 // ./festivalEditState alongside the pure tree reducers they operate on.
@@ -80,6 +89,7 @@ interface FestivalDetail {
   name?: string;
   location?: string;
   timeZone?: string | null;
+  b2bSeparator?: string;
   updatedAt?: string;
   mapConfig?: FestivalMapConfig | null;
   stages?: { id?: string; name?: string; color?: string; latitude?: number | null; longitude?: number | null }[];
@@ -105,6 +115,7 @@ const EMPTY_FORM: FormState = {
   name: '',
   location: '',
   timeZone: '',
+  b2bSeparator: 'b2b',
   stages: [],
   days: [],
   mapConfig: null,
@@ -125,6 +136,26 @@ function setLink(s: DetailSet): string {
   return links?.spotify || links?.soundcloud || s.linkUrl || '';
 }
 
+/**
+ * The artists to send for a set. Artist 1 carries the set's single Link field:
+ * a changed link replaces its spotify/soundcloud link, because the server ignores
+ * linkUrl whenever artists[] is sent. Empty means "send only the typed name".
+ */
+function artistsPayload(s: SetRow): { name: string; links: Record<string, string> }[] {
+  return s.artists.map((a, i) => {
+    const links = { ...(a.links ?? {}) };
+    if (i === 0) {
+      const link = s.linkUrl.trim();
+      if (link !== (links.spotify || links.soundcloud || '')) {
+        delete links.spotify;
+        delete links.soundcloud;
+        if (link) links.spotify = link;
+      }
+    }
+    return { name: a.name, links };
+  });
+}
+
 export default function FestivalEditScreen() {
   const t = useTokens();
   const styles = useStyles();
@@ -142,6 +173,11 @@ export default function FestivalEditScreen() {
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<'delete' | 'backfill' | null>(null);
   const [busy, setBusy] = useState(false);
+  // Artist inputs per set, keyed `${dayId}:${setId}`. Drafts keep blank inputs the
+  // saved artists[] drops; origins keep the artists loaded with the set so each
+  // input index keeps its own links and photo.
+  const [artistDrafts, setArtistDrafts] = useState<Record<string, string[]>>({});
+  const artistOrigins = useRef<Record<string, Artist[]>>({});
   // Dirty flag: flipped by user edit handlers only (never by the initial load
   // hydration below), so Cancel can tell an untouched form from one with
   // unsaved edits. Simplest honest signal — no deep compare.
@@ -184,17 +220,21 @@ export default function FestivalEditScreen() {
           startTime: s.startTime || '',
           endTime: s.endTime || '',
           linkUrl: setLink(s),
+          artists: (s.artists ?? []).flatMap((a) => (a.name ? [{ ...a, name: a.name }] : [])),
         })),
       }));
       setForm({
         name: full.name || '',
         location: full.location || '',
         timeZone: full.timeZone || '',
+        b2bSeparator: full.b2bSeparator || 'b2b',
         stages,
         days,
         mapConfig: full.mapConfig ?? null,
       });
       setUpdatedAt(full.updatedAt ?? null);
+      setArtistDrafts({});
+      artistOrigins.current = {};
       // Auto-expand all days so artists are visible immediately (web parity).
       setExpandedDays(new Set(days.map((d) => d.id)));
     } catch {
@@ -283,11 +323,71 @@ export default function FestivalEditScreen() {
         startTime: '',
         endTime: '',
         linkUrl: '',
+        artists: [],
       }),
     );
   const removeSet = (dayId: string, setId: string) => updateForm((f) => removeSetReducer(f, dayId, setId));
   const setSetField = (dayId: string, setId: string, field: keyof SetRow, value: string) =>
     updateForm((f) => setSetFieldReducer(f, dayId, setId, field, value));
+
+  // removedAt splices the origin too, so later artists keep their own links and photo.
+  const editArtistNames = (dayId: string, s: SetRow, names: string[], removedAt?: number) => {
+    const key = `${dayId}:${s.id}`;
+    artistOrigins.current[key] ??= s.artists;
+    if (removedAt !== undefined) artistOrigins.current[key] = withoutIndex(artistOrigins.current[key], removedAt);
+    setArtistDrafts((prev) => ({ ...prev, [key]: names }));
+    updateForm((f) => setSetArtistNamesReducer(f, dayId, s.id, artistOrigins.current[key], names));
+  };
+
+  const artistInputs = (dayId: string, s: SetRow) => {
+    const names = artistDrafts[`${dayId}:${s.id}`] ?? artistNamesOf(s);
+    return (
+      <>
+        {names.map((name, i) => (
+          <View key={i}>
+            <LabeledTextInput
+              label={i === 0 ? 'Artist' : `B2B artist ${i + 1}`}
+              value={name}
+              onChangeText={(v) => editArtistNames(dayId, s, names.map((n, j) => (j === i ? v : n)))}
+              placeholder="Artist name"
+              autoCapitalize="words"
+            />
+            {i > 0 ? (
+              <TouchableOpacity
+                onPress={() =>
+                  editArtistNames(
+                    dayId,
+                    s,
+                    names.filter((_, j) => j !== i),
+                    i,
+                  )
+                }
+                style={styles.removeBtn}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${name || 'artist'}`}
+              >
+                <Ionicons name="close" size={t.iconSize.sm} color={t.colors.accent.coral} />
+                <Text style={styles.removeBtnText}>Remove</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ))}
+        {names.length < MAX_ARTISTS_PER_SET ? (
+          <TouchableOpacity
+            onPress={() => editArtistNames(dayId, s, [...names, ''])}
+            style={styles.addBtn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Add B2B artist"
+          >
+            <Ionicons name="add" size={t.iconSize.md} color={t.colors.accent.aqua} />
+            <Text style={styles.addBtnText}>Add B2B artist</Text>
+          </TouchableOpacity>
+        ) : null}
+      </>
+    );
+  };
 
   // Stage options for the per-set ModalSelect.
   const stageOptions: SelectOption[] = form.stages.map((s) => ({
@@ -342,6 +442,7 @@ export default function FestivalEditScreen() {
       name: form.name.trim(),
       location: form.location.trim(),
       timeZone: form.timeZone ? form.timeZone : null,
+      b2bSeparator: form.b2bSeparator.trim() || 'b2b',
       // Preserve stage pin coords (authored in the map editor) so saving the
       // text fields here never silently drops a stage's location. null when
       // unpinned (Phase A contract: per-stage latitude/longitude).
@@ -362,7 +463,13 @@ export default function FestivalEditScreen() {
         date: d.date.trim(),
         sets: d.sets.map((s) => ({
           id: s.id,
-          artist: s.artist.trim(),
+          artist: s.artists.length
+            ? joinArtistNames(
+                s.artists.map((a) => a.name),
+                form.b2bSeparator,
+              )
+            : s.artist.trim(),
+          ...(s.artists.length ? { artists: artistsPayload(s) } : {}),
           stageId: s.stageId || null,
           startTime: normTime(s.startTime),
           endTime: normTime(s.endTime),
@@ -519,6 +626,15 @@ export default function FestivalEditScreen() {
               placeholder="Choose a time zone…"
               searchable
               hint="Set times, countdowns and reminders use this zone."
+            />
+            <LabeledTextInput
+              label="B2B separator"
+              value={form.b2bSeparator}
+              onChangeText={(v) => updateForm((f) => ({ ...f, b2bSeparator: v }))}
+              placeholder="b2b"
+              autoCapitalize="none"
+              maxLength={10}
+              hint="Joins B2B artist names, for example b2b, vs or &. Up to 10 characters."
             />
           </View>
 
@@ -688,13 +804,7 @@ export default function FestivalEditScreen() {
                                   <Ionicons name="close" size={t.iconSize.sm} color={t.colors.accent.coral} />
                                 </TouchableOpacity>
                               </View>
-                              <LabeledTextInput
-                                label="Artist"
-                                value={s.artist}
-                                onChangeText={(v) => setSetField(day.id, s.id, 'artist', v)}
-                                placeholder="Artist name"
-                                autoCapitalize="words"
-                              />
+                              {artistInputs(day.id, s)}
                               <ModalSelect
                                 label="Stage"
                                 value={s.stageId || null}
