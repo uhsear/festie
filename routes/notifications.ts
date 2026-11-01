@@ -2,11 +2,26 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { parsePageParams } from '../lib/pagination.js';
+import { createWebPushSender, parseWebPushSubscription } from '../lib/notifications/webpush.js';
+
+// The core categories, the M3 re-engagement opt-outs and the finer crew types.
+const BOOLEAN_PREF_KEYS = [
+  'crewUpdates',
+  'setReminders',
+  'scheduleChanges',
+  'lineupDrops',
+  'crewReformed',
+  'wrapReady',
+  'crewMeetingPoints',
+  'crewPolls',
+  'crewMoney',
+  'crewRides',
+] as const;
 
 export default function createNotificationRoutes(deps: any) {
   const {
     express,
-    _config,
+    config,
     log,
     stores,
     userAuth,
@@ -33,6 +48,14 @@ export default function createNotificationRoutes(deps: any) {
   const TOKEN_MAX_LENGTH = 4096;
   const DEVICE_NAME_MAX = 60;
   const MAX_TOKENS_PER_USER = 10;
+  const webPush = createWebPushSender(config, log);
+
+  // ── GET /vapid-key — public VAPID key for browser push subscriptions ─
+  router.get('/vapid-key', rl(60, 'notif-vapid'), (_req: any, res: any) => {
+    if (!webPush) return sendError(res, 404, 'Web push is not set up on this server.', ErrorCodes.NOT_FOUND);
+    res.set('Cache-Control', 'public, max-age=3600');
+    return sendSuccess(res, { publicKey: webPush.publicKey });
+  });
 
   // ── POST /token — register a device push token ──────────────────────
   // Rate limit routed through the shared Redis-backed `rl()` helper so limits
@@ -55,6 +78,15 @@ export default function createNotificationRoutes(deps: any) {
       // eslint-disable-next-line no-control-regex
       if (/[\x00-\x1f]/.test(token)) {
         return sendError(res, 400, 'Token contains invalid characters', ErrorCodes.INVALID_INPUT);
+      }
+      // A web token is a PushSubscription the server will POST to: allowlisted hosts only.
+      if (cleanPlatform === 'web' && !parseWebPushSubscription(token)) {
+        return sendError(
+          res,
+          400,
+          "This browser's push subscription is not valid. Turn notifications off and on again.",
+          ErrorCodes.INVALID_INPUT,
+        );
       }
 
       // Check if token already exists for a different user (token hijacking prevention)
@@ -185,13 +217,9 @@ export default function createNotificationRoutes(deps: any) {
     try {
       const body = req.validatedBody;
       // Reject requests with unknown fields to prevent abuse
-      const allowedKeys = new Set([
-        'crewUpdates',
-        'setReminders',
-        'scheduleChanges',
-        'lineupDrops',
-        'crewReformed',
-        'wrapReady',
+      const allowedKeys = new Set<string>([
+        ...BOOLEAN_PREF_KEYS,
+        'mustSeeReminderMinutes',
         'dndStart',
         'dndEnd',
         'dndTimeZone',
@@ -202,19 +230,15 @@ export default function createNotificationRoutes(deps: any) {
       }
       const update: any = {};
 
-      // Boolean toggles. The 3 core categories (crew/reminders/schedule) plus the
-      // M3 re-engagement opt-outs (lineup_drop / crew_reformed / wrap_ready).
-      for (const key of [
-        'crewUpdates',
-        'setReminders',
-        'scheduleChanges',
-        'lineupDrops',
-        'crewReformed',
-        'wrapReady',
-      ]) {
+      for (const key of BOOLEAN_PREF_KEYS) {
         if (body[key] !== undefined) {
           update[key] = body[key] ? 1 : 0;
         }
+      }
+
+      // Lead minutes (5/10/15/30/60) are already validated by schemas.notificationPrefs; null turns it off.
+      if (body.mustSeeReminderMinutes !== undefined) {
+        update.mustSeeReminderMinutes = body.mustSeeReminderMinutes ?? null;
       }
 
       // DND window: Simple HH:MM format prevents notifications during sleep/quiet hours
@@ -248,15 +272,17 @@ export default function createNotificationRoutes(deps: any) {
 
       // Merge with existing prefs since upsert does full INSERT OR REPLACE
       const current = (await stores.notificationPrefs.get(req.user.userId)) || {};
+      const booleans: any = {};
+      for (const key of BOOLEAN_PREF_KEYS) {
+        booleans[key] = update[key] !== undefined ? update[key] : (current[key] ?? true);
+      }
       await stores.notificationPrefs.upsert({
         userId: req.user.userId,
-        crewUpdates: update.crewUpdates !== undefined ? update.crewUpdates : (current.crewUpdates ?? true),
-        setReminders: update.setReminders !== undefined ? update.setReminders : (current.setReminders ?? true),
-        scheduleChanges:
-          update.scheduleChanges !== undefined ? update.scheduleChanges : (current.scheduleChanges ?? true),
-        lineupDrops: update.lineupDrops !== undefined ? update.lineupDrops : (current.lineupDrops ?? true),
-        crewReformed: update.crewReformed !== undefined ? update.crewReformed : (current.crewReformed ?? true),
-        wrapReady: update.wrapReady !== undefined ? update.wrapReady : (current.wrapReady ?? true),
+        ...booleans,
+        mustSeeReminderMinutes:
+          update.mustSeeReminderMinutes !== undefined
+            ? update.mustSeeReminderMinutes
+            : (current.mustSeeReminderMinutes ?? null),
         dndStart: update.dndStart !== undefined ? update.dndStart : (current.dndStart ?? null),
         dndEnd: update.dndEnd !== undefined ? update.dndEnd : (current.dndEnd ?? null),
         dndTimeZone: update.dndTimeZone !== undefined ? update.dndTimeZone : (current.dndTimeZone ?? null),

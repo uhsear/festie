@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from '@tanstack/react-router';
 import { X, Star, Users, ChevronRight } from 'lucide-react';
 import { ONBOARDING_SLIDES_SHARED } from '@festie/shared';
 import Button from '../ui/Button';
@@ -57,7 +56,6 @@ const STEPS: StepConfig[] = [
 ];
 
 export default function Onboarding({ suspended = false }: OnboardingProps) {
-  const navigate = useNavigate();
   const [pending, setPending] = useState(() => {
     if (isOnboardingCompleted()) return false;
     // Arriving through an invite link: the join prompt is the first run, so
@@ -101,11 +99,9 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
     if (step < STEPS.length - 1) {
       setStep((s) => s + 1);
     } else {
-      // Final step — complete onboarding and navigate to lineup
       dismiss();
-      navigate({ to: '/cards' });
     }
-  }, [step, dismiss, navigate]);
+  }, [step, dismiss]);
 
   if (!visible) return null;
 

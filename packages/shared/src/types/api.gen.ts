@@ -2006,12 +2006,17 @@ export type components = {
             updated_at: string;
         };
         NotificationPrefs: {
+            crewMeetingPoints: number;
+            crewMoney: number;
+            crewPolls: number;
             crewReformed: number;
+            crewRides: number;
             crewUpdates: number;
             dndEnd: string | null;
             dndStart: string | null;
             dndTimeZone: string | null;
             lineupDrops: number;
+            mustSeeReminderMinutes: number | null;
             scheduleChanges: number;
             setReminders: number;
             userId: string;

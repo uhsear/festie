@@ -152,7 +152,7 @@ function WrapPageInner() {
     }
   }, [currentFestival, toast, toastError]);
 
-  if (!user) return <GuestTeaser mode="picks" />;
+  if (!user) return <GuestTeaser mode="wrap" />;
 
   if (!currentFestival) {
     return (

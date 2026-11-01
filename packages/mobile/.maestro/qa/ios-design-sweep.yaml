@@ -69,7 +69,7 @@ env:
     timeout: 6000
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/02c-forgot-password
 - tapOn:
-    text: "Picks"
+    text: "My Plan"
     optional: true
 - waitForAnimationToEnd
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/02d-guest-picks
@@ -126,10 +126,10 @@ env:
 - stopApp
 - launchApp
 - extendedWaitUntil:
-    visible: "Schedule"
+    visible: "Lineup"
     timeout: 30000
 
-- tapOn: "Account"
+- tapOn: "More"
 - scrollUntilVisible:
     element:
       id: "daylight-switch"
@@ -156,7 +156,7 @@ env:
 - stopApp
 - launchApp
 - extendedWaitUntil:
-    visible: "Schedule"
+    visible: "Lineup"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 8000

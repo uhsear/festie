@@ -23,9 +23,12 @@ import { Music, SearchX } from 'lucide-react';
 
 export default function CardsView() {
   return (
-    <RenderErrorBoundary name="cards">
-      <CardsViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Schedule</h1>
+      <RenderErrorBoundary name="cards">
+        <CardsViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 
@@ -51,7 +54,6 @@ function usePrefersReducedMotion(): boolean {
 }
 
 function CardsViewInner() {
-  const currentProfile = useFestivalStore((state) => state.currentProfile);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const days = useFestivalStore((state) => state.days);
   const user = useAuthStore((state) => state.user);
@@ -167,7 +169,11 @@ function CardsViewInner() {
     <>
       {/* P1-5 — phase-aware home actions (authed only; matches BottomNav hiding
           crew/picks/wrap from guests). Re-prioritizes destinations by phase. */}
-      {user && phase ? <PhaseHomeActions phase={phase} /> : null}
+      {user && phase ? (
+        <div className={phase === 'post' ? undefined : 'max-md:hidden'}>
+          <PhaseHomeActions phase={phase} />
+        </div>
+      ) : null}
 
       {/* Card grid */}
       {filteredSets.length === 0 ? (
@@ -256,7 +262,7 @@ function CardsViewInner() {
                   set={set}
                   onTap={() => setDetailSet(set)}
                   onPreview={() => handlePreview(set)}
-                  showPicks={!!currentProfile}
+                  showPicks={!!user}
                   stageName={sn}
                   stageColor={sc}
                   friendProfiles={others}

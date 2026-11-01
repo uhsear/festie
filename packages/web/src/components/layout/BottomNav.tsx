@@ -1,17 +1,11 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
+import { Map as MapIcon } from 'lucide-react';
 import { useAuthStore } from '@festie/shared';
-import { useFestivalStore } from '@festie/shared/stores';
-import { isFestivalOver } from '@festie/shared/utils';
+import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
-
-interface NavTab {
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-  /** Trigger to warm this tab's lazy chunk before the user taps. */
-  prefetch?: () => Promise<unknown>;
-}
+import { SECTION_HREF, activeSection } from './sections';
 
 // Per-tab chunk prefetchers. Called from onPointerDown so the tap-up navigation
 // happens with the chunk already loaded — no chunk-load pause that made the
@@ -22,7 +16,7 @@ const prefetchers: Record<string, () => Promise<unknown>> = {
   '/grid': () => import('../../routes/grid'),
   '/picks': () => import('../../routes/picks'),
   '/crew': () => import('../../routes/crew'),
-  '/wrap': () => import('../../routes/wrap'),
+  '/map': () => import('../../routes/map'),
   '/account': () => import('../../routes/account'),
 };
 
@@ -63,35 +57,17 @@ const ProfileIcon = () => (
   </svg>
 );
 
-/** Wrap icon — sparkles (shown only after the festival ends) */
-const WrapIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <path d="M12 3l2.09 5.26L19 9.27l-4 3.87L15.82 19 12 16.77 8.18 19 9 13.14l-4-3.87 4.91-1.01L12 3z" />
-    <path d="M5 3l1 2M19 3l-1 2M5 21l1-2M19 21l-1-2" strokeLinecap="round" />
-  </svg>
-);
-
-// Schedule/Timeline/Grid were three separate tabs; they now collapse into one
-// "Schedule" destination with an in-page ScheduleViewSwitcher (parity with the
-// mobile SegmentedControl). This drops the nav from up-to-7 to ~5 tabs.
-const baseTabs: NavTab[] = [{ label: 'Schedule', href: '/cards', icon: <ScheduleIcon /> }];
-
-// The single Schedule tab reads as active across all three schedule views.
-const SCHEDULE_HREFS = ['/', '/cards', '/timeline', '/grid'];
-
-const authTabs: NavTab[] = [
-  { label: 'Picks', href: '/picks', icon: <PicksIcon /> },
-  { label: 'Crew', href: '/crew', icon: <CrewIcon /> },
-  { label: 'Account', href: '/account', icon: <ProfileIcon /> },
-];
-
-const wrapTab: NavTab = { label: 'Wrap', href: '/wrap', icon: <WrapIcon /> };
+const SECTION_ICON: Record<AppSectionKey, React.ReactNode> = {
+  lineup: <ScheduleIcon />,
+  myPlan: <PicksIcon />,
+  crew: <CrewIcon />,
+  map: <MapIcon aria-hidden="true" />,
+  more: <ProfileIcon />,
+};
 
 export default function BottomNav() {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
-  const currentFestival = useFestivalStore((state) => state.currentFestival);
-  const days = useFestivalStore((state) => state.days);
   const footerRef = useRef<HTMLElement>(null);
 
   // Drive --bottom-nav-h on :root so floating elements (e.g. the Timeline "Now"
@@ -113,20 +89,10 @@ export default function BottomNav() {
     };
   }, []);
 
-  // All tabs stay visible for guests (parity with mobile's NativeTabs): Picks/
-  // Crew advertise the features and gate in-place via GuestTeaser, Account is
-  // the sign-in entry (routes a guest to /login). Show Wrap tab ONLY after the
-  // festival has ended — otherwise it's noise. Empty-state inside /wrap handles
-  // the "coming soon" case for a direct URL visit before then.
-  const tabs = useMemo(() => {
-    const wrapUnlocked = isFestivalOver(currentFestival, days);
-    return wrapUnlocked ? [...baseTabs, ...authTabs, wrapTab] : [...baseTabs, ...authTabs];
-  }, [currentFestival, days]);
-
-  const isActive = (href: string) => {
-    if (href === '/cards') return SCHEDULE_HREFS.includes(location.pathname);
-    return location.pathname === href;
-  };
+  // All five sections stay visible for guests (parity with mobile's NativeTabs):
+  // My Plan/Crew gate in-place via GuestTeaser, and the More slot reads "Sign in"
+  // and opens /login directly.
+  const current = activeSection(location.pathname);
 
   return (
     <footer
@@ -146,14 +112,18 @@ export default function BottomNav() {
       data-bottom-nav
     >
       <nav className="flex justify-around w-full max-md:gap-0.5" aria-label="Primary">
-        {tabs.map((tab) => {
-          const active = isActive(tab.href);
+        {APP_SECTIONS.map((section) => {
+          const href = SECTION_HREF[section.key];
+          const isGuestTab = section.key === 'more' && !user;
+          const label = isGuestTab ? GUEST_PROMPT_COPY.signIn : section.label;
+          const active = current === section.key;
           return (
             <Link
-              key={tab.href}
-              to={tab.href}
+              key={section.key}
+              to={isGuestTab ? '/login' : href}
+              search={isGuestTab ? { next: location.href } : undefined}
               aria-current={active ? 'page' : undefined}
-              aria-label={`View ${tab.href === '/account' && !user ? 'Sign in' : tab.label}`}
+              aria-label={`View ${label}`}
               className={cn(
                 'flex flex-col items-center gap-1 px-3 py-2',
                 'bg-transparent text-text-muted text-[10px] font-semibold no-underline',
@@ -167,12 +137,12 @@ export default function BottomNav() {
                 'max-[359px]:justify-center max-[359px]:px-0 max-[359px]:py-1.5',
                 active && ['text-accent-aqua', '[&_svg]:drop-shadow-[0_0_6px_rgba(0,232,208,0.4)]'],
               )}
-              onPointerEnter={() => prefetchers[tab.href]?.().catch(() => {})}
-              onPointerDown={() => prefetchers[tab.href]?.().catch(() => {})}
+              onPointerEnter={() => prefetchers[href]?.().catch(() => {})}
+              onPointerDown={() => prefetchers[href]?.().catch(() => {})}
             >
-              {tab.icon}
+              {SECTION_ICON[section.key]}
               <span className={cn('max-w-full overflow-hidden text-ellipsis whitespace-nowrap', 'max-[359px]:hidden')}>
-                {tab.href === '/account' && !user ? 'Sign in' : tab.label}
+                {label}
               </span>
             </Link>
           );

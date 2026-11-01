@@ -225,7 +225,7 @@ export async function sendWrapReadyEmail({ to, username, festivalName, festivalI
  */
 export async function sendLineupDropEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
   const origin = _origin(config);
-  const festivalUrl = `${origin}/festival/${encodeURIComponent(festivalId || '')}`;
+  const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'a festival you love';
   const bodyHtml = `
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>

@@ -54,7 +54,7 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
             className={cn(baseButtonClass, active && p !== null && activeStyles[p])}
             type="button"
             aria-pressed={p === null ? undefined : active ? 'true' : 'false'}
-            aria-label={label + (active ? ' (selected)' : '') + (active && pending ? pendingSuffix : '')}
+            aria-label={label + (active && pending ? pendingSuffix : '')}
             aria-busy={isThisBusy ? 'true' : 'false'}
             disabled={anyBusy || (p === null && !myPick)}
             onClick={async (e) => {

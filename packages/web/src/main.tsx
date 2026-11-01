@@ -11,6 +11,7 @@ import { initWebVitals } from './lib/web-vitals';
 import { ToastProvider } from './lib/toastContext';
 import Toast from './components/layout/Toast';
 import Button from './components/ui/Button';
+import { scrubToken } from './lib/scrubUrl';
 import './styles/globals.css';
 
 // ── Sentry initialization ───────────────────────────────────────────────
@@ -25,6 +26,22 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     tracesSampleRate: Number(import.meta.env.VITE_SENTRY_TRACES_RATE ?? 0.05),
     sendDefaultPii: false,
     integrations: [Sentry.tanstackRouterBrowserTracingIntegration(router)],
+    // The password-reset token travels in the URL: keep it out of Sentry.
+    beforeSend(event) {
+      if (event.request) event.request.url = scrubToken(event.request.url);
+      return event;
+    },
+    beforeSendTransaction(event) {
+      if (event.request) event.request.url = scrubToken(event.request.url);
+      return event;
+    },
+    beforeBreadcrumb(breadcrumb) {
+      if (breadcrumb.category === 'navigation' && breadcrumb.data) {
+        breadcrumb.data.from = scrubToken(breadcrumb.data.from);
+        breadcrumb.data.to = scrubToken(breadcrumb.data.to);
+      }
+      return breadcrumb;
+    },
   });
 }
 

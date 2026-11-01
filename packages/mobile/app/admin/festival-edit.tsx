@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { Alert, View, Text, ScrollView, Switch, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,10 +42,12 @@ import {
 import {
   amenityCount,
   artistNamesOf,
+  describeScheduleNotice,
   joinArtistNames,
   listTimeZones,
   startsAfterMidnight,
 } from '@festie/shared/utils';
+import type { ScheduleNotice } from '@festie/shared/utils';
 import type { Artist, FestivalMapConfig } from '@festie/shared/types';
 
 /**
@@ -178,6 +180,7 @@ export default function FestivalEditScreen() {
   // input index keeps its own links and photo.
   const [artistDrafts, setArtistDrafts] = useState<Record<string, string[]>>({});
   const artistOrigins = useRef<Record<string, Artist[]>>({});
+  const [notifyPickers, setNotifyPickers] = useState(true);
   // Dirty flag: flipped by user edit handlers only (never by the initial load
   // hydration below), so Cancel can tell an untouched form from one with
   // unsaved edits. Simplest honest signal — no deep compare.
@@ -488,13 +491,13 @@ export default function FestivalEditScreen() {
     setSaving(true);
     try {
       if (editingId) {
-        const body = confirmRemovals ? { ...payload, confirmRemovals: true } : payload;
-        const run = async () => {
-          await api.put<void>(`/admin/festivals/${editingId}`, body);
-          return true;
-        };
-        const done = confirmRemovals ? await withReauth(run, askReauthPassword) : await run();
-        if (!done) return; // password prompt cancelled
+        const body = { ...payload, notify: notifyPickers, ...(confirmRemovals ? { confirmRemovals: true } : {}) };
+        const run = () =>
+          api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, body);
+        const res = confirmRemovals ? await withReauth(run, askReauthPassword) : await run();
+        if (confirmRemovals && res === null) return; // password prompt cancelled
+        // The screen closes on save and has no inline success message, so every save confirms in an alert.
+        if (res?.scheduleNotice) Alert.alert(describeScheduleNotice(res.scheduleNotice));
       } else {
         await api.post<void>('/admin/festivals', payload);
       }
@@ -902,6 +905,24 @@ export default function FestivalEditScreen() {
             </Text>
           ) : null}
 
+          {editingId ? (
+            <View style={styles.notifyRow}>
+              <View style={styles.notifyBody}>
+                <Text style={styles.notifyTitle}>Tell people whose picks changed</Text>
+                <Text style={styles.notifyHint}>Sends one alert to each person who picked a set you moved or removed.</Text>
+              </View>
+              <Switch
+                value={notifyPickers}
+                onValueChange={setNotifyPickers}
+                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
+                ios_backgroundColor={t.colors.text.muted}
+                thumbColor={t.colors.text.onAccent}
+                accessibilityLabel="Tell people whose picks changed"
+                accessibilityState={{ checked: notifyPickers }}
+              />
+            </View>
+          ) : null}
+
           {/* Primary actions */}
           <View style={styles.actions}>
             <TouchableOpacity
@@ -1166,6 +1187,23 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.danger,
     paddingHorizontal: t.spacing[1],
+  },
+  notifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+    paddingHorizontal: t.spacing[1],
+  },
+  notifyBody: {
+    flex: 1,
+  },
+  notifyTitle: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.primary,
+  },
+  notifyHint: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
   },
   actions: {
     flexDirection: 'row',

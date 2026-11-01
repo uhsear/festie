@@ -4,7 +4,7 @@
 appId: us.festie.app
 ---
 - tapOn:
-    text: "Schedule"
+    text: "Lineup"
     optional: true
 - extendedWaitUntil:
     visible:
@@ -80,7 +80,7 @@ appId: us.festie.app
     optional: true
 
 - tapOn:
-    text: "Picks"
+    text: "My Plan"
     optional: true
 - waitForAnimationToEnd:
     timeout: 6000
@@ -108,11 +108,11 @@ appId: us.festie.app
 - waitForAnimationToEnd
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/${THEME}-33-crew-money
 - tapOn:
-    id: "crew-tab-logistics"
+    id: "crew-tab-find"
     optional: true
 
 - tapOn:
-    text: "Account"
+    text: "More"
     optional: true
 - waitForAnimationToEnd:
     timeout: 6000

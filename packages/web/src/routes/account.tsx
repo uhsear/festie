@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { Sparkles } from 'lucide-react';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import ProfileSection from '../components/account/ProfileSection';
 import PaymentHandlesSection from '../components/account/PaymentHandlesSection';
@@ -91,6 +92,19 @@ function AccountPageInner() {
           <NotificationSection />
           <NotificationPrefsSection />
           <ReplayIntroRow />
+        </Section>
+
+        <Section label="Festival">
+          <Link
+            to="/wrap"
+            className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 hover:bg-surface-hover"
+          >
+            <Sparkles className="h-5 w-5 text-accent-aqua" aria-hidden="true" />
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold text-text-primary">Festival Wrap</span>
+              <span className="text-xs text-text-secondary">Your stats &amp; top sets after the festival</span>
+            </span>
+          </Link>
         </Section>
 
         {/* Legal */}

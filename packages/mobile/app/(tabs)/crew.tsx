@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
 import { useCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
@@ -29,6 +31,8 @@ import {
   deleteCrewConfirmMessage,
   leaveCrewConfirmMessage,
   removeMemberConfirmMessage,
+  DEFAULT_CREW_TAB,
+  parseCrewTab,
 } from '@festie/shared/utils';
 import type { Crew, CrewMember, CrewOverlap, FestivalSet } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -55,11 +59,6 @@ import CrewSos from '../../components/CrewSos';
 import InviteQRSheet from '../../components/InviteQRSheet';
 import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
-
-// DC2 deep-link tab whitelist. Module-scoped so its identity is stable across
-// renders (a component-local array would be a new ref each render and force the
-// ?tab effect to re-run / need it as a dep).
-const TAB_KEYS: readonly CrewTabKey[] = ['members', 'plan', 'logistics', 'money'];
 
 export default function CrewScreen() {
   const t = useTokens();
@@ -163,12 +162,13 @@ export default function CrewScreen() {
   const [forceAddId, setForceAddId] = useState('');
   const [forceAddBusy, setForceAddBusy] = useState(false);
   const [reformBusy, setReformBusy] = useState(false);
-  // P1-2: which crew section tab is showing. Members / Plan / Logistics / Money.
+  const [managingMemberId, setManagingMemberId] = useState<string | null>(null);
+  // P1-2: which crew section tab is showing. Find / Members / Plan / Money.
   // Day-of first: Find (SOS, status, live location, meeting points) opens by default.
-  const [crewTab, setCrewTab] = useState<CrewTabKey>('logistics');
+  const [crewTab, setCrewTab] = useState<CrewTabKey>(DEFAULT_CREW_TAB);
 
   // DC2: a raise-SOS affordance on /find and /map deep-links here with
-  // ?tab=logistics so the user lands on the Find pane where CrewSos lives.
+  // ?tab=find so the user lands on the Find pane where CrewSos lives.
   // mpLat/mpLng: tap-to-create coords deep-linked from the map's long-press —
   // forwarded to CrewMeetingPoints to prefill+open its create form.
   const {
@@ -206,17 +206,18 @@ export default function CrewScreen() {
     setShowOverlap(false);
     setForceAddOpen(false);
     setForceAddId('');
-    setCrewTab('logistics');
+    setCrewTab(DEFAULT_CREW_TAB);
     setTotemEditOpen(false);
   }
 
   // DC2: honor a deep-linked ?tab=... (e.g. the find/map SOS shortcut lands on
   // the Find pane). Runs after the crew-change reset since it keys on the param.
-  // TAB_KEYS is module-scoped (stable), so the param is the only dep.
+  // parseCrewTab also maps old keys (logistics, ...) so old links still work.
   useEffect(() => {
-    if (tabParam && (TAB_KEYS as readonly string[]).includes(tabParam)) {
+    const next = parseCrewTab(tabParam);
+    if (next) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- event-driven: apply the deep-linked ?tab exactly when the URL param changes; not derivable as render state since the user can still switch tabs afterward
-      setCrewTab(tabParam as CrewTabKey);
+      setCrewTab(next);
     }
   }, [tabParam]);
 
@@ -525,10 +526,23 @@ export default function CrewScreen() {
       <View style={styles.screen} testID="crew-screen">
         <ScreenHeader title="Crew" icon="people" />
         <EmptyState
-          icon="lock-closed-outline"
-          title="Sign in required"
-          message="Log in to coordinate with your crew."
-          action={{ label: 'Sign in', onPress: () => router.push('/(auth)/login') }}
+          icon="people-outline"
+          title={GUEST_PROMPT_COPY.teasers.crew.title}
+          message={GUEST_PROMPT_COPY.teasers.crew.message}
+          action={{
+            label: GUEST_PROMPT_COPY.createAccount,
+            onPress: () => {
+              setReturnTo('/(tabs)/crew');
+              router.push('/(auth)/register');
+            },
+          }}
+          secondaryAction={{
+            label: GUEST_PROMPT_COPY.signIn,
+            onPress: () => {
+              setReturnTo('/(tabs)/crew');
+              router.push('/(auth)/login');
+            },
+          }}
         />
       </View>
     );
@@ -759,11 +773,11 @@ export default function CrewScreen() {
               tab, so this chip jumps there rather than duplicating the raise
               flow — safety must be reachable from every crew tab. */}
           {/* Hidden on Logistics: the Find tab already shows Send SOS. */}
-          {crewTab !== 'logistics' ? (
+          {crewTab !== 'find' ? (
             <TouchableOpacity
               testID="crew-action-sos"
               style={styles.sosChip}
-              onPress={() => setCrewTab('logistics')}
+              onPress={() => setCrewTab('find')}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Open crew safety to send an SOS"
@@ -821,6 +835,7 @@ export default function CrewScreen() {
         <FlatList
           style={styles.flex1}
           data={members}
+          extraData={managingMemberId}
           keyExtractor={(m) => m.userId}
           contentContainerStyle={memberListStyle}
           contentInsetAdjustmentBehavior="automatic"
@@ -835,45 +850,42 @@ export default function CrewScreen() {
             // Owners may manage other members (kick + transfer). Force-add and
             // these controls hit admin-gated shared store actions.
             const canManage = isOwner && !rowIsOwner && !isSelf;
+            const managing = managingMemberId === item.userId;
             return (
-              <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{getInitials(item.name ?? '') || '?'}</Text>
-                </View>
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName} numberOfLines={2}>
-                    {displayName}
-                    {isSelf ? ' (you)' : ''}
-                  </Text>
-                  {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
-                </View>
-                {canManage ? (
-                  <View style={[styles.memberActions, largeText && styles.memberActionsWrap]}>
-                    <TouchableOpacity
-                      onPress={() => handleTransfer(crew.id, item)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Transfer ownership to ${displayName}`}
-                    >
-                      {/* swap-horizontal reads as "hand over / transfer"; the
-                          star glyph is reserved for the Owner badge so the two
-                          aren't visually conflated. */}
-                      <Ionicons name="swap-horizontal" size={18} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleKick(crew.id, item)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${displayName} from crew`}
-                    >
-                      <Ionicons name="person-remove-outline" size={18} color={t.colors.text.danger} />
-                    </TouchableOpacity>
+              <View>
+                <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{getInitials(item.name ?? '') || '?'}</Text>
                   </View>
-                ) : rowIsOwner ? (
-                  <View accessible accessibilityLabel="Owner">
-                    <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName} numberOfLines={2}>
+                      {displayName}
+                      {isSelf ? ' (you)' : ''}
+                    </Text>
+                    {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
+                  </View>
+                  {canManage ? (
+                    <TouchableOpacity
+                      onPress={() => setManagingMemberId(managing ? null : item.userId)}
+                      style={styles.manageButton}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Manage ${displayName}`}
+                      accessibilityState={{ expanded: managing }}
+                    >
+                      <Text style={styles.manageButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Manage</Text>
+                      <Ionicons name={managing ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.accent.aqua} />
+                    </TouchableOpacity>
+                  ) : rowIsOwner ? (
+                    <View accessible accessibilityLabel="Owner">
+                      <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
+                    </View>
+                  ) : null}
+                </View>
+                {canManage && managing ? (
+                  <View style={styles.memberActionRow}>
+                    <Button variant="secondary" size="sm" label="Make owner" onPress={() => handleTransfer(crew.id, item)} />
+                    <Button variant="danger" size="sm" label="Remove from crew" onPress={() => handleKick(crew.id, item)} />
                   </View>
                 ) : null}
               </View>
@@ -1293,7 +1305,7 @@ export default function CrewScreen() {
           </View>
           <CrewRides crewId={crew.id} currentUserId={user.id} isOwner={isOwner} />
         </ScrollView>
-      ) : crewTab === 'logistics' ? (
+      ) : crewTab === 'find' ? (
         <ScrollView
           style={styles.flex1}
           contentContainerStyle={tabScrollStyle}
@@ -1306,6 +1318,19 @@ export default function CrewScreen() {
           {/* DC2: SOS must be reachable without any scroll — top of the pane,
               always visible the instant the Find tab opens. */}
           <CrewSos crewId={crew.id} currentUserId={user.id} />
+
+          <TouchableOpacity
+            testID="crew-action-map"
+            style={styles.overlapToggle}
+            onPress={() => router.navigate('/(tabs)/map')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Open the map with your crew and meeting points"
+          >
+            <Ionicons name="map-outline" size={16} color={t.colors.accent.aqua} />
+            <Text style={styles.overlapToggleText}>Open map</Text>
+            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+          </TouchableOpacity>
 
           {/* Live location toggle sits below the SOS button. In low-power mode
               the battery-hungry live-location share is paused (gated by the
@@ -1338,21 +1363,6 @@ export default function CrewScreen() {
           />
 
           <CrewHomeBase crewId={crew.id} location={crew.homeBaseLocation} time={crew.homeBaseTime} isOwner={isOwner} />
-
-          {/* "Find each other" — ONE destination that co-locates the crew map,
-              the meeting-point compass and saved meeting points. */}
-          <TouchableOpacity
-            testID="crew-action-find"
-            style={styles.overlapToggle}
-            onPress={() => router.push('/find')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Find each other — crew map, compass and meeting points"
-          >
-            <Ionicons name="location-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>Find each other</Text>
-            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-          </TouchableOpacity>
 
           {/* M5 P2P plan handoff — QR / scan / SMS when signal is dead. */}
           <TouchableOpacity
@@ -1845,14 +1855,25 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
-  memberActions: {
+  manageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: t.spacing[2],
+    justifyContent: 'center',
+    gap: t.spacing[1],
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
   },
-  memberActionsWrap: {
-    width: '100%',
-    justifyContent: 'flex-end',
+  manageButtonText: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
+  },
+  memberActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[3],
+    paddingBottom: t.spacing[3],
   },
   liveSafetyBlock: {
     gap: t.spacing[3],

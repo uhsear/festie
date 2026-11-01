@@ -178,6 +178,14 @@ export const notificationPrefsSchema = z
     lineupDrops: z.boolean().optional(),
     crewReformed: z.boolean().optional(),
     wrapReady: z.boolean().optional(),
+    crewMeetingPoints: z.boolean().optional(),
+    crewPolls: z.boolean().optional(),
+    crewMoney: z.boolean().optional(),
+    crewRides: z.boolean().optional(),
+    mustSeeReminderMinutes: z
+      .union([z.literal(5), z.literal(10), z.literal(15), z.literal(30), z.literal(60)])
+      .nullable()
+      .optional(),
     dndStart: dndTime.optional(),
     dndEnd: dndTime.optional(),
     dndTimeZone: z.string().max(64).refine(isIanaTimeZone, { message: 'Invalid IANA time zone' }).nullable().optional(),
@@ -463,6 +471,8 @@ export const festivalUpdateSchema = festivalCreateSchema
     expectedUpdatedAt: z.string().max(40).optional(),
   })
   .partial()
+  // false saves without pushing schedule alerts to people whose picks changed.
+  .extend({ notify: z.boolean().optional() })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
 

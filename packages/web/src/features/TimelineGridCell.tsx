@@ -31,7 +31,7 @@ export interface TimelineGridCellProps {
   myPick: Priority | null | undefined;
   others: Array<{ profileId: string; priority: Priority; name?: string }>;
   hasConflict: boolean;
-  hasProfile: boolean;
+  canPick: boolean;
   festival: Festival | null;
   onSetClick: (set: FestivalSet) => void;
   onSavePick: (setId: string, priority: string | null) => void;
@@ -48,7 +48,7 @@ function TimelineGridCell({
   myPick,
   others,
   hasConflict,
-  hasProfile,
+  canPick,
   festival,
   onSetClick,
   onSavePick,
@@ -166,7 +166,7 @@ function TimelineGridCell({
       </button>
 
       {/* Priority pick buttons */}
-      {hasProfile && !isShort && blockPx >= 60 && (
+      {canPick && !isShort && blockPx >= 60 && (
         <div className="flex gap-[var(--space-1)] mt-0.5">
           {PICK_BUTTONS.map((p) => {
             const active = myPick === p;
@@ -199,7 +199,7 @@ function TimelineGridCell({
                 )}
                 type="button"
                 aria-pressed={active ? 'true' : 'false'}
-                aria-label={pickLabel(p) + (active ? ' (selected)' : '')}
+                aria-label={pickLabel(p)}
                 title={pickLabel(p)}
                 onClick={(e) => {
                   e.preventDefault();
