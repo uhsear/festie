@@ -13,7 +13,7 @@ interface Props {
   defaultValue?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  inputType?: 'text' | 'email' | 'number';
+  inputType?: 'text' | 'email' | 'number' | 'password';
   onConfirm: (value: string) => void | Promise<void>;
   busy?: boolean;
   maxLength?: number;
@@ -69,7 +69,8 @@ export default function PromptDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!value.trim() || busy) return;
-    await onConfirm(value.trim());
+    // Passwords may start or end with spaces, so they go through untrimmed.
+    await onConfirm(inputType === 'password' ? value : value.trim());
   }
 
   return (
@@ -84,6 +85,7 @@ export default function PromptDialog({
             onChange={(e) => setValue(e.target.value)}
             placeholder={placeholder}
             disabled={busy}
+            {...(inputType === 'password' ? { autoComplete: 'current-password' } : {})}
             aria-label={title}
             {...(error ? { 'aria-invalid': true, 'aria-describedby': errorId } : {})}
             className={`${inputBase} min-h-11 min-w-0`}

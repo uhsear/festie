@@ -159,7 +159,23 @@ export default function createUsersStore(pool: Pool, utils: any) {
       return normalizeRow(result.rows[0]);
     },
 
-    findByUsername: (...args: any[]) => users.getByUsername(...args),
+    // A soft-deleted account still inside its 30-day grace window. The bound
+    // matches the copy even if the pg_cron purge runs late.
+    async findDeletedByUsername(username: string) {
+      const result = await pool.query(
+        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' LIMIT 1`,
+        [username],
+      );
+      return normalizeRow(result.rows[0]);
+    },
+
+    // `update` filters `deleted_at IS NULL`, so it cannot clear a soft delete.
+    async reactivate(userId: string) {
+      await pool.query(
+        'UPDATE users SET deleted_at = NULL, deleted_by = NULL, deletion_reason = NULL, updated_at = NOW() WHERE id = $1 AND deleted_at IS NOT NULL',
+        [userId],
+      );
+    },
 
     async softDelete(userId: string, { deletedBy, reason }: { deletedBy?: string; reason?: string } = {}) {
       await pool.query(

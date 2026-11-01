@@ -251,6 +251,11 @@ export const accountDeleteSchema = z.object({
 });
 export type AccountDeleteInput = z.infer<typeof accountDeleteSchema>;
 
+export const reauthSchema = z.object({
+  password: z.string().min(1).max(200),
+});
+export type ReauthInput = z.infer<typeof reauthSchema>;
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email('Valid email required').max(254),
 });
@@ -449,6 +454,14 @@ export const festivalCreateSchema = z.object({
 export type FestivalCreateInput = z.infer<typeof festivalCreateSchema>;
 
 export const festivalUpdateSchema = festivalCreateSchema
+  .extend({
+    // A save that drops sets carrying picks or ratings is refused with
+    // CONFIRM_REMOVALS unless this is true (and the session re-authenticated).
+    confirmRemovals: z.boolean().optional(),
+    // The festival's updatedAt when the editor loaded it. A mismatch returns
+    // FESTIVAL_CHANGED so a stale form cannot overwrite a newer save.
+    expectedUpdatedAt: z.string().max(40).optional(),
+  })
   .partial()
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
@@ -649,6 +662,92 @@ export function normalizeSetArtists(set: any): any[] {
   return [{ name, links }];
 }
 
+const _escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function _cleanArtistList(list: any[]): any[] {
+  return list
+    .slice(0, _MAX_ARTISTS)
+    .map((a: any) => ({ name: sanitizeString(a?.name || '', 300), links: sanitizeLinkRecord(a?.links) }))
+    .filter((a: any) => a.name);
+}
+
+function _findArtist(list: any[], name: string): any {
+  const key = name.toLowerCase();
+  return list.find((a: any) => typeof a?.name === 'string' && a.name.trim().toLowerCase() === key);
+}
+
+// photo and genres are server-owned (lineup import and the Spotify backfill
+// write them); clients never send them, so they are copied from the stored set.
+function _storedArtistExtras(stored: any): Record<string, any> {
+  const extras: Record<string, any> = {};
+  const photo = stored?.photo;
+  if (typeof photo === 'string' && photo.length <= 500 && photo.startsWith('https://')) extras.photo = photo;
+  if (Array.isArray(stored?.genres)) {
+    const genres = stored.genres
+      .filter((g: any) => typeof g === 'string')
+      .map((g: string) => sanitizeString(g, 50))
+      .filter(Boolean)
+      .slice(0, 10);
+    if (genres.length > 0) extras.genres = genres;
+  }
+  return extras;
+}
+
+// A client that edits only the flat linkUrl (mobile) shows spotify, then soundcloud, then the
+// stored linkUrl. Apply the field only when it differs from that shown link.
+function _applyLinkEdit(links: Record<string, string>, rawLinkUrl: any, storedLinkUrl: any): void {
+  const shownKey = links.spotify ? 'spotify' : links.soundcloud ? 'soundcloud' : null;
+  const shown = (shownKey ? links[shownKey] : typeof storedLinkUrl === 'string' ? storedLinkUrl.trim() : '') || '';
+  const next = typeof rawLinkUrl === 'string' ? rawLinkUrl.trim().slice(0, 500) : '';
+  if (next === shown) return;
+  if (!next) {
+    if (shownKey) delete links[shownKey];
+  } else if (/^https?:\/\//.test(next)) {
+    links.spotify = next;
+  }
+}
+
+/**
+ * Resolve a saved set's artists against the stored set with the same id, so an
+ * update keeps per-artist links, photos and genres the client never sent.
+ *  - No artists[] and the typed `artist` is unchanged: keep the stored artists,
+ *    applying a changed `linkUrl` to the first artist.
+ *  - artists[] whose display name matches the typed `artist`: use artists[]
+ *    and its links only, so a removed link stays removed.
+ *  - Otherwise the typed name wins: split it on ` ${sep} ` into one artist per
+ *    name, copying links by name from artists[], then from the stored set.
+ * normalizeSetArtists stays for the create path.
+ */
+export function resolveSetArtists(set: any, storedSet: any, sep = 'b2b'): any[] {
+  const stored: any[] = Array.isArray(storedSet?.artists) ? storedSet.artists : [];
+  const payload = Array.isArray(set.artists) ? _cleanArtistList(set.artists) : [];
+  const typed = sanitizeString(set.artist || '', 300);
+
+  let result: any[];
+  if (payload.length === 0 && stored.length > 0 && typed && typed === artistDisplayName(stored, sep)) {
+    result = _cleanArtistList(stored);
+    if (result[0] && 'linkUrl' in set) _applyLinkEdit(result[0].links, set.linkUrl, storedSet?.linkUrl);
+  } else if (payload.length > 0 && (!typed || typed === artistDisplayName(payload, sep))) {
+    result = payload;
+  } else {
+    if (!typed) return [];
+    const names = typed
+      .split(new RegExp(` ${_escapeRegExp(sep)} `, 'i'))
+      .map((n) => n.trim())
+      .filter(Boolean)
+      .slice(0, _MAX_ARTISTS);
+    result = names.map((name) => ({
+      name,
+      links: { ...(_findArtist(payload, name)?.links ?? sanitizeLinkRecord(_findArtist(stored, name)?.links)) },
+    }));
+    const rawUrl = typeof set.linkUrl === 'string' ? set.linkUrl.trim() : '';
+    if (result[0] && !result[0].links.spotify && /^https?:\/\//.test(rawUrl)) {
+      result[0].links.spotify = rawUrl.slice(0, 500);
+    }
+  }
+  return result.map((a: any) => ({ ...a, ..._storedArtistExtras(_findArtist(stored, a.name)) }));
+}
+
 export function sanitizeLinkRecord(links: any): Record<string, string> {
   if (!links || typeof links !== 'object') return {};
   const clean: Record<string, string> = {};
@@ -738,6 +837,10 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
   // An explicit null clears it; undefined keeps whatever the festival already had.
   const mapConfig =
     input.mapConfig !== undefined ? (input.mapConfig ?? null) : (existingFestival?.mapConfig ?? null);
+  const storedSets = new Map<string, any>();
+  for (const day of existingFestival?.days || []) {
+    for (const set of day?.sets || []) if (set?.id) storedSets.set(set.id, set);
+  }
   return {
     id: existingFestival?.id || sanitizeIdentifier(input.id, 100) || createOpaqueId('fest'),
     name: sanitizeString(input.name || existingFestival?.name || ''),
@@ -757,9 +860,12 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
       label: sanitizeString(day.label || '', 100),
       date: sanitizeString(day.date || '', 20),
       sets: (day.sets || []).slice(0, config.MAX_SETS_PER_DAY).map((set: any, index: number) => {
-        const artists = normalizeSetArtists(set);
+        const setId = sanitizeIdentifier(set.id, 100);
+        const artists = existingFestival
+          ? resolveSetArtists(set, setId ? storedSets.get(setId) : undefined, b2bSep)
+          : normalizeSetArtists(set);
         return {
-          id: sanitizeIdentifier(set.id, 100) || createOpaqueId(`set-${index}`),
+          id: setId || createOpaqueId(`set-${index}`),
           artists,
           // Phase 1 backward compat: keep flat artist + linkUrl for rollback safety
           artist: artistDisplayName(artists, b2bSep),
@@ -1070,6 +1176,8 @@ export const adminAuditQuery = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   from: validDateString.optional(),
   to: validDateString.optional(),
+  scope: z.enum(['admin', 'user', 'all']).default('admin'),
+  actor: z.string().trim().max(100).optional(),
 });
 export type AdminAuditQueryInput = z.infer<typeof adminAuditQuery>;
 
@@ -1194,6 +1302,7 @@ export const schemas = {
   paymentHandles: paymentHandlesSchema,
   publicSchedule: publicScheduleSchema,
   accountDelete: accountDeleteSchema,
+  reauth: reauthSchema,
   topicSubscription: topicSubscriptionSchema,
   festivalCreate: festivalCreateSchema,
   festivalUpdate: festivalUpdateSchema,

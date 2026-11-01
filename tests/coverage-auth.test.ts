@@ -573,7 +573,7 @@ describe('DELETE /api/v1/account', () => {
     assert.ok(res.status === 400 || res.status === 403);
   });
 
-  test('soft-deleted account: login afterward is accepted, 401, or 403', async () => {
+  test('soft-deleted account: login afterward reactivates it', async () => {
     const server = await startServer(); servers.push(server);
     const username = 'reactivate_' + crypto.randomBytes(3).toString('hex');
     const user = await registerUser(server, username);
@@ -581,11 +581,13 @@ describe('DELETE /api/v1/account', () => {
       .delete('/api/v1/account')
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ password: DEFAULT_PASSWORD });
+      .send({ password: DEFAULT_PASSWORD })
+      .expect(200);
     const loginRes = await server.request
       .post('/api/v1/auth/login')
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ username, password: DEFAULT_PASSWORD });
-    assert.ok([200, 401, 403].includes(loginRes.status));
+    assert.equal(loginRes.status, 200);
+    assert.equal(loginRes.body.data.reactivated, true);
   });
 });

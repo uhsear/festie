@@ -143,19 +143,19 @@ export default function NotificationPrefsSection() {
       />
       <Toggle
         label="New lineups"
-        hint="A festival you've been to before posts its lineup"
+        hint="A festival you've been to before posts its lineup. By push and email."
         checked={prefs.lineupDrops}
         onChange={(v) => updatePrefs({ lineupDrops: v }).catch(() => {})}
       />
       <Toggle
         label="Crew re-forms"
-        hint="A past crew reunites for a new festival"
+        hint="A past crew reunites for a new festival. By push and email."
         checked={prefs.crewReformed}
         onChange={(v) => updatePrefs({ crewReformed: v }).catch(() => {})}
       />
       <Toggle
         label="Wrap-up ready"
-        hint="Your festival recap is ready to view"
+        hint="Your festival recap is ready to view. By push and email."
         checked={prefs.wrapReady}
         onChange={(v) => updatePrefs({ wrapReady: v }).catch(() => {})}
       />

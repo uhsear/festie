@@ -1,4 +1,5 @@
 import type { CrewExpense, CrewExpenseBalance, CrewSettlement } from '@festie/shared/types';
+import { ledgerRows, spendingExpenses } from '@festie/shared/utils';
 
 /**
  * Mobile-local view logic for CrewExpenses — the small pure transforms the
@@ -46,7 +47,7 @@ export function isAmountInvalid(rawAmount: string, parsedAmount: number): boolea
 
 /** Actual spend feeds the ledger; planned is the forecast/budget total. */
 export function actualExpenses(expenses: CrewExpense[]): CrewExpense[] {
-  return expenses.filter((e) => !e.planned);
+  return spendingExpenses(expenses);
 }
 
 export function plannedExpenses(expenses: CrewExpense[]): CrewExpense[] {
@@ -62,12 +63,10 @@ export function sumExpenseAmounts(expenses: CrewExpense[]): number {
  * The list shown under the active filter tab:
  *   'actual'  → real ledger rows
  *   'planned' → budget/forecast rows
- *   'all'     → everything
+ *   'all'     → everything except settle-up payments
  */
 export function visibleExpenses(expenses: CrewExpense[], view: 'all' | 'actual' | 'planned'): CrewExpense[] {
-  if (view === 'actual') return actualExpenses(expenses);
-  if (view === 'planned') return plannedExpenses(expenses);
-  return expenses;
+  return ledgerRows(expenses, view);
 }
 
 /**

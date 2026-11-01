@@ -223,6 +223,16 @@ async function loginAdmin(server: any) {
   return loginRes.body.data.token;
 }
 
+// Festival delete needs a password re-entry within 15 minutes (requireRecentAuth).
+async function reauthAdmin(server: any, adminToken: string) {
+  await server.request
+    .post('/api/v1/auth/reauth')
+    .set('x-user-token', adminToken)
+    .set(TRUSTED_MUTATION_HEADER, '1')
+    .send({ password: 'test-admin-password-pass' })
+    .expect(200);
+}
+
 
 const servers: any[] = [];
 afterEach(async () => {
@@ -304,6 +314,7 @@ describe('admin festival CRUD', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const adminToken = await loginAdmin(server);
+    await reauthAdmin(server, adminToken);
 
     await server.request
       .delete('/api/v1/admin/festivals/fest-1')
@@ -321,6 +332,7 @@ describe('admin festival CRUD', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const adminToken = await loginAdmin(server);
+    await reauthAdmin(server, adminToken);
 
     await server.request
       .delete('/api/v1/admin/festivals/fest-1?hard=true')
@@ -349,6 +361,7 @@ describe('admin festival CRUD', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const adminToken = await loginAdmin(server);
+    await reauthAdmin(server, adminToken);
 
     await server.request
       .delete('/api/v1/admin/festivals/nonexistent-fest')
@@ -396,6 +409,7 @@ describe('admin user management', { concurrency: 1 }, () => {
       .expect(200);
     const bob = usersRes.body.data.find((u: any) => u.username === 'bob');
 
+    await reauthAdmin(server, adminToken);
     await server.request
       .put(`/api/v1/admin/users/${bob.id}/reset-password`)
       .set('x-user-token', adminToken)
@@ -432,6 +446,7 @@ describe('admin user management', { concurrency: 1 }, () => {
       .expect(200);
     const doomed = usersRes.body.data.find((u: any) => u.username === 'doomed');
 
+    await reauthAdmin(server, adminToken);
     await server.request
       .delete(`/api/v1/admin/users/${doomed.id}`)
       .set('x-user-token', adminToken)

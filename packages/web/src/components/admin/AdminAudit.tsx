@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '@festie/shared/services/api';
+import { fetchAuditPage, type AuditEntry } from '@festie/shared/services/admin';
 import { timeAgoFromIso } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import EmptyState from '../ui/EmptyState';
 import { SearchX } from 'lucide-react';
 
-interface AuditEntry {
-  id: string;
-  action: string;
-  actorUsername?: string;
-  details?: Record<string, unknown>;
-  createdAt: string;
-}
+const PAGE_SIZE = 50;
+
+type Scope = 'admin' | 'user';
+
+const SCOPE_OPTIONS: { value: Scope; label: string }[] = [
+  { value: 'admin', label: 'Admin actions' },
+  { value: 'user', label: 'User activity' },
+];
 
 /**
  * Audit log viewer with filtering and pagination
@@ -19,6 +20,8 @@ interface AuditEntry {
 export default function AdminAudit() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [scope, setScope] = useState<Scope>('admin');
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   // Stack of previous cursors for back-navigation; null = first page
@@ -33,27 +36,23 @@ export default function AdminAudit() {
 
   useEffect(() => {
     loadAudit();
-  }, [currentCursor, actionFilter, userFilter, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps -- loadAudit reads filter state directly
+  }, [currentCursor, scope, actionFilter, userFilter, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps -- loadAudit reads filter state directly
 
   const loadAudit = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      params.set('limit', '50');
-      if (currentCursor) params.set('cursor', currentCursor);
-      if (actionFilter) params.set('action', actionFilter);
-      if (userFilter) params.set('user', userFilter);
-      if (dateFrom) params.set('from', dateFrom);
-      if (dateTo) params.set('to', dateTo);
-
-      // Fetch raw so we can read `meta` for pagination — the api wrapper
-      // strips everything but `data`.
-      const result = await api.get<AuditEntry[]>(`/admin/audit?${params.toString()}`);
-      const list = Array.isArray(result) ? result : [];
-      setEntries(list);
-      // Server returns nextCursor via meta; infer hasMore from page size
-      // since the api wrapper strips meta.
-      setNextCursor(list.length >= 50 ? (list[list.length - 1]?.id ?? null) : null);
+      const page = await fetchAuditPage({
+        limit: PAGE_SIZE,
+        scope,
+        cursor: currentCursor,
+        action: actionFilter,
+        actor: userFilter,
+        from: dateFrom,
+        to: dateTo,
+      });
+      setEntries(page.entries);
+      setNextCursor(page.nextCursor);
+      setTotal(page.total);
     } catch (err: unknown) {
       toastError(err, "Couldn't load the audit log. Try again.");
     } finally {
@@ -81,6 +80,10 @@ export default function AdminAudit() {
     setCurrentCursor(null);
   };
 
+  const hasFilters = Boolean(actionFilter || userFilter || dateFrom || dateTo);
+  const from = cursorStack.length * PAGE_SIZE + 1;
+  const to = cursorStack.length * PAGE_SIZE + entries.length;
+
   // Only show the full-page spinner on first load. Subsequent filter/page
   // changes keep the table visible and dim it via aria-busy so the view
   // doesn't flash to "Loading..." every keystroke.
@@ -90,6 +93,27 @@ export default function AdminAudit() {
 
   return (
     <div className="space-y-6" aria-busy={loading}>
+      <div role="group" aria-label="Audit log scope" className="inline-flex rounded-lg border border-glass-border overflow-hidden">
+        {SCOPE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={scope === option.value}
+            onClick={() => {
+              setScope(option.value);
+              resetPagination();
+            }}
+            className={`px-4 py-2 min-h-11 text-sm font-medium transition-colors ${
+              scope === option.value
+                ? 'bg-accent-aqua/20 text-accent-aqua'
+                : 'bg-bg-card text-text-muted hover:bg-bg-card/80'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filters */}
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
         <h2 className="type-label text-text-primary mb-3">Filters</h2>
@@ -143,8 +167,12 @@ export default function AdminAudit() {
       {entries.length === 0 ? (
         <EmptyState
           icon={<SearchX className="w-9 h-9" aria-hidden="true" />}
-          title="No audit entries found"
-          description="Try adjusting your filters or date range."
+          title={scope === 'admin' && !hasFilters ? 'No admin actions yet' : 'No audit entries found'}
+          description={
+            scope === 'admin' && !hasFilters
+              ? 'Role changes, deletes and imports appear here.'
+              : 'Try adjusting your filters or date range.'
+          }
         />
       ) : (
         <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-hidden">
@@ -166,9 +194,18 @@ export default function AdminAudit() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="font-medium text-text-primary">{entry.action.replace(/[_:]/g, ' ')}</div>
+                    <div className="font-medium text-text-primary">
+                      {entry.friendlyAction}
+                      {entry.status !== 'success' && (
+                        <span className="ml-2 px-2 py-0.5 rounded-full bg-accent-coral/20 text-accent-coral text-xs">
+                          Failed
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-text-muted mt-1">
-                      {entry.actorUsername || 'system'} • {timeAgoFromIso(entry.createdAt)}
+                      {[entry.actorUsername || 'system', entry.targetLabel, timeAgoFromIso(entry.createdAt)]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </div>
                   </div>
                   <div className="text-xl text-text-muted ml-4">{expandedId === entry.id ? '−' : '+'}</div>
@@ -206,6 +243,11 @@ export default function AdminAudit() {
             Next
           </button>
         </div>
+      )}
+      {entries.length > 0 && (
+        <p className="text-center text-xs text-text-muted">
+          Showing {from}–{to} of {total}
+        </p>
       )}
     </div>
   );

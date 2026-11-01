@@ -19,11 +19,13 @@ export interface CrewHighRating {
   rating: number;
 }
 
-/** A member's net ledger position, in dollars (from expenses.getBalances). */
-export interface CrewWrapBalance {
-  userId: string;
-  username: string;
-  balance: number;
+/** A crew expense row, as returned by expenses.getByCrew (amount is NUMERIC, so often a string). */
+export interface CrewWrapExpense {
+  amount: number | string;
+  paid_by?: string;
+  paid_by_name?: string;
+  planned?: boolean;
+  category?: string | null;
 }
 
 export interface CrewWrapTopSet {
@@ -67,9 +69,9 @@ export interface CrewWrap {
   overlapMatrix: CrewWrapOverlapPair[];
   /** Sets rated ≥4★ by ≥2 members, sorted by count desc. */
   setsSeenTogether: CrewWrapSeenTogether[];
-  /** Sum of all crew expense amounts, in dollars. */
+  /** Sum of the crew's spending, in dollars. Planned rows and settle-up payments do not count. */
   totalSplit: number;
-  /** The member who fronted the most (largest positive balance), or null. */
+  /** The member who paid the most spending (same rows as totalSplit), or null. */
   biggestSpender: { userId: string; name: string; amount: number } | null;
   /** Per-member top-3 high-rated sets. */
   perMember: CrewWrapMemberSummary[];
@@ -89,8 +91,7 @@ export function aggregateCrewWrap(
   festivalId: string,
   members: CrewWrapMember[],
   highRatings: CrewHighRating[],
-  expenses: { amount: number | string }[],
-  balances: CrewWrapBalance[],
+  expenses: CrewWrapExpense[],
 ): CrewWrap {
   const nameOf = new Map(members.map((m) => [m.userId, m.name]));
 
@@ -156,26 +157,34 @@ export function aggregateCrewWrap(
   }
   setsSeenTogether.sort((x, y) => y.count - x.count || (x.artist || x.setId).localeCompare(y.artist || y.setId));
 
-  // Total split: sum of every crew expense amount (NUMERIC arrives as a string
-  // from pg, so coerce with Number). Round to cents to avoid float drift.
-  const totalSplitCents = expenses.reduce((sum, e) => {
+  // Spending only: planned (forecast) rows and settle-up payments are not
+  // money the crew spent. Balances are not used, because settling up zeroes them.
+  // NUMERIC arrives as a string from pg, so coerce with Number; sum in cents to
+  // avoid float drift.
+  let totalSplitCents = 0;
+  const paidCents = new Map<string, number>();
+  // A payer who left the crew is not in the roster, so keep the row's username.
+  const paidByName = new Map<string, string>();
+  for (const e of expenses) {
+    if (e.planned || e.category === 'settlement') continue;
     const cents = Math.round(Number(e.amount) * 100);
-    return Number.isFinite(cents) ? sum + cents : sum;
-  }, 0);
+    if (!Number.isFinite(cents)) continue;
+    totalSplitCents += cents;
+    if (!e.paid_by) continue;
+    paidCents.set(e.paid_by, (paidCents.get(e.paid_by) ?? 0) + cents);
+    if (e.paid_by_name && !paidByName.has(e.paid_by)) paidByName.set(e.paid_by, e.paid_by_name);
+  }
   const totalSplit = totalSplitCents / 100;
 
-  // Biggest spender: largest positive balance (fronted the most net). A crew
-  // with no expenses / all-zero balances has no biggest spender.
+  // Biggest spender: the member who paid the most. A tie goes to the name that
+  // sorts first, so the result is stable.
   let biggestSpender: CrewWrap['biggestSpender'] = null;
-  let best = 0;
-  for (const b of balances) {
-    if (b.balance > best) {
-      best = b.balance;
-      biggestSpender = {
-        userId: b.userId,
-        name: nameOf.get(b.userId) ?? b.username,
-        amount: b.balance,
-      };
+  let bestCents = 0;
+  for (const [userId, cents] of paidCents) {
+    const name = nameOf.get(userId) ?? paidByName.get(userId) ?? 'A crewmate';
+    if (cents > bestCents || (biggestSpender && cents === bestCents && name.localeCompare(biggestSpender.name) < 0)) {
+      bestCents = cents;
+      biggestSpender = { userId, name, amount: cents / 100 };
     }
   }
 
@@ -325,10 +334,10 @@ export function createRatingsStore(pool: Pool) {
      * then folds the superlative math (overlap matrix, sets-seen-together,
      * per-member top-3) in `aggregateCrewWrap`.
      *
-     * Expense aggregates (totalSplit / biggestSpender) are sourced from the
-     * expenses store via the caller (route passes getByCrew + getBalances) so
-     * the canonical ledger math isn't duplicated here. Both default to empty so
-     * the wrap degrades gracefully when a crew has no expenses.
+     * Expense aggregates (totalSplit / biggestSpender) come from the expense
+     * rows the caller passes (the route passes expenses.getByCrew). Only
+     * spending counts: planned rows and settle-up payments are skipped. The
+     * list defaults to empty so the wrap degrades gracefully with no expenses.
      *
      * Only returns data about crew members the requester can already see — the
      * route gates on crews.getMember before calling this, and we never expose
@@ -339,10 +348,8 @@ export function createRatingsStore(pool: Pool) {
       festivalId: string,
       {
         expenses = [],
-        balances = [],
       }: {
-        expenses?: { amount: number | string }[];
-        balances?: CrewWrapBalance[];
+        expenses?: CrewWrapExpense[];
       } = {},
     ): Promise<CrewWrap> {
       const [memberRes, ratingRes] = await Promise.all([
@@ -394,7 +401,6 @@ export function createRatingsStore(pool: Pool) {
         memberRes.rows as CrewWrapMember[],
         ratingRes.rows as CrewHighRating[],
         expenses,
-        balances,
       );
     },
 

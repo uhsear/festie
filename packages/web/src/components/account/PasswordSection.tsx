@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuthStore } from '@festie/shared/stores/authStore';
+import { useAuthStore, PASSWORD_CHANGED_MESSAGE } from '@festie/shared/stores/authStore';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -30,11 +30,11 @@ export default function PasswordSection() {
 
     setSavingPassword(true);
     try {
-      await changePassword({ currentPassword, newPassword });
+      await changePassword({ currentPassword, newPassword, confirmPassword });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      toast('Password changed', 'success');
+      toast(PASSWORD_CHANGED_MESSAGE, 'success');
     } catch {
       toast("Couldn't change password. Try again.", 'error');
     } finally {

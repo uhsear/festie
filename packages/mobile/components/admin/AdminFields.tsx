@@ -32,6 +32,7 @@ export interface LabeledTextInputProps {
   maxLength?: number;
   editable?: boolean;
   multiline?: boolean;
+  secureTextEntry?: boolean;
   accessibilityLabel?: string;
 }
 
@@ -47,6 +48,7 @@ export function LabeledTextInput({
   maxLength,
   editable = true,
   multiline = false,
+  secureTextEntry,
   accessibilityLabel,
 }: LabeledTextInputProps) {
   const t = useTokens();
@@ -68,6 +70,8 @@ export function LabeledTextInput({
         maxLength={maxLength}
         editable={editable}
         multiline={multiline}
+        secureTextEntry={secureTextEntry}
+        {...(secureTextEntry ? { textContentType: 'password' as const, autoComplete: 'current-password' as const } : {})}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         accessibilityLabel={accessibilityLabel ?? label}

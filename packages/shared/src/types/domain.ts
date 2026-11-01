@@ -185,6 +185,8 @@ export interface User {
   paypalHandle?: string | null;
   // Opt-in public share page at /u/:username; absent/false = private.
   publicSchedule?: boolean;
+  // Address awaiting email-change confirmation (from /auth/me); null/absent = none.
+  pendingEmail?: string | null;
   createdAt: string;
   updatedAt: string;
 }

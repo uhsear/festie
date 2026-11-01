@@ -2279,6 +2279,13 @@
           },
           "refreshToken": {
             "type": "string"
+          },
+          "reactivated": {
+            "type": "boolean"
+          },
+          "pendingEmail": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -2347,6 +2354,13 @@
             "type": "string"
           },
           "refreshToken": {
+            "type": "string"
+          },
+          "reactivated": {
+            "type": "boolean"
+          },
+          "pendingEmail": {
+            "nullable": true,
             "type": "string"
           }
         },

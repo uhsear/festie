@@ -5,11 +5,13 @@ import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { SearchX } from 'lucide-react';
 import { maskEmail } from './maskEmail';
+import { withReauth } from '@festie/shared/services/admin';
+import { useReauthPrompt } from '../../lib/useReauthPrompt';
 
 interface User {
   id: string;
   username: string;
-  email: string;
+  email: string | null;
   roles: string[];
   isVerified: boolean;
   createdAt: string;
@@ -27,6 +29,7 @@ export default function AdminUsers() {
   // Emails stay masked until an admin expands one row.
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const { toast, toastError } = useToast();
+  const { askPassword, reauthDialog } = useReauthPrompt();
 
   useEffect(() => {
     loadUsers();
@@ -47,10 +50,18 @@ export default function AdminUsers() {
   const handleToggleAdmin = async (userId: string, currentlyAdmin: boolean) => {
     try {
       if (currentlyAdmin) {
-        await api.delete<void>(`/admin/users/${userId}/roles/admin`);
+        const done = await withReauth(async () => {
+          await api.delete<void>(`/admin/users/${userId}/roles/admin`);
+          return true;
+        }, askPassword);
+        if (!done) return;
         setUsers(users.map((u) => (u.id === userId ? { ...u, roles: u.roles.filter((r) => r !== 'admin') } : u)));
       } else {
-        await api.post<void>(`/admin/users/${userId}/roles`, { role: 'admin' });
+        const done = await withReauth(async () => {
+          await api.post<void>(`/admin/users/${userId}/roles`, { role: 'admin' });
+          return true;
+        }, askPassword);
+        if (!done) return;
         setUsers(users.map((u) => (u.id === userId ? { ...u, roles: [...u.roles, 'admin'] } : u)));
       }
       toast(`User ${!currentlyAdmin ? 'granted' : 'revoked'} admin access`, 'success');
@@ -75,7 +86,14 @@ export default function AdminUsers() {
     const name = users.find((u) => u.id === id)?.username || 'this user';
     setDeleteBusy(true);
     try {
-      await api.delete<void>(`/admin/users/${id}`);
+      const done = await withReauth(async () => {
+        await api.delete<void>(`/admin/users/${id}`);
+        return true;
+      }, askPassword);
+      if (!done) {
+        setConfirmDelete(null);
+        return;
+      }
       setUsers(users.filter((u) => u.id !== id));
       toast(`Deleted ${name}`, 'success');
       setConfirmDelete(null);
@@ -89,7 +107,7 @@ export default function AdminUsers() {
   const filteredUsers = users.filter(
     (u) =>
       u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()),
+      (u.email ?? '').toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   if (loading) {
@@ -151,17 +169,23 @@ export default function AdminUsers() {
                     >
                       <span className="flex items-center gap-2">
                         <span data-testid={`user-email-${user.id}`}>
-                          {revealedId === user.id ? user.email : maskEmail(user.email)}
+                          {user.email === null
+                            ? 'No email'
+                            : revealedId === user.id
+                              ? user.email
+                              : maskEmail(user.email)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setRevealedId(revealedId === user.id ? null : user.id)}
-                          aria-pressed={revealedId === user.id}
-                          aria-label={`${revealedId === user.id ? 'Hide' : 'Show'} full email for ${user.username}`}
-                          className="px-2 min-h-11 rounded-md text-xs text-accent-aqua hover:bg-accent-aqua/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
-                        >
-                          {revealedId === user.id ? 'Hide' : 'Show'}
-                        </button>
+                        {user.email !== null && (
+                          <button
+                            type="button"
+                            onClick={() => setRevealedId(revealedId === user.id ? null : user.id)}
+                            aria-pressed={revealedId === user.id}
+                            aria-label={`${revealedId === user.id ? 'Hide' : 'Show'} full email for ${user.username}`}
+                            className="px-2 min-h-11 rounded-md text-xs text-accent-aqua hover:bg-accent-aqua/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+                          >
+                            {revealedId === user.id ? 'Hide' : 'Show'}
+                          </button>
+                        )}
                       </span>
                     </td>
                     <td
@@ -226,6 +250,7 @@ export default function AdminUsers() {
         busy={deleteBusy}
         onConfirm={doDelete}
       />
+      {reauthDialog}
     </div>
   );
 }
