@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Mock TanStack Router
@@ -22,14 +22,8 @@ vi.mock('@festie/shared', () => ({
   useUIStore: (selector: (s: { connected: boolean }) => unknown) => selector({ connected: mockConnected }),
 }));
 
-// Festival store + isFestivalOver drive the desktop Wrap tab (mirrors BottomNav).
-const mockFestivalOver = vi.fn(() => false);
-vi.mock('@festie/shared/stores', () => ({
-  useFestivalStore: (selector: (s: { currentFestival: null; days: never[] }) => unknown) =>
-    selector({ currentFestival: null, days: [] }),
-}));
-vi.mock('@festie/shared/utils', () => ({
-  isFestivalOver: () => mockFestivalOver(),
+vi.mock('@festie/shared/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/utils')>()),
 }));
 
 // Mock UserMenu to avoid complex child rendering
@@ -51,7 +45,6 @@ describe('Header', () => {
     vi.clearAllMocks();
     mockAuthStore.mockReturnValue(null);
     mockConnected = true;
-    mockFestivalOver.mockReturnValue(false);
     document.documentElement.removeAttribute('data-theme');
   });
 
@@ -87,50 +80,61 @@ describe('Header', () => {
   });
 
   describe('desktop tabs for guest users', () => {
-    it('shows a single consolidated Schedule tab when not logged in', () => {
+    it('shows Lineup, My Plan, Crew and Map but no More button', () => {
       mockAuthStore.mockReturnValue(null);
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'Schedule' })).toBeInTheDocument();
-      // Timeline/Grid folded into the in-page ScheduleViewSwitcher.
+      for (const name of ['Lineup', 'My Plan', 'Crew', 'Map']) {
+        expect(screen.getByRole('link', { name })).toBeInTheDocument();
+      }
+      expect(screen.queryByRole('link', { name: 'More' })).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Timeline' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'Grid' })).not.toBeInTheDocument();
-    });
-
-    it('shows My Picks and Crew tabs for guests too (parity with mobile)', () => {
-      mockAuthStore.mockReturnValue(null);
-      render(<Header />);
-      expect(screen.getByRole('link', { name: 'My Picks' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Crew' })).toBeInTheDocument();
     });
   });
 
   describe('desktop tabs for logged-in users', () => {
-    it('shows Schedule, My Picks, and Crew tabs when logged in', () => {
+    it('shows the five sections in shared order', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'Schedule' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'My Picks' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Crew' })).toBeInTheDocument();
+      const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+      expect(within(nav).getAllByRole('link').map((b) => b.textContent)).toEqual([
+        'Lineup',
+        'My Plan',
+        'Crew',
+        'Map',
+        'More',
+      ]);
+    });
+
+    it('has no Wrap tab', () => {
+      mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
+      render(<Header />);
+      expect(screen.queryByRole('link', { name: 'Wrap' })).not.toBeInTheDocument();
     });
   });
 
   describe('active tab detection', () => {
-    it('marks Schedule as active on /cards', () => {
+    it('marks Lineup as active on /cards', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/cards' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
     });
 
-    it('marks Schedule as active on /', () => {
+    it('marks Lineup as active on /', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
     });
 
-    it('keeps Schedule active on the timeline and grid views', () => {
+    it('keeps Lineup active on the timeline and grid views', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/timeline' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'Schedule' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('keeps Crew active on /crew-plan', () => {
+      vi.mocked(useLocation).mockReturnValue({ pathname: '/crew-plan' } as ReturnType<typeof useLocation>);
+      render(<Header />);
+      expect(screen.getByRole('link', { name: 'Crew' })).toHaveAttribute('aria-current', 'page');
     });
   });
 
@@ -138,7 +142,7 @@ describe('Header', () => {
     it('renders tabs as real links', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'My Picks' })).toHaveAttribute('href', '/picks');
+      expect(screen.getByRole('link', { name: 'My Plan' })).toHaveAttribute('href', '/picks');
     });
   });
 
@@ -218,20 +222,6 @@ describe('Header', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'alice' });
       render(<Header />);
       expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
-    });
-  });
-
-  describe('desktop Wrap tab', () => {
-    it('is hidden while the festival is not over', () => {
-      mockFestivalOver.mockReturnValue(false);
-      render(<Header />);
-      expect(screen.queryByRole('link', { name: 'Wrap' })).not.toBeInTheDocument();
-    });
-
-    it('appears once the festival is over', () => {
-      mockFestivalOver.mockReturnValue(true);
-      render(<Header />);
-      expect(screen.getByRole('link', { name: 'Wrap' })).toBeInTheDocument();
     });
   });
 

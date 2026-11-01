@@ -75,16 +75,16 @@ env:
 - openLink: "festie://cards"
 - assertVisible:
     id: "schedule-screen"
-- tapOn: "Picks"
+- tapOn: "My Plan"
 - assertVisible:
     id: "picks-screen"
 - tapOn: "Crew"
 - assertVisible:
     id: "crew-screen"
-- tapOn: "Account"
+- tapOn: "More"
 - assertVisible:
     id: "account-screen"
-- tapOn: "Schedule"
+- tapOn: "Lineup"
 - assertVisible:
     id: "schedule-screen"
 
@@ -164,16 +164,6 @@ env:
 - waitForAnimationToEnd:
     timeout: 6000
 - takeScreenshot: 14-now-next
-- openLink: "festie://find"
-- extendedWaitUntil:
-    visible:
-      id: "find-action-map"
-    timeout: 30000
-- assertVisible:
-    id: "find-action-compass"
-- waitForAnimationToEnd:
-    timeout: 6000
-- takeScreenshot: 15-find
 - openLink: "festie://map"
 - extendedWaitUntil:
     visible:

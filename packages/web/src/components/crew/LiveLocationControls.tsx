@@ -1,16 +1,15 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Square, AlertCircle, Navigation, ShieldCheck, X, MapPin } from 'lucide-react';
+import { AlertCircle, Navigation, ShieldCheck, X, MapPin } from 'lucide-react';
 import { clearCrewSos, sosErrorMessage } from '@festie/shared';
 import type { SosEntry } from '@festie/shared/types';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { useLiveLocationPublisher, type GeoWatcher } from '@festie/shared/hooks';
 import { LIVE_LOCATION } from '@festie/shared/constants';
-import { formatStaleness, formatShareWindow } from '@festie/shared/utils';
+import { formatStaleness } from '@festie/shared/utils';
 import { useSharedSocket } from '../../lib/socketContext';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
@@ -28,10 +27,10 @@ const SESSION_MINUTES = Math.round(LIVE_LOCATION.MAX_SESSION_MS / 60_000);
  * LiveLocationControls — opt-in live-location sharing + SOS for the active crew.
  *
  * PRIVACY MODEL (see liveLocationStore header): sharing is OFF by default, is a
- * per-session opt-in that is never persisted (resets on reload), is scoped to
- * THIS crew only, and auto-stops on every exit path (toggle off, unmount, socket
- * disconnect, and a hard MAX_SESSION_MS cap). While sharing, a hard-to-miss,
- * non-dismissible banner with a one-tap Stop is always shown.
+ * per-session opt-in that is never persisted (resets on reload) and is scoped to
+ * THIS crew only. This switch only records the opt-in in liveLocationStore; the
+ * app-level LiveLocationSharing owns the GPS watch, its stop paths and the
+ * non-dismissible sharing indicator, so sharing survives leaving this tab.
  *
  * SOS is HTTP (not a fire-and-forget socket emit) so it reliably writes the
  * crew_activity row + fans out push; it is online-only (never queued), so an
@@ -42,34 +41,19 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
   const socket = useSharedSocket();
   const { toast } = useToast();
 
-  // Per-session opt-in. NOT persisted — always starts OFF (privacy requirement).
-  const [sharing, setSharing] = useState(false);
+  // Per-session opt-in, held in the non-persisted store (always starts OFF).
+  const shareIntentCrewId = useLiveLocationStore((s) => s.shareIntentCrewId);
   const sharingCrewId = useLiveLocationStore((s) => s.sharingCrewId);
-  const sharingExpiresAt = useLiveLocationStore((s) => s.sharingExpiresAt);
   // Read the FULL active-SOS list (not just the newest `sos`) so a second
   // concurrent SOS stays visible. The store is scoped to the active crew; filter
   // anyway as defense in depth (parity with mobile CrewSos).
   const activeSosList = useLiveLocationStore((s) => s.activeSosList);
   const sosList = useMemo(() => activeSosList.filter((e) => e.crewId === crewId), [activeSosList, crewId]);
+  const isSharingThisCrew = shareIntentCrewId === crewId && sharingCrewId === crewId;
 
-  // Phase 4C: tick once a minute so the own-side "sharing ends in Nm" countdown
-  // stays current. Only runs while sharing (cleared otherwise).
-  const [nowTick, setNowTick] = useState(() => Date.now());
-  useEffect(() => {
-    if (!sharingExpiresAt) return;
-    setNowTick(Date.now());
-    const id = setInterval(() => setNowTick(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, [sharingExpiresAt]);
-  const shareCountdown = sharingExpiresAt ? formatShareWindow(sharingExpiresAt, nowTick) : null;
   // Low-power mode disables the battery-hungry live-location auto-share (GPS
   // watch + socket emit loop). SOS stays available — it's an essential.
   const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
-
-  // If low-power mode flips on while we're sharing, stop the GPS watch loop.
-  useEffect(() => {
-    if (lowPowerMode && sharing) setSharing(false);
-  }, [lowPowerMode, sharing]);
 
   const [clearBusy, setClearBusy] = useState(false);
   // The SOS pending a clear-confirm. Any member may resolve any SOS (parity with
@@ -77,63 +61,9 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
   // clear a live emergency, so clearing is confirm-gated like the raise. null = closed.
   const [clearTarget, setClearTarget] = useState<SosEntry | null>(null);
 
-  // Adapter: navigator.geolocation.watchPosition → the publisher's GeoWatcher
-  // shape. Stable identity (the publisher assumes a stable watcher). Balanced
-  // accuracy (enableHighAccuracy:false) to spare battery at a festival.
-  const watchPosition = useMemo<GeoWatcher>(
-    () => (onFix, onError) => {
-      if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        onError?.(new Error('GEO_UNSUPPORTED'));
-        return () => {};
-      }
-      const id = navigator.geolocation.watchPosition(
-        (pos) =>
-          onFix({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy ?? undefined,
-            heading: pos.coords.heading ?? undefined,
-            speed: pos.coords.speed ?? undefined,
-            // TODO(battery): the Battery Status API (navigator.getBattery()) is
-            // non-standard and unavailable in Safari/iOS, so battery is left
-            // undefined here for parity with mobile (build-gated). The payload
-            // field + peer popup already exist; wire getBattery().level×100 when a
-            // cross-browser source is acceptable.
-            capturedAt: new Date(pos.timestamp).toISOString(),
-          }),
-        (err) => onError?.(err),
-        { enableHighAccuracy: false, maximumAge: 10_000, timeout: 20_000 },
-      );
-      return () => navigator.geolocation.clearWatch(id);
-    },
-    [],
-  );
-
-  useLiveLocationPublisher({
-    socket,
-    crewId,
-    enabled: sharing,
-    watchPosition,
-    onAutoStop: () => {
-      setSharing(false);
-      toast(`Live location stopped automatically after ${SESSION_MINUTES} minutes.`, 'info');
-    },
-    onError: (err) => {
-      setSharing(false);
-      const denied =
-        typeof err === 'object' && err !== null && 'code' in err && (err as GeolocationPositionError).code === 1;
-      toast(
-        denied
-          ? 'Location permission denied — turn it on in your browser to share.'
-          : "Couldn't read your location — live sharing stopped.",
-        'error',
-      );
-    },
-  });
-
   function toggleSharing() {
-    if (sharing) {
-      setSharing(false);
+    if (shareIntentCrewId === crewId) {
+      useLiveLocationStore.getState().cancelSharing();
       return;
     }
     if (lowPowerMode) {
@@ -148,7 +78,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
       toast('Not connected — can’t share your location right now.', 'error');
       return;
     }
-    setSharing(true);
+    useLiveLocationStore.getState().requestSharing(crewId);
   }
 
   // Clear a specific raiser's SOS. Any crew member may resolve any SOS (the
@@ -169,7 +99,6 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
     }
   }
 
-  const isSharingThisCrew = sharing && sharingCrewId === crewId;
   const showSos = sosList.length > 0;
   const clearMine = clearTarget?.userId === currentUserId;
   const ownSosActive = sosList.some((e) => e.userId === currentUserId);
@@ -235,32 +164,6 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
         );
       })}
 
-      {/* ── Sharing indicator (non-dismissible while active) ───────────────── */}
-      {isSharingThisCrew && (
-        <div
-          role="status"
-          aria-live="polite"
-          data-testid="sharing-indicator"
-          className="flex items-center gap-3 rounded-lg border border-accent-aqua bg-accent-aqua/10 p-3"
-        >
-          <span className="festie-live-dot" aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-text-primary">You&apos;re sharing your live location</p>
-            <p className="text-xs text-text-muted">
-              Only this crew can see it. Stops automatically when you leave{shareCountdown ? ` — ${shareCountdown}` : ''}.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSharing(false)}
-            aria-label="Stop sharing my live location"
-          >
-            <Square className="w-4 h-4" aria-hidden="true" /> Stop
-          </Button>
-        </div>
-      )}
-
       {/* ── Share toggle ──────────────────────────────────────── */}
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-card p-3">
         <div className="flex items-center gap-3">
@@ -272,7 +175,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
             <p id="live-share-desc" className="text-xs text-text-muted">
               {lowPowerMode
                 ? 'Paused by low-power mode to save battery. Turn it off in Festival Mode to share.'
-                : `Ephemeral and crew-only. Auto-stops on exit and after ${SESSION_MINUTES} min.`}
+                : `Ephemeral and crew-only. Keeps running on other pages and auto-stops after ${SESSION_MINUTES} min.`}
             </p>
           </div>
           <button

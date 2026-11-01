@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Linking, Switch, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useCrewStore } from '@festie/shared/stores';
@@ -53,6 +54,16 @@ const TYPES = [
   { key: 'general', label: 'General' },
 ] as const;
 
+/** A meeting point is navigable by the compass only if it carries finite coords. */
+function hasCoords(mp: CrewMeetingPoint): mp is CrewMeetingPoint & { latitude: number; longitude: number } {
+  return (
+    typeof mp.latitude === 'number' &&
+    typeof mp.longitude === 'number' &&
+    Number.isFinite(mp.latitude) &&
+    Number.isFinite(mp.longitude)
+  );
+}
+
 function typeLabel(type: string): string {
   return TYPES.find((entry) => entry.key === type)?.label ?? 'During';
 }
@@ -71,6 +82,7 @@ export default function CrewMeetingPoints({
   prefillCoords = null,
 }: CrewMeetingPointsProps) {
   const t = useTokens();
+  const router = useRouter();
   const haptics = useHaptics();
   const styles = useStyles();
 
@@ -556,6 +568,17 @@ export default function CrewMeetingPoints({
                 ) : null}
               </View>
               <View style={styles.rowActions}>
+                {hasCoords(point) ? (
+                  <TouchableOpacity
+                    onPress={() => router.push({ pathname: '/compass', params: { mpId: point.id } })}
+                    style={styles.iconButton}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Point the compass to ${point.label}`}
+                  >
+                    <Ionicons name="compass-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
                   onPress={() => openDirections(point)}
                   style={styles.iconButton}

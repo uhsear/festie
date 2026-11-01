@@ -45,14 +45,8 @@ describe('resetAllStores', () => {
       onlineUsers: [{ id: 'u1' } as any],
     });
     useLiveLocationStore.getState().startSharing('crew-1');
-    useFestivalModeStore.setState({
-      isFestivalMode: true,
-      festivalStarted: true,
-      showPastSets: false,
-      autoScrollToNow: true,
-      manuallyDisabled: true,
-      lowPowerMode: true,
-    });
+    useLiveLocationStore.getState().requestSharing('crew-1');
+    useFestivalModeStore.setState({ lowPowerMode: true });
     useOfflineReadinessStore.setState({
       byFestival: {
         'fest-1': {
@@ -122,6 +116,7 @@ describe('resetAllStores', () => {
     resetAllStores();
     const state = useLiveLocationStore.getState();
     expect(state.sharingCrewId).toBeNull();
+    expect(state.shareIntentCrewId).toBeNull();
     expect(state.crewId).toBeNull();
     expect(state.peers).toEqual({});
     expect(state.sos).toBeNull();
@@ -130,11 +125,6 @@ describe('resetAllStores', () => {
   it('resets festivalModeStore to defaults', () => {
     resetAllStores();
     const state = useFestivalModeStore.getState();
-    expect(state.isFestivalMode).toBe(false);
-    expect(state.festivalStarted).toBe(false);
-    expect(state.showPastSets).toBe(true);
-    expect(state.autoScrollToNow).toBe(false);
-    expect(state.manuallyDisabled).toBe(false);
     // lowPowerMode must reset too, or user A's power preference leaks to user B
     // on a shared device (persisted by festivalModeStore's partialize).
     expect(state.lowPowerMode).toBe(false);

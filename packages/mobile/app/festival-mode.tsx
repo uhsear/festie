@@ -117,7 +117,7 @@ export default function FestivalModeScreen() {
             />
           ) : crew ? (
             <>
-              <CrewNow crewName={crew.name} rows={whereabouts} onOpenCrew={() => router.push('/find')} />
+              <CrewNow crewName={crew.name} rows={whereabouts} onOpenCrew={() => router.navigate('/(tabs)/map')} />
               <MeetNow
                 meet={meet}
                 nowMs={nowMs}

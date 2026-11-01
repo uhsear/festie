@@ -16,6 +16,7 @@ import UpdatePrompt from '../features/UpdatePrompt';
 import IOSInstallSheet from '../features/IOSInstallSheet';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
+import LiveLocationSharing from '../crew/LiveLocationSharing';
 import Onboarding from '../features/Onboarding';
 import JoinCrewSheet from '../crew/JoinCrewSheet';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
@@ -160,6 +161,7 @@ export default function AppShell() {
         {joinCrewSheet}
         <Header />
         <SosBanner />
+        <LiveLocationSharing />
 
         {showDayBanner && <FestivalDayBanner />}
 

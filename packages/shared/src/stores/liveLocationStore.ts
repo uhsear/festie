@@ -31,6 +31,12 @@ export interface LiveLocationState {
   /** The crew we are actively publishing our own position to, or null. */
   sharingCrewId: string | null;
   /**
+   * The crew the user opted in to share with, or null. This is the intent an
+   * app-level publisher reads, so sharing outlives the screen that turned it on.
+   * Cleared by cancelSharing, a crew switch (setActiveCrew) and reset (logout).
+   */
+  shareIntentCrewId: string | null;
+  /**
    * Phase 4C: ISO timestamp our own time-boxed share auto-stops, or null. Drives
    * the "sharing ends in Nm" countdown on our own sharing indicator (peers get
    * theirs from each peer's relayed expiresAt). Cleared on stop/reset.
@@ -72,6 +78,10 @@ export interface LiveLocationActions {
   startSharing: (crewId: string, expiresAt?: string | null) => void;
   /** Stop publishing our own position; clears publisher bookkeeping. */
   stopSharing: () => void;
+  /** Opt in to sharing our position with `crewId` (sets shareIntentCrewId). */
+  requestSharing: (crewId: string) => void;
+  /** Withdraw the opt-in; the app-level publisher then stops. */
+  cancelSharing: () => void;
   /** Record a just-published fix (used by the throttle in useLiveLocationPublisher). */
   recordSent: (coord: { lat: number; lng: number }, at: number) => void;
   /** Apply a peer's position. Ignored if it targets a different crew than active. */
@@ -101,6 +111,7 @@ export type LiveLocationStore = LiveLocationState & LiveLocationActions;
 const EMPTY: LiveLocationState = {
   crewId: null,
   sharingCrewId: null,
+  shareIntentCrewId: null,
   sharingExpiresAt: null,
   lastSentAt: null,
   lastSentCoord: null,
@@ -140,6 +151,14 @@ const liveLocationStore: StateCreator<LiveLocationStore> = (set, get) => ({
 
   stopSharing: () => {
     set({ sharingCrewId: null, sharingExpiresAt: null, lastSentAt: null, lastSentCoord: null });
+  },
+
+  requestSharing: (crewId) => {
+    set({ shareIntentCrewId: crewId });
+  },
+
+  cancelSharing: () => {
+    set({ shareIntentCrewId: null });
   },
 
   recordSent: (coord, at) => {

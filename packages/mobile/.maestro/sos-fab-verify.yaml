@@ -1,17 +1,17 @@
 # SOS-FAB regression guard (Android New-Architecture 0x0-collapse bug).
 #
-# The raise-SOS FAB on /find (find-sos-fab) and /map (map-sos-fab) is an
+# The raise-SOS FAB on the Map tab (map-sos-fab) is an
 # absolutely-positioned child pinned bottom-right. Under RN 0.85 New Arch an
 # absolute child of a relative-flow parent collapsed to 0x0 and the FAB went
 # invisible on Android (fine on iOS via shadow*). Fix: outer absolute wrapper +
-# elevation. This flow proves both FABs actually render on Android.
+# elevation. This flow proves the FAB actually renders on Android.
 #
 # AUTHED-ONLY: needs TEST_USERNAME/TEST_PASSWORD via -e (CI repo secrets) AND a
-# crew membership (the FAB screens require an active crew). Run on the rig:
+# crew membership (the FAB shows only with an active crew). Run on the rig:
 #   maestro --device emulator-5554 test .maestro/sos-fab-verify.yaml \
 #     -e TEST_USERNAME=<u> -e TEST_PASSWORD=<p>
-# Deep-links past the nav with the `festie` scheme; the two assertVisible on the
-# FAB testIDs are the hard gates.
+# Deep-links past the nav with the `festie` scheme; the assertVisible on the
+# FAB testID is the hard gate.
 appId: us.festie.app
 env:
   TEST_USERNAME: ${TEST_USERNAME}
@@ -27,7 +27,7 @@ env:
     text: "Skip"
     optional: true
 - tapOn:
-    text: "Schedule"
+    text: "Lineup"
     optional: true
 - runFlow:
     when:
@@ -40,7 +40,7 @@ env:
             text: "Switch|Timeline|Cards"
           timeout: 90000
 - tapOn:
-    text: "Account|Sign in"
+    text: "More|Sign in"
     optional: true
 - waitForAnimationToEnd:
     timeout: 3000
@@ -62,19 +62,8 @@ env:
       - extendedWaitUntil:
           notVisible: "Username"
           timeout: 25000
-      # ── /find FAB ──
-      - openLink: festie:///find
-      - extendedWaitUntil:
-          visible: "Find each other"
-          timeout: 20000
-      - waitForAnimationToEnd:
-          timeout: 1500
-      - takeScreenshot: sosfab-01-find
-      - assertVisible:
-          id: "find-sos-fab"
       # ── /map FAB ──
-      - tapOn:
-          id: "find-action-map"
+      - openLink: festie:///map
       - extendedWaitUntil:
           visible:
             id: "map-sos-fab"

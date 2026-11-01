@@ -109,7 +109,7 @@ configureApi({
 function routeNotification(r: ReturnType<typeof useRouter>, data: Record<string, unknown> | undefined) {
   const sosCrewId = sosPushCrewId(data);
   if (sosCrewId) {
-    // Open that crew's logistics tab, where CrewSos shows the banner with "Get directions".
+    // Open that crew's Find tab, where CrewSos shows the banner with "Get directions".
     if (sosCrewId !== useCrewStore.getState().activeCrew?.id) {
       useCrewStore.getState().selectCrew(sosCrewId).catch(() => {});
     } else {
@@ -453,7 +453,7 @@ function AuthGate() {
             */}
             <Stack.Screen name="(tabs)" options={{ gestureResponseDistance: { start: 8 } }} />
             <Stack.Screen name="(auth)" />
-            <Stack.Screen name="grid" options={{ headerBackTitle: 'Schedule' }} />
+            <Stack.Screen name="grid" options={{ headerBackTitle: 'Lineup' }} />
             <Stack.Screen
               name="set/[setId]"
               options={{

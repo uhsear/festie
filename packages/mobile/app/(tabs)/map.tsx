@@ -1,27 +1,42 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useAuthStore, useCrewStore, useLiveLocationStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { CrewMeetingPoint } from '@festie/shared/types';
-import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
-import { useReduceMotion } from '../hooks/useReduceMotion';
-import { useHaptics } from '../hooks/useHaptics';
-import { useSosRaise } from '../hooks/useSosRaise';
-import { CREW_MEET_HREF } from '../lib/dayOfRoutes';
-import OfflineMap from '../components/OfflineMap';
-import FreshnessChip from '../components/FreshnessChip';
-import EmptyState from '../components/EmptyState';
-import HeaderTitle from '../components/HeaderTitle';
-import { LowPowerIndicator } from '../components/LowPowerControls';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
+import { useHaptics } from '../../hooks/useHaptics';
+import { useSosRaise } from '../../hooks/useSosRaise';
+import { CREW_MEET_HREF } from '../../lib/dayOfRoutes';
+import OfflineMap from '../../components/OfflineMap';
+import FreshnessChip from '../../components/FreshnessChip';
+import EmptyState from '../../components/EmptyState';
+import ScreenHeader from '../../components/ScreenHeader';
+import { LowPowerIndicator } from '../../components/LowPowerControls';
 
 /** Sweep stale peers off the map on this cadence while the screen is mounted. */
 const SWEEP_INTERVAL_MS = 15_000;
+/** Mirrors IOS_NATIVE_TAB_BAR_HEIGHT in (tabs)/index.tsx: the native iOS tab bar overlays content. */
+const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
+
+/** A meeting point is navigable by the compass only if it carries finite coords. */
+function hasCoords(mp: CrewMeetingPoint): boolean {
+  return (
+    typeof mp.latitude === 'number' &&
+    typeof mp.longitude === 'number' &&
+    Number.isFinite(mp.latitude) &&
+    Number.isFinite(mp.longitude)
+  );
+}
 
 /**
- * /map — M6 offline map for the active crew/festival.
+ * Map tab — M6 offline map for the current festival.
+ *
+ * Everyone sees stages and amenities. Crew layers (meeting points, live
+ * friends, SOS and tap-to-create) show only for a signed-in user with a crew.
  *
  * Renders meeting-point pins (F4 coords) over a WebView-hosted MapLibre map, with
  * a graceful offline fallback list when the map can't load (see OfflineMap). All
@@ -102,37 +117,42 @@ export default function MapScreen() {
     return () => clearInterval(id);
   }, [sweepStale]);
 
-  // Tap-to-create: a long-press on the map deep-links into the crew Logistics
+  // Tap-to-create: a long-press on the map deep-links into the crew Find
   // tab with the pressed coords, where CrewMeetingPoints opens its create form
   // prefilled with them. No write happens here — the user still confirms "Add".
   const handleMapPress = useCallback((coord: { latitude: number; longitude: number }) => {
     router.push({
       pathname: '/(tabs)/crew',
       params: {
-        tab: 'logistics',
+        tab: 'find',
         mpLat: String(coord.latitude),
         mpLng: String(coord.longitude),
       },
     });
   }, []);
 
-  if (!user) {
-    return (
-      <View testID="map-screen" style={styles.screen}>
-        <Stack.Screen options={{ title: 'Map', headerShown: true }} />
-        <EmptyState icon="lock-closed" title="Sign in required" message="Log in to see the crew map." />
-      </View>
-    );
-  }
+  const crewLayers = Boolean(user && activeCrew);
+  const hasCompassPoint = crewLayers && (meetingPoints ?? []).some((p) => p && p.active !== false && hasCoords(p));
+  const compassButton = hasCompassPoint ? (
+    <TouchableOpacity
+      testID="map-compass"
+      style={styles.compassButton}
+      onPress={() => router.push('/compass')}
+      accessibilityRole="button"
+      accessibilityLabel="Open the meeting-point compass"
+    >
+      <Ionicons name="navigate-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
+    </TouchableOpacity>
+  ) : undefined;
 
-  if (!activeCrew) {
+  if (!mapFestival) {
     return (
       <View testID="map-screen" style={styles.screen}>
-        <Stack.Screen options={{ title: 'Map', headerShown: true }} />
+        <ScreenHeader title="Map" subtitle={activeCrew?.name} icon="map-outline" right={compassButton} />
         <EmptyState
-          icon="people-outline"
-          title="No crew selected"
-          message="Open the Crew tab and pick a crew to see its meeting points on the map."
+          icon="map-outline"
+          title="No festival selected"
+          message="Pick a festival on the Lineup tab to see its map."
         />
       </View>
     );
@@ -140,22 +160,27 @@ export default function MapScreen() {
 
   return (
     <View testID="map-screen" style={styles.screen}>
-      {/* Drop the " · Map" suffix and shrink-to-fit: the screen context already
-          makes "Map" obvious, and a long crew name + suffix used to clip in the
-          notch-narrowed native title region. */}
-      <Stack.Screen options={{ headerShown: true, headerTitle: () => <HeaderTitle>{activeCrew.name}</HeaderTitle> }} />
+      <ScreenHeader title="Map" subtitle={activeCrew?.name} icon="map-outline" right={compassButton} />
       <View style={styles.chipBar}>
         <FreshnessChip surface="crew" />
         {/* Surfaces the shared low-power flag on the map so battery-saving GPS
             degradation (see OfflineMap's watchPositionAsync) is visible, not silent. */}
         <LowPowerIndicator />
       </View>
+      {!crewLayers ? (
+        <Text style={styles.crewHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {user
+            ? 'Join a crew to see friends and meeting points here.'
+            : 'Sign in and join a crew to see friends and meeting points here.'}
+        </Text>
+      ) : null}
       <OfflineMap
-        meetingPoints={meetingPoints}
-        peers={peers}
-        activeSosList={crewSosList}
-        onMapPress={handleMapPress}
+        meetingPoints={crewLayers ? meetingPoints : []}
+        peers={crewLayers ? peers : []}
+        activeSosList={crewLayers ? crewSosList : []}
+        onMapPress={crewLayers ? handleMapPress : undefined}
         festival={mapFestival}
+        bottomInset={Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT : 0}
       />
 
       {/* DC2 + R24: raise-SOS shortcut on the map. The FAB lives in an outer
@@ -164,28 +189,36 @@ export default function MapScreen() {
           collapses to 0x0 on Android New Arch. Pulsing coral RING (a real View,
           not shadow*) while an active SOS exists for this crew; reduce-motion
           shows a static ring. */}
-      <View style={[styles.sosFabWrap, { bottom: insets.bottom + t.spacing[5] }]} pointerEvents="box-none">
-        {sosActive ? <Animated.View pointerEvents="none" style={[styles.sosRing, sosRingStyle]} /> : null}
-        <TouchableOpacity
-          testID="map-sos-fab"
-          style={styles.sosFab}
-          onPress={() => {
-            haptics.tap();
-            // Own SOS already up: open the crew tab so they can tap "I'm safe".
-            if (mySosActive) router.push(CREW_MEET_HREF);
-            else confirmRaise();
-          }}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Send an SOS to your crew"
-          accessibilityHint="Asks for confirmation before sending"
+      {crewLayers ? (
+        <View
+          style={[
+            styles.sosFabWrap,
+            { bottom: (Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT + insets.bottom : 0) + t.spacing[5] },
+          ]}
+          pointerEvents="box-none"
         >
-          <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
-          <Text style={styles.sosFabText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            SOS
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {sosActive ? <Animated.View pointerEvents="none" style={[styles.sosRing, sosRingStyle]} /> : null}
+          <TouchableOpacity
+            testID="map-sos-fab"
+            style={styles.sosFab}
+            onPress={() => {
+              haptics.tap();
+              // Own SOS already up: open the crew tab so they can tap "I'm safe".
+              if (mySosActive) router.push(CREW_MEET_HREF);
+              else confirmRaise();
+            }}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Send an SOS to your crew"
+            accessibilityHint="Asks for confirmation before sending"
+          >
+            <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
+            <Text style={styles.sosFabText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              SOS
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -202,6 +235,18 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing[2],
     paddingHorizontal: t.spacing[4],
     paddingVertical: t.spacing[2],
+  },
+  crewHint: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+    paddingHorizontal: t.spacing[4],
+    paddingBottom: t.spacing[2],
+  },
+  compassButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Outer wrapper is the only absolutely-positioned node — pins the FAB to the
   // bottom-right regardless of parent flow so it reliably renders on Android.

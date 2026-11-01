@@ -22,14 +22,14 @@ tags:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Skip|Select a Festival|Schedule|Festie"
+      text: "Skip|Select a Festival|Lineup|Festie"
     timeout: 120000
 - tapOn:
     text: "Skip"
     optional: true
 # Guest may browse the schedule (public) — login must NOT be shown here.
 - tapOn:
-    text: "Schedule"
+    text: "Lineup"
     optional: true
 - waitForAnimationToEnd:
     timeout: 2000

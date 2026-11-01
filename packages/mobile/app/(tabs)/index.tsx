@@ -941,11 +941,12 @@ export default function TimelineScreen() {
         titleAccessibilityLabel={`${currentFestival.name}. Switch festival`}
       />
       {/* P1-5 — phase-aware home actions: re-prioritizes the crew's destinations
-          (picks / crew / find / Now & Next / wrap) by festival phase. Hidden when
+          (My Plan / crew / map / Now & Next / wrap) by festival phase. Hidden when
           the festival has no usable dates (phase === null). Folds behind the
-          filter toggle (DC1) — it's a setup action, not a mid-crowd one. Sits
+          filter toggle (DC1) — it's a setup action, not a mid-crowd one — except
+          after the festival, when Wrap is the first shortcut. Sits
           above the view switcher so it reads as the head of the Filters panel. */}
-      {phase && filtersOpen ? (
+      {phase && (filtersOpen || phase === 'post') ? (
         <View style={{ paddingHorizontal: hPad }}>
           <PhaseHomeActions phase={phase} />
         </View>
