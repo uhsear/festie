@@ -42,8 +42,8 @@ function MapViewInner() {
   const peers = useMemo(() => (hasCrew ? Object.values(peersMap) : []), [hasCrew, peersMap]);
   const sosList = useMemo(() => activeSosList.filter((e) => e.crewId === crewId), [activeSosList, crewId]);
 
-  // Scope live peers and SOS to this crew. No stopSharing() on unmount: that
-  // cleanup belongs to the crew tab, and leaving the map must not stop sharing.
+  // Scope live peers and SOS to this crew. No cleanup: sharing is owned app-wide
+  // by LiveLocationSharing, so leaving the map must not stop it.
   useEffect(() => {
     if (!hasCrew) return;
     useLiveLocationStore.getState().setActiveCrew(crewId);

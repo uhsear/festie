@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // --- Mocks ------------------------------------------------------------------
@@ -33,20 +33,8 @@ vi.mock('@festie/shared/constants', () => ({ LIVE_LOCATION: { MAX_SESSION_MS: 3_
 // utils — formatStaleness is the only one used by this component.
 vi.mock('@festie/shared/utils', () => ({ formatStaleness: () => 'as of just now' }));
 
-// The publisher hook is a side-effect engine (geolocation + socket). We don't
-// exercise it here; capture its options so we can assert the component wires
-// `enabled` to the share toggle, then no-op.
-const { publisherSpy } = vi.hoisted(() => ({ publisherSpy: vi.fn() }));
-vi.mock('@festie/shared/hooks', () => ({ useLiveLocationPublisher: (opts: unknown) => publisherSpy(opts) }));
-
-// liveLocationStore — a controllable in-memory state (selector-based hook).
-const { storeState } = vi.hoisted(() => ({
-  storeState: { sharingCrewId: null as string | null, activeSosList: [] as unknown[] },
-}));
-function useLiveLocationStore(selector: (s: typeof storeState) => unknown) {
-  return selector(storeState);
-}
-vi.mock('@festie/shared/stores/liveLocationStore', () => ({ useLiveLocationStore }));
+// The real (in-memory, non-persisted) liveLocationStore: the switch writes the
+// opt-in there and the app-level LiveLocationSharing publishes from it.
 
 // festivalModeStore — low-power mode gates the share affordance. Controllable
 // so a test can flip lowPowerMode on and assert the toggle is disabled.
@@ -63,14 +51,19 @@ vi.mock('../../lib/socketContext', () => ({ useSharedSocket: () => socketState }
 const { toastSpy } = vi.hoisted(() => ({ toastSpy: vi.fn() }));
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: toastSpy }) }));
 
+import type { SosEntry } from '@festie/shared/types';
+import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import LiveLocationControls from './LiveLocationControls';
 
 const CREW_ID = 'crew-1';
 const ME = 'user-me';
 
+function setSos(list: unknown[]) {
+  useLiveLocationStore.setState({ activeSosList: list as SosEntry[] });
+}
+
 function resetStore() {
-  storeState.sharingCrewId = null;
-  storeState.activeSosList = [];
+  useLiveLocationStore.getState().reset();
   fmState.lowPowerMode = false;
 }
 
@@ -105,22 +98,29 @@ describe('LiveLocationControls — share toggle', () => {
     expect(screen.queryByTestId('sharing-indicator')).not.toBeInTheDocument();
   });
 
-  it('shows the "you are sharing" indicator and flips aria-checked after opt-in', async () => {
+  it('records the opt-in for this crew and flips aria-checked once sharing starts', async () => {
     const user = userEvent.setup();
-    // The store mirrors the active sharing crew once the toggle turns on.
-    storeState.sharingCrewId = CREW_ID;
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     await user.click(screen.getByRole('switch'));
+    expect(useLiveLocationStore.getState().shareIntentCrewId).toBe(CREW_ID);
 
+    // The app-level publisher marks the share live once it starts.
+    act(() => useLiveLocationStore.getState().startSharing(CREW_ID));
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
-    const indicator = screen.getByTestId('sharing-indicator');
-    expect(indicator).toHaveAttribute('role', 'status');
-    expect(within(indicator).getByText(/you'?re sharing your live location/i)).toBeInTheDocument();
-    // Anti-slop: the indicator states scope + auto-stop, not just "sharing".
-    expect(within(indicator).getByText(/only this crew can see it/i)).toBeInTheDocument();
-    // A one-tap, labelled Stop is present.
-    expect(within(indicator).getByRole('button', { name: /stop sharing/i })).toBeInTheDocument();
+    // The indicator is app-wide (LiveLocationSharing), not on this tab.
+    expect(screen.queryByTestId('sharing-indicator')).not.toBeInTheDocument();
+  });
+
+  it('withdraws the opt-in when the switch is turned off', async () => {
+    const user = userEvent.setup();
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    await user.click(screen.getByRole('switch'));
+    act(() => useLiveLocationStore.getState().startSharing(CREW_ID));
+
+    await user.click(screen.getByRole('switch'));
+
+    expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
   });
 
   it('refuses to start sharing (and warns) when the socket is disconnected', async () => {
@@ -131,18 +131,8 @@ describe('LiveLocationControls — share toggle', () => {
     await user.click(screen.getByRole('switch'));
 
     expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/not connected/i), 'error');
-    expect(screen.queryByTestId('sharing-indicator')).not.toBeInTheDocument();
+    expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
     socketState.connected = true; // restore for other tests
-  });
-
-  it('passes the live `enabled` flag through to the publisher hook', async () => {
-    const user = userEvent.setup();
-    storeState.sharingCrewId = CREW_ID;
-    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
-    // Initially disabled.
-    expect(publisherSpy).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false, crewId: CREW_ID }));
-    await user.click(screen.getByRole('switch'));
-    expect(publisherSpy).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }));
   });
 
   it('disables the share affordance in low-power mode (battery gate) and warns on tap', async () => {
@@ -154,9 +144,9 @@ describe('LiveLocationControls — share toggle', () => {
     expect(sw).toBeDisabled();
     // SOS — an essential — stays available even in low-power mode.
     expect(screen.getByTestId('sos-raise')).toBeInTheDocument();
-    // A disabled switch swallows the click, so the publisher never goes live.
+    // A disabled switch swallows the click, so sharing never goes live.
     await user.click(sw);
-    expect(publisherSpy).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+    expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
   });
 });
 
@@ -169,15 +159,15 @@ describe('LiveLocationControls — Send SOS', () => {
   });
 
   it('pulses while a crew SOS is active', () => {
-    storeState.activeSosList = [
+    setSos([
       { crewId: CREW_ID, userId: 'user-other', username: 'Dana', raisedAt: new Date().toISOString() },
-    ];
+    ]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
     expect(screen.getByTestId('sos-raise')).toHaveAttribute('data-alerting', 'true');
   });
 
   it('hides the button while your own SOS is active', () => {
-    storeState.activeSosList = [{ crewId: CREW_ID, userId: ME, username: 'Me', raisedAt: new Date().toISOString() }];
+    setSos([{ crewId: CREW_ID, userId: ME, username: 'Me', raisedAt: new Date().toISOString() }]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
     expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
   });
@@ -193,7 +183,7 @@ describe('LiveLocationControls — active SOS banner', () => {
   };
 
   it('renders a prominent alert banner for a crew SOS raised by someone else', () => {
-    storeState.activeSosList = [{ ...baseSos }];
+    setSos([{ ...baseSos }]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     const banner = screen.getByTestId('sos-banner');
@@ -208,7 +198,7 @@ describe('LiveLocationControls — active SOS banner', () => {
   it('lets ANY member resolve another member\'s SOS via a confirm dialog', async () => {
     const user = userEvent.setup();
     clearCrewSosSpy.mockResolvedValueOnce(undefined);
-    storeState.activeSosList = [{ ...baseSos }];
+    setSos([{ ...baseSos }]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     await user.click(screen.getByRole('button', { name: /mark dana's sos resolved/i }));
@@ -225,7 +215,7 @@ describe('LiveLocationControls — active SOS banner', () => {
   it('shows the "I\'m safe — clear SOS" action to the raiser and clears on confirm', async () => {
     const user = userEvent.setup();
     clearCrewSosSpy.mockResolvedValueOnce(undefined);
-    storeState.activeSosList = [{ ...baseSos, userId: ME, username: 'Me' }];
+    setSos([{ ...baseSos, userId: ME, username: 'Me' }]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     const banner = screen.getByTestId('sos-banner');
@@ -242,7 +232,7 @@ describe('LiveLocationControls — active SOS banner', () => {
   it('shows the shared error line when the clear fails', async () => {
     const user = userEvent.setup();
     clearCrewSosSpy.mockRejectedValueOnce(new Error('boom'));
-    storeState.activeSosList = [{ ...baseSos }];
+    setSos([{ ...baseSos }]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     await user.click(screen.getByRole('button', { name: /mark dana's sos resolved/i }));
@@ -252,10 +242,10 @@ describe('LiveLocationControls — active SOS banner', () => {
   });
 
   it('renders one banner per active SOS with an "N active" header when 2+ are live', () => {
-    storeState.activeSosList = [
+    setSos([
       { ...baseSos },
       { ...baseSos, userId: 'user-3', username: 'Sam', message: 'Twisted ankle' },
-    ];
+    ]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     expect(screen.getAllByTestId('sos-banner')).toHaveLength(2);
@@ -263,9 +253,9 @@ describe('LiveLocationControls — active SOS banner', () => {
   });
 
   it('offers a directions link when the SOS carries a position', () => {
-    storeState.activeSosList = [
+    setSos([
       { ...baseSos, position: { lat: 41.88, lng: -87.62, capturedAt: new Date().toISOString() } },
-    ];
+    ]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     expect(
@@ -274,7 +264,7 @@ describe('LiveLocationControls — active SOS banner', () => {
   });
 
   it('ignores an SOS targeting a different crew', () => {
-    storeState.activeSosList = [{ ...baseSos, crewId: 'other-crew' }];
+    setSos([{ ...baseSos, crewId: 'other-crew' }]);
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
     expect(screen.queryByTestId('sos-banner')).not.toBeInTheDocument();
   });

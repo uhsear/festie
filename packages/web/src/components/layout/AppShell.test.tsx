@@ -48,6 +48,7 @@ vi.mock('../features/UpdatePrompt', () => ({ default: () => null }));
 vi.mock('../features/IOSInstallSheet', () => ({ default: () => null }));
 vi.mock('../features/FestivalDayBanner', () => ({ default: () => null }));
 vi.mock('../features/SosBanner', () => ({ default: () => null }));
+vi.mock('../crew/LiveLocationSharing', () => ({ default: () => null }));
 vi.mock('../../hooks/useRealtimeSync', () => ({ useRealtimeSync: vi.fn() }));
 vi.mock('../../hooks/usePushNotifications', () => ({ usePushNotifications: vi.fn() }));
 vi.mock('../../hooks/useScrollReset', () => ({ useScrollReset: vi.fn() }));

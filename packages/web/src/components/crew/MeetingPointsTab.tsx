@@ -134,21 +134,14 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   // concurrent SOS gets its own map marker — not just the newest one.
   const activeSosList = useLiveLocationStore((s) => s.activeSosList);
   const peers = useMemo(() => Object.values(peersMap), [peersMap]);
-  // The web publisher lives in LiveLocationControls on this tab, so leaving for
-  // the full map ends sharing (see the unmount cleanup below). Say so up front.
-  const sharingHere = useLiveLocationStore((s) => s.sharingCrewId === crewId);
   const sosList = useMemo(() => activeSosList.filter((e) => e.crewId === crewId), [activeSosList, crewId]);
 
   // Scopes the store to the open crew — the peer/SOS guards in liveLocationStore
   // fall open while crewId is null, so this must stay unconditional.
+  // No cleanup: the crew scope stays (useLiveLocationCrewSync owns it app-wide),
+  // and sharing outlives this tab (LiveLocationSharing in AppShell owns it).
   useEffect(() => {
     useLiveLocationStore.getState().setActiveCrew(crewId);
-    return () => {
-      // Leaving the tab stops local sharing bookkeeping (re-opt-in on return). The
-      // crew scope stays: useLiveLocationCrewSync owns it app-wide, and clearing it
-      // here wiped active SOS from the app-wide banner.
-      useLiveLocationStore.getState().stopSharing();
-    };
   }, [crewId]);
 
   useEffect(() => {
@@ -367,16 +360,10 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       </div>
       <Link
         to="/map"
-        aria-describedby={sharingHere ? 'full-map-sharing-note' : undefined}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 text-text-secondary hover:text-text-primary"
       >
         <Maximize2 className="w-4 h-4" aria-hidden="true" /> Open full map
       </Link>
-      {sharingHere && (
-        <p id="full-map-sharing-note" className="text-xs text-text-secondary">
-          Opening the full map stops sharing your location. Turn it on again when you come back.
-        </p>
-      )}
       </div>
 
       <div id="meeting-points-panel">
