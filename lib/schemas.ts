@@ -476,6 +476,34 @@ export const festivalUpdateSchema = festivalCreateSchema
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
 
+// ── Lineup import (admin) ───────────────────────────────────────────
+// A field that is absent means "column not mapped, leave alone". An empty string means "clear".
+export const lineupImportRowSchema = z
+  .object({
+    row: z.number().int().min(1).max(100_000), // 1-based line number in the source file
+    setId: z.string().max(100).optional(), // a re-imported export matches by id first
+    artist: z.string().max(300),
+    day: z.string().max(100).optional(),
+    date: z.string().max(20).optional(),
+    stage: z.string().max(100).optional(),
+    startTime: z.string().max(20).optional(),
+    endTime: z.string().max(20).optional(),
+    stageColor: z.string().max(20).optional(),
+    link: z.string().max(500).optional(),
+  })
+  .strict();
+export type LineupImportRowInput = z.infer<typeof lineupImportRowSchema>;
+
+export const lineupImportRequestSchema = z
+  .object({
+    rows: z.array(lineupImportRowSchema).min(1).max(500),
+    updateExisting: z.boolean().default(false),
+    createMissing: z.boolean().default(true),
+    skipSpotify: z.boolean().default(false),
+  })
+  .strict();
+export type LineupImportRequestInput = z.infer<typeof lineupImportRequestSchema>;
+
 // ── Crew schemas ─────────────────────────────────────────────────────
 export const crewCreateSchema = z.object({
   name: z.string().trim().min(1, 'Crew name required').max(60),
