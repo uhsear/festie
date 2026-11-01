@@ -99,10 +99,13 @@ describe('reminder-scheduler: processProfileReminders (via tick)', () => {
     // Use local date and local hours/minutes consistently so the computed
     // timestamp matches the expected setStartMs (within 1 minute due to
     // HH:MM truncation).
-    const setDate = new Date(setStartMs);
+    // A start before 06:00 belongs to the previous logical day, so date the day row
+    // on that day; otherwise the scheduler rolls the start 24 hours forward.
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
     const localDateStr = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
-    const localHours = setDate.getHours();
-    const localMinutes = setDate.getMinutes();
+    const localHours = startClock.getHours();
+    const localMinutes = startClock.getMinutes();
 
     // Build a festival query chain
     let callIndex = 0;
@@ -249,10 +252,13 @@ describe('reminder-scheduler: processProfileReminders (via tick)', () => {
     const notifyFn = mock.fn(async () => ({ sent: 0, reason: 'no_tokens' }));
     const prefsFn = mock.fn(async () => null);
 
-    const setDate = new Date(setStartMs);
+    // A start before 06:00 belongs to the previous logical day, so date the day row
+    // on that day; otherwise the scheduler rolls the start 24 hours forward.
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
     const localDateStr = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
-    const localHours = setDate.getHours();
-    const localMinutes = setDate.getMinutes();
+    const localHours = startClock.getHours();
+    const localMinutes = startClock.getMinutes();
 
     const queryFn = mock.fn(async (sql: string) => {
       if (sql.includes('festivals')) {
