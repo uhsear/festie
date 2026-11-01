@@ -28,7 +28,7 @@ import InviteCard from '../../components/InviteCard';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { firstInvalidField, validateRegister, type RegisterErrors, type RegisterField } from '../../lib/registerValidation';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
+import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
 // No in-app Terms route exists yet; open the canonical web Terms of Service,
 // mirroring how the privacy screen links out to it.
@@ -344,11 +344,15 @@ export default function RegisterScreen() {
       >
         {/* R25: hero staggered reveal — brand word then subtitle, gated on reduceMotion */}
         <BrandMark />
-        <Animated.Text style={styles.title} entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)}>
+        <Animated.Text
+          style={styles.title}
+          maxFontSizeMultiplier={typeScaleCap('display-lg')}
+          entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)}>
           Festie
         </Animated.Text>
         <Animated.Text
           style={styles.subtitle}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
           entering={reduceMotion ? undefined : FadeInDown.delay(360).duration(350)}
         >
           Create your account

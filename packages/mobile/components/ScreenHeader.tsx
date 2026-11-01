@@ -93,7 +93,7 @@ export default function ScreenHeader({ title, subtitle, right, icon }: ScreenHea
           <DisplayWords text={title} fontSize={styles.title.fontSize} />
         </Text>
         {subtitle ? (
-          <Text style={styles.subtitle} numberOfLines={2}>
+          <Text style={styles.subtitle} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {subtitle}
           </Text>
         ) : null}

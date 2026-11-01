@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, type ScrollViewInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
@@ -46,6 +46,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
   const styles = useStyles();
   const haptics = useHaptics();
   const reduceMotion = useReduceMotion();
+  const largeText = useLargeText();
   const scrollRef = useRef<ScrollViewInstance>(null);
   const xs = useRef<Record<string, number>>({});
 
@@ -97,9 +98,11 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
             >
               {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
               <Ionicons name={tab.icon} size={16} color={active ? t.colors.accent.aqua : t.colors.text.secondary} />
-              <Text style={[styles.label, active && styles.labelActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {tab.label}
-              </Text>
+              {!largeText || active ? (
+                <Text style={[styles.label, active && styles.labelActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {tab.label}
+                </Text>
+              ) : null}
               {typeof badge === 'number' && badge > 0 ? (
                 <View style={styles.countBadge}>
                   <Text style={styles.countBadgeText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
@@ -135,10 +138,12 @@ const useStyles = makeStyles((t) => ({
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: t.spacing[1],
     paddingHorizontal: t.spacing[3],
     paddingVertical: t.spacing[2],
     minHeight: 44, // WCAG 2.5.5 / Apple HIG minimum touch target
+    minWidth: 44, // icon-only tabs under large text are ~42pt wide without this
     borderRadius: t.radii.pill,
     borderWidth: 1,
     borderColor: t.colors.border.default,

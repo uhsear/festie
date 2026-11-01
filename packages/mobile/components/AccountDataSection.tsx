@@ -70,7 +70,7 @@ export default function AccountDataSection() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Export my data</Text>
-          <Text style={styles.rowHint} numberOfLines={1}>
+          <Text style={styles.rowHint} numberOfLines={3}>
             {busy ? 'Preparing your export…' : 'A JSON copy of your account · once per day'}
           </Text>
         </View>

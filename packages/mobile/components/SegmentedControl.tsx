@@ -49,6 +49,9 @@ function Segment<T extends string>({ option, active, onPress }: SegmentProps<T>)
         style={[s.label, active && { color: activeInk }]}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
         textBreakStrategy="simple"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
       >
         {/* Trailing NBSP: Android under-measures a center-aligned single-line
             Text node and tail-clips the last glyph ("Timeli…", "Car…") even

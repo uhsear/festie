@@ -123,7 +123,7 @@ export default function AccountPaymentHandlesSection() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Payment handles</Text>
-          <Text style={styles.rowHint} numberOfLines={1}>
+          <Text style={styles.rowHint} numberOfLines={3}>
             {summary}
           </Text>
         </View>

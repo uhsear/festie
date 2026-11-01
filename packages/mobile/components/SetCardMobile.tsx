@@ -20,7 +20,7 @@ import {
 } from '@festie/shared/utils';
 import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { duration, easing } from '@festie/shared/tokens';
-import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useSetStatus } from '../hooks/useSetStatus';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -226,7 +226,7 @@ function SetCardMobileImpl({
           </Text>
         </View>
 
-        <Text style={styles.artist} numberOfLines={2}>
+        <Text style={styles.artist} numberOfLines={2} maxFontSizeMultiplier={typeScaleCap('title')}>
           {artistName}
         </Text>
         {subtitle ? (

@@ -113,7 +113,7 @@ export default function AccountDisplayNameSection() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Display name</Text>
-          <Text style={styles.rowHint} numberOfLines={1}>
+          <Text style={styles.rowHint} numberOfLines={3}>
             {currentName || (username ? `@${username}` : 'Set a display name')}
           </Text>
         </View>

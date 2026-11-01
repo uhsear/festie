@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import type { ImageStyle, TextStyle, ViewStyle } from 'react-native';
 import {
   colors,
@@ -169,6 +169,22 @@ export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFac
   return style;
 }
 
+const TYPE_SCALE_CAPS: Partial<Record<TypeRoleName, number>> = {
+  'display-xl': 1.2,
+  'display-lg': 1.3,
+  heading: 1.4,
+  title: 1.6,
+};
+
+/**
+ * Dynamic Type cap for a role, for the Text's `maxFontSizeMultiplier` prop. Display
+ * and title roles are already large, so they stop growing early and content keeps
+ * its room; body, caption, label and micro return undefined and scale fully (F12).
+ */
+export function typeScaleCap(role: TypeRoleName): number | undefined {
+  return TYPE_SCALE_CAPS[role];
+}
+
 /**
  * F12: Sensible Dynamic Type cap for fixed/single-line decorative contexts
  * (chips, pills, badges) where unbounded scaling causes truncation or layout
@@ -178,6 +194,18 @@ export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFac
  * Usage: add `maxFontSizeMultiplier={MAX_FONT_SCALE}` to the Text prop.
  */
 export const MAX_FONT_SCALE = 1.4;
+
+/** OS font scale at which layouts switch to their large-text variant. */
+export const LARGE_TEXT_SCALE = 1.3;
+
+export function isLargeText(fontScale: number): boolean {
+  return fontScale >= LARGE_TEXT_SCALE;
+}
+
+/** True at large OS text: hide decorative images or move buttons onto their own line. */
+export function useLargeText(): boolean {
+  return isLargeText(useWindowDimensions().fontScale);
+}
 
 /** Returns the active theme's design tokens; a stable reference per theme. */
 export function useTokens(): Tokens {

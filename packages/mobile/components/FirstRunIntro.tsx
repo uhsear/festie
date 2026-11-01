@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Button from './Button';
 import DisplayWords from './DisplayWords';
-import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
 
 /**
  * One-time first-run intro. A 3-slide explainer shown over the app on first
@@ -89,6 +89,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
+  const largeText = useLargeText();
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<ScrollViewInstance>(null);
 
@@ -156,7 +157,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
           accessibilityLabel="Skip intro"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.skip}>Skip</Text>
+          <Text style={styles.skip} maxFontSizeMultiplier={MAX_FONT_SCALE}>Skip</Text>
         </TouchableOpacity>
       </View>
 
@@ -183,7 +184,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
           <ScrollView
             key={i}
             style={{ width: screenWidth }}
-            contentContainerStyle={styles.slide}
+            contentContainerStyle={[styles.slide, largeText && styles.slideCentered]}
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
@@ -191,6 +192,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
                 enough visual mass to own the top third. The bare icon slides
                 center in the region instead: a 112px circle pinned to the top
                 of a mostly-empty screen reads as unfinished. */}
+            {!largeText && (
             <View style={[styles.hero, !slide.showProductVisual && styles.heroCentered]}>
               {slide.showProductVisual ? (
                 <ProductVisual />
@@ -204,6 +206,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
                 </View>
               )}
             </View>
+            )}
 
             {/* Value-first copy, anchored low (just above the controls). */}
             <View style={styles.copy}>
@@ -265,6 +268,10 @@ const useStyles = makeStyles((t) => ({
   slide: {
     flexGrow: 1,
     paddingHorizontal: t.spacing[6],
+  },
+  // Hero hidden at large text: center the copy instead of anchoring it low.
+  slideCentered: {
+    justifyContent: 'center',
   },
   // Upper region: visual sits in the top third, not dead-centered. flex:1
   // fills remaining height so the copy block stays anchored at the bottom.

@@ -16,7 +16,7 @@ import { useAuthStore } from '@festie/shared/stores';
 import { isValidEmail } from '@festie/shared/utils';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
-import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
+import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
 /**
  * Forgot-password screen — mobile mirror of the web /forgot-password page.
@@ -164,8 +164,8 @@ export default function ForgotPasswordScreen() {
         showsVerticalScrollIndicator={false}
       >
         <BrandMark />
-        <Text style={styles.title}>Festie</Text>
-        <Text style={styles.subtitle}>Reset your password</Text>
+        <Text style={styles.title} maxFontSizeMultiplier={typeScaleCap('display-lg')}>Festie</Text>
+        <Text style={styles.subtitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>Reset your password</Text>
 
         {!submitted ? (
           <>

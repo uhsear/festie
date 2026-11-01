@@ -1,5 +1,5 @@
 import { Image } from 'react-native';
-import { makeStyles } from '../hooks/useTokens';
+import { makeStyles, useLargeText } from '../hooks/useTokens';
 
 const useStyles = makeStyles((t) => ({
   mark: {
@@ -14,6 +14,8 @@ const useStyles = makeStyles((t) => ({
 /** Existing app icon as the brand mark; decorative, the wordmark beside it names the app. */
 export default function BrandMark() {
   const styles = useStyles();
+  const largeText = useLargeText();
+  if (largeText) return null;
   return (
     <Image
       source={require('../assets/icon.png')}

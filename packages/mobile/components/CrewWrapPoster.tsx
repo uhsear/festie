@@ -43,6 +43,7 @@ const money = (n: number) =>
  * regardless of device. RN can't gradient-clip text or do CSS radial gradients,
  * so the FESTIE wordmark is solid coral and the background is flat #080810 (the
  * web poster is the high-fidelity version). Degrades gracefully on empty crews.
+ * Fixed-pixel image: text ignores the OS font size (documented exception to the typeStyle() rule).
  *
  * Palette is sourced from the POSTER constant above (DC10 Option B): both sibling
  * posters (WrapPoster + CrewWrapPoster) read from token values so a brand change
@@ -61,12 +62,12 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap }: Props) 
     <View style={s.poster}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.wordmark}>FESTIE</Text>
-        <Text style={s.kicker}>CREW WRAP</Text>
-        <Text style={s.crew} numberOfLines={2}>
+        <Text allowFontScaling={false} style={s.wordmark}>FESTIE</Text>
+        <Text allowFontScaling={false} style={s.kicker}>CREW WRAP</Text>
+        <Text allowFontScaling={false} style={s.crew} numberOfLines={2}>
           {crewName}
         </Text>
-        <Text style={s.festival} numberOfLines={1}>
+        <Text allowFontScaling={false} style={s.festival} numberOfLines={1}>
           {festivalName}
         </Text>
       </View>
@@ -74,38 +75,38 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap }: Props) 
       {/* Superlatives */}
       <View style={s.body}>
         <View style={s.superlative}>
-          <Text style={s.superLabel}>MOST-OVERLAPPING TASTE</Text>
-          <Text style={s.superValue} numberOfLines={1}>
+          <Text allowFontScaling={false} style={s.superLabel}>MOST-OVERLAPPING TASTE</Text>
+          <Text allowFontScaling={false} style={s.superValue} numberOfLines={1}>
             {topOverlap ? `${topOverlap.aName} + ${topOverlap.bName}` : 'Rate more sets together'}
           </Text>
           {topOverlap ? (
-            <Text style={s.superSub} numberOfLines={1}>
+            <Text allowFontScaling={false} style={s.superSub} numberOfLines={1}>
               {topOverlap.shared} shared favourite{topOverlap.shared === 1 ? '' : 's'}
             </Text>
           ) : null}
         </View>
 
         <View style={s.superlative}>
-          <Text style={s.superLabel}>BIGGEST SPENDER</Text>
-          <Text style={s.superValue} numberOfLines={1}>
+          <Text allowFontScaling={false} style={s.superLabel}>BIGGEST SPENDER</Text>
+          <Text allowFontScaling={false} style={s.superValue} numberOfLines={1}>
             {wrap.biggestSpender ? wrap.biggestSpender.name : 'No expenses yet'}
           </Text>
-          {wrap.biggestSpender ? <Text style={s.superSub}>fronted {money(wrap.biggestSpender.amount)}</Text> : null}
+          {wrap.biggestSpender ? <Text allowFontScaling={false} style={s.superSub}>fronted {money(wrap.biggestSpender.amount)}</Text> : null}
         </View>
 
         <View style={s.seenWrap}>
-          <Text style={s.superLabel}>SETS YOU SAW TOGETHER</Text>
+          <Text allowFontScaling={false} style={s.superLabel}>SETS YOU SAW TOGETHER</Text>
           {seenTogether.length > 0 ? (
             seenTogether.map((set) => (
               <View key={set.setId} style={s.seenRow}>
-                <Text style={s.seenArtist} numberOfLines={1}>
+                <Text allowFontScaling={false} style={s.seenArtist} numberOfLines={1}>
                   {set.artist || set.setId}
                 </Text>
-                <Text style={s.seenCount}>{set.count} loved it</Text>
+                <Text allowFontScaling={false} style={s.seenCount}>{set.count} loved it</Text>
               </View>
             ))
           ) : (
-            <Text style={s.empty}>No sets two of you both rated 4 or higher — yet.</Text>
+            <Text allowFontScaling={false} style={s.empty}>No sets two of you both rated 4 or higher — yet.</Text>
           )}
         </View>
       </View>
@@ -114,13 +115,13 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap }: Props) 
       <View style={s.statsGrid}>
         {statCells.map((cell) => (
           <View key={cell.label} style={s.statCell}>
-            <Text style={s.statValue}>{cell.value}</Text>
-            <Text style={s.statLabel}>{cell.label}</Text>
+            <Text allowFontScaling={false} style={s.statValue}>{cell.value}</Text>
+            <Text allowFontScaling={false} style={s.statLabel}>{cell.label}</Text>
           </View>
         ))}
       </View>
 
-      <Text style={s.footer}>FESTIE.US</Text>
+      <Text allowFontScaling={false} style={s.footer}>FESTIE.US</Text>
     </View>
   );
 }

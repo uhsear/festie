@@ -192,7 +192,7 @@ export default function AccountScreen() {
               <View style={styles.identityMeta}>
                 {/* Sacrificial NBSP absorbs Android's final-glyph under-measurement
                     without rendering the visible punctuation used by the old sentinel. */}
-                <Text style={styles.email} numberOfLines={1} ellipsizeMode="middle">
+                <Text style={styles.email} numberOfLines={2}>
                   {`${user?.email}\u00A0`}
                 </Text>
               </View>
@@ -261,7 +261,7 @@ export default function AccountScreen() {
             </View>
             <View style={styles.rowBody}>
               <Text style={styles.rowTitle}>Daylight mode</Text>
-              <Text style={styles.rowHint} numberOfLines={1}>
+              <Text style={styles.rowHint} numberOfLines={3}>
                 High contrast for bright sun
               </Text>
             </View>
@@ -289,7 +289,7 @@ export default function AccountScreen() {
             </View>
             <View style={styles.rowBody}>
               <Text style={styles.rowTitle}>Vibration</Text>
-              <Text style={styles.rowHint} numberOfLines={1}>
+              <Text style={styles.rowHint} numberOfLines={3}>
                 Taps, saves and clashes
               </Text>
             </View>
@@ -446,7 +446,7 @@ function LinkRow({
       </View>
       <View style={styles.rowBody}>
         <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowHint} numberOfLines={1}>
+        <Text style={styles.rowHint} numberOfLines={3}>
           {hint}
         </Text>
       </View>
