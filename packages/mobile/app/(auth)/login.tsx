@@ -8,13 +8,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Alert,
   type TextInputInstance,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores';
 import { AUTH_COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
@@ -167,7 +168,8 @@ export default function LoginScreen() {
     }
     setError(null);
     try {
-      await login({ username: username.trim(), password });
+      const result = await login({ username: username.trim(), password });
+      if (result.reactivated) Alert.alert(ACCOUNT_REACTIVATED_MESSAGE);
       // A guest who arrived through an invite link finishes that join first.
       const invite = getPendingInvite();
       if (invite) router.replace(`/join/${invite}`);

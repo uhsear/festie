@@ -322,6 +322,53 @@ describe('lib/db/stores/email-tokens.js', () => {
   });
 
   // =========================================================================
+  // invalidateTokensForEmail()
+  // =========================================================================
+  describe('invalidateTokensForEmail', () => {
+    it('kills only the tokens for that address, so a change link for another address stays live', async () => {
+      const pool = makePool([{ rows: [] }]);
+      const store = createEmailTokensStore(pool);
+
+      await store.invalidateTokensForEmail('user-1', 'Alice@Example.com');
+
+      assert.strictEqual(pool.query.mock.calls.length, 1);
+      const call = pool.query.mock.calls[0]! as any;
+      assert.ok(call.arguments[0].includes('UPDATE email_verification_tokens'));
+      assert.ok(call.arguments[0].includes('SET used_at = NOW()'));
+      assert.ok(call.arguments[0].includes('used_at IS NULL'));
+      assert.ok(call.arguments[0].includes('LOWER(email) = LOWER($2)'), 'other addresses must not match');
+      assert.deepStrictEqual(call.arguments[1], ['user-1', 'Alice@Example.com']);
+    });
+  });
+
+  // =========================================================================
+  // getPendingEmailChange()
+  // =========================================================================
+  describe('getPendingEmailChange', () => {
+    it('reads the newest live token whose address differs from the one on file', async () => {
+      const pool = makePool([{ rows: [{ email: 'new@example.com' }] }]);
+      const store = createEmailTokensStore(pool);
+
+      const result = await store.getPendingEmailChange('user-1', 'old@example.com');
+
+      assert.strictEqual(result, 'new@example.com');
+      const sql = String((pool.query.mock.calls[0]! as any).arguments[0]);
+      assert.ok(sql.includes('used_at IS NULL'), 'used tokens are ignored');
+      assert.ok(sql.includes('expires_at > NOW()'), 'expired tokens are ignored');
+      assert.ok(sql.includes('LOWER(email) IS DISTINCT FROM LOWER($2)'), 'same-address tokens are ignored');
+      assert.ok(sql.includes('ORDER BY created_at DESC LIMIT 1'));
+      assert.deepStrictEqual((pool.query.mock.calls[0]! as any).arguments[1], ['user-1', 'old@example.com']);
+    });
+
+    it('returns null when no change is pending', async () => {
+      const pool = makePool([{ rows: [] }]);
+      const store = createEmailTokensStore(pool);
+
+      assert.strictEqual(await store.getPendingEmailChange('user-1', null), null);
+    });
+  });
+
+  // =========================================================================
   // consumeResetToken()
   // =========================================================================
   describe('consumeResetToken', () => {

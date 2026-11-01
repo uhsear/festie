@@ -63,6 +63,11 @@ export function isAtLeastYearsOld(iso: string, years: number): boolean {
   return threshold.getTime() <= Date.now();
 }
 
+// Anonymous sign-up source from a ?ref= link. Lower-cased; anything that does
+// not match the pattern is dropped rather than failing the sign-up.
+export const SIGNUP_REF_PATTERN = /^[a-z0-9_-]{1,40}$/;
+const signupRef = z.string().trim().toLowerCase().regex(SIGNUP_REF_PATTERN).optional().catch(undefined);
+
 export const registerSchema = z
   .object({
     username,
@@ -74,6 +79,7 @@ export const registerSchema = z
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter your date of birth')
       .refine((s) => !Number.isNaN(Date.parse(s)), 'Invalid date of birth'),
     tosAccepted: z.literal(true, { error: 'You must accept the Terms of Service' }),
+    ref: signupRef,
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: 'Passwords do not match',
@@ -172,6 +178,14 @@ export const notificationPrefsSchema = z
     lineupDrops: z.boolean().optional(),
     crewReformed: z.boolean().optional(),
     wrapReady: z.boolean().optional(),
+    crewMeetingPoints: z.boolean().optional(),
+    crewPolls: z.boolean().optional(),
+    crewMoney: z.boolean().optional(),
+    crewRides: z.boolean().optional(),
+    mustSeeReminderMinutes: z
+      .union([z.literal(5), z.literal(10), z.literal(15), z.literal(30), z.literal(60)])
+      .nullable()
+      .optional(),
     dndStart: dndTime.optional(),
     dndEnd: dndTime.optional(),
     dndTimeZone: z.string().max(64).refine(isIanaTimeZone, { message: 'Invalid IANA time zone' }).nullable().optional(),
@@ -457,6 +471,8 @@ export const festivalUpdateSchema = festivalCreateSchema
     expectedUpdatedAt: z.string().max(40).optional(),
   })
   .partial()
+  // false saves without pushing schedule alerts to people whose picks changed.
+  .extend({ notify: z.boolean().optional() })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
 
@@ -1175,6 +1191,12 @@ export const adminAuditQuery = z.object({
 });
 export type AdminAuditQueryInput = z.infer<typeof adminAuditQuery>;
 
+// ── Admin sign-up ref counts query schema ─────────────────────
+export const adminRefCountsQuery = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+export type AdminRefCountsQueryInput = z.infer<typeof adminRefCountsQuery>;
+
 // ── Admin user search query schema ────────────────────────────
 export const adminUserSearchQuery = z.object({
   search: z.string().trim().max(200).optional(),
@@ -1330,6 +1352,7 @@ export const schemas = {
   adminAddRole: adminAddRoleSchema,
   paginationQuery,
   adminAuditQuery,
+  adminRefCountsQuery,
   adminUserSearchQuery,
   festivalDepthQuery,
   festivalDeleteQuery,

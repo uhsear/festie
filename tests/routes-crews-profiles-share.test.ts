@@ -34,8 +34,13 @@ function makeCrewDeps(overrides: any = {}) {
   const ioObj = makeIo();
   return {
     express,
-    config: { NODE_ENV: 'test', PUBLIC_ORIGIN: 'http://localhost:3000' },
+    config: { NODE_ENV: 'test', PUBLIC_ORIGIN: 'http://localhost:3000', MAX_PROFILES_PER_FESTIVAL: 500 },
     log: noopLog,
+    // POST /crews/join creates the festival profile (lib/festival-profile.ts).
+    getUserFestivalProfile: mock.fn(async () => ({ id: 'prof-1', userId: 'user-1' })),
+    getUserById: mock.fn(async (id: any) => ({ id, username: 'testuser' })),
+    getProfiles: mock.fn(async () => []),
+    emitter: { profileCreated: mock.fn() },
     userAuth: (req: any, _res: any, next: any) => { req.user = { userId: 'user-1', username: 'testuser' }; next(); },
     setNoStore: (_res: any) => {},
     sanitizeString: (s: any, _max: any) => (typeof s === 'string' ? s.trim() : ''),
@@ -598,29 +603,39 @@ describe('routes/crews.js', () => {
       assert.equal(res.status, 410);
     });
 
-    test('returns 403 when user has no festival profile', async () => {
+    test('creates the festival profile when the user has none, then joins', async () => {
       const crewStore = {
         ...makeCrewDeps().stores.crews,
         getByInviteCode: mock.fn(async () => ({ id: 'c1', festivalId: 'f1', maxMembers: 30 })),
       };
+      const create = mock.fn(async (p: any) => p);
       const { app } = await buildCrewApp({
+        getUserFestivalProfile: mock.fn(async () => null),
         stores: {
           ...makeCrewDeps().stores,
           crews: crewStore,
-          profiles: { readByUserAndFestival: mock.fn(async () => null) },
+          profiles: {
+            readByUserAndFestival: mock.fn(async () => null),
+            claimOrphan: mock.fn(async () => null),
+            countByFestival: mock.fn(async () => 0),
+            create,
+          },
         },
       });
       const res = await request(app)
         .post('/crews/join')
         .send({ inviteCode: 'ABCDEF' });
-      assert.equal(res.status, 403);
+      assert.equal(res.status, 200);
+      assert.equal(create.mock.calls.length, 1);
+      assert.equal((create.mock.calls[0] as any).arguments[0].festivalId, 'f1');
     });
 
-    test('returns 400 when already a member', async () => {
+    test('returns 200 with alreadyMember when already a member', async () => {
       const crewStore = {
         ...makeCrewDeps().stores.crews,
         getByInviteCode: mock.fn(async () => ({ id: 'c1', festivalId: 'f1', maxMembers: 30 })),
         getMember: mock.fn(async () => ({ role: 'member' })),
+        getMembers: mock.fn(async () => [{ userId: 'user-1', username: 'testuser', role: 'member' }]),
       };
       const { app } = await buildCrewApp({
         stores: { ...makeCrewDeps().stores, crews: crewStore },
@@ -628,8 +643,9 @@ describe('routes/crews.js', () => {
       const res = await request(app)
         .post('/crews/join')
         .send({ inviteCode: 'ABCDEF' });
-      assert.equal(res.status, 400);
-      assert.equal(res.body.error.code, 'ALREADY_EXISTS');
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.alreadyMember, true);
+      assert.equal(res.body.data.id, 'c1');
     });
 
     test('returns 400 when max crews per festival reached', async () => {
@@ -1045,47 +1061,20 @@ describe('routes/crews.js', () => {
     });
   });
 
-  // ── GET /join/:inviteCode — Public invite page (no auth) ────────
-  describe('GET /crews/join/:inviteCode — public invite page', () => {
-    test('returns error page for invalid invite code format', async () => {
+  // ── GET /join/:inviteCode — Moved to /join/:code (301) ───────────
+  describe('GET /crews/join/:inviteCode — moved invite page', () => {
+    test('301s to the /join/:code invite page', async () => {
       const { app } = await buildCrewApp();
-      const res = await request(app).get('/crews/join/ab'); // too short
-      assert.equal(res.status, 200); // sends HTML, not a JSON error
-      assert.ok(res.text.includes('Invalid or expired'));
+      const res = await request(app).get('/crews/join/VALIDC');
+      assert.equal(res.status, 301);
+      assert.equal(res.headers.location, '/join/VALIDC');
     });
 
-    test('returns error page for special-char invite code', async () => {
+    test('sanitizes special characters out of the redirect', async () => {
       const { app } = await buildCrewApp();
       const res = await request(app).get('/crews/join/ABC$DEF!');
-      assert.equal(res.status, 200);
-      assert.ok(res.text.includes('Invalid or expired'));
-    });
-
-    test('returns error page when crew not found by invite code', async () => {
-      const crewStore = {
-        ...makeCrewDeps().stores.crews,
-        getByInviteCode: mock.fn(async () => null),
-      };
-      const { app } = await buildCrewApp({
-        stores: { ...makeCrewDeps().stores, crews: crewStore },
-      });
-      const res = await request(app).get('/crews/join/VALIDC');
-      assert.equal(res.status, 200);
-      assert.ok(res.text.includes('Invalid or expired'));
-    });
-
-    test('returns join page when crew found', async () => {
-      const crewStore = {
-        ...makeCrewDeps().stores.crews,
-        getByInviteCode: mock.fn(async () => ({ id: 'c1', name: 'Cool Crew', festivalId: 'f1' })),
-      };
-      const { app } = await buildCrewApp({
-        stores: { ...makeCrewDeps().stores, crews: crewStore },
-      });
-      const res = await request(app).get('/crews/join/VALIDC');
-      assert.equal(res.status, 200);
-      assert.ok(res.text.includes('Cool Crew'));
-      assert.ok(res.text.includes('Join Crew'));
+      assert.equal(res.status, 301);
+      assert.equal(res.headers.location, '/join/ABCDEF');
     });
   });
 

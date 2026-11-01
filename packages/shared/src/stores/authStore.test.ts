@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useAuthStore } from './authStore';
+import { useAuthStore, accountDeletionNotice } from './authStore';
 import { api, setAuthToken, clearAuthToken, getAuthToken } from '../services/api';
 import type { User } from '../types/domain';
 
@@ -296,7 +296,7 @@ describe('authStore', () => {
       });
       const result = await useAuthStore.getState().checkSession();
       expect(result).toBe(true);
-      expect(useAuthStore.getState().user).toEqual({ ...mockUser, isAdmin: true });
+      expect(useAuthStore.getState().user).toEqual({ ...mockUser, isAdmin: true, pendingEmail: null });
       expect(useAuthStore.getState().sessionChecked).toBe(true);
     });
 
@@ -359,6 +359,7 @@ describe('authStore', () => {
       await useAuthStore.getState().changePassword({
         currentPassword: 'old',
         newPassword: 'new',
+        confirmPassword: 'new',
       });
       expect(useAuthStore.getState().isLoading).toBe(false);
     });
@@ -369,6 +370,7 @@ describe('authStore', () => {
         useAuthStore.getState().changePassword({
           currentPassword: 'wrong',
           newPassword: 'new',
+          confirmPassword: 'new',
         }),
       ).rejects.toThrow();
       expect(useAuthStore.getState().error).toBe('Wrong password');
@@ -380,9 +382,86 @@ describe('authStore', () => {
         useAuthStore.getState().changePassword({
           currentPassword: 'old',
           newPassword: 'new',
+          confirmPassword: 'new',
         }),
       ).rejects.toBe('string error');
       expect(useAuthStore.getState().error).toBe('Change password failed');
+    });
+  });
+
+  describe('changePassword body and token', () => {
+    it('posts exactly the three fields the server schema requires', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ success: true });
+      await useAuthStore.getState().changePassword({ currentPassword: 'old', newPassword: 'new', confirmPassword: 'new' });
+      const [path, body] = vi.mocked(api.post).mock.calls[0] as [string, Record<string, unknown>];
+      expect(path).toBe('/auth/change-password');
+      expect(Object.keys(body).sort()).toEqual(['confirmPassword', 'currentPassword', 'newPassword']);
+      expect(Object.values(body).every((v) => typeof v === 'string')).toBe(true);
+      expect(body.newPassword).toBe(body.confirmPassword);
+    });
+
+    it('stores a returned token', async () => {
+      useAuthStore.setState({ userToken: 't1' });
+      vi.mocked(api.post).mockResolvedValueOnce({ success: true, token: 't2' });
+      await useAuthStore.getState().changePassword({ currentPassword: 'o', newPassword: 'n', confirmPassword: 'n' });
+      expect(setAuthToken).toHaveBeenCalledWith('t2');
+      expect(useAuthStore.getState().userToken).toBe('t2');
+    });
+
+    it('keeps the token when none is returned', async () => {
+      useAuthStore.setState({ userToken: 't1' });
+      vi.mocked(api.post).mockResolvedValueOnce({ success: true });
+      await useAuthStore.getState().changePassword({ currentPassword: 'o', newPassword: 'n', confirmPassword: 'n' });
+      expect(setAuthToken).not.toHaveBeenCalled();
+      expect(useAuthStore.getState().userToken).toBe('t1');
+    });
+  });
+
+  describe('login reactivation', () => {
+    it('returns reactivated true when the server says so', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, token: 't', reactivated: true });
+      await expect(useAuthStore.getState().login({ username: 'alice', password: 'p' })).resolves.toEqual({
+        reactivated: true,
+      });
+    });
+
+    it('returns reactivated false otherwise', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, token: 't' });
+      await expect(useAuthStore.getState().login({ username: 'alice', password: 'p' })).resolves.toEqual({
+        reactivated: false,
+      });
+    });
+  });
+
+  describe('checkSession pendingEmail', () => {
+    it('puts pendingEmail on the user', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser, pendingEmail: 'new@test.com' });
+      await useAuthStore.getState().checkSession();
+      expect(useAuthStore.getState().user?.pendingEmail).toBe('new@test.com');
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('returns the server deletionDate', async () => {
+      vi.mocked(api.delete).mockResolvedValueOnce({ success: true, deletionDate: '2026-11-30T00:00:00.000Z' });
+      vi.mocked(api.post).mockResolvedValueOnce({});
+      await expect(useAuthStore.getState().deleteAccount('pw')).resolves.toEqual({
+        deletionDate: '2026-11-30T00:00:00.000Z',
+      });
+    });
+  });
+
+  describe('accountDeletionNotice', () => {
+    it('names the year for a valid date', () => {
+      const text = accountDeletionNotice('2026-11-30T12:00:00.000Z');
+      expect(text).toContain('2026');
+      expect(text).toContain('Sign in before then to keep it.');
+    });
+
+    it('falls back to 30 days for null or a bad date', () => {
+      const expected = 'Your account will be deleted in 30 days. Sign in before then to keep it.';
+      expect(accountDeletionNotice(null)).toBe(expected);
+      expect(accountDeletionNotice('nope')).toBe(expected);
     });
   });
 

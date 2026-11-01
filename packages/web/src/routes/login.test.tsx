@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Mock dependencies
@@ -23,8 +23,9 @@ vi.mock('@festie/shared', () => ({
   })),
 }));
 
+const mockToast = vi.fn();
 vi.mock('../lib/toastContext', () => ({
-  useToast: vi.fn(() => ({ toast: vi.fn() })),
+  useToast: () => ({ toast: mockToast }),
 }));
 
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
@@ -174,5 +175,28 @@ describe('LoginPage', () => {
   it('links to the schedule for guests', () => {
     render(<LoginPage />);
     expect(screen.getByRole('link', { name: 'Browse without an account' })).toHaveAttribute('href', '/cards');
+  });
+
+  it('shows the reactivated toast when login cancelled a deletion', async () => {
+    const mockLogin = vi.fn().mockResolvedValue({ reactivated: true });
+    vi.mocked(useAuth).mockReturnValue({
+      login: mockLogin,
+      register: vi.fn(),
+      logout: vi.fn(),
+      forgotPassword: vi.fn(),
+      changePassword: vi.fn(),
+      uploadAvatar: vi.fn(),
+      removeAvatar: vi.fn(),
+      isLoading: false,
+      error: null,
+    });
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Password'), 'secret123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith('Welcome back. Your account deletion was cancelled.', 'success'),
+    );
   });
 });

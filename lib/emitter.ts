@@ -14,9 +14,66 @@
  * - Deep link payloads in push notifications for mobile app navigation
  */
 
-const EVENT_VERSION = 1;
+import { appLink } from './notifications/links.js';
+import { buildSchedulePushes } from './schedule-diff.js';
 
-export function createSocketEmitter({ io, log, notificationService, buildAvatarUrl, _getUserById }: any) {
+const EVENT_VERSION = 1;
+const SCHEDULE_PUSH_CHUNK = 20;
+
+export function createSocketEmitter({ io, log, notificationService, buildAvatarUrl, _getUserById, stores, config }: any) {
+
+  // Crew pick push digest — one push per author per festival per window.
+  // shortcut: digest timers are per process, so with N PM2 instances a busy picker can trigger up to N pushes per window; move the dedupe to Redis if users report doubles.
+  const CREW_PUSH_DIGEST_MS = 5 * 60 * 1000;
+  const _crewPushTimers = new Map();
+  const _crewPushPending = new Map();
+
+  async function _sendCrewPickPush(festivalId: any, userId: any, profileId: any, name: any) {
+    if (!stores?.crews || typeof notificationService?.send !== 'function') return;
+    const crews = await stores.crews.listByUserAndFestival(userId, festivalId);
+    if (!crews?.length) return;
+    const membersByCrew = await stores.crews.getMembersForCrews(crews.map((c: any) => c.id));
+    const muted = new Set(
+      (await stores.topicSubscriptions?.getUnsubscribedUsers?.(festivalId, 'crew')) || [],
+    );
+    const recipients = new Set<string>();
+    for (const members of membersByCrew.values()) {
+      for (const m of members) {
+        if (m.userId !== userId && !muted.has(m.userId)) recipients.add(m.userId);
+      }
+    }
+    await Promise.all([...recipients].map((uid) =>
+      notificationService.send({
+        userId: uid,
+        type: 'crew_update',
+        title: 'Crew update',
+        body: `${name} updated their picks.`,
+        data: { festivalId, profileId, deepLink: appLink(config, '/compare') },
+        threadId: `crew-${festivalId}`,
+      }).catch((err: any) => log.warn('crew push failed', { error: err.message })),
+    ));
+  }
+
+  function queueCrewPickPush(profile: any) {
+    if (_shuttingDown || !notificationService?.isConfigured) return;
+    const key = `${profile.festivalId}:${profile.userId}`;
+    const pending = _crewPushPending.get(key);
+    if (pending) {
+      pending.name = profile.name;
+      return;
+    }
+    _crewPushPending.set(key, { name: profile.name });
+    const timer = setTimeout(() => {
+      const latest = _crewPushPending.get(key);
+      _crewPushTimers.delete(key);
+      _crewPushPending.delete(key);
+      if (!latest) return;
+      _sendCrewPickPush(profile.festivalId, profile.userId, profile.id, latest.name)
+        .catch((err: any) => log.warn('crew push failed', { error: err.message }));
+    }, CREW_PUSH_DIGEST_MS);
+    timer.unref?.();
+    _crewPushTimers.set(key, timer);
+  }
 
   // Profile update batching — coalesce rapid pick/status changes into a single broadcast
   const _profileBatchTimers = new Map();
@@ -88,23 +145,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     }
 
     // Push notification for pick changes to offline crew
-    if (notificationService?.isConfigured && typeof notificationService.sendToOfflineUsers === 'function' && changedFields.picks) {
-      notificationService.sendToOfflineUsers({
-        festivalId: profile.festivalId,
-        type: 'crew_update',
-        // #29: topic for per-type filtering
-        topic: 'crew',
-        title: 'Crew Update',
-        body: `${profile.name} updated their picks`,
-        data: {
-          festivalId: profile.festivalId,
-          profileId: profile.id,
-          deepLink: `rave://festival/${profile.festivalId}/profile/${profile.id}`,
-        },
-        // #32: Separate thread per festival for crew updates
-        threadId: `crew-${profile.festivalId}`,
-        excludeUserIds: [profile.userId],
-      }).catch((err: any) => log.warn('crew push failed', { error: err.message }));
+    if (notificationService?.isConfigured && changedFields.picks) {
+      queueCrewPickPush(profile);
 
       // #30: Silent push for background data sync (no visible notification)
       notificationService.sendSilentSync?.({
@@ -133,27 +175,48 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
   function festivalUpdated({ festival }: any) {
     io.emit('festival:updated', { _v: EVENT_VERSION, id: festival.id });
 
-    if (notificationService?.isConfigured && typeof notificationService.sendToOfflineUsers === 'function') {
-      notificationService.sendToOfflineUsers({
-        festivalId: festival.id,
-        type: 'schedule_change',
-        // #29: topic for per-type filtering
-        topic: 'schedule',
-        title: 'Schedule Updated',
-        body: `${festival.name} schedule has been updated`,
-        data: {
-          festivalId: festival.id,
-          deepLink: `rave://festival/${festival.id}`,
-        },
-        // #32: Separate thread per festival for schedule updates
-        threadId: `schedule-${festival.id}`,
-      }).catch((err: any) => log.warn('schedule push failed', { error: err.message }));
-
+    // No visible push here: scheduleChanged alerts only the people whose picks moved.
+    if (notificationService?.isConfigured && typeof notificationService.sendSilentSync === 'function') {
       // #30: Silent push for background data sync
-      notificationService.sendSilentSync?.({
+      notificationService.sendSilentSync({
         festivalId: festival.id,
         syncType: 'festival',
       }).catch((err: any) => log.warn('silent sync push failed', { error: err.message }));
+    }
+  }
+
+  /** One alert per person who picked a set that moved or left the lineup. Never throws. */
+  async function scheduleChanged({ festival, changes, pickersBySet }: any) {
+    if (!notificationService?.isConfigured || typeof notificationService.send !== 'function') return;
+    try {
+      const muted: Set<string> =
+        (await stores?.topicSubscriptions?.getUnsubscribedUsers?.(festival.id, 'schedule')) || new Set();
+      const messages = buildSchedulePushes(festival.name, changes, pickersBySet).filter((m) => !muted.has(m.userId));
+      for (let i = 0; i < messages.length; i += SCHEDULE_PUSH_CHUNK) {
+        const results = await Promise.allSettled(
+          messages.slice(i, i + SCHEDULE_PUSH_CHUNK).map(({ userId, title, body, setId }) =>
+            notificationService.send({
+              userId,
+              type: 'schedule_change',
+              title,
+              body,
+              data: {
+                festivalId: festival.id,
+                ...(setId ? { setId } : {}),
+                deepLink: appLink(config, setId ? `/set/${setId}` : '/picks'),
+              },
+              threadId: `schedule-${festival.id}`,
+            }),
+          ),
+        );
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            log.warn('schedule push failed', { festivalId: festival.id, error: result.reason?.message });
+          }
+        }
+      }
+    } catch (err: any) {
+      log.warn('schedule push failed', { festivalId: festival?.id, error: err.message });
     }
   }
 
@@ -176,6 +239,9 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     }
     _profileBatchTimers.clear();
     _profileBatchPayloads.clear();
+    for (const timer of _crewPushTimers.values()) clearTimeout(timer);
+    _crewPushTimers.clear();
+    _crewPushPending.clear();
   }
 
   function crewExpenseAdded({ crewId, expense }: any) {
@@ -195,6 +261,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     profileDeleted,
     festivalCreated,
     festivalUpdated,
+    scheduleChanged,
     festivalDeleted,
     presenceUpdate,
     flushAll,

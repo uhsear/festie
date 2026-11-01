@@ -167,7 +167,7 @@ describe('createUsersStore', () => {
     });
   });
 
-  // ── getByUsername / findByUsername ────────────────────────────────
+  // ── getByUsername / findDeletedByUsername ────────────────────────────────
 
   describe('getByUsername', () => {
     it('returns user when found', async () => {
@@ -195,21 +195,38 @@ describe('createUsersStore', () => {
     });
   });
 
-  describe('findByUsername', () => {
-    it('returns user when found (alias of getByUsername)', async () => {
-      const pool = mockPool([{ rows: [fakeUserRow()], rowCount: 1 }]);
+  describe('findDeletedByUsername', () => {
+    it('returns a soft-deleted user inside the 30-day window', async () => {
+      const pool = mockPool([{ rows: [fakeUserRow({ deletedAt: '2026-10-20T00:00:00.000Z' })], rowCount: 1 }]);
       const users = createUsersStore(pool, mockUtils);
 
-      const result = await users.findByUsername('alice');
+      const result = await users.findDeletedByUsername('alice');
       assert.equal(result.username, 'alice');
+      assert.equal(pool.calls[0].params[0], 'alice');
+      const sql = norm(pool.calls[0].sql);
+      assert.ok(sql.includes('deleted_at IS NOT NULL'));
+      assert.ok(sql.includes("deleted_at > NOW() - INTERVAL '30 days'"));
     });
 
     it('returns null when not found', async () => {
       const pool = mockPool([{ rows: [], rowCount: 0 }]);
       const users = createUsersStore(pool, mockUtils);
 
-      const result = await users.findByUsername('ghost');
+      const result = await users.findDeletedByUsername('ghost');
       assert.equal(result, null);
+    });
+  });
+
+  describe('reactivate', () => {
+    it('clears the soft delete only on a deleted row', async () => {
+      const pool = mockPool([{ rows: [], rowCount: 1 }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      await users.reactivate('u1');
+      const sql = norm(pool.calls[0].sql);
+      assert.ok(sql.startsWith('UPDATE users SET deleted_at = NULL'));
+      assert.ok(sql.includes('WHERE id = $1 AND deleted_at IS NOT NULL'));
+      assert.deepEqual(pool.calls[0].params, ['u1']);
     });
   });
 

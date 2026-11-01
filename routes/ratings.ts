@@ -143,13 +143,10 @@ export function createRatingsRoutes({
         const { crewId, festivalId } = req.validatedParams;
         const member = await stores.crews.getMember(crewId, req.user.userId);
         if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
-        // Source expense aggregates from the canonical ledger store so the
-        // wrap's totalSplit/biggestSpender match the settle-up math exactly.
-        const [expenses, balances] = await Promise.all([
-          stores.expenses.getByCrew(crewId),
-          stores.expenses.getBalances(crewId),
-        ]);
-        const wrap = await stores.ratings.getCrewWrap(crewId, festivalId, { expenses, balances });
+        // The wrap derives totalSplit/biggestSpender from the expense rows, not
+        // balances: settling up zeroes every balance.
+        const expenses = await stores.expenses.getByCrew(crewId);
+        const wrap = await stores.ratings.getCrewWrap(crewId, festivalId, { expenses });
         return sendSuccess(res, { wrap });
       } catch (err: any) {
         log.error('get crew wrap failed', { error: err.message, crewId: req.validatedParams?.crewId });

@@ -2,6 +2,11 @@ import { Router } from 'express';
 
 import { simplifyDebts } from '../lib/db/stores/expenses.js';
 
+// Activity detail for a settle-up payment: "$12.00 to Sam". Names only, never a user id.
+function paymentDetail(amount: number, recipient?: { name?: string | null; username?: string }) {
+  return `$${amount.toFixed(2)} to ${recipient?.name || recipient?.username || 'a crewmate'}`;
+}
+
 export default function createExpenseRoutes(deps: any) {
   const router = Router();
   const {
@@ -115,6 +120,22 @@ export default function createExpenseRoutes(deps: any) {
 
         await stores.expenses.delete(expenseId);
         emitter.crewExpenseDeleted({ crewId, expenseId });
+        if (expense.category === 'settlement') {
+          await stores.crews
+            .getMembers(crewId)
+            .then((members: any[]) =>
+              stores.activity.log({
+                crewId,
+                userId: req.user.userId,
+                type: 'settlement-undone',
+                detail: paymentDetail(
+                  Number(expense.amount),
+                  members.find((m: any) => m.userId === expense.split_with?.[0]),
+                ),
+              }),
+            )
+            .catch((err: any) => log.warn('settlement undo activity log failed', { error: err.message }));
+        }
         return sendSuccess(res, { deleted: true });
       } catch (err: any) {
         log.error('delete expense failed', { error: err.message });
@@ -218,8 +239,8 @@ export default function createExpenseRoutes(deps: any) {
         if (toUserId === req.user.userId) {
           return sendError(res, 400, 'Cannot settle with yourself', ErrorCodes.INVALID_INPUT);
         }
-        const settleMemberIds = new Set((await stores.crews.getMembers(crewId)).map((m: any) => m.userId));
-        if (!settleMemberIds.has(toUserId)) {
+        const recipient = (await stores.crews.getMembers(crewId)).find((m: any) => m.userId === toUserId);
+        if (!recipient) {
           return sendError(res, 400, 'Settlement target is not a crew member', ErrorCodes.INVALID_INPUT);
         }
         const settlement = await stores.expenses.create({
@@ -234,10 +255,10 @@ export default function createExpenseRoutes(deps: any) {
           .log({
             crewId,
             userId: req.user.userId,
-            type: 'expense_settled',
-            detail: `$${amount.toFixed(2)} to ${toUserId}`,
+            type: 'expense-settled',
+            detail: paymentDetail(amount, recipient),
           })
-          .catch(() => {});
+          .catch((err: any) => log.warn('settlement activity log failed', { error: err.message }));
         emitter.crewExpenseAdded({ crewId, expense: settlement });
         res.status(201);
         return sendSuccess(res, settlement);

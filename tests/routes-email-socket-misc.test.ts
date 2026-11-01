@@ -160,6 +160,7 @@ describe('routes/email-auth', () => {
       createVerificationToken: mock.fn(noopAsync),
       replaceVerificationToken: mock.fn(noopAsync),
       invalidateVerificationTokens: mock.fn(noopAsync),
+      invalidateTokensForEmail: mock.fn(noopAsync),
       invalidatePendingEmailChanges: mock.fn(noopAsync),
       consumeResetToken: mock.fn(async () => null),
     };
@@ -1834,6 +1835,9 @@ describe('routes/deep-links', () => {
     const res = await request(app).get('/apple-app-site-association').expect(200);
     assert.ok(res.body.applinks);
     assert.ok(res.body.applinks.details[0].appIDs[0].startsWith('REALTEAMID'));
+    // Crew invite links open the app when it is installed.
+    assert.ok(res.body.applinks.details[0].paths.includes('/join/*'));
+    assert.ok(res.body.applinks.details[0].components.some((c: any) => c['/'] === '/join/*'));
   });
 
   test('GET /apple-app-site-association — 503 when not configured', async () => {

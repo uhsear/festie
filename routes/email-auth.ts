@@ -263,8 +263,9 @@ export default function createEmailAuthRoutes(deps: any): Router {
       }
       _resendVerifyLimits.set(emailKey, [...recentAttempts, now]);
 
-      // Invalidate old tokens
-      await stores.emailTokens.invalidateVerificationTokens(req.user.userId);
+      // Invalidate old tokens for this address only; a pending email-change
+      // link for another address stays live.
+      await stores.emailTokens.invalidateTokensForEmail(req.user.userId, user.email);
 
       const verifyToken = crypto.randomBytes(32).toString('hex');
       const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');

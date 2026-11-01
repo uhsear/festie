@@ -1,4 +1,4 @@
-import type { User } from './domain';
+import type { Crew, User } from './domain';
 import type { paths } from './api.gen';
 
 export interface ApiResponse<T> {
@@ -58,6 +58,8 @@ export interface RegisterRequest {
   dateOfBirth?: string;
   tosAccepted: boolean;
   email?: string;
+  /** Anonymous sign-up source from a ?ref= link; the server drops an invalid value. */
+  ref?: string;
 }
 
 export interface ForgotPasswordRequest {
@@ -67,6 +69,7 @@ export interface ForgotPasswordRequest {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+  confirmPassword: string;
 }
 
 export interface SavePickRequest {
@@ -153,3 +156,23 @@ export interface PollVoteRequest {
   pollId: string;
   optionId: string;
 }
+
+/** Public invite preview from `GET /crews/join-preview/:inviteCode`. */
+export interface InvitePreview {
+  crewName: string;
+  ownerName: string | null;
+  memberCount: number;
+  maxMembers: number;
+  /** max(0, maxMembers - memberCount) */
+  spotsLeft: number;
+  festivalId: string | null;
+  festivalName: string | null;
+  /** YYYY-MM-DD, first festival day. */
+  startDate: string | null;
+  /** YYYY-MM-DD, last festival day. */
+  endDate: string | null;
+  expiresAt: string | null;
+}
+
+/** `POST /crews/join` response: `alreadyMember` is set when the caller was already in the crew. */
+export type JoinCrewResponse = Crew & { alreadyMember?: boolean };

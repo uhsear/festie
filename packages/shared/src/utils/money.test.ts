@@ -1,5 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { formatBalance, formatAmount } from './money';
+import { formatBalance, formatAmount, spendingExpenses, ledgerRows, describePayment } from './money';
+
+describe('settlement helpers', () => {
+  const rows = [
+    { id: 'a', category: 'food' },
+    { id: 'b', planned: true, category: 'food' },
+    { id: 'c', category: 'settlement' },
+  ];
+
+  it('spendingExpenses drops planned and settlement rows', () => {
+    expect(spendingExpenses(rows).map((r) => r.id)).toEqual(['a']);
+  });
+
+  it("ledgerRows('all') drops only settlements", () => {
+    expect(ledgerRows(rows, 'all').map((r) => r.id)).toEqual(['a', 'b']);
+    expect(ledgerRows(rows, 'planned').map((r) => r.id)).toEqual(['b']);
+  });
+
+  it('describePayment gives the three forms and fallbacks', () => {
+    const names: Record<string, string> = { me: 'Me', sam: 'Sam', alex: 'Alex' };
+    const nameOf = (id: string) => names[id];
+    const pay = (paid_by: string, to: string) => ({ paid_by, split_with: [to], amount: '12' });
+    expect(describePayment(pay('me', 'sam'), 'me', nameOf)).toBe('You paid Sam $12.00');
+    expect(describePayment(pay('sam', 'me'), 'me', nameOf)).toBe('Sam paid you $12.00');
+    expect(describePayment(pay('sam', 'alex'), 'me', nameOf)).toBe('Sam paid Alex $12.00');
+    expect(describePayment({ ...pay('x', 'y'), paid_by_name: 'Zed' }, 'me', () => undefined)).toBe(
+      'Zed paid a crewmate $12.00',
+    );
+    expect(describePayment(pay('x', 'y'), 'me', () => undefined)).toBe('A crewmate paid a crewmate $12.00');
+  });
+});
 
 describe('formatBalance', () => {
   it('prefixes a positive balance with +$', () => {

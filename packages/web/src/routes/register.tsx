@@ -18,6 +18,7 @@ import {
   type RegisterField,
 } from '../components/auth/registerValidation';
 import { cn } from '../lib/utils';
+import { readSignupRef } from '../hooks/useFestivalLoader';
 
 export default function RegisterPage() {
   return (
@@ -74,6 +75,7 @@ function RegisterPageInner() {
         dateOfBirth,
         tosAccepted,
         email,
+        ref: readSignupRef(),
       });
       toast(
         emailVerificationSent

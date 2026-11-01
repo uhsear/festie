@@ -22,6 +22,27 @@ export function generateInviteCode() {
   return code;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When a new or regenerated invite code expires: the later of "now + 7 days"
+ * and "last festival day + 2 days". The last day is read as UTC midnight, so the
+ * extra two days cover every time zone finishing the festival.
+ */
+export function inviteExpiryFor(
+  festival: { days?: Array<{ date?: string | null }> } | null | undefined,
+  now: number = Date.now(),
+): Date {
+  const floor = now + 7 * DAY_MS;
+  const lastDay = (festival?.days || [])
+    .map((d) => d?.date)
+    .filter((date): date is string => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort()
+    .pop();
+  const festivalEnd = lastDay ? Date.parse(`${lastDay}T00:00:00Z`) + 2 * DAY_MS : NaN;
+  return new Date(Number.isNaN(festivalEnd) ? floor : Math.max(floor, festivalEnd));
+}
+
 export async function generateUniqueInviteCode(stores: any) {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = generateInviteCode();
