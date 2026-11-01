@@ -18,23 +18,26 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFestivalDataStore } from '@festie/shared/stores';
+import { useFestivalDataStore, useCrewStore } from '@festie/shared/stores';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
-import type { ConflictGroup } from '@festie/shared/utils';
+import type { ConflictGroup, PlanListItem, PlanListKind } from '@festie/shared/utils';
 import {
   artistDisplayName,
   hasOfflineBasemap,
   festivalPhase,
   buildPickConflicts,
+  clashBadgeBySetId,
+  buildMyDay,
+  buildPlanList,
+  fmtZonedClock,
   getSetTimeBounds,
   resolveFestivalTimeZone,
-  formatTime,
   buildPicksIcs,
   buildPicksShareUrl,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
+import { COPY, PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
@@ -49,6 +52,8 @@ import { Skeleton } from '../../components/Skeleton';
 import SetCardMobile from '../../components/SetCardMobile';
 import CrewSuggestionStrip from '../../components/CrewSuggestionStrip';
 import OfflineReadinessCard from '../../components/OfflineReadinessCard';
+import ClashCards from '../../components/ClashCards';
+import { WalkRow, GapRow, MeetRow, PlanListRow } from '../../components/PlanRows';
 
 /**
  * Priority ordering + display metadata, mirroring the web /picks route. Sets
@@ -68,10 +73,10 @@ const PRIORITY_CHOICES: readonly { value: Priority; label: string }[] = [
 ];
 
 /** How the picks plan is organized: by festival day, or by priority tier. */
-type GroupMode = 'day' | 'priority';
+type GroupMode = 'day' | 'priority' | 'myday';
 
 /** The active focus filter applied on top of the chosen grouping. */
-type PickFilter = 'all' | Priority | 'clashes';
+type PickFilter = 'all' | Priority | 'clashes' | 'reminders' | 'notes';
 
 /**
  * A flattened list row: a collapsible group header (day OR priority tier
@@ -82,7 +87,11 @@ type PickFilter = 'all' | Priority | 'clashes';
 type Row =
   | { kind: 'group'; key: string; groupId: string; label: string; count: number; color?: string; collapsed: boolean }
   | { kind: 'subgroup'; key: string; label: string; count: number; color?: string }
-  | { kind: 'set'; key: string; set: FestivalSet };
+  | { kind: 'set'; key: string; set: FestivalSet }
+  | { kind: 'walk'; key: string; minutes: number; fromStage: string }
+  | { kind: 'gap'; key: string; minutes: number }
+  | { kind: 'meet'; key: string; label: string; location: string; timeLabel: string }
+  | { kind: 'planItem'; key: string; item: PlanListItem; listKind: PlanListKind };
 
 const SCROLL_TOP_THRESHOLD = 520;
 
@@ -106,6 +115,7 @@ export default function PicksScreen() {
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const sets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
+  const meetingPoints = useCrewStore((s) => s.meetingPoints);
   // Raw festival days (FestivalDay[]) — needed for the TZ-/date-aware interval
   // math in getSetTimeBounds / buildPickConflicts, which index `days[dayIndex]`
   // positionally. The lightweight `getDays()` shape below (index/label/date) is
@@ -165,11 +175,26 @@ export default function PicksScreen() {
     const out: ConflictGroup[] = [];
     for (let di = 0; di < storeDays.length; di++) {
       out.push(
-        ...buildPickConflicts({ sets, myPicks, selectedDay: di, days: storeDays, timeZone: festivalTimeZone }),
+        ...buildPickConflicts({ sets, myPicks, selectedDay: di, days: storeDays, timeZone: festivalTimeZone, stages }),
       );
     }
     return out;
-  }, [sets, storeDays, myPicks, festivalTimeZone]);
+  }, [sets, storeDays, myPicks, festivalTimeZone, stages]);
+
+  const clashBadges = useMemo(
+    () => clashBadgeBySetId(conflictGroups.flatMap((g) => g.pairs), currentFestival?.b2bSeparator),
+    [conflictGroups, currentFestival?.b2bSeparator],
+  );
+
+  const myNotes = currentProfile?.notes;
+  const myReminders = currentProfile?.reminders;
+  const planCounts = useMemo(() => {
+    const input = { sets, days: storeDays, timeZone: festivalTimeZone, notes: myNotes, reminders: myReminders };
+    return {
+      reminders: buildPlanList('reminders', input).length,
+      notes: buildPlanList('notes', input).length,
+    };
+  }, [sets, storeDays, festivalTimeZone, myNotes, myReminders]);
 
   // The set ids participating in ANY clash — drives the filter + the card ring.
   const conflictIds = useMemo(() => {
@@ -196,7 +221,12 @@ export default function PicksScreen() {
   // If the user is focused on clashes and then resolves the last one, don't
   // strand them on an empty "no clashes" view — fall the view back to the full
   // plan without mutating the stored filter (derive instead of setState-in-effect).
-  const effectiveFilter: PickFilter = filter === 'clashes' && stats.clashes === 0 ? 'all' : filter;
+  const effectiveFilter: PickFilter =
+    (filter === 'clashes' && stats.clashes === 0) ||
+    (filter === 'reminders' && planCounts.reminders === 0) ||
+    (filter === 'notes' && planCounts.notes === 0)
+      ? 'all'
+      : filter;
 
   // Stable start-time-then-name comparator for sets within a bucket. Sort by the
   // resolved absolute `startMs` (TZ- and post-midnight-aware) rather than the raw
@@ -252,6 +282,110 @@ export default function PicksScreen() {
     const knownDayIndices = new Set(days.map((d) => d.index));
     const isScheduled = (s: FestivalSet) =>
       typeof s.dayIndex === 'number' && knownDayIndices.has(s.dayIndex);
+
+    const pushDayGroup = (groupId: string, label: string, count: number) => {
+      const isCollapsed = collapsed.has(groupId);
+      out.push({ kind: 'group', key: `g-${groupId}`, groupId, label, count, collapsed: isCollapsed });
+      return isCollapsed;
+    };
+
+    if (effectiveFilter === 'reminders' || effectiveFilter === 'notes') {
+      // Every set with a reminder or note, picked or not; groupMode does not apply.
+      const listKind: PlanListKind = effectiveFilter;
+      const items = buildPlanList(listKind, {
+        sets,
+        days: storeDays,
+        timeZone: festivalTimeZone,
+        notes: myNotes,
+        reminders: myReminders,
+        myPicks,
+      }).filter((item) => matchesSearch(item.set));
+      const emit = (groupId: string, label: string, groupItems: PlanListItem[]) => {
+        if (groupItems.length === 0) return;
+        if (pushDayGroup(groupId, label, groupItems.length)) return;
+        groupItems.forEach((item) =>
+          out.push({ kind: 'planItem', key: `plan-${listKind}-${item.set.id}`, item, listKind }),
+        );
+      };
+      days.forEach((day) =>
+        emit(`day-${day.index}`, day.label || day.date, items.filter((i) => i.dayIndex === day.index)),
+      );
+      emit('day-tba', 'Unscheduled', items.filter((i) => i.dayIndex == null || !knownDayIndices.has(i.dayIndex)));
+      return out;
+    }
+
+    if (groupMode === 'myday') {
+      const eligiblePicks: Record<string, Priority> = {};
+      for (const s of eligible) eligiblePicks[s.id] = getMyPick(s.id)!;
+      days.forEach((day) => {
+        const myDay = buildMyDay({
+          sets,
+          myPicks: eligiblePicks,
+          dayIndex: day.index,
+          days: storeDays,
+          timeZone: festivalTimeZone,
+          stages,
+          meetingPoints,
+          conflictGroups,
+          b2bSeparator: separator,
+        });
+        // buildMyDay lists picks with no known day as unscheduled on every day; keep this day's own.
+        const dayUnscheduled = myDay.unscheduled.filter((s) => s.dayIndex === day.index);
+        if (myDay.sections.length === 0 && dayUnscheduled.length === 0) return;
+        const setCount =
+          myDay.sections.reduce((n, sec) => n + sec.items.filter((i) => i.kind === 'set').length, 0) +
+          dayUnscheduled.length;
+        if (pushDayGroup(`day-${day.index}`, day.label || day.date, setCount)) return;
+        for (const section of myDay.sections) {
+          out.push({
+            kind: 'subgroup',
+            key: `sg-${day.index}-${section.part}`,
+            label: section.title,
+            count: section.items.filter((i) => i.kind === 'set').length,
+          });
+          for (const item of section.items) {
+            if (item.kind === 'set') {
+              if (item.walkFromPrev) {
+                out.push({
+                  kind: 'walk',
+                  key: `walk-${item.key}`,
+                  minutes: item.walkFromPrev.minutes,
+                  fromStage: getStageName(item.walkFromPrev.fromStageId) || 'Unknown',
+                });
+              }
+              out.push({ kind: 'set', key: item.key, set: item.set });
+            } else if (item.kind === 'gap') {
+              out.push({ kind: 'gap', key: item.key, minutes: item.minutes });
+            } else {
+              out.push({
+                kind: 'meet',
+                key: item.key,
+                label: item.label,
+                location: item.location,
+                timeLabel: fmtZonedClock(item.startMs, festivalTimeZone),
+              });
+            }
+          }
+        }
+        if (dayUnscheduled.length > 0) {
+          out.push({
+            kind: 'subgroup',
+            key: `sg-${day.index}-unscheduled`,
+            label: COPY.myDay.unscheduled,
+            count: dayUnscheduled.length,
+          });
+          dayUnscheduled
+            .sort(compareSets)
+            .forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
+        }
+      });
+
+      const tbaSets = eligible.filter((s) => !isScheduled(s)).sort(compareSets);
+      if (tbaSets.length > 0 && !pushDayGroup('day-tba', 'Unscheduled', tbaSets.length)) {
+        tbaSets.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
+      }
+      return out;
+    }
 
     if (groupMode === 'day') {
       days.forEach((day) => {
@@ -366,6 +500,14 @@ export default function PicksScreen() {
     conflictIds,
     collapsed,
     compareSets,
+    storeDays,
+    festivalTimeZone,
+    stages,
+    meetingPoints,
+    conflictGroups,
+    myNotes,
+    myReminders,
+    myPicks,
   ]);
 
   const handlePickChange = useCallback(
@@ -539,6 +681,21 @@ export default function PicksScreen() {
           </View>
         );
       }
+      if (item.kind === 'walk') return <WalkRow minutes={item.minutes} fromStage={item.fromStage} />;
+      if (item.kind === 'gap') return <GapRow minutes={item.minutes} />;
+      if (item.kind === 'meet') {
+        return <MeetRow label={item.label} location={item.location} timeLabel={item.timeLabel} />;
+      }
+      if (item.kind === 'planItem') {
+        return (
+          <PlanListRow
+            item={item.item}
+            listKind={item.listKind}
+            stageName={getStageName(item.item.set.stageId) || 'Unknown'}
+            onPress={() => router.push(`/set/${item.item.set.id}`)}
+          />
+        );
+      }
       // No Reanimated entering/exiting/layout on rows: FlatList recycles and
       // re-mounts rows while scrolling, so each one replayed its animation and
       // the layout transition re-measured every visible row on each pick change.
@@ -551,6 +708,7 @@ export default function PicksScreen() {
           onPickChange={(priority) => handlePickChange(item.set, priority)}
           onPress={() => router.push(`/set/${item.set.id}`)}
           hasConflict={conflictIds.has(item.set.id)}
+          clashLabel={clashBadges.get(item.set.id)?.label}
           hasNote={!!getMyNote(item.set.id)}
         />
       );
@@ -563,6 +721,7 @@ export default function PicksScreen() {
       getMyNote,
       handlePickChange,
       conflictIds,
+      clashBadges,
       router,
       t,
       toggleCollapse,
@@ -666,15 +825,19 @@ export default function PicksScreen() {
   }, [currentProfile, currentFestival, haptics]);
 
   // ── At-a-glance summary + focus filter chips ─────────────────────────────
+  const hasPlan = stats.total > 0 || planCounts.reminders > 0 || planCounts.notes > 0;
+
   const summaryRow =
-    stats.total > 0 ? (
+    hasPlan ? (
       <View style={styles.summaryRow}>
-        <StatChip
-          label="All"
-          count={stats.total}
-          active={effectiveFilter === 'all'}
-          onPress={() => setFocusFilter('all')}
-        />
+        {stats.total > 0 ? (
+          <StatChip
+            label="All"
+            count={stats.total}
+            active={effectiveFilter === 'all'}
+            onPress={() => setFocusFilter('all')}
+          />
+        ) : null}
         {stats.must > 0 ? (
           <StatChip
             label="Must"
@@ -716,6 +879,24 @@ export default function PicksScreen() {
             onPress={() => setFocusFilter('clashes')}
           />
         ) : null}
+        {planCounts.reminders > 0 ? (
+          <StatChip
+            label={COPY.planLists.reminders}
+            count={planCounts.reminders}
+            icon="notifications-outline"
+            active={effectiveFilter === 'reminders'}
+            onPress={() => setFocusFilter('reminders')}
+          />
+        ) : null}
+        {planCounts.notes > 0 ? (
+          <StatChip
+            label={COPY.planLists.notes}
+            count={planCounts.notes}
+            icon="document-text-outline"
+            active={effectiveFilter === 'notes'}
+            onPress={() => setFocusFilter('notes')}
+          />
+        ) : null}
       </View>
     ) : null;
 
@@ -723,7 +904,7 @@ export default function PicksScreen() {
     stats.total > 0 ? (
       <View style={styles.controlsRow}>
         <View style={styles.segment} accessibilityRole="radiogroup" accessibilityLabel="Group picks by">
-          {(['day', 'priority'] as const).map((mode) => {
+          {(['day', 'priority', 'myday'] as const).map((mode) => {
             const activeMode = groupMode === mode;
             return (
               <TouchableOpacity
@@ -733,10 +914,12 @@ export default function PicksScreen() {
                 activeOpacity={0.8}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: activeMode }}
-                accessibilityLabel={mode === 'day' ? 'Group by day' : 'Group by priority'}
+                accessibilityLabel={
+                  mode === 'day' ? 'Group by day' : mode === 'priority' ? 'Group by priority' : 'Show my day'
+                }
               >
                 <Ionicons
-                  name={mode === 'day' ? 'calendar-clear-outline' : 'flag-outline'}
+                  name={mode === 'day' ? 'calendar-clear-outline' : mode === 'priority' ? 'flag-outline' : 'time-outline'}
                   size={t.iconSize.xs}
                   color={activeMode ? t.colors.accent.aqua : t.colors.text.muted}
                 />
@@ -744,7 +927,7 @@ export default function PicksScreen() {
                   style={[styles.segmentText, activeMode && styles.segmentTextActive]}
                   maxFontSizeMultiplier={MAX_FONT_SCALE}
                 >
-                  {mode === 'day' ? 'By day' : 'By priority'}
+                  {mode === 'day' ? 'By day' : mode === 'priority' ? 'By priority' : COPY.myDay.name}
                 </Text>
               </TouchableOpacity>
             );
@@ -924,12 +1107,7 @@ export default function PicksScreen() {
       {controlsRow}
       {searchField}
       <CrewSuggestionStrip />
-      <ClashBannerInline
-        groups={conflictGroups}
-        days={days}
-        separator={currentFestival?.b2bSeparator}
-        reduceMotion={reduceMotion}
-      />
+      <ClashCards groups={conflictGroups} days={days} />
       {bulkPanel}
     </View>
   );
@@ -948,7 +1126,14 @@ export default function PicksScreen() {
   // the empty state is honest and offers the right next action.
   const filtersActive = effectiveFilter !== 'all' || search.trim().length > 0;
   const emptyComponent =
-    stats.total === 0 ? (
+    effectiveFilter === 'reminders' || effectiveFilter === 'notes' ? (
+      <EmptyState
+        icon={effectiveFilter === 'reminders' ? 'notifications-outline' : 'document-text-outline'}
+        title={effectiveFilter === 'reminders' ? COPY.planLists.remindersEmptyTitle : COPY.planLists.notesEmptyTitle}
+        message={effectiveFilter === 'reminders' ? COPY.planLists.remindersEmptyBody : COPY.planLists.notesEmptyBody}
+        action={filtersActive ? { label: 'Clear filters', onPress: clearFilters } : undefined}
+      />
+    ) : stats.total === 0 ? (
       <EmptyState
         illustration="noPicks"
         title="No picks yet"
@@ -1172,129 +1357,6 @@ function BulkPill({
   );
 }
 
-/**
- * All-days set-time clash banner for the picks tab. Driven by the SAME
- * `buildPickConflicts` groups that feed the chip + the "clashes" filter (passed
- * in as `groups`), so those surfaces can never disagree. Unlike the schedule
- * tab's ClashBanner — which is scoped to the currently selected day — this spans
- * EVERY festival day (the picks tab has no day selector), so each card is tagged
- * with its day for context. Renders nothing when there are no clashes.
- */
-function ClashBannerInline({
-  groups,
-  days,
-  separator,
-  reduceMotion,
-}: {
-  groups: ConflictGroup[];
-  days: { index: number; date: string; label?: string }[];
-  separator?: string;
-  reduceMotion: boolean;
-}) {
-  const t = useTokens();
-  const styles = useStyles();
-  if (groups.length === 0) return null;
-  return (
-    <View style={styles.clashWrap}>
-      <View style={styles.clashHeading}>
-        <Ionicons name="warning-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
-        <Text style={styles.clashHeadingText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {clashCount(groups.length)}
-        </Text>
-      </View>
-      {groups.map((group) => (
-        <ClashCardInline
-          key={group.picks.map((p) => p.set.id).join('|')}
-          group={group}
-          days={days}
-          separator={separator}
-          reduceMotion={reduceMotion}
-        />
-      ))}
-    </View>
-  );
-}
-
-/** One clash card: the clashing acts + a "tap to decide" affordance. */
-function ClashCardInline({
-  group,
-  days,
-  separator,
-  reduceMotion,
-}: {
-  group: ConflictGroup;
-  days: { index: number; date: string; label?: string }[];
-  separator?: string;
-  reduceMotion: boolean;
-}) {
-  const t = useTokens();
-  const styles = useStyles();
-  const router = useRouter();
-
-  const keep = group.picks.find((p) => p.set.id === group.recommendedKeepId) ?? group.picks[0];
-  if (!keep) return null;
-  const keepName = artistDisplayName(keep.set, separator);
-  // The moment both acts are on stage = the latest start among the group.
-  const latest = group.picks.reduce((a, b) => (b.startMs > a.startMs ? b : a));
-  const atLabel = formatTime(latest.set.startTime);
-  const dayLabel = days.find((d) => d.index === (latest.set.dayIndex ?? 0))?.label;
-  const overlapLabel = group.overlapMin > 0 ? `${group.overlapMin} min overlap` : 'overlapping sets';
-  const a11yNames = group.picks.map((p) => artistDisplayName(p.set, separator)).join(', ');
-  // "Sat · 8:30 PM · 30 min overlap" — day prefix disambiguates across the plan.
-  const timeLabel = [dayLabel, atLabel, overlapLabel].filter(Boolean).join(' · ');
-
-  const card = (
-    <TouchableOpacity
-      style={styles.clashCard}
-      activeOpacity={0.8}
-      onPress={() => router.push(`/set/${keep.set.id}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`Schedule clash${dayLabel ? ` on ${dayLabel}` : ''}${
-        atLabel ? ` at ${atLabel}` : ''
-      }: ${a11yNames}. Recommended keep ${keepName}. Tap to decide.`}
-    >
-      <View style={styles.clashCardHead}>
-        <Text style={styles.clashCardTime} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-          {timeLabel}
-        </Text>
-        <View style={styles.clashDecideRow}>
-          <Text style={styles.clashDecideText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            Tap to decide
-          </Text>
-          <Ionicons name="chevron-forward" size={t.iconSize.xs} color={t.colors.accent.aqua} />
-        </View>
-      </View>
-      <View style={styles.clashActList}>
-        {group.picks.map((pick) => {
-          const recommended = pick.set.id === group.recommendedKeepId;
-          return (
-            <View key={pick.set.id} style={styles.clashActRow}>
-              <View style={[styles.clashPriorityDot, { backgroundColor: priorityColor(t, pick.priority) }]} />
-              <Text
-                style={[styles.clashActName, recommended && styles.clashActNameKeep]}
-                numberOfLines={1}
-                maxFontSizeMultiplier={MAX_FONT_SCALE}
-              >
-                {artistDisplayName(pick.set, separator)}
-              </Text>
-              {recommended ? (
-                <View style={styles.clashKeepTag}>
-                  <Text style={styles.clashKeepTagText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                    Keep
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          );
-        })}
-      </View>
-    </TouchableOpacity>
-  );
-
-  if (reduceMotion) return card;
-  return <Animated.View entering={FadeIn.duration(motionDuration.med)}>{card}</Animated.View>;
-}
-
 const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
@@ -1337,83 +1399,6 @@ const useStyles = makeStyles((t) => ({
   },
   separator: {
     height: t.spacing[2],
-  },
-  // ── Inline all-days clash banner ──────────────────────────────────────────
-  clashWrap: {
-    marginBottom: t.spacing[2],
-    gap: t.spacing[2],
-  },
-  clashHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-  },
-  clashHeadingText: {
-    ...typeStyle('label'),
-    color: t.colors.accent.coral,
-  },
-  clashCard: {
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.coral,
-    borderLeftWidth: 4,
-    backgroundColor: t.colors.bg.card,
-    padding: t.spacing[3],
-    gap: t.spacing[2],
-  },
-  clashCardHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: t.spacing[2],
-  },
-  clashCardTime: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-    flexShrink: 1,
-  },
-  clashDecideRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  clashDecideText: {
-    ...typeStyle('caption'),
-    color: t.colors.accent.aqua,
-  },
-  clashActList: {
-    gap: t.spacing[1],
-  },
-  clashActRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-  },
-  clashPriorityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  clashActName: {
-    ...typeStyle('body'),
-    color: t.colors.text.secondary,
-    flexShrink: 1,
-  },
-  clashActNameKeep: {
-    ...typeStyle('body', 700),
-    color: t.colors.text.primary,
-  },
-  clashKeepTag: {
-    paddingHorizontal: t.spacing[2],
-    paddingVertical: 1,
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.bg.secondary,
-    borderWidth: 1,
-    borderColor: t.colors.accent.aqua,
-  },
-  clashKeepTagText: {
-    ...typeStyle('caption'),
-    color: t.colors.accent.aqua,
   },
   // ── Summary / focus-filter chips ─────────────────────────────────────────
   summaryRow: {

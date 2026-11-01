@@ -1,11 +1,12 @@
-import { useMemo, useCallback, lazy, Suspense } from 'react';
+import { useMemo, useCallback, useState, lazy, Suspense } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
-import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
+import { PRIORITY_SYMBOLS, COPY } from '@festie/shared/constants';
 import {
   formatTime,
   byStartTime,
@@ -14,6 +15,10 @@ import {
   buildPicksShareUrl,
   resolveStageColor,
   isSetScheduled,
+  buildPickConflicts,
+  buildMyDay,
+  buildPlanList,
+  resolveFestivalTimeZone,
 } from '@festie/shared/utils';
 import StageBadge from '../components/ui/StageBadge';
 import PriorityIcon from '../components/ui/PriorityIcon';
@@ -26,11 +31,16 @@ import OfflineReadinessCard from '../components/features/OfflineReadinessCard';
 import CrewSuggestionStrip from '../components/features/CrewSuggestionStrip';
 import GuestTeaser from '../components/features/GuestTeaser';
 import PickConflicts from '../components/features/PickConflicts';
+import MyDayList from '../components/features/MyDayList';
+import PlanNotesList from '../components/features/PlanNotesList';
 // Lazy-loaded: PlanQRShare pulls in qrcode.react, which has no business in the
 // picks bundle until the user actually opens the share modal.
 const PlanQRShare = lazy(() => import('../components/features/PlanQRShare'));
 import { useToast } from '../lib/toastContext';
 import { CalendarX, UserPlus, CalendarPlus, Share2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+type PicksViewMode = 'priority' | 'myday' | 'reminders' | 'notes';
 
 // Each section carries its priority value, label, the dot accent token, and the
 // matching tint-ring Badge variant — mirroring the mobile Picks tab where every
@@ -76,6 +86,8 @@ function PicksViewInner() {
     [getStageColorRaw],
   );
   const { toast } = useToast();
+  const [view, setView] = useState<PicksViewMode>('priority');
+  const meetingPoints = useCrewStore((s) => s.meetingPoints);
 
   // Sets for the selected day, PLUS any unscheduled (TBA — schedule not yet
   // announced) picks. A pick on a set with an undefined/out-of-range dayIndex
@@ -118,6 +130,32 @@ function PicksViewInner() {
 
     return groups;
   }, [daySets, getMyPick, currentFestival?.b2bSeparator]);
+
+  const timeZone = resolveFestivalTimeZone(currentFestival);
+  const myPicks = currentProfile?.picks;
+  const planInput = useMemo(
+    () => ({ sets, days, timeZone, notes: currentProfile?.notes, reminders: currentProfile?.reminders, myPicks }),
+    [sets, days, timeZone, currentProfile?.notes, currentProfile?.reminders, myPicks],
+  );
+  const reminderItems = useMemo(() => buildPlanList('reminders', planInput), [planInput]);
+  const noteItems = useMemo(() => buildPlanList('notes', planInput), [planInput]);
+
+  const myDay = useMemo(() => {
+    if (view !== 'myday') return null;
+    const picks = myPicks ?? {};
+    const conflictGroups = buildPickConflicts({ sets, myPicks: picks, selectedDay, days, timeZone, stages });
+    return buildMyDay({
+      sets,
+      myPicks: picks,
+      dayIndex: selectedDay,
+      days,
+      timeZone,
+      stages,
+      meetingPoints,
+      conflictGroups,
+      b2bSeparator: currentFestival?.b2bSeparator,
+    });
+  }, [view, sets, myPicks, selectedDay, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator]);
 
   // True when the profile has any pick at all (across every day), which gates
   // the calendar export independently of the day filter — you can be on a day
@@ -238,12 +276,41 @@ function PicksViewInner() {
     );
   }
 
+  const viewTabs: Array<{ id: PicksViewMode; label: string }> = [
+    { id: 'priority', label: COPY.myDay.byPriority },
+    { id: 'myday', label: COPY.myDay.name },
+    { id: 'reminders', label: `${COPY.planLists.reminders} · ${reminderItems.length}` },
+    { id: 'notes', label: `${COPY.planLists.notes} · ${noteItems.length}` },
+  ];
+  const viewTabRow =
+    hasAnyPicks || reminderItems.length > 0 || noteItems.length > 0 ? (
+      <div role="tablist" aria-label="Picks views" className="flex gap-2 mb-3 overflow-x-auto">
+        {viewTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={view === tab.id}
+            className={cn(
+              'min-h-[44px] px-4 rounded-full border text-sm font-medium whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+              view === tab.id
+                ? 'bg-accent-aqua/20 border-accent-aqua text-text-primary'
+                : 'bg-bg-card border-border text-text-secondary hover:bg-bg-card-hover',
+            )}
+            onClick={() => setView(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    ) : null;
+
   const totalPicksThisDay = picksGrouped.must.length + picksGrouped['want-to-see'].length + picksGrouped.maybe.length;
 
   // Global empty state: zero picks on this day → single friendly CTA pointing
   // at /cards, rather than three stacked "Tap X on…" hint blocks which looked
   // like broken/stuck UI on first visit.
-  if (totalPicksThisDay === 0) {
+  if (totalPicksThisDay === 0 && (view === 'priority' || view === 'myday')) {
     // Was a bespoke inline-styled block referencing legacy classes
     // (.empty-state-guide / .empty-state-icon) that have no CSS rule in
     // the React package — rendered as an un-styled stack of text on this
@@ -252,6 +319,7 @@ function PicksViewInner() {
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
           {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {viewTabRow}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
           <PickBulkActions />
@@ -270,12 +338,26 @@ function PicksViewInner() {
     <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
       <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
         {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
-        <CrewSuggestionStrip />
-        <PickConflicts />
-        <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
-        <PickBulkActions />
+        {viewTabRow}
+        {(view === 'reminders' || view === 'notes') && (
+          <PlanNotesList
+            kind={view}
+            items={view === 'reminders' ? reminderItems : noteItems}
+            days={days}
+            onOpenSet={setDetailSet}
+          />
+        )}
+        {(view === 'priority' || view === 'myday') && (
+          <>
+            <CrewSuggestionStrip />
+            <PickConflicts />
+            <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
+            <PickBulkActions />
+          </>
+        )}
+        {view === 'myday' && myDay && <MyDayList myDay={myDay} onOpenSet={setDetailSet} timeZone={timeZone} />}
         {/* Priority sections */}
-        {PRIORITY_SECTIONS.map(({ value: pri, label, accent, badge }) => {
+        {view === 'priority' && PRIORITY_SECTIONS.map(({ value: pri, label, accent, badge }) => {
           const items = picksGrouped[pri];
           return (
             <div key={pri} className="mb-4">

@@ -3,7 +3,6 @@ import { Play, Square, AlertTriangle, StickyNote, Clock } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { usePicks, usePickSync } from '@festie/shared/hooks';
 import { formatTime, artistDisplayName, artistSubtitle, festivalPhase, PRIORITY_RANK } from '@festie/shared/utils';
-import { COPY } from '@festie/shared/constants';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { api } from '@festie/shared/services/api';
 import { useSetStatus } from '@/hooks/useSetStatus';
@@ -38,7 +37,7 @@ interface SetCardProps {
     color?: string;
     initials?: string;
   }>;
-  conflicts?: FestivalSet[];
+  clashLabel?: string | null;
   b2bSeparator?: string;
 }
 
@@ -56,7 +55,7 @@ function SetCard({
   stageName = set.stageName || 'Unknown',
   stageColor = 'var(--color-accent-coral)',
   friendProfiles = [],
-  conflicts = [],
+  clashLabel,
   b2bSeparator,
 }: SetCardProps) {
   const { getMyPick, savePick, getMyNote } = usePicks();
@@ -123,7 +122,7 @@ function SetCard({
   const subtitle = artistSubtitle(set, b2bSeparator);
 
   const pri = myPick ? PRI_MAP[myPick] : null;
-  const hasConflict = conflicts.length > 0;
+  const hasConflict = !!clashLabel;
 
   // Enrich + group the crew-overlap cluster:
   //  1. join each friend (profileId -> profile.userId -> crewMember.avatar) to
@@ -386,14 +385,15 @@ function SetCard({
         {hasConflict && (
           <span
             className={cn(
-              'inline-flex items-center gap-1',
+              'inline-flex items-center gap-1 max-w-full',
               'text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight',
               'bg-[var(--color-clash-tint)] text-text-primary',
               'border border-[var(--color-clash)]',
-              'tracking-[0.5px] uppercase',
             )}
+            title={clashLabel}
           >
-            <AlertTriangle className="w-3 h-3 text-[var(--color-clash)]" aria-hidden="true" /> {COPY.clash.badge}
+            <AlertTriangle className="w-3 h-3 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
+            <span className="max-w-full truncate">{clashLabel}</span>
           </span>
         )}
       </div>
@@ -510,7 +510,7 @@ function SetCard({
  * whose behavior is stable (they close over the same set object captured in
  * the loop). Comparing them would defeat memoization entirely.
  *
- * Array props (friendProfiles, conflicts) are compared by length + element
+ * Array props (friendProfiles) are compared by length + element
  * identity so we re-render when the list content changes but not when the
  * parent builds a new array reference with identical items.
  */
@@ -539,13 +539,7 @@ function setCardPropsAreEqual(prev: Readonly<SetCardProps>, next: Readonly<SetCa
     if (pf.profileId !== nf.profileId || pf.priority !== nf.priority) return false;
   }
 
-  // conflicts — compare by length + set IDs
-  const prevConflicts = prev.conflicts ?? [];
-  const nextConflicts = next.conflicts ?? [];
-  if (prevConflicts.length !== nextConflicts.length) return false;
-  for (let i = 0; i < prevConflicts.length; i++) {
-    if (prevConflicts[i]!.id !== nextConflicts[i]!.id) return false;
-  }
+  if (prev.clashLabel !== next.clashLabel) return false;
 
   return true;
 }

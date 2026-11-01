@@ -11,6 +11,8 @@
  * honest "as of N ago" copy the UI must show — never "live".
  */
 
+import type { Stage } from '../types/domain';
+
 /** A latitude/longitude pair in decimal degrees. */
 export interface Coord {
   latitude: number;
@@ -92,6 +94,26 @@ export function etaMinutes(from: Coord | null | undefined, to: Coord | null | un
   if (meters <= 0) return 0;
   const minutes = meters / WALK_SPEED_M_PER_S / 60;
   return Math.max(1, Math.ceil(minutes));
+}
+
+/**
+ * Walking minutes between two stages, via `etaMinutes` (straight line, a floor,
+ * not a route). Same stage gives 0. A missing stage id, stage or pin gives null.
+ */
+export function stageWalkMinutes(
+  stages: ReadonlyArray<Pick<Stage, 'id' | 'latitude' | 'longitude'>> | undefined,
+  fromStageId: string | undefined,
+  toStageId: string | undefined,
+): number | null {
+  if (!fromStageId || !toStageId) return null;
+  if (fromStageId === toStageId) return 0;
+  const pin = (id: string): Coord | null => {
+    const stage = stages?.find((s) => s.id === id);
+    return stage && stage.latitude != null && stage.longitude != null
+      ? { latitude: stage.latitude, longitude: stage.longitude }
+      : null;
+  };
+  return etaMinutes(pin(fromStageId), pin(toStageId));
 }
 
 /**

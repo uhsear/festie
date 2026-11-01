@@ -30,6 +30,20 @@ export const COPY = {
   clash: {
     one: 'Schedule clash', badge: 'Clash', filter: 'Clashes', none: 'No clashes',
     gridHint: 'Clashes with another of your picks',
+    tight: 'Tight change', suggested: 'Suggested', split: 'Split',
+    splitPlanned: 'Split planned', clearPlan: 'Clear plan', undo: 'Undo',
+    failed: "Couldn't update your picks. Try again.",
+  },
+  myDay: {
+    name: 'My day', byPriority: 'By priority', unscheduled: 'Time not announced',
+    free: (min: string) => `${min} free`,
+    walk: (min: number, stage: string) => `${min} min walk from ${stage}`,
+    meet: (label: string) => `Meet: ${label}`,
+  },
+  planLists: {
+    reminders: 'Reminders', notes: 'Notes',
+    remindersEmptyTitle: 'No reminders yet', remindersEmptyBody: 'Open a set and use Remind me before it starts.',
+    notesEmptyTitle: 'No notes yet', notesEmptyBody: 'Open a set and add a note. It shows here.',
   },
   grid: {
     zoomIn: 'Zoom in', zoomInHint: 'Show less of the day, larger',

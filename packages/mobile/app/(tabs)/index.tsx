@@ -21,7 +21,8 @@ import { usePicks, useFestival } from '@festie/shared/hooks';
 import {
   artistDisplayName,
   getSetHotness,
-  getConflictingSetIds,
+  detectConflicts,
+  clashBadgeBySetId,
   setMinuteRange,
   festivalPhase,
   byStartTime,
@@ -331,8 +332,13 @@ export default function TimelineScreen() {
       ? { label: 'Show another day', onPress: () => setSelectedDay(otherDayWithSets) }
       : undefined;
 
-  // Conflict set IDs — same util the web Cards view uses.
-  const conflictIds = useMemo(() => getConflictingSetIds(filteredSets, getMyPick), [filteredSets, getMyPick]);
+  // Each clashing set names its worst overlap; the ids feed TimelineView unchanged.
+  const conflicts = useMemo(() => detectConflicts(filteredSets, getMyPick), [filteredSets, getMyPick]);
+  const clashBadges = useMemo(
+    () => clashBadgeBySetId(conflicts, currentFestival?.b2bSeparator),
+    [conflicts, currentFestival?.b2bSeparator],
+  );
+  const conflictIds = useMemo(() => new Set(clashBadges.keys()), [clashBadges]);
 
   // Cards view: a flat hotness-sorted list of set rows.
   const rows = useMemo<ListRow[]>(() => filteredSets.map((set) => ({ kind: 'set', key: set.id, set })), [filteredSets]);
@@ -452,6 +458,7 @@ export default function TimelineScreen() {
           myPick={getMyPick(set.id)}
           friendProfiles={getOtherPicks(set.id)}
           hasConflict={conflictIds.has(set.id)}
+          clashLabel={clashBadges.get(set.id)?.label}
           hasNote={!!getMyNote(set.id)}
           onPickChange={(priority) => handlePickChange(set.id, priority)}
           onPress={() => router.push(`/set/${set.id}`)}
@@ -466,6 +473,7 @@ export default function TimelineScreen() {
       getOtherPicks,
       getMyNote,
       conflictIds,
+      clashBadges,
       handlePickChange,
       router,
       t.colors.text.muted,

@@ -7,7 +7,7 @@ export * from './useCrewRealtime';
 export * from './useLiveLocationPublisher';
 export * from './useOffline';
 export * from './useCrewNudges';
-export * from './usePickConflicts';
+export * from './useClashResolver';
 export * from './useCurrentPosition';
 export * from './useRevocationRealtime';
 export * from './useDayOf';

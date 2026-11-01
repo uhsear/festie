@@ -24,6 +24,15 @@ export function fmtCountdown(mins: number): string {
   return m ? `in ${h}h ${m}m` : `in ${h}h`;
 }
 
+/** A duration in whole minutes: "45 min", "1 h", "1 h 15 min". 0 or less gives "0 min". */
+export function fmtDurationMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes));
+  if (total < 60) return `${total} min`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
 /**
  * Ascending comparator for festival sets by start time within the festival day.
  *

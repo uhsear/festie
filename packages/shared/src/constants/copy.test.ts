@@ -64,3 +64,18 @@ describe('grid clash copy', () => {
     for (const v of Object.values(COPY.grid)) expect(v.toLowerCase()).not.toContain('conflict');
   });
 });
+
+describe('clash fix and My day copy', () => {
+  it('names the recommended pick Suggested, not Keep', () => {
+    expect(COPY.clash.suggested).toBe('Suggested');
+    expect(COPY.clash.failed).toBe("Couldn't update your picks. Try again.");
+  });
+  it('formats My day rows', () => {
+    expect(COPY.myDay.free('45 min')).toBe('45 min free');
+    expect(COPY.myDay.walk(6, 'Main Stage')).toBe('6 min walk from Main Stage');
+    expect(COPY.myDay.meet('Ferris wheel')).toBe('Meet: Ferris wheel');
+  });
+  it('keeps every T13 clash key', () => {
+    expect(COPY.clash).toMatchObject({ one: 'Schedule clash', badge: 'Clash', filter: 'Clashes', none: 'No clashes' });
+  });
+});
