@@ -170,6 +170,33 @@ describe('festivalDataStore', () => {
       expect(useFestivalUIStore.getState().selectedDay).toBe(0);
     });
 
+    it('defaults selectedDay to the logical festival day in the festival zone', async () => {
+      const day = (id: string, date: string) => ({ id, festivalId: 'fest-1', date, createdAt: '', updatedAt: '', sets: [] });
+      const detailResponse = {
+        ...mockFestival,
+        timeZone: 'America/Los_Angeles',
+        stages: [],
+        days: [day('d1', '2026-06-01'), day('d2', '2026-06-02'), day('d3', '2026-06-03')],
+      };
+      // Fake only Date, so the store's promises and retry timers run normally.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        // 01:00 PDT (UTC-7) on day 1's calendar date is still day 0's night.
+        vi.setSystemTime(Date.UTC(2026, 5, 2, 8, 0));
+        vi.mocked(api.get).mockResolvedValueOnce(detailResponse);
+        await useFestivalDataStore.getState().selectFestival('fest-1');
+        expect(useFestivalUIStore.getState().selectedDay).toBe(0);
+
+        // 01:00 PDT on day 2's calendar date is day 1, not day 2.
+        vi.setSystemTime(Date.UTC(2026, 5, 3, 8, 0));
+        vi.mocked(api.get).mockResolvedValueOnce(detailResponse);
+        await useFestivalDataStore.getState().selectFestival('fest-1');
+        expect(useFestivalUIStore.getState().selectedDay).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('loads profiles when user is authenticated', async () => {
       useAuthStore.setState({
         user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' },

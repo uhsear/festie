@@ -102,6 +102,7 @@ export default function DayEditor({
                 <SetEditor
                   key={s.id}
                   set={s}
+                  dayLabel={day.label}
                   stages={stages}
                   onField={(field, value) => onSetField(s.id, field, value)}
                   onRemove={() => onRemoveSet(s.id)}

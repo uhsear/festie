@@ -12,6 +12,7 @@
  */
 
 import { escapeHtml } from '../lib/helpers/sanitize.js';
+import { festivalStartMinutes } from '../lib/time-zone.js';
 
 export default function createShareRoutes(deps: any) {
   const {
@@ -89,7 +90,11 @@ export default function createShareRoutes(deps: any) {
           endTime: escapeHtml(set.endTime || ''),
           priority: picks[set.id] || 'want-to-see',
         }))
-        .sort((a: any, b: any) => a.startTime.localeCompare(b.startTime));
+        .sort(
+          (a: any, b: any) =>
+            (a.startTime ? festivalStartMinutes(a.startTime) : Number.MAX_SAFE_INTEGER) -
+            (b.startTime ? festivalStartMinutes(b.startTime) : Number.MAX_SAFE_INTEGER),
+        );
       return { label: escapeHtml(day.label || `Day ${dayIndex + 1}`), date: day.date || '', sets: daySets };
     }).filter((day: any) => day.sets.length > 0);
   }

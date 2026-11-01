@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import { useNotificationPrefsStore, useFestivalStore } from '@festie/shared/stores';
+import { timeZoneCity } from '@festie/shared/utils';
 import { api } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
 import { cn } from '../../lib/utils';
@@ -160,7 +161,9 @@ export default function NotificationPrefsSection() {
       />
       <Toggle
         label="Quiet hours"
-        hint="Mute 11pm–8am"
+        hint={
+          quietOn && prefs.dndTimeZone ? `Mute 11 PM–8 AM (${timeZoneCity(prefs.dndTimeZone)} time)` : 'Mute 11 PM–8 AM'
+        }
         checked={quietOn}
         onChange={(v) =>
           updatePrefs(v ? { dndStart: QUIET_START, dndEnd: QUIET_END } : { dndStart: null, dndEnd: null }).catch(

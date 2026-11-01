@@ -92,6 +92,7 @@ vi.mock('../../hooks/useHaptics', () => ({
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@festie/shared/utils')>()),
   hasSetStarted: vi.fn(() => false),
+  festivalTimeLabel: vi.fn((): 'Festival time' | null => null),
 }));
 
 // Mock sub-components to isolate DetailPanel behavior
@@ -121,6 +122,7 @@ vi.mock('./DetailNotesSection', () => ({
 }));
 
 import DetailPanel from './DetailPanel';
+import { festivalTimeLabel } from '@festie/shared/utils';
 import { useDetailPanelData } from './useDetailPanelData';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
@@ -305,5 +307,17 @@ describe('DetailPanel', () => {
     // handleReminderClick clears reminderBusy in finally, so the buttons
     // become interactive again (not stuck disabled).
     expect(screen.getByRole('button', { name: 'Remind me 5m before' })).not.toBeDisabled();
+  });
+
+  it('shows the Festival time label when the phone zone differs from the festival zone', () => {
+    vi.mocked(festivalTimeLabel).mockReturnValue('Festival time');
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.getByText(/Festival time/)).toBeInTheDocument();
+  });
+
+  it('omits the Festival time label when festivalTimeLabel returns null', () => {
+    vi.mocked(festivalTimeLabel).mockReturnValue(null);
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByText(/Festival time/)).not.toBeInTheDocument();
   });
 });

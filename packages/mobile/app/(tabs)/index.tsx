@@ -22,9 +22,12 @@ import {
   artistDisplayName,
   getSetHotness,
   getConflictingSetIds,
-  timeToMinutes,
+  setMinuteRange,
   festivalPhase,
   byStartTime,
+  festivalTimeLabel,
+  logicalDayIndexAt,
+  resolveFestivalTimeZone,
 } from '@festie/shared/utils';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -33,6 +36,7 @@ import { safeStageColor } from '../../lib/stageColor';
 import { useUI, type ViewMode } from '../../contexts/UIContext';
 import type { TimeBounds } from '../../hooks/useNowIndicator';
 import { useHaptics } from '../../hooks/useHaptics';
+import { useNow } from '../../hooks/useNow';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import SegmentedControl from '../../components/SegmentedControl';
 import NowNextStrip from '../../components/NowNextStrip';
@@ -143,10 +147,9 @@ export default function TimelineScreen() {
   // the list is scrolled past a threshold and expose a ref to snap it back.
   const listRef = useRef<FlatList<ListRow>>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  // Recompute on every render (cheap) so the "today" dot updates at midnight
-  // without needing an explicit timer. The component re-renders on store
-  // updates, search keystrokes, etc., so this stays current in practice.
-  const todayStr = new Date().toLocaleDateString('en-CA');
+  // useNow ticks, so the "today" dot follows the festival's own day (06:00
+  // cutoff, festival zone) rather than the device calendar.
+  const nowMs = useNow();
 
   const previousFestivalIdRef = useRef<string | null>(null);
 
@@ -279,6 +282,9 @@ export default function TimelineScreen() {
   );
 
   const days = useMemo(() => getDays(), [getDays]);
+  const festivalTimeZone = resolveFestivalTimeZone(currentFestival);
+  const todayIndex = logicalDayIndexAt(days, nowMs, festivalTimeZone);
+  const zoneLabel = festivalTimeLabel(festivalTimeZone, nowMs);
 
   // P1-5 — festival lifecycle phase (pre / live / post), derived from the
   // festival's date range vs now (shared `festivalPhase` → `festivalStatus`).
@@ -340,9 +346,7 @@ export default function TimelineScreen() {
     let minMin = 24 * 60;
     let maxMin = 0;
     for (const s of timedSets) {
-      const start = timeToMinutes(s.startTime);
-      let end = timeToMinutes(s.endTime);
-      if (end <= start) end += 24 * 60;
+      const { start, end } = setMinuteRange(s)!;
       if (start < minMin) minMin = start;
       if (end > maxMin) maxMin = end;
     }
@@ -694,9 +698,9 @@ export default function TimelineScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={[styles.daysContent, { paddingHorizontal: hPad }]}
           >
-            {days.map((day) => {
+            {days.map((day, dayPos) => {
               const active = day.index === selectedDay;
-              const isToday = day.date === todayStr;
+              const isToday = dayPos === todayIndex;
               return (
                 <TouchableOpacity
                   key={day.index}
@@ -723,6 +727,11 @@ export default function TimelineScreen() {
               );
             })}
           </ScrollView>
+          {zoneLabel ? (
+            <Text style={[styles.zoneLabel, { paddingHorizontal: hPad }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {zoneLabel}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -1232,6 +1241,11 @@ const useStyles = makeStyles((t) => ({
   },
   daysWrap: {
     paddingVertical: t.spacing[3],
+  },
+  zoneLabel: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+    marginTop: t.spacing[1],
   },
   daysContent: {
     paddingHorizontal: t.spacing[4],

@@ -8,6 +8,7 @@ import {
   artistDisplayName,
   buildOngoingNotificationModel,
   getSetTimeBounds,
+  resolveFestivalTimeZone,
   type OngoingSetInput,
 } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
@@ -109,6 +110,7 @@ export function useOngoingNotification(enabled: boolean = true): void {
 
   const picks = currentProfile?.picks;
   const b2bSeparator = currentFestival?.b2bSeparator;
+  const timeZone = resolveFestivalTimeZone(currentFestival);
 
   // Local 60s tick so the countdown / now-vs-next decision refreshes on-device
   // without any network. Runs on BOTH Android (ongoing notification) and iOS
@@ -146,8 +148,9 @@ export function useOngoingNotification(enabled: boolean = true): void {
         meetingPoints,
         meetingPointSyncedAt: meetingPointsSyncedAt ?? null,
         now,
+        timeZone,
       }),
-    [ongoingSets, days, meetingPoints, meetingPointsSyncedAt, now],
+    [ongoingSets, days, meetingPoints, meetingPointsSyncedAt, now, timeZone],
   );
 
   // Track what we last presented so we only re-issue the notification when the
@@ -198,7 +201,7 @@ export function useOngoingNotification(enabled: boolean = true): void {
       if (model.focusSet) {
         const focusSetData = sets.find((s) => s.id === model.focusSet!.id);
         if (focusSetData && days) {
-          const bounds = getSetTimeBounds(focusSetData, days);
+          const bounds = getSetTimeBounds(focusSetData, days, timeZone);
           if (bounds) {
             const targetMs = model.focusSet.kind === 'now' ? bounds.endMs : bounds.startMs;
             endsAt = new Date(targetMs).toISOString();
@@ -221,7 +224,7 @@ export function useOngoingNotification(enabled: boolean = true): void {
       // must be cleared here too, not just on unmount.
       clearWidgetSnapshot();
     }
-  }, [enabled, currentFestival, model, sets, days]);
+  }, [enabled, currentFestival, model, sets, days, timeZone]);
 
   // Final cleanup: when the app root unmounts, tear
   // down the sticky notification / Live Activity so it can't linger with stale data.

@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getSetTimeBounds, getSetStatus, zonedWallTimeToMs, isSetScheduled } from './setStatus';
+import {
+  getSetTimeBounds,
+  getSetStatus,
+  zonedWallTimeToMs,
+  isSetScheduled,
+  festivalStartMinutes,
+  startsAfterMidnight,
+  setMinuteRange,
+} from './setStatus';
 import type { FestivalSet, FestivalDay } from '../types/domain';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
@@ -102,6 +110,73 @@ describe('getSetTimeBounds with a festival timeZone', () => {
     expect(bounds!.startMs).toBe(Date.UTC(2026, 8, 4, 23, 30, 0));
     expect(bounds!.endMs).toBe(Date.UTC(2026, 8, 5, 1, 0, 0));
     expect(bounds!.endMs).toBeGreaterThan(bounds!.startMs);
+  });
+});
+
+// The 06:00 rule: a set that starts before 06:00 belongs to the night of its
+// logical day (CONTEXT.md "Day"), so it starts on the next calendar date.
+describe('getSetTimeBounds 06:00 start roll', () => {
+  const days = [{ date: '2026-09-04' }];
+  const onDay0 = (startTime: string, endTime: string) =>
+    makeSet({ startTime, endTime, date: undefined, dayIndex: 0 });
+
+  it('starts a 00:30-02:00 set on the next calendar date (UTC)', () => {
+    const bounds = getSetTimeBounds(onDay0('00:30', '02:00'), days, 'UTC');
+    expect(bounds!.startMs).toBe(Date.UTC(2026, 8, 5, 0, 30));
+    expect(bounds!.endMs).toBe(Date.UTC(2026, 8, 5, 2, 0));
+  });
+
+  it('rolls a 05:59 start and leaves a 06:00 start on its day', () => {
+    expect(getSetTimeBounds(onDay0('05:59', '07:00'), days, 'UTC')!.startMs).toBe(Date.UTC(2026, 8, 5, 5, 59));
+    expect(getSetTimeBounds(onDay0('06:00', '07:00'), days, 'UTC')!.startMs).toBe(Date.UTC(2026, 8, 4, 6, 0));
+  });
+
+  it('leaves a 23:30-01:00 set unchanged', () => {
+    const bounds = getSetTimeBounds(onDay0('23:30', '01:00'), days, 'UTC');
+    expect(bounds!.startMs).toBe(Date.UTC(2026, 8, 4, 23, 30));
+    expect(bounds!.endMs).toBe(Date.UTC(2026, 8, 5, 1, 0));
+  });
+
+  it('applies in the festival zone (America/Los_Angeles)', () => {
+    // 2026-09-05 00:30 PDT (UTC-7) = 07:30Z.
+    const bounds = getSetTimeBounds(onDay0('00:30', '02:00'), days, 'America/Los_Angeles');
+    expect(bounds!.startMs).toBe(Date.UTC(2026, 8, 5, 7, 30));
+  });
+
+  it('applies in the device-local frame too', () => {
+    const bounds = getSetTimeBounds(onDay0('00:30', '02:00'), days);
+    expect(bounds!.startMs).toBe(localMs('2026-09-04', 0, 30, 1));
+    expect(bounds!.endMs).toBe(localMs('2026-09-04', 2, 0, 1));
+  });
+});
+
+describe('festival-day minute helpers', () => {
+  it('festivalStartMinutes adds a day before 06:00', () => {
+    expect(festivalStartMinutes('01:00')).toBe(1500);
+    expect(festivalStartMinutes('05:59')).toBe(1799);
+    expect(festivalStartMinutes('06:00')).toBe(360);
+    expect(festivalStartMinutes('23:30')).toBe(1410);
+  });
+
+  it('startsAfterMidnight is true only for a start before 06:00', () => {
+    expect(startsAfterMidnight('00:30')).toBe(true);
+    expect(startsAfterMidnight('05:59')).toBe(true);
+    expect(startsAfterMidnight('06:00')).toBe(false);
+    expect(startsAfterMidnight('21:00')).toBe(false);
+    expect(startsAfterMidnight('')).toBe(false);
+    expect(startsAfterMidnight(null)).toBe(false);
+  });
+
+  it('setMinuteRange places sets on the logical day', () => {
+    expect(setMinuteRange({ startTime: '23:30', endTime: '01:00' })).toEqual({ start: 1410, end: 1500 });
+    expect(setMinuteRange({ startTime: '00:30', endTime: '02:00' })).toEqual({ start: 1470, end: 1560 });
+    expect(setMinuteRange({ startTime: '05:00', endTime: '07:00' })).toEqual({ start: 1740, end: 1860 });
+    expect(setMinuteRange({ startTime: '20:00', endTime: '21:30' })).toEqual({ start: 1200, end: 1290 });
+  });
+
+  it('setMinuteRange is null when a time is missing', () => {
+    expect(setMinuteRange({ startTime: '20:00', endTime: '' })).toBeNull();
+    expect(setMinuteRange({ startTime: null, endTime: '21:00' })).toBeNull();
   });
 });
 
@@ -248,7 +323,9 @@ describe('getSetStatus timezone consistency', () => {
   // identically: the test pins the local-frame contract on every host without
   // depending on a DST jump actually firing.
   it('stays wall-clock-consistent across a spring-forward DST boundary', () => {
-    const dstSet = makeSet({ startTime: '01:00', endTime: '04:00', date: '2026-03-08' });
+    // A 01:00 start belongs to the night of its logical day, so the set sits on
+    // logical day 2026-03-07 and starts on the 2026-03-08 calendar date.
+    const dstSet = makeSet({ startTime: '01:00', endTime: '04:00', date: '2026-03-07' });
     // 01:30 is before the gap and inside [01:00, 04:00] — LIVE on any host.
     expect(getSetStatus(dstSet, new Date(localMs('2026-03-08', 1, 30))).status).toBe('live');
     // Before the start wall-clock it must read upcoming; after the end, past — a

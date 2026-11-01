@@ -32,6 +32,8 @@ const FEST_ID = `fest-${RUN_ID}`;
 const STAGE_MAIN = `main-${RUN_ID}`;
 const SET_A = `set-a-${RUN_ID}`;
 const SET_B = `set-b-${RUN_ID}`;
+const SET_LATE = `set-late-${RUN_ID}`;
+const SET_NIGHT = `set-night-${RUN_ID}`;
 
 function fixtureFestival() {
   return {
@@ -46,6 +48,8 @@ function fixtureFestival() {
         sets: [
           { id: SET_A, artist: 'Aria', stageId: STAGE_MAIN, startTime: '20:00', endTime: '21:00' },
           { id: SET_B, artist: 'Blix', stageId: STAGE_MAIN, startTime: '21:30', endTime: '22:30' },
+          { id: SET_LATE, artist: 'Zed Late', stageId: STAGE_MAIN, startTime: '23:30', endTime: '00:30' },
+          { id: SET_NIGHT, artist: 'Yan Night', stageId: STAGE_MAIN, startTime: '01:00', endTime: '02:00' },
         ],
       },
     ],
@@ -193,6 +197,26 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     assert.match(res.text, /Share Test Fest/);
     // The picked artist must appear in the rendered page.
     assert.match(res.text, /Aria/);
+  });
+
+  test('picks sort by festival time: a 01:00 set comes after 23:30', async () => {
+    if (!createFestivalPlanner) return;
+    const server = (await startServer())!;
+    servers.push(server);
+    const user = await registerUser(server, 'sorter');
+    const profile = await joinFestival(server, user.token);
+    await server.request
+      .put(`/api/v1/profiles/${profile.id}`)
+      .set('x-user-token', user.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ picks: { [SET_A]: 'must', [SET_LATE]: 'must', [SET_NIGHT]: 'must' } })
+      .expect(200);
+
+    const res = await getShareHtml(server, profile.id);
+    assert.equal(res.status, 200);
+    const order = ['Aria', 'Zed Late', 'Yan Night'].map((n) => res.text.indexOf(n));
+    assert.ok(order.every((i) => i >= 0), 'all picked artists render');
+    assert.ok(order[0]! < order[1]! && order[1]! < order[2]!, `expected 20:00, 23:30, 01:00 order, got ${order}`);
   });
 
   test('share HTML sets restrictive CSP (no scripts, frame-ancestors none)', async () => {

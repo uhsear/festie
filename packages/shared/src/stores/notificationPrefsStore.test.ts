@@ -62,3 +62,36 @@ describe('notificationPrefsStore', () => {
     expect(useNotificationPrefsStore.getState().error).toBeTruthy();
   });
 });
+
+describe('notificationPrefsStore quiet-hours zone', () => {
+
+  beforeEach(() => {
+    useNotificationPrefsStore.setState({ prefs: DEFAULT_NOTIFICATION_PREFS, loaded: false });
+    mockApi.get.mockReset();
+    mockApi.put.mockReset();
+    mockApi.put.mockResolvedValue({});
+  });
+
+  it('sends the device zone when a quiet-hours window is set', async () => {
+    const real = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    await useNotificationPrefsStore.getState().updatePrefs({ dndStart: '23:00', dndEnd: '08:00' });
+    expect(mockApi.put).toHaveBeenCalledWith('/notifications/prefs', {
+      dndStart: '23:00',
+      dndEnd: '08:00',
+      dndTimeZone: real,
+    });
+  });
+
+  it('re-saves the zone on load when it differs from the device zone', async () => {
+    mockApi.get.mockResolvedValue({ dndStart: '23:00', dndEnd: '08:00', dndTimeZone: 'Stale/Zone' });
+    const real = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    await useNotificationPrefsStore.getState().loadPrefs();
+    expect(mockApi.put).toHaveBeenCalledWith('/notifications/prefs', { dndTimeZone: real });
+  });
+
+  it('does not re-save when quiet hours are off', async () => {
+    mockApi.get.mockResolvedValue({});
+    await useNotificationPrefsStore.getState().loadPrefs();
+    expect(mockApi.put).not.toHaveBeenCalled();
+  });
+});

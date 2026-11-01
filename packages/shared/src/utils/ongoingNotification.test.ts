@@ -74,7 +74,7 @@ describe('buildOngoingNotificationModel', () => {
     const m = buildOngoingNotificationModel({ sets, days, now: localMs(20, 30) });
     expect(m.focusSet?.kind).toBe('now');
     expect(m.title).toBe('Now: Anyma');
-    expect(m.body).toContain('until 21:00');
+    expect(m.body).toContain('until 9:00 PM');
   });
 
   it('appends an offline-honest last-synced meeting-point line', () => {
@@ -110,6 +110,17 @@ describe('buildOngoingNotificationModel', () => {
     expect(m.active).toBe(true);
     // s2 is the next set, so it focuses s2 rather than going meeting-point-only.
     expect(m.focusSet?.id).toBe('s2');
+  });
+});
+
+describe('buildOngoingNotificationModel with a festival zone', () => {
+  it('reads set bounds and the clock in the festival zone', () => {
+    const sets = [set('s1', '20:00', '21:00', 'Anyma')];
+    // 20:30 EDT (UTC-4) on 2026-09-04 is 00:30Z on 2026-09-05.
+    const now = Date.UTC(2026, 8, 5, 0, 30);
+    const m = buildOngoingNotificationModel({ sets, days, now, timeZone: 'America/New_York' });
+    expect(m.title).toBe('Now: Anyma');
+    expect(m.body).toContain('until 9:00 PM');
   });
 });
 

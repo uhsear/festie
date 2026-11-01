@@ -99,10 +99,13 @@ describe('reminder-scheduler: processProfileReminders (via tick)', () => {
     // Use local date and local hours/minutes consistently so the computed
     // timestamp matches the expected setStartMs (within 1 minute due to
     // HH:MM truncation).
-    const setDate = new Date(setStartMs);
+    // A start before 06:00 belongs to the previous logical day, so date the day row
+    // on that day; otherwise the scheduler rolls the start 24 hours forward.
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
     const localDateStr = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
-    const localHours = setDate.getHours();
-    const localMinutes = setDate.getMinutes();
+    const localHours = startClock.getHours();
+    const localMinutes = startClock.getMinutes();
 
     // Build a festival query chain
     let callIndex = 0;
@@ -249,10 +252,13 @@ describe('reminder-scheduler: processProfileReminders (via tick)', () => {
     const notifyFn = mock.fn(async () => ({ sent: 0, reason: 'no_tokens' }));
     const prefsFn = mock.fn(async () => null);
 
-    const setDate = new Date(setStartMs);
+    // A start before 06:00 belongs to the previous logical day, so date the day row
+    // on that day; otherwise the scheduler rolls the start 24 hours forward.
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
     const localDateStr = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
-    const localHours = setDate.getHours();
-    const localMinutes = setDate.getMinutes();
+    const localHours = startClock.getHours();
+    const localMinutes = startClock.getMinutes();
 
     const queryFn = mock.fn(async (sql: string) => {
       if (sql.includes('festivals')) {
@@ -344,5 +350,47 @@ describe('reminder-scheduler: processProfileReminders (via tick)', () => {
 
     // setReminders is false, should not notify
     assert.equal(notifyFn.mock.calls.length, 0);
+  });
+});
+
+describe('reminder-scheduler: after-midnight sets', () => {
+  // 00:30 on day 0 (2026-09-04, New York EDT = UTC-4) is 2026-09-05T04:30Z.
+  async function runCase(stageRows: any[]) {
+    const startMs = Date.parse('2026-09-05T04:30:00Z');
+    const mockNow = mock.method(Date, 'now', () => startMs - 15 * 60_000);
+    const notifyFn = mock.fn(async () => ({ sent: 1 }));
+    const queryFn = mock.fn(async (sql: string) => {
+      if (sql.includes('festival_days')) return { rows: [{ day_index: 0, label: 'Fri', date: '2026-09-04' }] };
+      if (sql.includes('festival_stages')) return { rows: stageRows };
+      if (sql.includes('festival_sets')) {
+        return { rows: [{ id: 'set-1', day_index: 0, artist: 'Night Owl', artists: null, stage_id: 'stage-1', startTime: '00:30', endTime: '02:00' }] };
+      }
+      if (sql.includes('festival_profiles')) {
+        return { rows: [{ id: 'fp-1', userId: 'user-1', remindersJson: JSON.stringify({ 'set-1': 15 }), picksJson: '{}' }] };
+      }
+      if (sql.includes('festivals')) return { rows: [{ id: 'fest-1', name: 'Test Fest', timeZone: 'America/New_York' }] };
+      return { rows: [] };
+    });
+    try {
+      const scheduler = createReminderScheduler(
+        makeDeps({ pool: { query: queryFn }, notificationService: { send: notifyFn } }),
+      );
+      await scheduler.tick();
+    } finally {
+      mockNow.mock.restore();
+    }
+    return notifyFn.mock.calls as any[];
+  }
+
+  it('fires on the next calendar day with a stage in the body', async () => {
+    const calls = await runCase([{ id: 'stage-1', name: 'Sahara' }]);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]!.arguments[0].body, '12:30 AM at Sahara');
+  });
+
+  it('says "Starts at" and never invents a stage when there is none', async () => {
+    const calls = await runCase([]);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]!.arguments[0].body, 'Starts at 12:30 AM');
   });
 });

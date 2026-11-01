@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
+import { formatTime } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import { parseHomeBaseTime } from '../lib/homeBaseTime';
 import Button from './Button';
 
 interface CrewHomeBaseProps {
@@ -28,6 +30,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
   const [loc, setLoc] = useState(location ?? '');
   const [timeValue, setTimeValue] = useState(time ?? '');
   const [saving, setSaving] = useState(false);
+  const [timeError, setTimeError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<'location' | 'time' | null>(null);
 
   // Keep the form in sync when the crew's stored values change underneath us.
@@ -38,17 +41,24 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
   }, [location, time]);
 
   const hasHomeBase = !!location;
+  const timeDisplay = time && /^\d{2}:\d{2}$/.test(time) ? formatTime(time) : time;
 
   if (!hasHomeBase && !isOwner) return null;
 
   const handleSave = async () => {
     const trimmed = loc.trim();
     if (!trimmed || saving) return;
+    const parsedTime = timeValue.trim() ? parseHomeBaseTime(timeValue) : null;
+    if (timeValue.trim() && !parsedTime) {
+      setTimeError('Use a time like 6:00 PM');
+      return;
+    }
+    setTimeError(null);
     setSaving(true);
     try {
       await updateHomeBase(crewId, {
         location: trimmed,
-        time: timeValue.trim() || null,
+        time: parsedTime,
       });
       setEditing(false);
     } catch {
@@ -90,7 +100,10 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
           placeholder="Time (optional, e.g. 6:00 PM)"
           placeholderTextColor={t.colors.text.placeholder}
           value={timeValue}
-          onChangeText={setTimeValue}
+          onChangeText={(v) => {
+            setTimeValue(v);
+            setTimeError(null);
+          }}
           maxLength={100}
           returnKeyType="done"
           onSubmitEditing={handleSave}
@@ -98,6 +111,11 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
           onBlur={() => setFocusedField((f) => (f === 'time' ? null : f))}
           accessibilityLabel="Home base time"
         />
+        {timeError ? (
+          <Text style={styles.errorText} accessibilityRole="alert">
+            {timeError}
+          </Text>
+        ) : null}
         <Button
           label="Save"
           loading={saving}
@@ -119,7 +137,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
       disabled={!isOwner}
       activeOpacity={isOwner ? 0.8 : 1}
       accessibilityRole={isOwner ? 'button' : 'text'}
-      accessibilityLabel={hasHomeBase ? `Home base ${location}${time ? ` at ${time}` : ''}` : 'Set crew home base'}
+      accessibilityLabel={hasHomeBase ? `Home base ${location}${timeDisplay ? ` at ${timeDisplay}` : ''}` : 'Set crew home base'}
     >
       <Ionicons name="location" size={16} color={hasHomeBase ? t.colors.accent.aqua : t.colors.text.muted} />
       <View style={styles.cardInfo}>
@@ -128,7 +146,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
             <Text style={styles.cardLocation} numberOfLines={1}>
               {location}
             </Text>
-            {time ? <Text style={styles.cardTime}>{time}</Text> : null}
+            {timeDisplay ? <Text style={styles.cardTime}>{timeDisplay}</Text> : null}
           </View>
         ) : (
           <Text style={styles.cardPlaceholder}>Tap to set your crew's Home Base</Text>
@@ -173,6 +191,10 @@ const useStyles = makeStyles((t) => ({
   cardTime: {
     ...typeStyle('caption'),
     color: t.colors.accent.aqua,
+  },
+  errorText: {
+    ...typeStyle('caption'),
+    color: t.colors.status.error,
   },
   cardPlaceholder: {
     ...typeStyle('caption'),

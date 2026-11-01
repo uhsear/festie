@@ -1,5 +1,5 @@
 import { FestivalSet, Priority } from '../types/domain';
-import { timeToMinutes } from './format';
+import { setMinuteRange } from './setStatus';
 
 export interface ConflictDetected {
   setA: FestivalSet;
@@ -38,13 +38,12 @@ export function detectConflicts(sets: FestivalSet[], getMyPick: GetMyPickFn): Co
       // so single-day festivals and callers that don't stamp dayIndex still work.
       if (a.dayIndex != null && b.dayIndex != null && a.dayIndex !== b.dayIndex) continue;
 
-      const aS = timeToMinutes(a.startTime);
-      let aE = timeToMinutes(a.endTime);
-      if (aE <= aS) aE += 1440;
-
-      const bS = timeToMinutes(b.startTime);
-      let bE = timeToMinutes(b.endTime);
-      if (bE <= bS) bE += 1440;
+      // Minutes from the logical day's midnight, so a 00:30 set sits after 23:30.
+      const ra = setMinuteRange(a);
+      const rb = setMinuteRange(b);
+      if (!ra || !rb) continue;
+      const { start: aS, end: aE } = ra;
+      const { start: bS, end: bE } = rb;
 
       if (aS < bE && bS < aE) {
         const key = [a.id, b.id].sort().join('-');

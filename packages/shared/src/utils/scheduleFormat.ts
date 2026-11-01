@@ -1,4 +1,5 @@
 import type { FestivalSet } from '../types/domain';
+import { festivalStartMinutes } from './setStatus';
 
 /**
  * Schedule-display helpers shared by both the mobile festival surfaces
@@ -24,24 +25,11 @@ export function fmtCountdown(mins: number): string {
 }
 
 /**
- * "HH:MM" 24-hour clock label from an **epoch-ms** timestamp, rendered in
- * the device's local frame.
+ * Ascending comparator for festival sets by start time within the festival day.
  *
- * Used on the festival-mode "until HH:MM" and NowNextStrip timing labels.
- * Intentionally NOT locale-formatted (no AM/PM) so the output is compact and
- * consistent across locales on both web (Date API) and RN (same Date API).
- */
-export function fmtClock(ms: number): string {
-  const d = new Date(ms);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-}
-
-/**
- * Ascending comparator for festival sets by `startTime` ("HH:MM" string).
- *
- * Sets with a startTime sort before sets without one. Stable for `Array.sort`.
+ * A start before 06:00 belongs to the night before (`festivalStartMinutes`), so
+ * `01:00` sorts after `23:30`. Sets with a startTime sort before sets without
+ * one. Stable for `Array.sort`.
  * Used in the mobile timeline and crew-compare screens to order sets
  * chronologically; lifted here so both screens share an identical sort and web
  * can adopt it without duplicating the logic.
@@ -49,7 +37,7 @@ export function fmtClock(ms: number): string {
 export function byStartTime(a: FestivalSet, b: FestivalSet): number {
   const ta = a.startTime || '';
   const tb = b.startTime || '';
-  if (ta && tb) return ta.localeCompare(tb);
+  if (ta && tb) return festivalStartMinutes(ta) - festivalStartMinutes(tb);
   if (ta && !tb) return -1;
   if (!ta && tb) return 1;
   return 0;

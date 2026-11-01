@@ -1683,6 +1683,7 @@ export type components = {
             crewUpdates: number;
             dndEnd: string | null;
             dndStart: string | null;
+            dndTimeZone: string | null;
             lineupDrops: number;
             scheduleChanges: number;
             setReminders: number;

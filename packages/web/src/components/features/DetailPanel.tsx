@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, hasSetStarted, buildHomeUrl } from '@festie/shared/utils';
+import { formatTime, artistDisplayName, hasSetStarted, buildHomeUrl, festivalTimeLabel, resolveFestivalTimeZone } from '@festie/shared/utils';
 import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -16,6 +16,7 @@ import DetailCrewSection from './DetailCrewSection';
 import DetailNotesSection from './DetailNotesSection';
 import { useDetailPanelData } from './useDetailPanelData';
 import { useHaptics } from '../../hooks/useHaptics';
+import { useNow } from '../../hooks/useSetStatus';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useToast } from '../../lib/toastContext';
 import { Share2 } from 'lucide-react';
@@ -57,6 +58,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     getStageName,
     getMyPick,
   } = useDetailPanelData(set);
+  const timeLabel = festivalTimeLabel(resolveFestivalTimeZone(currentFestival), useNow());
 
   const { select: selectHaptic, success: successHaptic, warning: warningHaptic } = useHaptics();
   const { toast, toastError } = useToast();
@@ -326,6 +328,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
 
               <div className="text-base text-text-secondary tabular-nums">
                 {set.startTime && set.endTime ? formatTime(set.startTime) + ' - ' + formatTime(set.endTime) : 'TBA'}
+                {set.startTime && set.endTime && timeLabel && <span className="text-text-muted"> · {timeLabel}</span>}
               </div>
             </div>
 

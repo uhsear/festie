@@ -3,6 +3,7 @@ import { View, Text, Switch, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useNotificationPrefsStore, useFestivalStore } from '@festie/shared/stores';
 import { api } from '@festie/shared/services';
+import { timeZoneCity } from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
 import { formatQuietHours } from '../lib/accountFormat';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
@@ -278,7 +279,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
               <Text style={styles.rowTitle}>Quiet hours</Text>
               <Text style={styles.rowHint}>
                 {quietOn && quietCaption
-                  ? `Mutes everything ${quietCaption}`
+                  ? `Mutes everything ${quietCaption}${prefs.dndTimeZone ? ` (${timeZoneCity(prefs.dndTimeZone)} time)` : ''}`
                   : 'Mutes notifications during your chosen window'}
               </Text>
             </View>

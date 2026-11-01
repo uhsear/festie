@@ -1,7 +1,7 @@
 /**
  * Shared constants and utility functions for the timeline grid view.
  *
- * Pure grid utils (toMin, fmtHour, fmtShort, getPxPerMin, getGutterW) and
+ * Pure grid utils (fmtHour, fmtShort, getPxPerMin, getGutterW) and
  * interfaces (GridBounds, HourMark) now live in @festie/shared/utils so mobile
  * can consume them. Re-exported here so existing web call sites don't churn.
  *
@@ -9,7 +9,7 @@
  * web-only (var(--color-accent-*)) and are meaningless in React Native.
  */
 
-export { toMin, fmtHour, fmtShort, getPxPerMin, getGutterW } from '@festie/shared/utils';
+export { fmtHour, fmtShort, getPxPerMin, getGutterW } from '@festie/shared/utils';
 export type { GridBounds, HourMark } from '@festie/shared/utils';
 
 export const PICK_COLOR: Record<string, string> = {

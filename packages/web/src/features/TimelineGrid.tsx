@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { FestivalSet, Priority, Stage, Profile, Festival } from '@festie/shared/types';
-import { timeToMinutes } from '@festie/shared/utils';
+import { setMinuteRange } from '@festie/shared/utils';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { cn } from '../lib/utils';
 import { stageTextColor } from '../components/ui/StageBadge';
@@ -241,9 +241,9 @@ export default function TimelineGrid({
         const color = getStageColor(st.id);
         const stageSets = setsByStage.get(st.id) || [];
         return stageSets.map((s) => {
-          const startMin = timeToMinutes(s.startTime!);
-          let endMin = timeToMinutes(s.endTime!);
-          if (endMin <= startMin) endMin += 24 * 60;
+          const range = setMinuteRange(s);
+          if (!range) return null;
+          const { start: startMin, end: endMin } = range;
           const topSlot = (startMin - timeBounds.minMin) / SLOT_MINUTES;
           const spanSlots = (endMin - startMin) / SLOT_MINUTES;
 

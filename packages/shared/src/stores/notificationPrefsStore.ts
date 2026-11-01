@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../services/api';
 import { mapErrorToUserMessage } from '../services/errors';
+import { isValidTimeZone } from '../utils/festivalTime';
 
 /**
  * Per-user notification preferences, backed by GET/PUT /notifications/prefs.
@@ -21,6 +22,8 @@ export interface NotificationPreferences {
   wrapReady: boolean;
   dndStart: string | null;
   dndEnd: string | null;
+  /** IANA zone the quiet-hours window is read in; null = server clock. */
+  dndTimeZone: string | null;
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
@@ -32,6 +35,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
   wrapReady: true,
   dndStart: null,
   dndEnd: null,
+  dndTimeZone: null,
 };
 
 function toBool(v: unknown, dflt: boolean): boolean {
@@ -50,7 +54,17 @@ function normalize(raw: Record<string, unknown> | null | undefined): Notificatio
     wrapReady: toBool(r.wrapReady, true),
     dndStart: (r.dndStart as string) ?? null,
     dndEnd: (r.dndEnd as string) ?? null,
+    dndTimeZone: (r.dndTimeZone as string) ?? null,
   };
+}
+
+function deviceTimeZone(): string | null {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return isValidTimeZone(tz) ? tz : null;
+  } catch {
+    return null;
+  }
 }
 
 interface NotificationPrefsState {
@@ -72,7 +86,16 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>((set, ge
     set({ isLoading: true, error: null });
     try {
       const raw = await api.get<Record<string, unknown>>('/notifications/prefs');
-      set({ prefs: normalize(raw), loaded: true, isLoading: false });
+      const prefs = normalize(raw);
+      set({ prefs, loaded: true, isLoading: false });
+      // Quiet hours follow the phone when the user travels.
+      // shortcut: the zone updates only when the user opens Account; upgrade to a sync on app foreground.
+      const device = deviceTimeZone();
+      if (prefs.dndStart && device && device !== prefs.dndTimeZone) {
+        get()
+          .updatePrefs({ dndTimeZone: device })
+          .catch(() => {});
+      }
     } catch (err) {
       set({ error: mapErrorToUserMessage(err, 'Failed to load notification settings'), isLoading: false });
       throw err;
@@ -81,6 +104,8 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>((set, ge
 
   updatePrefs: async (patch: Partial<NotificationPreferences>) => {
     const prev = get().prefs;
+    // Setting a quiet-hours window pins it to the zone the user is in right now.
+    if (typeof patch.dndStart === 'string') patch = { ...patch, dndTimeZone: deviceTimeZone() };
     const next = { ...prev, ...patch };
     set({ prefs: next, error: null }); // optimistic
     try {

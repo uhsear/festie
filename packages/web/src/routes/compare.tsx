@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
 import { useCrew, useFestival } from '@festie/shared/hooks';
-import { resolveStageColor } from '@festie/shared/utils';
+import { byStartTime, resolveStageColor } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
 import GuestTeaser from '../components/features/GuestTeaser';
 import EmptyState from '../components/ui/EmptyState';
@@ -50,7 +50,7 @@ function CompareViewInner() {
         return { set: s, mine, others, pickers };
       })
       .filter((r) => r.pickers > 0)
-      .sort((a, b) => (a.set.startTime || '').localeCompare(b.set.startTime || ''));
+      .sort((a, b) => byStartTime(a.set, b.set));
   }, [sets, selectedDay, currentProfile, getCrewScopedOtherPicks]);
 
   if (!user) return <GuestTeaser mode="crew" />;
