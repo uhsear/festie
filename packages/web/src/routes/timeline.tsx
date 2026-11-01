@@ -23,9 +23,12 @@ import { cn } from '../lib/utils';
 
 export default function TimelineView() {
   return (
-    <RenderErrorBoundary name="timeline">
-      <TimelineViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Timeline</h1>
+      <RenderErrorBoundary name="timeline">
+        <TimelineViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 

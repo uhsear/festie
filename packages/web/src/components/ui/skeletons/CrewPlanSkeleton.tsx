@@ -4,7 +4,8 @@
  */
 export default function CrewPlanSkeleton() {
   return (
-    <div className="space-y-4 pb-6 max-w-2xl mx-auto px-3 w-full" aria-busy="true" aria-label="Loading crew plan">
+    <div className="space-y-4 pb-6 max-w-2xl mx-auto px-3 w-full" aria-busy="true" aria-label="Loading crew plan" role="status" aria-live="polite">
+      <span className="sr-only">Loading crew plan…</span>
       {/* back link */}
       <div className="skeleton-shimmer h-4 w-24" />
 

@@ -59,11 +59,10 @@ async function registerUser(page: Page, app: { baseUrl: string }, username: stri
 }
 
 // Navigate to one of the three schedule views via the in-page ScheduleViewSwitcher.
-// The switcher uses honest nav semantics (plain buttons + aria-current, no
-// tablist — it navigates routes rather than swapping panels), aria-label
-// "Cards view" / "Timeline view" / "Grid view".
+// The switcher is a nav of route links (aria-current on the active one, no
+// tablist), named by their visible text "Cards" / "Timeline" / "Grid".
 async function openScheduleView(page: Page, label: 'Cards' | 'Timeline' | 'Grid') {
-  await page.getByRole('button', { name: `${label} view` }).click();
+  await page.getByRole('link', { name: label, exact: true }).click();
 }
 
 // Open a set's detail panel by clicking its card's click-target button.
@@ -114,7 +113,7 @@ test.describe('festival planner browser regression', () => {
 
     // Guests now get the full nav (parity with mobile) instead of a guest
     // banner: the "My Picks" tab is visible even when logged out.
-    await expect(page.getByRole('button', { name: 'My Picks' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'My Picks' })).toBeVisible();
 
     // Switch to fest-2 → Omega appears (Friday/Sunday differ; Sunday is the only day).
     await page.locator('[data-testid="festival-select"]').selectOption('fest-2');
@@ -267,23 +266,23 @@ test.describe('festival planner browser regression', () => {
 
 // ── Nav helpers that tolerate desktop (Header) vs mobile (BottomNav) ─────────
 
-// The desktop Header nav uses plain text buttons ("My Picks", "Crew"); the
-// mobile BottomNav uses buttons with aria-label "View Picks" / "View Crew".
+// The desktop Header nav uses plain text links ("My Picks", "Crew"); the
+// mobile BottomNav uses links with aria-label "View Picks" / "View Crew".
 // Click whichever exists for the current viewport.
 async function openMyPicks(page: Page) {
-  const desktop = page.getByRole('button', { name: 'My Picks' });
+  const desktop = page.getByRole('link', { name: 'My Picks' });
   if (await desktop.count()) {
     await desktop.first().click();
     return;
   }
-  await page.getByRole('button', { name: 'View Picks' }).click();
+  await page.getByRole('link', { name: 'View Picks' }).click();
 }
 
 async function openCrew(page: Page) {
-  const desktop = page.getByRole('button', { name: 'Crew', exact: true });
+  const desktop = page.getByRole('link', { name: 'Crew', exact: true });
   if (await desktop.count()) {
     await desktop.first().click();
     return;
   }
-  await page.getByRole('button', { name: 'View Crew' }).click();
+  await page.getByRole('link', { name: 'View Crew' }).click();
 }

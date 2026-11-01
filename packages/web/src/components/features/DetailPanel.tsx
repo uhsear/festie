@@ -237,7 +237,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             closeBtnRef.current?.focus();
           }}
         >
-          <div className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-border-light flex-shrink-0 lg:hidden" />
+          <div aria-hidden="true" className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-border-light flex-shrink-0 lg:hidden" />
           <Drawer.Title className="sr-only">{artistDisplayName(set, b2bSeparator)}</Drawer.Title>
           <Drawer.Description className="sr-only">
             Set details, schedule, and crew info for {artistDisplayName(set, b2bSeparator)}

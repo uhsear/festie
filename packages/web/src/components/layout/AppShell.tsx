@@ -9,6 +9,7 @@ import BottomNav from './BottomNav';
 import SubHeader from './SubHeader';
 import ScheduleViewSwitcher, { isSchedulePath } from './ScheduleViewSwitcher';
 import PageTransition from './PageTransition';
+import RouteAnnouncer from './RouteAnnouncer';
 import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
@@ -130,6 +131,7 @@ export default function AppShell() {
         )}
         aria-label="Authentication"
       >
+        <RouteAnnouncer />
         <Suspense fallback={<RouteFallback />}>
           <Outlet />
         </Suspense>
@@ -162,6 +164,7 @@ export default function AppShell() {
         </a>
 
         <OfflineBanner />
+        <RouteAnnouncer />
         <UpdatePrompt />
         <IOSInstallSheet />
         <Onboarding suspended={!!pendingJoinCode} />

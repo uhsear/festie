@@ -55,22 +55,23 @@ export default function Toast() {
               {getIcon(t.type)}
               <div className="flex-1">
                 <p className="text-sm font-medium">{t.message}</p>
-                {t.onUndo && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      t.onUndo?.();
-                      removeToast(t.id);
-                    }}
-                    aria-label={`Undo: ${t.message}`}
-                    className="text-xs mt-1 opacity-75 hover:opacity-100 flex items-center gap-1 transition-opacity min-h-11 min-w-11"
-                  >
-                    <RotateCcw className="w-3 h-3" aria-hidden="true" />
-                    Undo
-                  </button>
-                )}
               </div>
             </div>
+
+            {t.onUndo && (
+              <button
+                type="button"
+                onClick={() => {
+                  t.onUndo?.();
+                  removeToast(t.id);
+                }}
+                aria-label={`Undo: ${t.message}`}
+                className="text-sm font-semibold underline-offset-2 hover:underline inline-flex items-center gap-1 min-h-11 min-w-11 px-2 flex-shrink-0"
+              >
+                <RotateCcw className="w-4 h-4" aria-hidden="true" />
+                Undo
+              </button>
+            )}
 
             <button
               type="button"

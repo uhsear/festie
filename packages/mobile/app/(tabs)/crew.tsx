@@ -160,6 +160,7 @@ export default function CrewScreen() {
   const [forceAddId, setForceAddId] = useState('');
   const [forceAddBusy, setForceAddBusy] = useState(false);
   const [reformBusy, setReformBusy] = useState(false);
+  const [managingMemberId, setManagingMemberId] = useState<string | null>(null);
   // P1-2: which crew section tab is showing. Members / Plan / Logistics / Money.
   // Day-of first: Find (SOS, status, live location, meeting points) opens by default.
   const [crewTab, setCrewTab] = useState<CrewTabKey>('logistics');
@@ -808,6 +809,7 @@ export default function CrewScreen() {
         <FlatList
           style={styles.flex1}
           data={members}
+          extraData={managingMemberId}
           keyExtractor={(m) => m.userId}
           contentContainerStyle={memberListStyle}
           contentInsetAdjustmentBehavior="automatic"
@@ -822,45 +824,42 @@ export default function CrewScreen() {
             // Owners may manage other members (kick + transfer). Force-add and
             // these controls hit admin-gated shared store actions.
             const canManage = isOwner && !rowIsOwner && !isSelf;
+            const managing = managingMemberId === item.userId;
             return (
-              <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{getInitials(item.name ?? '') || '?'}</Text>
-                </View>
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName} numberOfLines={2}>
-                    {displayName}
-                    {isSelf ? ' (you)' : ''}
-                  </Text>
-                  {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
-                </View>
-                {canManage ? (
-                  <View style={[styles.memberActions, largeText && styles.memberActionsWrap]}>
-                    <TouchableOpacity
-                      onPress={() => handleTransfer(crew.id, item)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Transfer ownership to ${displayName}`}
-                    >
-                      {/* swap-horizontal reads as "hand over / transfer"; the
-                          star glyph is reserved for the Owner badge so the two
-                          aren't visually conflated. */}
-                      <Ionicons name="swap-horizontal" size={18} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleKick(crew.id, item)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${displayName} from crew`}
-                    >
-                      <Ionicons name="person-remove-outline" size={18} color={t.colors.text.danger} />
-                    </TouchableOpacity>
+              <View>
+                <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{getInitials(item.name ?? '') || '?'}</Text>
                   </View>
-                ) : rowIsOwner ? (
-                  <View accessible accessibilityLabel="Owner">
-                    <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName} numberOfLines={2}>
+                      {displayName}
+                      {isSelf ? ' (you)' : ''}
+                    </Text>
+                    {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
+                  </View>
+                  {canManage ? (
+                    <TouchableOpacity
+                      onPress={() => setManagingMemberId(managing ? null : item.userId)}
+                      style={styles.manageButton}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Manage ${displayName}`}
+                      accessibilityState={{ expanded: managing }}
+                    >
+                      <Text style={styles.manageButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Manage</Text>
+                      <Ionicons name={managing ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.accent.aqua} />
+                    </TouchableOpacity>
+                  ) : rowIsOwner ? (
+                    <View accessible accessibilityLabel="Owner">
+                      <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
+                    </View>
+                  ) : null}
+                </View>
+                {canManage && managing ? (
+                  <View style={styles.memberActionRow}>
+                    <Button variant="secondary" size="sm" label="Make owner" onPress={() => handleTransfer(crew.id, item)} />
+                    <Button variant="danger" size="sm" label="Remove from crew" onPress={() => handleKick(crew.id, item)} />
                   </View>
                 ) : null}
               </View>
@@ -1807,14 +1806,25 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
-  memberActions: {
+  manageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: t.spacing[2],
+    justifyContent: 'center',
+    gap: t.spacing[1],
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
   },
-  memberActionsWrap: {
-    width: '100%',
-    justifyContent: 'flex-end',
+  manageButtonText: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
+  },
+  memberActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[3],
+    paddingBottom: t.spacing[3],
   },
   liveSafetyBlock: {
     gap: t.spacing[3],
