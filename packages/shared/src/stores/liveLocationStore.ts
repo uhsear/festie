@@ -23,6 +23,7 @@
 import { create, StateCreator } from 'zustand';
 import type { PeerLocation, SosEntry } from '../types';
 import { LIVE_LOCATION } from '../constants/config';
+import { api } from '../services/api';
 
 export interface LiveLocationState {
   /** The crew this store is scoped to (viewing/sharing), or null when inactive. */
@@ -86,6 +87,11 @@ export interface LiveLocationActions {
    * argument (the socket "clear-all" / resolved path) clears every active SOS.
    */
   clearSos: (raiserId?: string) => void;
+  /**
+   * Read the crew's active SOS list over HTTP, so a member who opens the app
+   * after an SOS was raised still sees it. Never throws; keeps state on error.
+   */
+  loadActiveSos: (crewId: string) => Promise<void>;
   /** Full reset (e.g. on logout). */
   reset: () => void;
 }
@@ -191,6 +197,25 @@ const liveLocationStore: StateCreator<LiveLocationStore> = (set, get) => ({
       delete next[raiserId];
       return deriveSos(next);
     });
+  },
+
+  loadActiveSos: async (crewId) => {
+    const startedAt = Date.now();
+    try {
+      const res = await api.get<{ sos: SosEntry[] }>(`/crews/${crewId}/sos`);
+      if (get().crewId !== crewId) return;
+      const next: Record<string, SosEntry> = {};
+      for (const entry of res.sos) {
+        if (entry.crewId === crewId) next[entry.userId] = entry;
+      }
+      // A live sos:raised that landed mid-request is newer than the response.
+      for (const entry of Object.values(get().sosByUser)) {
+        if (new Date(entry.raisedAt).getTime() > startedAt) next[entry.userId] = entry;
+      }
+      set(deriveSos(next));
+    } catch (err) {
+      console.warn('[liveLocationStore] loadActiveSos failed; keeping current SOS state', err);
+    }
   },
 
   reset: () => {

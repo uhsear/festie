@@ -281,11 +281,11 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
   };
 
   const handleClose = (poll: CrewPoll) => {
-    // A schedule poll (carries `_setRefs`) spawns the winning set's meeting point
-    // + a seeded reminder on close; surface that in the confirm copy.
-    const isSchedule = !!poll._setRefs?.some((r) => r != null);
+    // A schedule poll (carries `set_refs`) gets the winning set's meeting point
+    // from the server on close, plus a reminder seeded here; surface that in the confirm copy.
+    const isSchedule = !!poll.set_refs?.some((r) => r != null);
     const message = isSchedule
-      ? `Close "${poll.question}"? The winning set becomes a crew meeting point with a reminder.`
+      ? `Close "${poll.question}"? The winning set becomes a meeting point for the whole crew, and you get a reminder 15 min before.`
       : `Close "${poll.question}"? This can't be undone.`;
     Alert.alert('Close poll', message, [
       { text: 'Cancel', style: 'cancel' },

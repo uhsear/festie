@@ -203,32 +203,6 @@ function dropOptimistic<T extends { _optimistic?: boolean }>(list: T[]): T[] {
   return list.filter((item) => item._optimistic !== true);
 }
 
-// ── Schedule-aware poll close (M2) ─────────────────────────────────────────
-// Tally a poll's votes and return the set linkage behind the WINNING option, or
-// null when the poll isn't schedule-aware, has no votes, or the winner is a
-// free-text option (no set behind it). Ties resolve to the lowest option index
-// (deterministic). Used by closePoll to spawn the meeting point + reminder.
-function resolveWinningSetRef(poll: CrewPoll): PollSetRef | null {
-  const refs = poll._setRefs;
-  if (!refs || refs.length === 0) return null;
-  const counts = new Array<number>(poll.options.length).fill(0);
-  for (const v of poll.votes || []) {
-    if (typeof v.option === 'number' && v.option >= 0 && v.option < counts.length) {
-      counts[v.option] = (counts[v.option] ?? 0) + 1;
-    }
-  }
-  let winner = -1;
-  let best = 0; // a winner needs at least one vote
-  for (let i = 0; i < counts.length; i++) {
-    if ((counts[i] ?? 0) > best) {
-      best = counts[i] ?? 0;
-      winner = i;
-    }
-  }
-  if (winner < 0) return null;
-  return refs[winner] ?? null;
-}
-
 let _lastSelectCrewId: string | null = null;
 
 const crewStore: StateCreator<CrewStore> = (set) => ({
@@ -574,10 +548,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   createPoll: async (crewId: string, request: CreateCrewPollRequest, setRefs?: (PollSetRef | null)[]) => {
     set({ error: null });
     try {
-      // Schedule-aware linkage is CLIENT-ONLY: attach it to local state but keep
-      // it out of the POST body so the server (which ignores it) stays the source
-      // of truth for the poll itself and no migration is needed. Only keep it
-      // when it actually links at least one option to a set.
+      // Only send the linkage when it links at least one option to a set.
       const localSetRefs = setRefs && setRefs.some((r) => r != null) ? setRefs : undefined;
       let optimisticPoll: CrewPoll | null = null;
       // The offline synthetic result is the BODY shape ({ ...request, id, _optimistic }),
@@ -585,7 +556,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       // and skip the envelope unwrap below for that case.
       const res = await api.post<{ poll: CrewPoll } | (CreateCrewPollRequest & { id: string; _optimistic: true })>(
         `/crews/${crewId}/polls`,
-        request,
+        localSetRefs ? { ...request, setRefs: localSetRefs } : request,
         {
           onOptimisticCreate: (result) => {
             const r = result as { id: string };
@@ -600,7 +571,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
               closed: false,
               created_at: new Date().toISOString(),
               _optimistic: true,
-              ...(localSetRefs ? { _setRefs: localSetRefs } : {}),
+              ...(localSetRefs ? { set_refs: localSetRefs } : {}),
             };
             set((state) => ({ polls: [optimisticPoll as CrewPoll, ...state.polls] }));
           },
@@ -609,13 +580,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       // Offline: the placeholder is already inserted; return it (don't re-insert).
       if (optimisticPoll) return optimisticPoll;
       const { poll } = res as { poll: CrewPoll };
-      // Re-attach the client-only linkage onto the authoritative server poll
-      // (the server never echoes it back).
-      const normalized: CrewPoll = {
-        ...poll,
-        votes: poll.votes ?? [],
-        ...(localSetRefs ? { _setRefs: localSetRefs } : {}),
-      };
+      const normalized: CrewPoll = { ...poll, votes: poll.votes ?? [] };
       set((state) => ({ polls: [normalized, ...state.polls] }));
       return normalized;
     } catch (err) {
@@ -686,48 +651,33 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
 
   // DELETE /crews/:crewId/polls/:pollId (close). Drop it from local state.
   //
-  // Schedule-aware close (M2): if the poll carries `_setRefs` (set by the
-  // composer) AND `opts` is supplied, the WINNING option's linked set becomes a
-  // shared meeting point (label=artist, stageReference=stage, meetAt=set start)
-  // via the existing createMeetingPoint, and a reminder is seeded via the
-  // injected `opts.seedReminder` (bound to festivalDataStore.saveReminder). We
-  // resolve the winner + the linked set BEFORE deleting so the poll/linkage is
-  // still in state. The meeting-point create and reminder are best-effort: a
-  // failure there is swallowed so it never blocks closing the poll. Plain polls
-  // (no `_setRefs`/`opts`) close exactly as before.
+  // The server tallies the votes and, for a schedule-aware poll, creates the
+  // winning set's meeting point and broadcasts it. We upsert the returned point
+  // (the socket event carries the same row, so this is idempotent). When the
+  // server reports a winning set and `opts.seedReminder` + `opts.festivalId` are
+  // set, a reminder is seeded for the closer only — best-effort, so a reminder
+  // failure never undoes a successful close. An offline-queued close returns no
+  // winningSetId, so no reminder is seeded; the server still creates the point
+  // on replay.
   closePoll: async (crewId: string, pollId: string, opts?: ClosePollOptions) => {
     set({ error: null });
-    // Resolve the winning set linkage up front (poll still present in state).
-    const poll = useCrewStore.getState().polls.find((p) => p.id === pollId);
-    const winningRef = poll ? resolveWinningSetRef(poll) : null;
+    let res: { meetingPoint?: CrewMeetingPoint | null; winningSetId?: string | null } | undefined;
     try {
-      await api.delete(`/crews/${crewId}/polls/${pollId}`);
+      res = await api.delete<{ closed: unknown; meetingPoint: CrewMeetingPoint | null; winningSetId: string | null }>(
+        `/crews/${crewId}/polls/${pollId}`,
+      );
       set((state) => ({ polls: state.polls.filter((p) => p.id !== pollId) }));
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to close poll');
       set({ error: message });
       throw err;
     }
-    // Post-close side effects — best-effort, never throw back to the caller so a
-    // meeting-point/reminder hiccup can't undo a successful close.
-    if (winningRef) {
+    if (res?.meetingPoint) useCrewStore.getState().applyMeetingPointUpsert(res.meetingPoint);
+    if (res?.winningSetId && opts?.seedReminder && opts.festivalId) {
       try {
-        await useCrewStore.getState().createMeetingPoint(crewId, {
-          label: winningRef.label,
-          location: winningRef.stageReference ?? '',
-          type: 'set',
-          stageReference: winningRef.stageReference,
-          meetAt: winningRef.meetAt,
-        });
+        await opts.seedReminder(res.winningSetId, opts.festivalId);
       } catch {
-        // createMeetingPoint already surfaced the error on the store.
-      }
-      if (opts?.seedReminder && opts.festivalId) {
-        try {
-          await opts.seedReminder(winningRef.setId, opts.festivalId);
-        } catch {
-          // Reminder seeding is best-effort; saveReminder surfaces its own error.
-        }
+        // Reminder seeding is best-effort; saveReminder surfaces its own error.
       }
     }
   },
@@ -1626,16 +1576,12 @@ registerCreateReconciler((clientId, serverResponse) => {
     useCrewStore.setState((state) => {
       const temp = state.polls.find((p) => p.id === clientId);
       if (!temp) return {};
-      // Carry the client-only schedule-aware linkage forward onto the real poll
-      // (the server never echoes `_setRefs`), so close still spawns the meeting
-      // point + reminder after an offline-created poll reconciles.
       const real: CrewPoll | null =
         poll && typeof poll.id === 'string'
           ? {
               ...poll,
               votes: poll.votes ?? [],
               _optimistic: false,
-              ...(temp._setRefs ? { _setRefs: temp._setRefs } : {}),
             }
           : null;
       const withoutTemp = state.polls.filter((p) => p.id !== clientId);

@@ -10,6 +10,8 @@ import {
   STATUS_UPDATE_LIMIT,
   PRESENCE_UPDATE_LIMIT,
   socketEventLimits,
+  clearSosActive,
+  listActiveSos,
 } from '../lib/rate-limiting.js';
 
 // Factory to create minimal deps for createRateLimiters
@@ -402,5 +404,51 @@ describe('rate-limiting: createAdminWriteRateLimit', () => {
       rl,
     );
     assert.equal(typeof middleware, 'function');
+  });
+});
+
+// ── SOS per-raiser state ────────────────────────────────────────────────
+
+describe('rate-limiting: SOS active state', () => {
+  it('listActiveSos skips an unparseable value and sorts newest first', async () => {
+    const now = Date.parse('2026-07-11T22:00:00.000Z');
+    const redis = {
+      hgetall: async () => ({
+        'user-a': JSON.stringify({ userId: 'user-a', raisedAt: '2026-07-11T21:50:00.000Z' }),
+        'user-bad': '{not json',
+        'user-b': JSON.stringify({ userId: 'user-b', raisedAt: '2026-07-11T21:55:00.000Z' }),
+      }),
+    };
+    const list = await listActiveSos(redis, 'crew-1', now);
+    assert.deepEqual(
+      list.map((e: any) => e.userId),
+      ['user-b', 'user-a'],
+    );
+  });
+
+  it('listActiveSos returns [] when Redis is missing or throws', async () => {
+    assert.deepEqual(await listActiveSos(null, 'crew-1', Date.now()), []);
+    const redis = {
+      hgetall: async () => {
+        throw new Error('down');
+      },
+    };
+    assert.deepEqual(await listActiveSos(redis, 'crew-1', Date.now()), []);
+  });
+
+  it('clearSosActive returns { unknown: true } when Redis throws', async () => {
+    const redis = {
+      hdel: async () => {
+        throw new Error('down');
+      },
+    };
+    assert.deepEqual(await clearSosActive(redis, 'crew-1', 'user-a'), { unknown: true });
+  });
+
+  it('clearSosActive reports whether that raiser was active', async () => {
+    const redis = { hdel: mock.fn(async (_key: string, field: string) => (field === 'user-a' ? 1 : 0)) };
+    assert.deepEqual(await clearSosActive(redis, 'crew-1', 'user-a'), { wasActive: true });
+    assert.deepEqual(await clearSosActive(redis, 'crew-1', 'user-b'), { wasActive: false });
+    assert.deepEqual((redis.hdel.mock.calls as any[])[0].arguments, ['sos:raisers:crew-1', 'user-a']);
   });
 });

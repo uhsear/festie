@@ -238,7 +238,11 @@ export interface SosRaisedPayload extends VersionedPayload {
   raisedAt: string;
 }
 
-/** server→client: emitted by POST /crews/:crewId/sos/clear. */
+/**
+ * server→client: emitted by POST /crews/:crewId/sos/clear. `userId` is the
+ * raiser whose SOS was cleared; `clearedBy` is the username of the person who
+ * cleared it. Late joiners read the active entries with GET /crews/:crewId/sos.
+ */
 export interface SosClearedPayload extends VersionedPayload {
   crewId: string;
   userId: string;

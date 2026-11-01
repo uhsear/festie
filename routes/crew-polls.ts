@@ -1,9 +1,11 @@
 import { Router } from 'express';
+import { MAX_MEETING_POINTS_PER_CREW } from '../lib/constants';
 
 export default function createCrewPollRoutes(deps: any) {
   const {
     log,
     userAuth,
+    createOpaqueId,
     sanitizeIdentifier,
     sendSuccess,
     sendError,
@@ -50,7 +52,7 @@ export default function createCrewPollRoutes(deps: any) {
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const { question, options, closesAt } = req.validatedBody;
+        const { question, options, closesAt, setRefs } = req.validatedBody;
         const userId = req.user.userId;
 
         const membership = await stores.crews.getMember(crewId, userId);
@@ -65,6 +67,7 @@ export default function createCrewPollRoutes(deps: any) {
           question,
           options,
           closesAt: closesAt ? new Date(closesAt) : null,
+          setRefs: setRefs ?? null,
         });
 
         io.to('crew:' + crewId).emit('crew:poll-created', {
@@ -146,9 +149,48 @@ export default function createCrewPollRoutes(deps: any) {
           return sendError(res, 403, 'Only creator or owner can close poll', ErrorCodes.FORBIDDEN);
         }
 
+        // close() is a no-op (undefined) when the poll was already closed, so a racing close creates nothing.
         const closed = await stores.polls.close(pollId);
-        io.to('crew:' + crewId).emit('crew:poll-closed', { pollId });
-        return sendSuccess(res, { closed });
+        let point: any = null;
+        let ref: any = null;
+        if (closed) {
+          io.to('crew:' + crewId).emit('crew:poll-closed', { pollId });
+          const setRefs = Array.isArray(poll.set_refs) ? poll.set_refs : [];
+          if (setRefs.some((r: any) => r)) {
+            try {
+              const counts: number[] = await stores.polls.tallyVotes(pollId);
+              let winner = -1;
+              counts.forEach((n, i) => {
+                if (n > 0 && (winner < 0 || n > counts[winner]!)) winner = i;
+              });
+              ref = winner >= 0 ? (setRefs[winner] ?? null) : null;
+              if (ref) {
+                const count = await stores.crews.meetingPoints.countByCrew(crewId);
+                if (count < MAX_MEETING_POINTS_PER_CREW) {
+                  const meetAt = ref.meetAt ?? null;
+                  point = await stores.crews.meetingPoints.create({
+                    id: createOpaqueId('mp'),
+                    crewId,
+                    createdBy: userId,
+                    label: String(ref.label).slice(0, 100),
+                    location: ref.stageReference || ref.label,
+                    type: 'set',
+                    meetAt,
+                    stageReference: ref.stageReference ?? null,
+                    expiresAt: meetAt ? new Date(new Date(meetAt).getTime() + 30 * 60_000).toISOString() : null,
+                    latitude: null,
+                    longitude: null,
+                    recursDaily: false,
+                  });
+                  io.to('crew:' + crewId).emit('crew:meeting-point-created', point);
+                }
+              }
+            } catch (mpErr: any) {
+              log.warn('poll close meeting point failed', { error: mpErr.message, pollId });
+            }
+          }
+        }
+        return sendSuccess(res, { closed: closed ?? null, meetingPoint: point ?? null, winningSetId: ref?.setId ?? null });
       } catch (err: any) {
         log.error('close poll error', { error: err.message });
         return sendError(res, 500, 'Failed to close poll', ErrorCodes.INTERNAL_ERROR);

@@ -75,6 +75,9 @@ export default function NotificationSection() {
           <p className="text-sm text-text-muted">
             You'll get notified when your crew picks sets, sends polls, or updates the meeting point.
           </p>
+          <p className="text-sm text-text-muted">
+            SOS alerts from your crew always come through, even when other alerts are muted.
+          </p>
           <Button variant="outline" fullWidth isLoading={pushBusy} onClick={handleDisablePush} className="min-h-[44px]">
             Disable Notifications
           </Button>

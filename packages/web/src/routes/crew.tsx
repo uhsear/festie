@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
 import { useCrewStore } from '@festie/shared/stores';
@@ -8,6 +8,7 @@ import { useFestivalStore } from '@festie/shared/stores';
 import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
+import SosRaiseButton from '../components/crew/SosRaiseButton';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
 import HomeBaseCard from '../components/crew/HomeBaseCard';
@@ -55,6 +56,11 @@ function CrewViewInner() {
   // Day-of first: the Meet tab (status, live location, SOS, meeting points).
   const [tab, setTab] = useState<TabKey>('meeting');
   const { toast, toastError } = useToast();
+  // /crew?sos=<userId> (SOS banner): open the Meet tab with the map aimed at that raiser.
+  const { sos: focusSosUserId } = useSearch({ from: '/crew' });
+  useEffect(() => {
+    if (focusSosUserId) setTab('meeting');
+  }, [focusSosUserId]);
 
   const { isAdmin, adminOpen, setAdminOpen, adminAddBusy, submitForceAdd, handleForceAdd } = useCrewAdmin(
     user,
@@ -220,6 +226,7 @@ function CrewViewInner() {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <FreshnessChip surface="crew" />
             <LastSyncedBadge surface="crew" />
+            <SosRaiseButton crewId={activeCrew.id} compact />
           </div>
 
           <HomeBaseCard
@@ -249,6 +256,7 @@ function CrewViewInner() {
             onTransferOwnership={handleTransferOwnership}
             onKick={handleKick}
             onDestroyCrew={() => setConfirmOpen(true)}
+            focusSosUserId={focusSosUserId}
           />
 
           {/* Setup rows sit after the day-of content. */}

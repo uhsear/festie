@@ -67,6 +67,17 @@ describe('lib/db/stores/polls.js', () => {
       assert.strictEqual(params[5], '2026-06-01T20:00:00Z');
     });
 
+    it('stringifies setRefs and passes null when absent', async () => {
+      const refs = [{ setId: 's', label: 'L', stageReference: null, meetAt: null }, null];
+      const pool = makePool([{ rows: [{ id: 'poll-1' }] }, { rows: [{ id: 'poll-2' }] }]);
+      const store = createPollsStore(pool);
+      const base = { crewId: 'c', createdBy: 'u', question: 'Q?', options: ['A', 'B'], closesAt: null };
+      await store.create({ ...base, setRefs: refs });
+      await store.create(base);
+      assert.strictEqual((pool.query.mock.calls[0]!.arguments as any[])[1][6], JSON.stringify(refs));
+      assert.strictEqual((pool.query.mock.calls[1]!.arguments as any[])[1][6], null);
+    });
+
     it('generates a unique poll id with poll- prefix', async () => {
       const pool = makePool([{ rows: [{ id: 'poll-generated' }] }]);
       const store = createPollsStore(pool);
@@ -449,6 +460,7 @@ describe('lib/db/stores/polls.js', () => {
       const call = pool.query.mock.calls[0]!;
       assert.ok((call.arguments as any[])[0].includes('UPDATE crew_polls'));
       assert.ok((call.arguments as any[])[0].includes('closed = TRUE'));
+      assert.ok((call.arguments as any[])[0].includes('AND closed = FALSE'));
       assert.ok((call.arguments as any[])[0].includes('RETURNING'));
       assert.deepStrictEqual((call.arguments as any[])[1], ['poll-1']);
     });
@@ -460,6 +472,15 @@ describe('lib/db/stores/polls.js', () => {
       const result = await store.close('nonexistent');
 
       assert.strictEqual(result, undefined);
+    });
+  });
+
+  describe('tallyVotes', () => {
+    it('maps rows to a count array indexed by option', async () => {
+      const pool = makePool([{ rows: [{ option_index: 2, n: 3 }, { option_index: 0, n: 1 }] }]);
+      const store = createPollsStore(pool);
+      assert.deepStrictEqual(await store.tallyVotes('poll-1'), [1, 0, 3]);
+      assert.deepStrictEqual((pool.query.mock.calls[0]!.arguments as any[])[1], ['poll-1']);
     });
   });
 

@@ -18,12 +18,14 @@ import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
-import { useCrewStore, useLiveLocationStore } from '@festie/shared/stores';
+import { useAuthStore, useCrewStore, useLiveLocationStore } from '@festie/shared/stores';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
+import { useSosRaise } from '../hooks/useSosRaise';
+import { CREW_MEET_HREF } from '../lib/dayOfRoutes';
 import EmptyState from '../components/EmptyState';
 import SectionLabel from '../components/SectionLabel';
 import Button from '../components/Button';
@@ -51,10 +53,17 @@ export default function FindScreen() {
   // R24: show pulsing coral ring on SOS FAB while an active SOS exists for
   // this crew. Continuous animation is justified (emergency). Ring stops when
   // SOS clears. Reduce-motion: static high-contrast coral ring, no animation.
-  const sos = useLiveLocationStore((s) => (s.sos && activeCrew && s.sos.crewId === activeCrew.id ? s.sos : null));
+  const userId = useAuthStore((s) => s.user?.id);
+  const activeSosList = useLiveLocationStore((s) => s.activeSosList);
+  const crewSosList = useMemo(
+    () => activeSosList.filter((e) => e.crewId === activeCrew?.id),
+    [activeSosList, activeCrew?.id],
+  );
+  const { confirmRaise } = useSosRaise(activeCrew?.id ?? null);
   const reduceMotion = useReduceMotion();
   const sosFabGlow = useSharedValue(0);
-  const sosActive = !!sos;
+  const sosActive = crewSosList.length > 0;
+  const mySosActive = crewSosList.some((e) => e.userId === userId);
   useEffect(() => {
     if (!sosActive || reduceMotion) {
       sosFabGlow.value = 0;
@@ -190,15 +199,15 @@ export default function FindScreen() {
           testID="find-sos-fab"
           style={styles.sosFab}
           onPress={() => {
-            // tap, not warning: this control OPENS the safety screen, it does not
-            // raise the alarm. warning() stays reserved for an actual SOS.
             haptics.tap();
-            router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } });
+            // Own SOS already up: open the crew tab so they can tap "I'm safe".
+            if (mySosActive) router.push(CREW_MEET_HREF);
+            else confirmRaise();
           }}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Open crew safety to send an SOS"
-          accessibilityHint="Opens the crew safety screen to send an SOS"
+          accessibilityLabel="Send an SOS to your crew"
+          accessibilityHint="Asks for confirmation before sending"
         >
           <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
           <Text style={styles.sosFabText}>SOS</Text>

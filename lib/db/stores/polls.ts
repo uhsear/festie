@@ -14,15 +14,15 @@ function safeParseJson(value: any, fallback: any) {
 
 export default function createPollsStore(pool: Pool, _utils: any) {
   return {
-    async create({ crewId, createdBy, question, options, closesAt }: any) {
+    async create({ crewId, createdBy, question, options, closesAt, setRefs }: any) {
       const id = 'poll-' + randomUUID();
       const result = await pool.query(
         `
-        INSERT INTO crew_polls (id, crew_id, created_by, question, options, closes_at, closed, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, FALSE, NOW())
-        RETURNING id, crew_id, created_by, question, options, closes_at, closed, created_at
+        INSERT INTO crew_polls (id, crew_id, created_by, question, options, closes_at, closed, created_at, set_refs)
+        VALUES ($1, $2, $3, $4, $5, $6, FALSE, NOW(), $7)
+        RETURNING id, crew_id, created_by, question, options, closes_at, closed, created_at, set_refs
       `,
-        [id, crewId, createdBy, question, JSON.stringify(options), closesAt],
+        [id, crewId, createdBy, question, JSON.stringify(options), closesAt, setRefs ? JSON.stringify(setRefs) : null],
       );
       return result.rows[0];
     },
@@ -93,10 +93,21 @@ export default function createPollsStore(pool: Pool, _utils: any) {
 
     async close(pollId: string) {
       const result = await pool.query(
-        'UPDATE crew_polls SET closed = TRUE WHERE id = $1 RETURNING id, crew_id, created_by, question, options, closes_at, closed, created_at',
+        'UPDATE crew_polls SET closed = TRUE WHERE id = $1 AND closed = FALSE RETURNING id, crew_id, created_by, question, options, closes_at, closed, created_at, set_refs',
         [pollId],
       );
       return result.rows[0];
+    },
+
+    // Vote counts indexed by option; options with no votes stay 0.
+    async tallyVotes(pollId: string) {
+      const result = await pool.query(
+        'SELECT option_index, COUNT(*)::int AS n FROM crew_poll_votes WHERE poll_id = $1 GROUP BY option_index',
+        [pollId],
+      );
+      const counts: number[] = [];
+      for (const row of result.rows) counts[row.option_index] = row.n;
+      return Array.from(counts, (n) => n ?? 0);
     },
 
     async countActiveByCrew(crewId: string) {
@@ -127,7 +138,8 @@ export default function createPollsStore(pool: Pool, _utils: any) {
     options,
     closes_at,
     closed,
-    created_at
+    created_at,
+    set_refs
   FROM
     crew_polls
   WHERE
@@ -140,6 +152,7 @@ export default function createPollsStore(pool: Pool, _utils: any) {
       return {
         ...row,
         options: Array.isArray(row.options) ? row.options : safeParseJson(row.options, []),
+        set_refs: safeParseJson(row.set_refs, null),
       };
     },
   };

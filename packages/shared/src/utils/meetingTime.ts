@@ -1,6 +1,6 @@
 import type { FestivalDay } from '../types/domain';
 import { formatTime } from './format';
-import { createDateInLocalFrame, zonedWallTimeToMs } from './setStatus';
+import { FESTIVAL_DAY_START_HOUR, createDateInLocalFrame, zonedWallTimeToMs } from './setStatus';
 
 /**
  * 055: resolve a crew meeting point's display time, honoring daily recurrence.
@@ -159,6 +159,44 @@ export function meetAtToWallInput(iso: string, timeZone?: string): string {
   const map: Record<string, string> = {};
   for (const p of parts) if (p.type !== 'literal') map[p.type] = p.value;
   return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}`;
+}
+
+function wallMs(date: string, hours: number, minutes: number, timeZone?: string): number {
+  return timeZone ? zonedWallTimeToMs(date, hours, minutes, timeZone) : createDateInLocalFrame(date, hours, minutes).getTime();
+}
+
+/**
+ * ISO instant for a wall-clock time on a festival day. A time before 06:00
+ * belongs to the night of that festival day, so it lands on the next calendar
+ * date (the logical-day rule, see `logicalDayIndexAt`). Read in `timeZone` when
+ * supplied, else device-local.
+ */
+export function meetAtForFestivalDay(day: DayLike, hours: number, minutes: number, timeZone?: string): string {
+  const h = hours < FESTIVAL_DAY_START_HOUR ? hours + 24 : hours;
+  return new Date(wallMs(day.date, h, minutes, timeZone)).toISOString();
+}
+
+/**
+ * Inverse of `meetAtForFestivalDay`: the logical festival day and wall-clock
+ * time of `meetAt`, for pre-filling an edit form. Null when `meetAt` is
+ * unparseable or falls outside every festival day.
+ */
+export function festivalDayTimeOf(
+  meetAt: string,
+  days: ReadonlyArray<DayLike>,
+  timeZone?: string,
+): { dayIndex: number; hours: number; minutes: number } | null {
+  const ms = new Date(meetAt).getTime();
+  const tod = meetAtTimeOfDay(meetAt, timeZone);
+  if (Number.isNaN(ms) || !tod) return null;
+  // Same bounds as dayOf.logicalDayIndexAt, inlined: dayOf imports this file.
+  const dayIndex = days.findIndex(
+    (d) =>
+      !!d?.date &&
+      ms >= wallMs(d.date, FESTIVAL_DAY_START_HOUR, 0, timeZone) &&
+      ms < wallMs(d.date, FESTIVAL_DAY_START_HOUR + 24, 0, timeZone),
+  );
+  return dayIndex < 0 ? null : { dayIndex, ...tod };
 }
 
 export interface MeetingTimeDisplay {

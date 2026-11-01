@@ -1,4 +1,4 @@
-import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref } from './dayOfRoutes';
+import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref, sosPushCrewId } from './dayOfRoutes';
 
 describe('day-of routes', () => {
   it('sends Browse lineup to the schedule tab, not the missing /schedule route', () => {
@@ -19,5 +19,12 @@ describe('day-of routes', () => {
     );
     expect(meetHref({ kind: 'home-base', id: null }, [])).toBe(CREW_MEET_HREF);
     expect(meetHref(null, [])).toBe(CREW_MEET_HREF);
+  });
+
+  it('reads the crew id from an SOS push only', () => {
+    expect(sosPushCrewId({ crewId: 'c1', deepLink: 'rave://crew/c1/sos' })).toBe('c1');
+    expect(sosPushCrewId({ deepLink: 'rave://crew/c1/sos' })).toBeNull();
+    expect(sosPushCrewId({ crewId: 'c1', deepLink: 'rave://crew/c1' })).toBeNull();
+    expect(sosPushCrewId(undefined)).toBeNull();
   });
 });

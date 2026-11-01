@@ -83,9 +83,11 @@ interface MeetingPointPayload {
 interface Props {
   crewId: string;
   currentUserId: string;
+  /** Raiser to aim the map at; opens Map view. */
+  focusSosUserId?: string;
 }
 
-export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
+export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId }: Props) {
   const { toast, toastError } = useToast();
   const qc = useQueryClient();
   // Festival timezone + days so recurring-point badges render the meet time in
@@ -113,7 +115,10 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const { locating, getCurrentPosition } = useCurrentPosition();
   // List vs Map view. Map is lazy + reveals <CrewMap/> only when chosen.
-  const [view, setView] = useState<'list' | 'map'>('list');
+  const [view, setView] = useState<'list' | 'map'>(focusSosUserId ? 'map' : 'list');
+  useEffect(() => {
+    if (focusSosUserId) setView('map');
+  }, [focusSosUserId]);
   const viewTablistRef = useRef<HTMLDivElement>(null);
   useRovingTabs(viewTablistRef);
 
@@ -309,17 +314,18 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
 
   return (
     <div className="space-y-3 px-4">
+      {/* Live Location + SOS (ephemeral, always visible so the share toggle / SOS /
+          active-SOS banner are reachable in both list & map views). First on the
+          tab: an emergency control belongs above the status card. No build-time
+          flag: the off-lever is server-side — LIVE_LOCATION_ENABLED / SOS_ENABLED
+          in lib/config.ts (both default ON) disable it for every client, no rebuild. */}
+      <LiveLocationControls crewId={crewId} currentUserId={currentUserId} />
+      <div className="h-px bg-border" />
+
       {/* M5: last-synced "on my way / ETA to [point]" — honest staleness, never
           live. ETA targets are the meeting points below; coord-bearing points
           enable a geo-computed ETA. */}
       <CrewStatus crewId={crewId} currentUserId={currentUserId} meetingPoints={points} />
-      <div className="h-px bg-border" />
-
-      {/* Live Location + SOS (ephemeral, always visible so the share toggle / SOS /
-          active-SOS banner are reachable in both list & map views). No build-time
-          flag: the off-lever is server-side — LIVE_LOCATION_ENABLED / SOS_ENABLED
-          in lib/config.ts (both default ON) disable it for every client, no rebuild. */}
-      <LiveLocationControls crewId={crewId} currentUserId={currentUserId} />
 
       {/* List/Map toggle. Map lazy-loads MapLibre only when selected. */}
       <div
@@ -363,7 +369,7 @@ export default function MeetingPointsTab({ crewId, currentUserId }: Props) {
             </div>
           }
         >
-          <CrewMap meetingPoints={points} peers={peers} activeSosList={sosList} festival={mapFestival} />
+          <CrewMap meetingPoints={points} peers={peers} activeSosList={sosList} festival={mapFestival} focusSosUserId={focusSosUserId} />
         </Suspense>
       )}
 

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  festivalDayTimeOf,
+  meetAtForFestivalDay,
   meetAtFromWallInput,
   meetAtTimeOfDay,
   meetAtToWallInput,
@@ -144,5 +146,28 @@ describe('meetAtFromWallInput / meetAtToWallInput', () => {
     expect(meetAtFromWallInput('', 'UTC')).toBeNull();
     expect(meetAtFromWallInput('tonight', 'UTC')).toBeNull();
     expect(meetAtToWallInput('not-a-date', 'UTC')).toBe('');
+  });
+});
+
+describe('meetAtForFestivalDay / festivalDayTimeOf', () => {
+  const NY = 'America/New_York';
+  const day = { date: '2026-07-11' };
+
+  it('puts an evening time on the festival day', () => {
+    expect(meetAtForFestivalDay(day, 21, 0, NY)).toBe('2026-07-12T01:00:00.000Z');
+  });
+
+  it('puts a time before 06:00 on the next calendar date', () => {
+    expect(meetAtForFestivalDay(day, 1, 30, NY)).toBe('2026-07-12T05:30:00.000Z');
+  });
+
+  it('round-trips both values', () => {
+    const days = [day, { date: '2026-07-12' }];
+    expect(festivalDayTimeOf(meetAtForFestivalDay(day, 21, 0, NY), days, NY)).toEqual({ dayIndex: 0, hours: 21, minutes: 0 });
+    expect(festivalDayTimeOf(meetAtForFestivalDay(day, 1, 30, NY), days, NY)).toEqual({ dayIndex: 0, hours: 1, minutes: 30 });
+  });
+
+  it('returns null outside every festival day', () => {
+    expect(festivalDayTimeOf('2026-01-01T00:00:00Z', [day], NY)).toBeNull();
   });
 });

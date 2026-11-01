@@ -37,12 +37,12 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import type { SosEntry } from '@festie/shared/types';
-import { api, isApiClientError, mapErrorToUserMessage } from '@festie/shared/services';
+import { clearCrewSos, sosErrorMessage } from '@festie/shared/services';
 import { useLiveLocationStore } from '@festie/shared/stores';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { useSosRaise } from '../hooks/useSosRaise';
 import MeetingPointCompass, { type MeetingPointTarget } from './MeetingPointCompass';
 
 interface CrewSosProps {
@@ -72,7 +72,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
     [activeSosList, crewId],
   );
 
-  const [raising, setRaising] = useState(false);
+  const { confirmRaise, raising } = useSosRaise(crewId);
   // Which raiser's clear is currently in flight (per-SOS, so one clear's spinner
   // doesn't disable every banner's button).
   const [clearingId, setClearingId] = useState<string | null>(null);
@@ -119,64 +119,6 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
     }
   }, [sosList, currentUserId, haptics]);
 
-  const doRaise = useCallback(async () => {
-    if (raising) return;
-    setRaising(true);
-    haptics.heavy();
-    // Best-effort one-shot fix so the crew can actually find the person. The
-    // fix is bounded so it never delays the SOS: seed from the cached
-    // last-known position (returns instantly), then race a fresh reading
-    // against a 4s timeout and use whichever is freshest. The POST fires after
-    // the race regardless of outcome.
-    let position: { lat: number; lng: number; accuracy?: number; capturedAt: string } | undefined;
-    try {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (perm.granted) {
-        const seed = await Location.getLastKnownPositionAsync();
-        const fresh = await Promise.race([
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
-        ]);
-        const pos = fresh ?? seed;
-        if (pos) {
-          position = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy ?? undefined,
-            capturedAt: new Date(pos.timestamp).toISOString(),
-          };
-        }
-      }
-    } catch {
-      // No location — still raise the SOS (the alert + push are the priority).
-    }
-    try {
-      await api.post(`/crews/${crewId}/sos`, position ? { position } : {});
-      // The sos:raised broadcast populates the banner for the whole crew (incl. us).
-    } catch (err) {
-      const offline = isApiClientError(err) && (err.isNetworkError || err.status === 0);
-      Alert.alert(
-        'SOS not sent',
-        offline
-          ? 'No signal — your SOS was NOT sent. Use your phone or radio to reach your crew directly.'
-          : mapErrorToUserMessage(err, 'Could not send your SOS. Try again.'),
-      );
-    } finally {
-      setRaising(false);
-    }
-  }, [crewId, raising, haptics]);
-
-  const confirmRaise = useCallback(() => {
-    Alert.alert(
-      'Send an SOS to your crew?',
-      'Everyone in this crew gets an alert with your last location so they can find you. Use this for emergencies.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Send SOS', style: 'destructive', onPress: () => void doRaise() },
-      ],
-    );
-  }, [doRaise]);
-
   const doClear = useCallback(
     async (raiserId: string) => {
       if (clearingId) return;
@@ -184,10 +126,10 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
       try {
         // Pass the raiser so the clear targets that SOS; the broadcast then
         // dismisses just that banner for the whole crew.
-        await api.post(`/crews/${crewId}/sos/clear`, { raiserId });
+        await clearCrewSos(crewId, raiserId);
         haptics.success();
       } catch (err) {
-        Alert.alert('Could not clear SOS', mapErrorToUserMessage(err, 'Try again.'));
+        Alert.alert('Could not clear SOS', sosErrorMessage(err, 'clear'));
       } finally {
         setClearingId(null);
       }
@@ -233,7 +175,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
         accessibilityLiveRegion="assertive"
       >
         <View style={styles.bannerHead}>
-          <Ionicons name="warning" size={t.iconSize.md} color={t.colors.accent.coral} />
+          <Ionicons name="alert-circle" size={t.iconSize.md} color={t.colors.accent.coral} />
           <Text style={styles.bannerTitle} accessibilityRole="alert">{isMine ? 'You raised an SOS' : `${sos.username} raised an SOS`}</Text>
         </View>
         <Text style={styles.bannerBody}>
