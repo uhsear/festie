@@ -20,7 +20,7 @@ interface Props {
 // URL (e.g. Google Photos / Apple shared album) that any crew member can paste;
 // everyone can open it. Server: member-gated PUT /crews/:crewId/photo-album.
 export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [url, setUrl] = useState(currentUrl || '');
@@ -44,7 +44,7 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
         /* ignore */
       }
     },
-    onError: (e) => toast(e instanceof Error ? e.message : "Couldn't update the photo album. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't update the photo album. Try again."),
   });
 
   const trimmed = url.trim();

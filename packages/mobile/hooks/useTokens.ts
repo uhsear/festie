@@ -114,6 +114,7 @@ function nativeFontFamily(family: string, weight: number): string | undefined {
  *
  * Pass an optional `weight` to override the role's default — the correct
  * weight-specific font cut is selected automatically (800/900 clamp to 700Bold).
+ * `opts.brandFace` opts a label into Space Grotesk (labels default to the system face).
  * Use this instead of spreading typeStyle() and then adding a raw `fontWeight`
  * override (which is inert on native because the weighted family wins).
  *
@@ -124,7 +125,7 @@ function nativeFontFamily(family: string, weight: number): string | undefined {
  *   // Right — selects SpaceGrotesk_700Bold:
  *   typeStyle('caption', 700)
  */
-export function typeStyle(role: TypeRoleName, weight?: number): TextStyle {
+export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFace?: boolean }): TextStyle {
   const r = typeRoles[role];
   const resolvedWeight = weight ?? r.weight;
   // Clamp 800/900 to 700 — no loaded cut above Bold for either brand face.
@@ -143,7 +144,7 @@ export function typeStyle(role: TypeRoleName, weight?: number): TextStyle {
   // and clip trailing glyphs even in unconstrained controls. Labels are the
   // high-risk role (buttons, legal links, compact actions), so use each OS's
   // native face there while preserving branded body/display typography.
-  const family = role === 'label' ? undefined : nativeFontFamily(r.family, clampedWeight);
+  const family = role === 'label' && !opts?.brandFace ? undefined : nativeFontFamily(r.family, clampedWeight);
   if (family) {
     // The weight-specific family IS the weight on native. Do NOT also set
     // fontWeight: Android applies synthetic (fake) bold on top of the already

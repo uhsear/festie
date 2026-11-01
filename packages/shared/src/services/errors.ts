@@ -39,17 +39,18 @@ export function parseRetryAfterMs(retryAfter: number | string | null | undefined
  * their `.message` (or the provided fallback), so plain-Error call sites and
  * existing message assertions are unaffected.
  */
-export function mapErrorToUserMessage(err: unknown, fallback = 'Something went wrong'): string {
+export function mapErrorToUserMessage(err: unknown, fallback = 'Something went wrong. Try again.'): string {
   if (isApiClientError(err)) {
     if (err.isNetworkError || err.status === 0) {
-      return 'You appear to be offline — check your connection and try again.';
+      return "You're offline. Check your connection and try again.";
     }
     if (err.status === 429) {
       const ms = parseRetryAfterMs(err.retryAfter);
       const secs = ms != null ? Math.ceil(ms / 1000) : null;
-      return secs ? `Too many requests — try again in ${secs}s.` : 'Too many requests — please slow down.';
+      if (!secs) return 'Too many tries. Wait a moment and try again.';
+      return `Too many tries. Wait ${secs} ${secs === 1 ? 'second' : 'seconds'} and try again.`;
     }
-    if (err.status >= 500) return 'The server had a problem — please try again shortly.';
+    if (err.status >= 500) return 'Something went wrong on our side. Try again in a minute.';
     return err.message || fallback;
   }
   return err instanceof Error ? err.message : fallback;

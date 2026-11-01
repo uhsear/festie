@@ -16,7 +16,8 @@
     "./constants": "./src/constants/index.ts",
     "./tokens": "./src/tokens/index.ts",
     "./platform": "./src/platform/index.ts",
-    "./pwa": "./src/pwa/runtimeCaching.ts"
+    "./pwa": "./src/pwa/runtimeCaching.ts",
+    "./illustrations": "./src/illustrations/index.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -13,7 +13,7 @@ vi.mock('@festie/shared/stores/crewStore', () => {
   const state = { updateCrew: updateCrewSpy };
   return { useCrewStore: vi.fn((sel: (s: typeof state) => unknown) => sel(state)) };
 });
-vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: toastSpy }) }));
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: toastSpy, toastError: vi.fn() }) }));
 vi.mock('../ui/Button', () => ({
   default: ({ children, onClick, ...rest }: { children: React.ReactNode; onClick?: () => void }) => (
     <button onClick={onClick} {...rest}>

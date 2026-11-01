@@ -59,7 +59,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   } = useDetailPanelData(set);
 
   const { select: selectHaptic, success: successHaptic, warning: warningHaptic } = useHaptics();
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   const [personalNote, setPersonalNote] = useState(currentProfile?.notes?.[set.id] || '');
   const [crewNote, setCrewNote] = useState(currentProfile?.notes?.['crew:' + set.id] || '');
@@ -235,11 +235,11 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
       await useFestivalStore.getState().loadProfiles(currentFestival.id);
       onClose();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't join festival. Try again.", 'error');
+      toastError(e, "Couldn't join the festival. Try again.");
     } finally {
       setJoinBusy(false);
     }
-  }, [currentFestival, onClose, toast]);
+  }, [currentFestival, onClose, toastError]);
 
   return (
     <Drawer.Root

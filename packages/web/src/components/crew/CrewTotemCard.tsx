@@ -31,7 +31,7 @@ interface Props {
  */
 export default function CrewTotemCard({ crewId, totemName, totemEmoji, isOwner, onSaved }: Props) {
   const updateCrew = useCrewStore((s) => s.updateCrew);
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState(totemName ?? '');
@@ -62,7 +62,7 @@ export default function CrewTotemCard({ crewId, totemName, totemEmoji, isOwner, 
       setEditing(false);
       await onSaved?.();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't update totem. Try again.", 'error');
+      toastError(e, "Couldn't update totem. Try again.");
     } finally {
       setBusy(false);
     }

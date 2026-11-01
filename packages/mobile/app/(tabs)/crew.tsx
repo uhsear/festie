@@ -582,9 +582,9 @@ export default function CrewScreen() {
           automaticallyAdjustKeyboardInsets
         >
           <EmptyState
-            icon="people-outline"
+            illustration="noCrew"
             title="No crew yet"
-            message="Create a crew or join an existing one to coordinate with friends."
+            message="Plan with your friends. Make a crew, or join one with a code."
           />
 
           {error ? <Text style={styles.error}>{error}</Text> : null}

@@ -23,7 +23,7 @@ export default function Toast() {
       case 'success':
         return 'text-accent-green bg-accent-green/10 border-accent-green/30';
       case 'error':
-        return 'text-accent-coral bg-accent-coral/10 border-accent-coral/30';
+        return 'text-[var(--color-text-danger)] bg-accent-coral/10 border-accent-coral/30';
       case 'warning':
         return 'text-accent-amber bg-accent-amber/10 border-accent-amber/30';
       default:
@@ -32,7 +32,7 @@ export default function Toast() {
   };
 
   return (
-    <div className="fixed bottom-24 right-4 left-4 z-[var(--z-toast)] flex flex-col gap-2 pointer-events-none sm:left-auto sm:max-w-sm">
+    <div className="fixed bottom-[calc(var(--bottom-nav-h,0px)+16px+env(safe-area-inset-bottom,0px))] right-4 left-4 z-[var(--z-toast)] flex flex-col gap-2 pointer-events-none sm:left-auto sm:max-w-sm">
       {toasts.map((t) => {
         const isAlert = t.type === 'error' || t.type === 'warning';
         const roleAttr: { role: 'alert' | 'status' } = { role: isAlert ? 'alert' : 'status' };
@@ -75,10 +75,10 @@ export default function Toast() {
             <button
               type="button"
               onClick={() => removeToast(t.id)}
-              className="p-1 hover:bg-white hover:bg-opacity-10 rounded transition-colors flex-shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center"
+              className="p-1 hover:bg-[var(--color-overlay-3)] rounded transition-colors flex-shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center"
               aria-label="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         );

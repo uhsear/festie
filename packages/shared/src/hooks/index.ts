@@ -11,3 +11,4 @@ export * from './usePickConflicts';
 export * from './useCurrentPosition';
 export * from './useRevocationRealtime';
 export * from './useDayOf';
+export * from './useUndoableRemove';

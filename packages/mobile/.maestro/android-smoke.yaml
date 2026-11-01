@@ -13,14 +13,14 @@ env:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Plan your whole weekend|Select a Festival"
+      text: "Plan.your.whole.weekend|Select a Festival"
     timeout: 120000
 - takeScreenshot: 01-launch
 - runFlow:
     when:
-      visible: "Plan your whole weekend"
+      visible: "Plan.your.whole.weekend"
     commands:
-      - assertVisible: "Plan your whole weekend"
+      - assertVisible: "Plan.your.whole.weekend"
       - tapOn:
           id: "intro-skip"
 - extendedWaitUntil:

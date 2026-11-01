@@ -41,7 +41,7 @@ export default function AdminCrews() {
   const [membersLoading, setMembersLoading] = useState<Record<string, boolean>>({});
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; title: string; description: string } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   useEffect(() => {
     loadCrews();
@@ -53,7 +53,7 @@ export default function AdminCrews() {
       const result = await api.get<Crew[]>('/admin/crews');
       setCrews(Array.isArray(result) ? result : []);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't load crews. Try again.", 'error');
+      toastError(err, "Couldn't load crews. Try again.");
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ export default function AdminCrews() {
       const result = await api.get<CrewMember[]>(`/admin/crews/${crewId}/members`);
       setMembersByCrew((prev) => ({ ...prev, [crewId]: Array.isArray(result) ? result : [] }));
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't load members. Try again.", 'error');
+      toastError(err, "Couldn't load members. Try again.");
     } finally {
       setMembersLoading((prev) => ({ ...prev, [crewId]: false }));
     }
@@ -105,7 +105,7 @@ export default function AdminCrews() {
       toast(`Deleted ${name}`, 'success');
       setConfirmDelete(null);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't delete crew. Try again.", 'error');
+      toastError(err, "Couldn't delete crew. Try again.");
     } finally {
       setDeleteBusy(false);
     }

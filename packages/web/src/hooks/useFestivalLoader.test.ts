@@ -57,7 +57,7 @@ vi.mock('@festie/shared/stores/crewStore', () => ({
 
 vi.mock('@festie/shared/services', () => ({ api: { post: vi.fn(async () => {}) } }));
 
-vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }) }));
 
 import { useFestivalLoader } from './useFestivalLoader';
 

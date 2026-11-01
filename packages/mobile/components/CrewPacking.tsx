@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ElementType } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Pressable, Alert, AccessibilityInfo } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Pressable, AccessibilityInfo } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
@@ -10,6 +10,8 @@ import { isPending, QUEUED_WRITE_MESSAGE } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
+import EmptyState from './EmptyState';
 import Button from './Button';
 import CrewSyncMarker from './CrewSyncMarker';
 
@@ -38,6 +40,11 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
   const createPackingItem = useCrewStore((s) => s.createPackingItem);
   const updatePackingItem = useCrewStore((s) => s.updatePackingItem);
   const deletePackingItem = useCrewStore((s) => s.deletePackingItem);
+
+  const { hiddenIds, remove } = useUndoableRemove(
+    (id) => deletePackingItem(crewId, id),
+    "Couldn't remove the item. Try again.",
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState('');
@@ -86,24 +93,12 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
   };
 
   const handleDelete = (item: CrewPackingItem) => {
-    // R20 destructive-confirmation haptic: warn before the irreversible prompt.
-    haptics.warning();
-    Alert.alert('Remove item', `Remove "${item.label}" from the packing list?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          setBusyId(item.id);
-          deletePackingItem(crewId, item.id)
-            .catch(() => {})
-            .finally(() => setBusyId(null));
-        },
-      },
-    ]);
+    haptics.tap();
+    remove(item.id, item.label);
   };
 
   const canCreate = !!label.trim();
+  const visibleItems = items.filter((i) => !hiddenIds.has(i.id));
 
   return (
     <View style={styles.container}>
@@ -155,10 +150,15 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
         </TouchableOpacity>
       )}
 
-      {items.length === 0 ? (
-        <Text style={styles.empty}>Nothing on the list yet — add what your crew needs to bring.</Text>
+      {visibleItems.length === 0 ? (
+        <EmptyState
+          illustration="emptyList"
+          title="Nothing on the list yet"
+          message="Add what your crew needs to bring, like a tent, a cooler or sunscreen."
+          action={{ label: 'Add item', onPress: () => setShowForm(true) }}
+        />
       ) : (
-        items.map((item) => {
+        visibleItems.map((item) => {
           const mine = item.brought_by === currentUserId;
           // A queued create has no server id yet, so it cannot be removed.
           const canRemove = !isPending(item) && (item.created_by === currentUserId || isOwner);
@@ -295,11 +295,6 @@ const useStyles = makeStyles((t) => ({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  empty: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    paddingHorizontal: t.spacing[2],
   },
   itemRow: {
     flexDirection: 'row',

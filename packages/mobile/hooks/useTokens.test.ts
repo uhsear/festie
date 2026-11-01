@@ -69,3 +69,15 @@ describe('typeStyle — Clash Display on native', () => {
     expect(typeStyle('heading', 500).fontFamily).toBe('ClashDisplay-Medium');
   });
 });
+
+describe('typeStyle — label face', () => {
+  it('keeps the system face for labels by default', () => {
+    expect(typeStyle('label').fontFamily).toBeUndefined();
+  });
+
+  it('uses Space Grotesk for labels when brandFace is set', () => {
+    const style = typeStyle('label', 600, { brandFace: true });
+    expect(style.fontFamily).toBe('SpaceGrotesk_600SemiBold');
+    expect(style.fontWeight).toBeUndefined();
+  });
+});

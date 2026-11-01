@@ -37,3 +37,5 @@ export type { Breakpoints } from './breakpoints.js';
 
 export { zIndex } from './z-index.js';
 export type { ZIndex } from './z-index.js';
+
+export type { ButtonVariant } from './buttons.js';

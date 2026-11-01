@@ -28,7 +28,7 @@ export default function UserMenuAccountSection({
 }: UserMenuAccountSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const uploadAvatar = useAuthStore((state) => state.uploadAvatar);
   const removeAvatar = useAuthStore((state) => state.removeAvatar);
   const resendVerification = useAuthStore((state) => state.resendVerification);
@@ -40,7 +40,7 @@ export default function UserMenuAccountSection({
       await resendVerification();
       toast('Verification email sent', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not resend verification email. Try again.', 'error');
+      toastError(err, "Couldn't resend the verification email. Try again.");
     } finally {
       setResending(false);
     }

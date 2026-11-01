@@ -29,7 +29,7 @@ export default function AdminAudit() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const { toast } = useToast();
+  const { toastError } = useToast();
 
   useEffect(() => {
     loadAudit();
@@ -55,7 +55,7 @@ export default function AdminAudit() {
       // since the api wrapper strips meta.
       setNextCursor(list.length >= 50 ? (list[list.length - 1]?.id ?? null) : null);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't load the audit log. Try again.", 'error');
+      toastError(err, "Couldn't load the audit log. Try again.");
     } finally {
       setLoading(false);
       setHasLoadedOnce(true);

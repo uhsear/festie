@@ -78,7 +78,7 @@ describe('ChangeEmailModal', () => {
     renderModal();
     await fillForm(user);
     await user.click(screen.getByRole('button', { name: 'Send Verification Link' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Too many requests — try again in 30s.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many tries. Wait 30 seconds and try again.');
     // Still open and retryable — the modal never closes itself on failure.
     expect(screen.getByRole('button', { name: 'Send Verification Link' })).toBeEnabled();
   });

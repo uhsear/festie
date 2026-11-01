@@ -11,9 +11,9 @@ interface UserMenuPanelProps {
 }
 
 /**
- * Overlay + dialog shell shared by the user-menu dropdown and
- * the change-password modal. Provides backdrop dismiss, ARIA
- * `dialog` role, and keyboard focus trapping.
+ * Overlay + panel for the user-menu dropdown only. Provides backdrop
+ * dismiss, ARIA `dialog` role, and keyboard focus trapping. The change
+ * email and password modals use the shared ui/Dialog shell instead.
  */
 export default function UserMenuPanel({ ariaLabel, onClose, children }: UserMenuPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);

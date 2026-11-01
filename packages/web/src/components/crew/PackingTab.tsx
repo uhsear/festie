@@ -25,7 +25,7 @@ interface Props {
  * to the current user; un-claiming clears both.
  */
 export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const { select, warning } = useHaptics();
 
   const items = useCrewStore((s) => s.packingItems);
@@ -86,7 +86,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
       toast(writeOutcomeMessage(queued ? 'queued' : 'sent', 'Item added'), queued ? 'info' : 'success');
       reset();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Couldn't add item. Try again.", 'error');
+      toastError(err, "Couldn't add item. Try again.");
     } finally {
       setCreateBusy(false);
     }
@@ -103,7 +103,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
       });
     } catch (err) {
       warning();
-      toast(err instanceof Error ? err.message : "Couldn't update item. Try again.", 'error');
+      toastError(err, "Couldn't update item. Try again.");
     } finally {
       setBusyId(null);
     }
@@ -164,9 +164,10 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
         />
       ) : visibleItems.length === 0 ? (
         <EmptyState
-          icon={<Backpack className="w-12 h-12" aria-hidden="true" />}
+          illustration="emptyList"
           title="Nothing on the list yet"
-          description="Add what your crew needs to bring — tent, cooler, sunscreen — and claim items so nothing's forgotten."
+          description="Add what your crew needs to bring, like a tent, a cooler or sunscreen."
+          cta={{ label: 'Add item', onClick: () => setShowForm(true) }}
         />
       ) : (
         <ul className="space-y-2">

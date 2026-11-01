@@ -9,6 +9,7 @@ import GuestTeaser from '../components/features/GuestTeaser';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
 import Skeleton from '../components/ui/Skeleton';
+import WrapSkeleton from '../components/ui/skeletons/WrapSkeleton';
 import Button from '../components/ui/Button';
 import WrapPoster from '../components/features/WrapPoster';
 import CrewWrapPoster, { type CrewWrapData } from '../components/features/CrewWrapPoster';
@@ -62,7 +63,7 @@ function WrapPageInner() {
   const days = useFestivalStore((s) => s.days);
   const activeCrew = useCrewStore((s) => s.activeCrew);
   const { getStageName } = useFestival();
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);
   const wrapTabsRef = useRef<HTMLDivElement>(null);
   useRovingTabs(wrapTabsRef);
@@ -144,12 +145,12 @@ function WrapPageInner() {
       // AbortError = user cancelled share sheet; suppress.
       const isAbort = e instanceof DOMException && e.name === 'AbortError';
       if (!isAbort) {
-        toast(e instanceof Error ? e.message : 'Share failed', 'error');
+        toastError(e, "Couldn't share your wrap. Try again.");
       }
     } finally {
       setSharing(false);
     }
-  }, [currentFestival, toast]);
+  }, [currentFestival, toast, toastError]);
 
   if (!user) return <GuestTeaser mode="picks" />;
 
@@ -235,13 +236,7 @@ function WrapPageInner() {
   }
 
   if (isLoading) {
-    return (
-      <div className="max-w-lg mx-auto space-y-3">
-        <Skeleton variant="card" />
-        <Skeleton variant="card" />
-        <Skeleton variant="card" />
-      </div>
-    );
+    return <WrapSkeleton />;
   }
   if (isError) {
     return (
@@ -431,7 +426,7 @@ function CrewWrapTab({
   festivalId: string;
   festivalName: string;
 }) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
 
@@ -470,11 +465,11 @@ function CrewWrapTab({
       }
     } catch (e: unknown) {
       const isAbort = e instanceof DOMException && e.name === 'AbortError';
-      if (!isAbort) toast(e instanceof Error ? e.message : 'Share failed', 'error');
+      if (!isAbort) toastError(e, "Couldn't share your wrap. Try again.");
     } finally {
       setSharing(false);
     }
-  }, [crewId, toast]);
+  }, [crewId, toast, toastError]);
 
   if (!crewId) {
     return (

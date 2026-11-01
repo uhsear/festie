@@ -32,6 +32,7 @@ import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { EXPENSE_IONICON } from '../lib/expenseIcon';
 import Button from './Button';
+import EmptyState from './EmptyState';
 import CrewSyncMarker from './CrewSyncMarker';
 
 interface CrewExpensesProps {
@@ -493,7 +494,12 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
       )}
 
       {expenses.length === 0 ? (
-        <Text style={styles.empty}>No expenses yet — track shared costs so everyone knows where they stand.</Text>
+        <EmptyState
+          illustration="emptyList"
+          title="No expenses yet"
+          message="Add the first one, for example: Gas, $60, split 4 ways."
+          action={{ label: 'Add expense', onPress: () => setShowForm(true) }}
+        />
       ) : visibleExpenses.length === 0 ? (
         <Text style={styles.empty}>
           {view === 'planned'

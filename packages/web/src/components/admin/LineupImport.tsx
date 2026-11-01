@@ -16,7 +16,7 @@ export default function LineupImport({ festivalId, onSuccess }: LineupImportProp
   const [preview, setPreview] = useState<LineupRow[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   const handleParse = () => {
     const { rows, errors: newErrors } = parseLineupCsv(importText);
@@ -40,7 +40,7 @@ export default function LineupImport({ festivalId, onSuccess }: LineupImportProp
       setErrors([]);
       onSuccess?.();
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Import failed', 'error');
+      toastError(err, "Couldn't import the lineup. Try again.");
     } finally {
       setLoading(false);
     }

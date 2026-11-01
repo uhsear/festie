@@ -14,11 +14,14 @@ export interface Toast {
   kind: ToastKind;
   /** auto-dismiss delay in ms; the platform <Toaster> owns the timer */
   durationMs: number;
+  /** When set, the toast shows an Undo action that calls this. */
+  onUndo?: () => void;
 }
 
 export interface ToastOptions {
   kind?: ToastKind;
   durationMs?: number;
+  onUndo?: () => void;
 }
 
 /**
@@ -61,6 +64,8 @@ export interface UIState {
   toasts: Toast[];
   /** Persisted device preference. Not reset on logout. */
   theme: ThemePreference;
+  /** Persisted device preference. Not reset on logout. SOS (heavy) always vibrates. */
+  hapticsEnabled: boolean;
 }
 
 export interface UIActions {
@@ -82,6 +87,7 @@ export interface UIActions {
   showToast: (message: string, options?: ToastOptions) => number;
   dismissToast: (id: number) => void;
   setTheme: (theme: ThemePreference) => void;
+  setHapticsEnabled: (enabled: boolean) => void;
 }
 
 export type UIStore = UIState & UIActions;
@@ -96,6 +102,7 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   onlineUsers: [],
   toasts: [],
   theme: 'stage',
+  hapticsEnabled: true,
 
   setDetailSet: (detailSet: FestivalSet | null) => {
     set({ detailSet });
@@ -158,6 +165,7 @@ const uiStore: StateCreator<UIStore> = (set) => ({
       message,
       kind: options?.kind ?? 'info',
       durationMs: options?.durationMs ?? 2500,
+      onUndo: options?.onUndo,
     };
     set((state) => ({ toasts: [...state.toasts, toast] }));
     return id;
@@ -170,6 +178,10 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   setTheme: (theme: ThemePreference) => {
     set({ theme });
   },
+
+  setHapticsEnabled: (hapticsEnabled: boolean) => {
+    set({ hapticsEnabled });
+  },
 });
 
 /** localStorage key; packages/web/index.html reads it before first paint. */
@@ -179,6 +191,6 @@ export const useUIStore = create<UIStore>()(
   persist(uiStore, {
     name: THEME_STORAGE_KEY,
     storage: createJSONStorage(() => getStorage()),
-    partialize: (state) => ({ theme: state.theme }),
+    partialize: (state) => ({ theme: state.theme, hapticsEnabled: state.hapticsEnabled }),
   }),
 );

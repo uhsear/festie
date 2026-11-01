@@ -19,7 +19,7 @@ import FestivalStats from './FestivalStats';
 export default function AdminAnalytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  const { toastError } = useToast();
 
   useEffect(() => {
     loadAnalytics();
@@ -31,7 +31,7 @@ export default function AdminAnalytics() {
       const raw = await api.get<unknown>('/admin/analytics');
       setData(normalizeAnalytics(raw));
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't load analytics. Try again.", 'error');
+      toastError(err, "Couldn't load analytics. Try again.");
       setData(ANALYTICS_DEFAULTS);
     } finally {
       setLoading(false);

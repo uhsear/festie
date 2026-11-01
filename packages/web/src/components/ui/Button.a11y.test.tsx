@@ -12,6 +12,9 @@ describe('Button — accessibility', () => {
         <Button>Save</Button>
         <Button variant="danger">Delete</Button>
         <Button variant="ghost">Cancel</Button>
+        <Button variant="secondary">Later</Button>
+        <Button variant="utility">Install</Button>
+        <Button variant="delete" aria-label="Delete" />
         <Button disabled>Disabled</Button>
       </div>,
     );

@@ -92,6 +92,13 @@ describe('PromptDialog', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Name already exists');
   });
 
+  it('styles the error with the danger token, not coral', () => {
+    render(<PromptDialog {...defaultProps} error="Name already exists" />);
+    const alert = screen.getByRole('alert');
+    expect(alert.className).toContain('text-[var(--color-text-danger)]');
+    expect(alert.className).not.toContain('text-accent-coral');
+  });
+
   it('sets aria-invalid on input when error is present', () => {
     render(
       <PromptDialog {...defaultProps} defaultValue="test" error="Invalid" />,

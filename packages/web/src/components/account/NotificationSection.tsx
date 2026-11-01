@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 import { Bell, BellOff } from 'lucide-react';
 
 export default function NotificationSection() {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const push = usePushNotifications();
   const [pushBusy, setPushBusy] = useState(false);
 
@@ -30,7 +30,7 @@ export default function NotificationSection() {
         toast('Permission prompt dismissed.', 'info');
       }
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not enable notifications. Try again.', 'error');
+      toastError(e, "Couldn't turn on notifications. Try again.");
     } finally {
       setPushBusy(false);
     }
@@ -42,7 +42,7 @@ export default function NotificationSection() {
       await push.unregisterToken();
       toast('Push notifications disabled', 'success');
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not disable notifications. Try again.', 'error');
+      toastError(e, "Couldn't turn off notifications. Try again.");
     } finally {
       setPushBusy(false);
     }

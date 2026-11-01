@@ -49,7 +49,7 @@ interface Props {
 }
 
 export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const { select, warning } = useHaptics();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -104,7 +104,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
       toast(writeOutcomeMessage(outcome, 'Poll created'), outcome === 'queued' ? 'info' : 'success');
       reset();
     },
-    onError: (e) => toast(e instanceof Error ? e.message : "Couldn't create poll. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't create poll. Try again."),
   });
 
   const vote = useMutation({
@@ -113,7 +113,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['polls', crewId] }),
     onError: (e) => {
       warning();
-      toast(e instanceof Error ? e.message : "Couldn't submit your vote. Try again.", 'error');
+      toastError(e, "Couldn't submit your vote. Try again.");
     },
   });
 
@@ -136,7 +136,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
       qc.invalidateQueries({ queryKey: ['polls', crewId] });
       toast('Poll closed', 'success');
     },
-    onError: () => toast("Couldn't close poll. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't close poll. Try again."),
   });
 
   function reset() {
@@ -271,9 +271,10 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
 
       {polls.length === 0 ? (
         <EmptyState
-          icon={<BarChart3 className="w-12 h-12" aria-hidden="true" />}
+          illustration="emptyList"
           title="No polls yet"
-          description="Create a poll to help your crew decide things together."
+          description="Ask the crew something."
+          cta={{ label: 'Create poll', onClick: () => setShowForm(true) }}
         />
       ) : (
         <div className="space-y-3">

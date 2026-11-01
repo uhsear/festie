@@ -9,6 +9,7 @@ import NotificationPrefsSection from '../components/account/NotificationPrefsSec
 import PublicScheduleSection from '../components/account/PublicScheduleSection';
 import ReplayIntroRow from '../components/account/ReplayIntroRow';
 import DaylightSection from '../components/account/DaylightSection';
+import HapticsSection from '../components/account/HapticsSection';
 import HistorySection from '../components/account/HistorySection';
 import DangerZone from '../components/account/DangerZone';
 import Avatar from '../components/ui/Avatar';
@@ -86,6 +87,7 @@ function AccountPageInner() {
         {/* Preferences */}
         <Section label="Preferences">
           <DaylightSection />
+          <HapticsSection />
           <NotificationSection />
           <NotificationPrefsSection />
           <ReplayIntroRow />
@@ -100,6 +102,14 @@ function AccountPageInner() {
             className="flex items-center gap-2 px-1 text-sm text-accent-aqua hover:underline"
           >
             Privacy Policy
+          </a>
+          <a
+            href="/third-party-notices.txt"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-1 text-sm text-accent-aqua hover:underline"
+          >
+            Third-party notices
           </a>
         </Section>
 

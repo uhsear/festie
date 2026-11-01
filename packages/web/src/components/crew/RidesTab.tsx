@@ -24,7 +24,7 @@ interface Props {
  * they're leaving from and when.
  */
 export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const { warning } = useHaptics();
 
   const offers = useCrewStore((s) => s.rideOffers);
@@ -82,7 +82,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
       reset();
     } catch (err) {
       warning();
-      toast(err instanceof Error ? err.message : "Couldn't post ride. Try again.", 'error');
+      toastError(err, "Couldn't post ride. Try again.");
     } finally {
       setCreateBusy(false);
     }
@@ -153,9 +153,10 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
 
       {visibleOffers.length === 0 ? (
         <EmptyState
-          icon={<Car className="w-12 h-12" aria-hidden="true" />}
+          illustration="emptyList"
           title="No rides yet"
-          description="Post a carpool — who's driving, how many seats, and where you're leaving from — so your crew can ride together."
+          description="Offer a ride, or ask for one."
+          cta={{ label: 'Offer a ride', onClick: () => setShowForm(true) }}
         />
       ) : (
         <ul className="space-y-2">

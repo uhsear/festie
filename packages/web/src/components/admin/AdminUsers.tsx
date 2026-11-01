@@ -26,7 +26,7 @@ export default function AdminUsers() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   // Emails stay masked until an admin expands one row.
   const [revealedId, setRevealedId] = useState<string | null>(null);
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   useEffect(() => {
     loadUsers();
@@ -38,7 +38,7 @@ export default function AdminUsers() {
       const result = await api.get<User[]>('/admin/users');
       setUsers(Array.isArray(result) ? result : []);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't load users. Try again.", 'error');
+      toastError(err, "Couldn't load users. Try again.");
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export default function AdminUsers() {
       }
       toast(`User ${!currentlyAdmin ? 'granted' : 'revoked'} admin access`, 'success');
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't update user. Try again.", 'error');
+      toastError(err, "Couldn't update user. Try again.");
     }
   };
 
@@ -80,7 +80,7 @@ export default function AdminUsers() {
       toast(`Deleted ${name}`, 'success');
       setConfirmDelete(null);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Couldn't delete user. Try again.", 'error');
+      toastError(err, "Couldn't delete user. Try again.");
     } finally {
       setDeleteBusy(false);
     }

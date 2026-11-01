@@ -78,7 +78,7 @@ vi.mock('@festie/shared/stores', () => ({
 
 const { mockToastUndo } = vi.hoisted(() => ({ mockToastUndo: vi.fn() }));
 vi.mock('../../lib/toastContext', () => ({
-  useToast: () => ({ toast: vi.fn(), toastUndo: mockToastUndo }),
+  useToast: () => ({ toast: vi.fn(), toastError: vi.fn(), toastUndo: mockToastUndo }),
 }));
 
 // react-query: drive useQuery state + capture mutations so we can assert the
@@ -191,7 +191,7 @@ describe('MeetingPointsTab', () => {
   it('"Add Meeting Point" button opens the create form', async () => {
     const user = userEvent.setup();
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
-    await user.click(screen.getByRole('button', { name: /add meeting point/i }));
+    await user.click(screen.getAllByRole('button', { name: /add meeting point/i })[0]!);
     expect(screen.getByText('New Meeting Point')).toBeInTheDocument();
     expect(screen.getByLabelText('Label')).toBeInTheDocument();
     expect(screen.getByLabelText('Location')).toBeInTheDocument();
@@ -200,7 +200,7 @@ describe('MeetingPointsTab', () => {
   it('disables submit until both required fields (label + location) are filled', async () => {
     const user = userEvent.setup();
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
-    await user.click(screen.getByRole('button', { name: /add meeting point/i }));
+    await user.click(screen.getAllByRole('button', { name: /add meeting point/i })[0]!);
 
     const submit = screen.getByRole('button', { name: 'Add' });
     expect(submit).toBeDisabled();
@@ -215,7 +215,7 @@ describe('MeetingPointsTab', () => {
   it('submitting the create form calls the create mutation with the payload', async () => {
     const user = userEvent.setup();
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
-    await user.click(screen.getByRole('button', { name: /add meeting point/i }));
+    await user.click(screen.getAllByRole('button', { name: /add meeting point/i })[0]!);
 
     await user.type(screen.getByLabelText('Label'), 'Entrance');
     await user.type(screen.getByLabelText('Location'), 'Front gate');
@@ -337,7 +337,7 @@ describe('MeetingPointsTab', () => {
   it('shows the "Repeats daily" toggle only once a meet time is set, and rides it into the create payload', async () => {
     const user = userEvent.setup();
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
-    await user.click(screen.getByRole('button', { name: /add meeting point/i }));
+    await user.click(screen.getAllByRole('button', { name: /add meeting point/i })[0]!);
 
     await user.type(screen.getByLabelText('Label'), 'Entrance');
     await user.type(screen.getByLabelText('Location'), 'Front gate');

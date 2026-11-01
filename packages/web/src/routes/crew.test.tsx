@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // CrewView reads tab badge counts via react-query, so renders need a client.
@@ -41,10 +41,22 @@ vi.mock('../components/features/GuestTeaser', () => ({
 }));
 
 vi.mock('../components/ui/EmptyState', () => ({
-  default: ({ title, description }: { title: string; description?: string }) => (
+  default: ({
+    title,
+    description,
+    cta,
+    secondaryCta,
+  }: {
+    title: string;
+    description?: string;
+    cta?: { label: string; onClick: () => void };
+    secondaryCta?: { label: string; onClick: () => void };
+  }) => (
     <div data-testid="empty-state">
       <h3>{title}</h3>
       {description && <p>{description}</p>}
+      {cta && <button onClick={cta.onClick}>{cta.label}</button>}
+      {secondaryCta && <button onClick={secondaryCta.onClick}>{secondaryCta.label}</button>}
     </div>
   ),
 }));
@@ -109,11 +121,11 @@ vi.mock('../components/crew/useCrewAdmin', () => ({
 }));
 
 vi.mock('../lib/toastContext', () => ({
-  useToast: vi.fn(() => ({ toast: vi.fn() })),
+  useToast: vi.fn(() => ({ toast: vi.fn(), toastError: vi.fn() })),
 }));
 
 vi.mock('../components/ui/PromptDialog', () => ({
-  default: () => null,
+  default: ({ open, title }: { open: boolean; title: string }) => (open ? <div data-testid="prompt-open">{title}</div> : null),
 }));
 
 vi.mock('../components/ui/ConfirmDialog', () => ({
@@ -175,14 +187,17 @@ describe('CrewView', () => {
     render(<CrewView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     expect(screen.getByText('No crew yet')).toBeInTheDocument();
-    expect(screen.getByText(/Create a crew or join an existing one/)).toBeInTheDocument();
+    expect(screen.getByText(/Make a crew, or join one with a code/)).toBeInTheDocument();
   });
 
-  it('shows Create Crew and Join by Code buttons when no crews', () => {
+  it('shows Create crew and Join with code inside the empty state and opens their prompts', () => {
     setStoreState({ crews: [], activeCrew: null });
     render(<CrewView />);
-    expect(screen.getByText('Create Crew')).toBeInTheDocument();
-    expect(screen.getByText('Join by Code')).toBeInTheDocument();
+    const empty = screen.getByTestId('empty-state');
+    fireEvent.click(within(empty).getByText('Create crew'));
+    expect(screen.getByTestId('prompt-open')).toHaveTextContent('New crew');
+    fireEvent.click(within(empty).getByText('Join with code'));
+    expect(screen.getByText('Join crew')).toBeInTheDocument();
   });
 
   it('renders crew content when active crew is set', () => {

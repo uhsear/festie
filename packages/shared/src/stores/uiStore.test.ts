@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useUIStore, THEME_STORAGE_KEY } from './uiStore';
 import type { OnlineUser } from '../types/domain';
 
@@ -194,16 +194,33 @@ describe('uiStore', () => {
       expect(remaining).toHaveLength(1);
       expect(remaining[0]!.id).toBe(b);
     });
+
+    it('keeps onUndo on the queued toast', () => {
+      const onUndo = vi.fn();
+      useUIStore.getState().showToast('Removed Tent', { onUndo });
+      useUIStore.getState().toasts[0]!.onUndo?.();
+      expect(onUndo).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('haptics preference', () => {
+    it('defaults to enabled and flips with setHapticsEnabled', () => {
+      expect(useUIStore.getState().hapticsEnabled).toBe(true);
+      useUIStore.getState().setHapticsEnabled(false);
+      expect(useUIStore.getState().hapticsEnabled).toBe(false);
+      useUIStore.getState().setHapticsEnabled(true);
+    });
   });
 
   describe('theme preference', () => {
-    it('defaults to stage and persists only the theme', () => {
+    it('defaults to stage and persists only theme and hapticsEnabled', () => {
       useUIStore.getState().setTheme('stage');
       expect(useUIStore.getState().theme).toBe('stage');
       useUIStore.getState().setTheme('daylight');
+      useUIStore.getState().showToast('not persisted');
       expect(useUIStore.getState().theme).toBe('daylight');
       const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
-      expect(parsed.state).toEqual({ theme: 'daylight' });
+      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true });
       useUIStore.getState().setTheme('stage');
     });
   });

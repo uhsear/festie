@@ -25,7 +25,7 @@ interface Props {
  * Consent-safe: nobody is silently added to a festival they haven't joined.
  */
 export default function ReformCrewButton({ crewId, sourceFestivalId, crewName }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const reformCrew = useCrewStore((s) => s.reformCrew);
   const festivals = useFestivalDataStore((s) => s.festivals);
   const loadFestivals = useFestivalDataStore((s) => s.loadFestivals);
@@ -61,7 +61,7 @@ export default function ReformCrewButton({ crewId, sourceFestivalId, crewName }:
       setOpen(false);
       setTarget('');
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Couldn't reform crew. Try again.", 'error');
+      toastError(err, "Couldn't reform crew. Try again.");
     } finally {
       setBusy(false);
     }

@@ -9,7 +9,7 @@ const meta = {
   argTypes: {
     variant: {
       control: 'select',
-      options: ['primary', 'danger', 'ghost', 'secondary', 'outline', 'util', 'delete'],
+      options: ['primary', 'secondary', 'ghost', 'danger', 'utility', 'delete'],
     },
     size: {
       control: 'select',
@@ -54,17 +54,10 @@ export const Secondary: Story = {
   },
 };
 
-export const Outline: Story = {
-  args: {
-    children: 'Outline',
-    variant: 'outline',
-  },
-};
-
-export const Util: Story = {
+export const Utility: Story = {
   args: {
     children: 'Install App',
-    variant: 'util',
+    variant: 'utility',
     icon: <Download className="w-3 h-3" />,
   },
 };
@@ -166,8 +159,7 @@ export const AllVariants: Story = {
       <Button variant="danger">Danger</Button>
       <Button variant="ghost">Ghost</Button>
       <Button variant="secondary">Secondary</Button>
-      <Button variant="outline">Outline</Button>
-      <Button variant="util" icon={<Download className="w-3 h-3" />}>Install</Button>
+      <Button variant="utility" icon={<Download className="w-3 h-3" />}>Install</Button>
       <Button variant="delete" aria-label="Delete" icon={<Trash2 className="w-4 h-4" />} />
     </div>
   ),

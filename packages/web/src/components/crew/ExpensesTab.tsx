@@ -65,7 +65,7 @@ function balanceColor(value: number): string {
 }
 
 export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const qc = useQueryClient();
   const settleExpense = useCrewStore((s) => s.settleExpense);
   const [showForm, setShowForm] = useState(false);
@@ -158,7 +158,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       toast(writeOutcomeMessage(outcome, 'Expense added'), outcome === 'queued' ? 'info' : 'success');
       reset();
     },
-    onError: (e) => toast(e instanceof Error ? e.message : "Couldn't add expense. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't add expense. Try again."),
   });
 
   const removeExpense = useMutation({
@@ -175,7 +175,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       setRemoveTarget(null);
       toast(writeOutcomeMessage(outcome, 'Expense removed'), outcome === 'queued' ? 'info' : 'success');
     },
-    onError: () => toast("Couldn't remove expense. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't remove expense. Try again."),
   });
 
   const settle = useMutation({
@@ -189,7 +189,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       setPaidTarget(null);
       toast(writeOutcomeMessage(outcome, 'Payment recorded'), outcome === 'queued' ? 'info' : 'success');
     },
-    onError: (e) => toast(e instanceof Error ? e.message : "Couldn't settle up. Try again.", 'error'),
+    onError: (e) => toastError(e, "Couldn't settle up. Try again."),
   });
 
   function reset() {
@@ -543,9 +543,10 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       <div id="expenses-list-panel">
       {expenses.length === 0 ? (
         <EmptyState
-          icon={<DollarSign className="w-12 h-12" aria-hidden="true" />}
+          illustration="emptyList"
           title="No expenses yet"
-          description="Track shared costs so everyone knows where they stand."
+          description="Add the first one, for example: Gas, $60, split 4 ways."
+          cta={{ label: 'Add expense', onClick: () => setShowForm(true) }}
         />
       ) : visibleExpenses.length === 0 ? (
         <EmptyState

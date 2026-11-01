@@ -109,7 +109,7 @@ describe('OfflineBanner', () => {
   it('shows Flush Now button during syncing state', () => {
     setStoreState({ offlineMode: false, pendingSync: 5 });
     render(<OfflineBanner />);
-    expect(screen.getByText('Flush now')).toBeInTheDocument();
+    expect(screen.getByText('Sync now')).toBeInTheDocument();
   });
 
   it('does not show dismiss button during syncing state', () => {

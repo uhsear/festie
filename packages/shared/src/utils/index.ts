@@ -33,3 +33,4 @@ export * from './scheduleFormat';
 export * from './links';
 export * from './crewWrites';
 export * from './dayOf';
+export * from './haptics';

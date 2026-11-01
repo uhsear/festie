@@ -20,18 +20,9 @@ describe('CrewSkeleton', () => {
     expect(homeBase).toBeInTheDocument();
   });
 
-  it('renders 5 tab placeholders in the tab row', () => {
-    const { container } = render(<CrewSkeleton />);
-    // The tab row contains 5 skeleton children with min-w-16 and flex-1
-    const tabSkeletons = container.querySelectorAll('.skeleton-shimmer.min-w-16');
-    expect(tabSkeletons.length).toBe(5);
-  });
-
-  it('renders 3 member row placeholders', () => {
-    const { container } = render(<CrewSkeleton />);
-    // Member rows have avatar circles (h-10 w-10 rounded-full)
-    const memberAvatars = container.querySelectorAll('.skeleton-shimmer.h-10.w-10.rounded-full');
-    expect(memberAvatars.length).toBe(3);
+  it('renders 7 tab placeholders in the tab row', () => {
+    render(<CrewSkeleton />);
+    expect(screen.getAllByTestId('crew-tab-chip')).toHaveLength(7);
   });
 
   it('uses skeleton class for placeholder blocks', () => {

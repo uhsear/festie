@@ -44,7 +44,7 @@ const MAX_OPTIONS = 4;
  * this composes fine on dead signal — it's just primarily a pre-festival tool.
  */
 export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Props) {
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
   const { getStageName } = useFestival();
@@ -131,7 +131,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
       toast('Schedule poll created', 'success');
       onCreated();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Couldn't create poll. Try again.", 'error');
+      toastError(err, "Couldn't create poll. Try again.");
     } finally {
       setBusy(false);
     }

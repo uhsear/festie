@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
-import UserMenuPanel from './UserMenuPanel';
+import Dialog from '../ui/Dialog';
 import { inputBase } from '../../lib/styles';
 import Button from '../ui/Button';
 
@@ -31,7 +31,7 @@ export default function ChangeEmailModal({ currentEmail, onClose, onSubmit }: Ch
   };
 
   return (
-    <UserMenuPanel ariaLabel="Change email" onClose={onClose}>
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }} title="Change email">
       <section className="pt-3 mt-3 border-t border-border first-of-type:pt-0 first-of-type:mt-0 first-of-type:border-t-0">
         <div className="text-[length:var(--font-size-12)] font-bold tracking-[1.2px] uppercase text-text-secondary mb-1.5">
           {currentEmail ? 'Change Email' : 'Add Email'}
@@ -89,6 +89,6 @@ export default function ChangeEmailModal({ currentEmail, onClose, onSubmit }: Ch
           </div>
         </form>
       </section>
-    </UserMenuPanel>
+    </Dialog>
   );
 }

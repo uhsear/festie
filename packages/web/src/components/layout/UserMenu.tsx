@@ -29,7 +29,7 @@ export default function UserMenu({ user }: UserMenuProps) {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showChangeEmail, setShowChangeEmail] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { toast, toastError } = useToast();
 
   const logout = useAuthStore((state) => state.logout);
   const changePassword = useAuthStore((state) => state.changePassword);
@@ -56,9 +56,7 @@ export default function UserMenu({ user }: UserMenuProps) {
       toast('Password changed', 'success');
       setShowChangePassword(false);
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Couldn't change password.";
-      toast(msg, 'error');
+      toastError(err, "Couldn't change your password. Try again.");
     }
   };
 
