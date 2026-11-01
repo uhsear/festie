@@ -91,6 +91,37 @@ describe('map document theme', () => {
   });
 });
 
+describe('map document place taps and camera padding', () => {
+  const html = VARIANTS[0]![1];
+  const body = (name: string) => {
+    const start = html.indexOf(`function ${name}(`);
+    return html.slice(start, html.indexOf('\n    function ', start + 1));
+  };
+
+  it('posts place-select and pads every fit with FIT_PADDING', () => {
+    expect(html).toContain('place-select');
+    expect(html).toContain('var FIT_PADDING =');
+    expect(html).not.toContain('padding: 48');
+    expect(html).not.toContain('padding: 64');
+  });
+
+  // The popup stays until the RN place card (T27 P7) handles place-select, so a
+  // tap never does nothing; the click must not stop propagation, or MapLibre
+  // never toggles the popup.
+  it('posts place-select from place markers and keeps their popup', () => {
+    expect(body('renderPins')).toContain("kind: 'meeting-point'");
+    expect(body('renderMapData')).toContain("type: 'place-select'");
+    expect(body('renderPins')).toContain('setPopup');
+    expect(body('renderMapData')).toContain('setPopup');
+    expect(body('renderPins')).not.toContain('stopPropagation');
+    expect(body('renderMapData')).not.toContain('stopPropagation');
+  });
+
+  it('keeps pursue-select on live markers', () => {
+    expect(body('renderLive')).toContain("type: 'pursue-select'");
+  });
+});
+
 describe('map document CSP', () => {
   for (const [name, html] of VARIANTS) {
     it(`allows no unpkg.com origin in any directive (${name})`, () => {

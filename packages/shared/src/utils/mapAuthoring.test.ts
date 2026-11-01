@@ -73,6 +73,9 @@ describe('humanizeAmenityType', () => {
     expect(humanizeAmenityType('water')).toBe('Water');
     expect(humanizeAmenityType('charging')).toBe('Charging');
   });
+  it('upper-cases atm', () => {
+    expect(humanizeAmenityType('atm')).toBe('ATM');
+  });
   it('falls back to Amenity for empty', () => {
     expect(humanizeAmenityType('')).toBe('Amenity');
   });

@@ -44,6 +44,11 @@ export function openFreeMapStyleUrl(theme: ThemePreference = 'stage'): string {
   return `https://${OPENFREEMAP_HOST}/styles/${theme === 'daylight' ? 'positron' : 'dark'}`;
 }
 
+const PMTILES_PALETTE = {
+  stage: { background: '#0c0c14', earth: '#15151f', landuse: '#1a2a1f', water: '#13263a', roads: '#3a3a4a', roadWidth: 1, buildings: '#23232f' },
+  daylight: { background: '#f2f0eb', earth: '#ece9e2', landuse: '#dcebd5', water: '#b8d4ea', roads: '#c9c5bd', roadWidth: 1.5, buildings: '#ddd8cf' },
+} as const;
+
 /**
  * A minimal Protomaps-style VECTOR basemap reading the festival's PMTiles archive
  * via the `pmtiles://` protocol. Deliberately small + standard-layer-named (the
@@ -57,7 +62,12 @@ export function openFreeMapStyleUrl(theme: ThemePreference = 'stage'): string {
  * host allowlist). No labels (text) layers — those need a glyphs endpoint we
  * don't host; geometry-only keeps the basemap fully self-contained.
  */
-export function pmtilesVectorStyle(pmtilesUrl: string, attribution?: string): MapStyleObject {
+export function pmtilesVectorStyle(
+  pmtilesUrl: string,
+  attribution?: string,
+  theme: ThemePreference = 'stage',
+): MapStyleObject {
+  const c = PMTILES_PALETTE[theme === 'daylight' ? 'daylight' : 'stage'];
   return {
     version: 8,
     sources: {
@@ -69,41 +79,41 @@ export function pmtilesVectorStyle(pmtilesUrl: string, attribution?: string): Ma
     },
     layers: [
       // Solid backdrop so gaps in coverage read as a neutral field, not black.
-      { id: 'background', type: 'background', paint: { 'background-color': '#0c0c14' } },
+      { id: 'background', type: 'background', paint: { 'background-color': c.background } },
       {
         id: 'earth',
         type: 'fill',
         source: 'protomaps',
         'source-layer': 'earth',
-        paint: { 'fill-color': '#15151f' },
+        paint: { 'fill-color': c.earth },
       },
       {
         id: 'landuse',
         type: 'fill',
         source: 'protomaps',
         'source-layer': 'landuse',
-        paint: { 'fill-color': '#1a2a1f' },
+        paint: { 'fill-color': c.landuse },
       },
       {
         id: 'water',
         type: 'fill',
         source: 'protomaps',
         'source-layer': 'water',
-        paint: { 'fill-color': '#13263a' },
+        paint: { 'fill-color': c.water },
       },
       {
         id: 'roads',
         type: 'line',
         source: 'protomaps',
         'source-layer': 'roads',
-        paint: { 'line-color': '#3a3a4a', 'line-width': 1 },
+        paint: { 'line-color': c.roads, 'line-width': c.roadWidth },
       },
       {
         id: 'buildings',
         type: 'fill',
         source: 'protomaps',
         'source-layer': 'buildings',
-        paint: { 'fill-color': '#23232f' },
+        paint: { 'fill-color': c.buildings },
       },
     ],
   };
@@ -133,7 +143,7 @@ export function pickMapStyle(
 ): MapStyleObject | string {
   if (hasOfflineBasemap(mapConfig)) {
     const { pmtilesUrl, attribution } = mapConfig.offlineBasemap;
-    return pmtilesVectorStyle(pmtilesUrl, attribution);
+    return pmtilesVectorStyle(pmtilesUrl, attribution, theme);
   }
   return openFreeMapStyleUrl(theme);
 }
