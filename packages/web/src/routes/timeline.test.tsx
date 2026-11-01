@@ -24,7 +24,12 @@ vi.mock('../components/features/LowPowerIndicator', () => ({
   default: () => null,
 }));
 
+vi.mock('../lib/useUndoNotifier', () => ({
+  useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
+}));
+
 vi.mock('@festie/shared/hooks', () => ({
+  usePickClear: () => vi.fn(),
   usePicks: vi.fn(() => ({
     getMyPick: vi.fn(() => null),
     getOtherPicks: vi.fn(() => []),

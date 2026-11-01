@@ -49,10 +49,10 @@ function RouteFallback() {
 const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan', '/festival-mode'];
 
 // Routes that keep ONLY the day toggle (Sat/Sun).
-const dayOnlySubHeaderRoutes = ['/timeline', '/grid', '/picks', '/compare'];
+const dayOnlySubHeaderRoutes = ['/timeline', '/grid', '/compare'];
 
 // Routes that keep ONLY the festival selector.
-const festivalOnlySubHeaderRoutes = ['/wrap'];
+const festivalOnlySubHeaderRoutes = ['/wrap', '/picks'];
 
 export default function AppShell() {
   const location = useLocation();

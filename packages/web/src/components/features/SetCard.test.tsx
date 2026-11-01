@@ -4,9 +4,11 @@ import userEvent from '@testing-library/user-event';
 import type { FestivalSet } from '@festie/shared/types';
 
 // Mock dependencies
+const clearPickMock = vi.fn();
 const pickSyncMock = { sync: undefined as { state: string; priority: string | null } | undefined, retry: vi.fn(() => Promise.resolve()) };
 vi.mock('@festie/shared/hooks', () => ({
   usePickSync: () => pickSyncMock,
+  usePickClear: () => clearPickMock,
   usePicks: vi.fn(() => ({
     getMyPick: vi.fn(() => null),
     savePick: vi.fn(),
@@ -40,6 +42,10 @@ vi.mock('@/hooks/useSetStatus', () => ({
 
 vi.mock('@/lib/toastContext', () => ({
   useToast: vi.fn(() => ({ toast: vi.fn() })),
+}));
+
+vi.mock('@/lib/useUndoNotifier', () => ({
+  useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
 }));
 
 vi.mock('@/hooks/useHaptics', () => ({
@@ -169,6 +175,18 @@ describe('SetCard', () => {
       render(<SetCard {...defaultProps} />);
       expect(screen.getByLabelText('Must See (selected)')).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByLabelText('Want to See')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('clears through usePickClear when the active priority is clicked', async () => {
+      vi.mocked(usePicks).mockReturnValue({
+        getMyPick: vi.fn(() => 'must'),
+        savePick: vi.fn(),
+        getMyNote: vi.fn(() => ''),
+      });
+      clearPickMock.mockClear();
+      render(<SetCard {...defaultProps} />);
+      await userEvent.click(screen.getByLabelText('Must See (selected)'));
+      expect(clearPickMock).toHaveBeenCalledWith('set-1', 'Daft Punk');
     });
   });
 

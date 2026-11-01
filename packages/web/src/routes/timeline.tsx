@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { usePicks, useFestival } from '@festie/shared/hooks';
+import { usePicks, useFestival, usePickClear } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
 import { selectNowNext, resolveFestivalTimeZone, artistDisplayName, resolveStageColor } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
@@ -22,6 +22,7 @@ import { CalendarX, Music, Filter } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { cn } from '../lib/utils';
+import { useUndoNotifier } from '../lib/useUndoNotifier';
 
 const JumpToNowIcon = CONCEPT_ICON.jumpToNow;
 
@@ -42,6 +43,7 @@ function TimelineViewInner() {
   // battery-costing reflow loop). The manual "Now" button stays available.
   const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
   const { getMyPick, getOtherPicks, savePick } = usePicks();
+  const clearPick = usePickClear(useUndoNotifier());
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
@@ -135,11 +137,15 @@ function TimelineViewInner() {
 
   const handleSavePick = useCallback(
     async (setId: string, priority: string | null) => {
-      if (currentFestival) {
-        await savePick(currentFestival.id, setId, priority as Priority | null);
+      if (!currentFestival) return;
+      if (priority === null) {
+        const found = allSets.find((s) => s.id === setId);
+        clearPick(setId, found ? artistDisplayName(found, currentFestival.b2bSeparator) : 'pick');
+        return;
       }
+      await savePick(currentFestival.id, setId, priority as Priority);
     },
-    [currentFestival, savePick],
+    [currentFestival, savePick, clearPick, allSets],
   );
 
   if (!currentFestival) {

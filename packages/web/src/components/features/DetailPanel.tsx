@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, hasSetStarted, buildHomeUrl, festivalTimeLabel, resolveFestivalTimeZone } from '@festie/shared/utils';
-import { useDebouncedNote } from '@festie/shared/hooks';
+import { useDebouncedNote, usePickClear } from '@festie/shared/hooks';
 import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -9,7 +9,6 @@ import { Drawer } from 'vaul';
 import RatingButtons from './RatingButtons';
 import DetailArtistHeader from './DetailArtistHeader';
 import DetailSpotifySection from './DetailSpotifySection';
-import DetailConflictWarning from './DetailConflictWarning';
 import ClashPrompt from './ClashPrompt';
 import DetailPriorityPicker from './DetailPriorityPicker';
 import DetailReminderPicker from './DetailReminderPicker';
@@ -20,6 +19,7 @@ import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useSetStatus';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useToast } from '../../lib/toastContext';
+import { useUndoNotifier } from '../../lib/useUndoNotifier';
 import { Share2 } from 'lucide-react';
 import Button from '../ui/Button';
 import { CHIP_TINT_ALPHA, inactiveChipTextColor } from '../ui/StageBadge';
@@ -54,14 +54,13 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     whoTitle,
     savePick,
     saveReminder,
-    getOtherPicks,
-    getStageName,
     getMyPick,
   } = useDetailPanelData(set);
   const timeLabel = festivalTimeLabel(resolveFestivalTimeZone(currentFestival), useNow());
 
   const { select: selectHaptic, success: successHaptic, warning: warningHaptic } = useHaptics();
   const { toast, toastError } = useToast();
+  const clearPick = usePickClear(useUndoNotifier());
 
   const personal = useDebouncedNote({
     festivalId: currentFestival?.id,
@@ -135,6 +134,10 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     async (priority: Priority | null) => {
       if (!currentFestival) return;
       selectHaptic();
+      if (priority === null) {
+        clearPick(set.id, artistDisplayName(set, b2bSeparator));
+        return;
+      }
       setPriorityBusy(priority ?? 'clear');
       try {
         await savePick(currentFestival.id, set.id, priority);
@@ -144,7 +147,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
         setPriorityBusy(null);
       }
     },
-    [currentFestival, set.id, savePick, selectHaptic, toast],
+    [currentFestival, set, b2bSeparator, savePick, clearPick, selectHaptic, toast],
   );
 
   const handleReminderClick = useCallback(
@@ -163,35 +166,13 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     [currentFestival, set.id, saveReminder, selectHaptic, toast],
   );
 
-  // Conflict switch handler. Sequenced (was two independent un-awaited
-  // calls) so a mid-switch failure produces exactly one toast instead of two
-  // writes racing silently, and so the first call's rollback
-  // (festivalDataStore.ts's `set({ currentProfile: prev })`) can never fire
-  // after the second call's optimistic apply has already landed.
-  const handleConflictSwitch = useCallback(
-    async (fromSetId: string, toSet: FestivalSet, priority: Priority) => {
-      if (!currentFestival) return;
-      try {
-        await savePick(currentFestival.id, fromSetId, null);
-        await savePick(currentFestival.id, toSet.id, priority);
-      } catch (err) {
-        toast(mapErrorToUserMessage(err, "Couldn't switch your pick. Try again."), 'error');
-      }
-    },
-    [currentFestival, savePick, toast],
-  );
-
-  // Clash-prompt clear handler — demote one side of a clash to null. savePick is
-  // offline-queued, so resolving a clash works on dead signal.
+  // Clash-prompt clear handler: clears one side of a clash, with an Undo toast.
   const handleClashClear = useCallback(
-    (setId: string) => {
-      if (!currentFestival) return;
+    (setId: string, label: string) => {
       selectHaptic();
-      savePick(currentFestival.id, setId, null).catch((err) => {
-        toast(mapErrorToUserMessage(err, "Couldn't clear your pick. Try again."), 'error');
-      });
+      clearPick(setId, label);
     },
-    [currentFestival, savePick, selectHaptic, toast],
+    [clearPick, selectHaptic],
   );
 
   // Join festival handler
@@ -318,16 +299,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 onClear={handleClashClear}
               />
             )}
-
-            <DetailConflictWarning
-              conflicts={conflicts}
-              currentSetId={set.id}
-              myPick={myPick || null}
-              b2bSeparator={b2bSeparator}
-              getStageName={getStageName}
-              getOtherPicks={getOtherPicks}
-              onSwitch={handleConflictSwitch}
-            />
 
             <hr className="border-t border-border -mx-7" />
 

@@ -28,7 +28,7 @@ import SaveStatusChip from '../features/SaveStatusChip';
 const SUB_HEADER_PATHS = ['/', '/cards', '/timeline', '/grid', '/picks', '/wrap', '/compare', '/crew-plan'];
 
 interface SubHeaderProps {
-  /** Show only day tabs (no stage chips or search). Used on /timeline, /grid, /picks. */
+  /** Show only day tabs (no stage chips or search). Used on /timeline, /grid, /compare. */
   dayOnly: boolean;
   /** Show only festival selector (no day tabs, stage chips, or search). Used on /wrap. */
   festivalOnly: boolean;

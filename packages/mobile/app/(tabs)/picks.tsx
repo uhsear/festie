@@ -19,16 +19,19 @@ import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFestivalDataStore } from '@festie/shared/stores';
-import { usePicks, useFestival } from '@festie/shared/hooks';
-import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
+import { usePicks, useFestival, usePicksPlan, usePickClear, useBulkAddPicks } from '@festie/shared/hooks';
+import type { FestivalSet, Priority } from '@festie/shared/types';
 import type { ConflictGroup } from '@festie/shared/utils';
 import {
   artistDisplayName,
   hasOfflineBasemap,
   festivalPhase,
-  buildPickConflicts,
-  getSetTimeBounds,
-  resolveFestivalTimeZone,
+  buildBulkPickGroups,
+  BULK_SCOPE_LABEL,
+  type PicksRow,
+  type PicksFilter,
+  type PicksGroupMode,
+  type PicksOrder,
   formatTime,
   buildPicksIcs,
   buildPicksShareUrl,
@@ -41,6 +44,7 @@ import { useHaptics } from '../../hooks/useHaptics';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
+import { undoNotifier } from '../../lib/undoNotifier';
 import { priorityIconName } from '../../lib/prioritySymbol';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -50,16 +54,6 @@ import SetCardMobile from '../../components/SetCardMobile';
 import CrewSuggestionStrip from '../../components/CrewSuggestionStrip';
 import OfflineReadinessCard from '../../components/OfflineReadinessCard';
 
-/**
- * Priority ordering + display metadata, mirroring the web /picks route. Sets
- * are grouped by day, then split into these three priority buckets in this
- * order, and finally sorted by start time (then artist name) within a bucket.
- */
-const PRIORITY_SECTIONS: readonly { value: Priority; label: string }[] = [
-  { value: 'must', label: PRIORITY_SYMBOLS.must.label },
-  { value: 'want-to-see', label: PRIORITY_SYMBOLS['want-to-see'].label },
-  { value: 'maybe', label: PRIORITY_SYMBOLS.maybe.label },
-];
 
 const PRIORITY_CHOICES: readonly { value: Priority; label: string }[] = [
   { value: 'must', label: PRIORITY_SYMBOLS.must.short },
@@ -67,22 +61,14 @@ const PRIORITY_CHOICES: readonly { value: Priority; label: string }[] = [
   { value: 'maybe', label: PRIORITY_SYMBOLS.maybe.short },
 ];
 
-/** How the picks plan is organized: by festival day, or by priority tier. */
-type GroupMode = 'day' | 'priority';
-
-/** The active focus filter applied on top of the chosen grouping. */
-type PickFilter = 'all' | Priority | 'clashes';
-
 /**
- * A flattened list row: a collapsible group header (day OR priority tier
- * depending on `groupMode`), a sub-group header, or a picked set. Keeping
- * everything in one FlatList (rather than nested .map in a ScrollView) preserves
- * list virtualization across the whole picks plan.
+ * A flattened list row: a collapsible group header, a sub-group header, or a
+ * picked set. One FlatList (rather than nested .map in a ScrollView) keeps list
+ * virtualization across the whole picks plan. Built by the shared usePicksPlan.
  */
-type Row =
-  | { kind: 'group'; key: string; groupId: string; label: string; count: number; color?: string; collapsed: boolean }
-  | { kind: 'subgroup'; key: string; label: string; count: number; color?: string }
-  | { kind: 'set'; key: string; set: FestivalSet };
+type Row = PicksRow;
+
+const colorOf = (t: Parameters<typeof priorityColor>[0], p?: Priority) => (p ? priorityColor(t, p) : undefined);
 
 const SCROLL_TOP_THRESHOLD = 520;
 
@@ -114,39 +100,40 @@ export default function PicksScreen() {
   const isLoading = useFestivalDataStore((s) => s.isLoading);
   const error = useFestivalDataStore((s) => s.error);
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
-  const bulkSavePicks = useFestivalDataStore((s) => s.bulkSavePicks);
 
   const [exportBusy, setExportBusy] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkPriority, setBulkPriority] = useState<Priority>('must');
-  const [bulkBusyKey, setBulkBusyKey] = useState<string | null>(null);
 
-  // ── Organize / focus controls ───────────────────────────────────────────
-  const [groupMode, setGroupMode] = useState<GroupMode>('day');
-  const [filter, setFilter] = useState<PickFilter>('all');
-  const [search, setSearch] = useState('');
+  // ── Organize / focus controls (shared with web) ─────────────────────────
+  const plan = usePicksPlan();
+  const {
+    groupMode,
+    order,
+    setOrder,
+    effectiveFilter,
+    search,
+    setSearch,
+    stats,
+    conflictGroups,
+    rows,
+    filtersActive,
+    toggleCollapsed,
+    toggleFilter,
+    setGroupMode,
+    clearFilters: clearPlanFilters,
+  } = plan;
   const [searchOpen, setSearchOpen] = useState(false);
-  // Collapsed group ids (e.g. `day-2`, `prio-must`) — lets a long multi-day plan
-  // fold to its headers and scan fast. In-memory for the screen's lifetime.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [showScrollTop, setShowScrollTop] = useState(false);
   const listRef = useRef<FlatList<Row>>(null);
 
-  const { getMyPick, savePick, removePick, getMyNote } = usePicks();
+  const { getMyPick, savePick, getMyNote, getMyReminder } = usePicks();
   const { getDays, getStageColor, getStageName } = useFestival();
+  const clearPick = usePickClear(undoNotifier);
+  const { busyKey: bulkBusyKey, add: bulkAdd } = useBulkAddPicks(undoNotifier);
 
   const days = useMemo(() => getDays(), [getDays]);
-
-  // ── Single source of truth for clashes ───────────────────────────────────
-  // The chip count, the "clashes" focus filter, the per-card conflict ring AND
-  // the banner all derive from the SAME `buildPickConflicts` groups — so the
-  // numbers can never disagree. `buildPickConflicts` is day-scoped, so we run it
-  // once per festival day and concatenate; this spans the WHOLE plan (the picks
-  // tab has no day selector — a clash on any day must surface here). This also
-  // replaces the old time-only `getConflictingSetIds`, picking up the shared TZ-
-  // and post-midnight-aware interval math (`getSetTimeBounds`).
-  const myPicks = currentProfile?.picks;
-  const festivalTimeZone = useMemo(() => resolveFestivalTimeZone(currentFestival), [currentFestival]);
+  const conflictIds = plan.clashIds;
 
   // The festival's offline vector basemap archive, when one has been authored
   // for it. Null for every other festival, which makes the download card omit
@@ -156,341 +143,77 @@ export default function PicksScreen() {
     [currentFestival],
   );
 
-  const conflictGroups = useMemo<ConflictGroup[]>(() => {
-    if (!myPicks || storeDays.length === 0) return [];
-    // buildPickConflicts is day-scoped, so run it once per festival day index
-    // (positional, 0..n-1 = each set's dayIndex) and concatenate. di === 0 also
-    // catches picks with an undefined dayIndex (buildPickConflicts buckets them
-    // as day 0 via `dayIndex ?? 0`).
-    const out: ConflictGroup[] = [];
-    for (let di = 0; di < storeDays.length; di++) {
-      out.push(
-        ...buildPickConflicts({ sets, myPicks, selectedDay: di, days: storeDays, timeZone: festivalTimeZone }),
-      );
-    }
-    return out;
-  }, [sets, storeDays, myPicks, festivalTimeZone]);
-
-  // The set ids participating in ANY clash — drives the filter + the card ring.
-  const conflictIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const g of conflictGroups) for (const p of g.picks) ids.add(p.set.id);
-    return ids;
-  }, [conflictGroups]);
-
-  // ── At-a-glance summary across ALL picks (independent of the active filter,
-  // so the counts stay a stable overview the user can navigate by). ──────────
-  const stats = useMemo(() => {
-    let must = 0;
-    let want = 0;
-    let maybe = 0;
-    for (const s of sets) {
-      const p = getMyPick(s.id);
-      if (p === 'must') must += 1;
-      else if (p === 'want-to-see') want += 1;
-      else if (p === 'maybe') maybe += 1;
-    }
-    return { must, want, maybe, total: must + want + maybe, clashes: conflictIds.size };
-  }, [sets, getMyPick, conflictIds]);
-
-  // If the user is focused on clashes and then resolves the last one, don't
-  // strand them on an empty "no clashes" view — fall the view back to the full
-  // plan without mutating the stored filter (derive instead of setState-in-effect).
-  const effectiveFilter: PickFilter = filter === 'clashes' && stats.clashes === 0 ? 'all' : filter;
-
-  // Stable start-time-then-name comparator for sets within a bucket. Sort by the
-  // resolved absolute `startMs` (TZ- and post-midnight-aware) rather than the raw
-  // 'HH:mm' string — a string sort puts a 01:00 after-midnight set ABOVE 18:00,
-  // scrambling the late-night tail of a day. Sets whose time can't be resolved
-  // sink below timed ones, then tiebreak by artist name.
-  const compareSets = useMemo(() => {
-    const separator = currentFestival?.b2bSeparator;
-    return (a: FestivalSet, b: FestivalSet) => {
-      const boundsA = getSetTimeBounds(a, storeDays, festivalTimeZone);
-      const boundsB = getSetTimeBounds(b, storeDays, festivalTimeZone);
-      if (boundsA && boundsB) {
-        if (boundsA.startMs !== boundsB.startMs) return boundsA.startMs - boundsB.startMs;
-      } else if (boundsA && !boundsB) return -1;
-      else if (!boundsA && boundsB) return 1;
-      return artistDisplayName(a, separator).localeCompare(artistDisplayName(b, separator), undefined, {
-        sensitivity: 'base',
-      });
-    };
-  }, [currentFestival?.b2bSeparator, storeDays, festivalTimeZone]);
-
-  // Build the flattened row list. In `day` mode the outer header is the festival
-  // day and the inner sub-group is the priority tier (must → want → maybe); in
-  // `priority` mode that nesting inverts (tier outer, day inner). Search + the
-  // focus filter prune the eligible sets first; collapsed groups emit only their
-  // header. Days / tiers with no surviving picks are skipped entirely.
-  const rows = useMemo<Row[]>(() => {
-    const separator = currentFestival?.b2bSeparator;
-    const q = search.trim().toLowerCase();
-    const matchesSearch = (s: FestivalSet) => {
-      if (!q) return true;
-      const name = artistDisplayName(s, separator).toLowerCase();
-      const stage = (getStageName(s.stageId) || '').toLowerCase();
-      return name.includes(q) || stage.includes(q);
-    };
-
-    const eligible = sets.filter((s) => {
-      const p = getMyPick(s.id);
-      if (!p) return false;
-      if (!matchesSearch(s)) return false;
-      if (effectiveFilter === 'clashes') return conflictIds.has(s.id);
-      if (effectiveFilter !== 'all' && p !== effectiveFilter) return false;
-      return true;
-    });
-
-    const out: Row[] = [];
-
-    // A pick is "scheduled" only when its dayIndex maps to a real festival day.
-    // Picks with an undefined / out-of-range dayIndex used to be counted in the
-    // stats but dropped by every day/tier loop below (they match no `day.index`),
-    // so "All N" exceeded the rendered cards and those picks were unreachable.
-    // They now land in a dedicated "Unscheduled" bucket so the plan is complete.
-    const knownDayIndices = new Set(days.map((d) => d.index));
-    const isScheduled = (s: FestivalSet) =>
-      typeof s.dayIndex === 'number' && knownDayIndices.has(s.dayIndex);
-
-    if (groupMode === 'day') {
-      days.forEach((day) => {
-        const daySets = eligible.filter((s) => s.dayIndex === day.index);
-        if (daySets.length === 0) return;
-        const groupId = `day-${day.index}`;
-        const isCollapsed = collapsed.has(groupId);
-        out.push({
-          kind: 'group',
-          key: `g-${groupId}`,
-          groupId,
-          label: day.label || day.date,
-          count: daySets.length,
-          collapsed: isCollapsed,
-        });
-        if (isCollapsed) return;
-        PRIORITY_SECTIONS.forEach((section) => {
-          const picked = daySets.filter((s) => getMyPick(s.id) === section.value).sort(compareSets);
-          if (picked.length === 0) return;
-          out.push({
-            kind: 'subgroup',
-            key: `sg-${day.index}-${section.value}`,
-            label: section.label,
-            color: priorityColor(t, section.value),
-            count: picked.length,
-          });
-          picked.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
-        });
-      });
-
-      // Unscheduled (TBA) day group — same priority sub-grouping as a real day.
-      const tbaSets = eligible.filter((s) => !isScheduled(s));
-      if (tbaSets.length > 0) {
-        const groupId = 'day-tba';
-        const isCollapsed = collapsed.has(groupId);
-        out.push({
-          kind: 'group',
-          key: `g-${groupId}`,
-          groupId,
-          label: 'Unscheduled',
-          count: tbaSets.length,
-          collapsed: isCollapsed,
-        });
-        if (!isCollapsed) {
-          PRIORITY_SECTIONS.forEach((section) => {
-            const picked = tbaSets.filter((s) => getMyPick(s.id) === section.value).sort(compareSets);
-            if (picked.length === 0) return;
-            out.push({
-              kind: 'subgroup',
-              key: `sg-tba-${section.value}`,
-              label: section.label,
-              color: priorityColor(t, section.value),
-              count: picked.length,
-            });
-            picked.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
-          });
-        }
-      }
-    } else {
-      PRIORITY_SECTIONS.forEach((section) => {
-        const tierSets = eligible.filter((s) => getMyPick(s.id) === section.value);
-        if (tierSets.length === 0) return;
-        const groupId = `prio-${section.value}`;
-        const isCollapsed = collapsed.has(groupId);
-        out.push({
-          kind: 'group',
-          key: `g-${groupId}`,
-          groupId,
-          label: section.label,
-          count: tierSets.length,
-          color: priorityColor(t, section.value),
-          collapsed: isCollapsed,
-        });
-        if (isCollapsed) return;
-        days.forEach((day) => {
-          const daySets = tierSets.filter((s) => s.dayIndex === day.index).sort(compareSets);
-          if (daySets.length === 0) return;
-          out.push({
-            kind: 'subgroup',
-            key: `sg-${section.value}-${day.index}`,
-            label: day.label || day.date,
-            count: daySets.length,
-          });
-          daySets.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
-        });
-
-        // Unscheduled (TBA) picks in this tier, after the dated days.
-        const tbaSets = tierSets.filter((s) => !isScheduled(s)).sort(compareSets);
-        if (tbaSets.length > 0) {
-          out.push({
-            kind: 'subgroup',
-            key: `sg-${section.value}-tba`,
-            label: 'Unscheduled',
-            count: tbaSets.length,
-          });
-          tbaSets.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
-        }
-      });
-    }
-
-    return out;
-  }, [
-    days,
-    sets,
-    getMyPick,
-    getStageName,
-    currentFestival?.b2bSeparator,
-    t,
-    groupMode,
-    effectiveFilter,
-    search,
-    conflictIds,
-    collapsed,
-    compareSets,
-  ]);
-
   const handlePickChange = useCallback(
     (set: FestivalSet, priority: Priority | null) => {
       if (!currentFestival) return;
       if (priority === null) {
-        // The card shows the Retry chip on failure.
-        removePick(currentFestival.id, set.id).catch(() => haptics.warning());
+        haptics.select();
+        clearPick(set.id, artistDisplayName(set, currentFestival.b2bSeparator));
       } else {
-        savePick(currentFestival.id, set.id, priority).catch(() => haptics.warning());
+        savePick(currentFestival.id, set.id, priority).catch((e) => {
+          haptics.warning();
+          undoNotifier.error(mapErrorToUserMessage(e, "Couldn't save your pick. Try again."));
+        });
       }
     },
-    [currentFestival, savePick, removePick, haptics],
+    [currentFestival, savePick, clearPick, haptics],
   );
 
   const toggleCollapse = useCallback(
     (groupId: string) => {
       haptics.tap();
-      setCollapsed((prev) => {
-        const next = new Set(prev);
-        if (next.has(groupId)) next.delete(groupId);
-        else next.add(groupId);
-        return next;
-      });
+      toggleCollapsed(groupId);
     },
-    [haptics],
+    [haptics, toggleCollapsed],
   );
 
   const setFocusFilter = useCallback(
-    (next: PickFilter) => {
+    (next: PicksFilter) => {
       haptics.select();
       // Tap an active chip to clear it (back to the whole plan).
-      setFilter((prev) => (prev === next ? 'all' : next));
+      toggleFilter(next);
     },
-    [haptics],
+    [haptics, toggleFilter],
   );
 
   const setGroupModeHaptic = useCallback(
-    (mode: GroupMode) => {
+    (mode: PicksGroupMode) => {
       haptics.select();
       setGroupMode(mode);
     },
-    [haptics],
+    [haptics, setGroupMode],
+  );
+
+  const setOrderHaptic = useCallback(
+    (next: PicksOrder) => {
+      haptics.select();
+      setOrder(next);
+    },
+    [haptics, setOrder],
   );
 
   const clearFilters = useCallback(() => {
     haptics.tap();
-    setFilter('all');
-    setSearch('');
+    clearPlanFilters();
     setSearchOpen(false);
-  }, [haptics]);
+  }, [haptics, clearPlanFilters]);
 
-  // ── M2 bulk pick helpers ────────────────────────────────────────────────
-  // Group the cached sets by stage and by artist genre so the user can add a
-  // whole group ("all on Main Stage", "all techno") in ONE coalesced write via
-  // festivalDataStore.bulkSavePicks (single PUT, offline-native + queued).
-  // Computed purely from cached store data — no network reads.
-  const stageGroups = useMemo(() => {
-    const byStage = new Map<string, string[]>();
-    for (const s of sets) {
-      const arr = byStage.get(s.stageId);
-      if (arr) arr.push(s.id);
-      else byStage.set(s.stageId, [s.id]);
-    }
-    const order = new Map<string, number>();
-    stages.forEach((st: Stage, i) => order.set(st.id, i));
-    return [...byStage.entries()]
-      .map(([stageId, setIds]) => ({
-        key: `stage-${stageId}`,
-        stageId,
-        label: getStageName(stageId) || 'Stage',
-        setIds,
-      }))
-      .sort((a, b) => (order.get(a.stageId) ?? 0) - (order.get(b.stageId) ?? 0));
-  }, [sets, stages, getStageName]);
-
-  const genreGroups = useMemo(() => {
-    const byGenre = new Map<string, string[]>();
-    // Lowercase only the dedupe KEY; keep the first-seen original casing for the
-    // display label so genres like "drum and bass" / "UK garage" aren't mangled
-    // by a textTransform:'capitalize'.
-    const labelByKey = new Map<string, string>();
-    for (const s of sets) {
-      const seen = new Set<string>();
-      for (const a of s.artists ?? []) {
-        for (const g of a.genres ?? []) {
-          const display = g.trim();
-          const key = display.toLowerCase();
-          if (!key || seen.has(key)) continue;
-          seen.add(key);
-          if (!labelByKey.has(key)) labelByKey.set(key, display);
-          const arr = byGenre.get(key);
-          if (arr) arr.push(s.id);
-          else byGenre.set(key, [s.id]);
-        }
-      }
-    }
-    return [...byGenre.entries()]
-      .map(([key, setIds]) => ({ key: `genre-${key}`, label: labelByKey.get(key) ?? key, setIds }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [sets]);
-
+  // ── Bulk pick helpers ───────────────────────────────────────────────────
+  // Group every cached set (all days) by stage and by artist genre so the user
+  // can add a whole group in ONE coalesced write via useBulkAddPicks.
+  const bulkGroups = useMemo(() => buildBulkPickGroups(sets, stages, getStageName), [sets, stages, getStageName]);
+  const stageGroups = bulkGroups.stages;
+  const genreGroups = bulkGroups.genres;
   const hasBulkGroups = stageGroups.length > 0 || genreGroups.length > 0;
 
   const handleBulkApply = useCallback(
-    (key: string, label: string, setIds: string[]) => {
-      if (setIds.length === 0 || bulkBusyKey) return;
-      setBulkBusyKey(key);
-      bulkSavePicks(setIds, bulkPriority)
-        .then(() => {
-          haptics.success();
-          const pLabel = PRIORITY_SYMBOLS[bulkPriority].label;
-          Alert.alert(
-            'Picks added',
-            `Added ${setIds.length} set${setIds.length === 1 ? '' : 's'} from ${label} to ${pLabel}.`,
-          );
-        })
-        .catch((e) => {
-          // bulkSavePicks already rolled back + set the store error.
-          haptics.warning();
-          Alert.alert("Couldn't add picks", mapErrorToUserMessage(e, 'Try again.'));
-        })
-        .finally(() => setBulkBusyKey(null));
+    (group: (typeof stageGroups)[number]) => {
+      bulkAdd(group, bulkPriority).then((result) => {
+        if (result === 'added') haptics.success();
+        else if (result === 'failed') haptics.warning();
+      });
     },
-    [bulkSavePicks, bulkPriority, bulkBusyKey, haptics],
+    [bulkAdd, bulkPriority, haptics],
   );
 
   const renderItem = useCallback(
@@ -507,7 +230,7 @@ export default function PicksScreen() {
               item.collapsed ? 'collapsed, double tap to expand' : 'expanded, double tap to collapse'
             }`}
           >
-            {item.color ? <View style={[styles.dot, { backgroundColor: item.color }]} /> : null}
+            {item.priority ? <View style={[styles.dot, { backgroundColor: colorOf(t, item.priority) }]} /> : null}
             <Text style={styles.dayLabel} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
               {item.label}
             </Text>
@@ -527,7 +250,7 @@ export default function PicksScreen() {
       if (item.kind === 'subgroup') {
         return (
           <View style={styles.sectionHeader} accessibilityRole="header">
-            {item.color ? <View style={[styles.dot, { backgroundColor: item.color }]} /> : null}
+            {item.priority ? <View style={[styles.dot, { backgroundColor: colorOf(t, item.priority) }]} /> : null}
             <Text style={styles.sectionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               {item.label}
             </Text>
@@ -552,6 +275,7 @@ export default function PicksScreen() {
           onPress={() => router.push(`/set/${item.set.id}`)}
           hasConflict={conflictIds.has(item.set.id)}
           hasNote={!!getMyNote(item.set.id)}
+          reminderMinutes={getMyReminder(item.set.id)}
         />
       );
     },
@@ -561,6 +285,7 @@ export default function PicksScreen() {
       getStageColor,
       getMyPick,
       getMyNote,
+      getMyReminder,
       handlePickChange,
       conflictIds,
       router,
@@ -770,6 +495,33 @@ export default function PicksScreen() {
       </View>
     ) : null;
 
+  const orderRow =
+    stats.total > 0 ? (
+      <View style={styles.controlsRow}>
+        <View style={styles.segment} accessibilityRole="radiogroup" accessibilityLabel="Order sets">
+          {(['openers', 'headliners'] as const).map((value) => {
+            const active = order === value;
+            const label = value === 'openers' ? 'Openers first' : 'Headliners first';
+            return (
+              <TouchableOpacity
+                key={value}
+                style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                onPress={() => setOrderHaptic(value)}
+                activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={label}
+              >
+                <Text style={[styles.segmentText, active && styles.segmentTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    ) : null;
+
   const searchField =
     stats.total > 0 && searchOpen ? (
       <View style={styles.searchRow}>
@@ -810,10 +562,10 @@ export default function PicksScreen() {
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityState={{ expanded: bulkOpen }}
-        accessibilityLabel="Bulk add picks"
+        accessibilityLabel="Bulk add picks for all days"
       >
         <Ionicons name="add-circle-outline" size={16} color={t.colors.accent.aqua} />
-        <Text style={styles.bulkHeaderText}>Bulk add picks</Text>
+        <Text style={styles.bulkHeaderText}>{`Bulk add picks · ${BULK_SCOPE_LABEL}`}</Text>
         <Ionicons
           name={bulkOpen ? 'chevron-up' : 'chevron-down'}
           size={16}
@@ -863,7 +615,7 @@ export default function PicksScreen() {
                     count={g.setIds.length}
                     busy={bulkBusyKey === g.key}
                     disabled={!!bulkBusyKey}
-                    onPress={() => handleBulkApply(g.key, g.label, g.setIds)}
+                    onPress={() => handleBulkApply(g)}
                   />
                 ))}
               </View>
@@ -881,7 +633,7 @@ export default function PicksScreen() {
                     count={g.setIds.length}
                     busy={bulkBusyKey === g.key}
                     disabled={!!bulkBusyKey}
-                    onPress={() => handleBulkApply(g.key, g.label, g.setIds)}
+                    onPress={() => handleBulkApply(g)}
                   />
                 ))}
               </View>
@@ -922,6 +674,7 @@ export default function PicksScreen() {
       )}
       {summaryRow}
       {controlsRow}
+      {orderRow}
       {searchField}
       <CrewSuggestionStrip />
       <ClashBannerInline
@@ -946,7 +699,6 @@ export default function PicksScreen() {
 
   // Distinguish "you have no picks at all" from "your filter/search hid them" so
   // the empty state is honest and offers the right next action.
-  const filtersActive = effectiveFilter !== 'all' || search.trim().length > 0;
   const emptyComponent =
     stats.total === 0 ? (
       <EmptyState

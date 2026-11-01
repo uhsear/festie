@@ -1,109 +1,41 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
-import { useFestival } from '@festie/shared/hooks';
-import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
+import { useFestival, useBulkAddPicks } from '@festie/shared/hooks';
+import type { Priority } from '@festie/shared/types';
 import { PRIORITY_OPTIONS } from '@festie/shared/constants';
+import { buildBulkPickGroups, BULK_SCOPE_LABEL } from '@festie/shared/utils';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import PriorityIcon from './ui/PriorityIcon';
-import { useToast } from '../lib/toastContext';
+import { useUndoNotifier } from '../lib/useUndoNotifier';
 import { Layers, Sparkles, ChevronDown } from 'lucide-react';
 
 // M2 bulk pick helpers (before-festival planning). Operates ENTIRELY on the
 // cached festivalDataStore.sets / .stages + artist genres — no network reads —
-// and applies a whole group in ONE coalesced write via the store's
-// `bulkSavePicks(setIds, priority)` (a single PUT, offline-native + queued).
+// and applies a whole group in ONE coalesced write via the shared
+// `useBulkAddPicks` hook (a single PUT, offline-native + queued).
 //
-// Surfaces three bulk affordances scoped to the currently-selected day:
+// Groups span every festival day (same scope as mobile), and the result toast
+// reports the true count and offers Undo:
 //   • "Add all must-see on this stage"  (per stage)
 //   • per-genre  (every set whose artists list that genre)
 // The chosen priority defaults to must-see (the headline "must-see on a stage"
 // ask) but can be switched to want/maybe before applying.
 
-/** Lowercased, de-duped genre list across a set's artists. */
-function setGenres(set: FestivalSet): string[] {
-  const out = new Set<string>();
-  for (const a of set.artists ?? []) {
-    for (const g of a.genres ?? []) {
-      const t = g.trim();
-      if (t) out.add(t);
-    }
-  }
-  return [...out];
-}
-
 export default function PickBulkActions() {
   const sets = useFestivalStore((s) => s.sets);
   const stages = useFestivalStore((s) => s.stages);
-  const days = useFestivalStore((s) => s.days);
-  const selectedDay = useFestivalStore((s) => s.selectedDay);
-  const bulkSavePicks = useFestivalStore((s) => s.bulkSavePicks);
   const { getStageName } = useFestival();
-  const { toast } = useToast();
+  const { busyKey, add } = useBulkAddPicks(useUndoNotifier());
 
   const [open, setOpen] = useState(false);
   const [priority, setPriority] = useState<Priority>('must');
-  const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  // Only the sets on the day currently shown in /picks — bulk actions stay
-  // scoped to what the user is looking at rather than silently spanning days.
-  const daySets = useMemo(() => sets.filter((s) => s.dayIndex === selectedDay), [sets, selectedDay]);
-
-  // Stages that actually have sets on this day, with their set ids.
-  const stageGroups = useMemo(() => {
-    const byStage = new Map<string, string[]>();
-    for (const set of daySets) {
-      const arr = byStage.get(set.stageId);
-      if (arr) arr.push(set.id);
-      else byStage.set(set.stageId, [set.id]);
-    }
-    const order = new Map<string, number>();
-    stages.forEach((st: Stage, i) => order.set(st.id, i));
-    return [...byStage.entries()]
-      .map(([stageId, setIds]) => ({
-        stageId,
-        name: getStageName(stageId) || 'Stage',
-        setIds,
-      }))
-      .sort((a, b) => (order.get(a.stageId) ?? 0) - (order.get(b.stageId) ?? 0));
-  }, [daySets, stages, getStageName]);
-
-  // Genres present on this day, with their set ids (a set lists under every
-  // genre any of its artists carries).
-  const genreGroups = useMemo(() => {
-    const byGenre = new Map<string, string[]>();
-    for (const set of daySets) {
-      for (const g of setGenres(set)) {
-        const key = g.toLowerCase();
-        const arr = byGenre.get(key);
-        if (arr) arr.push(set.id);
-        else byGenre.set(key, [set.id]);
-      }
-    }
-    return [...byGenre.entries()]
-      .map(([key, setIds]) => ({ key, label: key, setIds }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [daySets]);
-
-  const apply = useCallback(
-    async (key: string, label: string, setIds: string[]) => {
-      if (setIds.length === 0 || busyKey) return;
-      setBusyKey(key);
-      try {
-        await bulkSavePicks(setIds, priority);
-        const pLabel = PRIORITY_OPTIONS.find((p) => p.value === priority)?.short ?? '';
-        toast(`Added ${setIds.length} set${setIds.length === 1 ? '' : 's'} from ${label} to ${pLabel}`, 'success');
-      } catch {
-        // bulkSavePicks already rolled back + set the store error; surface a toast.
-        toast("Couldn't add picks. Try again.", 'error');
-      } finally {
-        setBusyKey(null);
-      }
-    },
-    [bulkSavePicks, priority, busyKey, toast],
+  const { stages: stageGroups, genres: genreGroups } = useMemo(
+    () => buildBulkPickGroups(sets, stages, getStageName),
+    [sets, stages, getStageName],
   );
 
-  const dayLabel = days[selectedDay]?.label;
   const hasGroups = stageGroups.length > 0 || genreGroups.length > 0;
   if (!hasGroups) return null;
 
@@ -113,11 +45,11 @@ export default function PickBulkActions() {
         type="button"
         className="flex items-center gap-2 w-full px-4 py-3 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-xl"
         aria-expanded={open}
-        aria-label={`Bulk add picks${dayLabel ? ` for ${dayLabel}` : ''}, ${open ? 'collapse' : 'expand'}`}
+        aria-label={`Bulk add picks for all days, ${open ? 'collapse' : 'expand'}`}
         onClick={() => setOpen((v) => !v)}
       >
         <Sparkles className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
-        <span className="text-sm font-semibold">Bulk add picks{dayLabel ? ` · ${dayLabel}` : ''}</span>
+        <span className="text-sm font-semibold">{`Bulk add picks · ${BULK_SCOPE_LABEL}`}</span>
         <ChevronDown
           className={`w-4 h-4 ml-auto text-text-muted transition-transform ${open ? 'rotate-180' : ''}`}
           aria-hidden="true"
@@ -135,7 +67,7 @@ export default function PickBulkActions() {
                 type="button"
                 role="radio"
                 aria-checked={priority === p.value}
-                aria-label={`${p.label}${priority === p.value ? ' (selected)' : ''}`}
+                aria-label={p.label}
                 onClick={() => setPriority(p.value)}
                 className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border cursor-pointer transition-colors ${
                   priority === p.value
@@ -158,16 +90,16 @@ export default function PickBulkActions() {
               <div className="flex flex-wrap gap-2">
                 {stageGroups.map((g) => (
                   <Button
-                    key={g.stageId}
+                    key={g.key}
                     variant="secondary"
                     size="sm"
                     type="button"
-                    isLoading={busyKey === `stage-${g.stageId}`}
+                    isLoading={busyKey === g.key}
                     disabled={!!busyKey}
-                    onClick={() => apply(`stage-${g.stageId}`, g.name, g.setIds)}
-                    aria-label={`Add all ${g.setIds.length} sets on ${g.name}`}
+                    onClick={() => add(g, priority)}
+                    aria-label={`Add all ${g.setIds.length} sets on ${g.label}, all days`}
                   >
-                    {g.name}
+                    {g.label}
                     <Badge variant="outline">{g.setIds.length}</Badge>
                   </Button>
                 ))}
@@ -188,12 +120,12 @@ export default function PickBulkActions() {
                     variant="secondary"
                     size="sm"
                     type="button"
-                    isLoading={busyKey === `genre-${g.key}`}
+                    isLoading={busyKey === g.key}
                     disabled={!!busyKey}
-                    onClick={() => apply(`genre-${g.key}`, g.label, g.setIds)}
-                    aria-label={`Add all ${g.setIds.length} ${g.label} sets`}
+                    onClick={() => add(g, priority)}
+                    aria-label={`Add all ${g.setIds.length} ${g.label} sets, all days`}
                   >
-                    <span className="capitalize">{g.label}</span>
+                    {g.label}
                     <Badge variant="outline">{g.setIds.length}</Badge>
                   </Button>
                 ))}

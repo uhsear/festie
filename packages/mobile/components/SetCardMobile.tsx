@@ -17,6 +17,8 @@ import {
   ensureWhiteContrast,
   PRIORITY_RANK,
   buildOverlapBreakdown,
+  reminderLeadLabel,
+  reminderLeadA11y,
 } from '@festie/shared/utils';
 import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { usePickSync } from '@festie/shared/hooks';
@@ -66,6 +68,8 @@ interface SetCardMobileProps {
   hasConflict?: boolean;
   /** When true, shows a small "has note" indicator next to the time. */
   hasNote?: boolean;
+  /** Lead time in minutes of this set's reminder; shows a bell with the lead. */
+  reminderMinutes?: number;
   /**
    * Crew members (other than the current user) who have this set picked.
    * Renders an overlapping avatar cluster + "+N" overflow in the footer,
@@ -192,6 +196,7 @@ function SetCardMobileImpl({
   onPress,
   hasConflict = false,
   hasNote = false,
+  reminderMinutes,
   friendProfiles,
 }: SetCardMobileProps) {
   const t = useTokens();
@@ -209,9 +214,11 @@ function SetCardMobileImpl({
   // Spell out how far through a live set we are so the body's accessible name
   // carries the same "now" context the visual progress bar does for sighted users.
   const livePct = isLive ? Math.round(setStatus.progress * 100) : 0;
-  const a11yBody = isLive
-    ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
-    : `${artistName}, ${stageName}, ${timeLabel}`;
+  const reminderA11y = reminderMinutes != null ? `Reminder ${reminderLeadA11y(reminderMinutes)} before` : null;
+  const a11yBody =
+    (isLive
+      ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
+      : `${artistName}, ${stageName}, ${timeLabel}`) + (reminderA11y ? `, ${reminderA11y.toLowerCase()}` : '');
 
   // The stage pill renders white (onAccent) text on the stage color, so darken
   // the fill just enough for that text to clear WCAG AA (see shared
@@ -259,6 +266,14 @@ function SetCardMobileImpl({
               color={t.colors.text.muted}
               accessibilityLabel="Has note"
             />
+          ) : null}
+          {reminderMinutes != null ? (
+            <View style={styles.reminderMark} accessibilityLabel={reminderA11y ?? undefined}>
+              <Ionicons name="notifications-outline" size={12} color={t.colors.text.muted} />
+              <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {reminderLeadLabel(reminderMinutes)}
+              </Text>
+            </View>
           ) : null}
           {hasConflict ? (
             <View style={styles.conflictBadge}>
@@ -361,7 +376,8 @@ function areEqual(prev: SetCardMobileProps, next: SetCardMobileProps): boolean {
     prev.stageColor !== next.stageColor ||
     prev.myPick !== next.myPick ||
     prev.hasConflict !== next.hasConflict ||
-    prev.hasNote !== next.hasNote
+    prev.hasNote !== next.hasNote ||
+    prev.reminderMinutes !== next.reminderMinutes
   ) {
     return false;
   }
@@ -526,6 +542,15 @@ const useStyles = makeStyles((t) => ({
   time: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  reminderMark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
+  },
+  reminderText: {
+    ...typeStyle('micro'),
+    color: t.colors.text.muted,
   },
   conflictBadge: {
     flexDirection: 'row',

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import {
   artistDisplayName,
   formatTime,
@@ -78,6 +79,7 @@ function CrewPlanInner() {
   const days = useFestivalStore((s) => s.days) as FestivalDay[];
   const allProfiles = useFestivalStore((s) => s.allProfiles) as Profile[];
   const stages = useFestivalStore((s) => s.stages);
+  const setDetailSet = useUIStore((s) => s.setDetailSet);
 
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
@@ -209,6 +211,11 @@ function CrewPlanInner() {
                         <Link
                           to="/set/$setId"
                           params={{ setId: g.set.id }}
+                          onClick={(e) => {
+                            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                            e.preventDefault();
+                            setDetailSet(g.set);
+                          }}
                           className="flex items-center gap-2 min-h-11 text-sm hover:underline"
                         >
                           <span
