@@ -26,7 +26,7 @@ describe('SosBanner', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('names who and when, announces once, and opens the crew', () => {
+  it('names who and when, announces once, and opens the map on the newest raiser', () => {
     entries = [{ crewId: 'c1', userId: 'dani', username: 'Dani', raisedAt: '2026-06-12T21:00:00Z' }];
     render(<SosBanner />);
     expect(screen.getByRole('alert')).toHaveTextContent('Dani needs help');
@@ -36,7 +36,7 @@ describe('SosBanner', () => {
     // Not dismissible: the only control opens the crew.
     expect(screen.getAllByRole('button')).toHaveLength(1);
     fireEvent.click(button);
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew' });
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew', search: { sos: 'dani' } });
   });
 
   it('summarises several raisers', () => {

@@ -9,6 +9,8 @@ import type { CrewMeetingPoint } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
+import { useSosRaise } from '../hooks/useSosRaise';
+import { CREW_MEET_HREF } from '../lib/dayOfRoutes';
 import OfflineMap from '../components/OfflineMap';
 import FreshnessChip from '../components/FreshnessChip';
 import EmptyState from '../components/EmptyState';
@@ -55,17 +57,22 @@ export default function MapScreen() {
   // Ephemeral live location + SOS (never persisted). The record is a stable ref
   // unless it changes, so derive the array via memo to avoid render churn.
   const peersRecord = useLiveLocationStore((s) => s.peers);
-  const sos = useLiveLocationStore((s) => s.sos);
+  const activeSosList = useLiveLocationStore((s) => s.activeSosList);
   const sweepStale = useLiveLocationStore((s) => s.sweepStale);
   const setActiveCrew = useLiveLocationStore((s) => s.setActiveCrew);
   const peers = useMemo(() => Object.values(peersRecord), [peersRecord]);
 
   // R24: pulsing coral ring on SOS FAB while an active SOS exists for this crew.
   // Continuous animation justified (emergency context). Reduce-motion: static ring.
-  const sosCurrent = sos && activeCrew && sos.crewId === activeCrew.id ? sos : null;
+  const crewSosList = useMemo(
+    () => activeSosList.filter((e) => e.crewId === activeCrew?.id),
+    [activeSosList, activeCrew?.id],
+  );
+  const { confirmRaise } = useSosRaise(activeCrew?.id ?? null);
   const reduceMotion = useReduceMotion();
   const sosFabGlow = useSharedValue(0);
-  const sosActive = !!sosCurrent;
+  const sosActive = crewSosList.length > 0;
+  const mySosActive = crewSosList.some((e) => e.userId === user?.id);
   useEffect(() => {
     if (!sosActive || reduceMotion) {
       sosFabGlow.value = 0;
@@ -146,7 +153,7 @@ export default function MapScreen() {
       <OfflineMap
         meetingPoints={meetingPoints}
         peers={peers}
-        sos={sos}
+        activeSosList={crewSosList}
         onMapPress={handleMapPress}
         festival={mapFestival}
       />
@@ -163,19 +170,15 @@ export default function MapScreen() {
           testID="map-sos-fab"
           style={styles.sosFab}
           onPress={() => {
-            // tap, not warning: this control OPENS the safety screen, it does not
-            // raise the alarm. warning() is reserved for an actual SOS (raise +
-            // incoming banner in CrewSos) so the alarm buzz stays unambiguous.
             haptics.tap();
-            router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } });
+            // Own SOS already up: open the crew tab so they can tap "I'm safe".
+            if (mySosActive) router.push(CREW_MEET_HREF);
+            else confirmRaise();
           }}
           activeOpacity={0.85}
           accessibilityRole="button"
-          // Honest label: this navigates, it does not send. CrewSos renders at the
-          // top of the Logistics pane, so the destination is the SOS control with
-          // no scroll needed.
-          accessibilityLabel="Open crew safety to send an SOS"
-          accessibilityHint="Opens the crew safety screen to send an SOS"
+          accessibilityLabel="Send an SOS to your crew"
+          accessibilityHint="Asks for confirmation before sending"
         >
           <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
           <Text style={styles.sosFabText} maxFontSizeMultiplier={MAX_FONT_SCALE}>

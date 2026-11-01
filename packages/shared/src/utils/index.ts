@@ -34,3 +34,4 @@ export * from './links';
 export * from './crewWrites';
 export * from './dayOf';
 export * from './haptics';
+export * from './crewActivity';

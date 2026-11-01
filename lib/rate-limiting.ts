@@ -660,21 +660,30 @@ async function unregisterSharingSocket(redis: any, userId: any, socketId: any) {
 //
 // SECURITY (audit 2026-06-06 L3): /sos/clear had no active-SOS guard, so a
 // member could spam clear → DND-bypassing sos:cleared broadcasts; and the
-// per-process SOS_RAISE_LIMIT drifts under PM2. Track a per-crew active-SOS
-// flag in Redis so (a) clear is a no-op when nothing is active and (b) the raise
+// per-process SOS_RAISE_LIMIT drifts under PM2. Track each raiser's active SOS
+// in Redis so (a) clear is a no-op when that SOS is not active and (b) the raise
 // throttle is cluster-wide. Best-effort: when Redis is unavailable the in-handler
 // SOS_RAISE_LIMIT + coarse rateLimit() middleware remain the bound and clear is
 // allowed (fail-open) so a safety action is never silently blocked.
 const SOS_ACTIVE_TTL_MS = 60 * 60 * 1000; // an SOS auto-expires after 1h if never cleared
 
+// One hash per crew, field = raiser userId, value = the JSON `sos:raised`
+// payload, so each raiser's SOS is tracked and cleared on its own.
+// New key name (not `sos:active:`) avoids WRONGTYPE against the old string key during rollout.
+const sosRaisersKey = (crewId: any) => `sos:raisers:${crewId}`;
+
 /**
- * Mark a crew's SOS active (raise). Returns `{ active: true }` so callers know
- * the flag was set; no-op + `{ active: false }` when Redis is unavailable.
+ * Mark one raiser's SOS active (raise). Stores the `sos:raised` payload (coarse
+ * position only) under the raiser's userId and refreshes the key's 1h expiry.
+ * Returns `{ active: true }` when stored; `{ active: false }` when Redis is
+ * unavailable or throws.
  */
-async function markSosActive(redis: any, crewId: any) {
-  if (!redis || !crewId) return { active: false };
+async function markSosActive(redis: any, crewId: any, entry: any) {
+  if (!redis || !crewId || !entry?.userId) return { active: false };
   try {
-    await redis.set(`sos:active:${crewId}`, '1', 'PX', SOS_ACTIVE_TTL_MS);
+    const key = sosRaisersKey(crewId);
+    await redis.hset(key, entry.userId, JSON.stringify(entry));
+    await redis.pexpire(key, SOS_ACTIVE_TTL_MS);
     return { active: true };
   } catch {
     return { active: false };
@@ -682,18 +691,47 @@ async function markSosActive(redis: any, crewId: any) {
 }
 
 /**
- * Atomically clear a crew's active-SOS flag. Returns:
- *   - `{ wasActive: true }`  → an SOS was active and is now cleared
- *   - `{ wasActive: false }` → nothing was active (caller should 409 / no-op)
+ * Atomically clear one raiser's SOS. Returns:
+ *   - `{ wasActive: true }`  → that raiser's SOS was active and is now cleared
+ *   - `{ wasActive: false }` → nothing was active for them (caller should 409 / no-op)
  *   - `{ unknown: true }`    → Redis unavailable; caller should fail-open
  */
-async function clearSosActive(redis: any, crewId: any) {
-  if (!redis || !crewId) return { unknown: true };
+async function clearSosActive(redis: any, crewId: any, raiserId: any) {
+  if (!redis || !crewId || !raiserId) return { unknown: true };
   try {
-    const removed = await redis.del(`sos:active:${crewId}`);
+    const removed = await redis.hdel(sosRaisersKey(crewId), raiserId);
     return { wasActive: removed > 0 };
   } catch {
     return { unknown: true };
+  }
+}
+
+/**
+ * Read a crew's active SOS entries (the late-joiner read), newest first.
+ * Skips values that fail to parse and entries older than SOS_ACTIVE_TTL_MS
+ * (the hash TTL is refreshed per raise, so one raiser can outlive another).
+ * Returns `[]` when Redis is unavailable or throws.
+ */
+async function listActiveSos(redis: any, crewId: any, now: number) {
+  if (!redis || !crewId) return [];
+  try {
+    const raw = (await redis.hgetall(sosRaisersKey(crewId))) || {};
+    const entries: any[] = [];
+    for (const value of Object.values(raw)) {
+      let entry: any;
+      try {
+        entry = JSON.parse(value as string);
+      } catch {
+        continue;
+      }
+      if (!entry || typeof entry !== 'object') continue;
+      // NaN (missing/bad raisedAt) fails the comparison and is dropped.
+      if (!(now - Date.parse(entry.raisedAt) <= SOS_ACTIVE_TTL_MS)) continue;
+      entries.push(entry);
+    }
+    return entries.sort((a, b) => Date.parse(b.raisedAt) - Date.parse(a.raisedAt));
+  } catch {
+    return [];
   }
 }
 
@@ -714,4 +752,5 @@ export {
   unregisterSharingSocket,
   markSosActive,
   clearSosActive,
+  listActiveSos,
 };

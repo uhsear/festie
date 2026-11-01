@@ -269,6 +269,13 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
               />
             </View>
           ))}
+          <View style={styles.row} accessible accessibilityLabel="SOS from your crew: always on">
+            <View style={styles.rowIcon}>
+              <Ionicons name="alert-circle" size={18} color={t.colors.accent.coral} />
+            </View>
+            <Text style={styles.rowTitle}>SOS from your crew</Text>
+            <Text style={styles.alwaysOn}>Always on</Text>
+          </View>
           </View>
 
           <View style={styles.row}>
@@ -279,8 +286,8 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
               <Text style={styles.rowTitle}>Quiet hours</Text>
               <Text style={styles.rowHint}>
                 {quietOn && quietCaption
-                  ? `Mutes everything ${quietCaption}${prefs.dndTimeZone ? ` (${timeZoneCity(prefs.dndTimeZone)} time)` : ''}`
-                  : 'Mutes notifications during your chosen window'}
+                  ? `Mutes everything except SOS ${quietCaption}${prefs.dndTimeZone ? ` (${timeZoneCity(prefs.dndTimeZone)} time)` : ''}`
+                  : 'Mutes notifications during your chosen window, except SOS'}
               </Text>
             </View>
             <Switch
@@ -346,6 +353,10 @@ const useStyles = makeStyles((t) => ({
   },
   rowHint: {
     ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+  },
+  alwaysOn: {
+    ...typeStyle('label'),
     color: t.colors.text.secondary,
   },
   pushHint: {

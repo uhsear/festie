@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useLiveLocationStore } from './liveLocationStore';
 import { LIVE_LOCATION } from '../constants/config';
 import type { PeerLocation, SosEntry } from '../types/domain';
+import { api } from '../services/api';
+
+vi.mock('../services/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
 const NOW = Date.UTC(2026, 5, 6, 12, 0, 0); // fixed reference instant
 
@@ -378,6 +381,57 @@ describe('liveLocationStore', () => {
       expect(s.lastSentCoord).toBeNull();
       expect(s.peers).toEqual({});
       expect(s.sos).toBeNull();
+    });
+  });
+
+  describe('loadActiveSos', () => {
+    const get = vi.mocked(api.get);
+
+    it('replaces stale entries with the server list', async () => {
+      useLiveLocationStore.setState({ crewId: 'crew-1' });
+      useLiveLocationStore.getState().applySos(makeSos({ userId: 'stale', raisedAt: isoFor(NOW, 9_000_000) }));
+      get.mockResolvedValueOnce({ sos: [makeSos({ userId: 'user-9', raisedAt: isoFor(NOW, 5_000_000) })] });
+
+      await useLiveLocationStore.getState().loadActiveSos('crew-1');
+
+      expect(get).toHaveBeenCalledWith('/crews/crew-1/sos');
+      expect(Object.keys(useLiveLocationStore.getState().sosByUser)).toEqual(['user-9']);
+    });
+
+    it('ignores the response after a crew switch', async () => {
+      useLiveLocationStore.setState({ crewId: 'crew-1' });
+      get.mockImplementationOnce(async () => {
+        useLiveLocationStore.setState({ crewId: 'crew-2' });
+        return { sos: [makeSos()] };
+      });
+
+      await useLiveLocationStore.getState().loadActiveSos('crew-1');
+
+      expect(useLiveLocationStore.getState().activeSosList).toEqual([]);
+    });
+
+    it('keeps an entry raised after the request started', async () => {
+      useLiveLocationStore.setState({ crewId: 'crew-1' });
+      get.mockImplementationOnce(async () => {
+        useLiveLocationStore.getState().applySos(makeSos({ userId: 'live', raisedAt: new Date(Date.now() + 1000).toISOString() }));
+        return { sos: [] };
+      });
+
+      await useLiveLocationStore.getState().loadActiveSos('crew-1');
+
+      expect(Object.keys(useLiveLocationStore.getState().sosByUser)).toEqual(['live']);
+    });
+
+    it('keeps state on a rejected request', async () => {
+      useLiveLocationStore.setState({ crewId: 'crew-1' });
+      useLiveLocationStore.getState().applySos(makeSos());
+      get.mockRejectedValueOnce(new Error('boom'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      await expect(useLiveLocationStore.getState().loadActiveSos('crew-1')).resolves.toBeUndefined();
+
+      expect(useLiveLocationStore.getState().activeSosList).toHaveLength(1);
+      warn.mockRestore();
     });
   });
 });

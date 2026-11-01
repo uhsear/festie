@@ -33,7 +33,7 @@ vi.mock('lucide-react', () => ({
   Hourglass: () => <span data-testid="hourglass-icon" />,
   // LiveLocationControls (now rendered unconditionally) pulls these too.
   Square: () => <span data-testid="square-icon" />,
-  Siren: () => <span data-testid="siren-icon" />,
+  AlertCircle: () => <span data-testid="alert-circle-icon" />,
   ShieldCheck: () => <span data-testid="shield-check-icon" />,
   // SyncMarker (pending / failed row marker).
   CloudOff: () => <span data-testid="cloud-off-icon" />,

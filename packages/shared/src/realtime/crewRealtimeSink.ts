@@ -48,6 +48,7 @@ export interface LiveLocationStoreSinkApi {
     removePeer: (userId: string) => void;
     applySos: (entry: SosEntry) => void;
     clearSos: (raiserId?: string) => void;
+    loadActiveSos: (crewId: string) => Promise<void>;
   };
 }
 
@@ -78,6 +79,8 @@ export interface CrewRealtimeSink {
   onLocationPeerStopped: (crewId: string, userId: string, reason: 'stop' | 'disconnect' | 'expired') => void;
   onSosRaised: (crewId: string, sos: SosEntry) => void;
   onSosCleared: (crewId: string, userId: string, clearedBy: string) => void;
+  /** Re-read the active SOS list (socket (re)connect). Optional so older sink doubles still compile. */
+  onSosResync?: (crewId: string) => void;
 }
 
 /**
@@ -151,6 +154,9 @@ export function createStoreSink(
       // the store's documented drop-every-SOS path, so forwarding nothing here
       // wiped every other crew member's still-active SOS.
       liveLocationApi?.getState().clearSos(userId);
+    },
+    onSosResync: (crewId) => {
+      void liveLocationApi?.getState().loadActiveSos(crewId);
     },
   };
 }
