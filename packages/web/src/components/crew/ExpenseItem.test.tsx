@@ -62,6 +62,11 @@ describe('ExpenseItem', () => {
     expect(screen.getByText(/split 3 ways/)).toBeInTheDocument();
   });
 
+  it('uses the singular for a split of one', () => {
+    render(<ExpenseItem {...makeProps({ splitCount: 1 })} />);
+    expect(screen.getByText(/split 1 way$/)).toBeInTheDocument();
+  });
+
   it('hides split info when splitCount is zero', () => {
     render(<ExpenseItem {...makeProps({ splitCount: 0 })} />);
     expect(screen.queryByText(/split/)).not.toBeInTheDocument();

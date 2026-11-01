@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores/authStore';
+import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -21,6 +23,7 @@ export default function LoginPage() {
 function LoginPageInner() {
   const navigate = useNavigate();
   const { login, isLoading } = useAuth();
+  const { toast } = useToast();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -44,7 +47,8 @@ function LoginPageInner() {
     }
 
     try {
-      await login({ username, password });
+      const result = await login({ username, password });
+      if (result?.reactivated) toast(ACCOUNT_REACTIVATED_MESSAGE, 'success');
       await navigate({ to: '/cards' });
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the

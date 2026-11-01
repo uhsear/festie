@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useCrewStore } from './crewStore';
+import { useCrewStore, parseActivityPage } from './crewStore';
 import { useAuthStore } from './authStore';
 import { api } from '../services/api';
 import type { Crew, CrewMember, CrewMemberStatus, CrewPoll, PollSetRef } from '../types/domain';
@@ -366,10 +366,25 @@ describe('crewStore', () => {
 
   describe('loadOverlap', () => {
     it('sets crewOverlap on success', async () => {
-      const overlap = { 'set-1': { setId: 'set-1', memberCount: 2, members: [] } };
-      vi.mocked(api.get).mockResolvedValueOnce(overlap);
+      const a = { userId: 'u1', username: 'a', name: 'Al' };
+      const b = { userId: 'u2', username: 'b', name: null };
+      vi.mocked(api.get).mockResolvedValueOnce({
+        crewId: 'crew-1',
+        festivalId: 'fest-1',
+        memberCount: 3,
+        overlap: { s1: [a, b], s2: [a] },
+      });
       await useCrewStore.getState().loadOverlap('crew-1', 'fest-1');
-      expect(useCrewStore.getState().crewOverlap).toEqual(overlap);
+      expect(useCrewStore.getState().crewOverlap).toEqual({
+        s1: {
+          setId: 's1',
+          memberCount: 2,
+          members: [
+            { userId: 'u1', username: 'a', name: 'Al' },
+            { userId: 'u2', username: 'b', name: undefined },
+          ],
+        },
+      });
     });
 
     it('sets error and throws on failure', async () => {
@@ -522,8 +537,14 @@ describe('crewStore', () => {
     it('deletes then refetches', async () => {
       vi.mocked(api.delete).mockResolvedValueOnce({});
       vi.mocked(api.get).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-      await useCrewStore.getState().removeExpense('crew-1', 'e1');
+      await expect(useCrewStore.getState().removeExpense('crew-1', 'e1')).resolves.toBe('sent');
       expect(api.delete).toHaveBeenCalledWith('/crews/crew-1/expenses/e1');
+    });
+
+    it('reports a delete queued offline as queued', async () => {
+      vi.mocked(api.delete).mockResolvedValueOnce({ _optimistic: true });
+      vi.mocked(api.get).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      await expect(useCrewStore.getState().removeExpense('crew-1', 'e1')).resolves.toBe('queued');
     });
   });
 
@@ -663,6 +684,15 @@ describe('crewStore', () => {
         .createPoll('crew-1', { question: 'Q', options: ['A', 'B'] }, [null, null]);
       expect(poll.set_refs).toBeUndefined();
       expect(vi.mocked(api.post).mock.calls[0]![1]).toEqual({ question: 'Q', options: ['A', 'B'] });
+    });
+  });
+
+  describe('parseActivityPage', () => {
+    it('handles envelope, bare array, { activity } and null', () => {
+      expect(parseActivityPage({ items: [{ id: 'a1' }], nextCursor: 'x' })).toEqual([{ id: 'a1' }]);
+      expect(parseActivityPage([{ id: 'a2' }])).toEqual([{ id: 'a2' }]);
+      expect(parseActivityPage({ activity: [{ id: 'a3' }] })).toEqual([{ id: 'a3' }]);
+      expect(parseActivityPage(null)).toEqual([]);
     });
   });
 

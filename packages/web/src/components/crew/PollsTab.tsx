@@ -288,8 +288,8 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
               index={idx}
               currentUserId={currentUserId}
               isOwner={isOwner}
-              isVotePending={vote.isPending}
-              isClosePending={close.isPending}
+              isVotePending={vote.isPending && vote.variables?.pollId === p.id}
+              isClosePending={close.isPending && close.variables === p.id}
               onVote={handleVote}
               onClose={setConfirmClosePollId}
             />

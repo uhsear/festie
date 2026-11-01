@@ -80,6 +80,28 @@ export function createEmailTokensStore(pool: Pool) {
     },
 
     /**
+     * Kill only the tokens for one address. Resend uses it so that re-sending
+     * the signup link does not also kill a pending email-change link.
+     */
+    async invalidateTokensForEmail(userId: string, email: string) {
+      await pool.query(
+        'UPDATE email_verification_tokens SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL AND LOWER(email) = LOWER($2)',
+        [userId, email],
+      );
+    },
+
+    /** The address of the newest live email-change link, or null. */
+    async getPendingEmailChange(userId: string, currentEmail: string | null): Promise<string | null> {
+      const { rows } = await pool.query(
+        `SELECT email FROM email_verification_tokens
+          WHERE user_id = $1 AND used_at IS NULL AND expires_at > NOW() AND LOWER(email) IS DISTINCT FROM LOWER($2)
+          ORDER BY created_at DESC LIMIT 1`,
+        [userId, currentEmail],
+      );
+      return rows[0]?.email ?? null;
+    },
+
+    /**
      * Supersede this user's pending email-*change* tokens and issue a new one,
      * atomically. Two things are load-bearing:
      *   - the `FOR UPDATE` on the users row. A bare transaction is not enough:

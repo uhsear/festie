@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { sendEmail, sendPasswordResetEmail, sendVerificationEmail } from '../lib/email.js';
+import { sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -324,4 +324,30 @@ describe('email: sendVerificationEmail', () => {
     assert.equal(capturedArgs.from, 'Festie <no-reply@festie.us>',
       'Should use default from address');
   });
+});
+
+// ---------------------------------------------------------------------------
+// re-engagement emails
+// ---------------------------------------------------------------------------
+
+describe('email: re-engagement senders', () => {
+  const base = { to: 'u@example.com', username: 'u', festivalName: 'Fest', festivalId: 'f1', crewName: 'Crew', crewId: 'c1' };
+  const cases: Array<[string, any, string]> = [
+    ['wrap ready', sendWrapReadyEmail, 'Wrap-up ready'],
+    ['lineup drop', sendLineupDropEmail, 'New lineups'],
+    ['crew reform', sendCrewReformEmail, 'Crew re-forms'],
+  ];
+  for (const [name, fn, label] of cases) {
+    it(`${name}: https List-Unsubscribe header and settings footer`, async () => {
+      const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+      const ok = await fn({ ...base, to: `${name.replace(' ', '')}@example.com`, config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }), log: createMockLog(), _client: createMockClient(send) });
+      assert.equal(ok, true);
+      const msg = (send.mock.calls as any[])[0].arguments[0];
+      assert.equal(msg.headers['List-Unsubscribe'], '<https://festie.test/account>');
+      const sentence = `You get this email because "${label}" is on in your Festie notification settings.`;
+      assert.ok(msg.html.includes(sentence));
+      assert.ok(msg.html.includes('href="https://festie.test/account"'));
+      assert.ok(msg.text.endsWith(`${sentence} Turn it off: https://festie.test/account`));
+    });
+  }
 });

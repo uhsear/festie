@@ -59,7 +59,7 @@ export default function ExpenseItem({
         <div className="text-xs text-text-secondary">
           <span className="tabular-nums">{formatAmount(amount)}</span> {'·'}{' '}
           {planned ? 'planned' : `${paidByMe ? 'You' : paidByName} paid`}
-          {splitCount > 0 && ` · split ${splitCount} ways`}
+          {splitCount > 0 && ` · split ${splitCount} ${splitCount === 1 ? 'way' : 'ways'}`}
         </div>
         <SyncMarker item={{ id, _optimistic: optimistic }} />
       </div>

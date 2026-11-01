@@ -38,6 +38,28 @@ import {
   CrewActivityEntry,
 } from '../types';
 
+/** Reads the activity response: bare array, `{ items, nextCursor }` or `{ activity }`. */
+export function parseActivityPage(res: unknown): CrewActivityEntry[] {
+  if (Array.isArray(res)) return res as CrewActivityEntry[];
+  const page = res as { items?: CrewActivityEntry[]; activity?: CrewActivityEntry[] } | null;
+  return page?.items ?? page?.activity ?? [];
+}
+
+/** Reads `{ overlap: { [setId]: member[] } }` into the sets picked by 2+ members. */
+export function overlapFromResponse(res: unknown): Record<string, CrewOverlap> {
+  const raw = (res as { overlap?: Record<string, CrewMember[]> } | null)?.overlap ?? {};
+  const out: Record<string, CrewOverlap> = {};
+  for (const [setId, members] of Object.entries(raw)) {
+    if (!Array.isArray(members) || members.length < 2) continue;
+    out[setId] = {
+      setId,
+      memberCount: members.length,
+      members: members.map(({ userId, username, name }) => ({ userId, username, name: name ?? undefined })),
+    };
+  }
+  return out;
+}
+
 export interface CrewState {
   crews: Crew[];
   activeCrew: Crew | null;
@@ -138,7 +160,7 @@ export interface CrewActions {
   // Both resolve 'queued' when the write was saved to the offline queue rather
   // than acknowledged by the server, so callers never show "sent" copy for it.
   addExpense: (crewId: string, request: CreateCrewExpenseRequest) => Promise<WriteOutcome>;
-  removeExpense: (crewId: string, expenseId: string) => Promise<void>;
+  removeExpense: (crewId: string, expenseId: string) => Promise<WriteOutcome>;
   settleExpense: (crewId: string, request: SettleCrewExpenseRequest) => Promise<WriteOutcome>;
   // Activity feed (routes/crew-activity.ts).
   loadActivity: (crewId: string) => Promise<void>;
@@ -491,8 +513,8 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   loadOverlap: async (crewId: string, festivalId: string) => {
     set({ error: null });
     try {
-      const overlap = await api.get<Record<string, CrewOverlap>>(`/crews/${crewId}/overlap?festivalId=${festivalId}`);
-      set({ crewOverlap: overlap });
+      const res = await api.get<unknown>(`/crews/${crewId}/overlap?festivalId=${festivalId}`);
+      set({ crewOverlap: overlapFromResponse(res) });
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load overlap');
       set({ error: message });
@@ -1282,7 +1304,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   removeExpense: async (crewId: string, expenseId: string) => {
     set({ error: null });
     try {
-      await api.delete(`/crews/${crewId}/expenses/${expenseId}`);
+      const res = await api.delete(`/crews/${crewId}/expenses/${expenseId}`);
       set((state) => ({
         expenses: state.expenses.filter((e) => e.id !== expenseId),
       }));
@@ -1291,6 +1313,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       } catch {
         /* refetch is best-effort; the write succeeded */
       }
+      return writeOutcomeOf(res);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to remove expense');
       set({ error: message });
@@ -1323,14 +1346,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   loadActivity: async (crewId: string) => {
     set({ error: null });
     try {
-      // Server returns { items, nextCursor } (paginated). Accept a bare array
-      // or { activity } too, in case the shape changes.
-      const res = await api.get<
-        | CrewActivityEntry[]
-        | { items: CrewActivityEntry[]; nextCursor?: string | null }
-        | { activity: CrewActivityEntry[] }
-      >(`/crews/${crewId}/activity`);
-      const activity = Array.isArray(res) ? res : (('items' in res ? res.items : res.activity) ?? []);
+      const activity = parseActivityPage(await api.get<unknown>(`/crews/${crewId}/activity`));
       set({ activity });
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load activity');

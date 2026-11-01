@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, type TextInputInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@festie/shared/hooks';
+import { PASSWORD_CHANGED_MESSAGE } from '@festie/shared/stores';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -11,7 +12,7 @@ import { passwordStrength } from '../lib/accountFormat';
  * Password-change form for the Account screen.
  *
  * Wired to the shared useAuth().changePassword → authStore.changePassword,
- * which POSTs /auth/change-password with { currentPassword, newPassword }.
+ * which POSTs /auth/change-password with { currentPassword, newPassword, confirmPassword }.
  * The shared method is fully platform-neutral, so this is just the UI: two
  * secure fields, an 8-char minimum check, in-flight spinner, and inline errors.
  */
@@ -82,7 +83,7 @@ export default function AccountPasswordSection() {
     setSubmitting(true);
     setError(null);
     try {
-      await changePassword({ currentPassword: current, newPassword: next });
+      await changePassword({ currentPassword: current, newPassword: next, confirmPassword: confirm });
       haptics.success();
       reset();
       // Keep the card open just long enough to show the inline confirmation,
@@ -92,7 +93,7 @@ export default function AccountPasswordSection() {
       savedTimer.current = setTimeout(() => {
         setSaved(false);
         setOpen(false);
-      }, 1800);
+      }, 3000);
     } catch (err) {
       haptics.warning();
       setError(err instanceof Error ? err.message : 'Could not change password.');
@@ -243,7 +244,7 @@ export default function AccountPasswordSection() {
           {saved ? (
             <View style={styles.savedRow} accessibilityLiveRegion="polite">
               <Ionicons name="checkmark-circle" size={14} color={t.colors.status.verified} style={styles.savedIcon} />
-              <Text style={styles.savedText}>Saved</Text>
+              <Text style={styles.savedText}>{PASSWORD_CHANGED_MESSAGE}</Text>
             </View>
           ) : null}
 

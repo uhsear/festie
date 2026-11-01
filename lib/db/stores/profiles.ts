@@ -329,7 +329,12 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return profile;
     },
 
-    async deleteByUserId(userId: string, { deletedBy, reason }: { deletedBy?: string; reason?: string } = {}) {
+    // `keepPicks` (self-service account delete) leaves picks and notes in place
+    // so a sign-in inside the grace window can restore them; admin delete purges.
+    async deleteByUserId(
+      userId: string,
+      { deletedBy, reason, keepPicks = false }: { deletedBy?: string; reason?: string; keepPicks?: boolean } = {},
+    ) {
       const { rows } = await pool.query(
         `
         SELECT
@@ -352,11 +357,35 @@ export default function createProfilesStore(pool: Pool, utils: any) {
             'UPDATE festival_profiles SET deleted_at = NOW(), updated_at = NOW(), deleted_by = $2, deletion_reason = $3 WHERE user_id = $1 AND deleted_at IS NULL',
             [userId, deletedBy || null, reason || null],
           );
+          if (keepPicks) return;
           await client.query('DELETE FROM festival_profile_picks WHERE profile_id = ANY($1)', [profileIds]);
           await client.query('DELETE FROM festival_profile_notes WHERE profile_id = ANY($1)', [profileIds]);
         });
       }
       return rows.map(mapProfileRow);
+    },
+
+    // Undo an account-deleted soft delete. NOT EXISTS skips a festival where the
+    // user already has a live profile, and DISTINCT ON restores only the newest
+    // row per festival, so the partial unique index cannot fail.
+    async restoreByUserId(userId: string) {
+      const { rowCount } = await pool.query(
+        `
+        UPDATE festival_profiles fp
+        SET deleted_at = NULL, deleted_by = NULL, deletion_reason = NULL, updated_at = NOW()
+        WHERE fp.id IN (
+            SELECT DISTINCT ON (festival_id) id FROM festival_profiles
+            WHERE user_id = $1 AND deleted_at IS NOT NULL AND deletion_reason = 'account-deleted'
+            ORDER BY festival_id, deleted_at DESC
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM festival_profiles live
+            WHERE live.user_id = fp.user_id AND live.festival_id = fp.festival_id AND live.deleted_at IS NULL
+          )
+      `,
+        [userId],
+      );
+      return rowCount ?? 0;
     },
 
     async claimOrphan(festivalId: string, userId: string, username: string) {

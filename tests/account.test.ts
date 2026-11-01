@@ -12,8 +12,10 @@ import fs from 'fs';
 import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
+import express from 'express';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import createAccountRoutes from '../routes/account';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -456,5 +458,120 @@ describe('account: GDPR export', { concurrency: 1, skip }, () => {
 
     const second = await server.request.get('/api/v1/account/export').set('x-user-token', user.token);
     assert.equal(second.status, 429);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// GDPR export limit across processes (mocked deps, no database)
+// ──────────────────────────────────────────────────────────────────────────
+
+// Two routers built from separate deps but one Redis stand in for two PM2
+// processes that share a Redis server.
+function fakeRedis() {
+  const expiresAt = new Map<string, number>();
+  const live = (key: string) => (expiresAt.get(key) ?? 0) > Date.now();
+  return {
+    async set(key: string, _value: string, _px: string, ms: number, _nx: string) {
+      if (live(key)) return null;
+      expiresAt.set(key, Date.now() + ms);
+      return 'OK';
+    },
+    async pttl(key: string) {
+      return live(key) ? expiresAt.get(key)! - Date.now() : -2;
+    },
+    async del(key: string) {
+      return expiresAt.delete(key) ? 1 : 0;
+    },
+  };
+}
+
+function exportApp({ redis, notificationPrefsGet }: { redis: unknown; notificationPrefsGet?: () => Promise<unknown> }) {
+  const passThrough = (_req: any, _res: any, next: any) => next();
+  const deps: any = {
+    express,
+    config: { REDIS_PREFIX: 'fp:' },
+    log: { info() {}, warn() {}, error() {}, debug() {} },
+    redis,
+    userAuth: (req: any, _res: any, next: any) => {
+      req.user = { userId: 'user-1', username: 'exporter' };
+      next();
+    },
+    handleAvatarUpload: passThrough,
+    rateLimit: () => passThrough,
+    validate: () => passThrough,
+    schemas: {},
+    setNoStore: () => {},
+    getUserById: async (id: string) => ({ id, username: 'exporter' }),
+    sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+    sendError: (res: any, status: number, message: string, code: string) =>
+      res.status(status).json({ data: null, error: { message, code } }),
+    ErrorCodes: { NOT_FOUND: 'NOT_FOUND', RATE_LIMITED: 'RATE_LIMITED', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+    stores: {
+      profiles: { getByUserId: async () => [] },
+      pool: { query: async () => ({ rows: [] }) },
+      notificationPrefs: { get: notificationPrefsGet ?? (async () => ({})) },
+    },
+  };
+  const app = express();
+  app.use(createAccountRoutes(deps));
+  return app;
+}
+
+describe('account: GDPR export limit (no database)', () => {
+  test('a second export within 24h is 429, also on another process sharing Redis', async () => {
+    const redis = fakeRedis();
+    const first = exportApp({ redis });
+    const second = exportApp({ redis });
+
+    assert.equal((await request(first).get('/export')).status, 200);
+    const blocked = await request(second).get('/export');
+    assert.equal(blocked.status, 429);
+    assert.match(blocked.body.error.message, /Next available: /);
+  });
+
+  test('a failed export does not use up the day', async () => {
+    const redis = fakeRedis();
+    let fail = true;
+    const app = exportApp({
+      redis,
+      notificationPrefsGet: async () => {
+        if (fail) throw new Error('db hiccup');
+        return {};
+      },
+    });
+
+    assert.equal((await request(app).get('/export')).status, 500);
+    fail = false;
+    assert.equal((await request(app).get('/export')).status, 200);
+  });
+
+  test('without Redis the per-process limit applies the same rules', async () => {
+    let fail = true;
+    const app = exportApp({
+      redis: null,
+      notificationPrefsGet: async () => {
+        if (fail) throw new Error('db hiccup');
+        return {};
+      },
+    });
+
+    assert.equal((await request(app).get('/export')).status, 500);
+    fail = false;
+    assert.equal((await request(app).get('/export')).status, 200);
+    assert.equal((await request(app).get('/export')).status, 429);
+  });
+
+  test('a Redis error falls back to the per-process limit', async () => {
+    const broken = {
+      set: async () => {
+        throw new Error('ECONNREFUSED');
+      },
+      pttl: async () => -2,
+      del: async () => 0,
+    };
+    const app = exportApp({ redis: broken });
+
+    assert.equal((await request(app).get('/export')).status, 200);
+    assert.equal((await request(app).get('/export')).status, 429);
   });
 });

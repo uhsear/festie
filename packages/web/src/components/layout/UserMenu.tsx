@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useAuthStore } from '@festie/shared';
+import { PASSWORD_CHANGED_MESSAGE } from '@festie/shared/stores/authStore';
 import { api } from '@festie/shared/services/api';
 import { useNavigate } from '@tanstack/react-router';
 import { useToast } from '../../lib/toastContext';
@@ -50,10 +51,11 @@ export default function UserMenu({ user }: UserMenuProps) {
   const handleChangePasswordSubmit = async (
     currentPassword: string,
     newPassword: string,
+    confirmPassword: string,
   ) => {
     try {
-      await changePassword({ currentPassword, newPassword });
-      toast('Password changed', 'success');
+      await changePassword({ currentPassword, newPassword, confirmPassword });
+      toast(PASSWORD_CHANGED_MESSAGE, 'success');
       setShowChangePassword(false);
     } catch (err) {
       toastError(err, "Couldn't change your password. Try again.");
@@ -64,6 +66,7 @@ export default function UserMenu({ user }: UserMenuProps) {
     const res = await api.post<{ message?: string }>('/account/email', { email, password });
     toast(res?.message || 'Check your new address for the verification link.', 'success');
     setShowChangeEmail(false);
+    await useAuthStore.getState().checkSession();
   };
 
   const avatarName = identityLabel(user);

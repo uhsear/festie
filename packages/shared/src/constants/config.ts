@@ -71,6 +71,8 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   'expense-added': 'added an expense',
   'expense-deleted': 'removed an expense',
   'expense-settled': 'settled up',
+  expense_settled: 'settled up',
+  'settlement-undone': 'undid a payment',
   'home-base-updated': 'updated the home base',
   'meeting-point-added': 'dropped a meeting point',
   'meeting-point-removed': 'removed a meeting point',
