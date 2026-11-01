@@ -446,6 +446,7 @@ describe('admin user management', { concurrency: 1 }, () => {
       .expect(200);
     const doomed = usersRes.body.data.find((u: any) => u.username === 'doomed');
 
+    await reauthAdmin(server, adminToken);
     await server.request
       .delete(`/api/v1/admin/users/${doomed.id}`)
       .set('x-user-token', adminToken)

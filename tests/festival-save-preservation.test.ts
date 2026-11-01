@@ -36,6 +36,7 @@ const SET_B2B = `b2b-${RUN_ID}`;
 const SET_SOLO = `solo-${RUN_ID}`;
 const SET_PICKED = `picked-${RUN_ID}`;
 const PROFILE_ID = `prof-${RUN_ID}`;
+const PICKER_USER_ID = `picker-${RUN_ID}`;
 
 const SPOTIFY_A = 'https://open.spotify.com/artist/a';
 const SPOTIFY_B = 'https://open.spotify.com/artist/b';
@@ -93,10 +94,16 @@ async function seed(pool: any) {
       [s.id, FEST_ID, s.dayIndex, s.artist, STAGE, s.start, s.end, i, s.artists[0]?.links?.spotify ?? null, JSON.stringify(s.artists)],
     );
   }
+  // festival_profiles.user_id is NOT NULL (migration 015), so the picker needs a user row.
   await pool.query(
-    `INSERT INTO festival_profiles (id, festival_id, name, created_at, updated_at)
-     VALUES ($1, $2, 'Picker', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`,
-    [PROFILE_ID, FEST_ID],
+    `INSERT INTO users (id, username, password_hash, created_at, tos_accepted_at, tos_version)
+     VALUES ($1, $2, 'x', NOW(), NOW(), 1) ON CONFLICT (id) DO NOTHING`,
+    [PICKER_USER_ID, `fsp-${RUN_ID}-picker`],
+  );
+  await pool.query(
+    `INSERT INTO festival_profiles (id, festival_id, user_id, name, created_at, updated_at)
+     VALUES ($1, $2, $3, 'Picker', NOW(), NOW()) ON CONFLICT (id) DO NOTHING`,
+    [PROFILE_ID, FEST_ID, PICKER_USER_ID],
   );
   await pool.query(
     `INSERT INTO festival_profile_picks (profile_id, set_id, priority) VALUES ($1, $2, 'must')`,

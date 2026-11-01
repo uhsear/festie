@@ -110,7 +110,9 @@ describe('admin audit log', { skip, concurrency: 1 }, () => {
       await grant().expect(200);
       await new Promise((r) => setTimeout(r, 300));
       assert.equal(await countRows("action = 'role_grant' AND target_id = $1 AND actor_type = 'admin'", [targetId]), 1);
-      assert.equal(await countRows("target_id = $1 AND action <> 'role_grant'", [targetId]), 0);
+      // The successful grant has no generic duplicate; the refused attempt stays on record as a failure.
+      assert.equal(await countRows("target_id = $1 AND action <> 'role_grant' AND status = 'success'", [targetId]), 0);
+      assert.equal(await countRows("target_id = $1 AND status = 'failure' AND actor_type = 'admin'", [targetId]), 1);
 
       // 3. User delete writes one admin_delete_user row with targetUsername.
       await authed(api.delete(`/api/v1/admin/users/${targetId}`)).expect(200);

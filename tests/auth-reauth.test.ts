@@ -98,8 +98,9 @@ describe('re-auth window (admin festival delete)', { skip, concurrency: 1 }, () 
         api.delete(`/api/v1/admin/festivals/${FEST_ID}`).set('x-user-token', token).set(TRUSTED_MUTATION_HEADER, '1');
       const reauthAt = () =>
         withPool(async (pool) => {
+          // Register and login each create a session; only the login one is stamped.
           const { rows } = await pool.query(
-            'SELECT reauth_at FROM user_sessions WHERE user_id = (SELECT id FROM users WHERE username = $1)',
+            'SELECT MAX(reauth_at) AS reauth_at FROM user_sessions WHERE user_id = (SELECT id FROM users WHERE username = $1)',
             [USERNAME],
           );
           return rows[0]?.reauth_at ?? null;

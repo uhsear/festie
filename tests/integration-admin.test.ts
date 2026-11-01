@@ -62,6 +62,20 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     assert.ok(!('password' in bobEntry));
     assert.equal(bobEntry.profileCount, 1);
 
+    // Both gated actions are refused until the admin confirms the password.
+    // One re-auth opens a 15-minute window for the session, so check before it.
+    const refusedReset = await server.request
+      .put(`/api/v1/admin/users/${bob.user.id}/reset-password`)
+      .set('x-user-token', adminToken)
+      .send({ newPassword: 'resetpass789' })
+      .expect(403);
+    assert.equal(refusedReset.body.error.code, 'REAUTH_REQUIRED');
+    const refusedDelete = await server.request
+      .delete(`/api/v1/admin/users/${bob.user.id}`)
+      .set('x-user-token', adminToken)
+      .expect(403);
+    assert.equal(refusedDelete.body.error.code, 'REAUTH_REQUIRED');
+
     await reauth(server, adminToken);
     await server.request
       .put(`/api/v1/admin/users/${bob.user.id}/reset-password`)
@@ -76,11 +90,6 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
 
     await loginUser(server, 'bob', 'resetpass789');
 
-    await server.request
-      .delete(`/api/v1/admin/users/${bob.user.id}`)
-      .set('x-user-token', adminToken)
-      .expect(403);
-    await reauth(server, adminToken);
     await server.request
       .delete(`/api/v1/admin/users/${bob.user.id}`)
       .set('x-user-token', adminToken)
@@ -220,10 +229,15 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     servers.push(server);
 
     const bob = await registerUser(server, 'bob');
+    // Only a socket that joined a festival room carries the user id that force-logout disconnects.
+    await joinFestivalProfile(server, bob.token);
     const adminToken = await loginAdmin(server);
     const bobSocket = connectSocket(server.baseUrl);
     await waitForEvent(bobSocket, 'connect');
-    bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token });
+    const joined: any = await new Promise((resolve) =>
+      bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token }, resolve),
+    );
+    assert.equal(joined.ok, true, JSON.stringify(joined));
     const bobDisconnected = waitForEvent(bobSocket, 'disconnect', () => true);
 
     await reauth(server, adminToken);

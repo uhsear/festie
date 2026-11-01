@@ -84,6 +84,7 @@ async function cleanupById(pool: any) {
   await pool.query(`DELETE FROM festival_profiles WHERE festival_id = $1`, [FEST_ID]);
   await pool.query(`DELETE FROM festival_days WHERE festival_id = $1`, [FEST_ID]);
   await pool.query(`DELETE FROM festival_stages WHERE festival_id = $1`, [FEST_ID]);
+  await pool.query(`DELETE FROM audit_log WHERE target_id = $1`, [FEST_ID]);
   await pool.query(`DELETE FROM festivals WHERE id = $1`, [FEST_ID]);
   // Child tables referencing users (FK changed to RESTRICT in migration 031)
   await pool.query(`DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
@@ -182,6 +183,8 @@ afterEach(async () => {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
   try {
     await pool.query(`DELETE FROM festival_sets WHERE festival_id = $1`, [FEST_ID]);
+    // Each commit writes a lineup_import row on FEST_ID; clear them so audit counts are per test.
+    await pool.query(`DELETE FROM audit_log WHERE target_id = $1`, [FEST_ID]);
   } finally {
     await pool.end();
   }
@@ -375,9 +378,16 @@ describe('lineup-import route (admin)', { skip, concurrency: 1 }, () => {
       const { rows } = await pool.query(`SELECT id FROM festival_sets WHERE festival_id = $1`, [FEST_ID]);
       const setId = rows[0].id;
       const profileId = `prof-${RUN_ID}`;
+      const pickerId = `picker-${RUN_ID}`;
+      // festival_profiles.user_id is NOT NULL (migration 015).
       await pool.query(
-        `INSERT INTO festival_profiles (id, festival_id, name) VALUES ($1, $2, 'p') ON CONFLICT DO NOTHING`,
-        [profileId, FEST_ID]
+        `INSERT INTO users (id, username, password_hash, created_at, tos_accepted_at, tos_version)
+         VALUES ($1, $2, 'x', NOW(), NOW(), 1) ON CONFLICT (id) DO NOTHING`,
+        [pickerId, `li-${RUN_ID}-picker`]
+      );
+      await pool.query(
+        `INSERT INTO festival_profiles (id, festival_id, user_id, name) VALUES ($1, $2, $3, 'p') ON CONFLICT DO NOTHING`,
+        [profileId, FEST_ID, pickerId]
       );
       await pool.query(
         `INSERT INTO festival_profile_picks (profile_id, set_id, priority) VALUES ($1, $2, 1) ON CONFLICT DO NOTHING`,
