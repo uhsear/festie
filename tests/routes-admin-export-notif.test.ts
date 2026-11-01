@@ -1743,3 +1743,46 @@ describe('routes/notifications.js', () => {
     assert.equal(res.body.data, null);
   });
 });
+
+// =====================================================================
+// admin.js — GET /ref-counts (anonymous sign-up counts, migration 070)
+// =====================================================================
+describe('routes/admin.js — GET /ref-counts', () => {
+  test('returns { day, ref, signups } rows newest first for the requested window', async () => {
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    const rows = [
+      { day: '2026-11-01', ref: 'insta', signups: 3 },
+      { day: '2026-10-31', ref: 'tiktok', signups: 1 },
+    ];
+    const deps = makeDeps();
+    deps.stores.pool.query = mock.fn(async () => ({ rows }));
+    const app = buildApp(createAdminRoutes(deps));
+
+    const res = await request(app).get('/ref-counts?days=7').expect(200);
+
+    assert.deepEqual(res.body.data, rows);
+    const [sql, params] = (deps.stores.pool.query.mock.calls[0] as any).arguments;
+    assert.match(sql, /FROM\s+signup_ref_counts/);
+    assert.match(sql, /ORDER BY\s+day DESC/);
+    assert.deepEqual(params, ['7']);
+  });
+
+  test('is admin-only', async () => {
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    const deps = makeDeps({
+      adminAuth: (_req: any, res: any) => res.status(403).json({ data: null, error: { code: 'FORBIDDEN' } }),
+    });
+    deps.stores.pool.query = mock.fn(async () => ({ rows: [] }));
+    const app = buildApp(createAdminRoutes(deps));
+
+    await request(app).get('/ref-counts').expect(403);
+    assert.equal(deps.stores.pool.query.mock.calls.length, 0);
+  });
+
+  test('defaults to 30 days and rejects an out-of-range window with the real schema', async () => {
+    const { adminRefCountsQuery } = await import('../lib/schemas.js');
+    assert.equal(adminRefCountsQuery.parse({}).days, 30);
+    assert.equal(adminRefCountsQuery.safeParse({ days: '0' }).success, false);
+    assert.equal(adminRefCountsQuery.safeParse({ days: '366' }).success, false);
+  });
+});

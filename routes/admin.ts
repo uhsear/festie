@@ -51,6 +51,8 @@ export default function createAdminRoutes(deps: any): Router {
     stores,
     _invalidateFestivalCache,
     rateLimit,
+    schemas,
+    validateQuery,
   } = deps;
 
   const router = express.Router();
@@ -208,6 +210,34 @@ export default function createAdminRoutes(deps: any): Router {
   mountAdminUserRoutes({ router, deps, ctx }); // /users, /users/:id/*
   mountAdminAuditRoutes({ router, deps, ctx }); // /audit
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*
+
+  // ── GET /ref-counts — anonymous sign-ups per ?ref= source (migration 070) ──
+  router.get('/ref-counts', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
+    try {
+      setNoStore(res);
+      const { rows } = await stores.pool.query(
+        `
+  SELECT
+    to_char(day, 'YYYY-MM-DD') AS day,
+    ref,
+    signups
+  FROM
+    signup_ref_counts
+  WHERE
+    day > CURRENT_DATE - $1::int
+  ORDER BY
+    day DESC,
+    signups DESC,
+    ref ASC
+`,
+        [req.validatedQuery.days],
+      );
+      return sendSuccess(res, rows);
+    } catch (error: any) {
+      log.error('admin ref counts failed', { error: error.message });
+      return sendError(res, 500, 'Failed to load sign-up ref counts', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
 
   // ── POST /festivals/:id/backfill-spotify — auto-populate link_url via Spotify ──
   // Preserves Agent E's SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET config reads.

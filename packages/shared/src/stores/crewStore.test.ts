@@ -200,6 +200,27 @@ describe('crewStore', () => {
       expect(useCrewStore.getState().crews).toHaveLength(1);
     });
 
+    it('returns the crew online', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce(mockCrew);
+      await expect(useCrewStore.getState().joinByCode({ inviteCode: 'ABC123' })).resolves.toEqual(mockCrew);
+    });
+
+    it('does not add an alreadyMember crew twice', async () => {
+      useCrewStore.setState({ crews: [mockCrew] });
+      vi.mocked(api.post).mockResolvedValueOnce({ ...mockCrew, alreadyMember: true });
+      await useCrewStore.getState().joinByCode({ inviteCode: 'ABC123' });
+      expect(useCrewStore.getState().crews).toHaveLength(1);
+    });
+
+    it('returns null when the join is queued offline', async () => {
+      vi.mocked(api.post).mockImplementationOnce(async (_p, body, opts) => {
+        (opts as { onOptimisticCreate: (r: unknown) => void }).onOptimisticCreate({ ...(body as object), id: 'tmp' });
+        return { id: 'tmp' };
+      });
+      await expect(useCrewStore.getState().joinByCode({ inviteCode: 'ABC123' })).resolves.toBeNull();
+      expect(useCrewStore.getState().crews[0]?._optimistic).toBe(true);
+    });
+
     it('throws on failure', async () => {
       vi.mocked(api.post).mockRejectedValueOnce(new Error('Invalid code'));
       await expect(useCrewStore.getState().joinByCode({ inviteCode: 'BAD' })).rejects.toThrow();

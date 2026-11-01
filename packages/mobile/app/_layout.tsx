@@ -27,6 +27,7 @@ import OfflineBanner from '../components/OfflineBanner';
 import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
 import FirstRunIntro from '../components/FirstRunIntro';
+import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
 import HeaderTitle from '../components/HeaderTitle';
 import { TopBannerContext } from '../components/ScreenHeader';
@@ -302,6 +303,12 @@ function AuthGate() {
     AsyncStorage.setItem(INTRO_KEY, 'true').catch(() => {});
   };
 
+  // A user who opened an invite link came to join a crew: skip the intro for good.
+  const skipIntro = introSeen === false && shouldSkipIntro(segments[0]);
+  useEffect(() => {
+    if (skipIntro) dismissIntro();
+  }, [skipIntro]);
+
   // Wait for Zustand persist to rehydrate from AsyncStorage, then restore
   // the bearer token into the API client's in-memory state so that
   // checkSession (and all subsequent requests) include the Authorization
@@ -517,7 +524,7 @@ function AuthGate() {
           <ActivityIndicator size="large" color={colors.accent.aqua} />
         </View>
       )}
-      {!loading && introSeen === false && <FirstRunIntro onDone={dismissIntro} />}
+      {!loading && introSeen === false && !skipIntro && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );
 }

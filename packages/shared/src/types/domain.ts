@@ -236,7 +236,7 @@ export interface Crew {
   id: string;
   name: string;
   inviteCode?: string;
-  /** Sent to the owner only. */
+  /** Sent to every member; regenerate is owner-only. */
   inviteExpiresAt?: string | null;
   owner: string;
   festivalId?: string;

@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Text, ScrollView, AccessibilityInfo } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore, useCrewStore } from '@festie/shared/stores';
+import { useAuthStore, useCrewStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
+import { useJoinCrewByInvite } from '@festie/shared/hooks';
+import type { InviteStatus } from '@festie/shared/utils';
+import type { InvitePreview } from '@festie/shared/types';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
 import DisplayWords from '../../components/DisplayWords';
 import { isValidInviteCode, setPendingInvite } from '../../lib/pendingInvite';
-import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg.primary },
@@ -46,15 +49,24 @@ export default function JoinInviteScreen() {
   const insets = useSafeAreaInsets();
   const { code } = useLocalSearchParams<{ code?: string }>();
   const user = useAuthStore((s) => s.user);
-  const joinByCode = useCrewStore((s) => s.joinByCode);
+  const joinByInvite = useJoinCrewByInvite();
+  const currentFestivalId = useFestivalStore((s) => s.currentFestival?.id);
   const crewLoading = useCrewStore((s) => s.crewLoading);
   const error = useCrewStore((s) => s.error);
   const setError = useCrewStore((s) => s.setError);
 
   const validCode = isValidInviteCode(code) ? code : null;
-  const [inviteStatus, setInviteStatus] = useState<'loading' | 'ready' | 'invalid'>('loading');
-  // Loading still allows Join; only a confirmed-invalid invite hides the actions.
-  const inviteUsable = !!validCode && inviteStatus !== 'invalid';
+  const [inviteStatus, setInviteStatus] = useState<InviteStatus>('loading');
+  const [preview, setPreview] = useState<InvitePreview | null>(null);
+  const handleStatus = useCallback((status: InviteStatus, p: InvitePreview | null) => {
+    setInviteStatus(status);
+    setPreview(p);
+  }, []);
+  // Loading and unreachable still allow Join; only a confirmed-dead invite hides the actions.
+  const inviteDead = inviteStatus === 'invalid' || inviteStatus === 'expired';
+  const inviteUsable = !!validCode && !inviteDead;
+  const full = preview?.spotsLeft === 0;
+  const switchesFestival = !!preview?.festivalId && !!preview.festivalName && preview.festivalId !== currentFestivalId;
 
   // Keep the code so sign-in and sign-up can show the invite and return here.
   useEffect(() => {
@@ -65,8 +77,14 @@ export default function JoinInviteScreen() {
     if (!validCode) return;
     setError(null);
     try {
-      await joinByCode({ inviteCode: validCode });
+      const outcome = await joinByInvite(validCode);
       setPendingInvite(null);
+      if (outcome.kind === 'already') {
+        AccessibilityInfo.announceForAccessibility(`You're already in ${outcome.crew.name}`);
+      } else if (outcome.kind === 'queued') {
+        // A toast, not screen text: the global Toaster outlives the replace below.
+        useUIStore.getState().showToast("We'll join you when you're back online.", { kind: 'info' });
+      }
       router.replace('/(tabs)/crew');
     } catch {
       // Error is set in the store.
@@ -93,7 +111,7 @@ export default function JoinInviteScreen() {
           <DisplayWords text="Crew invite" fontSize={styles.title.fontSize} />
         </Text>
 
-        <InviteCard code={validCode} onStatus={setInviteStatus} />
+        <InviteCard code={validCode} onStatus={handleStatus} />
         {!validCode ? (
           <Text style={styles.error} accessibilityRole="alert">
             This invite link is not valid. Ask the crew owner to share it again.
@@ -108,14 +126,28 @@ export default function JoinInviteScreen() {
 
         {inviteUsable && user ? (
           <>
-            <Text style={styles.body}>Crew members can see your picks and your status.</Text>
-            <Button label="Join crew" onPress={handleJoin} loading={crewLoading} />
+            <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Crew members can see your picks and your status.
+            </Text>
+            {switchesFestival ? (
+              <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                Joining switches you to {preview?.festivalName}.
+              </Text>
+            ) : null}
+            <Button
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              label={full ? 'Crew is full' : 'Join crew'}
+              onPress={handleJoin}
+              loading={crewLoading}
+              disabled={full}
+            />
           </>
         ) : null}
 
-        {inviteStatus === 'invalid' && user ? (
+        {inviteDead && user ? (
           <Button
-            label="Enter a code in Crew"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+            label="Type an invite code"
             onPress={() => {
               setPendingInvite(null);
               router.replace('/(tabs)/crew');
@@ -125,8 +157,13 @@ export default function JoinInviteScreen() {
 
         {inviteUsable && !user ? (
           <>
-            <Button label="Create account to join" onPress={() => router.push('/(auth)/register')} />
             <Button
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              label="Create account to join"
+              onPress={() => router.push('/(auth)/register')}
+            />
+            <Button
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
               label="Sign in"
               variant="secondary"
               onPress={() => router.push('/(auth)/login')}
@@ -135,7 +172,24 @@ export default function JoinInviteScreen() {
           </>
         ) : null}
 
-        <Button label="Not now" variant="ghost" onPress={leave} style={styles.secondary} />
+        {inviteDead && !user ? (
+          <Button
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+            label="Create account"
+            onPress={() => {
+              setPendingInvite(null);
+              router.push('/(auth)/register');
+            }}
+          />
+        ) : null}
+
+        <Button
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+          label="Not now"
+          variant="ghost"
+          onPress={leave}
+          style={styles.secondary}
+        />
       </ScrollView>
     </View>
   );

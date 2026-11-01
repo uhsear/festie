@@ -36,8 +36,8 @@ export default function createDeepLinkRoutes(deps: any) {
         details: [
           {
             appIDs: [`${config.APPLE_TEAM_ID}.us.festie.app`],
-            paths: ['/set/*', '/reset-password'],
-            components: [{ '/': '/set/*' }, { '/': '/reset-password' }],
+            paths: ['/set/*', '/reset-password', '/join/*'],
+            components: [{ '/': '/set/*' }, { '/': '/reset-password' }, { '/': '/join/*' }],
           },
         ],
       },

@@ -2,16 +2,16 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { paginateArray } from '../lib/pagination.js';
+import { ensureFestivalProfile } from '../lib/festival-profile.js';
 
 export default function createProfilesRoutes(deps: any) {
   const {
-    express, config, log,
+    express, log,
     userAuth, adminAuth, setNoStore,
     sanitizeIdentifier, getFestivalById, getProfiles, getUserMap, getUserById,
     normalizePickPayload, normalizeNotePayload, normalizeReminderPayload,
     serializeProfileForViewer, serializeOwnProfile,
     _buildAvatarUrl,
-    createOpaqueId,
     sendSuccess, sendError, ErrorCodes,
     rateLimit,
     removeProfileSockets,
@@ -61,50 +61,12 @@ export default function createProfilesRoutes(deps: any) {
       const festival = await getFestivalById(festivalId);
       if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
-      // Check if user already has profile for this festival
-      const { getUserFestivalProfile } = deps;
-      let profile = await getUserFestivalProfile(req.user.userId, festivalId);
-      if (profile) {
-        const user = await getUserById(profile.userId);
-        if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
-        emitter.profileCreated({ festivalId, profile, user });
-        return sendSuccess(res, serializeOwnProfile(profile, user));
-      }
-
-      // Try to claim orphan profile matching username
-      profile = await stores.profiles.claimOrphan(festivalId, req.user.userId, req.user.username);
-      if (profile) {
-        const user = await getUserById(profile.userId);
-        if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
-        emitter.profileCreated({ festivalId, profile, user });
-        return sendSuccess(res, serializeOwnProfile(profile, user));
-      }
-
-      // Check max profiles per festival — use countByFestival if available, else fallback
-      const festivalProfileCount = stores.profiles.countByFestival
-        ? await stores.profiles.countByFestival(festivalId)
-        : (await getProfiles()).filter((p: any) => p.festivalId === festivalId).length;
-      if (festivalProfileCount >= config.MAX_PROFILES_PER_FESTIVAL) {
+      const result = await ensureFestivalProfile(deps, req.user, festivalId);
+      if (result.error === 'limit') {
         return sendError(res, 400, 'Maximum profiles reached', ErrorCodes.MAX_LIMIT_REACHED);
       }
-
-      // Create new profile
-      profile = await stores.profiles.create({
-        id: createOpaqueId('prof'),
-        festivalId,
-        userId: req.user.userId,
-        name: req.user.username,
-        picks: {},
-        notes: {},
-        reminders: {},
-        createdAt: new Date().toISOString(),
-      });
-
-      const user = await getUserById(profile.userId);
-      if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
-      log.info('profile:created', { profileId: profile.id, festivalId, userId: req.user.userId, username: req.user.username });
-      emitter.profileCreated({ festivalId, profile, user });
-      return sendSuccess(res, serializeOwnProfile(profile, user));
+      if (result.error === 'user-missing') return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+      return sendSuccess(res, serializeOwnProfile(result.profile, result.user));
     } catch (error: any) {
       log.error('profile create failed', { error: error.message });
       return sendError(res, 500, 'Failed to create/join profile', ErrorCodes.INTERNAL_ERROR);

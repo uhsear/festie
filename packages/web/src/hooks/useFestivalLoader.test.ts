@@ -55,11 +55,9 @@ vi.mock('@festie/shared/stores/crewStore', () => ({
     sel({ loadCrews: vi.fn(async () => {}), joinByCode: h.joinByCode }),
 }));
 
-vi.mock('@festie/shared/services', () => ({ api: { post: vi.fn(async () => {}) } }));
-
 vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }) }));
 
-import { useFestivalLoader } from './useFestivalLoader';
+import { useFestivalLoader, readSignupRef } from './useFestivalLoader';
 
 describe('useFestivalLoader session probe', () => {
   beforeEach(() => {
@@ -98,6 +96,7 @@ describe('useFestivalLoader ?joinCrew consent gate', () => {
     h.state.user = { id: 'u1' };
     h.state.currentFestival = { id: 'f1' };
     h.state.currentProfile = { id: 'p1' };
+    sessionStorage.clear();
     window.history.pushState({}, '', '/?joinCrew=ABC123');
   });
 
@@ -109,5 +108,72 @@ describe('useFestivalLoader ?joinCrew consent gate', () => {
     renderHook(() => useFestivalLoader());
     await act(async () => {});
     expect(h.joinByCode).not.toHaveBeenCalled();
+  });
+
+  it('a guest with a pending code who signs in gets the code staged', async () => {
+    window.history.pushState({}, '', '/');
+    h.state.user = null;
+    sessionStorage.setItem('fk.pendingJoinCrew', 'ABC123');
+    const { result, rerender } = renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(result.current.pendingJoinCode).toBeNull();
+    h.state.user = { id: 'u1' };
+    rerender();
+    await act(async () => {});
+    expect(result.current.pendingJoinCode).toBe('ABC123');
+    expect(sessionStorage.getItem('fk.pendingJoinCrew')).toBeNull();
+    expect(h.joinByCode).not.toHaveBeenCalled();
+  });
+
+  it('a guest who opens ?joinCrew=, goes to sign-up and signs in gets the code staged', async () => {
+    h.state.user = null;
+    const { result, rerender } = renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(sessionStorage.getItem('fk.pendingJoinCrew')).toBe('ABC123');
+    window.history.pushState({}, '', '/register');
+    h.state.user = { id: 'u1' };
+    rerender();
+    await act(async () => {});
+    expect(result.current.pendingJoinCode).toBe('ABC123');
+    expect(sessionStorage.getItem('fk.pendingJoinCrew')).toBeNull();
+  });
+
+  it('stages a signed-in visitor even before a festival is selected', async () => {
+    h.state.currentFestival = null;
+    const { result } = renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(result.current.pendingJoinCode).toBe('ABC123');
+  });
+});
+
+describe('useFestivalLoader ?ref capture', () => {
+  beforeEach(() => {
+    h.state.user = null;
+    sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('stores a valid ref lower-cased, and the first value wins', () => {
+    window.history.pushState({}, '', '/?ref=Tiktok_1');
+    renderHook(() => useFestivalLoader());
+    window.history.pushState({}, '', '/?ref=other');
+    renderHook(() => useFestivalLoader());
+    expect(sessionStorage.getItem('festie-ref')).toBe('tiktok_1');
+  });
+
+  it('readSignupRef returns the stored ref for the register request', () => {
+    expect(readSignupRef()).toBeUndefined();
+    window.history.pushState({}, '', '/?ref=crew_share');
+    renderHook(() => useFestivalLoader());
+    expect(readSignupRef()).toBe('crew_share');
+  });
+
+  it('ignores an invalid ref', () => {
+    window.history.pushState({}, '', '/?ref=bad%20ref!');
+    renderHook(() => useFestivalLoader());
+    expect(sessionStorage.getItem('festie-ref')).toBeNull();
   });
 });
