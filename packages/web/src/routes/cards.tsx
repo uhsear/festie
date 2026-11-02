@@ -6,7 +6,8 @@ import {
   getHomeActions,
   resolveFestivalTimeZone,
   splitCardsByNow,
-  getConflictingSetIds,
+  detectConflicts,
+  clashBadgeBySetId,
   festivalPhase,
   groupScheduleSets,
   resolveStageColor,
@@ -127,22 +128,11 @@ function CardsViewInner() {
   }, [getDays]);
   const q = searchQuery.trim();
 
-  // Compute conflict set IDs
-  const conflictIds = useMemo(() => {
-    return getConflictingSetIds(filteredSets, getMyPick);
-  }, [filteredSets, getMyPick]);
-
-  const conflictsBySetId = useMemo(() => {
-    const conflictSets = filteredSets.filter((s) => conflictIds.has(s.id));
-    const map = new Map<string, typeof conflictSets>();
-    for (const s of conflictSets) {
-      map.set(
-        s.id,
-        conflictSets.filter((c) => c.id !== s.id),
-      );
-    }
-    return map;
-  }, [filteredSets, conflictIds]);
+  // Per-set badge naming the other set it clashes with and the overlap.
+  const clashBadges = useMemo(
+    () => clashBadgeBySetId(detectConflicts(filteredSets, getMyPick), currentFestival?.b2bSeparator),
+    [filteredSets, getMyPick, currentFestival?.b2bSeparator],
+  );
 
   // P1-5 — festival lifecycle phase (pre / live / post), derived from the
   // festival's date range vs now (shared `festivalPhase`). Drives the
@@ -271,7 +261,6 @@ function CardsViewInner() {
                 const sc = getStageColor(set.stageId);
                 const sn = getStageName(set.stageId) || 'Unknown';
                 const others = getOtherPicks(set.id);
-                const setConflicts = conflictsBySetId.get(set.id) || [];
 
                 return (
                   <div
@@ -302,7 +291,7 @@ function CardsViewInner() {
                       stageName={sn}
                       stageColor={sc}
                       friendProfiles={others}
-                      conflicts={setConflicts}
+                      clashLabel={clashBadges.get(set.id)?.label}
                       b2bSeparator={currentFestival?.b2bSeparator}
                     />
                   </div>

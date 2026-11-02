@@ -13,6 +13,7 @@ import {
   formatEta,
   nearestPin,
   buildPursuit,
+  stageWalkMinutes,
   type Coord,
   type GeoPoint,
 } from './geo';
@@ -318,5 +319,29 @@ describe('geo.formatStaleness (honest "as of N ago", never live)', () => {
 
   it('never includes the word "live"', () => {
     expect(formatStaleness(Date.now() - 90 * 60_000)).not.toMatch(/live/i);
+  });
+});
+
+describe('geo.stageWalkMinutes', () => {
+  // 0.0045 degrees of latitude is about 500 m.
+  const stages = [
+    { id: 's1', latitude: 40.0, longitude: -74.0 },
+    { id: 's2', latitude: 40.0045, longitude: -74.0 },
+    { id: 'nopin', latitude: null, longitude: null },
+  ];
+
+  it('gives 0 for the same stage', () => {
+    expect(stageWalkMinutes(stages, 's1', 's1')).toBe(0);
+  });
+
+  it('gives null when a pin, a stage or an id is missing', () => {
+    expect(stageWalkMinutes(stages, 's1', 'nopin')).toBeNull();
+    expect(stageWalkMinutes(stages, 's1', 'unknown')).toBeNull();
+    expect(stageWalkMinutes(undefined, 's1', 's2')).toBeNull();
+    expect(stageWalkMinutes(stages, undefined, 's2')).toBeNull();
+  });
+
+  it('rounds 500 m at 1.25 m/s up to 7 minutes', () => {
+    expect(stageWalkMinutes(stages, 's1', 's2')).toBe(7);
   });
 });
