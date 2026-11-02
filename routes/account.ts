@@ -18,12 +18,19 @@ import type {
 import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from '../lib/email';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user';
 import type { Identity } from '../lib/db/stores/identities';
+import { collectAuthoredRecords, isoOrNull } from '../lib/account-export-records';
 
 /**
- * Collect all user data for GDPR export. Gathers profiles, device tokens,
- * crews, sessions, notification preferences, topic subscriptions, Spotify
- * linkage, payment handles, email, display name, date of birth, and any
- * crew status/location snapshots the user has authored.
+ * Collect all user data for GDPR export (exportVersion 1.2). Gathers the
+ * account (email, display name, date of birth, payment handles, sharing
+ * settings), profiles with picks, notes and reminders, device tokens, crews,
+ * sessions with their device label, notification preferences, topic
+ * subscriptions, Spotify linkage, linked Google and Apple sign-ins, and the
+ * crew statuses the user has posted (with their stored location). Then the
+ * records the user wrote (lib/account-export-records.ts): ratings, caught
+ * sets, followed festivals, expenses, polls created, poll votes, packing
+ * items, ride offers and seats, meeting points, crew activity, calendar feeds,
+ * payment reminders sent, crew days and meet-up "I'll be there" taps.
  */
 async function collectGdprData(
   userId: string,
@@ -48,7 +55,7 @@ async function collectGdprData(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const exportData: any = {
     exportDate: new Date().toISOString(),
-    exportVersion: '1.1',
+    exportVersion: '1.2',
     user: {
       id: currentUser.id,
       username: currentUser.username,
@@ -66,9 +73,18 @@ async function collectGdprData(
       updatedAt: currentUser.updatedAt,
     },
     profiles: [],
-    messages: [],
     deviceTokens: [],
   };
+
+  // Sharing settings (063 public page, 075 last picks-link reset).
+  try {
+    const sharing = await stores.shareLinks.getStatus(userId);
+    if (!sharing) throw new Error('user not found');
+    exportData.user.sharing = { publicSchedule: sharing.publicSchedule, linksResetAt: sharing.linksResetAt };
+  } catch (error) {
+    log.warn('gdpr-export:partial-failure', { section: 'sharing', userId, error: (error as Error).message });
+    exportData.user.sharing = { publicSchedule: false, linksResetAt: null };
+  }
 
   // Get profiles for this user — use targeted query when available
   const userProfiles = stores?.profiles?.getByUserId
@@ -87,8 +103,6 @@ async function collectGdprData(
       updatedAt: profile.updatedAt,
     });
   }
-
-  // Chat feature removed (migration 013) — messages export skipped
 
   // Get device tokens
   if (stores?.deviceTokens?.listByUser) {
@@ -123,10 +137,13 @@ async function collectGdprData(
   if (stores?.sessions?.listUserSessions) {
     try {
       const sessions = await stores.sessions.listUserSessions(userId);
-      exportData.sessions = sessions.map((s: { createdAt: string | number; lastAccess: string | number }) => ({
-        createdAt: new Date(s.createdAt).toISOString(),
-        lastAccess: new Date(s.lastAccess).toISOString(),
-      }));
+      exportData.sessions = sessions.map(
+        (s: { createdAt: string | number; lastAccess: string | number; deviceLabel?: string | null }) => ({
+          createdAt: new Date(s.createdAt).toISOString(),
+          lastAccess: new Date(s.lastAccess).toISOString(),
+          deviceLabel: s.deviceLabel ?? null,
+        }),
+      );
     } catch (error) {
       log.warn('gdpr-export:partial-failure', { section: 'sessions', userId, error: (error as Error).message });
       exportData.sessions = [];
@@ -197,9 +214,8 @@ async function collectGdprData(
     exportData.identities = [];
   }
 
-  // Get crew status snapshots the user has authored (M5 offline-sync snapshots).
-  // Location breadcrumbs (latitude/longitude) are excluded — they are ephemeral
-  // device-captured offsets, not stored personal location history.
+  // Get crew status snapshots the user has authored (M5 offline-sync snapshots),
+  // with the stored status location: it persists and crewmates can see it.
   if (stores?.crewStatus?.listByUser) {
     try {
       const statuses = await stores.crewStatus.listByUser(userId);
@@ -209,6 +225,9 @@ async function collectGdprData(
         targetMeetingPointId: s.target_meeting_point_id ?? null,
         etaMinutes: s.eta_minutes ?? null,
         note: s.note ?? null,
+        latitude: s.latitude ?? null,
+        longitude: s.longitude ?? null,
+        locationCapturedAt: isoOrNull(s.location_captured_at),
         updatedAt: s.updated_at ? new Date(s.updated_at as string).toISOString() : null,
       }));
     } catch (error) {
@@ -216,6 +235,8 @@ async function collectGdprData(
       exportData.crewStatuses = [];
     }
   }
+
+  Object.assign(exportData, await collectAuthoredRecords(stores.pool, userId, log));
 
   return exportData;
 }
@@ -533,6 +554,34 @@ export default function createAccountRoutes(deps: RouteDeps) {
   router.put('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
   router.patch('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
 
+  // ── POST /stop-sharing — turn off the public page and clear status locations
+  // Payment handles and picks links are left alone; the client stops live
+  // location itself. Each cleared status row is re-broadcast with the same
+  // payload as PUT /crews/:crewId/status so open crew screens drop the pin.
+  router.post('/stop-sharing', userAuth, rateLimit(10, 'stop-sharing'), async (req: Request, res: Response) => {
+    const userId = req.user.userId;
+    try {
+      setNoStore(res);
+      const user = await stores.users.update(userId, { publicSchedule: false });
+      if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+      invalidateUserCache();
+
+      // Every row is cleared, but only crews the user still belongs to hear about it:
+      // clients add unknown rows, so a left crew would see the member's status again.
+      const cleared: Array<{ crew_id: string; still_member: boolean }> =
+        await stores.crewStatus.clearLocationsForUser(userId);
+      for (const { still_member: stillMember, ...status } of cleared) {
+        if (stillMember) io.to('crew:' + status.crew_id).emit('crew:status-updated', { status });
+      }
+
+      log.info('account:stop-sharing', { userId, clearedStatusLocations: cleared.length });
+      return sendSuccess(res, { user: serializePublicUser(user), clearedStatusLocations: cleared.length });
+    } catch (error) {
+      log.error('account stop-sharing failed', { error: (error as Error).message, userId });
+      return sendError(res, 500, "Couldn't stop sharing. Try again.", ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
   // ── POST /share-link/:festivalId — revocable picks link for one festival ─
   router.post('/share-link/:festivalId', userAuth, rateLimit(20, 'share-link'), async (req: Request, res: Response) => {
     try {
@@ -558,10 +607,25 @@ export default function createAccountRoutes(deps: RouteDeps) {
       const status = await stores.shareLinks.getStatus(req.user.userId);
       if (!status) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
       const newest = status.publicSchedule ? await stores.shareLinks.newestProfile(req.user.userId) : null;
+      // Left out (never []) when the query fails, so clients fall back to local data
+      // instead of showing a false "None". Never the coordinates.
+      let statusLocations: Array<{ crewId: string; crewName: string; capturedAt: string | null }> | undefined;
+      try {
+        const rows: Array<{ crew_id: string; crew_name: string; location_captured_at: unknown }> =
+          await stores.crewStatus.listLocationsForUser(req.user.userId);
+        statusLocations = rows.map((r) => ({
+          crewId: r.crew_id,
+          crewName: r.crew_name,
+          capturedAt: isoOrNull(r.location_captured_at),
+        }));
+      } catch (error) {
+        log.warn('sharing status locations failed', { error: (error as Error).message, userId: req.user.userId });
+      }
       return sendSuccess(res, {
         publicSchedule: status.publicSchedule,
         publicFestival: newest ? { id: newest.festivalId, name: newest.festivalName } : null,
         linksResetAt: status.linksResetAt,
+        ...(statusLocations ? { statusLocations } : {}),
       });
     } catch (error) {
       log.error('sharing status failed', { error: (error as Error).message, userId: req.user.userId });
@@ -779,12 +843,10 @@ export default function createAccountRoutes(deps: RouteDeps) {
       const retryMs = await reserveExport(userId);
       if (retryMs > 0) {
         const nextAvailable = new Date(Date.now() + retryMs);
-        return sendError(
-          res,
-          429,
-          `Data export rate limited. Next available: ${nextAvailable.toISOString()}`,
-          ErrorCodes.RATE_LIMITED,
-        );
+        res.setHeader('Retry-After', String(Math.max(1, Math.ceil(retryMs / 1000))));
+        return sendError(res, 429, 'You can download your data once a day. Try again later.', ErrorCodes.RATE_LIMITED, {
+          retryAt: nextAvailable.toISOString(),
+        });
       }
       reserved = true;
 

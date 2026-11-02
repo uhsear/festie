@@ -156,7 +156,7 @@ export default function SetDetailScreen() {
   const allProfiles = useFestivalDataStore((s) => s.allProfiles);
   const days = useFestivalDataStore((s) => s.days);
 
-  const { getMyPick, savePick, getOtherPicks, saveReminder, getMyReminder } = usePicks();
+  const { getMyPick, savePick, getOtherPicks, getPickCount, saveReminder, getMyReminder } = usePicks();
   const { getStageColor, getStageName } = useFestival();
   const { getCrewScopedOtherPicks } = useCrew();
   const haptics = useHaptics();
@@ -262,7 +262,14 @@ export default function SetDetailScreen() {
     });
   }, [set, currentProfile, getCrewScopedOtherPicks, getOtherPicks, allProfiles]);
 
-  const whoTitle = others.length > 0 ? `Who's Going (${others.length})` : 'Nobody else going yet';
+  // Non-crew picks arrive only as an anonymous count, so the fallback shows the number without names.
+  const othersTotal = set ? getPickCount(set.id) : 0;
+  const whoTitle =
+    others.length > 0
+      ? `Who's Going (${others.length})`
+      : othersTotal > 0
+        ? `${othersTotal} going`
+        : 'Nobody else going yet';
 
   const crewNotes = useMemo(() => {
     if (!set) return [];

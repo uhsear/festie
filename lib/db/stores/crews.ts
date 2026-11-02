@@ -1423,6 +1423,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           crew_member_status s
           JOIN users u ON u.id = s.user_id
           AND u.deleted_at IS NULL
+          JOIN crew_members m ON m.crew_id = s.crew_id
+          AND m.user_id = s.user_id
         WHERE
           s.crew_id = $1
         ORDER BY
@@ -1434,7 +1436,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     },
 
     // GDPR export: return all status snapshots the given user has authored
-    // across all their crews. Excludes location breadcrumbs (NOT live GPS).
+    // across all their crews.
+    // Includes the stored status location: it persists and crewmates can see it.
     async listByUser(userId: string) {
       const result = await pool.query(
         `
@@ -1444,6 +1447,9 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           s.target_meeting_point_id,
           s.eta_minutes,
           s.note,
+          s.latitude,
+          s.longitude,
+          s.location_captured_at,
           s.updated_at
         FROM
           crew_member_status s
@@ -1451,6 +1457,73 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           s.user_id = $1
         ORDER BY
           s.updated_at DESC
+      `,
+        [userId],
+      );
+      return result.rows;
+    },
+
+    // Stop all sharing: null the status location in every crew. updated_at is
+    // left alone; clients accept an equal timestamp, so the broadcast applies.
+    async clearLocationsForUser(userId: string) {
+      const result = await pool.query(
+        `
+        UPDATE crew_member_status
+        SET
+          latitude = NULL,
+          longitude = NULL,
+          location_captured_at = NULL
+        WHERE
+          user_id = $1
+          AND (
+            latitude IS NOT NULL
+            OR longitude IS NOT NULL
+          )
+        RETURNING
+          crew_id,
+          user_id,
+          status,
+          target_meeting_point_id,
+          eta_minutes,
+          note,
+          latitude,
+          longitude,
+          location_captured_at,
+          updated_at,
+          EXISTS (
+            SELECT
+              1
+            FROM
+              crew_members m
+            WHERE
+              m.crew_id = crew_member_status.crew_id
+              AND m.user_id = $1
+          ) AS still_member
+      `,
+        [userId],
+      );
+      return result.rows;
+    },
+
+    // Privacy summary: crews the user still belongs to that hold a status
+    // location of theirs. Never returns the coordinates.
+    async listLocationsForUser(userId: string) {
+      const result = await pool.query(
+        `
+        SELECT
+          s.crew_id,
+          c.name AS crew_name,
+          s.location_captured_at
+        FROM
+          crew_member_status s
+          JOIN crews c ON c.id = s.crew_id
+          JOIN crew_members m ON m.crew_id = s.crew_id
+          AND m.user_id = s.user_id
+        WHERE
+          s.user_id = $1
+          AND s.latitude IS NOT NULL
+        ORDER BY
+          s.location_captured_at DESC NULLS LAST
       `,
         [userId],
       );

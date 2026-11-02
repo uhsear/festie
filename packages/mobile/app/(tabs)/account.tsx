@@ -32,6 +32,7 @@ import AppSwitch from '../../components/AppSwitch';
 import { LowPowerToggle } from '../../components/LowPowerControls';
 import AccountDisplayNameSection from '../../components/AccountDisplayNameSection';
 import AccountPaymentHandlesSection from '../../components/AccountPaymentHandlesSection';
+import AccountPrivacySection from '../../components/AccountPrivacySection';
 import AccountPublicScheduleSection from '../../components/AccountPublicScheduleSection';
 import AccountPasswordSection from '../../components/AccountPasswordSection';
 import AccountSignInMethodsSection from '../../components/AccountSignInMethodsSection';
@@ -214,7 +215,12 @@ export default function AccountScreen() {
         <AccountNotificationPrefsSection pushOn={push.registered} />
       </>
     ),
-    privacy: <AccountPublicScheduleSection />,
+    privacy: (
+      <>
+        <AccountPrivacySection />
+        <AccountPublicScheduleSection />
+      </>
+    ),
     offline: (
       <>
         <LowPowerToggle />
