@@ -54,6 +54,7 @@ vi.mock('./LiveBadge', () => ({
 
 import SetCard from './SetCard';
 import { useSetStatus } from '@/hooks/useSetStatus';
+import { api } from '@festie/shared/services/api';
 import { usePicks } from '@festie/shared/hooks';
 import { ensureWhiteContrast } from '../ui/StageBadge';
 
@@ -145,6 +146,40 @@ describe('SetCard', () => {
     render(<SetCard {...defaultProps} />);
     const btn = screen.getByLabelText(/Daft Punk.*Main Stage.*2:00 PM/);
     expect(btn).toBeInTheDocument();
+  });
+
+  describe('Listen', () => {
+    const spotifySet = makeSet({
+      artists: [{ name: 'Daft Punk', links: { spotify: 'https://open.spotify.com/artist/abc123' } }],
+    } as unknown as Partial<FestivalSet>);
+
+    it('calls onPreview and never fetches', async () => {
+      const onPreview = vi.fn();
+      const onTap = vi.fn();
+      render(<SetCard {...defaultProps} set={spotifySet} onPreview={onPreview} onTap={onTap} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Listen to Daft Punk' }));
+      expect(onPreview).toHaveBeenCalledOnce();
+      expect(onTap).not.toHaveBeenCalled();
+      expect(api.get).not.toHaveBeenCalled();
+    });
+
+    it('is hidden without a Spotify artist link', () => {
+      render(<SetCard {...defaultProps} />);
+      expect(screen.queryByRole('button', { name: /Listen to/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('pick placeholders', () => {
+    it('renders three placeholders while picks load', () => {
+      const { container } = render(<SetCard {...defaultProps} showPicks={false} picksLoading />);
+      expect(container.querySelectorAll('.skeleton-shimmer')).toHaveLength(3);
+      expect(container.querySelector('.card-priority')).toBeNull();
+    });
+
+    it('renders no placeholders when not loading', () => {
+      const { container } = render(<SetCard {...defaultProps} showPicks={false} />);
+      expect(container.querySelectorAll('.skeleton-shimmer')).toHaveLength(0);
+    });
   });
 
   describe('priority buttons', () => {

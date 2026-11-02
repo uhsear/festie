@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { FESTIVAL_STATUS_LABEL } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
-import { formatFestivalDateRange, festivalStatus, sortFestivalsForPicker, type FestivalStatus } from '@festie/shared/utils';
+import { formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
@@ -270,7 +270,12 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const haptics = useHaptics();
 
-  const sortedFestivals = useMemo(() => sortFestivalsForPicker(festivals), [festivals]);
+  // Order: live first, then upcoming (soonest first), then past (most recent
+  // first), so the festivals a user is most likely choosing sit at the top.
+  const sortedFestivals = useMemo(() => {
+    const g = groupFestivalsByStatus(festivals);
+    return [...g.live, ...g.upcoming, ...g.past, ...g.undated];
+  }, [festivals]);
 
   const handleRefresh = useCallback(() => {
     loadFestivals().catch(() => {});

@@ -5,70 +5,33 @@ import DetailNotesSection from './DetailNotesSection';
 
 describe('DetailNotesSection', () => {
   const defaultProps = {
-    personalNote: '',
     crewNote: '',
-    onPersonalChange: vi.fn(),
     onCrewChange: vi.fn(),
   };
+  const LABEL = 'Crew note (your crew sees this)';
 
-  it('renders personal notes section', () => {
+  it('renders only the crew note', () => {
     render(<DetailNotesSection {...defaultProps} />);
-    expect(screen.getByText('Personal Notes')).toBeInTheDocument();
+    expect(screen.getByText(LABEL)).toBeInTheDocument();
+    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    expect(screen.queryByText('Personal Notes')).not.toBeInTheDocument();
   });
 
-  it('renders crew notes section', () => {
-    render(<DetailNotesSection {...defaultProps} />);
-    expect(screen.getByText('Crew Note (visible to your crew)')).toBeInTheDocument();
+  it('displays the crew note value', () => {
+    render(<DetailNotesSection {...defaultProps} crewNote="VIP area" />);
+    expect(screen.getByLabelText(LABEL)).toHaveValue('VIP area');
   });
 
-  it('displays personal note value', () => {
-    render(
-      <DetailNotesSection {...defaultProps} personalNote="Meet at the rail" />,
-    );
-    const textarea = screen.getByLabelText('Personal Notes');
-    expect(textarea).toHaveValue('Meet at the rail');
-  });
-
-  it('displays crew note value', () => {
-    render(
-      <DetailNotesSection {...defaultProps} crewNote="VIP area" />,
-    );
-    const textarea = screen.getByLabelText('Crew Note (visible to your crew)');
-    expect(textarea).toHaveValue('VIP area');
-  });
-
-  it('calls onPersonalChange when personal note is typed', async () => {
-    const user = userEvent.setup();
-    const onPersonalChange = vi.fn();
-    render(
-      <DetailNotesSection {...defaultProps} onPersonalChange={onPersonalChange} />,
-    );
-    const textarea = screen.getByLabelText('Personal Notes');
-    await user.type(textarea, 'a');
-    expect(onPersonalChange).toHaveBeenCalledWith('a');
-  });
-
-  it('calls onCrewChange when crew note is typed', async () => {
-    const user = userEvent.setup();
+  it('calls onCrewChange when typed', async () => {
     const onCrewChange = vi.fn();
-    render(
-      <DetailNotesSection {...defaultProps} onCrewChange={onCrewChange} />,
-    );
-    const textarea = screen.getByLabelText('Crew Note (visible to your crew)');
-    await user.type(textarea, 'b');
+    render(<DetailNotesSection {...defaultProps} onCrewChange={onCrewChange} />);
+    await userEvent.setup().type(screen.getByLabelText(LABEL), 'b');
     expect(onCrewChange).toHaveBeenCalledWith('b');
   });
 
-  it('renders placeholder text for personal notes', () => {
+  it('renders the crew placeholder', () => {
     render(<DetailNotesSection {...defaultProps} />);
-    const textarea = screen.getByPlaceholderText(/Add notes/);
-    expect(textarea).toBeInTheDocument();
-  });
-
-  it('renders placeholder text for crew notes', () => {
-    render(<DetailNotesSection {...defaultProps} />);
-    const textarea = screen.getByPlaceholderText(/Share a note with your crew/);
-    expect(textarea).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Share a note with your crew/)).toBeInTheDocument();
   });
 
   it.each([
@@ -77,32 +40,19 @@ describe('DetailNotesSection', () => {
     ['queued', 'Saved on this device — will send when online'],
     ['failed', 'Not saved.'],
   ] as const)('renders the %s status', (status, text) => {
-    render(<DetailNotesSection {...defaultProps} personalStatus={status} />);
-    expect(screen.getAllByRole('status')[0]).toHaveTextContent(text);
+    render(<DetailNotesSection {...defaultProps} crewStatus={status} />);
+    expect(screen.getByRole('status')).toHaveTextContent(text);
   });
 
   it('renders nothing visible for idle', () => {
     render(<DetailNotesSection {...defaultProps} />);
-    screen.getAllByRole('status').forEach((el) => expect(el).toBeEmptyDOMElement());
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
-  it('calls the retry callbacks', async () => {
-    const user = userEvent.setup();
-    const onRetryPersonal = vi.fn();
+  it('calls the retry callback', async () => {
     const onRetryCrew = vi.fn();
-    render(
-      <DetailNotesSection
-        {...defaultProps}
-        personalStatus="failed"
-        crewStatus="failed"
-        onRetryPersonal={onRetryPersonal}
-        onRetryCrew={onRetryCrew}
-      />,
-    );
-    const [first, second] = screen.getAllByRole('button', { name: 'Retry' });
-    await user.click(first!);
-    await user.click(second!);
-    expect(onRetryPersonal).toHaveBeenCalledOnce();
+    render(<DetailNotesSection {...defaultProps} crewStatus="failed" onRetryCrew={onRetryCrew} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRetryCrew).toHaveBeenCalledOnce();
   });
 });

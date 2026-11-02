@@ -21,7 +21,7 @@ async function gotoSchedule(
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(`${app.baseUrl}${route}`);
   await expect(page.locator('#app')).toBeVisible();
-  await expect(page.locator('[data-testid="festival-select"]')).toHaveValue('fest-1');
+  await expect(page.locator('[data-testid="festival-select"]')).toHaveAttribute('data-festival-id', 'fest-1');
 
   if (route === '/cards') {
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();

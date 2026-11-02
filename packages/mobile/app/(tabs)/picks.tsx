@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Share,
+  Linking,
   TextInput,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
@@ -32,6 +33,8 @@ import {
   formatTime,
   buildPicksIcs,
   buildPicksShareUrl,
+  buildListenList,
+  listenListText,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { COPY, GUEST_PROMPT_COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
@@ -132,6 +135,7 @@ export default function PicksScreen() {
   // fold to its headers and scan fast. In-memory for the screen's lifetime.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [listenOpen, setListenOpen] = useState(false);
   const listRef = useRef<FlatList<Row>>(null);
 
   const { getMyPick, savePick, removePick, getMyNote } = usePicks();
@@ -554,6 +558,8 @@ export default function PicksScreen() {
           onPress={() => router.push(`/set/${item.set.id}`)}
           hasConflict={conflictIds.has(item.set.id)}
           hasNote={!!getMyNote(item.set.id)}
+          b2bSeparator={currentFestival?.b2bSeparator}
+          onListen={() => router.push(`/set/${item.set.id}?listen=1`)}
         />
       );
     },
@@ -568,6 +574,7 @@ export default function PicksScreen() {
       router,
       t,
       toggleCollapse,
+      currentFestival?.b2bSeparator,
     ],
   );
 
@@ -666,6 +673,78 @@ export default function PicksScreen() {
     const url = buildPicksShareUrl(currentProfile.id);
     Share.share({ message: `My ${currentFestival.name} picks on Festie: ${url}`, url }).catch(() => {});
   }, [currentProfile, currentFestival, haptics]);
+
+  // "Listen before you go": every pick by day with Spotify link-outs. No Spotify sign-in.
+  const listenList = useMemo(
+    () => buildListenList(sets.filter((s) => myPicks?.[s.id]), storeDays, currentFestival?.b2bSeparator),
+    [sets, myPicks, storeDays, currentFestival?.b2bSeparator],
+  );
+  // Mobile has no clipboard module; the share sheet offers Copy.
+  const handleShareListenList = useCallback(() => {
+    if (!currentFestival) return;
+    haptics.tap();
+    Share.share({ message: listenListText(currentFestival.name, listenList) }).catch(() => {});
+  }, [currentFestival, listenList, haptics]);
+
+  const listenSection =
+    listenList.length > 0 ? (
+      <View style={styles.listenCard}>
+        <TouchableOpacity
+          style={styles.listenToggle}
+          onPress={() => setListenOpen((o) => !o)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: listenOpen }}
+        >
+          <Ionicons name="musical-notes-outline" size={16} color={t.colors.accent.aqua} />
+          <Text style={styles.listenTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Listen before you go
+          </Text>
+          <Ionicons name={listenOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+        </TouchableOpacity>
+        {listenOpen && (
+          <View>
+            {listenList.map((day) => (
+              <View key={day.label} style={styles.listenDay}>
+                <Text style={styles.listenDayLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {day.label}
+                </Text>
+                {day.rows.map((row) => (
+                  <View key={row.setId} style={styles.listenRow}>
+                    <Text style={styles.listenName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {row.name}
+                    </Text>
+                    {row.spotifyUrl ? (
+                      <TouchableOpacity
+                        style={styles.listenLinkHit}
+                        onPress={() => Linking.openURL(row.spotifyUrl as string).catch(() => {})}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Open ${row.name} in Spotify`}
+                      >
+                        <Text style={styles.listenLink} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                          Spotify ↗
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ))}
+            <TouchableOpacity
+              style={styles.calendarButton}
+              onPress={handleShareListenList}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+              <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+                Share as text
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    ) : null;
 
   // ── At-a-glance summary + focus filter chips ─────────────────────────────
   const summaryRow =
@@ -933,6 +1012,7 @@ export default function PicksScreen() {
         reduceMotion={reduceMotion}
       />
       {bulkPanel}
+      {listenSection}
     </View>
   );
 
@@ -1363,6 +1443,52 @@ const useStyles = makeStyles((t) => ({
   },
   calendarButtonDisabled: {
     opacity: 0.5,
+  },
+  listenCard: {
+    marginBottom: t.spacing[3],
+    paddingHorizontal: t.spacing[3],
+    paddingBottom: t.spacing[1],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  listenToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    minHeight: 44,
+  },
+  listenTitle: {
+    ...typeStyle('label'),
+    color: t.colors.text.primary,
+    flex: 1,
+  },
+  listenDay: {
+    marginBottom: t.spacing[2],
+  },
+  listenDayLabel: {
+    ...typeStyle('caption', 700),
+    color: t.colors.text.secondary,
+  },
+  listenRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    minHeight: 44,
+  },
+  listenName: {
+    ...typeStyle('body'),
+    color: t.colors.text.primary,
+    flex: 1,
+  },
+  listenLinkHit: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  listenLink: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
   },
   separator: {
     height: t.spacing[2],

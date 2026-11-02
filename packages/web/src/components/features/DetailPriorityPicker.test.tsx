@@ -41,15 +41,13 @@ describe('DetailPriorityPicker', () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  it('renders all four priority options', () => {
+  it('renders three priority options and no Clear', () => {
     render(<DetailPriorityPicker {...defaultProps} />);
-    expect(screen.getByLabelText('Must See')).toBeInTheDocument();
+    expect(screen.getByLabelText('Must See')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByLabelText('Want to See')).toBeInTheDocument();
     expect(screen.getByLabelText('Maybe')).toBeInTheDocument();
-    // Clear is never a selected state: no aria-pressed, disabled while there is nothing to clear.
-    const clear = screen.getByLabelText('Clear');
-    expect(clear).not.toHaveAttribute('aria-pressed');
-    expect(clear).toBeDisabled();
+    expect(screen.queryByLabelText('Clear')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove pick' })).not.toBeInTheDocument();
   });
 
   it('marks active priority as pressed', () => {
@@ -66,11 +64,19 @@ describe('DetailPriorityPicker', () => {
     expect(onPriorityClick).toHaveBeenCalledWith('must');
   });
 
-  it('calls onPriorityClick with null for Clear', async () => {
+  it('clears the pick when the active option is clicked', async () => {
     const user = userEvent.setup();
     const onPriorityClick = vi.fn().mockResolvedValue(undefined);
     render(<DetailPriorityPicker {...defaultProps} myPick="must" onPriorityClick={onPriorityClick} />);
-    await user.click(screen.getByLabelText('Clear'));
+    await user.click(screen.getByLabelText('Must See'));
+    expect(onPriorityClick).toHaveBeenCalledWith(null);
+  });
+
+  it('shows Remove pick only with a pick and clears on click', async () => {
+    const user = userEvent.setup();
+    const onPriorityClick = vi.fn().mockResolvedValue(undefined);
+    render(<DetailPriorityPicker {...defaultProps} myPick="maybe" onPriorityClick={onPriorityClick} />);
+    await user.click(screen.getByRole('button', { name: 'Remove pick' }));
     expect(onPriorityClick).toHaveBeenCalledWith(null);
   });
 
@@ -88,8 +94,8 @@ describe('DetailPriorityPicker', () => {
 
   it('renders a Lucide icon for each priority', () => {
     render(<DetailPriorityPicker {...defaultProps} />);
-    // Icons are now Lucide SVGs (Star/Heart/Circle/X), not Unicode glyphs.
-    for (const label of ['Must See', 'Want to See', 'Maybe', 'Clear']) {
+    // Icons are now Lucide SVGs (Star/Heart/Circle), not Unicode glyphs.
+    for (const label of ['Must See', 'Want to See', 'Maybe']) {
       expect(screen.getByLabelText(label).querySelector('svg')).toBeInTheDocument();
     }
   });
