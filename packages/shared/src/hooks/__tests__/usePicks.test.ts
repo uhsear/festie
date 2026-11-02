@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { usePicks, usePickSync } from '../usePicks';
+import { usePicks, usePickSync, useCanPick } from '../usePicks';
 import { useFestivalStore } from '../../stores/festivalStore';
+import { useAuthStore } from '../../stores/authStore';
 
 vi.mock('../../services/api', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -33,6 +34,31 @@ function resetStore() {
 describe('usePicks hook', () => {
   beforeEach(() => {
     resetStore();
+    useAuthStore.setState({ user: null });
+  });
+
+  describe('useCanPick', () => {
+    it('is true with a profile', () => {
+      useFestivalStore.setState({
+        currentFestivalId: 'f1',
+        currentProfile: { id: 'p1', userId: 'u1', festivalId: 'f1', picks: {}, notes: {}, updatedAt: '2026-01-01T00:00:00Z' },
+      });
+      useAuthStore.setState({ user: { id: 'u1' } as never });
+      expect(renderHook(() => useCanPick()).result.current).toBe(true);
+    });
+
+    it('is true for a signed-in user with no profile on the chosen festival (first pick joins)', () => {
+      useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: null });
+      useAuthStore.setState({ user: { id: 'u1' } as never });
+      expect(renderHook(() => useCanPick()).result.current).toBe(true);
+    });
+
+    it('is true for a guest who has chosen a festival, and false before that', () => {
+      useAuthStore.setState({ user: null });
+      expect(renderHook(() => useCanPick()).result.current).toBe(false);
+      useFestivalStore.setState({ currentFestivalId: 'f1' });
+      expect(renderHook(() => useCanPick()).result.current).toBe(true);
+    });
   });
 
   describe('getMyPick', () => {

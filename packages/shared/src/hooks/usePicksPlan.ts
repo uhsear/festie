@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useFestivalStore } from '../stores/festivalStore';
+import { useFestivalStore, selectMyPicks } from '../stores/festivalStore';
 import { getStorage } from '../platform/storage';
 import { buildFestivalPickConflicts, conflictSetIds, type ConflictGroup } from '../utils/pickConflicts';
 import { resolveFestivalTimeZone } from '../utils/festivalTime';
@@ -48,7 +48,7 @@ export function usePicksPlan(): {
   const stages = useFestivalStore((s) => s.stages);
   const days = useFestivalStore((s) => s.days);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const picks = useFestivalStore((s) => s.currentProfile?.picks);
+  const picks = useFestivalStore(selectMyPicks) ?? undefined;
 
   const [groupMode, setGroupMode] = useState<PicksGroupMode>('day');
   const [filter, setFilter] = useState<PicksFilter>('all');

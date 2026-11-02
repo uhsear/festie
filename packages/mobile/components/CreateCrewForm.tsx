@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Text, TextInput, TouchableOpacity, View, type TextInputInstance } from 'react-native';
 import { useCreateCrew } from '@festie/shared/hooks';
 import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import type { Crew } from '@festie/shared/types';
@@ -10,12 +10,14 @@ import Button from './Button';
 
 interface CreateCrewFormProps {
   onCreated?: (crew: Crew) => void;
+  /** Focus the name field when this turns true (the intro's "Start a crew" route). */
+  autoFocus?: boolean;
 }
 
 const MAX_CHOICES = 10;
 
 /** Create-a-crew form. A crew belongs to one festival, so the festival is chosen here, not assumed. */
-export default function CreateCrewForm({ onCreated }: CreateCrewFormProps) {
+export default function CreateCrewForm({ onCreated, autoFocus }: CreateCrewFormProps) {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
@@ -26,6 +28,7 @@ export default function CreateCrewForm({ onCreated }: CreateCrewFormProps) {
   const loadFestivals = useFestivalStore((s) => s.loadFestivals);
   const crews = useCrewStore((s) => s.crews);
 
+  const nameInputRef = useRef<TextInputInstance>(null);
   const [name, setName] = useState('');
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,6 +37,10 @@ export default function CreateCrewForm({ onCreated }: CreateCrewFormProps) {
   useEffect(() => {
     if (festivals.length === 0) loadFestivals().catch(() => {});
   }, [festivals.length, loadFestivals]);
+
+  useEffect(() => {
+    if (autoFocus) nameInputRef.current?.focus();
+  }, [autoFocus]);
 
   const choices = useMemo(
     () => crewFestivalChoices(festivals, currentFestival?.id),
@@ -73,6 +80,7 @@ export default function CreateCrewForm({ onCreated }: CreateCrewFormProps) {
         Create a crew
       </Text>
       <TextInput
+        ref={nameInputRef}
         style={styles.input}
         value={name}
         onChangeText={setName}
