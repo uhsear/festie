@@ -225,22 +225,30 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
       );
     },
 
-    async listByUser(userId: string, limit: number = 50) {
+    // shortcut: notification_log has no age-based cleanup; the inbox reads the newest 50. Add a retention rule if the table grows.
+    async listInbox(userId: string, limit: number = 50) {
+      // data holds only these four keys, so SOS coordinates in data_json are never returned.
       const result = await pool.query(
         `
         SELECT
           id,
-          user_id AS "userId",
           type,
           title,
           body,
-          status,
-          platform,
-          created_at AS "createdAt"
+          created_at AS "createdAt",
+          jsonb_strip_nulls(
+            jsonb_build_object(
+              'deepLink', data_json ->> 'deepLink',
+              'setId', data_json ->> 'setId',
+              'festivalId', data_json ->> 'festivalId',
+              'crewId', data_json ->> 'crewId'
+            )
+          ) AS data
         FROM
           notification_log
         WHERE
           user_id = $1
+          AND platform = 'inbox'
         ORDER BY
           created_at DESC
         LIMIT
@@ -249,6 +257,34 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
         [userId, limit],
       );
       return result.rows;
+    },
+
+    /**
+     * Push budget: per user, the pushes counted in the last hour. Counts only
+     * inbox rows that went on to the device step (status 'inbox'; 'held' rows
+     * do not count), and skips the exempt types. Users with no row are absent.
+     */
+    async countRecentPushes(userIds: string[], exemptTypes: string[]): Promise<Map<string, number>> {
+      if (!userIds || userIds.length === 0) return new Map();
+      const result = await pool.query(
+        `
+  SELECT
+    user_id AS "userId",
+    COUNT(*)::int AS n
+  FROM
+    notification_log
+  WHERE
+    user_id = ANY ($1)
+    AND platform = 'inbox'
+    AND status = 'inbox'
+    AND created_at > NOW() - INTERVAL '1 hour'
+    AND type <> ALL ($2)
+  GROUP BY
+    user_id
+`,
+        [userIds, exemptTypes],
+      );
+      return new Map(result.rows.map((r: any) => [r.userId, r.n]));
     },
 
     async updateStatus(id: string, status: string) {

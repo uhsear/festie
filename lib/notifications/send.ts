@@ -105,6 +105,14 @@ export const PREF_MAP: Record<string, string> = {
  */
 const CRITICAL_TYPES = new Set(['crew_sos']);
 
+/** At most this many pushes reach one user in a rolling hour. */
+export const PUSH_BUDGET_PER_HOUR = 6;
+/**
+ * Never held by the budget and never counted: an emergency, reminders the user asked
+ * for, and meeting points (owner decision 2026-11-02).
+ */
+export const PUSH_BUDGET_EXEMPT = new Set(['crew_sos', 'set_reminder', 'crew_meeting_point']);
+
 /** Per-type push channel/category overrides for critical alerts. */
 const CRITICAL_CHANNEL: Record<string, { channelId: string; category: string }> = {
   crew_sos: { channelId: 'sos', category: 'CREW_SOS' },
@@ -197,13 +205,16 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     if (!stores.notificationLog) return null;
     try {
       const id = crypto.randomUUID();
+      // The log is keyed by recipient, so an SOS position stored here would outlive the
+      // crew and the raiser's account. The privacy policy promises it does not.
+      const { lat: _lat, lng: _lng, ...loggedData } = data || {};
       await stores.notificationLog.insert({
         id,
         userId,
         type,
         title: String(title || '').slice(0, MAX_TITLE_LENGTH),
         body: String(body || '').slice(0, MAX_BODY_LENGTH),
-        dataJson: data ? JSON.stringify(data) : null,
+        dataJson: data ? JSON.stringify(loggedData) : null,
         status: status || 'sent',
         platform: platform || null,
         errorMessage: errorMessage || null,
@@ -213,6 +224,30 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
       log.debug('notification log failed', { error: err.message });
       return null;
     }
+  }
+
+  /** Counted pushes in the last hour per user. A missing or failing count is 0: better a push than a drop. */
+  async function recentPushCounts(userIds: string[]): Promise<Map<string, number>> {
+    if (!stores.notificationLog?.countRecentPushes) return new Map();
+    try {
+      return await stores.notificationLog.countRecentPushes(userIds, [...PUSH_BUDGET_EXEMPT]);
+    } catch (err: any) {
+      log.warn('push budget count failed', { error: err.message });
+      return new Map();
+    }
+  }
+
+  /** One inbox row per user per notification; 'held' when quiet hours or the budget stopped the push. */
+  function logInboxRow({ userId, type, safeTitle, safeBody, safeData, held }: any) {
+    return logNotification({
+      userId,
+      type,
+      title: safeTitle,
+      body: safeBody,
+      data: safeData,
+      status: held ? 'held' : 'inbox',
+      platform: 'inbox',
+    });
   }
 
   /**
@@ -444,10 +479,18 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     // Safety-critical types (crew_sos) bypass the per-type opt-out and the DND
     // window — an emergency must reach people. prefKey is undefined for these
     // (omitted from PREF_MAP), but guard explicitly so intent is unmistakable.
-    if (!isCritical) {
-      if (prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
-      if (isInDndWindow(prefs)) return { sent: 0, reason: 'dnd_active' };
+    if (!isCritical && prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
+    // shortcut: count-then-send is not atomic, so concurrent sends can pass the cap by one or two; use a Redis counter if that matters.
+    let held: string | null = null;
+    if (!isCritical && isInDndWindow(prefs)) held = 'dnd_active';
+    else if (!isCritical && !PUSH_BUDGET_EXEMPT.has(type)) {
+      const count = (await recentPushCounts([userId])).get(userId) ?? 0;
+      if (count >= PUSH_BUDGET_PER_HOUR) held = 'budget';
     }
+    // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
+    // status 'held' means quiet hours or the hourly budget stopped the push; the push budget counts only 'inbox' rows.
+    await logInboxRow({ userId, type, safeTitle, safeBody, safeData, held });
+    if (held) return { sent: 0, reason: held };
 
     const tokens = await stores.deviceTokens.listByUser(userId);
     if (tokens.length === 0) return { sent: 0, reason: 'no_tokens' };
@@ -657,10 +700,20 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     // Browser subscriptions routed to per-device Web Push (no multicast either).
     const webSends: any[] = [];
 
+    // shortcut: count-then-send is not atomic, so concurrent sends can pass the cap by one or two; use a Redis counter if that matters.
+    const pushCounts = PUSH_BUDGET_EXEMPT.has(type) ? new Map<string, number>() : await recentPushCounts(batch);
+
     for (const userId of batch) {
       const prefs = await stores.notificationPrefs.get(userId);
       if (prefs && prefKey && !prefs[prefKey]) continue;
-      if (isInDndWindow(prefs)) continue;
+      const held = isInDndWindow(prefs)
+        ? 'dnd_active'
+        : (pushCounts.get(userId) ?? 0) >= PUSH_BUDGET_PER_HOUR
+          ? 'budget'
+          : null;
+      // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
+      await logInboxRow({ userId, type, safeTitle, safeBody, safeData, held });
+      if (held) continue;
 
       const tokens = await stores.deviceTokens.listByUser(userId);
       const badgeCount = await getUnreadCount(userId);

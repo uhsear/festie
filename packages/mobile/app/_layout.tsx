@@ -8,8 +8,7 @@ import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigatio
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
-import { useAuthStore, useCrewStore, useFestivalStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
-import { resolvePushTarget } from '@festie/shared/utils';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
 import {
@@ -41,8 +40,7 @@ import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
 import { isGuestBlocked } from '../lib/authRoutes';
 import { setReturnTo, takeReturnTo } from '../lib/returnTo';
-import { CREW_MEET_HREF, sosPushCrewId } from '../lib/dayOfRoutes';
-import { pushTargetHref } from '../lib/pushRoutes';
+import { routeNotification } from '../lib/routeNotification';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
@@ -104,27 +102,6 @@ configureApi({
     }
   },
 });
-
-// Route a tapped notification's data payload to its deep-link target. Shared by
-// the warm-tap listener and the cold-start useLastNotificationResponse handler
-// so both paths route identically.
-function routeNotification(r: ReturnType<typeof useRouter>, data: Record<string, unknown> | undefined) {
-  const sosCrewId = sosPushCrewId(data);
-  if (sosCrewId) {
-    // Open that crew's Find tab, where CrewSos shows the banner with "Get directions".
-    if (sosCrewId !== useCrewStore.getState().activeCrew?.id) {
-      useCrewStore.getState().selectCrew(sosCrewId).catch(() => {});
-    } else {
-      void useLiveLocationStore.getState().loadActiveSos(sosCrewId);
-    }
-    r.push(CREW_MEET_HREF);
-    return;
-  }
-  const target = resolvePushTarget(data);
-  if (!target) return;
-  if (target.kind === 'festival') useFestivalStore.getState().selectFestival(target.festivalId).catch(() => {});
-  r.push(pushTargetHref(target));
-}
 
 function AuthGate() {
   const { colors } = useTokens();
