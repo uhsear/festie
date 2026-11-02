@@ -5,6 +5,8 @@ import { cn } from '../../lib/utils';
 
 interface GridToolbarProps {
   clashCount: number;
+  pickedCount: number;
+  viewAsOn: boolean;
   onShowClash: () => void;
   zoom: number;
   onZoom: (next: number) => void;
@@ -20,7 +22,16 @@ const ZOOM_BUTTON = cn(
 );
 
 /** Clash chip, zoom buttons and image export for the schedule grid. */
-export default function GridToolbar({ clashCount, onShowClash, zoom, onZoom, exporting, onExport }: GridToolbarProps) {
+export default function GridToolbar({
+  clashCount,
+  pickedCount,
+  viewAsOn,
+  onShowClash,
+  zoom,
+  onZoom,
+  exporting,
+  onExport,
+}: GridToolbarProps) {
   return (
     <div className="flex items-center gap-1.5">
       {clashCount > 0 && (
@@ -38,6 +49,11 @@ export default function GridToolbar({ clashCount, onShowClash, zoom, onZoom, exp
           <TriangleAlert aria-hidden="true" className="w-3.5 h-3.5 text-[var(--color-clash)]" />
           <span>{clashChip(clashCount)}</span>
         </button>
+      )}
+      {clashCount === 0 && pickedCount > 0 && !viewAsOn && (
+        <span className="inline-flex items-center min-h-11 px-3 text-[length:var(--font-size-12)] text-text-muted">
+          {COPY.clash.none}
+        </span>
       )}
       <button
         type="button"

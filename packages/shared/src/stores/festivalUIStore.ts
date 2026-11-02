@@ -35,6 +35,8 @@ export interface FestivalUIState {
   prefsScope: FestivalUIScope;
   /** Remembered filter prefs per festival. The only persisted field. */
   byFestival: Record<string, ScheduleFilterPrefs>;
+  /** "View as": the crew mate whose picks filter the schedule. Memory only; cleared on festival switch. */
+  viewAsProfileId: string | null;
 }
 
 export interface FestivalUIActions {
@@ -47,6 +49,7 @@ export interface FestivalUIActions {
   setHiddenDays: (days: number[]) => void;
   dismissPhaseBand: (phase: FestivalPhase | null) => void;
   setScheduleGroupBy: (groupBy: ScheduleGroupBy | null) => void;
+  setViewAs: (profileId: string | null) => void;
   restoreForFestival: (festivalId: string, scope: FestivalUIScope & { todayIdx: number }) => void;
 }
 
@@ -156,6 +159,7 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
         prefsFestivalId: null,
         prefsScope: { stageIds: [], dayCount: 0 },
         byFestival: {},
+        viewAsProfileId: null,
 
         setSelectedDay: (dayIndex: number) => {
           set({ selectedDay: dayIndex });
@@ -181,6 +185,9 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
 
         setScheduleGroupBy: (groupBy) => update({ scheduleGroupBy: groupBy }),
 
+        // Plain set, not update: View as is never remembered.
+        setViewAs: (profileId) => set({ viewAsProfileId: profileId }),
+
         restoreForFestival: (festivalId, { todayIdx, ...scope }) => {
           const s = get();
           const inRange = (i: number) => i >= 0 && i < scope.dayCount;
@@ -200,7 +207,14 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
             inRange(todayIdx) && !prefs.hiddenDays.includes(todayIdx)
               ? todayIdx
               : firstVisibleDay(scope.dayCount, prefs.hiddenDays);
-          set({ ...fromPrefs(prefs), activeGenres: [], prefsFestivalId: festivalId, prefsScope: scope, selectedDay });
+          set({
+            ...fromPrefs(prefs),
+            activeGenres: [],
+            viewAsProfileId: null,
+            prefsFestivalId: festivalId,
+            prefsScope: scope,
+            selectedDay,
+          });
         },
       };
     },

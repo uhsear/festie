@@ -142,10 +142,13 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
           },
           threadId: `reminder-${festival.id}`,
         });
-        if (result?.sent > 0 || result?.localCovered > 0) {
+        // no_tokens still wrote the inbox row; a second tick would write it again.
+        if (result?.sent > 0 || result?.localCovered > 0 || result?.reason === 'no_tokens') {
           _firedCache.set(dedupKey, now);
           if (result?.sent > 0) {
             logger.debug('reminder fired', { userId: profile.userId, setId, minutesBefore });
+          } else if (result?.reason === 'no_tokens') {
+            logger.debug('reminder in inbox only', { userId: profile.userId, setId, minutesBefore });
           } else {
             logger.debug('reminder covered by device', { userId: profile.userId, setId, minutesBefore });
           }

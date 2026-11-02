@@ -30,6 +30,7 @@ import {
   useFestival,
   useSetMove,
   useCrew,
+  useViewAs,
   useDebouncedNote,
   useSpotifyPreview,
   type NoteSaveStatus,
@@ -51,6 +52,8 @@ import {
   QUEUED_WRITE_MESSAGE,
   MAP_COPY,
   stageCoord,
+  getAvatarColor,
+  viewAsButtonLabel,
   type ReminderPermission,
 } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
@@ -71,6 +74,8 @@ import LoadingState from '../../components/LoadingState';
 import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
 import AlsoPickedSection from '../../components/AlsoPickedSection';
+import AlsoPlaysSection from '../../components/AlsoPlaysSection';
+import AppPressable from '../../components/AppPressable';
 import { undoNotifier } from '../../lib/undoNotifier';
 import { compassHref, stageMapHref } from '../../lib/dayOfRoutes';
 
@@ -164,6 +169,7 @@ export default function SetDetailScreen() {
   const { getMyPick, savePick, getOtherPicks, getPickCount, saveReminder, getMyReminder } = usePicks();
   const { getStageColor, getStageName } = useFestival();
   const { getCrewScopedOtherPicks } = useCrew();
+  const viewAs = useViewAs();
   const haptics = useHaptics();
 
   const set = useMemo(() => sets.find((x) => x.id === setId), [sets, setId]);
@@ -256,10 +262,10 @@ export default function SetDetailScreen() {
 
   // Crew / who's going.
   const others = useMemo(() => {
-    if (!set || !currentProfile) return [];
+    if (!set || !currentProfile) return { list: [], crewScoped: false };
     const raw = getCrewScopedOtherPicks(set.id);
     const scoped = raw.length > 0 ? raw : getOtherPicks(set.id);
-    return scoped.map((o) => {
+    const list = scoped.map((o) => {
       const profile = allProfiles.find((p) => p.id === o.profileId);
       return {
         profileId: o.profileId,
@@ -267,13 +273,15 @@ export default function SetDetailScreen() {
         name: profile?.name || 'Unknown',
       };
     });
+    return { list, crewScoped: raw.length > 0 };
   }, [set, currentProfile, getCrewScopedOtherPicks, getOtherPicks, allProfiles]);
 
   // Non-crew picks arrive only as an anonymous count, so the fallback shows the number without names.
+  const { list: othersList, crewScoped } = others;
   const othersTotal = set ? getPickCount(set.id) : 0;
   const whoTitle =
-    others.length > 0
-      ? `Who's Going (${others.length})`
+    othersList.length > 0
+      ? `Who's Going (${othersList.length})`
       : othersTotal > 0
         ? `${othersTotal} going`
         : 'Nobody else going yet';
@@ -528,6 +536,8 @@ export default function SetDetailScreen() {
             />
           </View>
         ) : null}
+
+        <AlsoPlaysSection set={set} nowMs={nowMs} />
 
         {/* Priority picker: guests pick on this device */}
         {canPick ? (
@@ -849,19 +859,34 @@ export default function SetDetailScreen() {
         {/* Who's going */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{whoTitle}</Text>
-          {others.map((o) => {
+          {othersList.map((o) => {
             // F27: the priority tier must not be color-only. The dot keeps the
             // color; a label + matching icon carry the same signal for
             // color-blind users, and the row exposes it to screen readers.
             const meta = { label: PRIORITY_SYMBOLS[o.priority].short, icon: priorityIconName(o.priority) };
             return (
-              <View key={o.profileId} style={styles.crewRow} accessible accessibilityLabel={`${o.name}, ${meta.label}`}>
-                <View style={[styles.crewDot, { backgroundColor: priorityColor(t, o.priority) }]} />
-                <Text style={styles.crewName} numberOfLines={1}>
-                  {o.name}
-                </Text>
-                <Ionicons name={meta.icon} size={12} color={t.colors.text.muted} />
-                <Text style={styles.crewPriority}>{meta.label}</Text>
+              <View key={o.profileId} style={styles.crewRow}>
+                <View style={styles.crewInfo} accessible accessibilityLabel={`${o.name}, ${meta.label}`}>
+                  <View style={[styles.crewDot, { backgroundColor: getAvatarColor(o.name) }]} />
+                  <Text style={styles.crewName}>{o.name}</Text>
+                  <Ionicons name={meta.icon} size={12} color={priorityColor(t, o.priority)} />
+                  <Text style={[styles.crewPriority, { color: priorityColor(t, o.priority) }]}>{meta.label}</Text>
+                </View>
+                {crewScoped && viewAs.canView(o.profileId) ? (
+                  <AppPressable
+                    style={styles.viewAsButton}
+                    onPress={() => {
+                      viewAs.start(o.profileId);
+                      router.navigate('/(tabs)');
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={viewAsButtonLabel(o.name)}
+                  >
+                    <Text style={styles.viewAsText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {viewAsButtonLabel(o.name)}
+                    </Text>
+                  </AppPressable>
+                ) : null}
               </View>
             );
           })}
@@ -1192,9 +1217,23 @@ const useStyles = makeStyles((t) => ({
   // Join CTA migrated to components/Button (F8).
   crewRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: t.spacing[2],
   },
+  crewInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  viewAsButton: {
+    minHeight: 44,
+    paddingHorizontal: t.spacing[2],
+    justifyContent: 'center',
+  },
+  viewAsText: { ...typeStyle('label'), color: t.colors.accent.aqua },
   crewDot: {
     width: 8,
     height: 8,

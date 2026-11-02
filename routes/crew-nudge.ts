@@ -102,7 +102,6 @@ export default function createCrewNudgeRoutes(deps: RouteDeps) {
         }
 
         // Fire-and-forget: a slow push transport must not hold the request.
-        // T47: exempt from push budget
         void crewNotify?.toUsers({
           crewId,
           userIds: [toId],

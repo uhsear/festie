@@ -16,13 +16,12 @@ import * as Sharing from 'expo-sharing';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFestivalDataStore, useFestivalStore, useAuthStore } from '@festie/shared/stores';
-import { usePicks, useFestival, useDayClashes } from '@festie/shared/hooks';
+import { usePicks, useFestival, useDayClashes, useViewAs } from '@festie/shared/hooks';
 import { COPY } from '@festie/shared/constants';
 import {
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
   twoUpColumnWidth,
-  pickClashTarget,
   nowPositionPercent,
   setMinuteRange,
   fmtHour,
@@ -46,7 +45,6 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE, type Tokens } from '.
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
-import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
 import ClashHatch from '../components/ClashHatch';
@@ -101,8 +99,8 @@ export default function GridScreen() {
   const colW = twoUpColumnWidth(windowW, GUTTER_W);
   const [zoom, setZoom] = useState(() => defaultZoomIndex(windowW));
   const pxPerMin = GRID_ZOOM_LEVELS[zoom]!;
-  const reduceMotion = useReduceMotion();
-  const { count: clashCount, marks, groups } = useDayClashes();
+  const { count: clashCount, marks, picked } = useDayClashes();
+  const viewAs = useViewAs();
   const { holdToPick, setPick } = useQuickPick();
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
@@ -247,20 +245,6 @@ export default function GridScreen() {
     bodyScrollRef.current?.scrollTo({ y, animated: false });
   }, [pxPerMin, bounds, bodyH]);
 
-  const showFirstClash = useCallback(() => {
-    const target = pickClashTarget(groups, new Set(visibleStages.map((st) => st.id)));
-    if (!target) return;
-    const range = setMinuteRange(target.set);
-    const colIndex = visibleStages.findIndex((st) => st.id === target.set.stageId);
-    if (!target.visible || !bounds || !range || colIndex < 0) {
-      router.push(`/set/${target.set.id}`);
-      return;
-    }
-    const top = (range.start - bounds.lo) * pxPerMin;
-    colsScrollRef.current?.scrollTo({ x: colIndex * colW, animated: !reduceMotion });
-    bodyScrollRef.current?.scrollTo({ y: Math.max(0, top - 2 * 44), animated: !reduceMotion });
-  }, [groups, visibleStages, bounds, pxPerMin, colW, reduceMotion, router]);
-
   // ── PNG export (replicates wrap.tsx's off-screen captureRef pipeline) ──
   const [sharing, setSharing] = useState(false);
   const posterRef = useRef<HostInstance>(null);
@@ -344,12 +328,16 @@ export default function GridScreen() {
   }
   const stageFilterActive = isStageFilterActive(activeStages, stages.length);
   const filterNarrows =
-    searchQuery.trim() !== '' || (onlyMine && hasAnyPick(picks)) || stageFilterActive || activeGenres.length > 0;
+    searchQuery.trim() !== '' || (onlyMine && hasAnyPick(picks)) ||
+    stageFilterActive ||
+    activeGenres.length > 0 ||
+    viewAs.target !== null;
   const clearAllFilters = () => {
     setSearchQuery('');
     setOnlyMine(false);
     setActiveStages([]);
     setActiveGenres([]);
+    viewAs.clear();
   };
   const resultsRow = filterNarrows ? (
     <ScheduleResultsRow
@@ -358,6 +346,7 @@ export default function GridScreen() {
         onlyMine: onlyMine && hasAnyPick(picks),
         activeStageCount: stageFilterActive ? activeStages.length : 0,
         activeGenreCount: activeGenres.length,
+        viewAsName: viewAs.target?.name,
       })}
       onClearAll={clearAllFilters}
       hPad={t.spacing[4]}
@@ -394,6 +383,7 @@ export default function GridScreen() {
       hasAnyPick: hasAnyPick(picks),
       stageFilterActive,
       genreFilterActive: activeGenres.length > 0,
+      viewAsName: viewAs.target?.name,
     });
     let empty: { title: string; message: string; actionLabel?: string; onAction?: () => void };
     if (reason === 'search') {
@@ -402,11 +392,14 @@ export default function GridScreen() {
       const clearFilters = () => {
         setOnlyMine(false);
         setActiveStages([]);
+        viewAs.clear();
       };
       empty = {
         ...searchEmptyCopy(searchQuery, dayLabel, false, hidden),
         onAction: hidden ? clearFilters : () => setSearchQuery(''),
       };
+    } else if (reason === 'viewAs') {
+      empty = { ...scheduleEmptyCopy('viewAs', dayLabel, viewAs.target?.name), onAction: viewAs.clear };
     } else if (reason === 'picks') {
       empty = { ...scheduleEmptyCopy('picks', dayLabel), onAction: () => setOnlyMine(false) };
     } else if (reason === 'stages') {
@@ -556,7 +549,7 @@ export default function GridScreen() {
       />
 
       <View style={styles.toolbar}>
-        <ClashChip count={clashCount} onPress={showFirstClash} />
+        <ClashChip count={clashCount} picked={picked} />
         <View style={styles.zoomButtons}>
           <TouchableOpacity
             onPress={() => changeZoom(zoom - 1)}
