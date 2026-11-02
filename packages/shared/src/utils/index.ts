@@ -58,6 +58,7 @@ export * from './crewManage';
 export * from './scheduleImage';
 export * from './sharedPicks';
 export * from './ratingSummary';
+export * from './announcements';
 export * from './onboarding';
 export * from './festivalReady';
 export * from './guestPicks';
