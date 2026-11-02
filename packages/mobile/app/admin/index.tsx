@@ -46,6 +46,8 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  *   /admin/festival-edit  — create (no id) or edit (?id=) a festival
  *   /admin/lineup-import?id=  — CSV lineup import for a festival
  *   /admin/festival-preview?id=  — read-only attendee schedule preview
+ *   /admin/festival-map?id=   — festival map editor
+ *   /admin/festival-links?id= — Spotify links for a festival's artists
  *
  * Gated on useAuthStore isAdmin; a non-admin sees an "Admins only" EmptyState.
  * The Festivals card has a Select mode: tick festivals, then Archive them through
@@ -450,7 +452,7 @@ export default function AdminScreen() {
             </>
           ) : null}
 
-          {/* Festivals — each row links to edit, lineup import and preview; Select mode bulk-archives. */}
+          {/* Festivals — each row links to edit, lineup import, map, links and preview; Select mode bulk-archives. */}
           <View style={styles.sectionHeader}>
             <View style={styles.rowBody}>
               <SectionLabel>Festivals</SectionLabel>
@@ -472,7 +474,7 @@ export default function AdminScreen() {
               festivals.map((f, i) => (
                 <TouchableOpacity
                   key={f.id}
-                  style={[styles.row, i < festivals.length - 1 && styles.rowDivider]}
+                  style={[selectMode ? styles.row : styles.festivalRow, i < festivals.length - 1 && styles.rowDivider]}
                   activeOpacity={0.7}
                   disabled={!selectMode}
                   onPress={() => onToggleFestival(f.id)}
@@ -492,36 +494,45 @@ export default function AdminScreen() {
                       {f.name}
                     </Text>
                     {!f.published ? <Text style={styles.draftCaption}>Draft</Text> : null}
+                    {f.location ? (
+                      <Text style={styles.rowHint} numberOfLines={1}>
+                        {f.location}
+                      </Text>
+                    ) : null}
                   </View>
                   {selectMode ? null : (
                   <View style={styles.rowActions}>
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => router.push(`/admin/festival-edit?id=${f.id}`)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Edit ${f.name}`}
-                    >
-                      <Ionicons name="create-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => router.push(`/admin/lineup-import?id=${f.id}`)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Import lineup for ${f.name}`}
-                    >
-                      <Ionicons name="cloud-upload-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => router.push(`/admin/festival-preview?id=${f.id}`)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Preview ${f.name}`}
-                    >
-                      <Ionicons name="eye-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
+                    {(
+                      [
+                        { label: 'Edit', icon: 'create-outline', path: 'festival-edit', a11y: `Edit ${f.name}` },
+                        {
+                          label: 'Import',
+                          icon: 'cloud-upload-outline',
+                          path: 'lineup-import',
+                          a11y: `Import lineup for ${f.name}`,
+                        },
+                        { label: 'Map', icon: 'map-outline', path: 'festival-map', a11y: `Edit map for ${f.name}` },
+                        {
+                          label: 'Links',
+                          icon: 'musical-notes-outline',
+                          path: 'festival-links',
+                          a11y: `Spotify links for ${f.name}`,
+                        },
+                        { label: 'Preview', icon: 'eye-outline', path: 'festival-preview', a11y: `Preview ${f.name}` },
+                      ] as const
+                    ).map((b) => (
+                      <TouchableOpacity
+                        key={b.label}
+                        style={styles.actionBtn}
+                        activeOpacity={0.7}
+                        onPress={() => router.push(`/admin/${b.path}?id=${f.id}`)}
+                        accessibilityRole="button"
+                        accessibilityLabel={b.a11y}
+                      >
+                        <Ionicons name={b.icon} size={t.iconSize.md} color={t.colors.accent.aqua} />
+                        <Text style={styles.actionText}>{b.label}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
                   )}
                 </TouchableOpacity>
@@ -662,20 +673,31 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label', 600),
     color: t.colors.accent.aqua,
   },
-  rowActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  festivalRow: {
+    paddingHorizontal: t.spacing[4],
+    paddingVertical: t.spacing[3],
     gap: t.spacing[2],
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
+  rowActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    gap: t.spacing[1],
     borderRadius: t.radii.default,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: t.colors.bg.primary,
     borderWidth: 1,
     borderColor: t.colors.border.default,
+  },
+  actionText: {
+    ...typeStyle('caption'),
+    color: t.colors.text.primary,
   },
   rowTitle: {
     ...typeStyle('body'),

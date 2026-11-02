@@ -12,7 +12,7 @@ import sharp from 'sharp';
 
 parentPort!.on('message', async (msg: any) => {
   try {
-    const { buffer, maxPixels, size, quality } = msg;
+    const { buffer, maxPixels, size, quality, fit } = msg;
     const buf = Buffer.from(buffer);
 
     const metadata = await sharp(buf, { failOn: 'error', limitInputPixels: maxPixels }).metadata();
@@ -27,7 +27,8 @@ parentPort!.on('message', async (msg: any) => {
 
     const result = await sharp(buf, { failOn: 'error', limitInputPixels: maxPixels })
       .rotate()
-      .resize(size, size, { fit: 'cover', position: 'centre' })
+      // Site plans shrink to fit and keep their shape; avatars crop to a square.
+      .resize(size, size, fit === 'inside' ? { fit: 'inside', withoutEnlargement: true } : { fit: 'cover', position: 'centre' })
       .webp({ quality, effort: 4 })
       .toBuffer();
 

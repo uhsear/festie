@@ -155,3 +155,10 @@ describe('FestivalEditForm lineup tools', () => {
     expect(sets[1].id).toBe('s1');
   });
 });
+
+describe('FestivalEditForm engagement', () => {
+  it('says when pick counts failed to load', () => {
+    render(<FestivalEditForm {...baseProps} formData={lineup()} setFormData={vi.fn()} engagementError />);
+    expect(screen.getByText("Couldn't load pick counts.")).toBeTruthy();
+  });
+});

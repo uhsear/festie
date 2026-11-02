@@ -199,4 +199,23 @@ describe('AvatarPool: encoded output contract', () => {
     // it is a security property: it removes EXIF GPS from user uploads.
     assert.equal(md.exif, undefined);
   });
+
+  it("with { fit: 'inside' } shrinks to fit and keeps the aspect ratio", async () => {
+    const input = await sharp({
+      create: { width: 200, height: 100, channels: 3, background: { r: 200, g: 60, b: 40 } },
+    })
+      .png()
+      .toBuffer();
+
+    pool = new AvatarPool();
+    const out = await pool.process(
+      input,
+      { AVATAR_MAX_PIXELS: 16_000_000, AVATAR_SIZE: 256, AVATAR_WEBP_QUALITY: 82 },
+      { fit: 'inside', size: 64 },
+    );
+
+    const md = await sharp(out).metadata();
+    assert.equal(md.width, 64);
+    assert.equal(md.height, 32);
+  });
 });

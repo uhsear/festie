@@ -2103,7 +2103,9 @@ export type components = {
                 }[];
             }[];
             id: string;
+            latitude?: number | null;
             location: string;
+            longitude?: number | null;
             mapConfig: {
                 amenities?: {
                     features: {
@@ -2187,7 +2189,9 @@ export type components = {
                 }[];
             }[];
             id: string;
+            latitude?: number | null;
             location: string;
+            longitude?: number | null;
             mapConfig: {
                 amenities?: {
                     features: {

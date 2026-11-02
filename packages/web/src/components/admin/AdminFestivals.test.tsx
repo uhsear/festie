@@ -26,6 +26,7 @@ vi.mock('./FestivalEditForm', () => ({
     setFormData,
     notifyPickers,
     onNotifyPickersChange,
+    engagementError,
   }: {
     onSave: () => void;
     onDiscard: () => void;
@@ -33,8 +34,10 @@ vi.mock('./FestivalEditForm', () => ({
     onNotifyPickersChange: (v: boolean) => void;
     formData: { name?: string; days?: { id: string; label: string }[] };
     setFormData: (f: unknown) => void;
+    engagementError?: boolean;
   }) => (
     <div>
+      {engagementError && <p>Couldn't load pick counts.</p>}
       <button onClick={onSave}>save form</button>
       <button onClick={onDiscard}>discard form</button>
       <input
@@ -64,13 +67,19 @@ vi.mock('./FestivalEditForm', () => ({
     </div>
   ),
 }));
+vi.mock('./FestivalLinks', () => ({
+  default: ({ festivalName, onClose }: { festivalName: string; onClose: () => void }) => (
+    <button onClick={onClose}>links panel for {festivalName}</button>
+  ),
+}));
 
+const mockGet = vi.fn();
 const mockPut = vi.fn();
 const mockPost = vi.fn();
 vi.mock('@festie/shared/services/api', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   api: {
-    get: vi.fn(),
+    get: (...a: unknown[]) => mockGet(...a),
     put: (...a: unknown[]) => mockPut(...a),
     post: (...a: unknown[]) => mockPost(...a),
     delete: vi.fn(),
@@ -102,6 +111,7 @@ vi.mock('@festie/shared/services/festivalAdmin', async (orig) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGet.mockResolvedValue({});
   fetchAdminFestival.mockResolvedValue(FULL);
   fetchArchivedFestivals.mockResolvedValue([]);
   fetchDeleteImpact.mockResolvedValue({ profiles: 2, crews: 1, picks: 3 });
@@ -207,5 +217,24 @@ describe('AdminFestivals', () => {
     expect(input).toHaveValue('Fest Edited');
     await userEvent.click(screen.getByRole('button', { name: 'discard form' }));
     expect(screen.getByLabelText('local draft')).toHaveValue('Fest');
+  });
+});
+
+describe('AdminFestivals Links button', () => {
+  it('opens the links panel for the row and returns to the list', async () => {
+    render(<AdminFestivals />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Spotify links for Fest' }));
+    await userEvent.click(await screen.findByText('links panel for Fest'));
+    expect(await screen.findByRole('button', { name: 'Edit' })).toBeInTheDocument();
+  });
+
+  it('shows the pick-count error when engagement fails', async () => {
+    mockGet.mockImplementation(async (url: string) => {
+      if (url.endsWith('/set-engagement')) throw new Error('boom');
+      return {};
+    });
+    render(<AdminFestivals />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(await screen.findByText("Couldn't load pick counts.")).toBeInTheDocument();
   });
 });

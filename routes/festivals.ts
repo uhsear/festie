@@ -372,7 +372,7 @@ export default function createFestivalsRoutes(deps: any) {
         invalidateFestivalListCache();
         log.info('festival:created', { festivalId: festival.id, name: festival.name });
         audit('festival:create', 'festival', festival.id, req, { name: festival.name });
-        void fillVenueCoords(festival.id, festival.location);
+        if (typeof festival.latitude !== 'number') void fillVenueCoords(festival.id, festival.location);
         res.status(201);
         return sendSuccess(res, { ...festival, publishedAt: null });
       } catch (error: any) {
@@ -409,6 +409,7 @@ export default function createFestivalsRoutes(deps: any) {
         }
 
         const nextFestival = sanitizeFestivalPayload(body, existingFestival);
+        const venueSent = body.latitude !== undefined || body.longitude !== undefined;
         // Days and sets are touched only when the payload sends them; the map
         // editors leave them out so a map save cannot rewrite the lineup.
         const daysSent = body.days !== undefined;
@@ -473,6 +474,7 @@ export default function createFestivalsRoutes(deps: any) {
           ...(daysSent ? { days: nextFestival.days } : {}),
           mapConfig: nextFestival.mapConfig,
           updatedBy: req.user?.userId ?? null,
+          ...(venueSent ? { latitude: nextFestival.latitude, longitude: nextFestival.longitude } : {}),
         });
         invalidateFestivalCache();
 
@@ -491,7 +493,12 @@ export default function createFestivalsRoutes(deps: any) {
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
         if (notified) void emitter.scheduleChanged({ festival, changes, pickersBySet });
         const venueMissing = typeof existingFestival.latitude !== 'number';
-        if (venueMissing || nextFestival.location !== existingFestival.location) {
+        // An admin-set venue wins over the geocoder until the location text changes in a later save.
+        const venueSetByAdmin =
+          venueSent &&
+          (nextFestival.latitude !== existingFestival.latitude ||
+            nextFestival.longitude !== existingFestival.longitude);
+        if (!venueSetByAdmin && (venueMissing || nextFestival.location !== existingFestival.location)) {
           void fillVenueCoords(festival.id, nextFestival.location);
         }
         return sendSuccess(res, { ...festival, scheduleNotice });
@@ -641,6 +648,7 @@ export default function createFestivalsRoutes(deps: any) {
         const festivalId = req.params.festivalId;
         const setId = req.params.setId;
         const { linkUrl } = req.validatedBody;
+        const artistIndex = req.validatedBody.artistIndex ?? 0;
 
         if (!festivalId || !setId)
           return sendError(res, 400, 'Festival and set IDs required', ErrorCodes.INVALID_INPUT);
@@ -656,35 +664,34 @@ export default function createFestivalsRoutes(deps: any) {
         // Validated by Zod schema — normalize to null if empty
         const cleanUrl = linkUrl && typeof linkUrl === 'string' && linkUrl.trim() ? linkUrl.trim() : null;
 
-        // Update both link_url (backward compat) and artists JSONB
-        await stores.pool.query('UPDATE festival_sets SET link_url = $1 WHERE id = $2 AND festival_id = $3', [
-          cleanUrl,
-          setId,
-          festivalId,
-        ]);
-        // Update first artist's spotify link in artists JSONB
-        if (set.artists?.length > 0) {
-          const updatedArtists = [...set.artists];
-          if (!updatedArtists[0].links) updatedArtists[0].links = {};
-          if (cleanUrl) updatedArtists[0].links.spotify = cleanUrl;
-          else delete updatedArtists[0].links.spotify;
-          await stores.pool.query('UPDATE festival_sets SET artists = $1 WHERE id = $2 AND festival_id = $3', [
-            JSON.stringify(updatedArtists),
-            setId,
-            festivalId,
-          ]);
+        // A set saved before the artists array existed has only its display name.
+        const artists: any[] = set.artists?.length
+          ? set.artists.map((a: any) => ({ ...a, links: { ...(a?.links || {}) } }))
+          : [{ name: set.artist, links: {} }];
+        if (artistIndex >= artists.length) {
+          return sendError(res, 400, 'That artist is not on this set.', ErrorCodes.INVALID_INPUT);
         }
+        if (cleanUrl) artists[artistIndex].links.spotify = cleanUrl;
+        else delete artists[artistIndex].links.spotify;
+        // link_url mirrors the first artist's Spotify link (backward compat).
+        const firstLink = artists[0].links.spotify || null;
+
+        await stores.pool.query(
+          'UPDATE festival_sets SET artists = $1, link_url = $2 WHERE id = $3 AND festival_id = $4',
+          [JSON.stringify(artists), firstLink, setId, festivalId],
+        );
         await stores.pool.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
         invalidateFestivalCache();
 
-        audit('set:link-update', 'set', setId, req, { festivalId, linkUrl: cleanUrl });
+        audit('set:link-update', 'set', setId, req, { festivalId, artistIndex, linkUrl: cleanUrl });
         log.info('set link updated', {
           festivalId,
           setId,
+          artistIndex,
           linkUrl: cleanUrl ? 'set' : 'cleared',
           ip: getRequestIp(req),
         });
-        return sendSuccess(res, { setId, linkUrl: cleanUrl });
+        return sendSuccess(res, { setId, artistIndex, linkUrl: cleanUrl });
       } catch (error: any) {
         log.error('set link update failed', { error: error.message });
         return sendError(res, 500, 'Failed to update set link', ErrorCodes.INTERNAL_ERROR);

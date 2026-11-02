@@ -15,6 +15,7 @@ import {
   issuesFromError,
   restoreFestival,
 } from '@festie/shared/services/festivalAdmin';
+import { getSetEngagement, type SetEngagementMap } from '@festie/shared/services';
 import type { AdminFestivalSummary, ArchivedFestival } from '@festie/shared/services/festivalAdmin';
 import type { EditableFestival, FestivalIssue } from '@festie/shared/utils';
 import {
@@ -38,6 +39,7 @@ import FestivalMapEditor from './FestivalMapEditor';
 import FestivalStatusPanel, { FestivalMeta } from './FestivalStatusPanel';
 import AdminFestivalPreview from './AdminFestivalPreview';
 import SelectionBar from './SelectionBar';
+import FestivalLinks from './FestivalLinks';
 import { cn } from '../../lib/utils';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -81,6 +83,11 @@ export default function AdminFestivals() {
   // owns stage-pin + amenity authoring and persists via the same PUT path.
   const [mapEditingId, setMapEditingId] = useState<string | null>(null);
   const [importTarget, setImportTarget] = useState<{ id: string; name: string } | null>(null);
+  // When set, the Spotify links panel takes over the panel for this festival.
+  const [linksTarget, setLinksTarget] = useState<{ id: string; name: string } | null>(null);
+  // Per-set picks and reminders for the festival being edited.
+  const [engagement, setEngagement] = useState<SetEngagementMap | undefined>(undefined);
+  const [engagementError, setEngagementError] = useState(false);
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
   const [removalBusy, setRemovalBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -134,6 +141,8 @@ export default function AdminFestivals() {
     setMeta({});
     setIssues([]);
     setInitialExpandedDays(new Set());
+    setEngagement(undefined);
+    setEngagementError(false);
   };
 
   // Loads the saved festival into the editor. Every day gets an id (the list
@@ -143,6 +152,10 @@ export default function AdminFestivals() {
     setNotifyPickers(true);
     setTab('create');
     setEditorLoading(true);
+    setEngagement(undefined);
+    setEngagementError(false);
+    // Pick counts load beside the festival; a failure only hides the counts.
+    getSetEngagement(id).then(setEngagement, () => setEngagementError(true));
     try {
       const { checklist, publishedAt, updatedByUsername, ...full } = await fetchAdminFestival(id);
       const stages = (full.stages || []) as unknown as NonNullable<FormFestival['stages']>;
@@ -223,18 +236,15 @@ export default function AdminFestivals() {
     if (!editingId) return;
     setRemovalBusy(true);
     try {
-      const done = await withReauth(
-        async () => {
-          const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
-            ...formData,
-            expectedUpdatedAt: formData.updatedAt,
-            confirmRemovals: true,
-            notify: notifyPickers,
-          });
-          return { notice: res?.scheduleNotice };
-        },
-        askPassword,
-      );
+      const done = await withReauth(async () => {
+        const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
+          ...formData,
+          expectedUpdatedAt: formData.updatedAt,
+          confirmRemovals: true,
+          notify: notifyPickers,
+        });
+        return { notice: res?.scheduleNotice };
+      }, askPassword);
       if (done === null) return;
       setPendingRemoval(null);
       await afterEditSave(editingId, done.notice);
@@ -367,7 +377,17 @@ export default function AdminFestivals() {
   // Map editor takes over the panel when active — it loads the festival itself
   // and persists the geo edits, then returns here on close.
   if (mapEditingId) {
-    return <FestivalMapEditor festivalId={mapEditingId} onClose={closeMap} />;
+    const editFestival = () => {
+      const id = mapEditingId;
+      setMapEditingId(null);
+      void openEditor(id);
+    };
+    return <FestivalMapEditor festivalId={mapEditingId} onClose={closeMap} onEditFestival={editFestival} />;
+  }
+  if (linksTarget) {
+    return (
+      <FestivalLinks festivalId={linksTarget.id} festivalName={linksTarget.name} onClose={() => setLinksTarget(null)} />
+    );
   }
 
   const toggleClass = (active: boolean) =>
@@ -472,7 +492,7 @@ export default function AdminFestivals() {
                 {filteredFestivals.map((festival) => (
                   <div
                     key={festival.id}
-                    className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex items-center justify-between hover:bg-bg-card/80 transition-colors"
+                    className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between hover:bg-bg-card/80 transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -481,7 +501,7 @@ export default function AdminFestivals() {
                       onChange={() => toggleSelected(festival.id)}
                       className="mr-3 h-5 w-5 shrink-0"
                     />
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <h2 className="text-base font-semibold text-text-primary">
                         {festival.name}
                         {!festival.published && (
@@ -494,7 +514,7 @@ export default function AdminFestivals() {
                         {festival.location} · {festival.stageCount ?? 0} stages · {festival.dayCount ?? 0} days
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => confirmLeave(() => openEditor(festival.id))}
                         className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
@@ -521,6 +541,13 @@ export default function AdminFestivals() {
                         className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
                       >
                         Map
+                      </button>
+                      <button
+                        onClick={() => confirmLeave(() => setLinksTarget({ id: festival.id, name: festival.name }))}
+                        aria-label={`Spotify links for ${festival.name}`}
+                        className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+                      >
+                        Links
                       </button>
                       <button
                         onClick={() => handleDelete(festival.id)}
@@ -580,6 +607,8 @@ export default function AdminFestivals() {
             changes={changes}
             issues={issues}
             saving={saving}
+            engagement={engagement}
+            engagementError={engagementError}
             onSave={handleSave}
             onDiscard={() => {
               setFormData(original ?? {});

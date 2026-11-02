@@ -127,6 +127,7 @@ import createAuthRoutes from './routes/auth';
 import createEmailAuthRoutes from './routes/email-auth';
 import createAccountRoutes from './routes/account';
 import createAdminRoutes from './routes/admin';
+import createAdminSiteplanRoutes from './routes/admin-siteplan';
 import createFestivalRoutes from './routes/festivals';
 import createProfileRoutes from './routes/profiles';
 import createExportRoutes from './routes/export';
@@ -284,6 +285,7 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/auth', emailAuthRoutes);
   app.use('/api/v1/account', accountRoutes);
   app.use('/api/v1/admin', adminRoutes);
+  app.use('/api/v1/admin', createAdminSiteplanRoutes(deps));
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);
