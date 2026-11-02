@@ -1,25 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, AlertCircle, ChevronDown, Download, RefreshCw } from 'lucide-react';
-import { useOfflineReadinessStore } from '@festie/shared/stores/offlineReadinessStore';
-import type { ReadinessSection, SectionReadiness } from '@festie/shared/stores/offlineReadinessStore';
-import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { useFestivalStore } from '@festie/shared/stores/festivalStore';
-import { isFestivalOver, timeAgo } from '@festie/shared/utils';
+import type { SectionReadiness } from '@festie/shared/stores/offlineReadinessStore';
+import { offlineActionLabel, offlineStatusLabel, timeAgo } from '@festie/shared/utils';
+import { useOfflineDownload } from '../../hooks/useOfflineDownload';
 import { cn } from '../../lib/utils';
 
 interface Props {
   festivalId: string;
   className?: string;
 }
-
-// Ordered step list — matches store section order (schedule must finish first).
-const SECTIONS: Array<{ key: ReadinessSection; label: string }> = [
-  { key: 'schedule', label: 'Schedule' },
-  { key: 'picks', label: 'My picks' },
-  { key: 'crew', label: 'Crew plan' },
-  { key: 'weather', label: 'Weather' },
-  { key: 'art', label: 'Artist art' },
-];
 
 // R18: per-step state renderer.
 // pending  -> 8px muted dot
@@ -30,11 +19,13 @@ function StepRow({
   label,
   section,
   tick,
+  detail,
   onRetry,
 }: {
   label: string;
   section: SectionReadiness;
   tick: number;
+  detail?: string;
   onRetry?: () => void;
 }) {
   // tick forces re-render so "synced N ago" advances from the device clock.
@@ -46,7 +37,7 @@ function StepRow({
   const isError = section.status === 'error';
 
   return (
-    <li className="flex items-center gap-3 py-2" aria-live="polite" aria-atomic="true">
+    <li className="flex flex-wrap items-center gap-x-3 py-2" aria-live="polite" aria-atomic="true">
       {/* Step indicator: pending dot / active pulse / done check / error icon */}
       <span className="flex-shrink-0 flex items-center justify-center w-5 h-5">
         {isDone ? (
@@ -110,32 +101,22 @@ function StepRow({
           </span>
         )}
       </span>
+      {detail && <p className="basis-full pl-8 pt-1 text-xs text-accent-coral">{detail}</p>}
     </li>
   );
 }
 
 /**
- * R18: Multi-step loader for the festival offline-download sync.
+ * Offline download card. One header row (status, action, chevron) with the
+ * per-step checklist collapsed by default. State comes from useOfflineDownload,
+ * which adds the web-only map archive to the five store sections.
  *
- * Renders the five download sections (schedule / picks / crew / weather / art)
- * as a vertical step list with per-step state: pending dot, active shimmer,
- * done aqua check, error coral text + retry. Replaces the previous flat
- * spinner/icon rows. UI only — store orchestration is unchanged.
- *
- * The "synced N ago" labels advance from the device clock via a 30s tick —
- * same offline-honesty pattern as FreshnessChip.
+ * The "synced N ago" labels advance from the device clock via a 30s tick,
+ * the same offline-honesty pattern as FreshnessChip.
  */
 export default function OfflineReadinessCard({ festivalId, className }: Props) {
-  const readiness = useOfflineReadinessStore((s) => s.byFestival[festivalId]);
-  const downloadingFestivalId = useOfflineReadinessStore((s) => s.downloadingFestivalId);
-  const downloadForOffline = useOfflineReadinessStore((s) => s.downloadForOffline);
-  const activeCrewId = useCrewStore((s) => s.activeCrew?.id ?? null);
-
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const days = useFestivalStore((s) => s.days);
+  const { steps, summary, download, isDownloading, mapBytes, hasMap } = useOfflineDownload(festivalId);
   const [expanded, setExpanded] = useState(false);
-
-  const isDownloading = downloadingFestivalId === festivalId;
 
   // 30s tick so "synced N ago" keeps advancing from the device clock.
   const [tick, setTick] = useState(0);
@@ -143,8 +124,6 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
     const id = setInterval(() => setTick((n) => n + 1), 30_000);
     return () => clearInterval(id);
   }, []);
-
-  const hasDownloaded = !!readiness && SECTIONS.some(({ key }) => readiness[key]?.status === 'ready');
 
   // Inject the pulse keyframe once. Co-located with the only consumer.
   // prefers-reduced-motion variant collapses the animation.
@@ -165,50 +144,38 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
     document.head.appendChild(style);
   }, []);
 
-  const handleDownload = () => void downloadForOffline(festivalId, activeCrewId ?? undefined);
-  // Per-step retry re-triggers the full download (store handles idempotency).
-  const handleRetry = () => void downloadForOffline(festivalId, activeCrewId ?? undefined);
+  if (summary.hidden) return null;
 
-  const allReady = !!readiness && SECTIONS.every(({ key }) => readiness[key]?.status === 'ready');
-  // Only claim 'saved' when at least one section actually downloaded.
-  const syncedTimes = SECTIONS.filter(({ key }) => readiness?.[key]?.status === 'ready')
-    .map(({ key }) => readiness?.[key]?.syncedAt)
-    .filter((t): t is number => t != null);
-  const collapsed = !expanded && !isDownloading && syncedTimes.length > 0
-    && (allReady || isFestivalOver(currentFestival, days));
-  if (collapsed) {
-    return (
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        aria-expanded={false}
-        className={cn(
-          'flex w-full items-center gap-2 rounded-xl border border-border bg-bg-card px-4 min-h-11 text-left text-sm text-text-secondary',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
-          className,
-        )}
-      >
-        <Check className="w-4 h-4 text-accent-aqua flex-shrink-0" aria-hidden="true" />
-        <span className="flex-1 min-w-0 truncate">
-          Saved for offline · synced {timeAgo(Math.max(...syncedTimes))}
-        </span>
-        <ChevronDown className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-      </button>
-    );
-  }
+  const handleDownload = () => void download();
+  const mapMb = mapBytes != null ? ` The map is ${Math.max(1, Math.round(mapBytes / 1_000_000))} MB.` : '';
+  const description = hasMap
+    ? `Saves the schedule, your picks, crew plan, weather, artist art and the festival map so they work with no signal.${mapMb}`
+    : 'Saves the schedule, your picks, crew plan, weather and artist art so they work with no signal. The map needs signal at this festival.';
 
   return (
     <section
-      className={cn('rounded-xl border border-border bg-bg-card p-4', className)}
+      className={cn('rounded-xl border border-border bg-bg-card px-4', className)}
       aria-label="Download festival for offline"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-bold text-text-primary">Download for offline</h3>
-          <p className="mt-0.5 text-xs text-text-secondary">
-            Cache the schedule, picks, crew plan, weather, and art so they work with no signal.
-          </p>
-        </div>
+      <div className="flex items-center gap-2 min-h-11 py-1">
+        <span className="flex-shrink-0 flex items-center justify-center w-5 h-5">
+          {summary.overall === 'ready' ? (
+            <Check className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
+          ) : summary.overall === 'partial' ? (
+            <AlertCircle className="w-4 h-4 text-accent-coral" aria-hidden="true" />
+          ) : summary.overall === 'syncing' ? (
+            <span
+              className="block w-2 h-2 rounded-full motion-reduce:opacity-60"
+              style={{ background: 'var(--color-accent-aqua)', animation: 'offline-step-pulse 900ms ease-in-out infinite' }}
+              aria-hidden="true"
+            />
+          ) : (
+            <Download className="w-4 h-4 text-text-secondary" aria-hidden="true" />
+          )}
+        </span>
+        <span className="flex-1 min-w-0 truncate text-sm font-medium text-text-primary">
+          {offlineStatusLabel(summary)}
+        </span>
         <button
           type="button"
           onClick={handleDownload}
@@ -222,26 +189,36 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
             'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
         >
-          <Download className="w-4 h-4" aria-hidden="true" />
-          {isDownloading ? 'Downloading…' : hasDownloaded ? 'Update' : 'Download'}
+          {offlineActionLabel(summary)}
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-label="Show offline download details"
+          className="inline-flex flex-shrink-0 items-center justify-center w-11 h-11 rounded-xl text-text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        >
+          <ChevronDown className={cn('w-4 h-4 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />
         </button>
       </div>
 
-      {/* R18: vertical step list */}
-      <ul className="mt-3 divide-y divide-[var(--color-overlay-4)]" aria-label="Offline readiness checklist">
-        {SECTIONS.map(({ key, label }) => {
-          const sec = readiness?.[key] ?? { status: 'idle' as const, syncedAt: null };
-          return (
-            <StepRow
-              key={key}
-              label={label}
-              section={sec}
-              tick={tick}
-              onRetry={sec.status === 'error' ? handleRetry : undefined}
-            />
-          );
-        })}
-      </ul>
+      {expanded && (
+        <div className="pb-3">
+          <p className="text-xs text-text-secondary">{description}</p>
+          <ul className="mt-3 divide-y divide-[var(--color-overlay-4)]" aria-label="Offline readiness checklist">
+            {steps.map(({ key, label, section, detail }) => (
+              <StepRow
+                key={key}
+                label={label}
+                section={section}
+                tick={tick}
+                detail={detail}
+                onRetry={section.status === 'error' ? handleDownload : undefined}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

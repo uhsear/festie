@@ -3,6 +3,7 @@ import {
   FESTIE_RUNTIME_CACHING,
   FESTIVAL_CATALOG_RE,
   WEATHER_RE,
+  OFFLINE_MAP_CACHE,
   type RuntimeCachingRule,
 } from './runtimeCaching';
 
@@ -84,12 +85,12 @@ describe('SW cache boundary — the SHIPPED matcher functions (not just the cons
 
 describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
   it('has exactly four rules', () => {
-    expect(FESTIE_RUNTIME_CACHING).toHaveLength(4);
+    expect(FESTIE_RUNTIME_CACHING).toHaveLength(5);
   });
 
   it('declares the expected cacheNames in order', () => {
     const names = FESTIE_RUNTIME_CACHING.map((r) => r.options?.cacheName);
-    expect(names).toEqual(['api-cache', 'weather-cache', 'art-cache', 'google-fonts']);
+    expect(names).toEqual(['api-cache', 'weather-cache', 'art-cache', 'google-fonts', 'offline-map-cache']);
   });
 
   it('declares the expected handlers in order', () => {
@@ -97,6 +98,7 @@ describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
     expect(handlers).toEqual([
       'StaleWhileRevalidate',
       'NetworkFirst',
+      'CacheFirst',
       'CacheFirst',
       'CacheFirst',
     ]);
@@ -124,5 +126,26 @@ describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
       maxEntries: 10,
       maxAgeSeconds: 60 * 60 * 24 * 365,
     });
+  });
+});
+
+describe('SW offline map rule', () => {
+  const rule = FESTIE_RUNTIME_CACHING[4];
+  const match = (method: string, path: string) =>
+    (rule.urlPattern as (o: { url: URL; request: Request }) => boolean)({
+      url: new URL(`https://festie.us${path}`),
+      request: { method } as Request,
+    });
+
+  it('matches GET .pmtiles only', () => {
+    expect(match('GET', '/uploads/basemaps/x.pmtiles')).toBe(true);
+    expect(match('POST', '/uploads/basemaps/x.pmtiles')).toBe(false);
+    expect(match('GET', '/api/v1/profiles/me')).toBe(false);
+  });
+
+  it('serves ranges from a whole-file 200', () => {
+    expect(rule.options?.rangeRequests).toBe(true);
+    expect(rule.options?.cacheName).toBe(OFFLINE_MAP_CACHE);
+    expect(rule.options?.cacheableResponse?.statuses).toEqual([200]);
   });
 });

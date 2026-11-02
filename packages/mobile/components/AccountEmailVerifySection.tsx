@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '@festie/shared/stores';
+import { mapErrorToUserMessage } from '@festie/shared/services';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -22,6 +23,7 @@ export default function AccountEmailVerifySection() {
   const haptics = useHaptics();
   const user = useAuthStore((s) => s.user);
   const resendVerification = useAuthStore((s) => s.resendVerification);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [submitting, setSubmitting] = useState(false);
   // Throttle resends with a visible countdown so an impatient tap-tap-tap
@@ -65,13 +67,13 @@ export default function AccountEmailVerifySection() {
       startCooldown();
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not send. Please try again.');
+      setError(mapErrorToUserMessage(err, 'Could not send. Please try again.'));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const disabled = submitting || cooldown > 0;
+  const disabled = submitting || cooldown > 0 || offlineMode;
   const buttonLabel = submitting ? '' : cooldown > 0 ? `${cooldown}s` : sent ? 'Resend' : 'Verify';
 
   return (

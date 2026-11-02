@@ -56,6 +56,7 @@ vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import AccountPage from './account';
 
 function setStoreState(overrides: Record<string, unknown> = {}) {
@@ -74,6 +75,7 @@ function setStoreState(overrides: Record<string, unknown> = {}) {
 describe('AccountPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useUIStore.setState({ offlineMode: false });
     setStoreState();
   });
 
@@ -116,5 +118,13 @@ describe('AccountPage', () => {
   it('links Festival Wrap to /wrap', () => {
     render(<AccountPage />);
     expect(screen.getByRole('link', { name: /Festival Wrap/ })).toHaveAttribute('href', '/wrap');
+  });
+
+  it('shows the offline note only while offline', () => {
+    const { rerender } = render(<AccountPage />);
+    expect(screen.queryByText("You're offline. Settings need a connection.")).toBeNull();
+    useUIStore.setState({ offlineMode: true });
+    rerender(<AccountPage />);
+    expect(screen.getByRole('status')).toHaveTextContent("You're offline. Settings need a connection.");
   });
 });

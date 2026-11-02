@@ -6,6 +6,7 @@ import {
   accountDeletionNotice,
 } from '@festie/shared/stores/authStore';
 import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -16,6 +17,7 @@ export default function DangerZone() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [exporting, setExporting] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -56,8 +58,8 @@ export default function DangerZone() {
       const { deletionDate } = await deleteAccount(deletePassword);
       toast(accountDeletionNotice(deletionDate), 'info');
       navigate({ to: '/login' });
-    } catch {
-      toast("Couldn't delete account. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't delete account. Try again."), 'error');
     } finally {
       setDeleting(false);
     }
@@ -147,7 +149,7 @@ export default function DangerZone() {
                 type="submit"
                 variant="danger"
                 isLoading={deleting}
-                disabled={!deletePassword}
+                disabled={offlineMode || !deletePassword}
                 className="flex-1 min-h-[44px]"
               >
                 Confirm Delete

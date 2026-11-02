@@ -7,6 +7,7 @@ import { useAuthStore } from '@festie/shared/stores';
 import { useFestivalStore } from '@festie/shared/stores';
 import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
+import OfflineStatusChip from '../components/features/OfflineStatusChip';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
 import EmptyState from '../components/ui/EmptyState';
@@ -229,6 +230,7 @@ function CrewViewInner() {
         <div className="crew-content space-y-4 min-w-0">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <FreshnessChip surface="crew" />
+            <OfflineStatusChip />
             <LastSyncedBadge surface="crew" />
             <SosRaiseButton crewId={activeCrew.id} compact />
           </div>

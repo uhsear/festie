@@ -104,6 +104,15 @@ function attemptToken(): string {
 // One in-flight download per URL. Both callers (map open, Download button) await
 // the same promise instead of racing two transfers for the same archive.
 const inFlight = new Map<string, Promise<string | null>>();
+const listeners = new Set<() => void>();
+
+/** Runs after any archive attempt settles, so every mounted download hook re-reads the disk. */
+export function subscribeBasemapCache(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+}
 
 /**
  * Ensure the festival's PMTiles archive is cached locally; return the local
@@ -137,7 +146,10 @@ export function ensureBasemapCached(pmtilesUrl: string): Promise<string | null> 
   if (typeof pmtilesUrl !== 'string' || !/^https:\/\//i.test(pmtilesUrl)) return Promise.resolve(null);
   const existing = inFlight.get(pmtilesUrl);
   if (existing) return existing;
-  const run = downloadOnce(pmtilesUrl).finally(() => inFlight.delete(pmtilesUrl));
+  const run = downloadOnce(pmtilesUrl).finally(() => {
+    inFlight.delete(pmtilesUrl);
+    listeners.forEach((cb) => cb());
+  });
   inFlight.set(pmtilesUrl, run);
   return run;
 }

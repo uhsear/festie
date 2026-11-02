@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
-import { api } from '@festie/shared/services/api';
+import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { buildPublicScheduleUrl } from '@festie/shared/utils';
 import { Globe } from 'lucide-react';
 import { useToast } from '../../lib/toastContext';
@@ -11,6 +12,7 @@ export default function PublicScheduleSection() {
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -25,8 +27,8 @@ export default function PublicScheduleSection() {
         publicSchedule: !on,
       });
       setUser({ ...user, publicSchedule: res.user?.publicSchedule ?? !on });
-    } catch {
-      toast("Couldn't update your public schedule page. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't update your public schedule page. Try again."), 'error');
     } finally {
       setSaving(false);
     }
@@ -57,7 +59,7 @@ export default function PublicScheduleSection() {
           role="switch"
           aria-checked={on}
           aria-label="Public schedule page"
-          disabled={saving}
+          disabled={saving || offlineMode}
           onClick={toggle}
           className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${on ? 'bg-accent-aqua' : 'bg-border'}`}
         >

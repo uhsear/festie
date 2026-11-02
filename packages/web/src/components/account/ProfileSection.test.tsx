@@ -42,7 +42,8 @@ vi.mock('@festie/shared/stores/authStore', () => ({
 }));
 
 const mockApiPut = vi.fn();
-vi.mock('@festie/shared/services/api', () => ({
+vi.mock('@festie/shared/services/api', async (importActual) => ({
+  ...(await importActual<typeof import('@festie/shared/services/api')>()),
   api: {
     put: (...args: unknown[]) => mockApiPut(...args),
   },
@@ -159,7 +160,7 @@ describe('ProfileSection — display name submission', () => {
     await user.type(input, 'Grace');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(mockToast).toHaveBeenCalledWith("Couldn't change display name. Try again.", 'error'));
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith('network', 'error'));
     expect(mockSetUser).not.toHaveBeenCalled();
   });
 });

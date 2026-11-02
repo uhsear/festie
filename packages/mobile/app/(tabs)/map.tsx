@@ -13,6 +13,7 @@ import { useSosRaise } from '../../hooks/useSosRaise';
 import { CREW_MEET_HREF } from '../../lib/dayOfRoutes';
 import OfflineMap from '../../components/OfflineMap';
 import FreshnessChip from '../../components/FreshnessChip';
+import OfflineStatusChip from '../../components/OfflineStatusChip';
 import EmptyState from '../../components/EmptyState';
 import ScreenHeader from '../../components/ScreenHeader';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
@@ -163,6 +164,7 @@ export default function MapScreen() {
       <ScreenHeader title="Map" subtitle={activeCrew?.name} icon="map-outline" right={compassButton} />
       <View style={styles.chipBar}>
         <FreshnessChip surface="crew" />
+        <OfflineStatusChip />
         {/* Surfaces the shared low-power flag on the map so battery-saving GPS
             degradation (see OfflineMap's watchPositionAsync) is visible, not silent. */}
         <LowPowerIndicator />

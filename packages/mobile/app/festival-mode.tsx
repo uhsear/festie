@@ -10,6 +10,8 @@ import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens } from '..
 import { useNow } from '../hooks/useNow';
 import EmptyState from '../components/EmptyState';
 import FreshnessChip from '../components/FreshnessChip';
+import OfflineStatusChip from '../components/OfflineStatusChip';
+import WeatherStrip from '../components/WeatherStrip';
 import { DaylightToggle, LowPowerToggle, LowPowerIndicator } from '../components/LowPowerControls';
 import { CrewNow, CrewPrompt, MeetNow, NowHero, UpNext } from '../components/NowSurface';
 import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref } from '../lib/dayOfRoutes';
@@ -93,6 +95,7 @@ export default function FestivalModeScreen() {
           </View>
           <View style={styles.metaRow}>
             <FreshnessChip surface="schedule" />
+            {user ? <OfflineStatusChip /> : null}
             <LowPowerIndicator />
           </View>
 
@@ -107,6 +110,8 @@ export default function FestivalModeScreen() {
             onBrowse={() => router.navigate(SCHEDULE_HREF)}
             onWrap={user ? () => router.push('/wrap') : undefined}
           />
+
+          <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
 
           {!user ? (
             <CrewPrompt

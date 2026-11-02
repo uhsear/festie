@@ -73,6 +73,7 @@ export default function AccountScreen() {
   const setTheme = useUIStore((s) => s.setTheme);
   const hapticsEnabled = useUIStore((s) => s.hapticsEnabled);
   const setHapticsEnabled = useUIStore((s) => s.setHapticsEnabled);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [loggingOut, setLoggingOut] = useState(false);
   // Pull-to-refresh: a bump signal re-pulls the History card, and we reload
@@ -230,6 +231,12 @@ export default function AccountScreen() {
             </View>
           </View>
         </IdentityCard>
+
+        {offlineMode ? (
+          <Text style={styles.offlineNote} accessibilityRole="alert">
+            You're offline. Settings need a connection.
+          </Text>
+        ) : null}
 
         {/* Profile photo — the AccountAvatarSection card carries its own
             "Profile Photo" title, so no separate section heading here. */}
@@ -619,6 +626,10 @@ const useStyles = makeStyles((t) => ({
   },
   statusTextOn: {
     color: t.colors.text.onLightAccent,
+  },
+  offlineNote: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.amber,
   },
   version: {
     ...typeStyle('caption'),

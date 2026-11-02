@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared/stores/authStore';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import ProfileSection from '../components/account/ProfileSection';
 import PaymentHandlesSection from '../components/account/PaymentHandlesSection';
 import PasswordSection from '../components/account/PasswordSection';
@@ -37,6 +38,7 @@ export default function AccountPage() {
 function AccountPageInner() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
@@ -59,6 +61,12 @@ function AccountPageInner() {
             {user.email ? <p className="text-xs text-text-secondary truncate">{user.email}</p> : null}
           </div>
         </section>
+
+        {offlineMode ? (
+          <p role="status" className="rounded-xl border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber">
+            You're offline. Settings need a connection.
+          </p>
+        ) : null}
 
         {/* Profile */}
         <Section label="Profile">
