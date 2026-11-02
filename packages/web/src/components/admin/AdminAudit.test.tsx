@@ -58,4 +58,16 @@ describe('AdminAudit', () => {
       expect(mockFetchPage).toHaveBeenLastCalledWith(expect.objectContaining({ scope: 'user', cursor: null })),
     );
   });
+
+  it('Roles chip sends action=role_ and resets the cursor', async () => {
+    render(<AdminAudit />);
+    await screen.findByText('Action p1');
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Action p2');
+    await userEvent.click(screen.getByRole('button', { name: 'Roles' }));
+    await waitFor(() =>
+      expect(mockFetchPage).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'role_', cursor: null })),
+    );
+    expect(screen.getByRole('button', { name: 'Roles' })).toHaveAttribute('aria-pressed', 'true');
+  });
 });

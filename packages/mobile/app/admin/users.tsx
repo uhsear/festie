@@ -1,14 +1,32 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
-import { Stack } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert, Share } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { api, withReauth } from '@festie/shared/services';
+import {
+  withReauth,
+  setAdminRole,
+  createResetLink,
+  bulkForceLogout,
+  api,
+  type AdminUserRow,
+} from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
+import { useAdminUserList } from '@festie/shared/hooks';
+import {
+  maskEmail,
+  roleChangeCopy,
+  resetLinkCopy,
+  resetLinkReadyMessage,
+  bulkConfirmCopy,
+  summarizeBulkResults,
+  toggleSelection,
+  SELECTION_LIMIT_MESSAGE,
+} from '@festie/shared/utils';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
-import { ConfirmDialog, LabeledTextInput, useReauthPrompt } from '../../components/admin';
+import { ConfirmDialog, LabeledTextInput, SelectionBar, useReauthPrompt } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
@@ -21,35 +39,30 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  * /admin — pushed non-tab screens use the platform header per ScreenHeader's
  * adoption rule.
  *
- * Reuses the shared api.* calls exactly as the web console does — NO new
- * backend logic. Endpoints resolve under /api/v1:
- *   GET    /admin/users                      → User[] (wrapper strips pagination meta)
+ * Uses the shared admin client (@festie/shared/services) and useAdminUserList.
+ * Endpoints resolve under /api/v1:
+ *   GET    /admin/users?search&cursor&limit  → paged list; search is server-side and
+ *                                              "Load more" fetches the next page
+ *   GET    /admin/users/:id                  → detail (user-detail.tsx)
  *   POST   /admin/users/:id/roles            { role: 'admin' }   → grant admin
  *   DELETE /admin/users/:id/roles/admin                          → revoke admin
+ *   POST   /admin/users/:id/reset-link                           → one-time reset link
  *   PUT    /admin/users/:id/reset-password   { newPassword }     → admin reset
  *   DELETE /admin/users/:id                                      → delete user
+ *   POST   /admin/bulk/force-logout                              → bulk force-logout
  *
- * Search is client-side over the loaded list (matching the web component); the
- * GET endpoint also accepts a `search` query, but the wrapper returns only the
- * first page, so filtering locally keeps every loaded row searchable. EVERY
- * destructive write (grant/revoke admin, reset password, delete) is gated
- * behind ConfirmDialog before the api.* call fires.
+ * EVERY destructive write (grant/revoke admin, reset link, reset password,
+ * delete, force-logout) is gated behind ConfirmDialog before the call fires.
  */
-
-interface AdminUser {
-  id: string;
-  username: string;
-  email: string | null;
-  roles: string[];
-  createdAt: string;
-}
 
 // Discriminated confirm intents — the parent owns the dialog state and which
 // mutation the confirm button will run, mirroring the web ConfirmDialog wiring.
 type PendingAction =
-  | { kind: 'toggle-admin'; user: AdminUser; grant: boolean }
-  | { kind: 'reset-password'; user: AdminUser; newPassword: string }
-  | { kind: 'delete'; user: AdminUser };
+  | { kind: 'toggle-admin'; user: AdminUserRow; grant: boolean }
+  | { kind: 'reset-link'; user: AdminUserRow }
+  | { kind: 'reset-password'; user: AdminUserRow; newPassword: string }
+  | { kind: 'force-logout' }
+  | { kind: 'delete'; user: AdminUserRow };
 
 export default function AdminUsersScreen() {
   const t = useTokens();
@@ -58,11 +71,13 @@ export default function AdminUsersScreen() {
   const isAdmin = useAuthStore((s) => s.isAdmin);
   const currentUserId = useAuthStore((s) => s.user?.id);
 
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(false);
-  const [search, setSearch] = useState('');
+  const router = useRouter();
+  const { users, total, hasMore, loading, loadingMore, error, search, setSearch, loadMore, refresh, patchUser, removeUser } =
+    useAdminUserList({ enabled: isAdmin });
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [limited, setLimited] = useState(false);
 
   // Which user's inline action panel (reset-password form) is expanded.
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -74,44 +89,20 @@ export default function AdminUsersScreen() {
   const [busy, setBusy] = useState(false);
   const { askPassword: askReauthPassword, reauthDialog } = useReauthPrompt();
 
-  const load = useCallback(async () => {
-    setError(false);
-    try {
-      const result = await api.get<AdminUser[]>('/admin/users');
-      setUsers(Array.isArray(result) ? result : []);
-    } catch {
-      setError(true);
-    }
+  const leaveSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelected(new Set());
+    setLimited(false);
   }, []);
 
-  useEffect(() => {
-    if (!isAdmin) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- load-once guard: non-admins have nothing to fetch, so clear the initial loading flag. Tied to the fetch lifecycle, not derivable from render inputs.
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    load().finally(() => {
-      if (!cancelled) setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isAdmin, load]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    void load().finally(() => setRefreshing(false));
-  }, [load]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter(
-      (u) => u.username.toLowerCase().includes(q) || (u.email ? u.email.toLowerCase().includes(q) : false),
-    );
-  }, [users, search]);
+  const onToggleSelect = useCallback(
+    (id: string) => {
+      const { next, limited: hitLimit } = toggleSelection(selected, id);
+      setSelected(next);
+      setLimited(hitLimit);
+    },
+    [selected],
+  );
 
   // ── Open the reset-password panel for a user (collapse others) ──────────
   const toggleExpanded = useCallback((id: string) => {
@@ -121,13 +112,13 @@ export default function AdminUsersScreen() {
   }, []);
 
   // ── Stage a destructive intent into the ConfirmDialog ───────────────────
-  const requestToggleAdmin = useCallback((user: AdminUser) => {
+  const requestToggleAdmin = useCallback((user: AdminUserRow) => {
     const grant = !user.roles.includes('admin');
     setPending({ kind: 'toggle-admin', user, grant });
   }, []);
 
   const requestResetPassword = useCallback(
-    (user: AdminUser) => {
+    (user: AdminUserRow) => {
       const pw = newPassword;
       if (pw.length < 8) {
         setPwError('Password must be at least 8 characters.');
@@ -139,7 +130,11 @@ export default function AdminUsersScreen() {
     [newPassword],
   );
 
-  const requestDelete = useCallback((user: AdminUser) => {
+  const requestResetLink = useCallback((user: AdminUserRow) => {
+    setPending({ kind: 'reset-link', user });
+  }, []);
+
+  const requestDelete = useCallback((user: AdminUserRow) => {
     setPending({ kind: 'delete', user });
   }, []);
 
@@ -157,26 +152,32 @@ export default function AdminUsersScreen() {
     try {
       if (pending.kind === 'toggle-admin') {
         const { user, grant } = pending;
-        await withReauth(
-          () =>
-            grant
-              ? api.post<unknown>(`/admin/users/${user.id}/roles`, { role: 'admin' })
-              : api.delete<unknown>(`/admin/users/${user.id}/roles/admin`),
-          askPassword,
-        );
+        await withReauth(() => setAdminRole(user.id, grant), askPassword);
         if (cancelled) {
           setPending(null);
           return;
         }
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === user.id
-              ? { ...u, roles: grant ? [...u.roles, 'admin'] : u.roles.filter((r) => r !== 'admin') }
-              : u,
-          ),
-        );
+        patchUser(user.id, {
+          roles: grant ? [...user.roles, 'admin'] : user.roles.filter((r) => r !== 'admin'),
+        });
         setPending(null);
         Alert.alert(grant ? 'Admin granted' : 'Admin revoked', `@${user.username} ${grant ? 'now has' : 'no longer has'} admin access.`);
+      } else if (pending.kind === 'reset-link') {
+        const { user } = pending;
+        const { resetUrl, username, expiresAt } = await createResetLink(user.id);
+        setPending(null);
+        await Share.share({ message: resetUrl });
+        Alert.alert('Reset link ready', resetLinkReadyMessage(username, expiresAt));
+      } else if (pending.kind === 'force-logout') {
+        const ids = [...selected];
+        const done = await withReauth(() => bulkForceLogout(ids), askPassword);
+        if (cancelled || !done) {
+          setPending(null);
+          return;
+        }
+        setPending(null);
+        leaveSelectMode();
+        Alert.alert('Force-logout', summarizeBulkResults('force-logout', done.results));
       } else if (pending.kind === 'reset-password') {
         const { user, newPassword: pw } = pending;
         await withReauth(
@@ -198,7 +199,7 @@ export default function AdminUsersScreen() {
           setPending(null);
           return;
         }
-        setUsers((prev) => prev.filter((u) => u.id !== user.id));
+        removeUser(user.id);
         if (expandedId === user.id) setExpandedId(null);
         setPending(null);
         Alert.alert('User deleted', `@${user.username} has been removed.`);
@@ -210,20 +211,19 @@ export default function AdminUsersScreen() {
     } finally {
       setBusy(false);
     }
-  }, [pending, expandedId, askReauthPassword]);
+  }, [pending, expandedId, askReauthPassword, patchUser, removeUser, selected, leaveSelectMode]);
 
   // Confirm-dialog copy derived from the staged intent.
   const confirm = useMemo(() => {
     if (!pending) return null;
     if (pending.kind === 'toggle-admin') {
-      return {
-        title: pending.grant ? `Grant admin to @${pending.user.username}?` : `Revoke admin from @${pending.user.username}?`,
-        message: pending.grant
-          ? 'This gives the user full access to the admin console, including destructive operations.'
-          : 'This removes the user’s access to the admin console.',
-        confirmLabel: pending.grant ? 'Grant Admin' : 'Revoke Admin',
-        destructive: true,
-      };
+      return { ...roleChangeCopy(pending.user.username, pending.grant), destructive: true };
+    }
+    if (pending.kind === 'reset-link') {
+      return { ...resetLinkCopy(pending.user.username), destructive: false };
+    }
+    if (pending.kind === 'force-logout') {
+      return { ...bulkConfirmCopy('force-logout', selected.size), destructive: true };
     }
     if (pending.kind === 'reset-password') {
       return {
@@ -240,7 +240,31 @@ export default function AdminUsersScreen() {
       confirmLabel: 'Delete',
       destructive: true,
     };
-  }, [pending]);
+  }, [pending, selected.size]);
+
+  const renderIdentity = (user: AdminUserRow, isUserAdmin: boolean, isSelf: boolean) => (
+    <>
+      <View style={styles.nameLine}>
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {user.username}
+        </Text>
+        {isSelf ? (
+          <View style={styles.adminBadge}>
+            <Text style={styles.adminBadgeText}>You</Text>
+          </View>
+        ) : null}
+        {isUserAdmin ? (
+          <View style={styles.adminBadge}>
+            <Text style={styles.adminBadgeText}>ADMIN</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={styles.rowHint} numberOfLines={1}>
+        {revealedId === user.id && user.email ? user.email : maskEmail(user.email)}
+        {user.emailVerified ? ' · Verified' : ' · Not verified'}
+      </Text>
+    </>
+  );
 
   // Non-admins never see the data — the AuthGate bounces them, but render a
   // clear fallback in case this mounts before the redirect lands.
@@ -259,36 +283,51 @@ export default function AdminUsersScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ headerShown: true, title: 'Users' }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Users',
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => (selectMode ? leaveSelectMode() : setSelectMode(true))}
+              style={styles.headerButton}
+              accessibilityRole="button"
+              accessibilityLabel={selectMode ? 'Done selecting' : 'Select users'}
+            >
+              <Text style={styles.headerButtonText}>{selectMode ? 'Done' : 'Select'}</Text>
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
-      {loading ? (
+      {loading && users.length === 0 && search === '' ? (
         <LoadingState label="Loading users" />
-      ) : error ? (
+      ) : error && users.length === 0 ? (
         <EmptyState
           icon="cloud-offline-outline"
           title="Couldn't load users"
-          message="Something went wrong reaching the server."
-          action={{ label: 'Try again', onPress: () => void onRefresh() }}
+          message={error}
+          action={{ label: 'Try again', onPress: refresh }}
         />
       ) : (
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
-            { paddingBottom: Math.max(t.spacing[6], insets.bottom + t.spacing[2]) },
+            { paddingBottom: Math.max(t.spacing[6], insets.bottom + t.spacing[2]) + (selected.size > 0 ? 96 : 0) },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
+              refreshing={loading && users.length > 0 && search === ''}
+              onRefresh={refresh}
               tintColor={t.colors.accent.aqua}
               colors={[t.colors.accent.aqua]}
             />
           }
         >
           <LabeledTextInput
-            label={`Search (${filtered.length})`}
+            label="Search"
             value={search}
             onChangeText={setSearch}
             placeholder="Search by username or email…"
@@ -296,50 +335,79 @@ export default function AdminUsersScreen() {
             accessibilityLabel="Search users by username or email"
           />
 
-          {filtered.length === 0 ? (
+          <Text style={styles.rowHint}>Users ({total})</Text>
+
+          {users.length === 0 ? (
             <EmptyState
               icon="search-outline"
               title="No users found"
-              message="Try adjusting your search query."
+              message={`No users match "${search.trim()}". Search covers every user.`}
             />
           ) : (
             <View style={styles.card}>
-              {filtered.map((user, i) => {
+              {users.map((user, i) => {
                 const isUserAdmin = user.roles.includes('admin');
                 const expanded = expandedId === user.id;
                 const isSelf = user.id === currentUserId;
                 return (
-                  <View key={user.id} style={[i < filtered.length - 1 && styles.rowDivider]}>
+                  <View key={user.id} style={[i < users.length - 1 && styles.rowDivider]}>
                     <View style={styles.row}>
-                      <View style={styles.rowBody}>
-                        <View style={styles.nameLine}>
-                          <Text style={styles.rowTitle} numberOfLines={1}>
-                            {user.username}
-                          </Text>
-                          {isUserAdmin ? (
-                            <View style={styles.adminBadge}>
-                              <Text style={styles.adminBadgeText}>ADMIN</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        <Text style={styles.rowHint} numberOfLines={1}>
-                          {user.email ?? 'no email'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.expandButton}
-                        onPress={() => toggleExpanded(user.id)}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={expanded ? `Hide actions for ${user.username}` : `Manage ${user.username}`}
-                        accessibilityState={{ expanded }}
-                      >
-                        <Ionicons
-                          name={expanded ? 'chevron-up' : 'chevron-forward'}
-                          size={18}
-                          color={t.colors.text.placeholder}
-                        />
-                      </TouchableOpacity>
+                      {selectMode ? (
+                        <TouchableOpacity
+                          style={styles.rowBody}
+                          disabled={isSelf}
+                          onPress={() => onToggleSelect(user.id)}
+                          accessibilityRole="checkbox"
+                          accessibilityLabel={`Select ${user.username}`}
+                          accessibilityState={{ checked: selected.has(user.id), disabled: isSelf }}
+                        >
+                          <View style={styles.selectLine}>
+                            {!isSelf ? (
+                              <Ionicons
+                                name={selected.has(user.id) ? 'checkbox' : 'square-outline'}
+                                size={22}
+                                color={selected.has(user.id) ? t.colors.accent.aqua : t.colors.text.placeholder}
+                              />
+                            ) : null}
+                            {renderIdentity(user, isUserAdmin, isSelf)}
+                          </View>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.rowBody}
+                          onPress={() => router.push(`/admin/user-detail?id=${encodeURIComponent(user.id)}`)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open details for ${user.username}`}
+                        >
+                          {renderIdentity(user, isUserAdmin, isSelf)}
+                        </TouchableOpacity>
+                      )}
+                      {user.email && !selectMode ? (
+                        <TouchableOpacity
+                          style={styles.showButton}
+                          onPress={() => setRevealedId((prev) => (prev === user.id ? null : user.id))}
+                          accessibilityRole="button"
+                          accessibilityLabel={revealedId === user.id ? `Hide email for ${user.username}` : `Show email for ${user.username}`}
+                        >
+                          <Text style={styles.headerButtonText}>{revealedId === user.id ? 'Hide' : 'Show'}</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {!selectMode ? (
+                        <TouchableOpacity
+                          style={styles.expandButton}
+                          onPress={() => toggleExpanded(user.id)}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={expanded ? `Hide actions for ${user.username}` : `Manage ${user.username}`}
+                          accessibilityState={{ expanded }}
+                        >
+                          <Ionicons
+                            name={expanded ? 'chevron-up' : 'chevron-forward'}
+                            size={18}
+                            color={t.colors.text.placeholder}
+                          />
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
 
                     {expanded ? (
@@ -354,6 +422,15 @@ export default function AdminUsersScreen() {
                             accessibilityLabel={isUserAdmin ? `Revoke admin from ${user.username}` : `Grant admin to ${user.username}`}
                           />
                         ) : null}
+
+                        <Button
+                          label="Share reset link"
+                          variant="secondary"
+                          size="sm"
+                          icon="link-outline"
+                          onPress={() => requestResetLink(user)}
+                          accessibilityLabel={`Share reset link for ${user.username}`}
+                        />
 
                         <View style={styles.resetBlock}>
                           <LabeledTextInput
@@ -371,7 +448,7 @@ export default function AdminUsersScreen() {
                             accessibilityLabel={`New password for ${user.username}`}
                           />
                           <Button
-                            label="Reset Password"
+                            label="Set password yourself"
                             variant="secondary"
                             size="sm"
                             icon="key-outline"
@@ -397,9 +474,38 @@ export default function AdminUsersScreen() {
               })}
             </View>
           )}
+
+          {users.length > 0 ? (
+            <View style={styles.footer}>
+              <Text style={styles.rowHint}>
+                Showing {users.length} of {total}
+              </Text>
+              {hasMore ? (
+                <Button
+                  label="Load more"
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => void loadMore()}
+                  loading={loadingMore}
+                  style={styles.touch}
+                />
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
       )}
 
+      <SelectionBar
+        count={selected.size}
+        actionLabel="Force-logout"
+        onAction={() => setPending({ kind: 'force-logout' })}
+        onClear={() => {
+          setSelected(new Set());
+          setLimited(false);
+        }}
+        busy={busy}
+        note={limited ? SELECTION_LIMIT_MESSAGE : null}
+      />
       <ConfirmDialog
         visible={!!pending && !busy}
         title={confirm?.title ?? ''}
@@ -491,6 +597,34 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing[3],
     borderTopWidth: 1,
     borderTopColor: t.colors.border.default,
+  },
+  headerButton: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerButtonText: {
+    ...typeStyle('label', 600),
+    color: t.colors.accent.aqua,
+  },
+  showButton: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+  },
+  footer: {
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  touch: {
+    minHeight: 44,
   },
   resetBlock: {
     gap: t.spacing[3],

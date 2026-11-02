@@ -1,12 +1,14 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
+import { AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED } from '../lib/db/stores/audit.js';
+
 /**
  * Admin user/role management routes
  * Extracted from routes/admin.js during the 2026-04-14 file-size split.
- * Mounts: /users, /users/:id/roles, /users/:id/reset-link, /users/:id/reset-password, /users/:id
+ * Mounts: /users, /users/:id (GET detail, DELETE), /users/:id/roles, /users/:id/reset-link, /users/:id/reset-password
  *
  * Called by routes/admin.js::createAdminRoutes() with { router, deps, ctx } where
- * ctx carries: adminWriteLimit, crypto, parsePageParams, paginateArray
+ * ctx carries: adminWriteLimit, crypto, parsePageParams, paginateArray, enrichAuditEntries
  */
 export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
   const {
@@ -38,7 +40,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     invalidateUserCache,
     requireRecentAuth,
   } = deps;
-  const { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray } = ctx;
+  const { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray, enrichAuditEntries } = ctx;
 
   async function writeAudit(req: any, res: any, action: string, targetId: string, details: Record<string, unknown>) {
     if (!stores.auditLog) return;
@@ -84,6 +86,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
           id: user.id,
           username: user.username,
           email: user.email || null,
+          emailVerified: Boolean(user.emailVerifiedAt),
           avatarUrl: buildAvatarUrl(user),
           createdAt: user.createdAt,
           profileCount: userProfiles.length,
@@ -108,6 +111,121 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     } catch (error: any) {
       log.error('admin users load failed', { error: error.message });
       return sendError(res, 500, 'Failed to load users', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── GET /users/:id — read-only support view of one user ────────────
+  // Every view is recorded first. If the record fails, no user data is sent.
+  router.get('/users/:id', adminAuth, validateParams(schemas.genericIdParams), async (req: any, res: any) => {
+    try {
+      setNoStore(res);
+      const targetUserId = deps.sanitizeIdentifier(req.validatedParams.id, 100);
+      if (!targetUserId) return sendError(res, 400, 'Invalid user ID', ErrorCodes.INVALID_INPUT);
+
+      const user = await getUserById(targetUserId);
+      if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+
+      try {
+        await stores.auditLog.insert({
+          actorType: 'admin',
+          actorId: req.user?.userId || req.userId,
+          action: AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED,
+          targetType: 'user',
+          targetId: targetUserId,
+          detailsJson: JSON.stringify({ targetUsername: user.username }),
+          ip: getRequestIp(req),
+          requestId: req.id,
+        });
+      } catch (err: any) {
+        log.error('admin user detail audit write failed', { targetUserId, error: err?.message });
+        return sendError(
+          res,
+          500,
+          "Couldn't record this view, so the details stay hidden. Try again.",
+          ErrorCodes.INTERNAL_ERROR,
+        );
+      }
+
+      const [roles, festivalsResult, crewsResult, sessionResult, activityRows] = await Promise.all([
+        stores.roles.getUserRoles(targetUserId),
+        stores.pool.query(
+          `
+  SELECT
+    fp.festival_id AS "festivalId",
+    f.name AS "festivalName",
+    fp.name AS "profileName",
+    fp.created_at AS "joinedAt",
+    COUNT(p.set_id)::int AS picks
+  FROM
+    festival_profiles fp
+    LEFT JOIN festivals f ON f.id = fp.festival_id
+    LEFT JOIN festival_profile_picks p ON p.profile_id = fp.id
+  WHERE
+    fp.user_id = $1
+    AND fp.deleted_at IS NULL
+  GROUP BY
+    fp.id,
+    f.name
+  ORDER BY
+    fp.created_at DESC
+`,
+          [targetUserId],
+        ),
+        stores.pool.query(
+          `
+  SELECT
+    c.id,
+    c.name,
+    c.festival_id AS "festivalId",
+    f.name AS "festivalName",
+    cm.role,
+    cm.joined_at AS "joinedAt",
+    (
+      SELECT
+        COUNT(*)::int
+      FROM
+        crew_members x
+      WHERE
+        x.crew_id = c.id
+    ) AS "memberCount"
+  FROM
+    crew_members cm
+    JOIN crews c ON c.id = cm.crew_id
+    LEFT JOIN festivals f ON f.id = c.festival_id
+  WHERE
+    cm.user_id = $1
+  ORDER BY
+    cm.joined_at DESC
+`,
+          [targetUserId],
+        ),
+        stores.pool.query('SELECT MAX(last_access) AS "lastActiveAt" FROM user_sessions WHERE user_id = $1', [
+          targetUserId,
+        ]),
+        stores.auditLog.listForUser(targetUserId, 20),
+      ]);
+
+      const toIso = (value: any) => (value ? new Date(value).toISOString() : null);
+      const lastActiveAt = sessionResult.rows[0]?.lastActiveAt;
+      return sendSuccess(res, {
+        user: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName || null,
+          email: user.email || null,
+          emailVerified: Boolean(user.emailVerifiedAt),
+          createdAt: user.createdAt,
+          lastActiveAt: toIso(lastActiveAt),
+          roles,
+          publicSchedule: user.publicSchedule === true,
+        },
+        festivals: festivalsResult.rows.map((row: any) => ({ ...row, joinedAt: toIso(row.joinedAt) })),
+        crews: crewsResult.rows.map((row: any) => ({ ...row, joinedAt: toIso(row.joinedAt) })),
+        activity: await enrichAuditEntries(activityRows),
+      });
+    } catch (error: any) {
+      log.error('admin user detail failed', { error: error.message, targetUserId: req.validatedParams?.id });
+      return sendError(res, 500, 'Failed to load user', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
@@ -258,7 +376,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         });
         log.warn('admin:reset-link', { ...auditLog });
         await writeAudit(req, res, 'admin_reset_link', targetUserId, { targetUsername: user.username });
-        return sendSuccess(res, { resetUrl, username: user.username });
+        return sendSuccess(res, { resetUrl, username: user.username, expiresAt: expiresAt.toISOString() });
       } catch (error: any) {
         log.error('admin reset-link failed', { error: error.message, targetUserId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to generate reset link', ErrorCodes.INTERNAL_ERROR);

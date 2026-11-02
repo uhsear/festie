@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '@festie/shared/services';
+import { api, bulkArchiveFestivals, withReauth } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import type { Festival } from '@festie/shared/types';
-import { timeAgoFromIso, formatUptime } from '@festie/shared/utils';
+import {
+  timeAgoFromIso,
+  formatUptime,
+  toggleSelection,
+  bulkConfirmCopy,
+  summarizeBulkResults,
+  SELECTION_LIMIT_MESSAGE,
+} from '@festie/shared/utils';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
+import { ConfirmDialog, SelectionBar, useReauthPrompt } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
@@ -29,8 +37,11 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  *   /admin/audit          — full audit log
  *   /admin/festival-edit  — create (no id) or edit (?id=) a festival
  *   /admin/lineup-import?id=  — CSV lineup import for a festival
+ *   /admin/festival-preview?id=  — read-only attendee schedule preview
  *
  * Gated on useAuthStore isAdmin; a non-admin sees an "Admins only" EmptyState.
+ * The Festivals card has a Select mode: tick festivals, then Archive them through
+ * a ConfirmDialog and a re-auth-wrapped POST /admin/bulk/archive-festivals.
  * Pull-to-refresh re-runs the three GETs. Endpoints resolve under /api/v1:
  *   GET /admin/dashboard → { stats, health, recentActivity (enriched) }
  *   GET /admin/audit     → recent audit entries (array; wrapper strips meta)
@@ -85,6 +96,12 @@ export default function AdminScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectNote, setSelectNote] = useState<string | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const { askPassword, reauthDialog } = useReauthPrompt();
 
   const load = useCallback(async () => {
     setError(false);
@@ -124,6 +141,39 @@ export default function AdminScreen() {
     setRefreshing(true);
     void load().finally(() => setRefreshing(false));
   }, [load]);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelected(new Set());
+    setSelectNote(null);
+  }, []);
+
+  const onToggleFestival = useCallback(
+    (id: string) => {
+      const { next, limited } = toggleSelection(selected, id);
+      setSelected(next);
+      setSelectNote(limited ? SELECTION_LIMIT_MESSAGE : null);
+    },
+    [selected],
+  );
+
+  const runArchive = useCallback(async () => {
+    setConfirmArchive(false);
+    setArchiving(true);
+    try {
+      const ids = [...selected];
+      const res = await withReauth(() => bulkArchiveFestivals(ids), askPassword);
+      if (!res) return;
+      const archived = new Set(res.results.filter((r) => r.status === 'archived').map((r) => r.festivalId));
+      setFestivals((prev) => prev.filter((f) => !archived.has(f.id)));
+      Alert.alert('Archive festivals', summarizeBulkResults('archive', res.results));
+      exitSelectMode();
+    } catch (err: unknown) {
+      Alert.alert('Archive festivals', err instanceof Error ? err.message : 'Action failed. Try again.');
+    } finally {
+      setArchiving(false);
+    }
+  }, [selected, askPassword, exitSelectMode]);
 
   // Non-admins never see the data — bounce them with a clear empty state.
   if (!isAdmin) {
@@ -193,7 +243,7 @@ export default function AdminScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
-            { paddingBottom: Math.max(t.spacing[6], insets.bottom + t.spacing[2]) },
+            { paddingBottom: Math.max(t.spacing[6], insets.bottom + t.spacing[2]) + (selected.size > 0 ? 96 : 0) },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -344,21 +394,49 @@ export default function AdminScreen() {
             </>
           ) : null}
 
-          {/* Festivals — each row links to edit + lineup import. */}
-          <SectionLabel>Festivals</SectionLabel>
+          {/* Festivals — each row links to edit, lineup import and preview; Select mode bulk-archives. */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.rowBody}>
+              <SectionLabel>Festivals</SectionLabel>
+            </View>
+            {festivals.length > 0 ? (
+              <TouchableOpacity
+                style={styles.textBtn}
+                activeOpacity={0.7}
+                onPress={selectMode ? exitSelectMode : () => setSelectMode(true)}
+                accessibilityRole="button"
+                accessibilityLabel={selectMode ? 'Done selecting festivals' : 'Select festivals'}
+              >
+                <Text style={styles.textBtnLabel}>{selectMode ? 'Done' : 'Select'}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
           <View style={styles.card}>
             {festivals.length > 0 ? (
               festivals.map((f, i) => (
-                <View
+                <TouchableOpacity
                   key={f.id}
                   style={[styles.row, i < festivals.length - 1 && styles.rowDivider]}
-                  accessibilityLabel={`Festival: ${f.name}`}
+                  activeOpacity={0.7}
+                  disabled={!selectMode}
+                  onPress={() => onToggleFestival(f.id)}
+                  accessibilityRole={selectMode ? 'checkbox' : undefined}
+                  accessibilityState={selectMode ? { checked: selected.has(f.id) } : undefined}
+                  accessibilityLabel={selectMode ? `Select ${f.name}` : `Festival: ${f.name}`}
                 >
+                  {selectMode ? (
+                    <Ionicons
+                      name={selected.has(f.id) ? 'checkbox' : 'square-outline'}
+                      size={t.iconSize.md}
+                      color={selected.has(f.id) ? t.colors.accent.aqua : t.colors.text.secondary}
+                    />
+                  ) : null}
                   <View style={styles.rowBody}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
                       {f.name}
                     </Text>
                   </View>
+                  {selectMode ? null : (
                   <View style={styles.rowActions}>
                     <TouchableOpacity
                       style={styles.iconBtn}
@@ -378,8 +456,18 @@ export default function AdminScreen() {
                     >
                       <Ionicons name="cloud-upload-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
                     </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.iconBtn}
+                      activeOpacity={0.7}
+                      onPress={() => router.push(`/admin/festival-preview?id=${f.id}`)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Preview ${f.name}`}
+                    >
+                      <Ionicons name="eye-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
+                    </TouchableOpacity>
                   </View>
-                </View>
+                  )}
+                </TouchableOpacity>
               ))
             ) : (
               <View style={styles.row}>
@@ -389,6 +477,26 @@ export default function AdminScreen() {
           </View>
         </ScrollView>
       )}
+
+      <SelectionBar
+        count={selected.size}
+        actionLabel="Archive"
+        onAction={() => setConfirmArchive(true)}
+        onClear={() => {
+          setSelected(new Set());
+          setSelectNote(null);
+        }}
+        busy={archiving}
+        note={selectNote}
+      />
+      <ConfirmDialog
+        visible={confirmArchive}
+        {...bulkConfirmCopy('archive', selected.size)}
+        destructive
+        onConfirm={() => void runArchive()}
+        onCancel={() => setConfirmArchive(false)}
+      />
+      {reauthDialog}
 
       <Stack.Screen options={{ headerShown: true, title: 'Admin' }} />
     </View>
@@ -430,6 +538,20 @@ const useStyles = makeStyles((t) => ({
   rowBody: {
     flex: 1,
     gap: t.spacing[1],
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  textBtn: {
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textBtnLabel: {
+    ...typeStyle('label', 600),
+    color: t.colors.accent.aqua,
   },
   rowActions: {
     flexDirection: 'row',
