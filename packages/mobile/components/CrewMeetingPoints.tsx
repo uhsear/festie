@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { useCrewStore } from '@festie/shared/stores';
+import { useCrewStore, useUIStore } from '@festie/shared/stores';
 import { COPY, MEETING_POINT_KINDS, meetingPointKind } from '@festie/shared/constants';
 import {
   meetingTimeDisplay,
@@ -19,7 +19,7 @@ import {
 } from '@festie/shared/utils';
 import { fetchPastMeetingPoints } from '@festie/shared/services';
 import type { CrewMeetingPoint, Festival, FestivalDay } from '@festie/shared/types';
-import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { useHaptics } from '../hooks/useHaptics';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
@@ -93,6 +93,7 @@ export default function CrewMeetingPoints({
   const createMeetingPoint = useCrewStore((s) => s.createMeetingPoint);
   const updateMeetingPoint = useCrewStore((s) => s.updateMeetingPoint);
   const deleteMeetingPoint = useCrewStore((s) => s.deleteMeetingPoint);
+  const setMeetingPointComing = useCrewStore((s) => s.setMeetingPointComing);
 
   const { hiddenIds, remove } = useUndoableRemove(
     (id) => deleteMeetingPoint(crewId, id),
@@ -305,6 +306,13 @@ export default function CrewMeetingPoints({
     remove(point.id, point.label);
   };
 
+  const toggleComing = (point: CrewMeetingPoint, coming: boolean) => {
+    haptics.tap();
+    setMeetingPointComing(crewId, point.id, currentUserId, coming).catch(() => {
+      useUIStore.getState().showToast("Couldn't update. Try again.", { kind: 'error' });
+    });
+  };
+
   const visiblePoints = meetingPoints.filter((p) => !hiddenIds.has(p.id));
   const { current, past } = splitMeetingPoints(visiblePoints, pastPoints, nowMs);
   const canCreate = !!label.trim() && !!location.trim();
@@ -313,6 +321,8 @@ export default function CrewMeetingPoints({
     // A queued create has no server id yet, so it cannot be edited or removed.
     const canRemove = !isPast && !isPending(point) && (point.created_by === currentUserId || isOwner);
     const isEmergency = point.type === 'emergency';
+    const comingMine = point.coming?.includes(currentUserId) ?? false;
+    const comingCount = point.coming?.length ?? 0;
     // 055: resolve the point's display time honoring daily recurrence.
     // Recurring → "daily 3:00 PM"; one-shot → "Sat 3:00 PM"; no meetAt → ''.
     const timeDisplay = meetingTimeDisplay(point.meet_at, point.recurs_daily, days, new Date(), timeZone);
@@ -349,6 +359,27 @@ export default function CrewMeetingPoints({
               <Text style={styles.pointTime} numberOfLines={1}>
                 {timeDisplay.label}
               </Text>
+            </View>
+          ) : null}
+          {!isPast && !isPending(point) ? (
+            <View style={styles.comingRow}>
+              <TouchableOpacity
+                onPress={() => toggleComing(point, !comingMine)}
+                style={[styles.comingButton, comingMine && styles.comingButtonOn]}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: comingMine }}
+                accessibilityLabel={`I'll be there: ${point.label}`}
+              >
+                <Text style={[styles.comingText, comingMine && styles.comingTextOn]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {comingMine ? 'Coming' : "I'll be there"}
+                </Text>
+              </TouchableOpacity>
+              {comingCount > 0 ? (
+                <Text style={styles.comingCount} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {comingCount} coming
+                </Text>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -839,6 +870,35 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.accent.aqua,
   },
   pointLocation: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+  },
+  comingRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  comingButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.pill,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+  },
+  comingButtonOn: {
+    borderColor: t.colors.accent.aqua,
+    backgroundColor: t.colors.ring.aqua,
+  },
+  comingText: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
+  },
+  comingTextOn: {
+    color: t.colors.accent.aqua,
+  },
+  comingCount: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },

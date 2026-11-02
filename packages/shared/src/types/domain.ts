@@ -428,10 +428,21 @@ export interface CrewMeetingPoint {
   updated_at?: string;
   /** Joined creator username (present on the list endpoint, not on create/update). */
   creator_name?: string;
+  /** T43: user ids who tapped "I'll be there", oldest first. Absent on old servers and the past list. */
+  coming?: string[];
   active: boolean;
   created_at: string;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */
   _optimistic?: boolean;
+}
+
+/** T43: a member's answer for one festival day. No row means no answer. */
+export type CrewDayAnswer = 'going' | 'maybe' | 'no';
+
+export interface CrewMemberDay {
+  userId: string;
+  dayIndex: number;
+  answer: CrewDayAnswer;
 }
 
 export interface CreateCrewMeetingPointRequest {

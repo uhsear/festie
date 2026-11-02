@@ -1017,6 +1017,86 @@ describe('crewStore', () => {
       expect(votes.find((v) => v.user_id === 'user-1')?.option).toBe(2);
     });
 
+    it('setMyDays updates optimistically and sends the deterministic clientId', async () => {
+      useCrewStore.setState({ crewDays: [{ userId: 'user-2', dayIndex: 0, answer: 'no' }] });
+      vi.mocked(api.put).mockResolvedValueOnce({ days: [{ userId: 'user-1', dayIndex: 1, answer: 'going' }] });
+      const outcome = await useCrewStore.getState().setMyDays('crew-1', 'user-1', {
+        days: [{ dayIndex: 1, answer: 'going' }],
+      });
+      expect(outcome).toBe('sent');
+      expect(vi.mocked(api.put).mock.calls[0]![2]).toMatchObject({
+        clientId: 'PUT:/crews/crew-1/days:days-crew-1-user-1',
+        offlineLabel: 'Update my days',
+      });
+      expect(useCrewStore.getState().crewDays).toHaveLength(2);
+    });
+
+    it('setMyDays rolls back only my rows on an online reject', async () => {
+      useCrewStore.setState({
+        crewDays: [
+          { userId: 'user-1', dayIndex: 0, answer: 'going' },
+          { userId: 'user-2', dayIndex: 0, answer: 'no' },
+        ],
+      });
+      vi.mocked(api.put).mockImplementationOnce(async () => {
+        useCrewStore.getState().applyCrewDays({
+          crewId: 'crew-1',
+          userId: 'user-3',
+          days: [{ userId: 'user-3', dayIndex: 1, answer: 'maybe' }],
+        });
+        throw new Error('rejected');
+      });
+      useCrewStore.setState({ activeCrew: mockCrew });
+      await expect(
+        useCrewStore.getState().setMyDays('crew-1', 'user-1', { days: [{ dayIndex: 0, answer: 'no' }] }),
+      ).rejects.toThrow('rejected');
+      const rows = useCrewStore.getState().crewDays;
+      expect(rows.find((d) => d.userId === 'user-1')).toMatchObject({ dayIndex: 0, answer: 'going' });
+      expect(rows.find((d) => d.userId === 'user-3')).toBeDefined();
+      expect(rows.find((d) => d.userId === 'user-2')).toBeDefined();
+    });
+
+    it('setMeetingPointComing adds my id, then rolls it back on reject', async () => {
+      useCrewStore.setState({ meetingPoints: [{ id: 'mp1', coming: ['user-2'] } as never] });
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('rejected'));
+      await expect(useCrewStore.getState().setMeetingPointComing('crew-1', 'mp1', 'user-1', true)).rejects.toThrow(
+        'rejected',
+      );
+      expect(useCrewStore.getState().meetingPoints[0]!.coming).toEqual(['user-2']);
+      expect(vi.mocked(api.put).mock.calls[0]![2]).toMatchObject({
+        clientId: 'PUT:/crews/crew-1/meeting-points/mp1/coming:coming-mp1-user-1',
+        offlineLabel: "Update I'll be there",
+      });
+    });
+
+    it('setMeetingPointComing replaces the row with the server row', async () => {
+      useCrewStore.setState({ meetingPoints: [{ id: 'mp1', coming: [] } as never] });
+      vi.mocked(api.put).mockResolvedValueOnce({ meetingPoint: { id: 'mp1', coming: ['user-1', 'user-2'] } });
+      await useCrewStore.getState().setMeetingPointComing('crew-1', 'mp1', 'user-1', true);
+      expect(useCrewStore.getState().meetingPoints[0]!.coming).toEqual(['user-1', 'user-2']);
+    });
+
+    it('loadCrewDays treats a 404 as no answers', async () => {
+      useCrewStore.setState({ activeCrew: mockCrew, crewDays: [{ userId: 'u', dayIndex: 0, answer: 'no' }] });
+      vi.mocked(api.get).mockRejectedValueOnce(Object.assign(new Error('Not found'), { status: 404 }));
+      await expect(useCrewStore.getState().loadCrewDays(mockCrew.id)).resolves.toBeUndefined();
+      expect(useCrewStore.getState().crewDays).toEqual([]);
+    });
+
+    it('applyCrewDays replaces that user rows and ignores another crew', () => {
+      useCrewStore.setState({
+        activeCrew: mockCrew,
+        crewDays: [
+          { userId: 'u1', dayIndex: 0, answer: 'no' },
+          { userId: 'u2', dayIndex: 0, answer: 'no' },
+        ],
+      });
+      useCrewStore.getState().applyCrewDays({ crewId: 'other', userId: 'u1', days: [] });
+      expect(useCrewStore.getState().crewDays).toHaveLength(2);
+      useCrewStore.getState().applyCrewDays({ crewId: mockCrew.id, userId: 'u1', days: [] });
+      expect(useCrewStore.getState().crewDays).toEqual([{ userId: 'u2', dayIndex: 0, answer: 'no' }]);
+    });
+
     it('updateMyStatus rolls back only my row, keeping a concurrent peer status', async () => {
       const mine: CrewMemberStatus = {
         crew_id: 'crew-1',

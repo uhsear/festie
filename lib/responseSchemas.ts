@@ -262,6 +262,8 @@ export const meetingPointResponseSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   creator_name: z.string().optional(),
+  // 090: user ids who tapped "I'll be there", oldest first. Absent on the `/past` list.
+  coming: z.array(z.string()).optional(),
 });
 export type MeetingPointResponse = z.infer<typeof meetingPointResponseSchema>;
 

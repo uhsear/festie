@@ -650,6 +650,28 @@ export const meetingPointUpdateSchema = z
   });
 export type MeetingPointUpdateInput = z.infer<typeof meetingPointUpdateSchema>;
 
+// 090: "I'll be there" on a meeting point. The member sets only their own tap.
+export const meetingPointComingSchema = z.object({ coming: z.boolean() });
+export type MeetingPointComingInput = z.infer<typeof meetingPointComingSchema>;
+
+// 090: the member's full set of day answers. A day left out is cleared; `days: []` clears all.
+// The route rejects a dayIndex at or past the festival's day count.
+export const crewDaysSchema = z
+  .object({
+    days: z
+      .array(
+        z.object({
+          dayIndex: z.number().int().min(0).max(60),
+          answer: z.enum(['going', 'maybe', 'no']),
+        }),
+      )
+      .max(61),
+  })
+  .refine((body) => new Set(body.days.map((d) => d.dayIndex)).size === body.days.length, {
+    message: 'Each day can appear only once.',
+  });
+export type CrewDaysInput = z.infer<typeof crewDaysSchema>;
+
 // ── Validation middleware factory ───────────────────────────────────
 export function validate(schema: z.ZodType<any>) {
   return (req: any, res: any, next: any) => {
@@ -1548,6 +1570,8 @@ export const schemas = {
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,
   meetingPointUpdate: meetingPointUpdateSchema,
+  meetingPointComing: meetingPointComingSchema,
+  crewDays: crewDaysSchema,
   pollCreate: pollCreateSchema,
   pollVote: pollVoteSchema,
   packingCreate: packingCreateSchema,

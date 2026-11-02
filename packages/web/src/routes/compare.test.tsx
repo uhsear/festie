@@ -9,13 +9,17 @@ const mocks = vi.hoisted(() => ({
   compare: vi.fn(),
   strip: vi.fn(),
   navigate: vi.fn(() => Promise.resolve()),
+  days: [
+    { id: 'd0', date: '2026-11-06', label: 'Friday' },
+    { id: 'd1', date: '2026-11-07', label: 'Saturday' },
+  ] as unknown[],
 }));
 
 const SET = { id: 's1', stageId: 'st', artist: 'Daft Punk', startTime: '14:00', endTime: '15:00' };
 
 vi.mock('@festie/shared/stores', () => ({
   useAuthStore: (sel: (s: unknown) => unknown) => sel({ user: mocks.user }),
-  useFestivalStore: (sel: (s: unknown) => unknown) => sel({ currentFestival: { id: 'f1' } }),
+  useFestivalStore: (sel: (s: unknown) => unknown) => sel({ currentFestival: { id: 'f1' }, days: mocks.days, selectedDay: 1 }),
 }));
 vi.mock('@festie/shared/hooks', () => ({
   useActiveCrew: () => mocks.crewState,
@@ -54,11 +58,29 @@ beforeEach(() => {
     freeTogether: [],
     split: [],
     together: [],
+    notThere: [],
     timeZone: 'UTC',
   });
 });
 
 describe('CompareView', () => {
+  it('names members who are not there on the selected day', () => {
+    mocks.compare.mockReturnValue({
+      ...mocks.compare(),
+      notThere: [
+        { profileId: 'p3', userId: 'u3', name: 'Ana', isMe: false, color: 'x' },
+        { profileId: 'p4', userId: 'u4', name: 'Ben', isMe: false, color: 'x' },
+      ],
+    });
+    render(<CompareView />);
+    expect(screen.getByText('Not there Saturday: Ana, Ben')).toBeInTheDocument();
+  });
+
+  it('shows no not-there line when everyone is there', () => {
+    render(<CompareView />);
+    expect(screen.queryByText(/Not there/)).not.toBeInTheDocument();
+  });
+
   it('shows the guest teaser when signed out', () => {
     mocks.user = null;
     render(<CompareView />);

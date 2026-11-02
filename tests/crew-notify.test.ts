@@ -128,6 +128,40 @@ describe('crew notifier', () => {
     assert.equal(sent()[0].body, 'Maya set a meeting point: Gate');
   });
 
+  test('now() with userIds sends only to those still in the crew, never the actor', async () => {
+    const { notifier, sent } = make();
+    await notifier.now({
+      crewId: 'crew1',
+      actorId: 'a',
+      kind: 'meeting-point',
+      key: 'mp-cancel:1',
+      text: 'Maya cancelled Gate',
+      userIds: ['a', 'b', 'gone'],
+    });
+    const s = sent();
+    assert.deepEqual(
+      s.map((m) => m.userId),
+      ['b'],
+    );
+    assert.equal(s[0].body, 'Maya cancelled Gate');
+    assert.equal(s[0].type, 'crew_meeting_point');
+  });
+
+  test('now() without userIds sends to the whole crew minus the actor as crew_meeting_point', async () => {
+    const { notifier, sent } = make();
+    await notifier.now({ crewId: 'crew1', actorId: 'a', kind: 'meeting-point', key: 'mp:9', text: 'Maya set a meeting point: X' });
+    assert.deepEqual(sent().map((m) => m.userId), ['b', 'c']);
+    assert.ok(sent().every((m) => m.type === 'crew_meeting_point'));
+  });
+
+  test('now() follows crewMeetingPoints, not crewUpdates', async () => {
+    const { notifier, sent } = make({
+      prefs: { b: { crewMeetingPoints: 0, crewUpdates: 1 }, c: { crewUpdates: 0, crewMeetingPoints: 1 } },
+    });
+    await notifier.now({ crewId: 'crew1', actorId: 'a', kind: 'meeting-point', key: 'mp:10', text: 'Maya set a meeting point: X' });
+    assert.deepEqual(sent().map((m) => m.userId), ['c']);
+  });
+
   test('toUsers() uses the given crew name', async () => {
     const { notifier, sent } = make();
     await notifier.toUsers({

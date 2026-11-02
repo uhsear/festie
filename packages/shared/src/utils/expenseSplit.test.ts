@@ -7,6 +7,7 @@ import {
   paymentStatusLine,
   paymentsToConfirm,
   settlementSentence,
+  sharesByDays,
   sharesError,
 } from './expenseSplit';
 import type { CrewExpense, CrewMember, CrewSettlement } from '../types';
@@ -39,6 +40,46 @@ describe('evenShares', () => {
       { userId: 'c', cents: 333 },
     ]);
     expect(evenShares(100, [])).toEqual([]);
+  });
+});
+
+describe('sharesByDays', () => {
+  const daysOf = (map: Record<string, number>) => (id: string) => map[id] ?? 0;
+
+  it('weights shares by days', () => {
+    expect(sharesByDays(4000, ['a', 'b'], daysOf({ a: 3, b: 1 }))).toEqual({
+      shares: [
+        { userId: 'a', cents: 3000 },
+        { userId: 'b', cents: 1000 },
+      ],
+      removed: [],
+    });
+    expect(sharesByDays(1000, ['a', 'b', 'c'], () => 1).shares.map((s) => s.cents)).toEqual([334, 333, 333]);
+  });
+
+  it('removes zero-day users and gives them no share', () => {
+    expect(sharesByDays(1000, ['a', 'b', 'c'], daysOf({ a: 2, c: 2 }))).toEqual({
+      shares: [
+        { userId: 'a', cents: 500 },
+        { userId: 'c', cents: 500 },
+      ],
+      removed: ['b'],
+    });
+  });
+
+  it('removes everyone when all are at zero days', () => {
+    expect(sharesByDays(1000, ['a', 'b'], () => 0)).toEqual({ shares: [], removed: ['a', 'b'] });
+  });
+
+  it('always sums to the total', () => {
+    for (let n = 0; n < 200; n += 1) {
+      const total = 1 + Math.floor(Math.random() * 100000);
+      const ids = Array.from({ length: 1 + Math.floor(Math.random() * 8) }, (_, i) => `u${i}`);
+      const days = ids.map(() => Math.floor(Math.random() * 6));
+      const { shares } = sharesByDays(total, ids, (id) => days[ids.indexOf(id)]);
+      if (days.some((d) => d > 0)) expect(shares.reduce((s, x) => s + x.cents, 0)).toBe(total);
+      else expect(shares).toEqual([]);
+    }
   });
 });
 

@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { useFestivalStore } from '@festie/shared/stores';
 import MembersTab, { type MembersTabProps } from './MembersTab';
+
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 // Avatar depends on @festie/shared helpers — mock the module so tests
 // don't need the full shared package wiring.
@@ -180,5 +184,38 @@ describe('MembersTab', () => {
     const members = Array.from({ length: 28 }, (_, i) => ({ id: `m${i}`, userId: `u${i}`, name: `N${i}` }));
     render(<MembersTab {...makeProps({ members, maxMembers: 30 })} />);
     expect(screen.getByText('28 of 30 members')).toBeInTheDocument();
+  });
+
+  it('shows day chips with a group name for members who answered', () => {
+    useFestivalStore.setState({
+      currentFestival: { id: 'f1' } as never,
+      days: [
+        { id: 'd0', festivalId: 'f1', date: '2026-11-06', label: 'Friday' },
+        { id: 'd1', festivalId: 'f1', date: '2026-11-07', label: 'Saturday' },
+      ] as never,
+    });
+    useCrewStore.setState({
+      activeCrew: { id: 'c1', festivalId: 'f1' } as never,
+      crewDays: [
+        { userId: 'u1', dayIndex: 0, answer: 'going' },
+        { userId: 'u1', dayIndex: 1, answer: 'maybe' },
+      ],
+    } as never);
+    render(<MembersTab {...makeProps()} />);
+    expect(screen.getByRole('list', { name: 'Alice: going Friday; maybe Saturday' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: /^Charlie/ })).not.toBeInTheDocument();
+  });
+
+  it('shows no day chips while another festival is loaded', () => {
+    useFestivalStore.setState({
+      currentFestival: { id: 'f2' } as never,
+      days: [{ id: 'd0', festivalId: 'f2', date: '2026-12-01', label: 'Tuesday' }] as never,
+    });
+    useCrewStore.setState({
+      activeCrew: { id: 'c1', festivalId: 'f1' } as never,
+      crewDays: [{ userId: 'u1', dayIndex: 0, answer: 'going' }],
+    } as never);
+    render(<MembersTab {...makeProps()} />);
+    expect(screen.queryByRole('list', { name: /^Alice/ })).not.toBeInTheDocument();
   });
 });

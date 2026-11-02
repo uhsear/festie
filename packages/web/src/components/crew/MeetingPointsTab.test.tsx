@@ -96,6 +96,11 @@ vi.mock('@festie/shared/stores', () => ({
     selector({ currentFestival: null, days: [] }),
 }));
 
+const { setComing } = vi.hoisted(() => ({ setComing: vi.fn(() => Promise.resolve('sent')) }));
+vi.mock('@festie/shared/stores/crewStore', () => ({
+  useCrewStore: { getState: () => ({ setMeetingPointComing: setComing }) },
+}));
+
 // P4 adds imports to CrewStatus; it is not under test here.
 vi.mock('./CrewStatus', () => ({ default: () => null }));
 
@@ -301,5 +306,27 @@ describe('MeetingPointsTab', () => {
     setQuery({ data: [POINT] });
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     expect(useLiveLocationStore.getState().crewId).toBe('c1');
+  });
+
+  it("shows the I'll be there button, the count, and toggles through the store", async () => {
+    const user = userEvent.setup();
+    setQuery({ data: [{ ...POINT, coming: ['u2', 'u3'] }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText('2 coming')).toBeInTheDocument();
+    const btn = screen.getByRole('button', { name: "I'll be there: Main Entrance" });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    await user.click(btn);
+    expect(setComing).toHaveBeenCalledWith('c1', 'mp1', 'u1', true);
+  });
+
+  it('reads Coming when tapped and undoes on the next tap', async () => {
+    const user = userEvent.setup();
+    setQuery({ data: [{ ...POINT, coming: ['u1'] }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    const btn = screen.getByRole('button', { name: "I'll be there: Main Entrance" });
+    expect(btn).toHaveTextContent('Coming');
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    await user.click(btn);
+    expect(setComing).toHaveBeenCalledWith('c1', 'mp1', 'u1', false);
   });
 });

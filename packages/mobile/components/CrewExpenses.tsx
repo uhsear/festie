@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, Alert, Linking, AccessibilityInfo } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { useCrewStore, useUIStore } from '@festie/shared/stores';
+import { useCrewStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
+import { useCrewDaysIndex } from '@festie/shared/hooks';
 import type { CrewExpense, CrewMember, CrewSettlement, CreateCrewExpenseRequest } from '@festie/shared/types';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import {
@@ -11,6 +12,10 @@ import {
   formatCents,
   toCents,
   evenShares,
+  sharesByDays,
+  attendingDayCount,
+  hasDayAnswers,
+  memberSummary,
   sharesError,
   expenseShareCents,
   settlementSentence,
@@ -94,6 +99,9 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
     !!editing && editing.paid_by !== currentUserId && editing.created_by !== currentUserId && !isOwner;
   const [uneven, setUneven] = useState(false);
   const [shareText, setShareText] = useState<Record<string, string>>({});
+  const [removedNames, setRemovedNames] = useState<string[]>([]);
+  const daysIndex = useCrewDaysIndex();
+  const dayCount = useFestivalStore((s) => s.days.length);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // Planned-vs-actual filter. 'actual' = the real ledger (feeds settle-up);
@@ -112,6 +120,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
     setPaidBy(currentUserId);
     setUneven(false);
     setShareText({});
+    setRemovedNames([]);
     setEditing(null);
     setShowForm(false);
   };
@@ -139,6 +148,16 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
       Object.fromEntries(evenShares(toCents(amount), splitWith).map((sh) => [sh.userId, (sh.cents / 100).toFixed(2)])),
     );
     setUneven(true);
+  };
+
+  const splitByDays = () => {
+    const { shares: byDays, removed } = sharesByDays(toCents(amount), splitWith, (id) =>
+      attendingDayCount(daysIndex, id, dayCount),
+    );
+    if (byDays.length === 0) return;
+    setSplitWith((prev) => prev.filter((id) => !removed.includes(id)));
+    setShareText(Object.fromEntries(byDays.map((sh) => [sh.userId, (sh.cents / 100).toFixed(2)])));
+    setRemovedNames(removed.map((id) => members.find((m) => m.userId === id)?.name || 'Member'));
   };
 
   const toggleMember = (uid: string) => {
@@ -727,11 +746,31 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                   {shareProblem}
                 </Text>
               ) : null}
+              {uneven && amt > 0 && dayCount > 0 && hasDayAnswers(daysIndex, splitWith) ? (
+                <TouchableOpacity
+                  style={styles.textButton}
+                  onPress={splitByDays}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.textButtonText}>By days attending</Text>
+                </TouchableOpacity>
+              ) : null}
+              {removedNames.length > 0 ? (
+                <Text style={styles.splitHint} accessibilityLiveRegion="polite">
+                  {memberSummary(removedNames)} not there any day, so not in this split.
+                </Text>
+              ) : null}
             </>
           ) : null}
           <TouchableOpacity
             style={styles.textButton}
-            onPress={() => (uneven ? setUneven(false) : startUneven())}
+            onPress={() => {
+              if (uneven) {
+                setUneven(false);
+                setRemovedNames([]);
+              } else startUneven();
+            }}
             activeOpacity={0.8}
             accessibilityRole="button"
           >

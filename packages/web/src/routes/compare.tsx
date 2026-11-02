@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewCompare, useCrewFestival, useFestival, usePicks } from '@festie/shared/hooks';
-import { resolveStageColor } from '@festie/shared/utils';
+import { memberSummary, resolveStageColor, formatDayChip } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
 import GuestTeaser from '../components/features/GuestTeaser';
 import CrewSuggestionStrip from '../components/features/CrewSuggestionStrip';
@@ -34,7 +34,9 @@ function CompareViewInner() {
 
   const { status, crew, retry: retryCrew } = useActiveCrew();
   const { state: festivalState, festivalName, retry: retryFestival } = useCrewFestival(crew);
-  const { columns, rows, freeTogether, split, together, timeZone } = useCrewCompare(sort);
+  const { columns, rows, freeTogether, split, together, notThere, timeZone } = useCrewCompare(sort);
+  const days = useFestivalStore((s) => s.days);
+  const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { savePick } = usePicks();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
@@ -130,6 +132,11 @@ function CompareViewInner() {
           together={together}
           timeZone={timeZone}
         />
+        {notThere.length > 0 && days[selectedDay] && (
+          <p className="mb-2 text-sm text-text-secondary">
+            Not there {formatDayChip(days[selectedDay]).label}: {memberSummary(notThere.map((c) => c.name))}
+          </p>
+        )}
         <div role="group" aria-label="Sort by" className="mb-2 flex items-center gap-2">
           <span className="text-sm text-text-secondary" aria-hidden="true">
             Sort by

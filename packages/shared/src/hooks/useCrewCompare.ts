@@ -6,7 +6,9 @@ import { PRIORITY_WEIGHT } from '../utils/crewNudges';
 import { assignCrewColors, buildCrewMix, crewProfilesFor, findFreeTogether, type FreeSlot } from '../utils/crewPlan';
 import { resolveFestivalTimeZone } from '../utils/festivalTime';
 import { buildCrewSplits, type CrewSplit, type CrewTogether } from '../utils/pickConflicts';
+import { isAttending } from '../utils/crewDays';
 import { byStartTime } from '../utils/scheduleFormat';
+import { useCrewDaysIndex } from './useCrewDaysIndex';
 
 export interface CrewCompareColumn {
   profileId: string;
@@ -31,6 +33,8 @@ export interface CrewCompare {
   /** Where members split up and which sets they see together; both empty for a crew of one. */
   split: CrewSplit[];
   together: CrewTogether[];
+  /** Others who said Not going on the selected day, in member order. */
+  notThere: CrewCompareColumn[];
   timeZone: string | undefined;
 }
 
@@ -44,6 +48,7 @@ export function useCrewCompare(sort: 'time' | 'mix'): CrewCompare {
   const currentProfile = useFestivalStore((s) => s.currentProfile) as Profile | null;
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const timeZone = useFestivalStore((s) => resolveFestivalTimeZone(s.currentFestival));
+  const daysIndex = useCrewDaysIndex();
 
   const profiles = useMemo(
     () =>
@@ -60,7 +65,14 @@ export function useCrewCompare(sort: 'time' | 'mix'): CrewCompare {
     return currentProfile ? [currentProfile, ...others] : others;
   }, [profiles, currentProfile]);
 
-  const columns = useMemo(() => {
+  // You plus every member not marked Not going on the selected day. Your own column always stays.
+  const dayProfiles = useMemo(
+    () => ordered.filter((p) => p.id === currentProfile?.id || isAttending(daysIndex, p.userId, selectedDay)),
+    [ordered, currentProfile, daysIndex, selectedDay],
+  );
+
+  // Colours come from the full crew so a member keeps their colour from day to day.
+  const allColumns = useMemo(() => {
     const colors = assignCrewColors(ordered.map((p) => p.id));
     return ordered.map((p) => ({
       profileId: p.id,
@@ -71,6 +83,16 @@ export function useCrewCompare(sort: 'time' | 'mix'): CrewCompare {
     }));
   }, [ordered, currentProfile]);
 
+  const columns = useMemo(
+    () => allColumns.filter((c) => dayProfiles.some((p) => p.id === c.profileId)),
+    [allColumns, dayProfiles],
+  );
+
+  const notThere = useMemo(
+    () => allColumns.filter((c) => !dayProfiles.some((p) => p.id === c.profileId)),
+    [allColumns, dayProfiles],
+  );
+
   const rows = useMemo(() => {
     const built = sets
       .filter((s) => s.dayIndex === selectedDay)
@@ -78,7 +100,7 @@ export function useCrewCompare(sort: 'time' | 'mix'): CrewCompare {
         const picks: Record<string, Priority | undefined> = {};
         let pickers = 0;
         let top: Priority | null = null;
-        for (const p of ordered) {
+        for (const p of dayProfiles) {
           const priority = p.picks?.[set.id] as Priority | undefined;
           picks[p.id] = priority;
           if (!priority) continue;
@@ -96,23 +118,22 @@ export function useCrewCompare(sort: 'time' | 'mix'): CrewCompare {
       .filter((r) => r.pickers > 0);
     if (sort === 'time') return built.sort((a, b) => byStartTime(a.set, b.set));
     const rank = new Map(
-      buildCrewMix({ sets, days, profiles: ordered, dayIndex: selectedDay, minCount: 1, limit: Infinity }).map(
+      buildCrewMix({ sets, days, profiles: dayProfiles, dayIndex: selectedDay, minCount: 1, limit: Infinity }).map(
         (e, idx) => [e.set.id, idx] as const,
       ),
     );
     return built.sort((a, b) => (rank.get(a.set.id) ?? 0) - (rank.get(b.set.id) ?? 0));
-  }, [sets, days, ordered, selectedDay, currentProfile, sort]);
+  }, [sets, days, dayProfiles, selectedDay, currentProfile, sort]);
 
   const freeTogether = useMemo(
-    () => findFreeTogether({ sets, days, profiles: ordered, dayIndex: selectedDay, nowMs: Date.now(), timeZone }),
-    [sets, days, ordered, selectedDay, timeZone],
+    () => findFreeTogether({ sets, days, profiles: dayProfiles, dayIndex: selectedDay, nowMs: Date.now(), timeZone }),
+    [sets, days, dayProfiles, selectedDay, timeZone],
   );
 
-  // shortcut: shows every member on every day; filter by attendance once T43 crew days exist.
   const { split, together } = useMemo(
-    () => buildCrewSplits({ sets, days, profiles: ordered, dayIndex: selectedDay, timeZone }),
-    [sets, days, ordered, selectedDay, timeZone],
+    () => buildCrewSplits({ sets, days, profiles: dayProfiles, dayIndex: selectedDay, timeZone }),
+    [sets, days, dayProfiles, selectedDay, timeZone],
   );
 
-  return { columns, rows, freeTogether, split, together, timeZone };
+  return { columns, rows, freeTogether, split, together, notThere, timeZone };
 }

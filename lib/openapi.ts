@@ -33,6 +33,8 @@ import {
   festivalDepthQuery,
   lineupImportRequestSchema,
   festivalAnnouncementSchema,
+  crewDaysSchema,
+  meetingPointComingSchema,
 } from './schemas';
 import { responseSchemas } from './responseSchemas';
 
@@ -125,6 +127,16 @@ function jsonResponseWrapper(props: Record<string, any>) {
 function arrayOf(name: string) {
   return { type: 'array', items: ref(name) };
 }
+
+/** `CrewMemberDay[]`: one row per answered day (no row means no answer). */
+const crewMemberDays = {
+  type: 'array',
+  items: {
+    type: 'object',
+    required: ['userId', 'dayIndex', 'answer'],
+    properties: { userId: { type: 'string' }, dayIndex: { type: 'integer' }, answer: { type: 'string', enum: ['going', 'maybe', 'no'] } },
+  },
+};
 
 /** The `crewId` path parameter shared by every crew sub-resource route. */
 const crewIdPathParam = { name: 'crewId', in: 'path', required: true, schema: { type: 'string' } };
@@ -307,6 +319,13 @@ export function generateOpenAPISpec(config: any) {
       '/api/v1/crews/{crewId}/status': {
         get: { tags: ['Crews'], summary: 'List crew member statuses', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Member statuses', ...jsonResponseWrapper({ statuses: arrayOf('CrewMemberStatus') }) } } },
         put: { tags: ['Crews'], summary: 'Upsert my own status', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Status upserted', ...jsonResponseWrapper({ status: ref('CrewMemberStatus') }) } } },
+      },
+      '/api/v1/crews/{crewId}/days': {
+        get: { tags: ['Crews'], summary: 'List the day answers of current crew members', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Day answers, ordered by user and day', ...jsonResponseWrapper({ days: crewMemberDays }) }, 403: { description: 'Not a crew member' } } },
+        put: { tags: ['Crews'], summary: 'Replace my day answers (a day left out is cleared)', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], requestBody: jsonBody(crewDaysSchema), responses: { 200: { description: 'My day answers', ...jsonResponseWrapper({ days: crewMemberDays }) }, 400: { description: 'A repeated day, or a day that is not part of this festival' }, 403: { description: 'Not a crew member' } } },
+      },
+      '/api/v1/crews/{crewId}/meeting-points/{mpId}/coming': {
+        put: { tags: ['Crews'], summary: "Set or clear my I'll be there tap on an active meeting point (idempotent)", security: [{ bearerAuth: [] }], parameters: [crewIdPathParam, { name: 'mpId', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(meetingPointComingSchema), responses: { 200: { description: 'The meeting point with its coming list', ...jsonResponseWrapper({ meetingPoint: ref('MeetingPoint') }) }, 403: { description: 'Not a crew member' }, 404: { description: 'Meeting point not found or not active' } } },
       },
       '/api/v1/crews/{crewId}/activity': {
         get: { tags: ['Crews'], summary: 'Crew activity feed (cursor-paginated)', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Activity entries', ...jsonResponseWrapper({ items: arrayOf('CrewActivityEntry'), nextCursor: { type: 'string', nullable: true } }) } } },

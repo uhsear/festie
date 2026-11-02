@@ -1626,6 +1626,12 @@
           },
           "creator_name": {
             "type": "string"
+          },
+          "coming": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -3528,6 +3534,252 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/days": {
+      "get": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "List the day answers of current crew members",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Day answers, ordered by user and day",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "userId",
+                          "dayIndex",
+                          "answer"
+                        ],
+                        "properties": {
+                          "userId": {
+                            "type": "string"
+                          },
+                          "dayIndex": {
+                            "type": "integer"
+                          },
+                          "answer": {
+                            "type": "string",
+                            "enum": [
+                              "going",
+                              "maybe",
+                              "no"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a crew member"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Replace my day answers (a day left out is cleared)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "maxItems": 61,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "dayIndex": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 60
+                        },
+                        "answer": {
+                          "type": "string",
+                          "enum": [
+                            "going",
+                            "maybe",
+                            "no"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "dayIndex",
+                        "answer"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "days"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "My day answers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "userId",
+                          "dayIndex",
+                          "answer"
+                        ],
+                        "properties": {
+                          "userId": {
+                            "type": "string"
+                          },
+                          "dayIndex": {
+                            "type": "integer"
+                          },
+                          "answer": {
+                            "type": "string",
+                            "enum": [
+                              "going",
+                              "maybe",
+                              "no"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A repeated day, or a day that is not part of this festival"
+          },
+          "403": {
+            "description": "Not a crew member"
+          }
+        }
+      }
+    },
+    "/api/v1/crews/{crewId}/meeting-points/{mpId}/coming": {
+      "put": {
+        "tags": [
+          "Crews"
+        ],
+        "summary": "Set or clear my I'll be there tap on an active meeting point (idempotent)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "crewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mpId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "coming": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "coming"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The meeting point with its coming list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "meetingPoint": {
+                      "$ref": "#/components/schemas/MeetingPoint"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a crew member"
+          },
+          "404": {
+            "description": "Meeting point not found or not active"
           }
         }
       }

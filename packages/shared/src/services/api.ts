@@ -114,6 +114,8 @@ const OFFLINE_ELIGIBLE_PATTERNS: RegExp[] = [
   // (status-<crewId>-<userId>) collapses repeated offline toggles into the
   // latest, replay-safe write — captured offline, delivered on a signal blip.
   /^\/crews\/[^/]+\/status(\/|$)/,
+  // T43: my per-day attendance answers. PUT replaces my full set, so a replay is safe.
+  /^\/crews\/[^/]+\/days(\/|$)/,
   // Saw it / Skipped marks: PUT /ratings/:setId/caught with clientId caught-<userId>-<setId>.
   /^\/ratings\/[^/]+\/caught$/,
   // DELIBERATELY ABSENT: /crews/:id/sos, /sos/clear, /sos/seen and

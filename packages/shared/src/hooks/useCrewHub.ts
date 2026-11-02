@@ -17,6 +17,8 @@ import {
 } from '../utils/crewPlan';
 import type { CrewWhereabout } from '../utils/dayOf';
 import { isFestivalOver, resolveFestivalTimeZone } from '../utils/festivalTime';
+import { isAttending } from '../utils/crewDays';
+import { useCrewDaysIndex } from './useCrewDaysIndex';
 import { useCrewDayOf } from './useDayOf';
 
 export interface CrewHub {
@@ -53,6 +55,7 @@ export function useCrewHub(nowMs: number): CrewHub {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const festivals = useFestivalStore((s) => s.festivals);
   const timeZone = resolveFestivalTimeZone(currentFestival);
+  const daysIndex = useCrewDaysIndex();
 
   const { crew, whereabouts } = useCrewDayOf(nowMs, days, timeZone);
 
@@ -85,6 +88,7 @@ export function useCrewHub(nowMs: number): CrewHub {
       : buildSlots(sets, days, crewProfiles, nowMs, CREW_PLAN_SLOTS, timeZone)
           .filter((slot) => slot.picks.length > 0)
           .map((slot) => ({ startMs: slot.startMs, startTime: slot.startTime, groups: groupSlotPicks(slot.picks) }));
+    const attending = (profile: Profile, dayIndex: number) => isAttending(daysIndex, profile.userId, dayIndex);
     return {
       crew,
       festivalName: crewFestivalName(crew, festivals, currentFestival),
@@ -93,8 +97,8 @@ export function useCrewHub(nowMs: number): CrewHub {
       meetingPoint: pickActiveMeetingPoint(meetingPoints, nowMs),
       isPast,
       upNext,
-      howWeDid: isPast ? buildCrewMix({ sets, days, profiles: crewProfiles, timeZone, limit: 5 }) : [],
-      mix: isPast ? [] : buildCrewMix({ sets, days, profiles: crewProfiles, nowMs, timeZone, limit: 3 }),
+      howWeDid: isPast ? buildCrewMix({ sets, days, profiles: crewProfiles, timeZone, limit: 5, isAttending: attending }) : [],
+      mix: isPast ? [] : buildCrewMix({ sets, days, profiles: crewProfiles, nowMs, timeZone, limit: 3, isAttending: attending }),
       whereabouts: whereabouts.filter((w) => w.sos || w.live || w.statusLabel).slice(0, 3),
       openPolls: polls
         .filter((p) => !p.closed)
@@ -113,6 +117,7 @@ export function useCrewHub(nowMs: number): CrewHub {
     sets,
     days,
     crewProfiles,
+    daysIndex,
     timeZone,
     whereabouts,
     polls,

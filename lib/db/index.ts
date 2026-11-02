@@ -62,6 +62,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
   const crewPacking = crewsResult.crewPacking;
   const crewRides = crewsResult.crewRides;
   const crewStatus = crewsResult.crewStatus;
+  const crewDays = crewsResult.crewDays;
 
   const sessions = createSessionsStore(pool, utils);
   const refreshTokens = sessions.refreshTokens;
@@ -103,6 +104,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
     crewPacking,
     crewRides,
     crewStatus,
+    crewDays,
     auditLog,
     roles,
     polls,
