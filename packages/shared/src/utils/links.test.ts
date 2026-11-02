@@ -8,6 +8,7 @@ import {
   buildPublicScheduleUrl,
   buildHomeUrl,
   buildAppDeepLink,
+  safeReturnPath,
 } from './links';
 
 describe('links — buildJoinUrl', () => {
@@ -81,5 +82,34 @@ describe('links — buildPublicScheduleUrl', () => {
   it('builds the vanity schedule URL and encodes the username', () => {
     expect(buildPublicScheduleUrl('raver_1')).toBe('https://festie.us/s/u/raver_1');
     expect(buildPublicScheduleUrl('a b', 'http://localhost:5173/')).toBe('http://localhost:5173/s/u/a%20b');
+  });
+});
+
+describe('links — safeReturnPath', () => {
+  it.each(['/set/abc', '/picks?day=2', '/(tabs)/picks'])('accepts the in-app path %s', (path) => {
+    expect(safeReturnPath(path)).toBe(path);
+  });
+
+  it.each([
+    '//evil.com',
+    '/\\evil.com',
+    'https://evil.com',
+    'javascript:alert(1)',
+    '',
+    42,
+    undefined,
+    '/login',
+    '/register?next=/x',
+    '/forgot-password',
+    '/(auth)/login',
+    '/set/a\nb',
+    `/${'a'.repeat(512)}`,
+  ])('rejects %j', (raw) => {
+    expect(safeReturnPath(raw)).toBeNull();
+  });
+
+  it('accepts a path of exactly 512 characters', () => {
+    const path = `/${'a'.repeat(511)}`;
+    expect(safeReturnPath(path)).toBe(path);
   });
 });

@@ -13,6 +13,11 @@ const storeState: Record<string, unknown> = {};
 
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+  useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+}));
+
+vi.mock('../lib/toastContext', () => ({
+  useToast: () => ({ toast: vi.fn() }),
 }));
 
 vi.mock('@festie/shared/stores/uiStore', () => ({
@@ -113,6 +118,7 @@ describe('GridView perf (EDC Orlando-sized lineup)', () => {
     Object.assign(storeState, {
       currentFestival: { id: 'edc', name: 'EDC Orlando' },
       currentProfile: { id: 'p1', picks: PICKS },
+      user: { id: 'p1' },
       picks: PICKS,
       sets: SETS,
       stages: STAGES,

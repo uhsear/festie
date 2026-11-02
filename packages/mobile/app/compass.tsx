@@ -116,7 +116,7 @@ export default function CompassScreen() {
             }
             action={{
               label: 'Set a meeting point',
-              onPress: () => router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } }),
+              onPress: () => router.push({ pathname: '/(tabs)/crew', params: { tab: 'find' } }),
             }}
           />
         </ScrollView>

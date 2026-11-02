@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { useFestivalStore } from '@festie/shared/stores';
+import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { usePicks, useFestival, useDayClashes } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   selectNowNext,
   resolveFestivalTimeZone,
@@ -33,19 +34,24 @@ import { CalendarX, Music, Filter } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { cn } from '../lib/utils';
+import { useToast } from '../lib/toastContext';
 
 const JumpToNowIcon = CONCEPT_ICON.jumpToNow;
 
 export default function GridView() {
   return (
-    <RenderErrorBoundary name="grid">
-      <GridViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Grid</h1>
+      <RenderErrorBoundary name="grid">
+        <GridViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 
 function GridViewInner() {
   const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const user = useAuthStore((state) => state.user);
   const days = useFestivalStore((state) => state.days);
   const allSets = useFestivalStore((state) => state.sets);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
@@ -53,6 +59,7 @@ function GridViewInner() {
   // battery-costing reflow loop). The manual "Now" button stays available.
   const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
   const { getMyPick, getOtherPicks, savePick } = usePicks();
+  const { toast } = useToast();
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
@@ -192,11 +199,15 @@ function GridViewInner() {
 
   const handleSavePick = useCallback(
     async (setId: string, priority: string | null) => {
-      if (currentFestival) {
+      if (!currentFestival) return;
+      try {
         await savePick(currentFestival.id, setId, priority as Priority | null);
+      } catch (err) {
+        // Grid and TBA cells show no failed chip, so a failed save (first-pick join included) toasts.
+        toast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), 'error');
       }
     },
-    [currentFestival, savePick],
+    [currentFestival, savePick, toast],
   );
 
   if (!currentFestival) {
@@ -226,7 +237,7 @@ function GridViewInner() {
             getMyPick={getMyPick}
             getOtherPicks={getOtherPicks}
             conflictIds={conflictIds}
-            currentProfile={currentProfile}
+            canPick={!!user}
             currentFestival={currentFestival}
             getStageColor={getStageColor}
             onSavePick={handleSavePick}
@@ -321,7 +332,7 @@ function GridViewInner() {
             vpW={vpW}
             nowIndicator={nowIndicator}
             clashMarks={clashMarks}
-            currentProfile={currentProfile}
+            canPick={!!user}
             currentFestival={currentFestival}
             gridRef={gridRef}
             getMyPick={getMyPick}
@@ -365,7 +376,7 @@ function GridViewInner() {
               getMyPick={getMyPick}
               getOtherPicks={getOtherPicks}
               conflictIds={conflictIds}
-              currentProfile={currentProfile}
+              canPick={!!user}
               currentFestival={currentFestival}
               getStageColor={getStageColor}
               onSavePick={handleSavePick}

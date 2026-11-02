@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FestivalSet, Priority, Stage, Profile, Festival } from '@festie/shared/types';
+import { FestivalSet, Priority, Stage, Festival } from '@festie/shared/types';
 import {
   setMinuteRange,
   twoUpColumnWidth,
@@ -127,7 +127,7 @@ export interface TimelineGridProps {
   vpW: number;
   nowIndicator: number | null;
   clashMarks: Map<string, ClashMark>;
-  currentProfile: Profile | null;
+  canPick: boolean;
   currentFestival: Festival | null;
   gridRef: React.RefObject<HTMLDivElement | null>;
   getMyPick: (setId: string) => Priority | null | undefined;
@@ -146,7 +146,7 @@ export default function TimelineGrid({
   vpW,
   nowIndicator,
   clashMarks,
-  currentProfile,
+  canPick,
   currentFestival,
   gridRef,
   getMyPick,
@@ -323,7 +323,7 @@ export default function TimelineGrid({
               clash={clashMarks.get(s.id)}
               compact={compact}
               tabbable={s.id === tabStopId}
-              hasProfile={!!currentProfile}
+              canPick={canPick}
               festival={currentFestival}
               onSetClick={onSetClick}
               onSavePick={onSavePick}

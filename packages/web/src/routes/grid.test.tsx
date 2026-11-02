@@ -8,6 +8,11 @@ const storeState: Record<string, unknown> = {};
 
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+  useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+}));
+
+vi.mock('../lib/toastContext', () => ({
+  useToast: () => ({ toast: vi.fn() }),
 }));
 
 vi.mock('@festie/shared/stores/uiStore', () => ({
@@ -374,6 +379,7 @@ describe('GridView', () => {
         date: day,
       };
       storeState.currentProfile = { id: 'p1', picks: { 's-next': 'must' } };
+      storeState.user = { id: 'p1' };
       storeState.days = [{ id: 'd1', date: day, dayIndex: 0 }];
       storeState.sets = [pickedSet];
       setFilters({
@@ -388,6 +394,7 @@ describe('GridView', () => {
     afterEach(() => {
       vi.useRealTimers();
       storeState.currentProfile = undefined;
+      storeState.user = undefined;
       storeState.days = undefined;
       storeState.sets = undefined;
     });
@@ -402,6 +409,7 @@ describe('GridView', () => {
 
     it('does not render the countdown when the user has no upcoming picks', () => {
       storeState.currentProfile = { id: 'p1', picks: {} };
+      storeState.user = { id: 'p1' };
       render(<GridView />);
       expect(screen.queryByTestId('next-pick-countdown')).not.toBeInTheDocument();
     });

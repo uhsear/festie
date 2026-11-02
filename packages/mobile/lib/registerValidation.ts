@@ -1,3 +1,6 @@
+import { AUTH_COPY } from '@festie/shared/constants';
+import { isValidEmail, usernameError } from '@festie/shared/utils';
+
 export interface RegisterFields {
   username: string;
   email: string;
@@ -30,8 +33,13 @@ export function isAtLeast18(d: Date, now: number = Date.now()): boolean {
 export function validateRegister(f: RegisterFields, now: number = Date.now()): RegisterErrors {
   const errors: RegisterErrors = {};
   if (!f.username.trim()) errors.username = 'Username is required';
-  // Email is required on mobile: it is the only way to recover a password.
-  if (!f.email.trim()) errors.email = 'Email is required for password reset';
+  else {
+    const rule = usernameError(f.username);
+    if (rule) errors.username = rule;
+  }
+  // Email is required: it is the only way to recover a password.
+  if (!f.email.trim()) errors.email = AUTH_COPY.emailRequired;
+  else if (!isValidEmail(f.email.trim())) errors.email = 'Please enter a valid email address';
   if (!f.password.trim()) errors.password = 'Password is required';
   else if (f.password.length < 8) errors.password = 'Password must be at least 8 characters';
   if (f.password && f.password !== f.confirmPassword) errors.confirmPassword = 'Passwords do not match';

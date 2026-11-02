@@ -15,7 +15,7 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
+import { useFestivalDataStore, useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { usePicks, useFestival, useDayClashes } from '@festie/shared/hooks';
 import { COPY } from '@festie/shared/constants';
 import {
@@ -95,7 +95,7 @@ export default function GridScreen() {
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const allSets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
-  const currentProfile = useFestivalDataStore((s) => s.currentProfile);
+  const user = useAuthStore((s) => s.user);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const activeStages = useFestivalStore((s) => s.activeStages);
   const { getMyPick, getOtherPicks } = usePicks();
@@ -331,7 +331,7 @@ export default function GridScreen() {
             <TBASection
               sets={untimedSets}
               stages={stages}
-              currentProfile={currentProfile}
+              canPick={!!user}
               currentFestival={currentFestival}
               getMyPick={getMyPick}
               getOtherPicks={getOtherPicks}

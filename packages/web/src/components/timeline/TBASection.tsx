@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { FestivalSet, Priority, Stage, Profile, Festival } from '@festie/shared/types';
+import { FestivalSet, Priority, Stage, Festival } from '@festie/shared/types';
 import { artistDisplayName, getAvatarColor, getInitials, groupUntimedByStage } from '@festie/shared/utils';
 import { PRIORITY_SYMBOLS, COPY } from '@festie/shared/constants';
 import PriorityIcon from '../ui/PriorityIcon';
@@ -12,7 +12,7 @@ export interface TBASectionProps {
   getMyPick: (setId: string) => Priority | null | undefined;
   getOtherPicks: (setId: string) => Array<{ profileId: string; priority: Priority; name?: string }>;
   conflictIds: Set<string>;
-  currentProfile: Profile | null;
+  canPick: boolean;
   currentFestival: Festival | null;
   getStageColor: (stageId: string) => string;
   onSavePick: (setId: string, priority: string | null) => void;
@@ -27,7 +27,7 @@ export default function TBASection({
   getMyPick,
   getOtherPicks,
   conflictIds: _conflictIds,
-  currentProfile,
+  canPick,
   currentFestival,
   getStageColor,
   onSavePick,
@@ -117,7 +117,7 @@ export default function TBASection({
               <div className="relative z-[2] pointer-events-none font-semibold text-sm mb-1">{dn}</div>
 
               {/* Priority pick buttons */}
-              {currentProfile && (
+              {canPick && (
                 <div className="relative z-[2] flex gap-[var(--space-1)] mt-1.5">
                   {(['must', 'want-to-see', 'maybe'] as const).map((p) => {
                     const active = myPick === p;
@@ -150,10 +150,7 @@ export default function TBASection({
                         )}
                         type="button"
                         aria-pressed={active ? 'true' : 'false'}
-                        aria-label={
-                          PRIORITY_SYMBOLS[p].label +
-                          (active ? ' (selected)' : '')
-                        }
+                        aria-label={PRIORITY_SYMBOLS[p].label}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();

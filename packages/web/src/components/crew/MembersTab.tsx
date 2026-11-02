@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
-import IconButton from '../ui/IconButton';
 import EmptyState from '../ui/EmptyState';
-import { Users, UserPlus, Crown, UserMinus, Trash2, LogOut } from 'lucide-react';
+import { Users, UserPlus, Crown, ChevronDown, Trash2, LogOut } from 'lucide-react';
 import type { CrewMember } from '@festie/shared/types';
 
 export interface MembersTabProps {
@@ -33,6 +32,7 @@ export default function MembersTab({
   onKick,
   onDestroyCrew,
 }: MembersTabProps) {
+  const [managingId, setManagingId] = useState<string | null>(null);
   return (
     <div className="space-y-1.5 px-4">
       {isAdmin && (
@@ -53,39 +53,56 @@ export default function MembersTab({
             const canManage = isOwner && !memberIsOwner && m.userId !== currentUserId;
             const canKick = canManage && !!onKick;
             const displayName = m.name || m.username || 'User';
+            const open = managingId === m.userId;
             return (
               <div
                 key={m.userId}
-                className="crew-member-row stagger-item relative py-2 px-2.5 rounded-md bg-bg-card border border-glass-border flex items-center gap-2.5 motion-reduce:!animate-none"
+                className="stagger-item motion-reduce:!animate-none"
                 style={{ '--i': Math.min(index, 6) } as React.CSSProperties}
               >
-                <Avatar name={displayName} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-text-primary truncate">{m.name || m.username}</div>
-                  {memberIsOwner && (
-                    <div className="text-xs text-text-secondary inline-flex items-center gap-1">
-                      <Crown className="w-3 h-3" aria-hidden="true" /> Owner
-                    </div>
+                <div className="crew-member-row relative py-2 px-2.5 rounded-md bg-bg-card border border-glass-border flex items-center gap-2.5">
+                  <Avatar name={displayName} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-text-primary truncate">{m.name || m.username}</div>
+                    {memberIsOwner && (
+                      <div className="text-xs text-text-secondary inline-flex items-center gap-1">
+                        <Crown className="w-3 h-3" aria-hidden="true" /> Owner
+                      </div>
+                    )}
+                  </div>
+                  {canManage && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setManagingId(open ? null : m.userId)}
+                      aria-expanded={open}
+                      aria-controls={`member-actions-${m.userId}`}
+                      aria-label={`Manage ${displayName}`}
+                      className="min-h-11 text-xs"
+                    >
+                      Manage
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
+                        aria-hidden="true"
+                      />
+                    </Button>
                   )}
                 </div>
-                {canManage && (
-                  <Button
-                    variant="outline"
-                    onClick={() => onTransferOwnership(m)}
-                    aria-label={`Make ${displayName} the owner`}
-                    className="!py-1 !px-2.5 text-xs"
+                {canManage && open && (
+                  <div
+                    id={`member-actions-${m.userId}`}
+                    role="group"
+                    aria-label={`Manage ${displayName}`}
+                    className="flex gap-2 px-2.5 pb-2 pt-1.5"
                   >
-                    <Crown className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span className="hidden sm:inline">Make owner</span>
-                  </Button>
-                )}
-                {canKick && (
-                  <IconButton
-                    label={`Remove ${displayName} from crew`}
-                    variant="danger"
-                    icon={<UserMinus className="w-4 h-4" />}
-                    onClick={() => onKick!(m)}
-                  />
+                    <Button variant="outline" className="min-h-11 text-xs" onClick={() => onTransferOwnership(m)}>
+                      Make owner
+                    </Button>
+                    {canKick && (
+                      <Button variant="danger" className="min-h-11 text-xs" onClick={() => onKick!(m)}>
+                        Remove from crew
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             );

@@ -136,7 +136,7 @@ describe('SetCard', () => {
     const onTap = vi.fn();
     const user = userEvent.setup();
     render(<SetCard {...defaultProps} onTap={onTap} />);
-    const clickTarget = screen.getByLabelText(/Daft Punk/);
+    const clickTarget = screen.getByLabelText(/Daft Punk.*Main Stage/);
     await user.click(clickTarget);
     expect(onTap).toHaveBeenCalledOnce();
   });
@@ -150,14 +150,26 @@ describe('SetCard', () => {
   describe('priority buttons', () => {
     it('renders 3 priority buttons when showPicks is true', () => {
       render(<SetCard {...defaultProps} showPicks />);
-      expect(screen.getByLabelText('Must See')).toBeInTheDocument();
-      expect(screen.getByLabelText('Want to See')).toBeInTheDocument();
-      expect(screen.getByLabelText('Maybe')).toBeInTheDocument();
+      expect(screen.getByLabelText('Must See: Daft Punk')).toBeInTheDocument();
+      expect(screen.getByLabelText('Want to See: Daft Punk')).toBeInTheDocument();
+      expect(screen.getByLabelText('Maybe: Daft Punk')).toBeInTheDocument();
+    });
+
+    it('shows the Must, Want and Maybe words', () => {
+      render(<SetCard {...defaultProps} showPicks />);
+      expect(screen.getByText('Must')).toBeInTheDocument();
+      expect(screen.getByText('Want')).toBeInTheDocument();
+      expect(screen.getByText('Maybe')).toBeInTheDocument();
+    });
+
+    it('names the priority group after the artist', () => {
+      render(<SetCard {...defaultProps} showPicks />);
+      expect(screen.getByRole('group', { name: 'Priority for Daft Punk' })).toBeInTheDocument();
     });
 
     it('does not render priority buttons when showPicks is false', () => {
       render(<SetCard {...defaultProps} showPicks={false} />);
-      expect(screen.queryByLabelText('Must See')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Must See: Daft Punk')).not.toBeInTheDocument();
     });
 
     it('marks the active priority with aria-pressed=true', () => {
@@ -167,8 +179,9 @@ describe('SetCard', () => {
         getMyNote: vi.fn(() => ''),
       });
       render(<SetCard {...defaultProps} />);
-      expect(screen.getByLabelText('Must See (selected)')).toHaveAttribute('aria-pressed', 'true');
-      expect(screen.getByLabelText('Want to See')).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByRole('button', { name: 'Must See: Daft Punk' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'Want to See: Daft Punk' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.queryByRole('button', { name: /\(selected\)/ })).not.toBeInTheDocument();
     });
   });
 

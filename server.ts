@@ -131,6 +131,7 @@ import createExportRoutes from './routes/export';
 import createNotificationRoutes from './routes/notifications';
 import createCrewRoutes from './routes/crews';
 import createLineupImportRoutes from './routes/lineup-import';
+import createLineupAnnounceRoutes from './routes/lineup-announce';
 import createShareRoutes from './routes/share';
 import { createRatingsRoutes } from './routes/ratings';
 import { createWeatherRoutes } from './routes/weather';
@@ -220,6 +221,7 @@ async function createFestieApp(overrides: any = {}) {
   }
   const reengagement = reengagementQueue || reengagementExecutor;
   deps.reengagement = reengagement;
+  deps.reengagementExecutor = reengagementExecutor;
   ctx.reengagement = reengagement; // also exposed to background tasks (wrap_ready sweep)
   ctx.reengagementQueue = reengagementQueue; // for graceful shutdown
   ctx.reengagementExecutor = reengagementExecutor; // inline path for the shutdown sweep
@@ -248,6 +250,7 @@ async function createFestieApp(overrides: any = {}) {
   const notificationRoutes = createNotificationRoutes(deps);
   const crewRoutes = createCrewRoutes(deps);
   const lineupImportRoutes = createLineupImportRoutes(deps);
+  const lineupAnnounceRoutes = createLineupAnnounceRoutes(deps);
   const shareRoutes = createShareRoutes(deps);
   const ratingsRoutes = createRatingsRoutes(deps);
   const weatherRoutes = createWeatherRoutes(deps);
@@ -268,6 +271,7 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/admin', adminRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
+  app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);
   app.use('/api/v1/festivals', festivalRoutes);
   app.use('/api/v1/profiles', profileRoutes);
   app.use('/api/v1', exportRoutes);

@@ -198,7 +198,7 @@ describe('notifications/send: createSendService', () => {
     const stores = makeStores({
       notificationPrefs: { get: mock.fn(async () => ({ crewUpdates: true })) },
       deviceTokens: {
-        listByUser: mock.fn(async () => [{ token: 'valid-token-' + 'x'.repeat(30), platform: 'web' }]),
+        listByUser: mock.fn(async () => [{ token: 'valid-token-' + 'x'.repeat(30), platform: 'android' }]),
         unregister: mock.fn(async () => {}),
       },
     });
@@ -226,14 +226,15 @@ describe('notifications/send: createSendService', () => {
     assert.equal(fcmMsg!.data.type, 'crew_update');
     assert.ok(fcmMsg!.android);
     assert.ok(fcmMsg!.apns);
-    assert.ok(fcmMsg!.webpush);
+    // Browsers get Web Push directly; FCM messages carry no webpush block.
+    assert.equal(fcmMsg!.webpush, undefined);
   });
 
   it('send skips tokens that are too short', async () => {
     const stores = makeStores({
       notificationPrefs: { get: mock.fn(async () => null) },
       deviceTokens: {
-        listByUser: mock.fn(async () => [{ token: 'short', platform: 'web' }]),
+        listByUser: mock.fn(async () => [{ token: 'short', platform: 'android' }]),
         unregister: mock.fn(async () => {}),
       },
     });
@@ -772,6 +773,203 @@ describe('notifications/send: platform routing', () => {
     assert.equal(payload.aps['content-available'], 1);
     assert.equal(opts.pushType, 'background');
     assert.equal(opts.priority, '5');
+  });
+});
+
+// ── notifications/send: Web Push, Android channels, explicit recipients ──
+
+describe('notifications/send: web push, channels and recipients', () => {
+  const fakeLog = { info() {}, warn() {}, error() {}, debug() {} };
+  const config = { PUBLIC_ORIGIN: 'https://festie.us/' };
+  const webToken = JSON.stringify({ endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: {} });
+  const androidToken = 'a'.repeat(64);
+
+  function makeStores({ prefs = {}, tokens = {}, festivalUsers = [], unsubscribed = [] }: any = {}) {
+    return {
+      notificationPrefs: { get: mock.fn(async (uid: string) => prefs[uid] ?? null) },
+      deviceTokens: {
+        listByUser: mock.fn(async (uid: string) => tokens[uid] ?? []),
+        unregister: mock.fn(async () => {}),
+      },
+      notificationCounts: {
+        getByUser: mock.fn(async () => []),
+        increment: mock.fn(async () => {}),
+        reset: mock.fn(async () => {}),
+      },
+      notificationLog: { insert: mock.fn(async (_row: any) => null) },
+      profiles: { userIdsByFestival: mock.fn(async () => festivalUsers) },
+      topicSubscriptions: { getUnsubscribedUsers: mock.fn(async () => new Set(unsubscribed)) },
+    };
+  }
+  function makeWebPush(result: any = { sent: true, stale: false }) {
+    return { publicKey: 'pk', send: mock.fn(async (_t: string, _p: any, _o: any) => result) };
+  }
+  function makeMessaging() {
+    return {
+      send: mock.fn(async (_m: any) => 'fcm-id'),
+      sendEach: mock.fn(async (batch: any[]) => ({ responses: batch.map(() => ({ success: true })) })),
+    };
+  }
+  function build(stores: any, { webPush = makeWebPush(), messaging = makeMessaging() }: any = {}) {
+    const svc = createSendService({ stores, config, log: fakeLog, messaging, retryQueue: { enqueue() {} }, webPush });
+    return { svc, webPush, messaging };
+  }
+  const reminder = {
+    userId: 'u1',
+    type: 'set_reminder',
+    title: 'Peggy Gou in 15 min',
+    body: 'Sahara',
+    data: { festivalId: 'f1', setId: 's1', deepLink: 'https://festie.us/set/s1' },
+  };
+
+  it('a web device gets one Web Push with the deepLink as url and high urgency for set_reminder', async () => {
+    const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
+    const { svc, webPush, messaging } = build(stores);
+    const result = await svc.send(reminder);
+    assert.equal(result.sent, 1);
+    assert.equal(messaging.send.mock.calls.length, 0);
+    assert.equal(webPush.send.mock.calls.length, 1);
+    const [token, payload, opts] = webPush.send.mock.calls[0]!.arguments;
+    assert.equal(token, webToken);
+    assert.deepEqual(payload, {
+      title: 'Peggy Gou in 15 min',
+      body: 'Sahara',
+      url: 'https://festie.us/set/s1',
+      tag: 'set_reminder',
+    });
+    assert.deepEqual(opts, { ttl: 3600, urgency: 'high' });
+    const logged = stores.notificationLog.insert.mock.calls[0]!.arguments[0];
+    assert.equal(logged.platform, 'web');
+    assert.equal(logged.status, 'sent');
+  });
+
+  it('a non-urgent type gets normal urgency, a day of TTL and the threadId as tag', async () => {
+    const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
+    const { svc, webPush } = build(stores);
+    await svc.send({ ...reminder, type: 'crew_update', threadId: 'crew-f1' });
+    const [, payload, opts] = webPush.send.mock.calls[0]!.arguments;
+    assert.equal(payload.tag, 'crew-f1');
+    assert.deepEqual(opts, { ttl: 86400, urgency: 'normal' });
+  });
+
+  it('a deepLink off our origin opens the home page instead', async () => {
+    const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
+    const { svc, webPush } = build(stores);
+    await svc.send({ ...reminder, data: { festivalId: 'f1', deepLink: 'https://festie.us.evil.example/x' } });
+    assert.equal(webPush.send.mock.calls[0]!.arguments[1].url, 'https://festie.us/');
+  });
+
+  it('a stale Web Push result unregisters the token', async () => {
+    const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
+    const { svc } = build(stores, { webPush: makeWebPush({ sent: false, stale: true }) });
+    const result = await svc.send(reminder);
+    assert.equal(result.sent, 0);
+    assert.deepEqual(stores.deviceTokens.unregister.mock.calls[0]!.arguments, [webToken, 'u1']);
+  });
+
+  it('with webPush null a web token is skipped and not unregistered', async () => {
+    const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
+    const { svc, messaging } = build(stores, { webPush: null });
+    const result = await svc.send(reminder);
+    assert.equal(result.sent, 0);
+    assert.equal(messaging.send.mock.calls.length, 0);
+    assert.equal(stores.deviceTokens.unregister.mock.calls.length, 0);
+  });
+
+  it('only webPush configured is enough to send', async () => {
+    const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
+    const { svc } = build(stores, { messaging: null });
+    assert.equal((await svc.send(reminder)).sent, 1);
+  });
+
+  it('sendToOfflineUsers({ userIds }) sends only to those users, through Web Push too', async () => {
+    const stores = makeStores({
+      festivalUsers: ['u1', 'u2', 'u3'],
+      tokens: {
+        u1: [{ token: androidToken, platform: 'android' }],
+        u2: [{ token: webToken, platform: 'web' }],
+      },
+    });
+    const { svc, webPush, messaging } = build(stores);
+    const result = await svc.sendToOfflineUsers({
+      festivalId: 'f1',
+      userIds: ['u2'],
+      type: 'crew_update',
+      title: 'Alex updated their picks',
+      body: 'b',
+      data: { festivalId: 'f1', deepLink: 'https://festie.us/compare' },
+    });
+    assert.equal(result.sent, 1);
+    assert.equal(stores.profiles.userIdsByFestival.mock.calls.length, 0);
+    assert.equal(messaging.sendEach.mock.calls.length, 0);
+    assert.equal(webPush.send.mock.calls.length, 1);
+    assert.equal(webPush.send.mock.calls[0]!.arguments[1].url, 'https://festie.us/compare');
+    assert.deepEqual(stores.notificationCounts.increment.mock.calls[0]!.arguments, ['u2', 'f1', 'updates']);
+  });
+
+  it('sendToOfflineUsers({ userIds }) still applies the topic filter', async () => {
+    const stores = makeStores({
+      unsubscribed: ['u3'],
+      tokens: {
+        u2: [{ token: androidToken, platform: 'android' }],
+        u3: [{ token: 'b'.repeat(64), platform: 'android' }],
+      },
+    });
+    const { svc, messaging } = build(stores);
+    await svc.sendToOfflineUsers({
+      festivalId: 'f1',
+      userIds: ['u2', 'u3'],
+      type: 'crew_update',
+      title: 't',
+      body: 'b',
+      topic: 'crew',
+    });
+    const batch = messaging.sendEach.mock.calls[0]!.arguments[0];
+    assert.deepEqual(
+      batch.map((m: any) => m.token),
+      [androidToken],
+    );
+  });
+
+  it('an Android set_reminder uses the set-reminders channel', async () => {
+    const stores = makeStores({ tokens: { u1: [{ token: androidToken, platform: 'android' }] } });
+    const { svc, messaging } = build(stores);
+    await svc.send(reminder);
+    assert.equal(messaging.send.mock.calls[0]!.arguments[0].android.notification.channelId, 'set-reminders');
+  });
+
+  it('a crew_poll batch uses the crew channel', async () => {
+    const stores = makeStores({
+      festivalUsers: ['u1'],
+      tokens: { u1: [{ token: androidToken, platform: 'android' }] },
+    });
+    const { svc, messaging } = build(stores);
+    await svc.sendToOfflineUsers({ festivalId: 'f1', type: 'crew_poll', title: 't', body: 'b' });
+    const batch = messaging.sendEach.mock.calls[0]!.arguments[0];
+    assert.equal(batch[0].android.notification.channelId, 'crew');
+  });
+
+  it('a crew_poll to a user with crewPolls off is not sent', async () => {
+    const stores = makeStores({
+      prefs: { u1: { crewPolls: 0, crewUpdates: 1 } },
+      tokens: { u1: [{ token: androidToken, platform: 'android' }] },
+    });
+    const { svc, messaging } = build(stores);
+    const result = await svc.send({ userId: 'u1', type: 'crew_poll', title: 't', body: 'b' });
+    assert.equal(result.reason, 'user_disabled');
+    assert.equal(messaging.send.mock.calls.length, 0);
+  });
+
+  it('sendSilentSync skips web devices', async () => {
+    const stores = makeStores({
+      festivalUsers: ['u1'],
+      tokens: { u1: [{ token: webToken, platform: 'web' }] },
+    });
+    const { svc, webPush, messaging } = build(stores);
+    const result = await svc.sendSilentSync({ festivalId: 'f1', syncType: 'picks' });
+    assert.equal(result.sent, 0);
+    assert.equal(messaging.send.mock.calls.length, 0);
+    assert.equal(webPush.send.mock.calls.length, 0);
   });
 });
 

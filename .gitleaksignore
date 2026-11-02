@@ -17,3 +17,7 @@ tests/hardening.test.js
 # Test fixture — fake webhook HMAC key used to exercise the PII-stripping path
 tests/notifications-webhook-pii.test.ts
 
+
+# Test fixtures — public RFC 8291 section 5 example keys (web push encryption vectors), not secrets
+72083d81de6a3dc7afcf043389080bf1c38974ec:tests/integration-notifications.test.ts:generic-api-key:278
+72083d81de6a3dc7afcf043389080bf1c38974ec:tests/webpush.test.ts:generic-api-key:18

@@ -89,6 +89,23 @@ describe('notificationPrefsStore quiet-hours zone', () => {
     expect(mockApi.put).toHaveBeenCalledWith('/notifications/prefs', { dndTimeZone: real });
   });
 
+  it('defaults the new prefs and maps an unsupported must-see lead to null', async () => {
+    mockApi.get.mockResolvedValue({ mustSeeReminderMinutes: 20 });
+    await useNotificationPrefsStore.getState().loadPrefs();
+    const p = useNotificationPrefsStore.getState().prefs;
+    expect(p.crewMeetingPoints).toBe(true);
+    expect(p.crewPolls).toBe(true);
+    expect(p.crewMoney).toBe(true);
+    expect(p.crewRides).toBe(true);
+    expect(p.mustSeeReminderMinutes).toBeNull();
+  });
+
+  it('keeps a supported must-see lead', async () => {
+    mockApi.get.mockResolvedValue({ mustSeeReminderMinutes: 30 });
+    await useNotificationPrefsStore.getState().loadPrefs();
+    expect(useNotificationPrefsStore.getState().prefs.mustSeeReminderMinutes).toBe(30);
+  });
+
   it('does not re-save when quiet hours are off', async () => {
     mockApi.get.mockResolvedValue({});
     await useNotificationPrefsStore.getState().loadPrefs();

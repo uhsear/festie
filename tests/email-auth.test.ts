@@ -236,6 +236,8 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
     const res = await server.request.get('/api/v1/auth/verify-email?token=not-hex');
     assert.equal(res.status, 400);
     assert.match(res.text, /Invalid verification link/);
+    assert.match(res.text, /Link not valid/);
+    assert.match(res.text, /href="\/"/);
   });
 
   test('rejects unknown/expired token with 400 HTML page', async () => {
@@ -245,6 +247,8 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
     const res = await server.request.get(`/api/v1/auth/verify-email?token=${fakeToken}`);
     assert.equal(res.status, 400);
     assert.match(res.text, /expired|already been used/i);
+    assert.match(res.text, /Link expired/);
+    assert.match(res.text, /Need a new link\? Sign in to Festie and send another from your account\./);
   });
 
   test('verifies email end-to-end with valid token', async () => {
@@ -271,6 +275,8 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
       const res = await server.request.get(`/api/v1/auth/verify-email?token=${verifyToken}`);
       assert.equal(res.status, 200);
       assert.match(res.text, /verified/i);
+      assert.match(res.text, /Email verified/);
+      assert.match(res.text, /Open Festie/);
 
       // email_verified_at should now be set
       const after = await pool.query('SELECT email, email_verified_at FROM users WHERE id = $1', [userId]);
@@ -289,6 +295,17 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
 // ──────────────────────────────────────────────────────────────────────────
 
 describe('email-auth: reset-password', { concurrency: 1 }, () => {
+  test('unknown token: 400 with TOKEN_EXPIRED', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const res = await server.request
+      .post('/api/v1/auth/reset-password')
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ token: crypto.randomBytes(32).toString('hex'), newPassword: 'freshpassword9', confirmPassword: 'freshpassword9' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+  });
+
   test('rejects invalid token', async () => {
     const server = await startServer();
     servers.push(server);

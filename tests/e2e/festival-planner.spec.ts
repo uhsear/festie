@@ -48,6 +48,7 @@ async function registerUser(page: Page, app: { baseUrl: string }, username: stri
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByLabel('Confirm password').fill(password);
   await page.getByLabel('Date of birth').fill('1995-01-01');
+  await page.getByLabel('Email', { exact: true }).fill(`${username}@example.test`);
   // TOS checkbox (label wraps a checkbox with id="authTos").
   await page.locator('#authTos').check();
 
@@ -59,11 +60,10 @@ async function registerUser(page: Page, app: { baseUrl: string }, username: stri
 }
 
 // Navigate to one of the schedule views via the in-page ScheduleViewSwitcher.
-// The switcher uses honest nav semantics (plain buttons + aria-current, no
-// tablist — it navigates routes rather than swapping panels), aria-label
-// "Cards view" / "Grid view".
+// The switcher is a nav of route links (aria-current on the active one, no
+// tablist), named by their visible text "Cards" / "Grid".
 async function openScheduleView(page: Page, label: 'Cards' | 'Grid') {
-  await page.getByRole('button', { name: `${label} view` }).click();
+  await page.getByRole('link', { name: label, exact: true }).click();
 }
 
 // Open a set's detail panel by clicking its card's click-target button.
@@ -78,18 +78,6 @@ async function openSet(page: Page, artist: string) {
 async function closeDetailPanel(page: Page) {
   await page.getByRole('button', { name: 'Close detail panel' }).click();
   await expect(page.locator('[aria-label="Set detail panel"]')).toHaveCount(0);
-}
-
-// Join the current festival. DetailPanel's "Join Festival" button posts a
-// profile then calls onClose() — so the panel closes itself on success. We open
-// any set, click Join, and wait for the panel to disappear. After this the
-// store has a currentProfile, so priority pickers become available everywhere.
-async function joinFestivalViaSet(page: Page, artist: string) {
-  await openSet(page, artist);
-  const panel = page.locator('[aria-label="Set detail panel"]');
-  await panel.getByRole('button', { name: 'Join Festival' }).click();
-  // The join handler closes the panel on success.
-  await expect(panel).toHaveCount(0);
 }
 
 // ── Guest (unauthenticated) journeys ────────────────────────────────────────
@@ -114,7 +102,7 @@ test.describe('festival planner browser regression', () => {
 
     // Guests now get the full nav (parity with mobile) instead of a guest
     // banner: the "Picks" tab is visible even when logged out.
-    await expect(page.getByRole('button', { name: 'Picks', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Picks' })).toBeVisible();
 
     // Switch to fest-2 → Omega appears (Friday/Sunday differ; Sunday is the only day).
     await page.locator('[data-testid="festival-select"]').selectOption('fest-2');
@@ -126,9 +114,12 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
     await openSet(page, 'Alpha');
-    // Guests see the "Join this festival to save picks" prompt instead of the
-    // priority picker (DetailPanel currentProfile === null branch).
-    await expect(page.locator('[aria-label="Set detail panel"]')).toContainText('Join this festival');
+    // Guests see the sign-in prompt with both auth buttons, never a Join Festival button.
+    const panel = page.locator('[aria-label="Set detail panel"]');
+    await expect(panel).toContainText('Sign in to save picks');
+    await expect(panel.getByRole('button', { name: 'Create account' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Join Festival' })).toHaveCount(0);
     await closeDetailPanel(page);
   });
 
@@ -155,6 +146,7 @@ test.describe('festival planner browser regression', () => {
     await page.getByLabel('Password', { exact: true }).fill(DEFAULT_PASSWORD);
     await page.getByLabel('Confirm password').fill(DEFAULT_PASSWORD);
     await page.getByLabel('Date of birth').fill('1995-01-01');
+    await page.getByLabel('Email', { exact: true }).fill('tosskip@example.test');
     // Intentionally do NOT check TOS.
     await page.getByRole('button', { name: 'Create account' }).click();
 
@@ -180,9 +172,7 @@ test.describe('festival planner browser regression', () => {
     await registerUser(page, app, `picker_${Date.now()}`);
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
-    // Join first (the panel closes on join), then reopen Alpha — now that a
-    // profile exists DetailPanel renders the priority picker.
-    await joinFestivalViaSet(page, 'Alpha');
+    // The first pick creates the profile, so no separate join step is needed.
     await openSet(page, 'Alpha');
     const panel = page.locator('[aria-label="Set detail panel"]');
     await panel.getByRole('button', { name: /^Must See/ }).click();
@@ -205,9 +195,7 @@ test.describe('festival planner browser regression', () => {
   test('saving a pick directly from the card grid toggles its state', async ({ app, page }) => {
     await registerUser(page, app, `carder_${Date.now()}`);
 
-    // Join first (card priority buttons only persist once a profile exists).
-    await joinFestivalViaSet(page, 'Beta');
-
+    // The first pick on a card joins the festival and saves the pick.
     const betaCard = page.locator('[data-testid="set-card"][data-artist="Beta"]');
     const wantBtn = betaCard.getByRole('button', { name: /^Want to See/ });
     await expect(wantBtn).toHaveAttribute('aria-pressed', 'false');
@@ -236,7 +224,6 @@ test.describe('festival planner browser regression', () => {
 
   test('the grid clash chip focuses the first clashing set', async ({ app, page }) => {
     await registerUser(page, app, `clasher_${Date.now()}`);
-    await joinFestivalViaSet(page, 'Alpha');
 
     // Alpha (10:00-11:00, Main) and Beta (10:30-11:30, Forest) overlap.
     for (const artist of ['Alpha', 'Beta']) {
@@ -287,23 +274,23 @@ test.describe('festival planner browser regression', () => {
 
 // ── Nav helpers that tolerate desktop (Header) vs mobile (BottomNav) ─────────
 
-// The desktop Header nav uses plain text buttons ("Picks", "Crew"); the
-// mobile BottomNav uses buttons with aria-label "View Picks" / "View Crew".
+// The desktop Header nav uses plain text links ("Picks", "Crew"); the
+// mobile BottomNav uses links with aria-label "View Picks" / "View Crew".
 // Click whichever exists for the current viewport.
 async function openMyPicks(page: Page) {
-  const desktop = page.getByRole('button', { name: 'Picks', exact: true });
+  const desktop = page.getByRole('link', { name: 'Picks' });
   if (await desktop.count()) {
     await desktop.first().click();
     return;
   }
-  await page.getByRole('button', { name: 'View Picks' }).click();
+  await page.getByRole('link', { name: 'View Picks' }).click();
 }
 
 async function openCrew(page: Page) {
-  const desktop = page.getByRole('button', { name: 'Crew', exact: true });
+  const desktop = page.getByRole('link', { name: 'Crew', exact: true });
   if (await desktop.count()) {
     await desktop.first().click();
     return;
   }
-  await page.getByRole('button', { name: 'View Crew' }).click();
+  await page.getByRole('link', { name: 'View Crew' }).click();
 }

@@ -24,7 +24,7 @@ function renderCell(
   topSlot: number,
   spanSlots: number,
   myPick: 'want-to-see' | null = null,
-  extra: { clash?: ClashMark; compact?: boolean; tabbable?: boolean } = {},
+  extra: { clash?: ClashMark; compact?: boolean; tabbable?: boolean; canPick?: boolean } = {},
 ) {
   const { container } = render(
     <TimelineGridCell
@@ -40,7 +40,7 @@ function renderCell(
       compact={extra.compact ?? false}
       tabbable={extra.tabbable ?? true}
       clash={extra.clash}
-      hasProfile
+      canPick={extra.canPick ?? true}
       festival={null}
       onSetClick={vi.fn()}
       onSavePick={vi.fn()}
@@ -68,6 +68,12 @@ describe('TimelineGridCell block placement', () => {
     const el = renderCell('c', 0, 4, 'want-to-see');
     const btn = el.querySelector<HTMLElement>('button[aria-pressed="true"]')!;
     expect(btn.className).toContain('--text-on-light-accent');
+    expect(btn.getAttribute('aria-label')).not.toContain('(selected)');
+  });
+
+  it('shows the pick row only when canPick is set', () => {
+    expect(renderCell('d', 0, 4, null, { canPick: true }).querySelectorAll('button[aria-pressed]').length).toBeGreaterThan(0);
+    expect(renderCell('e', 0, 4, null, { canPick: false }).querySelectorAll('button[aria-pressed]').length).toBe(0);
   });
 
   it('draws a hatched bar for each clash segment and names the clash for screen readers', () => {

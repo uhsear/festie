@@ -13,9 +13,9 @@ export default function TimelineSkeleton() {
     <div
       className="relative overflow-auto h-full [-webkit-overflow-scrolling:touch] overscroll-contain"
       aria-busy="true"
-      aria-label="Loading timeline"
-      role="region"
+      aria-label="Loading timeline" role="status" aria-live="polite"
     >
+      <span className="sr-only">Loading timeline…</span>
       <div
         className={cn(
           'timeline-grid',
