@@ -2,8 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const mockPut = vi.fn();
-const mockSetUser = vi.fn();
+const mockSetPublicSchedule = vi.fn();
 const mockFetchStatus = vi.fn();
 const mockReset = vi.fn();
 const mockToast = vi.fn();
@@ -11,9 +10,8 @@ let storeUser: Record<string, unknown>;
 
 vi.mock('@festie/shared/stores/authStore', () => ({
   useAuthStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ user: storeUser, setUser: mockSetUser }),
+    selector({ user: storeUser, setPublicSchedule: (...a: unknown[]) => mockSetPublicSchedule(...a) }),
 }));
-vi.mock('@festie/shared/services/api', () => ({ api: { put: (...a: unknown[]) => mockPut(...a) } }));
 vi.mock('@festie/shared/services/sharing', () => ({
   fetchSharingStatus: (...a: unknown[]) => mockFetchStatus(...a),
   resetShareLinks: (...a: unknown[]) => mockReset(...a),
@@ -30,7 +28,7 @@ describe('PublicScheduleSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     storeUser = { id: 'u1', username: 'raver' };
-    mockPut.mockResolvedValue({ user: { publicSchedule: true } });
+    mockSetPublicSchedule.mockResolvedValue(undefined);
     mockFetchStatus.mockResolvedValue({
       publicSchedule: true,
       publicFestival: { id: 'f1', name: 'EDC Orlando' },
@@ -53,10 +51,7 @@ describe('PublicScheduleSection', () => {
   it('turning it on saves the flag', async () => {
     render(<PublicScheduleSection />);
     await userEvent.click(screen.getByRole('switch'));
-    expect(mockPut).toHaveBeenCalledWith('/account/public-schedule', { publicSchedule: true });
-    await waitFor(() =>
-      expect(mockSetUser).toHaveBeenCalledWith(expect.objectContaining({ publicSchedule: true })),
-    );
+    expect(mockSetPublicSchedule).toHaveBeenCalledWith(true);
   });
 
   it('shows the link, copy and open buttons when on', () => {

@@ -110,6 +110,8 @@ import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
 import { createCrewNotifier } from './lib/notifications/crew-notify';
 import { createPollCloser } from './lib/poll-close';
+import { createSosRaiser } from './lib/sos-raise';
+import { createCheckinScheduler } from './lib/checkin';
 import { createAnnouncer } from './lib/announcements';
 import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
@@ -128,6 +130,7 @@ import createAuthRoutes from './routes/auth';
 import createEmailAuthRoutes from './routes/email-auth';
 import createAccountRoutes from './routes/account';
 import createAdminRoutes from './routes/admin';
+import createAdminSiteplanRoutes from './routes/admin-siteplan';
 import createFestivalRoutes from './routes/festivals';
 import createProfileRoutes from './routes/profiles';
 import createExportRoutes from './routes/export';
@@ -254,6 +257,16 @@ async function createFestieApp(overrides: any = {}) {
   ctx.crewNotify = crewNotify;
   deps.pollCloser = pollCloser;
   ctx.pollCloser = pollCloser;
+  // Check-in timers: a missed timer raises an SOS through the same code as POST /sos.
+  const sosRaiser = createSosRaiser(deps);
+  ctx.checkinScheduler = createCheckinScheduler({
+    redis,
+    stores: ctx.stores,
+    raiser: sosRaiser,
+    notificationService,
+    log,
+    config,
+  });
   const announcer = createAnnouncer({ stores: ctx.stores, notificationService, config, log });
   deps.announcer = announcer;
   ctx.announcer = announcer;
@@ -293,6 +306,7 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/auth', emailAuthRoutes);
   app.use('/api/v1/account', accountRoutes);
   app.use('/api/v1/admin', adminRoutes);
+  app.use('/api/v1/admin', createAdminSiteplanRoutes(deps));
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);

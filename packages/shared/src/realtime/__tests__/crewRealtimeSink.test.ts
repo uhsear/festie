@@ -68,3 +68,30 @@ describe('crewRealtimeSink: onPollVoted', () => {
     expect(applyPollVote).toHaveBeenCalledWith('poll-1', 'user-1', [0, 2]);
   });
 });
+
+describe('crewRealtimeSink: packing and rides reloads', () => {
+  const makeApi = (activeId: string | null) => {
+    const loadPacking = vi.fn().mockResolvedValue(undefined);
+    const loadRides = vi.fn().mockResolvedValue(undefined);
+    const storeApi = {
+      getState: () => ({ activeCrew: activeId ? { id: activeId } : null, loadPacking, loadRides }),
+    };
+    return { loadPacking, loadRides, sink: createStoreSink(storeApi as never) };
+  };
+
+  it('reloads both lists for the active crew', () => {
+    const { loadPacking, loadRides, sink } = makeApi(CREW);
+    sink.onPackingChanged(CREW);
+    sink.onRidesChanged(CREW);
+    expect(loadPacking).toHaveBeenCalledWith(CREW);
+    expect(loadRides).toHaveBeenCalledWith(CREW);
+  });
+
+  it('does nothing when the active crew changed before the flush', () => {
+    const { loadPacking, loadRides, sink } = makeApi('crew-2');
+    sink.onPackingChanged(CREW);
+    sink.onRidesChanged(CREW);
+    expect(loadPacking).not.toHaveBeenCalled();
+    expect(loadRides).not.toHaveBeenCalled();
+  });
+});

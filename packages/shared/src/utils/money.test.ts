@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { settleUpLine, formatBalance, formatAmount, spendingExpenses, ledgerRows, describePayment } from './money';
+import {
+  settleUpLine,
+  formatBalance,
+  formatAmount,
+  formatCents,
+  toCents,
+  spendingExpenses,
+  ledgerRows,
+  describePayment,
+} from './money';
 
 describe('settlement helpers', () => {
   const rows = [
@@ -86,5 +95,23 @@ describe('settleUpLine', () => {
     expect(settleUpLine(-24)).toBe('You owe $24.00');
     expect(settleUpLine(12.5)).toBe("You're owed $12.50");
     expect(settleUpLine(0.004)).toBe("You're all settled up");
+  });
+});
+
+describe('currency formatting', () => {
+  it('formats amounts and signed balances in the crew currency', () => {
+    expect(formatAmount('12.4', 'EUR')).toBe('€12.40');
+    expect(formatAmount(12.4, 'GBP')).toBe('£12.40');
+    expect(formatBalance(12.4, 'EUR')).toBe('+€12.40');
+    expect(formatBalance(-12.4, 'EUR')).toBe('-€12.40');
+    expect(formatBalance(0.004, 'EUR')).toBe('€0.00');
+  });
+
+  it('formatCents and toCents work in integer cents', () => {
+    expect(formatCents(1240)).toBe('$12.40');
+    expect(formatCents(1240, 'EUR')).toBe('€12.40');
+    expect(toCents('12.345')).toBe(1235);
+    expect(toCents(12.4)).toBe(1240);
+    expect(toCents('abc')).toBe(0);
   });
 });

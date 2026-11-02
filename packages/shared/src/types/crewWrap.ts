@@ -39,4 +39,6 @@ export interface CrewWrapData {
   totalSplit: number;
   biggestSpender: { userId: string; name: string; amount: number } | null;
   perMember: CrewWrapMemberSummary[];
+  /** The crew's currency label (ISO 4217). Absent on old servers: treat as USD. */
+  currency?: string;
 }

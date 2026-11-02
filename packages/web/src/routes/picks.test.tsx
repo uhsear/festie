@@ -54,6 +54,16 @@ vi.mock('../components/PickBulkActions', () => ({ default: () => <div data-testi
 vi.mock('../components/features/PicksPlanRow', () => ({
   default: ({ set }: { set: { artist: string } }) => <div data-testid="plan-row">{set.artist}</div>,
 }));
+vi.mock('../components/features/MyDayList', () => ({
+  default: () => <div data-testid="my-day-list" />,
+}));
+vi.mock('../components/features/PlanNotesList', () => ({
+  default: ({ kind, items }: { kind: string; items: unknown[] }) => (
+    <div data-testid="plan-notes-list">
+      {kind}:{items.length}
+    </div>
+  ),
+}));
 vi.mock('../components/features/PickConflicts', () => ({
   default: ({ groups }: { groups?: unknown[] }) => <div data-testid="pick-conflicts">{groups?.length ?? 0}</div>,
 }));
@@ -272,6 +282,31 @@ describe('PicksView', () => {
     render(<PicksView />);
     fireEvent.click(screen.getByRole('button', { name: 'Day 1, 1 pick' }));
     expect(screen.queryByText('Daft Punk')).toBeNull();
+  });
+
+  it('switches to My day and renders MyDayList', () => {
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    expect(screen.queryByTestId('my-day-list')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'My day' }));
+    expect(screen.getByTestId('my-day-list')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'My day' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('shows the tab row and the Notes list for a user with only a note', () => {
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk')],
+      profile: { id: 'p1', userId: 'u1', picks: {}, notes: { s1: 'Bring water' } },
+    });
+    render(<PicksView />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Notes · 1' }));
+    expect(screen.getByTestId('plan-notes-list')).toHaveTextContent('notes:1');
+    expect(screen.queryByTestId('empty-state')).toBeNull();
+  });
+
+  it('hides the tab row when there are no picks, notes or reminders', () => {
+    render(<PicksView />);
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 
   it('renders the region with aria-label "My picks"', () => {

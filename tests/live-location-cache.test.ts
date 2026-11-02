@@ -24,6 +24,7 @@ import {
   writeLivePosition,
   dropLivePosition,
   readLiveSnapshot,
+  readLivePosition,
 } from '../lib/live-location-cache.js';
 
 const NOW = Date.parse('2026-06-25T18:00:00.000Z');
@@ -264,5 +265,39 @@ describe('live-location-cache — Redis round-trip + fail-open', () => {
 
   it('readLiveSnapshot returns [] when redis is null (fail-open)', async () => {
     assert.deepEqual(await readLiveSnapshot(null, 'crew-1', { now: NOW }), []);
+  });
+});
+
+describe('live-location-cache — readLivePosition', () => {
+  function hgetRedis(value: string | null, opts: { throws?: boolean } = {}) {
+    return {
+      async hget(key: string, field: string) {
+        if (opts.throws) throw new Error('redis down');
+        assert.equal(key, 'loc:pos:crew-1');
+        assert.equal(field, 'user-a');
+        return value;
+      },
+    };
+  }
+
+  it('returns a fresh entry as { lat, lng, accuracy, capturedAt }', async () => {
+    const p = freshPayload();
+    const pos = await readLivePosition(hgetRedis(JSON.stringify(p)), 'crew-1', 'user-a', NOW);
+    assert.deepEqual(pos, { lat: p.lat, lng: p.lng, accuracy: p.accuracy, capturedAt: p.capturedAt });
+  });
+
+  it('returns null for a stale entry', async () => {
+    const p = freshPayload({ serverAt: new Date(NOW - 121_000).toISOString() });
+    assert.equal(await readLivePosition(hgetRedis(JSON.stringify(p)), 'crew-1', 'user-a', NOW), null);
+  });
+
+  it('returns null when the field is missing or malformed', async () => {
+    assert.equal(await readLivePosition(hgetRedis(null), 'crew-1', 'user-a', NOW), null);
+    assert.equal(await readLivePosition(hgetRedis('{bad'), 'crew-1', 'user-a', NOW), null);
+  });
+
+  it('returns null when Redis throws or is missing', async () => {
+    assert.equal(await readLivePosition(hgetRedis(null, { throws: true }), 'crew-1', 'user-a', NOW), null);
+    assert.equal(await readLivePosition(null, 'crew-1', 'user-a', NOW), null);
   });
 });

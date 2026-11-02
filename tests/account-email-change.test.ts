@@ -203,6 +203,48 @@ async function stealResetToken(userId: string) {
   return raw;
 }
 
+/** Live (unused, unexpired) password-reset rows, with hours left on each. */
+async function liveResetTokens(userId: string): Promise<{ hoursLeft: number }[]> {
+  return withPool(async (pool) => {
+    const { rows } = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM (expires_at - NOW())) / 3600 AS "hoursLeft" FROM password_reset_tokens
+        WHERE user_id = $1 AND used_at IS NULL AND expires_at > NOW()`,
+      [userId],
+    );
+    return rows.map((r: { hoursLeft: string }) => ({ hoursLeft: Number(r.hoursLeft) }));
+  });
+}
+
+/** Insert a 1-hour reset token whose raw value the test knows. */
+async function insertResetToken(userId: string) {
+  const raw = crypto.randomBytes(32).toString('hex');
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  await withPool((pool) =>
+    pool.query(
+      "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 hour')",
+      [userId, hash],
+    ),
+  );
+  return raw;
+}
+
+/** Confirm the signup address through the real link, so the route cache sees it. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function verifySignupEmail(server: any, userId: string) {
+  const { raw } = await stealPendingToken(userId);
+  const res = await server.request.get(`/api/v1/auth/verify-email?token=${raw}`).set('Accept', 'application/json');
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.data.sessionsRevoked, false);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resetPassword(server: any, token: string) {
+  return server.request
+    .post('/api/v1/auth/reset-password')
+    .set(TRUSTED_MUTATION_HEADER, '1')
+    .send({ token, newPassword: 'N3wStr0ng!Pw22', confirmPassword: 'N3wStr0ng!Pw22' });
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const servers: any[] = [];
 afterEach(async () => {
@@ -332,6 +374,7 @@ describe('account: POST /email (change-email request)', { concurrency: 1 }, () =
     const res = await changeEmail(server, user.token, newEmail, 'Wr0ngPassword!x');
     assert.equal(res.status, 400);
     assert.equal(res.body.error.code, 'PASSWORD_INCORRECT');
+    assert.equal(res.body.error.message, 'That password is not correct.');
     assert.equal(await countLiveTokens(user.id, newEmail), 0);
     assert.equal((await readUser(user.id)).email, oldEmail);
   });
@@ -501,6 +544,67 @@ describe('account: POST /email (change-email request)', { concurrency: 1 }, () =
     const after = await server.request.get('/api/v1/auth/me').set('x-user-token', user.token);
     assert.equal(after.status, 401, 'a session issued before the identity moved must not survive it');
     assert.equal((await readUser(user.id)).email, newEmail);
+  });
+
+  test("verified address: the alert's reset link lives as long as the change link", async () => {
+    const server = await startServer({ EMAIL_VERIFY_TOKEN_TTL_HOURS: 48 });
+    servers.push(server);
+    const user = await registerUser(server, unique('ec-nm'), `${unique('old')}@example.com`);
+    await verifySignupEmail(server, user.id);
+
+    assert.equal((await changeEmail(server, user.token, `${unique('new')}@example.com`)).status, 200);
+
+    const live = await liveResetTokens(user.id);
+    assert.equal(live.length, 1, 'exactly one "This wasn\'t me" reset token');
+    assert.ok(live[0]!.hoursLeft > 47 && live[0]!.hoursLeft <= 48, `expires in ${live[0]!.hoursLeft}h, want ~48h`);
+  });
+
+  test('unverified address: the alert carries no reset link', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const user = await registerUser(server, unique('ec-nv'), `${unique('old')}@example.com`);
+
+    assert.equal((await changeEmail(server, user.token, `${unique('new')}@example.com`)).status, 200);
+    assert.equal((await liveResetTokens(user.id)).length, 0);
+  });
+
+  test("the alert's reset link cancels the change and works only once", async () => {
+    const server = await startServer();
+    servers.push(server);
+    const oldEmail = `${unique('old')}@example.com`;
+    const user = await registerUser(server, unique('ec-nmr'), oldEmail);
+    await verifySignupEmail(server, user.id);
+
+    assert.equal((await changeEmail(server, user.token, `${unique('atk')}@evil.test`)).status, 200);
+    const { raw: changeRaw } = await stealPendingToken(user.id);
+    const resetRaw = await stealResetToken(user.id);
+
+    const reset = await resetPassword(server, resetRaw);
+    assert.equal(reset.status, 200, JSON.stringify(reset.body));
+
+    const clicked = await server.request
+      .get(`/api/v1/auth/verify-email?token=${changeRaw}`)
+      .set('Accept', 'application/json');
+    assert.equal(clicked.status, 400, 'the pending change link must be dead');
+    assert.equal((await readUser(user.id)).email, oldEmail);
+
+    const again = await resetPassword(server, resetRaw);
+    assert.equal(again.status, 400);
+    assert.equal(again.body.error.code, 'TOKEN_EXPIRED');
+  });
+
+  test('a successful reset retires every other outstanding reset link', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const user = await registerUser(server, unique('ec-rr'), `${unique('old')}@example.com`);
+    const first = await insertResetToken(user.id);
+    const second = await insertResetToken(user.id);
+
+    assert.equal((await resetPassword(server, first)).status, 200);
+    const stale = await resetPassword(server, second);
+    assert.equal(stale.status, 400);
+    assert.equal(stale.body.error.code, 'TOKEN_EXPIRED');
+    assert.equal((await liveResetTokens(user.id)).length, 0);
   });
 
   test('the retired POST /api/v1/auth/update-email is not mounted', async () => {

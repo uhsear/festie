@@ -47,7 +47,7 @@ function LoginPageInner() {
     setPasswordErr('');
 
     if (!username) {
-      setUsernameErr('Username is required');
+      setUsernameErr(AUTH_COPY.loginIdentifierRequired);
       return;
     }
     if (!password) {
@@ -62,7 +62,7 @@ function LoginPageInner() {
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the
       // render before the request failed, so it is still null here.
-      setFormError(mapErrorToUserMessage(err, 'Sign-in failed. Check your username and password and try again.'));
+      setFormError(mapErrorToUserMessage(err, 'Sign-in failed. Check your username or email and your password, then try again.'));
     }
   };
 
@@ -101,9 +101,9 @@ function LoginPageInner() {
 
         <div className="mb-3">
           <Input
-            label="Username"
+            label={AUTH_COPY.loginIdentifierLabel}
             autoComplete="username"
-            maxLength={30}
+            maxLength={254}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             disabled={isLoading}

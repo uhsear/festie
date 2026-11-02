@@ -22,6 +22,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     io,
     invalidateUserSessions,
     requireRecentAuth,
+    getUserById,
   } = deps;
   const { adminWriteLimit } = ctx;
 
@@ -239,7 +240,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
           c.created_at AS "createdAt",
           f.name AS "festivalName",
           u.username AS "creatorUsername",
-          COUNT(cm.user_id) AS "memberCount"
+          COUNT(cm.user_id)::int AS "memberCount"
         FROM
           crews c
           LEFT JOIN festivals f ON f.id = c.festival_id
@@ -299,6 +300,17 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
 
         const member = await stores.crews.getMember(crewId, targetUserId);
         if (!member) return sendError(res, 404, 'Member not found', ErrorCodes.NOT_FOUND);
+        // Removing the owner would leave the crew with no owner.
+        if (member.role === 'owner') {
+          return sendError(
+            res,
+            400,
+            "The crew owner can't be removed. Delete the crew instead.",
+            ErrorCodes.INVALID_INPUT,
+          );
+        }
+
+        const [crew, targetUser] = await Promise.all([stores.crews.getById(crewId), getUserById(targetUserId)]);
 
         await stores.crews.removeMember(crewId, targetUserId);
 
@@ -320,7 +332,12 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             action: 'crew_remove_member',
             targetType: 'crew_member',
             targetId: `${crewId}:${targetUserId}`,
-            detailsJson: JSON.stringify({ crewId, userId: targetUserId }),
+            detailsJson: JSON.stringify({
+              crewId,
+              crewName: crew?.name ?? null,
+              userId: targetUserId,
+              targetUsername: targetUser?.username ?? null,
+            }),
             ip: getRequestIp(req),
           });
           res.locals.auditWritten = true;

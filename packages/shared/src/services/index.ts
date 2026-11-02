@@ -7,5 +7,7 @@ export * from './meetingPoints';
 export * from './sharing';
 export * from './lineupImport';
 export * from './festivalAdmin';
+export * from './adminFestivalTools';
+export * from './checkin';
 export * from './ratings';
 export * from './announcements';

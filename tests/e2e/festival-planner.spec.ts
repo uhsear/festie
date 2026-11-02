@@ -136,7 +136,7 @@ test.describe('festival planner browser regression', () => {
     // inline field errors (rendered by the Input component) instead.
     await page.getByRole('button', { name: 'Sign in' }).click();
     // The username Input is required-first; its error text appears in the form.
-    await expect(page.locator('form')).toContainText('Username is required');
+    await expect(page.locator('form')).toContainText('Enter your username or email.');
   });
 
   test('register requires accepting the Terms of Service', async ({ app, page }) => {

@@ -1,8 +1,8 @@
 import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { api } from '../services/api';
 import { getStorage } from '../platform/storage';
 import { useFestivalDataStore } from './festivalDataStore';
+import { useWeatherStore } from './weatherStore';
 import { useCrewStore } from './crewStore';
 import type { FestivalSet } from '../types';
 
@@ -13,7 +13,8 @@ import type { FestivalSet } from '../types';
 // it ORCHESTRATES the existing loaders (selectFestival / loadProfiles /
 // selectCrew + the crew sub-resource loaders) so each populates its OWN
 // persisted store (festivalDataStore + crewStore zustand-persist). It then
-// fetches weather + prefetches artist art so the web service worker caches the
+// loads weather into weatherStore (zustand-persist, so it works offline on web
+// and mobile) and prefetches artist art so the web service worker caches the
 // PUBLIC assets (see vite.config.ts runtimeCaching).
 //
 // Division of labor (the security guardrail, mirrored in vite.config.ts):
@@ -76,7 +77,7 @@ export interface DownloadDeps {
   loadPolls: (crewId: string) => Promise<void>;
   loadExpenses: (crewId: string) => Promise<void>;
   loadActivity: (crewId: string) => Promise<void>;
-  /** Fetch weather for the festival (public GET — web SW caches it). */
+  /** Load weather for the festival into weatherStore. */
   fetchWeather: (festivalId: string) => Promise<void>;
   /** Read the loaded sets so art prefetch can collect artist image URLs. */
   getSets: () => FestivalSet[];
@@ -93,12 +94,9 @@ function defaultDeps(): DownloadDeps {
     loadPolls: (crewId) => useCrewStore.getState().loadPolls(crewId),
     loadExpenses: (crewId) => useCrewStore.getState().loadExpenses(crewId),
     loadActivity: (crewId) => useCrewStore.getState().loadActivity(crewId),
-    fetchWeather: async (festivalId) => {
-      // Public GET — issuing it primes the web SW weather cache (vite.config.ts
-      // StaleWhileRevalidate). We don't store the body here; the weather UI
-      // re-reads it (served from cache when offline).
-      await api.get(`/weather/${festivalId}`);
-    },
+    // The body is kept in weatherStore (zustand-persist), so weather works
+    // offline on mobile as well as on web.
+    fetchWeather: (festivalId) => useWeatherStore.getState().loadWeather(festivalId),
     getSets: () => useFestivalDataStore.getState().sets,
     prefetchImage: async (url) => {
       // Best-effort image warm: a GET routes the response into the SW CacheFirst

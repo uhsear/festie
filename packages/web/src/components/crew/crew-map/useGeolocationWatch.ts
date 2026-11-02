@@ -2,6 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import type { Coord } from '@festie/shared/utils';
 
 export type GeoState = 'idle' | 'locating' | 'denied' | 'on';
@@ -16,22 +17,35 @@ export interface GeolocationWatch {
 
 /**
  * Browser geolocation watch for pursue / nearest-X. A continuous `watchPosition`
- * keeps `selfCoord` fresh as the user moves so the arrow + ETA recompute live;
- * the watch is torn down on unmount. Extracted verbatim from CrewMap.
+ * keeps `selfCoord` fresh as the user moves so the arrow + ETA recompute live.
+ * Low-power mode lowers accuracy and accepts older fixes (the watch restarts when
+ * it flips). The watch stops while the tab is hidden and resumes when it is
+ * visible again, and is torn down on unmount.
  */
 export function useGeolocationWatch(): GeolocationWatch {
   const [selfCoord, setSelfCoord] = useState<Coord | null>(null);
   const [geoState, setGeoState] = useState<GeoState>('idle');
+  const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
   const watchIdRef = useRef<number | null>(null);
+  // The user enabled location; survives a hidden tab so the watch can resume.
+  const wantedRef = useRef(false);
+  const lowPowerRef = useRef(lowPowerMode);
+  lowPowerRef.current = lowPowerMode;
 
-  const enableLocation = useCallback(() => {
+  const clearWatch = useCallback(() => {
+    const geo = typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
+    if (geo && watchIdRef.current != null) geo.clearWatch(watchIdRef.current);
+    watchIdRef.current = null;
+  }, []);
+
+  const startWatch = useCallback(() => {
     const geo = typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
     if (!geo) {
       setGeoState('denied');
       return;
     }
     if (watchIdRef.current != null) return; // already watching
-    setGeoState('locating');
+    setGeoState((s) => (s === 'on' ? s : 'locating'));
     watchIdRef.current = geo.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
@@ -42,25 +56,43 @@ export function useGeolocationWatch(): GeolocationWatch {
       },
       () => {
         setGeoState('denied');
-        if (watchIdRef.current != null) {
-          geo.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-        }
+        wantedRef.current = false;
+        clearWatch();
       },
-      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
+      lowPowerRef.current
+        ? { enableHighAccuracy: false, maximumAge: 30_000, timeout: 20_000 }
+        : { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
     );
-  }, []);
+  }, [clearWatch]);
 
-  // Tear the geolocation watch down on unmount.
+  const enableLocation = useCallback(() => {
+    wantedRef.current = true;
+    startWatch();
+  }, [startWatch]);
+
+  // Restart with the new options when low-power mode flips mid-watch.
+  const firstRunRef = useRef(true);
   useEffect(() => {
-    return () => {
-      const geo = typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
-      if (geo && watchIdRef.current != null) {
-        geo.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
+    if (firstRunRef.current) {
+      firstRunRef.current = false;
+      return;
+    }
+    if (watchIdRef.current == null) return;
+    clearWatch();
+    startWatch();
+  }, [lowPowerMode, clearWatch, startWatch]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') clearWatch();
+      else if (wantedRef.current) startWatch();
     };
-  }, []);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearWatch();
+    };
+  }, [clearWatch, startWatch]);
 
   return { selfCoord, geoState, enableLocation };
 }

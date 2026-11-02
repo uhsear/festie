@@ -27,10 +27,12 @@ export function createEmailTokensStore(pool: Pool) {
       );
     },
 
-    async createResetToken(userId: string, tokenHash: string) {
+    // `ttlHours` defaults to the 1-hour forgot-password lifetime. The email-change
+    // "This wasn't me" link lives as long as the pending change link instead.
+    async createResetToken(userId: string, tokenHash: string, ttlHours = 1) {
       await pool.query(
-        'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL \'1 hour\')',
-        [userId, tokenHash],
+        'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + ($3 || \' hours\')::INTERVAL)',
+        [userId, tokenHash, ttlHours],
       );
     },
 

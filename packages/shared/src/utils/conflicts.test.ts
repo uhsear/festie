@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectConflicts, getConflictingSetIds, hasConflict, isHardConflict } from './conflicts';
+import { clashBadgeBySetId, detectConflicts, getConflictingSetIds, hasConflict, isHardConflict } from './conflicts';
 import type { FestivalSet, Priority } from '../types/domain';
 
 function makeSet(overrides: Partial<FestivalSet> & { id: string }): FestivalSet {
@@ -230,5 +230,56 @@ describe('all-TBA festival (S-8) — no set has start/end times', () => {
     expect(conflicts).toHaveLength(1);
     const ids = [conflicts[0]!.setA.id, conflicts[0]!.setB.id].sort();
     expect(ids).toEqual(['timed-a', 'timed-b']);
+  });
+});
+
+describe('clashBadgeBySetId', () => {
+  const a = makeSet({ id: 'a', artist: 'A', startTime: '20:00', endTime: '21:00' });
+  const b = makeSet({ id: 'b', artist: 'B', startTime: '20:30', endTime: '21:30' });
+  const c = makeSet({ id: 'c', artist: 'C', startTime: '20:45', endTime: '22:00' });
+  const d = makeSet({ id: 'd', artist: 'D', startTime: '21:05', endTime: '22:00' });
+
+  it('names the other set and the overlap', () => {
+    const badges = clashBadgeBySetId([{ setA: a, setB: b, overlapMinutes: 30 }]);
+    expect(badges.get('a')!.label).toBe('Clashes with B (30 min)');
+    expect(badges.get('b')!.label).toBe('Clashes with A (30 min)');
+    expect(badges.get('a')).toMatchObject({
+      otherSetId: 'b',
+      otherName: 'B',
+      overlapMinutes: 30,
+      more: 0,
+      tight: false,
+    });
+  });
+
+  it('counts the other clashing sets and picks the largest overlap', () => {
+    const badges = clashBadgeBySetId([
+      { setA: a, setB: b, overlapMinutes: 30 },
+      { setA: a, setB: c, overlapMinutes: 15 },
+    ]);
+    expect(badges.get('a')!.label).toBe('Clashes with B (30 min) +1');
+  });
+
+  it('breaks an overlap tie on the earlier-starting other set', () => {
+    const badges = clashBadgeBySetId([
+      { setA: a, setB: c, overlapMinutes: 15 },
+      { setA: a, setB: b, overlapMinutes: 15 },
+    ]);
+    expect(badges.get('a')!.otherSetId).toBe('b');
+  });
+
+  it('labels a tight-only pair as a tight change', () => {
+    const badges = clashBadgeBySetId([{ setA: a, setB: d, overlapMinutes: 0, tight: true }]);
+    expect(badges.get('a')!.label).toBe('Tight change with D');
+    expect(badges.get('a')!.tight).toBe(true);
+  });
+
+  it('ranks an overlap above a tight pair', () => {
+    const badges = clashBadgeBySetId([
+      { setA: a, setB: d, overlapMinutes: 0, tight: true },
+      { setA: a, setB: b, overlapMinutes: 5 },
+    ]);
+    expect(badges.get('a')).toMatchObject({ otherSetId: 'b', tight: false, label: 'Clashes with B (5 min) +1' });
+    expect(badges.get('d')!.label).toBe('Tight change with A');
   });
 });

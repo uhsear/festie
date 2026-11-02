@@ -48,6 +48,9 @@ import type {
   CrewPollClosedPayload,
   CrewExpensePayload,
   CrewExpenseDeletedPayload,
+  CrewExpenseUpdatedPayload,
+  CrewPackingChangedPayload,
+  CrewRidesChangedPayload,
   CrewActivityPayload,
   LocationPeerUpdatePayload,
   LocationPeerStoppedPayload,
@@ -114,6 +117,16 @@ export interface ExpensesChangedIntent {
   crewId: string;
 }
 
+export interface PackingChangedIntent {
+  kind: 'packing-changed';
+  crewId: string;
+}
+
+export interface RidesChangedIntent {
+  kind: 'rides-changed';
+  crewId: string;
+}
+
 export interface ActivityLoggedIntent {
   kind: 'activity-logged';
   crewId: string;
@@ -158,6 +171,8 @@ export type CrewRealtimeIntent =
   | PollVotedIntent
   | PollClosedIntent
   | ExpensesChangedIntent
+  | PackingChangedIntent
+  | RidesChangedIntent
   | ActivityLoggedIntent
   | LocationPeerUpdateIntent
   | LocationPeerStoppedIntent
@@ -269,11 +284,27 @@ export function routePollClosed(payload: CrewPollClosedPayload, activeCrewId: st
 }
 
 export function routeExpensesChanged(
-  payload: CrewExpensePayload | CrewExpenseDeletedPayload,
+  payload: CrewExpensePayload | CrewExpenseDeletedPayload | CrewExpenseUpdatedPayload,
   activeCrewId: string | null,
 ): ExpensesChangedIntent | null {
   if (!matchesActiveCrew(payload?.crewId, activeCrewId)) return null;
   return { kind: 'expenses-changed', crewId: payload.crewId };
+}
+
+export function routePackingChanged(
+  payload: CrewPackingChangedPayload,
+  activeCrewId: string | null,
+): PackingChangedIntent | null {
+  if (!matchesActiveCrew(payload?.crewId, activeCrewId)) return null;
+  return { kind: 'packing-changed', crewId: payload.crewId };
+}
+
+export function routeRidesChanged(
+  payload: CrewRidesChangedPayload,
+  activeCrewId: string | null,
+): RidesChangedIntent | null {
+  if (!matchesActiveCrew(payload?.crewId, activeCrewId)) return null;
+  return { kind: 'rides-changed', crewId: payload.crewId };
 }
 
 export function routeActivityLogged(

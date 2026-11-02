@@ -18,6 +18,7 @@
 
 import { useEffect } from 'react';
 import type { Socket } from '../services/socket';
+import { useLiveLocationStore } from '../stores/liveLocationStore';
 import {
   routeHomeBaseUpdated,
   routeMeetingPointUpsert,
@@ -26,6 +27,8 @@ import {
   routePollVoted,
   routePollClosed,
   routeExpensesChanged,
+  routePackingChanged,
+  routeRidesChanged,
   routeActivityLogged,
   routeLocationPeerUpdate,
   routeLocationPeerStopped,
@@ -42,11 +45,15 @@ import type {
   CrewPollClosedPayload,
   CrewExpensePayload,
   CrewExpenseDeletedPayload,
+  CrewExpenseUpdatedPayload,
+  CrewPackingChangedPayload,
+  CrewRidesChangedPayload,
   CrewActivityPayload,
   LocationPeerUpdatePayload,
   LocationPeerStoppedPayload,
   SosRaisedPayload,
   SosClearedPayload,
+  SosSeenPayload,
 } from '../types/socket-events';
 
 export interface UseCrewRealtimeOptions {
@@ -135,11 +142,27 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       if (intent) sink.onPollClosed(intent.crewId, intent.pollId);
     };
 
-    const handleExpensesChanged = (data: CrewExpensePayload | CrewExpenseDeletedPayload) => {
+    const handleExpensesChanged = (data: CrewExpensePayload | CrewExpenseDeletedPayload | CrewExpenseUpdatedPayload) => {
       const intent = routeExpensesChanged(data, getActiveCrewId());
       if (!intent) return;
       schedule(`crew-expenses:${intent.crewId}`, () => {
         sink.onExpensesChanged(intent.crewId);
+      });
+    };
+
+    const handlePackingChanged = (data: CrewPackingChangedPayload) => {
+      const intent = routePackingChanged(data, getActiveCrewId());
+      if (!intent) return;
+      schedule(`crew-packing:${intent.crewId}`, () => {
+        sink.onPackingChanged(intent.crewId);
+      });
+    };
+
+    const handleRidesChanged = (data: CrewRidesChangedPayload) => {
+      const intent = routeRidesChanged(data, getActiveCrewId());
+      if (!intent) return;
+      schedule(`crew-rides:${intent.crewId}`, () => {
+        sink.onRidesChanged(intent.crewId);
       });
     };
 
@@ -173,6 +196,12 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       if (intent) sink.onSosCleared(intent.crewId, intent.userId, intent.clearedBy);
     };
 
+    // Written straight to the store: no app sink needs to change for seen-by.
+    const handleSosSeen = (data: SosSeenPayload) => {
+      if (data.crewId !== getActiveCrewId()) return;
+      useLiveLocationStore.getState().applySosSeen(data.raiserId, data.seenBy);
+    };
+
     // ── Register listeners ──────────────────────────────────────────────────
     socket.on('crew:home-base-updated', handleHomeBaseUpdated);
     socket.on('crew:meeting-point-created', handleMeetingPointUpsert);
@@ -183,11 +212,19 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     socket.on('crew:poll-closed', handlePollClosed);
     socket.on('crew:expense-added', handleExpensesChanged);
     socket.on('crew:expense-deleted', handleExpensesChanged);
+    socket.on('crew:expense-updated', handleExpensesChanged);
+    socket.on('crew:packing-created', handlePackingChanged);
+    socket.on('crew:packing-updated', handlePackingChanged);
+    socket.on('crew:packing-deleted', handlePackingChanged);
+    socket.on('crew:ride-created', handleRidesChanged);
+    socket.on('crew:ride-updated', handleRidesChanged);
+    socket.on('crew:ride-deleted', handleRidesChanged);
     socket.on('crew:activity', handleActivityLogged);
     socket.on('location:peer-update', handleLocationPeerUpdate);
     socket.on('location:peer-stopped', handleLocationPeerStopped);
     socket.on('sos:raised', handleSosRaised);
     socket.on('sos:cleared', handleSosCleared);
+    socket.on('sos:seen', handleSosSeen);
 
     // ── Crew room lifecycle ─────────────────────────────────────────────────
     // Join on connect AND immediately (the socket may already be connected when
@@ -217,11 +254,19 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       socket.off('crew:poll-closed', handlePollClosed);
       socket.off('crew:expense-added', handleExpensesChanged);
       socket.off('crew:expense-deleted', handleExpensesChanged);
+      socket.off('crew:expense-updated', handleExpensesChanged);
+      socket.off('crew:packing-created', handlePackingChanged);
+      socket.off('crew:packing-updated', handlePackingChanged);
+      socket.off('crew:packing-deleted', handlePackingChanged);
+      socket.off('crew:ride-created', handleRidesChanged);
+      socket.off('crew:ride-updated', handleRidesChanged);
+      socket.off('crew:ride-deleted', handleRidesChanged);
       socket.off('crew:activity', handleActivityLogged);
       socket.off('location:peer-update', handleLocationPeerUpdate);
       socket.off('location:peer-stopped', handleLocationPeerStopped);
       socket.off('sos:raised', handleSosRaised);
       socket.off('sos:cleared', handleSosCleared);
+      socket.off('sos:seen', handleSosSeen);
       socket.off('connect', handleConnect);
 
       // Cancel pending debounced reloads.

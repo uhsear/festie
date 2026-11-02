@@ -45,10 +45,11 @@ export class AvatarPool {
     }
   }
 
-  process(buffer: any, config: any) {
+  // `opts` overrides the AVATAR_* values; the site-plan upload uses it. Avatar callers pass none.
+  process(buffer: any, config: any, opts: { size?: number; maxPixels?: number; quality?: number; fit?: 'cover' | 'inside' } = {}) {
     return new Promise((resolve, reject) => {
       this.init();
-      this._queue.push({ buffer, config, resolve, reject });
+      this._queue.push({ buffer, config, opts, resolve, reject });
       this._drain();
     });
   }
@@ -96,9 +97,10 @@ export class AvatarPool {
       const ab = src.buffer.slice(src.byteOffset, src.byteOffset + src.byteLength);
       worker.postMessage({
         buffer: ab,
-        maxPixels: task.config.AVATAR_MAX_PIXELS,
-        size: task.config.AVATAR_SIZE,
-        quality: task.config.AVATAR_WEBP_QUALITY,
+        maxPixels: task.opts?.maxPixels ?? task.config.AVATAR_MAX_PIXELS,
+        size: task.opts?.size ?? task.config.AVATAR_SIZE,
+        quality: task.opts?.quality ?? task.config.AVATAR_WEBP_QUALITY,
+        fit: task.opts?.fit,
       }, [ab]);
     }
   }

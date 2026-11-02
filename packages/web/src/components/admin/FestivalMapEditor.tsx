@@ -1,11 +1,17 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@festie/shared/services/api';
+import { uploadSiteplanImage } from '@festie/shared/services';
 import {
   amenityGlyph,
   amenityCount,
   buildAmenityFeature,
   appendAmenity,
   removeAmenity,
+  moveAmenity,
+  moveZone,
+  setAmenityLabel as renameAmenity,
+  setZoneLabel as renameZone,
+  parseLatLng,
   stageCoordFromTap,
   AMENITY_PALETTE,
   humanizeAmenityType,
@@ -29,6 +35,7 @@ import type { AmenityType, Festival, FestivalMapConfig, Stage } from '@festie/sh
 import { useToast } from '../../lib/toastContext';
 import { useUnsavedChangesGuard } from '../../lib/useUnsavedChangesGuard';
 import { cn } from '../../lib/utils';
+import Button from '../ui/Button';
 
 // CrewMap is heavy (MapLibre); lazy-load it exactly like the crew surface does so
 // it never lands in the admin bundle until the map editor opens.
@@ -69,12 +76,16 @@ interface StageEdit {
 }
 
 const DEFAULT_STAGE_COLOR = '#6a6a88';
+const MAX_SITEPLAN_BYTES = 10 * 1024 * 1024;
 
 type ArmedTarget =
   | { kind: 'stage'; stageId: string }
   | { kind: 'amenity'; amenityType: AmenityType }
   | { kind: 'zone' }
   | { kind: 'siteplan' }
+  | { kind: 'venue' }
+  | { kind: 'move-amenity'; id: string }
+  | { kind: 'move-zone'; id: string }
   | null;
 
 /** A single tapped vertex while drawing a zone (geo.ts {latitude, longitude}). */
@@ -84,9 +95,32 @@ export interface FestivalMapEditorProps {
   festivalId: string;
   /** Back to the festival list/edit view. */
   onClose: () => void;
+  /** Leave the map for the festival editor (shown when the festival has no stages). */
+  onEditFestival?: () => void;
 }
 
-export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEditorProps) {
+/** Name field with a local draft; commits on blur or Enter so each keystroke does not rewrite the map config. */
+function NameInput({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  return (
+    <input
+      type="text"
+      aria-label={`Name of ${label}`}
+      placeholder="Unnamed"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== value) onCommit(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
+      className="flex-1 min-w-0 px-2 py-1 rounded-md bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+    />
+  );
+}
+
+export default function FestivalMapEditor({ festivalId, onClose, onEditFestival }: FestivalMapEditorProps) {
   const { toast, toastError } = useToast();
 
   const [name, setName] = useState('');
@@ -97,6 +131,15 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Set by every edit handler, never by the load, so leaving can warn about unsaved changes.
+  // Venue: the festival latitude/longitude the map camera and weather use.
+  const [venue, setVenue] = useState<Vertex | null>(null);
+  const [venueDirty, setVenueDirty] = useState(false);
+  const [venueText, setVenueText] = useState('');
+  const [venueError, setVenueError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [armed, setArmed] = useState<ArmedTarget>(null);
   const [amenityLabel, setAmenityLabel] = useState('');
   // Zone drawing (Phase 4A): the in-progress polygon vertices + the chosen
@@ -116,7 +159,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const dirty =
     snapshot !== null &&
-    (JSON.stringify({ stages, mapConfig }) !== snapshot || draftVertices.length > 0 || draftCorners.length > 0);
+    (JSON.stringify({ stages, mapConfig }) !== snapshot || venueDirty || draftVertices.length > 0 || draftCorners.length > 0);
   const { confirmLeave, guardDialog } = useUnsavedChangesGuard(dirty);
 
   const load = useCallback(async () => {
@@ -136,6 +179,12 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       setStages(loadedStages);
       setMapConfig(full.mapConfig ?? null);
       setSnapshot(JSON.stringify({ stages: loadedStages, mapConfig: full.mapConfig ?? null }));
+      setVenue(
+        typeof full.latitude === 'number' && typeof full.longitude === 'number'
+          ? { latitude: full.latitude, longitude: full.longitude }
+          : null,
+      );
+      setVenueDirty(false);
       // Hydrate the site-plan URL + opacity fields from the existing config (the
       // corners stay committed in mapConfig until the admin re-taps them).
       const existingSp = extractSiteplan(full.mapConfig ?? null);
@@ -151,6 +200,17 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
   useEffect(() => {
     void load();
   }, [load]);
+
+  const editStages = useCallback((updater: (prev: StageEdit[]) => StageEdit[]) => {
+    setStages(updater);
+  }, []);
+  const editMapConfig = useCallback((updater: (prev: FestivalMapConfig | null) => FestivalMapConfig | null) => {
+    setMapConfig(updater);
+  }, []);
+  const applyVenue = useCallback((next: Vertex) => {
+    setVenueDirty(true);
+    setVenue(next);
+  }, []);
 
   // The config the PREVIEW renders: the committed config, plus the in-progress
   // zone (once it has ≥3 vertices) appended as a draft so the organizer sees the
@@ -189,12 +249,12 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       ({
         id: festivalId,
         name,
-        latitude: detail?.latitude ?? null,
-        longitude: detail?.longitude ?? null,
+        latitude: venue?.latitude ?? null,
+        longitude: venue?.longitude ?? null,
         mapConfig: previewConfig,
         stages: stages as unknown as Stage[],
       }) as Festival & { stages?: Stage[] },
-    [festivalId, name, detail?.latitude, detail?.longitude, previewConfig, stages],
+    [festivalId, name, venue, previewConfig, stages],
   );
 
   // A click on the map applies to the armed target (one-shot: disarms after).
@@ -217,19 +277,28 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
         );
         return;
       }
-      if (armed.kind === 'stage') {
+      if (armed.kind === 'venue') {
         const next = stageCoordFromTap(coord);
-        setStages((prev) =>
+        if (typeof next.latitude === 'number' && typeof next.longitude === 'number') {
+          applyVenue({ latitude: next.latitude, longitude: next.longitude });
+        }
+      } else if (armed.kind === 'move-amenity') {
+        editMapConfig((prev) => moveAmenity(prev, armed.id, coord));
+      } else if (armed.kind === 'move-zone') {
+        editMapConfig((prev) => moveZone(prev, armed.id, coord));
+      } else if (armed.kind === 'stage') {
+        const next = stageCoordFromTap(coord);
+        editStages((prev) =>
           prev.map((s) => (s.id === armed.stageId ? { ...s, latitude: next.latitude, longitude: next.longitude } : s)),
         );
       } else {
         const feature = buildAmenityFeature(coord, armed.amenityType, amenityLabel);
-        if (feature) setMapConfig((prev) => appendAmenity(prev, feature));
+        if (feature) editMapConfig((prev) => appendAmenity(prev, feature));
         setAmenityLabel('');
       }
       setArmed(null);
     },
-    [armed, amenityLabel],
+    [armed, amenityLabel, applyVenue, editMapConfig, editStages],
   );
 
   const armStage = (stageId: string) =>
@@ -239,9 +308,28 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       prev?.kind === 'amenity' && prev.amenityType === amenityType ? null : { kind: 'amenity', amenityType },
     );
 
+  const armVenue = () => setArmed((prev) => (prev?.kind === 'venue' ? null : { kind: 'venue' }));
+  const armMoveAmenity = (id: string) =>
+    setArmed((prev) => (prev?.kind === 'move-amenity' && prev.id === id ? null : { kind: 'move-amenity', id }));
+  const armMoveZone = (id: string) =>
+    setArmed((prev) => (prev?.kind === 'move-zone' && prev.id === id ? null : { kind: 'move-zone', id }));
+  const applyVenueText = () => {
+    const parsed = parseLatLng(venueText);
+    if (!parsed) {
+      setVenueError('Use latitude, longitude. For example: 28.53834, -81.37923');
+      return;
+    }
+    setVenueError(null);
+    setVenueText('');
+    applyVenue(parsed);
+  };
+
   const clearStagePin = (stageId: string) =>
-    setStages((prev) => prev.map((s) => (s.id === stageId ? { ...s, latitude: null, longitude: null } : s)));
-  const removeAmenityById = (amenityId: string) => setMapConfig((prev) => removeAmenity(prev, amenityId));
+    editStages((prev) => prev.map((s) => (s.id === stageId ? { ...s, latitude: null, longitude: null } : s)));
+  const removeAmenityById = (amenityId: string) => editMapConfig((prev) => removeAmenity(prev, amenityId));
+  const renameAmenityById = (amenityId: string, label: string) =>
+    editMapConfig((prev) => renameAmenity(prev, amenityId, label));
+  const renameZoneById = (zoneId: string, label: string) => editMapConfig((prev) => renameZone(prev, zoneId, label));
 
   // ── Zone drawing controls ───────────────────────────────────────────────────
   const startZone = () => {
@@ -255,12 +343,12 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
   };
   const finishZone = () => {
     const feature = buildZoneFeature(draftVertices, { color: zoneColor, label: zoneLabel });
-    if (feature) setMapConfig((prev) => appendZone(prev, feature));
+    if (feature) editMapConfig((prev) => appendZone(prev, feature));
     setDraftVertices([]);
     setZoneLabel('');
     setArmed(null);
   };
-  const removeZoneById = (zoneId: string) => setMapConfig((prev) => removeZone(prev, zoneId));
+  const removeZoneById = (zoneId: string) => editMapConfig((prev) => removeZone(prev, zoneId));
 
   // ── Site-plan overlay controls (Phase 4B) ──────────────────────────────────
   // The committed site plan (corners + url + opacity), if any.
@@ -271,7 +359,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
   // Re-commit a site plan through the shared validator; no-op if it doesn't build.
   const recommitSiteplan = (url: string, corners: Vertex[], opacity: number) => {
     const sp = buildSiteplan(url, corners, opacity);
-    if (sp) setMapConfig((prev) => setSiteplan(prev, sp));
+    if (sp) editMapConfig((prev) => setSiteplan(prev, sp));
     return !!sp;
   };
   const startSiteplanCorners = () => {
@@ -301,8 +389,28 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
     setSiteplanOpacity(op);
     if (committedSiteplan) recommitSiteplan(committedSiteplan.imageUrl, cornersToLatLng(committedSiteplan.corners), op);
   };
+  const onSiteplanFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_SITEPLAN_BYTES) {
+      setUploadError('The image must be 10 MB or smaller.');
+      return;
+    }
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const { imageUrl } = await uploadSiteplanImage(festivalId, file, file.name);
+      onSiteplanUrlChange(imageUrl);
+      toast('Image uploaded. Now mark the four corners.', 'success');
+    } catch (err: unknown) {
+      toastError(err, "Couldn't upload the image. Try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
   const removeSiteplanOverlay = () => {
-    setMapConfig((prev) => removeSiteplan(prev));
+    editMapConfig((prev) => removeSiteplan(prev));
     setDraftCorners([]);
     setArmed((prev) => (prev?.kind === 'siteplan' ? null : prev));
   };
@@ -332,12 +440,17 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       expectedUpdatedAt: detail.updatedAt,
       mapConfig,
     };
+    if (venueDirty && venue) {
+      payload.latitude = venue.latitude;
+      payload.longitude = venue.longitude;
+    }
 
     setSaving(true);
     try {
       await api.put<void>(`/admin/festivals/${festivalId}`, payload);
       toast('Festival map saved', 'success');
       setSnapshot(JSON.stringify({ stages, mapConfig }));
+      setVenueDirty(false);
       setDraftVertices([]);
       setDraftCorners([]);
       onClose();
@@ -393,16 +506,56 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
             className="absolute top-2 left-1/2 -translate-x-1/2 z-[1] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent-aqua text-bg-primary text-xs font-medium shadow-lg pointer-events-none"
             role="status"
           >
-            {armed.kind === 'stage'
-              ? 'Click the map to set this stage’s location'
-              : armed.kind === 'amenity'
-                ? `Click the map to drop a ${humanizeAmenityType(armed.amenityType)} marker`
-                : armed.kind === 'siteplan'
-                  ? draftCorners.length >= SITEPLAN_CORNER_COUNT
-                    ? 'All 4 corners set — apply them below'
-                    : `Click the ${SITEPLAN_CORNER_LABELS[draftCorners.length]} corner (${draftCorners.length}/${SITEPLAN_CORNER_COUNT})`
-                  : `Click the map to add zone points (${draftVertices.length} added — need 3+)`}
+            {armed.kind === 'venue'
+              ? 'Click the map at the venue'
+              : armed.kind === 'move-amenity'
+                ? `Click the map where ${amenityFeatures.find((f) => f.properties.id === armed.id)?.properties.label || 'this amenity'} should go`
+                : armed.kind === 'move-zone'
+                  ? `Click the map where the centre of ${placedZones.find((z) => z.id === armed.id)?.label || 'this zone'} should go`
+                  : armed.kind === 'stage'
+                    ? 'Click the map to set this stage’s location'
+                    : armed.kind === 'amenity'
+                      ? `Click the map to drop a ${humanizeAmenityType(armed.amenityType)} marker`
+                      : armed.kind === 'siteplan'
+                        ? draftCorners.length >= SITEPLAN_CORNER_COUNT
+                          ? 'All 4 corners set — apply them below'
+                          : `Click the ${SITEPLAN_CORNER_LABELS[draftCorners.length]} corner (${draftCorners.length}/${SITEPLAN_CORNER_COUNT})`
+                        : `Click the map to add zone points (${draftVertices.length} added — need 3+)`}
           </div>
+        )}
+      </div>
+
+      {/* Venue: the festival point the map camera and weather use */}
+      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
+        <h3 className="type-label text-text-primary">Venue</h3>
+        <p className="text-xs text-text-muted">
+          {venue
+            ? `The map and weather use ${venue.latitude.toFixed(5)}, ${venue.longitude.toFixed(5)}.`
+            : 'No venue point yet. Festie looks up the location when you save the festival. If it can’t find it, set the venue here.'}
+        </p>
+        <Button variant="secondary" size="sm" aria-pressed={armed?.kind === 'venue'} onClick={armVenue}>
+          {armed?.kind === 'venue' ? 'Cancel' : 'Set on map'}
+        </Button>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            aria-label="Venue coordinates"
+            placeholder="Paste coordinates, e.g. 28.53834, -81.37923"
+            value={venueText}
+            onChange={(e) => setVenueText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyVenueText();
+            }}
+            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          />
+          <Button size="sm" onClick={applyVenueText}>
+            Use
+          </Button>
+        </div>
+        {venueError && (
+          <p className="text-xs text-[var(--color-text-danger)]" role="alert">
+            {venueError}
+          </p>
         )}
       </div>
 
@@ -410,9 +563,18 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
         <h3 className="type-label text-text-primary mb-3">Stage locations</h3>
         {stages.length === 0 ? (
-          <p className="text-sm text-text-muted">
-            This festival has no stages. Add stages in the festival editor first.
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-text-muted">This festival has no stages yet.</p>
+            {onEditFestival && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => confirmLeave(onEditFestival)}
+              >
+                Add stages
+              </Button>
+            )}
+          </div>
         ) : (
           <div className="space-y-2">
             {stages.map((stage) => {
@@ -556,7 +718,15 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
                   style={{ backgroundColor: z.color }}
                   aria-hidden="true"
                 />
-                <span className="text-sm text-text-primary flex-1 truncate">{z.label || 'Unnamed zone'}</span>
+                <NameInput label={z.label || 'zone'} value={z.label} onCommit={(v) => renameZoneById(z.id, v)} />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-pressed={armed?.kind === 'move-zone' && armed.id === z.id}
+                  onClick={() => armMoveZone(z.id)}
+                >
+                  {armed?.kind === 'move-zone' && armed.id === z.id ? 'Cancel' : 'Move'}
+                </Button>
                 <button
                   onClick={() => removeZoneById(z.id)}
                   className="px-2 py-1 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
@@ -574,9 +744,25 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
         <h3 className="type-label text-text-primary">Site plan overlay</h3>
         <p className="text-xs text-text-muted">
-          Underlay the organizer’s map image. Paste an https image link, then click the four corners (top-left,
-          top-right, bottom-right, bottom-left) to georeference it.
+          Upload the organizer’s site-plan image (PNG, JPEG or WebP, up to 10 MB), or paste an https link. Then mark the
+          four corners: top-left, top-right, bottom-right, bottom-left. Got a PDF? Save the page as a PNG first.
         </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          aria-label="Site-plan image file"
+          onChange={(e) => void onSiteplanFile(e)}
+        />
+        <Button variant="secondary" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+          {uploading ? 'Uploading…' : 'Upload image'}
+        </Button>
+        {uploadError && (
+          <p className="text-xs text-[var(--color-text-danger)]" role="alert">
+            {uploadError}
+          </p>
+        )}
         <input
           type="url"
           inputMode="url"
@@ -723,7 +909,19 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
                   >
                     {glyph}
                   </span>
-                  <span className="text-sm text-text-primary flex-1 truncate">{f.properties.label}</span>
+                  <NameInput
+                    label={f.properties.label}
+                    value={f.properties.label}
+                    onCommit={(v) => renameAmenityById(f.properties.id, v)}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    aria-pressed={armed?.kind === 'move-amenity' && armed.id === f.properties.id}
+                    onClick={() => armMoveAmenity(f.properties.id)}
+                  >
+                    {armed?.kind === 'move-amenity' && armed.id === f.properties.id ? 'Cancel' : 'Move'}
+                  </Button>
                   <button
                     onClick={() => removeAmenityById(f.properties.id)}
                     className="px-2 py-1 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"

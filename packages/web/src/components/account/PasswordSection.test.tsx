@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ApiClientError } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import PasswordSection from './PasswordSection';
 
 // --- Mocks ---
 
 const mockChangePassword = vi.fn();
 vi.mock('@festie/shared/stores/authStore', () => ({
-  useAuthStore: (selector: (s: Record<string, unknown>) => unknown) => selector({ changePassword: mockChangePassword }),
+  useAuthStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ changePassword: mockChangePassword, user: { username: 'alice', email: 'alice@example.com' } }),
   PASSWORD_CHANGED_MESSAGE: 'Password changed. Other devices were signed out.',
 }));
 
@@ -18,6 +21,7 @@ vi.mock('../../lib/toastContext', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useUIStore.setState({ offlineMode: false });
   mockChangePassword.mockResolvedValue(undefined);
 });
 
@@ -136,7 +140,9 @@ describe('PasswordSection', () => {
 
   it('shows error toast when changePassword fails', async () => {
     const user = userEvent.setup();
-    mockChangePassword.mockRejectedValue(new Error('bad'));
+    mockChangePassword.mockRejectedValue(
+      Object.assign(new Error('boom'), { name: 'ApiClientError', status: 500 }),
+    );
 
     render(<PasswordSection />);
     await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
@@ -145,8 +151,35 @@ describe('PasswordSection', () => {
     await user.click(screen.getByText('Update Password'));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith("Couldn't change password. Try again.", 'error');
+      expect(mockToast).toHaveBeenCalledWith('Something went wrong on our side. Try again in a minute.', 'error');
     });
+  });
+
+  it('shows the server message when the current password is wrong', async () => {
+    const user = userEvent.setup();
+    mockChangePassword.mockRejectedValue(
+      new ApiClientError('That password is not right. Try again.', 403, 'PASSWORD_INCORRECT'),
+    );
+
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
+    await user.type(screen.getByPlaceholderText(/New password/), 'newpass123');
+    await user.type(screen.getByPlaceholderText('Confirm new password'), 'newpass123');
+    await user.click(screen.getByText('Update Password'));
+
+    // T32 shows a wrong current password inline, so the server message lands under the field.
+    expect(await screen.findByText('That password is not right. Try again.')).toBeInTheDocument();
+  });
+
+  it('disables submit while offline', async () => {
+    const user = userEvent.setup();
+    useUIStore.setState({ offlineMode: true });
+
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
+    await user.type(screen.getByPlaceholderText(/New password/), 'newpass123');
+    await user.type(screen.getByPlaceholderText('Confirm new password'), 'newpass123');
+    expect(screen.getByText('Update Password').closest('button')).toBeDisabled();
   });
 
   it('shows warning toast and does not call API when new password is under 8 chars', async () => {
@@ -173,5 +206,51 @@ describe('PasswordSection', () => {
     const submitBtn = screen.getByText('Update Password').closest('button')!;
     expect(submitBtn).toBeDisabled();
     expect(mockChangePassword).not.toHaveBeenCalled();
+  });
+
+  it('always shows the password rule line', () => {
+    render(<PasswordSection />);
+    expect(screen.getByText(/Use 8 to 100 characters/)).toBeInTheDocument();
+  });
+
+  it('flags a common password and keeps submit disabled', async () => {
+    const user = userEvent.setup();
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
+    await user.type(screen.getByPlaceholderText(/New password/), 'password123');
+    await user.type(screen.getByPlaceholderText('Confirm new password'), 'password123');
+    expect(screen.getByText(/That password is too common/)).toBeInTheDocument();
+    expect(screen.getByText(/Use 8 to 100 characters/)).toBeInTheDocument();
+    expect(screen.getByText('Update Password').closest('button')).toBeDisabled();
+  });
+
+  it('flags a password that contains the username', async () => {
+    const user = userEvent.setup();
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText(/New password/), 'alice-rocks-99');
+    expect(screen.getByText('Password must not contain your username')).toBeInTheDocument();
+  });
+
+  it('shows a wrong current password inline under Current password, not as a toast', async () => {
+    const user = userEvent.setup();
+    mockChangePassword.mockRejectedValue(
+      Object.assign(new Error('Your current password is not correct.'), {
+        name: 'ApiClientError',
+        status: 400,
+        code: 'PASSWORD_INCORRECT',
+      }),
+    );
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
+    await user.type(screen.getByPlaceholderText(/New password/), 'newpass123');
+    await user.type(screen.getByPlaceholderText('Confirm new password'), 'newpass123');
+    await user.click(screen.getByText('Update Password'));
+
+    const field = screen.getByPlaceholderText('Current password');
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0])).toHaveTextContent(
+      'Your current password is not correct.',
+    );
+    expect(mockToast).not.toHaveBeenCalledWith(expect.anything(), 'error');
   });
 });

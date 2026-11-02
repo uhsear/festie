@@ -15,7 +15,7 @@ export default function mountAdminAuditRoutes({ router, deps, ctx }: any): void 
     schemas, validateQuery,
     getUsers,
   } = deps;
-  const { getFriendlyAction } = ctx;
+  const { enrichAuditEntries } = ctx;
 
   // ── GET /audit — query audit log with filters ────────────
   router.get('/audit', adminAuth, validateQuery(schemas.adminAuditQuery), async (req: any, res: any) => {
@@ -26,13 +26,11 @@ export default function mountAdminAuditRoutes({ router, deps, ctx }: any): void 
       const from = req.validatedQuery.from ? new Date(req.validatedQuery.from).toISOString() : null;
       const to = req.validatedQuery.to ? new Date(req.validatedQuery.to).toISOString() : null;
 
-      const users = await getUsers();
-      const usernameById = new Map<string, string>(users.map((u: any) => [u.id, u.username]));
-
       // Resolve the username filter to an id; an unknown name matches nothing.
       let resolvedActorId = actorId || null;
       if (actor) {
         const wanted = actor.toLowerCase();
+        const users = await getUsers();
         const match = users.find((u: any) => String(u.username).toLowerCase() === wanted);
         if (!match) return sendSuccess(res, [], { total: 0, limit, nextCursor: null });
         resolvedActorId = match.id;
@@ -44,14 +42,7 @@ export default function mountAdminAuditRoutes({ router, deps, ctx }: any): void 
         stores.auditLog.count(filters),
       ]);
 
-      const entries = rows.map((row: any) => ({
-        ...row,
-        friendlyAction: getFriendlyAction(row.action),
-        actorUsername: usernameById.get(row.actorId) || row.actorId,
-        targetLabel: row.details?.targetUsername || row.details?.name || `${row.targetType} ${row.targetId ?? ''}`.trim(),
-      }));
-
-      return sendSuccess(res, entries, { total, limit, nextCursor });
+      return sendSuccess(res, await enrichAuditEntries(rows), { total, limit, nextCursor });
     } catch (error: any) {
       log.error('admin audit query failed', { error: error.message });
       return sendError(res, 500, 'Failed to query audit log', ErrorCodes.INTERNAL_ERROR);

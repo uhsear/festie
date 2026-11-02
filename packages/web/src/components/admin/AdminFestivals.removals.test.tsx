@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { ApiClientError } from '@festie/shared/services/api';
 import AdminFestivals from './AdminFestivals';
 
+vi.mock('@tanstack/react-router', () => ({
+  useSearch: () => ({}),
+  Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
+}));
 vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
 }));

@@ -10,6 +10,8 @@ import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
 import CrewHeader from '../components/crew/CrewHeader';
 import CrewSkeleton from '../components/ui/skeletons/CrewSkeleton';
+import OfflineStatusChip from '../components/features/OfflineStatusChip';
+import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
@@ -28,6 +30,7 @@ import GuestTeaser from '../components/features/GuestTeaser';
 import { useCrewAdmin } from '../components/crew/useCrewAdmin';
 import { useToast } from '../lib/toastContext';
 import PromptDialog from '../components/ui/PromptDialog';
+import UserPickerDialog from '../components/admin/UserPickerDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useActiveCrew } from '@festie/shared/hooks';
@@ -82,6 +85,7 @@ function CrewViewInner() {
   const { isAdmin, adminOpen, setAdminOpen, adminAddBusy, submitForceAdd, handleForceAdd } = useCrewAdmin(
     user,
     activeCrew?.id,
+    activeCrew?.name,
     toast,
   );
 
@@ -306,6 +310,8 @@ function CrewViewInner() {
         <div className="crew-content space-y-4 min-w-0">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <FreshnessChip surface="crew" />
+            <OfflineStatusChip />
+            <LastSyncedBadge surface="crew" />
             <SosRaiseButton crewId={activeCrew.id} compact />
           </div>
 
@@ -406,15 +412,12 @@ function CrewViewInner() {
         onConfirm={submitJoinCrew}
       />
       <JoinCrewSheet code={sheetCode} onClose={() => setSheetCode(null)} />
-      <PromptDialog
+      <UserPickerDialog
         open={adminOpen}
         onOpenChange={setAdminOpen}
-        title="Force add member"
-        description="Admin only. Type a username or email to add them without an invite code."
-        placeholder="username or email"
-        confirmLabel="Add"
-        busy={adminAddBusy}
-        onConfirm={submitForceAdd}
+        title={`Add a member to ${activeCrew?.name ?? 'this crew'}`}
+        existingUserIds={members.map((m) => m.userId)}
+        onPick={submitForceAdd}
       />
       <PromptDialog
         open={renameOpen}

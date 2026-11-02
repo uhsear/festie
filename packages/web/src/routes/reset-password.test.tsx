@@ -40,7 +40,7 @@ describe('ResetPasswordPage', () => {
   it('blocks mismatched passwords without calling resetPassword', async () => {
     const user = userEvent.setup();
     render(<ResetPasswordPage />);
-    await fill(user, 'password123', 'different99');
+    await fill(user, 'N3wStr0ng!Pw22', 'Other!Str0ng77');
     expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
     expect(mockResetPassword).not.toHaveBeenCalled();
   });
@@ -49,14 +49,14 @@ describe('ResetPasswordPage', () => {
     mockResetPassword.mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(<ResetPasswordPage />);
-    await fill(user, 'password123', 'password123');
+    await fill(user, 'N3wStr0ng!Pw22', 'N3wStr0ng!Pw22');
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith({ to: '/login', search: { reset: true }, replace: true }),
     );
     expect(mockResetPassword).toHaveBeenCalledWith({
       token: 'a'.repeat(64),
-      newPassword: 'password123',
-      confirmPassword: 'password123',
+      newPassword: 'N3wStr0ng!Pw22',
+      confirmPassword: 'N3wStr0ng!Pw22',
     });
   });
 
@@ -66,7 +66,7 @@ describe('ResetPasswordPage', () => {
     );
     const user = userEvent.setup();
     render(<ResetPasswordPage />);
-    await fill(user, 'password123', 'password123');
+    await fill(user, 'N3wStr0ng!Pw22', 'N3wStr0ng!Pw22');
     expect(await screen.findByText('This reset link has expired')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Send a new link' })).toHaveAttribute('href', '/forgot-password');
   });
@@ -88,10 +88,18 @@ describe('ResetPasswordPage', () => {
     );
     const user = userEvent.setup();
     render(<ResetPasswordPage />);
-    await fill(user, 'password123', 'password123');
+    await fill(user, 'N3wStr0ng!Pw22', 'N3wStr0ng!Pw22');
     const field = screen.getByLabelText('New password');
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
     const target = document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0]);
     expect(target).toHaveTextContent('That password is too common');
+  });
+
+  it('blocks a common password on the client before calling resetPassword', async () => {
+    const user = userEvent.setup();
+    render(<ResetPasswordPage />);
+    await fill(user, 'password123', 'password123');
+    expect(await screen.findByText(/That password is too common/)).toBeInTheDocument();
+    expect(mockResetPassword).not.toHaveBeenCalled();
   });
 });

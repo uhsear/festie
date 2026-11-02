@@ -88,8 +88,8 @@ export function usePicksPlan(): {
   const b2bSeparator = currentFestival?.b2bSeparator;
 
   const conflictGroups = useMemo(
-    () => (picks ? buildFestivalPickConflicts({ sets, myPicks: picks, days, timeZone }) : []),
-    [sets, picks, days, timeZone],
+    () => (picks ? buildFestivalPickConflicts({ sets, myPicks: picks, days, timeZone, stages }) : []),
+    [sets, picks, days, timeZone, stages],
   );
   const clashIds = useMemo(() => conflictSetIds(conflictGroups), [conflictGroups]);
   const stats = useMemo(() => picksStats(sets, picks, clashIds), [sets, picks, clashIds]);

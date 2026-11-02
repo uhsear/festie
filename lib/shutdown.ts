@@ -179,6 +179,10 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     state.reminderScheduler = ctx.reminderScheduler;
     log.info('reminder scheduler registered with background tasks');
   }
+  if (ctx.checkinScheduler) {
+    ctx.checkinScheduler.start();
+    state.checkinScheduler = ctx.checkinScheduler;
+  }
 
   // Phase 1B: Meeting point expiry — deactivate expired points every 5 min
   const _meetingPointExpiryTimer = setInterval(async () => {
@@ -298,6 +302,13 @@ function createCloseHandler({
     if (state.reminderScheduler) {
       try {
         state.reminderScheduler.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (state.checkinScheduler) {
+      try {
+        state.checkinScheduler.stop();
       } catch {
         /* ignore */
       }

@@ -78,6 +78,10 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   'expense-deleted': 'removed an expense',
   'expense-settled': 'settled up',
   expense_settled: 'settled up',
+  'expense-edited': 'edited an expense',
+  'payment-confirmed': 'confirmed a payment',
+  'payment-disputed': 'said a payment has not arrived',
+  'currency-changed': 'changed the crew currency',
   'settlement-undone': 'undid a payment',
   'home-base-updated': 'updated Home Base',
   'meeting-point-added': 'dropped a meeting point',
@@ -85,7 +89,69 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   'crew-updated': 'updated the crew',
   sos_raised: 'raised an SOS',
   sos_cleared: 'cleared an SOS',
+  'checkin-started': 'started a check-in timer',
+  'checkin-done': 'checked in safe',
 };
+
+// ── Crew money and packing ─────────────────────────────────────────────────
+
+/**
+ * Currencies a crew can use. All have 2 decimal places, so integer-cent math
+ * stays valid. Keep in sync with CREW_CURRENCIES in lib/schemas.ts (the backend
+ * cannot import shared).
+ */
+export const CREW_CURRENCIES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'CAD',
+  'AUD',
+  'NZD',
+  'MXN',
+  'CHF',
+  'SEK',
+  'NOK',
+  'DKK',
+  'PLN',
+  'CZK',
+  'BRL',
+] as const;
+
+/** Starter packing lists offered on an empty crew packing tab. */
+export const PACKING_TEMPLATES: readonly { id: 'camping' | 'day-trip'; label: string; items: readonly string[] }[] = [
+  {
+    id: 'camping',
+    label: 'Camping list',
+    items: [
+      'Tent',
+      'Sleeping bags',
+      'Camping chairs',
+      'Cooler',
+      'Headlamps',
+      'Sunscreen',
+      'Water jugs',
+      'Portable charger',
+      'Earplugs',
+      'Rain ponchos',
+      'First aid kit',
+      'Trash bags',
+    ],
+  },
+  {
+    id: 'day-trip',
+    label: 'Day trip list',
+    items: [
+      'Tickets',
+      'Portable charger',
+      'Sunscreen',
+      'Refillable water bottle',
+      'Earplugs',
+      'Small bag',
+      'Rain poncho',
+      'Cash and card',
+    ],
+  },
+];
 
 // ── Expense categories ─────────────────────────────────────────────────────
 
@@ -212,35 +278,106 @@ export const LIVE_LOCATION = {
 } as const;
 
 /**
- * Time-boxed live-location sharing (the mobile opt-in sheet). Sharing is already
- * foreground-only and auto-stops on background; on top of that the user picks an
- * explicit bound up-front (default ~2h, Find My-style) after which the publisher
- * auto-expires — no silent indefinite sharing. `ms: null` = "until the festival
- * ends", which is clamped to LIVE_SHARE_MAX_MS so a forgotten session can never
- * run unbounded even if the device stays foregrounded.
+ * Time-boxed live-location sharing (the opt-in sheet on both apps). The user
+ * picks an explicit bound up-front (default ~2h, Find My-style) after which the
+ * publisher auto-expires — no silent indefinite sharing. There is no "until the
+ * festival ends" preset: sharing is foreground-only on mobile, so it cannot
+ * honestly promise that. "Rest of today" is built per call by liveShareOptions.
+ * LIVE_SHARE_MAX_MS caps any session.
  */
 export const LIVE_SHARE_MAX_MS = 12 * 3_600_000;
 
 export interface LiveShareDuration {
   id: string;
   label: string;
-  /** Bound in ms, or null for "until the festival ends" (clamped to LIVE_SHARE_MAX_MS). */
-  ms: number | null;
+  /** Bound in ms (clamped to LIVE_SHARE_MAX_MS). */
+  ms: number;
 }
 
 export const LIVE_SHARE_DURATIONS: readonly LiveShareDuration[] = [
   { id: '1h', label: '1 hour', ms: 3_600_000 },
   { id: '2h', label: '2 hours', ms: 7_200_000 },
   { id: '4h', label: '4 hours', ms: 14_400_000 },
-  { id: 'festival', label: 'Until the festival ends', ms: null },
 ];
 
 export const LIVE_SHARE_DEFAULT_DURATION_ID = '2h';
 
-/** Resolve a preset's effective bound in ms (null → the festival ceiling). */
+/** Resolve a preset's effective bound in ms. */
 export function resolveLiveShareMs(d: LiveShareDuration): number {
-  return d.ms == null ? LIVE_SHARE_MAX_MS : Math.min(d.ms, LIVE_SHARE_MAX_MS);
+  return Math.min(d.ms, LIVE_SHARE_MAX_MS);
 }
+
+/** Live-sharing copy single-sourced for web + mobile. The stop rule differs because the behaviour does. */
+export const LIVE_SHARE_COPY = {
+  title: 'Share my live location',
+  switchA11y: 'Share my live location with this crew',
+  ruleNative: 'Only this crew sees it. It stops at the time you pick, or when you lock your phone or leave the app.',
+  ruleWeb: 'Only this crew sees it. It stops at the time you pick, or when you close this tab.',
+  chooserTitle: 'Share your location for…',
+  restOfToday: (clock: string) => `Rest of today (until ${clock})`,
+  battery: 'Show my battery level',
+  batteryHint: 'Helps your crew see why your dot went quiet.',
+  cancel: 'Not now',
+  sharingTitle: "You're sharing your live location",
+  sharingSub: (countdown: string, clock: string) => `Ends in ${countdown} · ${clock}`,
+  pausedTitle: 'Sharing paused',
+  pausedSub: (countdown: string, clock: string) => `Your crew can't see you. Ends in ${countdown} · ${clock}`,
+  pause: 'Pause',
+  pauseA11y: 'Pause sharing. Your crew stops seeing you.',
+  resume: 'Resume',
+  resumeA11y: 'Resume sharing my live location',
+  stop: 'Stop',
+  stopA11y: 'Stop sharing my live location',
+  // One-time explainer before the first share on a device.
+  explainerTitle: 'Before you share your location',
+  explainerPoints: [
+    'Only this crew sees where you are.',
+    'Festie keeps no location history. It holds only your latest position, for 2 minutes at most.',
+    'It runs only while Festie is open.',
+    'It stops at the time you pick. You can pause or stop it at any time.',
+  ],
+  explainerOk: 'Got it',
+} as const;
+
+export const LOW_POWER_COPY = {
+  name: 'Low-power mode',
+  hint: 'Saves battery: pauses live location and background refresh, and uses less GPS on the map. Reminders and your crew plan keep working.',
+  livePaused: 'Live location is off while low-power mode is on.',
+  turnOff: 'Turn off low-power mode',
+} as const;
+
+/** The T10 crew-status sentence, shared by both apps. */
+export const CREW_STATUS_HONESTY = 'Not live: each status shows when that crewmate last had signal.';
+
+export const CHECKIN_DURATIONS = [
+  { minutes: 15, label: '15 min' },
+  { minutes: 30, label: '30 min' },
+  { minutes: 60, label: '1 hour' },
+  { minutes: 120, label: '2 hours' },
+] as const;
+
+export const CHECKIN_COPY = {
+  title: 'Check-in timer',
+  idleBody:
+    "Walking somewhere alone? Start a timer. If you don't check in on time, your crew gets an SOS with your last location.",
+  activeTitle: (clock: string) => `Check in by ${clock}`,
+  activeBody: (countdown: string) => `${countdown} left. Tap I'm OK when you get there, or your crew gets an SOS.`,
+  ok: "I'm OK",
+  okA11y: "I'm OK. Stop the check-in timer.",
+  started: (clock: string) => `Check-in timer set for ${clock}.`,
+  done: 'Checked in. Timer stopped.',
+  ended: "Your timer had already ended, so your crew got an SOS. Clear it if you're OK.",
+} as const;
+
+export const BEACON_COPY = {
+  button: 'Beacon',
+  buttonHint:
+    'Turn your screen into a bright flashing signal so friends can spot you in a crowd. No GPS or signal needed.',
+  prompt: 'Hold your phone up high',
+  footer: 'Turn your screen brightness all the way up.',
+  done: 'Done',
+  a11y: 'Beacon is on. Your screen is flashing so friends can spot you. Tap Done to stop.',
+} as const;
 
 /** Intro slides, single-sourced for web and mobile (design-system-23). Slide 1 names the three priorities. */
 export const ONBOARDING_SLIDES_SHARED = [

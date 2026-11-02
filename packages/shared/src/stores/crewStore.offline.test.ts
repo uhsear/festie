@@ -31,6 +31,8 @@ function resetStore() {
     meetingPoints: [],
     expenses: [],
     expenseBalances: [],
+    packingItems: [],
+    rideOffers: [],
     activity: [],
     crewLoading: false,
     error: null,
@@ -482,6 +484,70 @@ describe('crewStore offline optimistic create + reconciliation (Phase 2)', () =>
       const outcome = await useCrewStore.getState().settleExpense('crew-1', { toUserId: 'u2', amount: 12.5 });
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(outcome).toBe('queued');
+    });
+  });
+
+  // ── T30: edits, seats and batch adds queue honestly ───────────────────────
+  describe('T30 offline writes', () => {
+    const row = {
+      id: 'e1',
+      crew_id: 'crew-1',
+      paid_by: 'u1',
+      paid_by_name: 'A',
+      description: 'Gas',
+      amount: 40,
+      split_with: ['u1', 'u2'],
+      category: 'transport',
+      created_at: '2026-06-03T00:00:00Z',
+    };
+
+    it('updateExpense queues, merges the request and marks the row pending', async () => {
+      useUIStore.setState({ offlineMode: true });
+      useCrewStore.setState({ expenses: [row] });
+      const outcome = await useCrewStore.getState().updateExpense('crew-1', 'e1', {
+        description: 'Gas',
+        amount: 60,
+        splitWith: ['u1', 'u2'],
+        category: 'transport',
+        shares: [
+          { userId: 'u1', cents: 2000 },
+          { userId: 'u2', cents: 4000 },
+        ],
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(outcome).toBe('queued');
+      const after = useCrewStore.getState().expenses[0]!;
+      expect(after.amount).toBe(60);
+      expect(after.split_amounts).toEqual({ u1: 2000, u2: 4000 });
+      expect(isPending(after)).toBe(true);
+      const q = readQueue();
+      expect(q).toHaveLength(1);
+      expect(q[0]!.method).toBe('PUT');
+    });
+
+    it('takeRideSeat queues and keeps the optimistic seat', async () => {
+      useUIStore.setState({ offlineMode: true });
+      useCrewStore.setState({
+        rideOffers: [{ id: 'r1', crew_id: 'crew-1', created_by: 'u2', passenger_ids: [] } as never],
+      });
+      const outcome = await useCrewStore.getState().takeRideSeat('crew-1', 'r1', 'u1');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(outcome).toBe('queued');
+      expect(useCrewStore.getState().rideOffers[0]!.passenger_ids).toEqual(['u1']);
+    });
+
+    it('addPackingItems placeholders are dropped by the next loadPacking', async () => {
+      useUIStore.setState({ offlineMode: true });
+      const outcome = await useCrewStore.getState().addPackingItems('crew-1', ['Tent', 'Cooler']);
+      expect(outcome).toBe('queued');
+      const placeholders = useCrewStore.getState().packingItems;
+      expect(placeholders).toHaveLength(2);
+      expect(placeholders.every((p) => p._optimistic === true)).toBe(true);
+      expect(placeholders[1]!.id.endsWith('-1')).toBe(true);
+
+      fetchSpy.mockResolvedValue(envelope({ items: [] }));
+      await useCrewStore.getState().loadPacking('crew-1');
+      expect(useCrewStore.getState().packingItems).toHaveLength(0);
     });
   });
 });

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@festie/shared/stores';
 import { useActiveSos, useLiveLocationCrewSync } from '@festie/shared/hooks';
-import { sosHeadline, sosWhen } from '@festie/shared/utils';
+import { sosHeadline, sosSeenLabel, sosWhen } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
 import { CREW_MEET_HREF } from '../lib/dayOfRoutes';
@@ -48,7 +48,10 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   }, [headline]);
 
   if (!active) return null;
-  const when = sosWhen(entries);
+  const newest = entries[0];
+  if (!newest) return null;
+  const own = newest.userId === selfId;
+  const when = sosWhen(entries) + (own ? ` · ${sosSeenLabel(newest)}` : '');
 
   return (
     <AppPressable

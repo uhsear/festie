@@ -250,6 +250,10 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
   function crewExpenseDeleted({ crewId, expenseId }: any) {
     io.to('crew:' + crewId).emit('crew:expense-deleted', { _v: EVENT_VERSION, crewId, expenseId });
   }
+  // An expense was edited, a payment confirmed or disputed, or the currency changed.
+  function crewExpenseUpdated({ crewId, expense }: any) {
+    io.to('crew:' + crewId).emit('crew:expense-updated', { _v: EVENT_VERSION, crewId, expense });
+  }
   function crewActivityLogged({ crewId, item }: any) {
     io.to('crew:' + crewId).emit('crew:activity', { _v: EVENT_VERSION, crewId, item });
   }
@@ -267,6 +271,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     flushAll,
     crewExpenseAdded,
     crewExpenseDeleted,
+    crewExpenseUpdated,
     crewActivityLogged,
   };
 }

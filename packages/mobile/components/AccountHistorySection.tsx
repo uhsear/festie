@@ -4,10 +4,10 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
+import { formatDateSpan } from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-import { formatDateSpan } from '../lib/accountFormat';
 
 // Server shape from GET /ratings/lifetime (M3 cross-festival YoY history).
 interface LifetimeTotals {

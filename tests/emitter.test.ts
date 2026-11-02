@@ -499,6 +499,18 @@ describe('emitter: crew events', () => {
     assert.equal(emitted[0][1].expenseId, 'exp-1');
   });
 
+  it('emits crew:expense-updated to the crew room', () => {
+    const io = makeIo();
+    const emitter = createSocketEmitter(defaultDeps({ io }));
+
+    emitter.crewExpenseUpdated({ crewId: 'crew-1', expense: { id: 'exp-1' } });
+
+    const emitted = io._rooms['crew:crew-1'];
+    assert.ok(emitted);
+    assert.equal(emitted[0][0], 'crew:expense-updated');
+    assert.deepEqual(emitted[0][1], { _v: 1, crewId: 'crew-1', expense: { id: 'exp-1' } });
+  });
+
   it('emits crew:activity to the crew room', () => {
     const io = makeIo();
     const emitter = createSocketEmitter(defaultDeps({ io }));

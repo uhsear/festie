@@ -67,3 +67,47 @@ describe('SetEditor B2B artists', () => {
     expect(screen.queryByText('+ B2B artist')).toBeNull();
   });
 });
+
+describe('SetEditor phone layout and engagement', () => {
+  const base = { id: 's1', artist: 'Alpha', startTime: '21:00' };
+
+  it('shows the engagement label when showEngagement is true', () => {
+    render(
+      <SetEditor
+        set={base}
+        stages={[]}
+        engagement={{ picks: 3, reminders: 1 }}
+        showEngagement
+        onSetArtists={vi.fn()} onField={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Picked by 3 · 1 reminder')).toBeTruthy();
+  });
+
+  it('says there are no picks for a loaded set with no entry', () => {
+    render(<SetEditor set={base} stages={[]} showEngagement onSetArtists={vi.fn()} onField={vi.fn()} onRemove={vi.fn()} />);
+    expect(screen.getByText('No picks or reminders yet')).toBeTruthy();
+  });
+
+  it('has no engagement row when showEngagement is false', () => {
+    render(
+      <SetEditor set={base} stages={[]} engagement={{ picks: 3, reminders: 1 }} onSetArtists={vi.fn()} onField={vi.fn()} onRemove={vi.fn()} />,
+    );
+    expect(screen.queryByText(/Picked by/)).toBeNull();
+    expect(screen.queryByText('No picks or reminders yet')).toBeNull();
+  });
+
+  it('renders a visible label for each field', () => {
+    render(<SetEditor set={base} stages={[]} onSetArtists={vi.fn()} onField={vi.fn()} onRemove={vi.fn()} />);
+    for (const label of ['Artist', 'Stage', 'Start', 'End']) expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.getByLabelText('Artist')).toBeTruthy();
+  });
+
+  it('Remove set calls onRemove', () => {
+    const onRemove = vi.fn();
+    render(<SetEditor set={base} stages={[]} onSetArtists={vi.fn()} onField={vi.fn()} onRemove={onRemove} />);
+    fireEvent.click(screen.getByText('Remove set'));
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+});

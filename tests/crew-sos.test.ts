@@ -135,6 +135,12 @@ function makeFakeRedis() {
     async hgetall(key: string) {
       return Object.fromEntries(hashes.get(key) ?? []);
     },
+    async hexists(key: string, field: string) {
+      return hashes.get(key)?.has(field) ? 1 : 0;
+    },
+    async del(key: string) {
+      return hashes.delete(key) ? 1 : 0;
+    },
   };
 }
 
@@ -694,6 +700,143 @@ describe('routes/crew-sos.ts — GET /:crewId/sos', () => {
       res.body.data.sos.map((e: any) => e.userId),
       ['user-b'],
     );
+  });
+});
+
+// =====================================================================
+//  POST /:crewId/sos/seen — "seen by"
+// =====================================================================
+describe('routes/crew-sos.ts — POST /:crewId/sos/seen', () => {
+  function seedActive(redis: ReturnType<typeof makeFakeRedis>, userId = 'user-a') {
+    return redis.hset(
+      'sos:raisers:crew-1',
+      userId,
+      JSON.stringify({ _v: 1, crewId: 'crew-1', userId, raisedAt: new Date().toISOString() }),
+    );
+  }
+
+  test('a member ack emits sos:seen with that viewer and returns the list', async () => {
+    const redis = makeFakeRedis();
+    await seedActive(redis);
+    const ioObj = makeIo();
+    const { app } = await buildApp({ redis, io: ioObj });
+
+    const res = await request(app).post('/crew-1/sos/seen').send({ raiserId: 'user-a' });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.seenBy, [{ userId: 'user-1', username: 'testuser' }]);
+    assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
+    const [event, payload] = (ioObj._emit.mock.calls as any[])[0].arguments;
+    assert.equal(event, 'sos:seen');
+    assert.deepEqual(payload, {
+      _v: 1,
+      crewId: 'crew-1',
+      raiserId: 'user-a',
+      seenBy: [{ userId: 'user-1', username: 'testuser' }],
+    });
+    assert.equal(redis.hashes.get('sos:seen:crew-1:user-a')!.get('user-1'), 'testuser');
+    assert.deepEqual((redis.pexpire.mock.calls as any[]).at(-1).arguments, ['sos:seen:crew-1:user-a', 60 * 60 * 1000]);
+  });
+
+  test('the list is the union of viewers, sorted by username', async () => {
+    const redis = makeFakeRedis();
+    await seedActive(redis);
+    await redis.hset('sos:seen:crew-1:user-a', 'user-9', 'zed');
+    await redis.hset('sos:seen:crew-1:user-a', 'user-8', 'alex');
+    const { app } = await buildApp({ redis });
+
+    const res = await request(app).post('/crew-1/sos/seen').send({ raiserId: 'user-a' });
+
+    assert.deepEqual(
+      res.body.data.seenBy.map((v: any) => v.username),
+      ['alex', 'testuser', 'zed'],
+    );
+  });
+
+  test('a self-ack returns the list and emits nothing', async () => {
+    const redis = makeFakeRedis();
+    await seedActive(redis, 'user-1');
+    await redis.hset('sos:seen:crew-1:user-1', 'user-2', 'sam');
+    const ioObj = makeIo();
+    const { app } = await buildApp({ redis, io: ioObj });
+
+    const res = await request(app).post('/crew-1/sos/seen').send({ raiserId: 'user-1' });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.seenBy, [{ userId: 'user-2', username: 'sam' }]);
+    assert.equal(ioObj._emit.mock.calls.length, 0);
+    assert.equal(redis.hashes.get('sos:seen:crew-1:user-1')!.has('user-1'), false);
+  });
+
+  test('404 when the raiser has no active SOS', async () => {
+    const ioObj = makeIo();
+    const { app } = await buildApp({ redis: makeFakeRedis(), io: ioObj });
+
+    const res = await request(app).post('/crew-1/sos/seen').send({ raiserId: 'user-a' });
+
+    assert.equal(res.status, 404);
+    assert.equal(res.body.error.code, 'NOT_FOUND');
+    assert.equal(res.body.error.message, 'That SOS is no longer active.');
+    assert.equal(ioObj._emit.mock.calls.length, 0);
+  });
+
+  test('with no Redis it still emits a one-viewer list', async () => {
+    const ioObj = makeIo();
+    const { app } = await buildApp({ io: ioObj });
+
+    const res = await request(app).post('/crew-1/sos/seen').send({ raiserId: 'user-a' });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.seenBy, [{ userId: 'user-1', username: 'testuser' }]);
+    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'sos:seen');
+  });
+
+  test('403 for a non-member and 400 without a raiserId', async () => {
+    const { app } = await buildApp({ stores: { crews: { getMember: mock.fn(async () => null) } } });
+    const forbidden = await request(app).post('/crew-1/sos/seen').send({ raiserId: 'user-a' });
+    assert.equal(forbidden.status, 403);
+    const invalid = await request(app).post('/crew-1/sos/seen').send({});
+    assert.equal(invalid.status, 400);
+  });
+
+  test('clear deletes the seen hash', async () => {
+    const redis = makeFakeRedis();
+    await seedActive(redis);
+    const members = [{ userId: 'user-1' }, { userId: 'user-a', username: 'maya' }];
+    const { app } = await buildApp({ redis, stores: { crews: { getMembers: mock.fn(async () => members) } } });
+    await request(app).post('/crew-1/sos/seen').send({ raiserId: 'user-a' });
+    assert.ok(redis.hashes.has('sos:seen:crew-1:user-a'));
+
+    const res = await request(app).post('/crew-1/sos/clear').send({ raiserId: 'user-a' });
+
+    assert.equal(res.status, 200);
+    assert.equal(redis.hashes.has('sos:seen:crew-1:user-a'), false);
+  });
+
+  test('a new raise starts with no viewers, even while the old SOS is still active', async () => {
+    const redis = makeFakeRedis();
+    const { app } = await buildApp({ redis });
+    await request(app).post('/crew-1/sos').send({});
+    await redis.hset('sos:seen:crew-1:user-1', 'user-2', 'sam');
+
+    (SOS_RAISE_LIMIT as any)._reset();
+    const again = await request(app).post('/crew-1/sos').send({});
+    assert.equal(again.status, 200);
+
+    const res = await request(app).get('/crew-1/sos');
+    assert.deepEqual(res.body.data.sos[0].seenBy, []);
+  });
+
+  test('GET /sos entries carry seenBy', async () => {
+    const redis = makeFakeRedis();
+    await seedActive(redis);
+    await redis.hset('sos:seen:crew-1:user-a', 'user-2', 'sam');
+    const { app } = await buildApp({ redis });
+
+    const res = await request(app).get('/crew-1/sos');
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.sos[0].seenBy, [{ userId: 'user-2', username: 'sam' }]);
   });
 });
 

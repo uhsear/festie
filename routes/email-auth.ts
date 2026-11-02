@@ -23,7 +23,7 @@
 import crypto from 'crypto';
 import type { Router } from 'express';
 import { createPasswordResetRateLimit } from '../lib/rate-limiting';
-import { sendPasswordResetEmail, sendVerificationEmail } from '../lib/email';
+import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail } from '../lib/email';
 import { escapeHtml } from '../lib/helpers/sanitize';
 
 export default function createEmailAuthRoutes(deps: any): Router {
@@ -216,6 +216,9 @@ export default function createEmailAuthRoutes(deps: any): Router {
         await invalidateUserSessions(userId);
         if (stores.refreshTokens) await stores.refreshTokens.revokeAll(userId);
         disconnectUserSockets(userId, io);
+        // Tell the old address. sendEmail never throws, so a mail failure
+        // cannot fail the confirm.
+        await sendEmailChangedEmail({ to: currentUser.email, config, log });
       }
 
       log.info('email:verified', { userId, email: verifiedEmail, identityMoved });
@@ -374,6 +377,9 @@ export default function createEmailAuthRoutes(deps: any): Router {
         // user reaching for /forgot-password is exactly the user whose session
         // may already have requested a change to an attacker's address.
         await stores.emailTokens.invalidatePendingEmailChanges(targetUserId, user.email ?? null);
+        // Retire every other outstanding reset link too, e.g. a "This wasn't me"
+        // link alongside a forgot-password one: either could reset again.
+        await stores.emailTokens.invalidateResetTokens(targetUserId);
         disconnectUserSockets(targetUserId, io);
         state._adminResetTokens.delete(tokenHash);
 

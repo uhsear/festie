@@ -7,225 +7,79 @@
  * PRIVACY MODEL (see liveLocationStore header): OFF by default, explicit
  * per-session opt-in, scoped to ONE crew, fully ephemeral, foreground-only, and
  * aggressively auto-expiring.
- *  - The toggle is local state that resets to OFF on mount and on every crew
- *    change — nothing is persisted (the store has no persist middleware).
- *  - Enabling requests FOREGROUND location permission only (no background
- *    tracking), then streams Balanced-accuracy fixes through the shared
- *    useLiveLocationPublisher (throttled ~10s / 15m, 60-min hard cap).
- *  - A non-dismissible "You are sharing your live location" banner with a
- *    one-tap Stop is always visible while sharing.
- *  - Backgrounding the app stops sharing (handled here + in useRealtimeSync);
- *    returning requires the user to opt in again (no silent re-share).
+ *
+ * This component only renders. The session lives in the shared liveLocationStore
+ * (`shareIntent`) and runs in the app-wide LiveSharePublisher, so a tab or screen
+ * change never stops it. Enabling requests FOREGROUND location permission only,
+ * then writes the intent with an absolute end time. A banner with Pause and Stop
+ * stays visible while sharing, including while paused.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Switch, TouchableOpacity, AppState, Alert, Linking, type AppStateStatus } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, Switch, TouchableOpacity, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import * as Battery from 'expo-battery';
-import { useLiveLocationPublisher, type GeoWatcher } from '@festie/shared/hooks';
+import { useFestivalStore, useLiveLocationStore } from '@festie/shared/stores';
+import { LIVE_SHARE_COPY } from '@festie/shared/constants';
+import { useShareExplainer } from '@festie/shared/hooks';
 import {
-  LIVE_LOCATION,
-  LIVE_SHARE_DURATIONS,
-  LIVE_SHARE_DEFAULT_DURATION_ID,
-  resolveLiveShareMs,
-  type LiveShareDuration,
-} from '@festie/shared/constants';
+  formatCountdown,
+  fmtZonedClock,
+  liveShareEndedText,
+  liveShareOptions,
+  resolveFestivalTimeZone,
+  type LiveShareOption,
+} from '@festie/shared/utils';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
-import { useLiveSocket } from '../lib/liveSocket';
+import { useNow } from '../hooks/useNow';
 
 interface CrewLiveLocationProps {
   crewId: string;
-}
-
-/** Short local clock label for the auto-expiry, e.g. "3:45 PM". */
-function clockLabel(epochMs: number): string {
-  try {
-    return new Date(epochMs).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  } catch {
-    return '';
-  }
 }
 
 export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
-  const socket = useLiveSocket();
 
-  // Local per-session intent — OFF by default and reset on crew change. This is
-  // the source of truth the publisher's `enabled` reads from.
-  const [sharing, setSharing] = useState(false);
+  const shareIntent = useLiveLocationStore((s) => s.shareIntent);
+  const shareEndedReason = useLiveLocationStore((s) => s.shareEndedReason);
+  const beginShare = useLiveLocationStore((s) => s.beginShare);
+  const setSharePaused = useLiveLocationStore((s) => s.setSharePaused);
+  const endShare = useLiveLocationStore((s) => s.endShare);
+  const clearShareEnded = useLiveLocationStore((s) => s.clearShareEnded);
+  const days = useFestivalStore((s) => s.days);
+  const sets = useFestivalStore((s) => s.sets);
+  const currentFestival = useFestivalStore((s) => s.currentFestival);
+  const timeZone = resolveFestivalTimeZone(currentFestival);
+
+  const sharing = shareIntent?.crewId === crewId;
+  const paused = sharing && shareIntent.paused;
   const [busy, setBusy] = useState(false);
   // The opt-in duration sheet is open (picking a time-box before sharing starts).
   const [choosing, setChoosing] = useState(false);
-  // The chosen time-box (ms) + the wall-clock instant it auto-expires, for the
-  // banner copy and the publisher's auto-stop. Null while not sharing.
-  const [durationMs, setDurationMs] = useState<number | null>(null);
-  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const explainer = useShareExplainer();
+  // Battery is opt-in per session and never saved.
+  const [shareBattery, setShareBattery] = useState(false);
+  const now = useNow(30_000);
 
-  const resetShare = useCallback(() => {
-    setSharing(false);
+  // Re-opt-in per crew: close the chooser when the crew changes (the store clears
+  // the session itself on a crew switch).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- privacy-critical event-driven reset: close the chooser and clear the battery opt-in when the crew changes so nothing carries over.
     setChoosing(false);
-    setDurationMs(null);
-    setExpiresAt(null);
-  }, []);
+    setShareBattery(false);
+  }, [crewId]);
 
-  // Reset sharing whenever the crew changes — you must re-opt-in per crew.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- privacy-critical event-driven reset: clear all transient share state when the crew changes so sharing never carries over. Must run as a side effect, not derived state.
-    resetShare();
-  }, [crewId, resetShare]);
+  const { options, defaultId } = useMemo(
+    () => liveShareOptions({ days, sets, timeZone, nowMs: now }),
+    [days, sets, timeZone, now],
+  );
 
-  // Foreground-only: stop sharing the moment the app backgrounds so the toggle
-  // is OFF when the user returns (useRealtimeSync emits the server-side stop).
-  useEffect(() => {
-    const onChange = (next: AppStateStatus) => {
-      if (next.match(/inactive|background/)) resetShare();
-    };
-    const sub = AppState.addEventListener('change', onChange);
-    return () => sub.remove();
-  }, [resetShare]);
-
-  // Phase 4C battery: cache the latest battery % so each GPS fix can attach it
-  // SYNCHRONOUSLY without awaiting a native read in the publish path — a slow or
-  // failed battery read must never block (or fail) a location send. Seeded once,
-  // then kept fresh by the OS battery-level listener. Fully optional + resilient:
-  // any failure leaves the ref undefined and the peer popup simply omits the chip.
-  const batteryPctRef = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    let active = true;
-    let sub: ReturnType<typeof Battery.addBatteryLevelListener> | null = null;
-    // getBatteryLevelAsync returns 0–1 (or -1 when unknown, e.g. some emulators).
-    const setFromLevel = (level: number) => {
-      if (active && typeof level === 'number' && level >= 0) {
-        batteryPctRef.current = Math.round(level * 100);
-      }
-    };
-    Battery.getBatteryLevelAsync()
-      .then(setFromLevel)
-      .catch(() => {
-        /* battery unreadable — leave undefined so the chip is omitted */
-      });
-    try {
-      sub = Battery.addBatteryLevelListener(({ batteryLevel }) => setFromLevel(batteryLevel));
-    } catch {
-      /* listener unavailable — the seeded value (if any) is still used */
-    }
-    return () => {
-      active = false;
-      sub?.remove();
-    };
-  }, []);
-
-  // Peer low-power flag (#5): cache whether the device is in battery-saver /
-  // low-power mode so each GPS fix can attach it SYNCHRONOUSLY (same pattern as
-  // battery above — no awaiting a native read in the publish path). Seeded once,
-  // then kept fresh by the OS low-power-mode listener. Fully optional + resilient:
-  // any failure leaves the ref undefined and the peer popup simply omits the cue.
-  const lowPowerRef = useRef<boolean | undefined>(undefined);
-  useEffect(() => {
-    let active = true;
-    let sub: ReturnType<typeof Battery.addLowPowerModeListener> | null = null;
-    Battery.isLowPowerModeEnabledAsync()
-      .then((enabled) => {
-        if (active && typeof enabled === 'boolean') lowPowerRef.current = enabled;
-      })
-      .catch(() => {
-        /* low-power state unreadable — leave undefined so the cue is omitted */
-      });
-    try {
-      sub = Battery.addLowPowerModeListener(({ lowPowerMode }) => {
-        if (active && typeof lowPowerMode === 'boolean') lowPowerRef.current = lowPowerMode;
-      });
-    } catch {
-      /* listener unavailable — the seeded value (if any) is still used */
-    }
-    return () => {
-      active = false;
-      sub?.remove();
-    };
-  }, []);
-
-  // expo-location → GeoFix adapter for the shared publisher. watchPositionAsync
-  // is async; we hold the subscription and tear it down synchronously.
-  const watchPosition = useCallback<GeoWatcher>((onFix, onError) => {
-    let sub: Location.LocationSubscription | null = null;
-    let cancelled = false;
-    Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: LIVE_LOCATION.UPDATE_INTERVAL_MS,
-        distanceInterval: LIVE_LOCATION.MIN_MOVE_METERS,
-      },
-      (pos) => {
-        onFix({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy ?? undefined,
-          heading: pos.coords.heading ?? undefined,
-          speed: pos.coords.speed ?? undefined,
-          // Phase 4C battery: attach the cached % (kept fresh by the listener
-          // above). Optional — undefined when the read failed/is unavailable, so
-          // the peer popup omits the chip. Requires the native build that adds
-          // expo-battery; it does NOT light up over OTA.
-          battery: batteryPctRef.current,
-          // Peer low-power flag (#5): attach the cached battery-saver state (kept
-          // fresh by the listener above). Optional — undefined when unreadable, so
-          // the peer popup omits the cue. Synchronous: never blocks the fix send.
-          lowPower: lowPowerRef.current,
-          capturedAt: new Date(pos.timestamp).toISOString(),
-        });
-      },
-    )
-      .then((s) => {
-        if (cancelled) s.remove();
-        else sub = s;
-      })
-      .catch((err) => onError?.(err));
-    return () => {
-      cancelled = true;
-      sub?.remove();
-      sub = null;
-    };
-  }, []);
-
-  const handleAutoStop = useCallback(() => {
-    resetShare();
-    Alert.alert(
-      'Sharing stopped',
-      'Your live location sharing reached its time limit and stopped. Turn it back on if you still want your crew to see you.',
-    );
-  }, [resetShare]);
-
-  // Keep one ref so the error handler can flip the toggle without re-subscribing.
-  const sharingRef = useRef(sharing);
-  useEffect(() => {
-    sharingRef.current = sharing;
-  }, [sharing]);
-  const handleError = useCallback(() => {
-    if (!sharingRef.current) return;
-    resetShare();
-    Alert.alert(
-      'Location unavailable',
-      "Couldn't read your location, so sharing stopped. Check that location is enabled and try again.",
-    );
-  }, [resetShare]);
-
-  useLiveLocationPublisher({
-    socket,
-    crewId,
-    enabled: sharing,
-    watchPosition,
-    durationMs: durationMs ?? undefined,
-    onAutoStop: handleAutoStop,
-    onError: handleError,
-  });
-
-  // Pick a time-box → request permission → start sharing for that duration.
+  // Pick a time-box → request permission → start the shared session.
   const startSharing = useCallback(
-    async (duration: LiveShareDuration) => {
+    async (option: LiveShareOption) => {
       if (busy) return;
       setBusy(true);
       try {
@@ -251,11 +105,8 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
           }
           return;
         }
-        const ms = resolveLiveShareMs(duration);
-        setDurationMs(ms);
-        setExpiresAt(Date.now() + ms);
+        beginShare(crewId, new Date(Date.now() + option.ms).toISOString(), shareBattery);
         setChoosing(false);
-        setSharing(true);
         haptics.select();
       } catch {
         Alert.alert('Location unavailable', "Couldn't start location sharing. Try again.");
@@ -263,19 +114,20 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
         setBusy(false);
       }
     },
-    [busy, haptics],
+    [busy, beginShare, crewId, shareBattery, haptics],
   );
 
   const disableSharing = useCallback(() => {
-    resetShare();
+    endShare('user');
     haptics.tap();
-  }, [resetShare, haptics]);
+  }, [endShare, haptics]);
 
   // The Switch opens the duration sheet (sharing only starts once a time-box is
   // picked — value stays OFF until then); switching off cancels/stops.
   const onToggle = useCallback(
     (next: boolean) => {
       if (next) {
+        clearShareEnded();
         setChoosing(true);
         haptics.tap();
       } else {
@@ -283,10 +135,23 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
         disableSharing();
       }
     },
-    [disableSharing, haptics],
+    [clearShareEnded, disableSharing, haptics],
   );
 
-  const untilLabel = useMemo(() => (expiresAt ? clockLabel(expiresAt) : ''), [expiresAt]);
+  const togglePause = useCallback(() => {
+    setSharePaused(!paused);
+    haptics.tap();
+  }, [setSharePaused, paused, haptics]);
+
+  const expiresMs = sharing ? Date.parse(shareIntent.expiresAt) : NaN;
+  const sub = Number.isFinite(expiresMs)
+    ? (paused ? LIVE_SHARE_COPY.pausedSub : LIVE_SHARE_COPY.sharingSub)(
+        formatCountdown(expiresMs - now),
+        fmtZonedClock(expiresMs, timeZone),
+      )
+    : null;
+  const notice =
+    shareEndedReason === 'background' || shareEndedReason === 'low-power' ? liveShareEndedText(shareEndedReason) : null;
 
   return (
     <View style={styles.wrap}>
@@ -295,10 +160,8 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
           <Ionicons name="navigate-circle-outline" size={20} color={t.colors.accent.aqua} />
         </View>
         <View style={styles.rowBody}>
-          <Text style={styles.rowTitle}>Share my live location</Text>
-          <Text style={styles.rowSub}>
-            Only this crew can see it, only while the app is open. Off by default — it stops when you close the app.
-          </Text>
+          <Text style={styles.rowTitle}>{LIVE_SHARE_COPY.title}</Text>
+          <Text style={styles.rowSub}>{LIVE_SHARE_COPY.ruleNative}</Text>
         </View>
         <Switch
           value={sharing || choosing}
@@ -308,33 +171,86 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
           ios_backgroundColor={t.colors.border.light}
           thumbColor={sharing || choosing ? t.colors.accent.aqua : t.colors.text.muted}
           accessibilityRole="switch"
-          accessibilityLabel="Share my live location with this crew"
+          accessibilityLabel={LIVE_SHARE_COPY.switchA11y}
           accessibilityState={{ checked: sharing || choosing, disabled: busy }}
         />
       </View>
 
+      {notice && !sharing && !choosing ? (
+        <View style={styles.notice}>
+          <Text style={styles.noticeText}>{notice}</Text>
+          <TouchableOpacity
+            onPress={clearShareEnded}
+            style={styles.noticeDismiss}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss"
+          >
+            <Text style={styles.chooserCancelText}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       {/* Duration sheet — explicit opt-in time-box before any sharing starts. */}
       {choosing && !sharing ? (
         <View style={styles.chooser}>
-          <Text style={styles.chooserTitle} accessibilityRole="header">Share your location for…</Text>
-          <View style={styles.chooserOptions}>
-            {LIVE_SHARE_DURATIONS.map((d) => {
-              const isDefault = d.id === LIVE_SHARE_DEFAULT_DURATION_ID;
-              return (
-                <TouchableOpacity
-                  key={d.id}
-                  onPress={() => startSharing(d)}
-                  disabled={busy}
-                  style={[styles.durationChip, isDefault && styles.durationChipDefault]}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Share for ${d.label}`}
-                >
-                  <Text style={[styles.durationChipText, isDefault && styles.durationChipTextDefault]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{d.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <Text style={styles.chooserTitle} accessibilityRole="header">
+            {explainer.needed ? LIVE_SHARE_COPY.explainerTitle : LIVE_SHARE_COPY.chooserTitle}
+          </Text>
+          {explainer.needed ? (
+            <>
+              {LIVE_SHARE_COPY.explainerPoints.map((point) => (
+                <Text key={point} style={styles.rowSub}>{`• ${point}`}</Text>
+              ))}
+              <TouchableOpacity
+                onPress={explainer.markSeen}
+                style={[styles.durationChip, styles.durationChipDefault]}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.durationChipText, styles.durationChipTextDefault]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {LIVE_SHARE_COPY.explainerOk}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={styles.batteryRow}>
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>{LIVE_SHARE_COPY.battery}</Text>
+                  <Text style={styles.rowSub}>{LIVE_SHARE_COPY.batteryHint}</Text>
+                </View>
+                <Switch
+                  value={shareBattery}
+                  onValueChange={setShareBattery}
+                  trackColor={{ false: t.colors.border.light, true: t.colors.aquaAlpha[30] }}
+                  ios_backgroundColor={t.colors.border.light}
+                  thumbColor={shareBattery ? t.colors.accent.aqua : t.colors.text.muted}
+                  accessibilityRole="switch"
+                  accessibilityLabel={LIVE_SHARE_COPY.battery}
+                  accessibilityState={{ checked: shareBattery }}
+                />
+              </View>
+              <View style={styles.chooserOptions}>
+                {options.map((d) => {
+                  const isDefault = d.id === defaultId;
+                  return (
+                    <TouchableOpacity
+                      key={d.id}
+                      onPress={() => startSharing(d)}
+                      disabled={busy}
+                      style={[styles.durationChip, isDefault && styles.durationChipDefault]}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Share for ${d.label}`}
+                    >
+                      <Text style={[styles.durationChipText, isDefault && styles.durationChipTextDefault]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{d.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
           <TouchableOpacity
             onPress={() => setChoosing(false)}
             style={styles.chooserCancel}
@@ -342,34 +258,41 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
             accessibilityRole="button"
             accessibilityLabel="Cancel sharing"
           >
-            <Text style={styles.chooserCancelText}>Not now</Text>
+            <Text style={styles.chooserCancelText}>{LIVE_SHARE_COPY.cancel}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
       {sharing ? (
         <View style={styles.banner}>
-          <View style={styles.bannerDot} />
+          <View style={[styles.bannerDot, paused && styles.bannerDotPaused]} />
           <View style={styles.bannerBody}>
             <Text
               style={styles.bannerText}
               accessibilityRole="alert"
               accessibilityLabel={
-                untilLabel
-                  ? `You are sharing your live location with this crew until ${untilLabel}`
-                  : 'You are sharing your live location with this crew'
+                sub ? `${paused ? LIVE_SHARE_COPY.pausedTitle : LIVE_SHARE_COPY.sharingTitle}. ${sub}` : undefined
               }
-            >You are sharing your live location</Text>
-            {untilLabel ? <Text style={styles.bannerSub}>Until {untilLabel} · stops if you leave the app</Text> : null}
+            >{paused ? LIVE_SHARE_COPY.pausedTitle : LIVE_SHARE_COPY.sharingTitle}</Text>
+            {sub ? <Text style={styles.bannerSub}>{sub}</Text> : null}
           </View>
+          <TouchableOpacity
+            onPress={togglePause}
+            style={styles.stopButton}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={paused ? LIVE_SHARE_COPY.resumeA11y : LIVE_SHARE_COPY.pauseA11y}
+          >
+            <Text style={styles.stopButtonText}>{paused ? LIVE_SHARE_COPY.resume : LIVE_SHARE_COPY.pause}</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={disableSharing}
             style={styles.stopButton}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Stop sharing my live location"
+            accessibilityLabel={LIVE_SHARE_COPY.stopA11y}
           >
-            <Text style={styles.stopButtonText}>Stop</Text>
+            <Text style={styles.stopButtonText}>{LIVE_SHARE_COPY.stop}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -426,6 +349,9 @@ const useStyles = makeStyles((t) => ({
     borderRadius: t.radii.pill,
     backgroundColor: t.colors.accent.aqua,
   },
+  bannerDotPaused: {
+    backgroundColor: t.colors.text.muted,
+  },
   bannerBody: {
     flex: 1,
     gap: 2,
@@ -437,6 +363,29 @@ const useStyles = makeStyles((t) => ({
   bannerSub: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  notice: {
+    gap: t.spacing[1],
+    paddingHorizontal: t.spacing[3],
+    paddingVertical: t.spacing[2],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  noticeText: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+  },
+  noticeDismiss: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  batteryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
   },
   chooser: {
     gap: t.spacing[2],

@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useCrewStore, isPending, writeOutcomeMessage } from '@festie/shared';
+import {
+  useCrewStore,
+  isPending,
+  writeOutcomeMessage,
+  packingClaim,
+  packingClaimLine,
+  memberDisplayName,
+  PACKING_TEMPLATES,
+} from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
 import { useHaptics } from '../../hooks/useHaptics';
 import Button from '../ui/Button';
@@ -7,6 +15,7 @@ import Input from '../ui/Input';
 import EmptyState from '../ui/EmptyState';
 import Skeleton from '../ui/Skeleton';
 import IconButton from '../ui/IconButton';
+import Avatar from '../ui/Avatar';
 import SyncMarker from './SyncMarker';
 import { useUndoableRemove } from './useUndoableRemove';
 import { Backpack, Check, Plus, Trash2, X } from 'lucide-react';
@@ -22,7 +31,8 @@ interface Props {
  * Offline-native: reads/writes go through the crewStore, so an item created with
  * no signal renders optimistically and reconciles when the queued POST replays
  * (same pattern as polls). Claiming an item flips `claimed` + sets `brought_by`
- * to the current user; un-claiming clears both.
+ * to the current user; only that member or the crew owner can release it. The
+ * claimer can tick "Packed", and anyone can rename an item.
  */
 export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
   const { toast, toastError } = useToast();
@@ -33,11 +43,18 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
   const createPackingItem = useCrewStore((s) => s.createPackingItem);
   const updatePackingItem = useCrewStore((s) => s.updatePackingItem);
   const deletePackingItem = useCrewStore((s) => s.deletePackingItem);
+  const addPackingItems = useCrewStore((s) => s.addPackingItems);
+  // Select separately: one selector returning `?? []` would make a new array each render.
+  const crewMembers = useCrewStore((s) => s.crewMembers);
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const members = crewMembers.length ? crewMembers : (activeCrew?.members ?? []);
 
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState('');
   // Local load state around crewStore's loadPacking: the store's crewLoading/error
   // aren't scoped per sub-resource (crewLoading never toggles for loadPacking, and
   // error is shared across every crew tab), so real isLoading/isError needs to be
@@ -92,20 +109,42 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
     }
   }
 
-  async function toggleClaim(itemId: string, claimed: boolean) {
+  async function patchItem(itemId: string, request: Parameters<typeof updatePackingItem>[2]) {
     select();
     setBusyId(itemId);
     try {
-      // Claim: mark claimed + record this user as the bringer. Un-claim: clear both.
-      await updatePackingItem(crewId, itemId, {
-        claimed: !claimed,
-        broughtBy: !claimed ? currentUserId : null,
-      });
+      await updatePackingItem(crewId, itemId, request);
+      return true;
     } catch (err) {
       warning();
       toastError(err, "Couldn't update item. Try again.");
+      return false;
     } finally {
       setBusyId(null);
+    }
+  }
+
+  function startEdit(itemId: string, current: string) {
+    setEditingId(itemId);
+    setEditLabel(current);
+  }
+
+  async function saveEdit(itemId: string, current: string) {
+    const next = editLabel.trim();
+    if (!next) return;
+    if (next === current) {
+      setEditingId(null);
+      return;
+    }
+    if (await patchItem(itemId, { label: next })) setEditingId(null);
+  }
+
+  async function addTemplate(labels: readonly string[]) {
+    try {
+      const outcome = await addPackingItems(crewId, [...labels]);
+      toast(writeOutcomeMessage(outcome, `Added ${labels.length} items`), outcome === 'queued' ? 'info' : 'success');
+    } catch (err) {
+      toastError(err, "Couldn't add items. Try again.");
     }
   }
 
@@ -163,45 +202,122 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
           }}
         />
       ) : visibleItems.length === 0 ? (
-        <EmptyState
-          illustration="emptyList"
-          title="Nothing on the list yet"
-          description="Add what your crew needs to bring, like a tent, a cooler or sunscreen."
-          cta={{ label: 'Add item', onClick: () => setShowForm(true) }}
-        />
+        <>
+          <EmptyState
+            illustration="emptyList"
+            title="Nothing on the list yet"
+            description="Add what your crew needs to bring, like a tent, a cooler or sunscreen."
+            cta={{ label: 'Add item', onClick: () => setShowForm(true) }}
+          />
+          <div className="space-y-2 text-center">
+            <p className="text-sm text-text-secondary">Start from a list:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {PACKING_TEMPLATES.map((t) => (
+                <Button key={t.id} variant="outline" onClick={() => addTemplate(t.items)} className="min-h-11">
+                  {t.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </>
       ) : (
         <ul className="space-y-2">
           {visibleItems.map((item) => {
-            const mine = item.brought_by === currentUserId;
+            const claim = packingClaim(item, currentUserId, isOwner);
+            const busy = busyId === item.id;
             // A queued create has no server id yet, so it cannot be removed.
             const canRemove = !isPending(item) && (item.created_by === currentUserId || isOwner);
+            const claimerId = claim.state === 'mine' ? currentUserId : claim.state === 'theirs' ? claim.userId : null;
+            const packed = claim.state !== 'open' && claim.packed;
             return (
               <li key={item.id} className="flex items-center gap-2 p-2.5 rounded-lg bg-bg-card border border-border">
-                <button
-                  type="button"
-                  onClick={() => toggleClaim(item.id, item.claimed)}
-                  disabled={busyId === item.id}
-                  aria-pressed={item.claimed}
-                  aria-label={item.claimed ? `Unclaim ${item.label}` : `Claim ${item.label}`}
-                  className={`flex-shrink-0 w-6 h-6 min-h-11 min-w-11 rounded-md border flex items-center justify-center transition-colors ${
-                    item.claimed
-                      ? 'bg-accent-aqua/20 border-accent-aqua/40 text-accent-aqua'
-                      : 'bg-bg-input border-border text-transparent'
-                  }`}
-                >
-                  <Check className="w-4 h-4" aria-hidden="true" />
-                </button>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`text-sm truncate ${
-                      item.claimed ? 'text-text-secondary line-through' : 'text-text-primary'
-                    }`}
-                  >
-                    {item.label}
-                  </p>
-                  {item.claimed && item.brought_by ? (
-                    <p className="text-xs text-accent-aqua">{mine ? 'Bringing it' : 'Claimed'}</p>
+                <div className="min-w-0 flex-1 space-y-1">
+                  {editingId === item.id ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void saveEdit(item.id, item.label);
+                      }}
+                      className="space-y-2"
+                    >
+                      <Input
+                        aria-label="Item name"
+                        value={editLabel}
+                        onChange={(e) => setEditLabel(e.target.value)}
+                        maxLength={200}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') setEditingId(null);
+                        }}
+                      />
+                      <div className="flex gap-2">
+                        <Button type="submit" variant="primary" disabled={!editLabel.trim() || busy} className="min-h-11">
+                          Save
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setEditingId(null)} className="min-h-11">
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(item.id, item.label)}
+                      aria-label={`Rename ${item.label}`}
+                      className="flex items-center gap-1.5 max-w-full text-left text-sm text-text-primary min-h-11"
+                    >
+                      {packed ? <Check className="w-4 h-4 flex-shrink-0 text-accent-aqua" aria-hidden="true" /> : null}
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  )}
+                  {claimerId ? (
+                    <div className="flex items-center gap-2">
+                      <Avatar size="xs" name={memberDisplayName(members, claimerId)} />
+                      <p className="text-xs text-accent-aqua">{packingClaimLine(item, members, currentUserId)}</p>
+                    </div>
                   ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    {claim.state === 'open' ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => patchItem(item.id, { claimed: true })}
+                        disabled={busy}
+                        className="min-h-11"
+                      >
+                        I'll bring it
+                      </Button>
+                    ) : null}
+                    {claim.state === 'mine' ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          aria-pressed={claim.packed}
+                          onClick={() => patchItem(item.id, { packed: !claim.packed })}
+                          disabled={busy}
+                          className="min-h-11"
+                        >
+                          <Check className="w-4 h-4" aria-hidden="true" /> Packed
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => patchItem(item.id, { claimed: false })}
+                          disabled={busy}
+                          className="min-h-11"
+                        >
+                          Not bringing it
+                        </Button>
+                      </>
+                    ) : null}
+                    {claim.state === 'theirs' && claim.canRelease ? (
+                      <Button
+                        variant="ghost"
+                        onClick={() => patchItem(item.id, { claimed: false })}
+                        disabled={busy}
+                        className="min-h-11"
+                      >
+                        Remove claim
+                      </Button>
+                    ) : null}
+                  </div>
                   <SyncMarker item={item} />
                 </div>
                 {canRemove ? (
@@ -210,7 +326,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
                     variant="danger"
                     icon={<Trash2 className="w-4 h-4" />}
                     onClick={() => remove(item.id, `"${item.label}"`)}
-                    disabled={busyId === item.id}
+                    disabled={busy}
                   />
                 ) : null}
               </li>

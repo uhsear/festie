@@ -36,6 +36,12 @@ const DEFAULT_ITEM = {
   created_at: '2026-01-01T00:00:00.000Z',
 };
 
+const MEMBERS = [
+  { userId: 'user-1', role: 'member', name: null, username: 'testuser' },
+  { userId: 'user-2', role: 'member', name: 'Ada', username: 'ada' },
+  { userId: 'user-3', role: 'owner', name: null, username: 'olive' },
+];
+
 /**
  * Build a deps object tailored for crew-packing.js.
  */
@@ -44,6 +50,7 @@ function makePackingDeps(overrides: any = {}) {
   const storesBase = {
     crews: {
       getMember: mock.fn(async () => null),
+      getMembers: mock.fn(async () => MEMBERS),
     },
     crewPacking: {
       listByCrew: mock.fn(async () => []),
@@ -60,6 +67,9 @@ function makePackingDeps(overrides: any = {}) {
       getById: mock.fn(async () => null),
       update: mock.fn(async () => ({ ...DEFAULT_ITEM })),
       delete: mock.fn(async () => {}),
+      createMany: mock.fn(async (crewId: string, createdBy: string, labels: string[]) =>
+        labels.map((label, i) => ({ ...DEFAULT_ITEM, id: `pack-b${i}`, crew_id: crewId, created_by: createdBy, label })),
+      ),
     },
     activity: {
       log: mock.fn(async () => {}),
@@ -97,6 +107,7 @@ function makePackingDeps(overrides: any = {}) {
       crewIdItemIdParams: {},
       packingCreate: {},
       packingUpdate: {},
+      packingBatch: {},
     },
     validate: overrides.validate || ((_schema: any) => (req: any, _res: any, next: any) => { req.validatedBody = req.body; next(); }),
     validateParams: overrides.validateParams || ((_schema: any) => (req: any, _res: any, next: any) => { req.validatedParams = req.params; next(); }),
@@ -247,7 +258,7 @@ describe('routes/crew-packing.js — POST /:crewId/packing', () => {
     assert.equal((createFn.mock.calls as any[])[0].arguments[0].createdBy, 'user-1');
   });
 
-  test('passes broughtBy and claimed through when provided', async () => {
+  test('a claim on create stores the caller, whatever broughtBy says', async () => {
     const createFn = mock.fn(async (data: any) => ({
       id: 'pack-new',
       crew_id: data.crewId,
@@ -273,7 +284,7 @@ describe('routes/crew-packing.js — POST /:crewId/packing', () => {
       .send({ label: 'Cooler', broughtBy: 'user-2', claimed: true });
 
     const passed = (createFn.mock.calls as any[])[0].arguments[0];
-    assert.equal(passed.broughtBy, 'user-2');
+    assert.equal(passed.broughtBy, 'user-1');
     assert.equal(passed.claimed, true);
   });
 
@@ -332,6 +343,7 @@ describe('routes/crew-packing.js — POST /:crewId/packing', () => {
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:packing-created');
     const payload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
+    assert.equal(payload.crewId, 'crew-1');
     assert.equal(payload.item.id, 'pack-new');
     assert.equal(payload.item.label, 'Tent');
   });
@@ -542,6 +554,7 @@ describe('routes/crew-packing.js — PUT /:crewId/packing/:itemId', () => {
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:packing-updated');
     const payload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
+    assert.equal(payload.crewId, 'crew-1');
     assert.equal(payload.item.claimed, true);
   });
 
@@ -699,7 +712,7 @@ describe('routes/crew-packing.js — DELETE /:crewId/packing/:itemId', () => {
 
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:packing-deleted');
-    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { itemId: 'pack-1' });
+    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { crewId: 'crew-1', itemId: 'pack-1' });
   });
 
   // ── Permission: regular member cannot remove another's item ───────
@@ -891,5 +904,212 @@ describe('routes/crew-packing.js — rate limiting', () => {
     const limit = rateLimitCalls.find((c: any) => c.key === 'crew-packing-delete');
     assert.ok(limit, 'crew-packing-delete rate limit should be applied');
     assert.equal(limit.max, 30);
+  });
+});
+
+// =====================================================================
+//  T30: two-way packing claims — who may claim, release and mark packed
+// =====================================================================
+describe('routes/crew-packing.js — PUT claim rules', () => {
+  const asUser = (userId: string) => (req: any, _res: any, next: any) => {
+    req.user = { userId, username: userId };
+    next();
+  };
+  const heldBy = (userId: string, packed = false) => ({ ...DEFAULT_ITEM, claimed: true, brought_by: userId, packed });
+
+  async function put(body: any, opts: { item?: any; role?: string; userId?: string } = {}) {
+    const updateFn = mock.fn(async (_id: string, fields: any) => ({ ...DEFAULT_ITEM, ...fields }));
+    const { app } = await buildPackingApp({
+      userAuth: asUser(opts.userId ?? 'user-1'),
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: opts.userId ?? 'user-1', role: opts.role ?? 'member' })) },
+        crewPacking: { getById: mock.fn(async () => opts.item ?? { ...DEFAULT_ITEM }), update: updateFn },
+      },
+    });
+    const res = await request(app).put('/crew-1/packing/pack-1').send(body);
+    const fields = updateFn.mock.calls.length ? (updateFn.mock.calls as any[])[0].arguments[1] : null;
+    return { res, fields };
+  }
+
+  test('claiming an item someone else holds returns 409 with their name', async () => {
+    const { res, fields } = await put({ claimed: true, broughtBy: 'user-1' }, { item: heldBy('user-2') });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'CONFLICT');
+    assert.equal(res.body.error.message, 'Ada is already bringing this.');
+    assert.equal(fields, null);
+  });
+
+  test('claiming an open item stores the caller, not the broughtBy in the body', async () => {
+    const { res, fields } = await put({ claimed: true, broughtBy: 'someone-else' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(fields, { claimed: true, broughtBy: 'user-1', packed: false });
+  });
+
+  test('broughtBy alone counts as a claim when claimed is absent', async () => {
+    const { res, fields } = await put({ broughtBy: 'user-9' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(fields, { claimed: true, broughtBy: 'user-1', packed: false });
+  });
+
+  test('re-claiming your own item keeps packed', async () => {
+    const { res, fields } = await put({ claimed: true }, { item: heldBy('user-1', true) });
+    assert.equal(res.status, 200);
+    assert.deepEqual(fields, { claimed: true, broughtBy: 'user-1' });
+  });
+
+  test('a member cannot release a claim someone else holds', async () => {
+    const { res, fields } = await put({ claimed: false, broughtBy: null }, { item: heldBy('user-2') });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'FORBIDDEN');
+    assert.equal(res.body.error.message, 'Only Ada or the crew owner can take this off their list.');
+    assert.equal(fields, null);
+  });
+
+  test('a claim by someone no longer in the crew names a former member', async () => {
+    const { res } = await put({ claimed: true }, { item: heldBy('user-gone') });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.message, 'A former member is already bringing this.');
+  });
+
+  test('the owner can release a claim someone else holds, which clears packed', async () => {
+    const { res, fields } = await put(
+      { claimed: false },
+      { item: heldBy('user-2', true), role: 'owner', userId: 'user-3' },
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(fields, { claimed: false, broughtBy: null, packed: false });
+  });
+
+  test('the holder can release their own claim', async () => {
+    const { res, fields } = await put({ broughtBy: null }, { item: heldBy('user-1', true) });
+    assert.equal(res.status, 200);
+    assert.deepEqual(fields, { claimed: false, broughtBy: null, packed: false });
+  });
+
+  test('marking an item someone else holds as packed returns 403', async () => {
+    const { res, fields } = await put({ packed: true }, { item: heldBy('user-2') });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.message, 'Only the person bringing this can mark it packed.');
+    assert.equal(fields, null);
+  });
+
+  test('marking an open item packed returns 403', async () => {
+    const { res } = await put({ packed: true });
+    assert.equal(res.status, 403);
+  });
+
+  test('the holder can mark their item packed', async () => {
+    const { res, fields } = await put({ packed: true }, { item: heldBy('user-1') });
+    assert.equal(res.status, 200);
+    assert.deepEqual(fields, { packed: true });
+    assert.equal(res.body.data.item.packed, true);
+  });
+
+  test('claim and packed in one request both apply', async () => {
+    const { res, fields } = await put({ claimed: true, packed: true });
+    assert.equal(res.status, 200);
+    assert.deepEqual(fields, { claimed: true, broughtBy: 'user-1', packed: true });
+  });
+
+  test('any member can rename an item someone else holds', async () => {
+    const { res, fields } = await put({ label: 'Two tents' }, { item: heldBy('user-2') });
+    assert.equal(res.status, 200);
+    assert.deepEqual(fields, { label: 'Two tents' });
+  });
+});
+
+// =====================================================================
+//  T30: POST /:crewId/packing/batch — template and pasted lists
+// =====================================================================
+describe('routes/crew-packing.js — POST /:crewId/packing/batch', () => {
+  const CAMPING = [
+    'Tent', 'Sleeping bags', 'Camping chairs', 'Cooler', 'Headlamps', 'Sunscreen',
+    'Water jugs', 'Portable charger', 'Earplugs', 'Rain ponchos', 'First aid kit', 'Trash bags',
+  ];
+
+  async function batch(labels: string[], opts: { existing?: any[]; count?: number; member?: any } = {}) {
+    const ioObj = makeIo();
+    const member = opts.member === undefined ? { userId: 'user-1', role: 'member' } : opts.member;
+    const { app, deps } = await buildPackingApp({
+      io: ioObj,
+      stores: {
+        crews: { getMember: mock.fn(async () => member) },
+        crewPacking: {
+          listByCrew: mock.fn(async () => opts.existing ?? []),
+          countByCrew: mock.fn(async () => opts.count ?? (opts.existing ?? []).length),
+        },
+      },
+    });
+    const res = await request(app).post('/crew-1/packing/batch').send({ labels });
+    return { res, deps, ioObj };
+  }
+
+  test('creates every camping label on an empty list, with one emit and one activity row', async () => {
+    const { res, deps, ioObj } = await batch(CAMPING);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.items.length, 12);
+    const createMany = deps.stores.crewPacking.createMany as any;
+    assert.equal(createMany.mock.calls.length, 1);
+    assert.deepEqual(createMany.mock.calls[0].arguments, ['crew-1', 'user-1', CAMPING]);
+    assert.equal(ioObj._emit.mock.calls.length, 1);
+    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:packing-created');
+    const payload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
+    assert.equal(payload.crewId, 'crew-1');
+    assert.equal(payload.items.length, 12);
+    const logs = (deps.stores.activity.log as any).mock.calls;
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].arguments[0].type, 'packing-created');
+    assert.equal(logs[0].arguments[0].detail, 'Added 12 items');
+  });
+
+  test('the same batch again creates nothing and emits nothing', async () => {
+    const existing = CAMPING.map((label, i) => ({ ...DEFAULT_ITEM, id: `pack-${i}`, label }));
+    const { res, deps, ioObj } = await batch(CAMPING, { existing });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.items, []);
+    assert.equal((deps.stores.crewPacking.createMany as any).mock.calls.length, 0);
+    assert.equal(ioObj._emit.mock.calls.length, 0);
+    assert.equal((deps.stores.activity.log as any).mock.calls.length, 0);
+  });
+
+  test('drops labels matching the list or an earlier label, trimmed and case-insensitive', async () => {
+    const { res, deps } = await batch(['tent ', 'Cooler', 'COOLER', 'Chairs'], {
+      existing: [{ ...DEFAULT_ITEM, label: ' Tent' }],
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual((deps.stores.crewPacking.createMany as any).mock.calls[0].arguments[2], ['Cooler', 'Chairs']);
+    assert.equal((deps.stores.activity.log as any).mock.calls[0].arguments[0].detail, 'Added 2 items');
+  });
+
+  test('returns 409 when the new labels would pass the 200-item cap', async () => {
+    const { res, deps } = await batch(['A', 'B', 'C'], { count: 198 });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'CONFLICT');
+    assert.equal(res.body.error.message, 'A crew list can hold 200 items. Remove some first.');
+    assert.equal((deps.stores.crewPacking.createMany as any).mock.calls.length, 0);
+  });
+
+  test('fills the list exactly to 200', async () => {
+    const { res } = await batch(['A', 'B'], { count: 198 });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.items.length, 2);
+  });
+
+  test('returns 403 when the caller is not a crew member', async () => {
+    const { res } = await batch(['Tent'], { member: null });
+    assert.equal(res.status, 403);
+  });
+
+  test('applies the crew-packing-batch rate limit of 10', async () => {
+    const calls: any[] = [];
+    await buildPackingApp({
+      rateLimit: (max: any, key: any) => {
+        calls.push({ max, key });
+        return (_req: any, _res: any, next: any) => next();
+      },
+    });
+    const limit = calls.find((c) => c.key === 'crew-packing-batch');
+    assert.ok(limit, 'crew-packing-batch rate limit should be applied');
+    assert.equal(limit.max, 10);
   });
 });

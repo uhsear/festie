@@ -68,6 +68,8 @@ interface SetCardMobileProps {
   onPress: () => void;
   /** When true, shows the conflict warning indicator. */
   hasConflict?: boolean;
+  /** Names the clashing set and the overlap; replaces the generic conflict badge text. */
+  clashLabel?: string;
   /** When true, shows a small "has note" indicator next to the time. */
   hasNote?: boolean;
   /** Lead time in minutes of this set's reminder; shows a bell with the lead. */
@@ -201,6 +203,7 @@ function SetCardMobileImpl({
   onPickChange,
   onPress,
   hasConflict = false,
+  clashLabel,
   hasNote = false,
   reminderMinutes,
   friendProfiles,
@@ -226,10 +229,12 @@ function SetCardMobileImpl({
   // carries the same "now" context the visual progress bar does for sighted users.
   const livePct = isLive ? Math.round(setStatus.progress * 100) : 0;
   const reminderA11y = reminderMinutes != null ? `Reminder ${reminderLeadA11y(reminderMinutes)} before` : null;
+  const a11yBase = isLive
+    ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
+    : `${artistName}, ${stageName}, ${timeLabel}`;
   const a11yBody =
-    (isLive
-      ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
-      : `${artistName}, ${stageName}, ${timeLabel}`) + (reminderA11y ? `, ${reminderA11y.toLowerCase()}` : '');
+    (hasConflict ? `${a11yBase}, ${clashLabel ?? 'clash'}` : a11yBase) +
+    (reminderA11y ? `, ${reminderA11y.toLowerCase()}` : '');
 
   // Ended sets dim only while the festival is on, mirroring web SetCard.
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
@@ -293,7 +298,9 @@ function SetCardMobileImpl({
           {hasConflict ? (
             <View style={styles.conflictBadge}>
               <Ionicons name="warning" size={12} color={t.colors.clash.mark} />
-              <Text style={styles.conflictText}>{COPY.clash.badge}</Text>
+              <Text style={styles.conflictText} numberOfLines={1}>
+                {clashLabel ?? COPY.clash.badge}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -402,6 +409,7 @@ function areEqual(prev: SetCardMobileProps, next: SetCardMobileProps): boolean {
     prev.stageColor !== next.stageColor ||
     prev.myPick !== next.myPick ||
     prev.hasConflict !== next.hasConflict ||
+    prev.clashLabel !== next.clashLabel ||
     prev.hasNote !== next.hasNote ||
     prev.b2bSeparator !== next.b2bSeparator ||
     !!prev.onListen !== !!next.onListen ||
@@ -584,6 +592,7 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[1],
+    flexShrink: 1,
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     borderRadius: t.radii.default,
@@ -593,6 +602,7 @@ const useStyles = makeStyles((t) => ({
   },
   conflictText: {
     ...typeStyle('micro'),
+    flexShrink: 1,
     color: t.colors.text.primary,
   },
   footer: {

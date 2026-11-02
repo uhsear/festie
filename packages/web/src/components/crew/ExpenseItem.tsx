@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { formatAmount } from '@festie/shared/utils';
 import type { EXPENSE_CATEGORIES } from '@festie/shared/constants';
 import IconButton from '../ui/IconButton';
@@ -21,6 +21,18 @@ export interface ExpenseItemProps {
   planned?: boolean;
   /** Offline-queued create: not on the server yet (id is the queue clientId). */
   optimistic?: boolean;
+  currency?: string;
+  /** "Your share $12.40" or "Not in your split". */
+  shareLine?: string | null;
+  /** "Added by Alex · Edited by Sam 2h ago". */
+  trailLine?: string | null;
+  /** Payee's answer on a payment row. */
+  statusLine?: string | null;
+  /** Not a payment and not a queued create. */
+  canEdit?: boolean;
+  onEdit?: (id: string) => void;
+  /** Payer, adder or owner (payments: payer only), and not a queued create. */
+  canRemove: boolean;
   onRemove: (id: string) => void;
   isRemoving: boolean;
 }
@@ -36,6 +48,13 @@ export default function ExpenseItem({
   category,
   planned,
   optimistic,
+  currency = 'USD',
+  shareLine,
+  trailLine,
+  statusLine,
+  canEdit,
+  onEdit,
+  canRemove,
   onRemove,
   isRemoving,
 }: ExpenseItemProps) {
@@ -57,14 +76,28 @@ export default function ExpenseItem({
           )}
         </div>
         <div className="text-xs text-text-secondary">
-          <span className="tabular-nums">{formatAmount(amount)}</span> {'·'}{' '}
+          <span className="tabular-nums">{formatAmount(amount, currency)}</span> {'·'}{' '}
           {planned ? 'planned' : `${paidByMe ? 'You' : paidByName} paid`}
           {splitCount > 0 && ` · split ${splitCount} ${splitCount === 1 ? 'way' : 'ways'}`}
         </div>
+        {[shareLine, trailLine, statusLine].map(
+          (line) =>
+            line && (
+              <div key={line} className="text-xs text-text-secondary">
+                {line}
+              </div>
+            ),
+        )}
         <SyncMarker item={{ id, _optimistic: optimistic }} />
       </div>
-      {/* A queued create has no server id yet, so it cannot be deleted. */}
-      {paidByMe && !optimistic && (
+      {canEdit && (
+        <IconButton
+          label="Edit expense"
+          icon={<Pencil className="w-4 h-4" />}
+          onClick={() => onEdit?.(id)}
+        />
+      )}
+      {canRemove && (
         <IconButton
           label="Remove expense"
           variant="danger"

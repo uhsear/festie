@@ -8,7 +8,17 @@
  */
 
 import { haversineDistance } from './geo';
-import { LIVE_LOCATION } from '../constants/config';
+import {
+  LIVE_LOCATION,
+  LIVE_SHARE_COPY,
+  LIVE_SHARE_DEFAULT_DURATION_ID,
+  LIVE_SHARE_DURATIONS,
+  LIVE_SHARE_MAX_MS,
+} from '../constants/config';
+import type { LiveShareEndReason } from '../stores/liveLocationStore';
+import type { FestivalDay, FestivalSet, SosEntry } from '../types/domain';
+import { fmtZonedClock, logicalDayEndAt, logicalDayIndexAt } from './dayOf';
+import { getSetTimeBounds } from './setStatus';
 
 export interface LatLng {
   lat: number;
@@ -91,9 +101,8 @@ export const LOW_BATTERY_THRESHOLD = 20;
 /**
  * Format a peer's battery level (0–100) for the popup, e.g. "85%" or, when low,
  * "8% — regroup". Returns null for absent/invalid/out-of-range so the chip is
- * simply omitted. NOTE: until a native build adds expo-battery, `level` is always
- * undefined on mobile — see the TODO in useLiveLocationPublisher; web reads it
- * from the (non-standard) Battery API only when available.
+ * simply omitted. Mobile reads expo-battery; web reads the Battery API where
+ * present. Both send a level only when the sharer opts in.
  */
 export function formatBatteryLabel(
   level: number | null | undefined,
@@ -105,11 +114,26 @@ export function formatBatteryLabel(
   return pct <= lowThreshold ? `${pct}% — regroup` : `${pct}%`;
 }
 
+/** "42 min", "1 h 5 min" or "2 h". Rounds up to whole minutes, at least 1. */
+export function formatCountdown(remainingMs: number): string {
+  const total = Math.max(1, Math.ceil(remainingMs / 60_000));
+  if (total < 60) return `${total} min`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
+/** "Lost contact 12 min ago" (or "2 h ago") for a peer whose live fix was swept. */
+export function lostContactLabel(lostAtMs: number, nowMs: number = Date.now()): string {
+  const mins = Math.max(1, Math.floor((nowMs - lostAtMs) / 60_000));
+  return mins < 60 ? `Lost contact ${mins} min ago` : `Lost contact ${Math.floor(mins / 60)} h ago`;
+}
+
 /**
- * Countdown for a time-boxed share, e.g. "sharing ends in 4m". `expiresAt` is the
+ * Countdown for a time-boxed share, e.g. "sharing ends in 4 min". `expiresAt` is the
  * ISO timestamp (or epoch ms) the share auto-stops. Returns null when there is no
  * window or it has already elapsed (the peer is swept regardless) so callers show
- * nothing. Always rounds UP to whole minutes (never "ends in 0m" while still live).
+ * nothing. Always rounds UP to whole minutes (never "ends in 0 min" while still live).
  */
 export function formatShareWindow(
   expiresAt: string | number | null | undefined,
@@ -123,6 +147,84 @@ export function formatShareWindow(
   if (!Number.isFinite(ms)) return null;
   const remaining = ms - now;
   if (remaining <= 0) return null;
-  const mins = Math.max(1, Math.ceil(remaining / 60_000));
-  return `sharing ends in ${mins}m`;
+  return `sharing ends in ${formatCountdown(remaining)}`;
+}
+
+export interface LiveShareOption {
+  id: string;
+  label: string;
+  ms: number;
+}
+
+/**
+ * The durations the sharer can pick. "Rest of today" ends with the logical festival
+ * day (06:00 next morning) and shows only when that is over 1 hour and at most
+ * LIVE_SHARE_MAX_MS away. It is the default when shown, else the 2 hour preset.
+ */
+/**
+ * When "Rest of today" ends: 1 hour after the last set of the current festival
+ * day, or at the end of that day (06:00) when it has no timed sets. Null outside
+ * a festival day.
+ */
+export function restOfTodayEndAt(
+  days: ReadonlyArray<Pick<FestivalDay, 'date'>>,
+  sets: ReadonlyArray<Pick<FestivalSet, 'startTime' | 'endTime' | 'date' | 'dayIndex'>>,
+  nowMs: number,
+  timeZone?: string,
+): number | null {
+  const dayEnd = logicalDayEndAt(days, nowMs, timeZone);
+  if (dayEnd == null) return null;
+  const index = logicalDayIndexAt(days, nowMs, timeZone);
+  let lastSetEnd = -Infinity;
+  for (const set of sets) {
+    if (set.dayIndex !== index) continue;
+    const bounds = getSetTimeBounds(set, days, timeZone);
+    if (bounds) lastSetEnd = Math.max(lastSetEnd, bounds.endMs);
+  }
+  return Number.isFinite(lastSetEnd) ? lastSetEnd + 3_600_000 : dayEnd;
+}
+
+export function liveShareOptions({
+  days,
+  sets = [],
+  timeZone,
+  nowMs,
+}: {
+  days: ReadonlyArray<Pick<FestivalDay, 'date'>>;
+  /** The festival's sets, so "Rest of today" ends 1 hour after the day's last set. */
+  sets?: ReadonlyArray<Pick<FestivalSet, 'startTime' | 'endTime' | 'date' | 'dayIndex'>>;
+  timeZone?: string;
+  nowMs: number;
+}): { options: LiveShareOption[]; defaultId: string } {
+  const options: LiveShareOption[] = LIVE_SHARE_DURATIONS.map((d) => ({ id: d.id, label: d.label, ms: d.ms }));
+  const end = restOfTodayEndAt(days, sets, nowMs, timeZone);
+  if (end != null && end - nowMs > 3_600_000 && end - nowMs <= LIVE_SHARE_MAX_MS) {
+    options.push({ id: 'day', label: LIVE_SHARE_COPY.restOfToday(fmtZonedClock(end, timeZone)), ms: end - nowMs });
+    return { options, defaultId: 'day' };
+  }
+  return { options, defaultId: LIVE_SHARE_DEFAULT_DURATION_ID };
+}
+
+const LIVE_SHARE_ENDED_TEXT: Record<LiveShareEndReason, string> = {
+  expired: 'Live location stopped at the time you picked.',
+  background: 'Live location stopped when you left the app. Turn it on again to keep sharing.',
+  'low-power': 'Live location stopped because low-power mode is on.',
+  error: "Couldn't read your location, so sharing stopped. Check that location is on and try again.",
+  denied: 'Location permission is off. Turn it on in your settings to share.',
+  rejected: "Couldn't share your location with this crew. Try again.",
+  user: '',
+};
+
+/** One-line notice for why sharing ended. Empty when the user stopped it. */
+export function liveShareEndedText(reason: LiveShareEndReason): string {
+  return LIVE_SHARE_ENDED_TEXT[reason];
+}
+
+/** "Not seen yet", "Seen by Sam", "Seen by Sam and Alex", "Seen by Sam, Alex and 2 more". */
+export function sosSeenLabel(entry: Pick<SosEntry, 'seenBy'>): string {
+  const names = (entry.seenBy ?? []).map((v) => v.username);
+  if (names.length === 0) return 'Not seen yet';
+  if (names.length === 1) return `Seen by ${names[0]}`;
+  if (names.length === 2) return `Seen by ${names[0]} and ${names[1]}`;
+  return `Seen by ${names[0]}, ${names[1]} and ${names.length - 2} more`;
 }

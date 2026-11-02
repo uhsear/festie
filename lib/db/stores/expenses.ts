@@ -76,33 +76,182 @@ export function simplifyDebts(balances: BalanceCents[]): Settlement[] {
   return settlements;
 }
 
+const EXPENSE_COLUMN_NAMES = [
+  'id',
+  'crew_id',
+  'paid_by',
+  'description',
+  'amount',
+  'split_with',
+  'category',
+  'planned',
+  'created_at',
+  'split_amounts',
+  'created_by',
+  'updated_by',
+  'updated_at',
+  'confirmed_at',
+  'disputed_at',
+];
+const EXPENSE_COLUMNS = EXPENSE_COLUMN_NAMES.join(', ');
+
+// JSONB arrives parsed from pg; a string (old rows, mocks) is parsed here.
+function parseJson(value: any, fallback: any) {
+  if (typeof value !== 'string') return value ?? fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+// Equal split: base share to everyone, one extra cent to each of the first
+// `remainder` ids in order, so the shares sum to the total.
+function evenShares(amountCents: number, userIds: string[]): Array<[string, number]> {
+  if (userIds.length === 0) return [];
+  const baseShare = Math.floor(amountCents / userIds.length);
+  let remainder = amountCents - baseShare * userIds.length;
+  return userIds.map((uid) => {
+    const owed = baseShare + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder -= 1;
+    return [uid, owed];
+  });
+}
+
+/**
+ * What each current member owes for one expense, in integer cents. An empty
+ * result means the expense is skipped (nobody left to owe it).
+ *
+ * packages/shared/src/utils/expenseSplit.ts (expenseShareCents) mirrors these
+ * rules; tests/stores-expenses.test.ts and expenseSplit.test.ts share fixtures.
+ */
+function owedShares(
+  amountCents: number,
+  splitWith: string[],
+  splitAmounts: any,
+  memberIds: string[],
+  isMember: (id: string) => boolean,
+): Array<[string, number]> {
+  if (splitAmounts && typeof splitAmounts === 'object' && !Array.isArray(splitAmounts)) {
+    const keys = Object.keys(splitAmounts);
+    const values = keys.map((k) => splitAmounts[k]);
+    const valid = values.every((v) => Number.isInteger(v)) && values.reduce((sum, v) => sum + v, 0) === amountCents;
+    // A map that does not add up falls back to the equal split over its keys,
+    // so bad data can never leave the ledger non-zero-sum.
+    if (!valid) return evenShares(amountCents, keys.filter(isMember));
+    const staying = keys.filter(isMember);
+    if (staying.length === 0) return [];
+    // Shares of removed members are pooled and spread evenly over the rest.
+    const pool = keys.filter((k) => !isMember(k)).reduce((sum, k) => sum + splitAmounts[k], 0);
+    const pooled = new Map(evenShares(pool, staying));
+    return staying.map((uid) => [uid, splitAmounts[uid] + (pooled.get(uid) ?? 0)]);
+  }
+  // Split among the named members (empty = whole crew); drop any id that
+  // is no longer a current member so removed members can't leave the
+  // ledger non-zero-sum — their share redistributes across the rest.
+  return evenShares(amountCents, (splitWith.length > 0 ? splitWith : memberIds).filter(isMember));
+}
+
 export function createExpensesStore(pool: Pool) {
   return {
-    async create({ crewId, paidBy, description, amount, splitWith, category = 'other', planned = false }: any) {
+    async create({
+      crewId,
+      paidBy,
+      description,
+      amount,
+      splitWith,
+      category = 'other',
+      planned = false,
+      createdBy = null,
+      splitAmounts = null,
+    }: any) {
       const id = randomUUID();
       const splitJson = JSON.stringify(splitWith || []);
       const { rows } = await pool.query(
-        `INSERT INTO crew_expenses (id, crew_id, paid_by, description, amount, split_with, category, planned, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-         RETURNING id, crew_id, paid_by, description, amount, split_with, category, planned, created_at`,
-        [id, crewId, paidBy, description, amount, splitJson, category, planned],
+        `INSERT INTO crew_expenses (id, crew_id, paid_by, description, amount, split_with, category, planned, created_at, created_by, split_amounts)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10)
+         RETURNING ${EXPENSE_COLUMNS}`,
+        [
+          id,
+          crewId,
+          paidBy,
+          description,
+          amount,
+          splitJson,
+          category,
+          planned,
+          createdBy,
+          splitAmounts ? JSON.stringify(splitAmounts) : null,
+        ],
       );
       return rows[0];
+    },
+
+    // Full replacement of an expense's editable fields (PUT). Records who edited.
+    async update(
+      id: string,
+      { paidBy, description, amount, splitWith, splitAmounts = null, category, planned, updatedBy }: any,
+    ) {
+      const { rows } = await pool.query(
+        `UPDATE crew_expenses
+         SET paid_by = $2, description = $3, amount = $4, split_with = $5, split_amounts = $6,
+             category = $7, planned = $8, updated_by = $9, updated_at = NOW()
+         WHERE id = $1
+         RETURNING ${EXPENSE_COLUMNS}`,
+        [
+          id,
+          paidBy,
+          description,
+          amount,
+          JSON.stringify(splitWith || []),
+          splitAmounts ? JSON.stringify(splitAmounts) : null,
+          category,
+          planned,
+          updatedBy,
+        ],
+      );
+      return rows[0] || null;
+    },
+
+    // The payee's answer on a payment row. Setting one clears the other.
+    async setConfirmation(id: string, received: boolean) {
+      const { rows } = await pool.query(
+        `UPDATE crew_expenses
+         SET confirmed_at = CASE WHEN $2::boolean THEN NOW() ELSE NULL END,
+             disputed_at = CASE WHEN $2::boolean THEN NULL ELSE NOW() END
+         WHERE id = $1
+         RETURNING ${EXPENSE_COLUMNS}`,
+        [id, received],
+      );
+      return rows[0] || null;
+    },
+
+    async getCurrency(crewId: string): Promise<string> {
+      const { rows } = await pool.query('SELECT currency FROM crews WHERE id = $1', [crewId]);
+      return rows[0]?.currency || 'USD';
+    },
+
+    async setCurrency(crewId: string, currency: string) {
+      await pool.query('UPDATE crews SET currency = $2 WHERE id = $1', [crewId, currency]);
+    },
+
+    // One settle-up reminder per (crew, creditor, debtor) per UTC day. True when
+    // this call recorded it, false when one was already sent today.
+    async recordReminder(crewId: string, fromUserId: string, toUserId: string): Promise<boolean> {
+      const result = await pool.query(
+        `INSERT INTO crew_expense_reminders (crew_id, from_user_id, to_user_id, sent_on)
+         VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'UTC')::date)
+         ON CONFLICT DO NOTHING`,
+        [crewId, fromUserId, toUserId],
+      );
+      return result.rowCount === 1;
     },
 
     async getByCrew(crewId: string) {
       const { rows } = await pool.query(
         `
   SELECT
-    e.id,
-    e.crew_id,
-    e.paid_by,
-    e.description,
-    e.amount,
-    e.split_with,
-    e.category,
-    e.planned,
-    e.created_at,
+    ${EXPENSE_COLUMN_NAMES.map((c) => `e.${c}`).join(', ')},
     u.username as paid_by_name
   FROM
     crew_expenses e
@@ -124,7 +273,7 @@ export function createExpensesStore(pool: Pool) {
             splitWith = [];
           }
         }
-        return { ...r, split_with: splitWith };
+        return { ...r, split_with: splitWith, split_amounts: parseJson(r.split_amounts, null) };
       });
     },
 
@@ -132,15 +281,7 @@ export function createExpensesStore(pool: Pool) {
       const { rows } = await pool.query(
         `
   SELECT
-    id,
-    crew_id,
-    paid_by,
-    description,
-    amount,
-    split_with,
-    category,
-    planned,
-    created_at
+    ${EXPENSE_COLUMNS}
   FROM
     crew_expenses
   WHERE
@@ -166,15 +307,7 @@ export function createExpensesStore(pool: Pool) {
       const { rows: expenses } = await pool.query(
         `
   SELECT
-    id,
-    crew_id,
-    paid_by,
-    description,
-    amount,
-    split_with,
-    category,
-    planned,
-    created_at
+    ${EXPENSE_COLUMNS}
   FROM
     crew_expenses
   WHERE
@@ -209,42 +342,24 @@ export function createExpensesStore(pool: Pool) {
         cents[id] = 0;
       });
 
+      const isMember = (uid: string) => cents[uid] !== undefined;
       for (const exp of expenses) {
-        let splitWith = exp.split_with || [];
-        if (typeof exp.split_with === 'string') {
-          try {
-            splitWith = JSON.parse(exp.split_with);
-          } catch {
-            splitWith = [];
-          }
-        }
-        // Split among the named members (empty = whole crew); drop any id that
-        // is no longer a current member so removed members can't leave the
-        // ledger non-zero-sum — their share redistributes across the rest.
-        const splitMembers = (splitWith.length > 0 ? splitWith : memberIds).filter(
-          (uid: string) => cents[uid] !== undefined,
-        );
-        const shareCount = splitMembers.length;
-        if (shareCount === 0) continue;
-
         const amountCents = Math.round(Number(exp.amount) * 100);
         if (!Number.isFinite(amountCents)) continue;
+        const owed = owedShares(
+          amountCents,
+          parseJson(exp.split_with, []),
+          parseJson(exp.split_amounts, null),
+          memberIds,
+          isMember,
+        );
+        if (owed.length === 0) continue;
 
         // Payer fronted the whole amount.
         const payerBal = cents[exp.paid_by];
         if (payerBal !== undefined) cents[exp.paid_by] = payerBal + amountCents;
 
-        // Each member owes an equal share; spread the leftover pennies one each
-        // across the first `remainder` members so the shares sum to the total.
-        const baseShare = Math.floor(amountCents / shareCount);
-        let remainder = amountCents - baseShare * shareCount;
-        splitMembers.forEach((uid: string) => {
-          const cur = cents[uid];
-          if (cur === undefined) return;
-          const owed = baseShare + (remainder > 0 ? 1 : 0);
-          if (remainder > 0) remainder -= 1;
-          cents[uid] = cur - owed;
-        });
+        for (const [uid, share] of owed) cents[uid] = (cents[uid] ?? 0) - share;
       }
 
       return memberIds.map((id: string) => ({

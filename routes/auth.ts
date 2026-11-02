@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import type { Request, Response, Router } from 'express';
 import { sendVerificationEmail } from '../lib/email';
 import { REAUTH_WINDOW_MS } from '../lib/app-context/session';
+import { describeDevice } from '../lib/helpers/device-label';
 // Request augmentation (validatedBody, user, userToken, …) now lives centrally
 // in lib/types/request.ts. Importing the types barrel pulls in its global
 // side-effect so this module sees the augmented Request.
@@ -105,6 +106,11 @@ async function handleLoginFailure(user: any, deps: any) {
       log.warn('account locked', { userId: user.id, failures: failures.consecutiveFailures });
     }
   }
+}
+
+// Same native test the token responses use (x-festie-client, or no Origin).
+function deviceOf(req: Request) {
+  return describeDevice(req.get('user-agent'), req.get('x-festie-client') === 'native' || !req.get('origin'));
 }
 
 /**
@@ -244,7 +250,7 @@ export default function createAuthRoutes(deps: any): Router {
         const user = await createUserWithProfile({ cleanUsername, passwordHash, newUserId, cleanEmail, dateOfBirth }, deps);
         await countSignupRef((req.validatedBody as any).ref);
 
-        const token = await createUserSession(user.id, user.username);
+        const token = await createUserSession(user.id, user.username, deviceOf(req));
         setNoStore(res);
         setUserSessionCookie(res, token);
         const refreshToken = await issueRefreshToken(user.id, token, deps);
@@ -274,9 +280,12 @@ export default function createAuthRoutes(deps: any): Router {
     },
   );
 
+  // Usernames cannot contain '@', so an '@' means sign-in by email. The email
+  // lookup skips soft-deleted accounts; only a username reactivates one.
   async function resolveLoginUser(username: string) {
-    const clean = String(username).trim();
-    return (await stores.users.getByUsername(clean)) ?? stores.users.findDeletedByUsername(clean);
+    const ident = String(username).trim();
+    if (ident.includes('@')) return stores.users.getByEmail(ident.toLowerCase());
+    return (await stores.users.getByUsername(ident)) ?? stores.users.findDeletedByUsername(ident);
   }
 
   async function checkAccountLockout(user: any, res: Response) {
@@ -315,7 +324,7 @@ export default function createAuthRoutes(deps: any): Router {
         const jitter = 500 + Math.floor(Math.random() * 1000);
         log.warn('authentication failed', { username: user ? user.username : 'unknown', ip: req.ip });
         return setTimeout(
-          () => sendError(res, 401, 'Invalid username or password', ErrorCodes.INVALID_CREDENTIALS),
+          () => sendError(res, 401, 'Wrong username, email or password.', ErrorCodes.INVALID_CREDENTIALS),
           jitter,
         );
       }
@@ -330,7 +339,7 @@ export default function createAuthRoutes(deps: any): Router {
         log.info('account:reactivated', { userId: user.id, username: user.username, restoredProfiles });
       }
 
-      const token = await createUserSession(user.id, user.username);
+      const token = await createUserSession(user.id, user.username, deviceOf(req));
       setNoStore(res);
       setUserSessionCookie(res, token);
       const refreshToken = await issueRefreshToken(user.id, token, deps);
@@ -427,7 +436,7 @@ export default function createAuthRoutes(deps: any): Router {
         // Disconnect sockets still using the old token to prevent stale connections
         disconnectSessionTokens([req.userToken], io);
       }
-      const token = await createUserSession(req.user.userId, req.user.username);
+      const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req));
       setUserSessionCookie(res, token);
       const { serializePublicUser } = deps;
       const user = await getUserById(req.user.userId);
@@ -472,7 +481,7 @@ export default function createAuthRoutes(deps: any): Router {
         }
 
         // Issue new session token
-        const newSessionToken = await createUserSession(user.id, user.username);
+        const newSessionToken = await createUserSession(user.id, user.username, deviceOf(req));
         setUserSessionCookie(res, newSessionToken);
 
         // Rotate refresh token (old one marked revoked, new one issued)
@@ -520,6 +529,7 @@ export default function createAuthRoutes(deps: any): Router {
         createdAt: new Date(s.createdAt).toISOString(),
         lastAccess: new Date(s.lastAccess).toISOString(),
         current: s.token === currentTokenHash,
+        device: s.deviceLabel ?? null,
       }));
       return sendSuccess(res, items);
     } catch (error: any) {
@@ -614,7 +624,7 @@ export default function createAuthRoutes(deps: any): Router {
           return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
         }
         if (!(await verifyPassword(currentPassword, user.passwordHash))) {
-          return sendError(res, 400, 'Current password incorrect', ErrorCodes.PASSWORD_INCORRECT);
+          return sendError(res, 400, 'Your current password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
         }
 
         // Update password in database
@@ -633,7 +643,7 @@ export default function createAuthRoutes(deps: any): Router {
         // token for the address already on file survives.
         await stores.emailTokens.invalidatePendingEmailChanges(req.user.userId, user.email ?? null);
         disconnectUserSockets(req.user.userId, io);
-        const token = await createUserSession(req.user.userId, req.user.username);
+        const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req));
         setNoStore(res);
         setUserSessionCookie(res, token);
         // H4: body token only for the native bearer client (see login).
