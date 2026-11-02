@@ -4,6 +4,7 @@ import {
   festivalPhase,
   groupFestivalsByStatus,
   festivalTimeLabel,
+  festivalLoadState,
   isFestivalOver,
   hasSetStarted,
   isValidTimeZone,
@@ -289,5 +290,33 @@ describe('sortFestivalsForPicker / pickDefaultFestival', () => {
 
   it('returns the most recent festival when all are past', () => {
     expect(pickDefaultFestival([oldPast, recentPast], now)?.id).toBe('recent');
+  });
+});
+
+describe('festivalLoadState', () => {
+  const base = { currentFestival: null, festivals: [{ id: 'a' }], isLoading: false, error: null };
+
+  it('is ready when a festival is current', () => {
+    expect(festivalLoadState({ ...base, currentFestival: { id: 'a' } })).toBe('ready');
+  });
+
+  it('is loading while the store loads', () => {
+    expect(festivalLoadState({ ...base, isLoading: true })).toBe('loading');
+  });
+
+  it('is error when the load failed', () => {
+    expect(festivalLoadState({ ...base, error: 'Network down' })).toBe('error');
+  });
+
+  it('is loading before the catalogue has arrived', () => {
+    expect(festivalLoadState({ ...base, festivals: [] })).toBe('loading');
+  });
+
+  it('is none when festivals exist but none is chosen', () => {
+    expect(festivalLoadState(base)).toBe('none');
+  });
+
+  it('a set currentFestival beats error and isLoading', () => {
+    expect(festivalLoadState({ ...base, currentFestival: { id: 'a' }, isLoading: true, error: 'x' })).toBe('ready');
   });
 });

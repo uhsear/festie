@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SHARE_EXPLAINER_SEEN_KEY } from '@festie/shared/hooks';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // --- Mocks ------------------------------------------------------------------
@@ -94,8 +94,9 @@ beforeEach(() => {
 describe('LiveLocationControls — share toggle', () => {
   it('renders an accessible, labelled, OFF-by-default switch', () => {
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
-    const sw = screen.getByRole('switch');
+    const sw = screen.getByRole('switch', { name: LIVE_SHARE_COPY.switchA11y });
     expect(sw).toHaveAccessibleName('Share my live location with this crew');
+    expect(sw).toHaveAccessibleDescription(LIVE_SHARE_COPY.ruleWeb);
     expect(sw).toHaveAttribute('aria-checked', 'false');
     expect(screen.queryByTestId('sharing-indicator')).not.toBeInTheDocument();
     expect(screen.queryByTestId('live-share-chooser')).not.toBeInTheDocument();
@@ -300,6 +301,19 @@ describe('LiveLocationControls — active SOS banner', () => {
 
     expect(clearCrewSosSpy).toHaveBeenCalledWith(CREW_ID, ME);
     expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/sos cleared/i), 'success');
+  });
+
+  it('returns focus to the resolve button on Escape', async () => {
+    const user = userEvent.setup();
+    setSos([{ ...baseSos }]);
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    const opener = screen.getByRole('button', { name: /mark dana's sos resolved/i });
+    await user.click(opener);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(clearCrewSosSpy).not.toHaveBeenCalled();
   });
 
   it('shows the shared error line when the clear fails', async () => {

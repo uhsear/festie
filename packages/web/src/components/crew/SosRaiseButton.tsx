@@ -8,6 +8,7 @@ import { raiseSos, sosErrorMessage, isApiClientError } from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
+import { useReturnFocus } from '../../hooks/useReturnFocus';
 import { inputBase } from '../../lib/styles';
 
 interface Props {
@@ -45,6 +46,7 @@ function oneShotPosition(): Promise<{ lat: number; lng: number; accuracy?: numbe
 export default function SosRaiseButton({ crewId, compact = false, alerting = false }: Props) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const returnFocus = useReturnFocus();
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   // Reactively track prefers-reduced-motion so the ring class stays in sync
@@ -105,8 +107,8 @@ export default function SosRaiseButton({ crewId, compact = false, alerting = fal
 
       <Dialog.Root open={open} onOpenChange={(o: boolean) => !busy && setOpen(o)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
+          <Dialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
+          <Dialog.Content {...returnFocus} className="fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <Dialog.Title className="flex items-center gap-2 text-base font-bold text-text-primary">

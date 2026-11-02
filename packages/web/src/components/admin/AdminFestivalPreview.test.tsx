@@ -50,4 +50,11 @@ describe('AdminFestivalPreview', () => {
     expect(mockPreview).toHaveBeenCalledWith('f1');
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it('draws the warning with theme amber tokens, not palette amber', async () => {
+    render(<AdminFestivalPreview festivalId="f1" />);
+    const warning = (await screen.findByText('1 stage has no map pin: Circuit.')).closest('ul')!;
+    expect(warning.className).not.toMatch(/amber-\d/);
+    expect(warning.className).toContain('text-accent-amber');
+  });
 });

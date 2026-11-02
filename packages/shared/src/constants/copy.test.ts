@@ -89,10 +89,10 @@ describe('also plays copy', () => {
     expect(COPY.alsoPlays.picked).toBe('In your picks');
     expect(COPY.alsoPlays.catchInstead('A', 'Sat')).toBe('Catch A on Sat instead');
     expect(COPY.alsoPlays.catchInsteadA11y('A', 'Sat 9:00 PM')).toBe(
-      'Catch A Sat 9:00 PM instead, and remove this slot from your picks',
+      'Catch A Sat 9:00 PM instead, and remove this set from your picks',
     );
     expect(COPY.alsoPlays.caught('A', 'Sat 9:00 PM')).toBe('Catching A Sat 9:00 PM instead.');
-    expect(COPY.alsoPlays.gone).toBe('That other slot is no longer free. Pick another fix.');
+    expect(COPY.alsoPlays.gone).toBe('That other set is no longer free. Pick another fix.');
   });
   it('never says "Log in"', () => {
     const strings = [

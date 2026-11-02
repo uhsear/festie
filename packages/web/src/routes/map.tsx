@@ -6,7 +6,10 @@ import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { Map as MapIcon } from 'lucide-react';
+import { COPY } from '@festie/shared/constants';
+import { festivalLoadState } from '@festie/shared/utils';
 import EmptyState from '../components/ui/EmptyState';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 
 // Lazy: CrewMap pulls in maplibre-gl, so it stays out of the main bundle.
@@ -58,7 +61,7 @@ function MapViewInner() {
   }, [hasCrew]);
 
   // Same key and fetcher as MeetingPointsTab, so both share one cache entry.
-  const { data: points = NO_POINTS } = useQuery<CrewMeetingPoint[]>({
+  const { data: points = NO_POINTS, isError: pointsFailed, refetch: refetchPoints } = useQuery<CrewMeetingPoint[]>({
     queryKey: ['meeting-points', crewId],
     queryFn: async () => {
       const res = await api.get<CrewMeetingPoint[] | { meetingPoints: CrewMeetingPoint[] }>(
@@ -69,12 +72,20 @@ function MapViewInner() {
     enabled: hasCrew,
   });
 
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
+    if (loadState === 'error') {
+      return (
+        <div className="px-4">
+          <FestivalLoadError />
+        </div>
+      );
+    }
     return (
       <div className="px-4">
         <EmptyState
           icon={<MapIcon className="w-12 h-12" aria-hidden="true" />}
-          title="No festival selected"
+          title={COPY.festivalLoad.noneTitle}
           description="Pick a festival on the Lineup tab to see its map."
         />
       </div>
@@ -101,6 +112,14 @@ function MapViewInner() {
           canvasClassName="h-[calc(100dvh-var(--bottom-nav-h,0px)-11rem)] min-h-[320px]"
         />
       </Suspense>
+      {hasCrew && pointsFailed && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
+          <p role="alert">{COPY.meetingPoint.loadFailed}</p>
+          <button type="button" className="min-h-11 underline" onClick={() => void refetchPoints()}>
+            {COPY.festivalLoad.retry}
+          </button>
+        </div>
+      )}
       {!hasCrew && (
         <p className="text-sm text-text-muted">
           {user ? (

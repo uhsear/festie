@@ -10,7 +10,7 @@ import {
   resolveStageColor,
   type ComparedSet,
 } from '@festie/shared/utils';
-import { PRIORITY_LABEL } from '@festie/shared/constants';
+import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import StageBadge from '../components/ui/StageBadge';
@@ -193,12 +193,12 @@ function FriendPicksInner() {
       </header>
 
       {!user ? (
-        <Banner text="Sign in to compare these picks with yours.">
+        <Banner text={signInTo('compare these picks with yours')}>
           <button type="button" className="btn-primary min-h-11 px-4" onClick={() => navigate({ to: '/login' })}>
-            Log in
+            {COPY.auth.signIn}
           </button>
           <button type="button" className="btn-secondary min-h-11 px-4" onClick={() => navigate({ to: '/register' })}>
-            Sign up
+            {COPY.auth.createAccount}
           </button>
         </Banner>
       ) : otherFestival ? (

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 const h = vi.hoisted(() => ({
   festival: null as unknown,
@@ -10,6 +10,11 @@ const h = vi.hoisted(() => ({
   setActiveCrew: vi.fn(),
   search: {} as { focusStage?: string },
   navigate: vi.fn(),
+  error: null as string | null,
+  queryError: false,
+  refetch: vi.fn(),
+  loadFestivals: vi.fn(),
+  selectFestival: vi.fn(),
 }));
 
 vi.mock('@festie/shared', () => ({ api: { get: vi.fn() } }));
@@ -17,7 +22,15 @@ vi.mock('@festie/shared', () => ({ api: { get: vi.fn() } }));
 vi.mock('@festie/shared/stores', () => {
   const pick = (value: () => unknown) => (sel: (s: unknown) => unknown) => sel(value());
   return {
-    useFestivalStore: (sel: (s: unknown) => unknown) => sel({ currentFestival: h.festival, stages: [] }),
+    useFestivalStore: (sel: (s: unknown) => unknown) => sel({
+      currentFestival: h.festival,
+      stages: [],
+      festivals: [],
+      isLoading: false,
+      error: h.error,
+      loadFestivals: h.loadFestivals,
+      selectFestival: h.selectFestival,
+    }),
     useAuthStore: pick(() => ({ user: h.user })),
     useCrewStore: pick(() => ({ activeCrew: h.crew })),
   };
@@ -33,7 +46,7 @@ vi.mock('@festie/shared/stores/liveLocationStore', () => {
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (opts: unknown) => {
     h.useQuery(opts);
-    return { data: [{ id: 'mp1', label: 'Gate' }] };
+    return { data: [{ id: 'mp1', label: 'Gate' }], isError: h.queryError, refetch: h.refetch };
   },
 }));
 
@@ -62,6 +75,8 @@ beforeEach(() => {
   h.user = null;
   h.crew = null;
   h.search = {};
+  h.error = null;
+  h.queryError = false;
 });
 
 describe('MapView', () => {
@@ -70,6 +85,25 @@ describe('MapView', () => {
     render(<MapView />);
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
     expect(screen.queryByTestId('crew-map')).not.toBeInTheDocument();
+  });
+
+  it('shows the load error and a retry when the festival list failed', () => {
+    h.festival = null;
+    h.error = 'Network down';
+    render(<MapView />);
+    expect(screen.getByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('shows an alert and a retry when meeting points fail to load', () => {
+    h.user = { id: 'u1' };
+    h.crew = { id: 'c1' };
+    h.queryError = true;
+    render(<MapView />);
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load meeting points.");
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(h.refetch).toHaveBeenCalled();
   });
 
   it('renders the map for a guest with no meeting points and the guest line', async () => {

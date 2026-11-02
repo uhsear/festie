@@ -8,9 +8,10 @@ import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
-import { buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
+import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
 import RefreshableView from '../components/layout/RefreshableView';
@@ -146,14 +147,15 @@ function PicksViewInner() {
 
   const guestBanner = user ? null : <GuestPicksBanner />;
 
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
     return (
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
-        <EmptyState
+        {loadState === 'error' ? <FestivalLoadError /> : <EmptyState
           icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
           title="No festival selected"
           description="Choose a festival from the top menu to start saving picks."
-        />
+        />}
       </div>
     );
   }
@@ -377,7 +379,7 @@ function PicksViewInner() {
             title={clashOnlyEmpty ? COPY.clash.none : 'No matching picks'}
             description={
               clashOnlyEmpty
-                ? "Nothing on your plan overlaps — you're all set."
+                ? COPY.clash.noneBody
                 : trimmedSearch
                   ? `Nothing matches “${trimmedSearch}”.`
                   : 'No picks in this view.'

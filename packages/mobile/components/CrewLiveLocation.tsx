@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Switch, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useCrewStore, useFestivalStore, useLiveLocationStore } from '@festie/shared/stores';
@@ -32,6 +32,7 @@ import {
   type LiveShareOption,
 } from '@festie/shared/utils';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
+import AppSwitch from './AppSwitch';
 import { useHaptics } from '../hooks/useHaptics';
 import { useNow } from '../hooks/useNow';
 import { BACKGROUND_SHARE_AVAILABLE } from '../lib/backgroundShare';
@@ -213,13 +214,10 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
           <Text style={styles.rowTitle}>{LIVE_SHARE_COPY.title}</Text>
           <Text style={styles.rowSub}>{LIVE_SHARE_COPY.ruleNative}</Text>
         </View>
-        <Switch
+        <AppSwitch
           value={sharing || choosing}
           onValueChange={onToggle}
           disabled={busy}
-          trackColor={{ false: t.colors.border.light, true: t.colors.aquaAlpha[30] }}
-          ios_backgroundColor={t.colors.border.light}
-          thumbColor={sharing || choosing ? t.colors.accent.aqua : t.colors.text.muted}
           accessibilityRole="switch"
           accessibilityLabel={LIVE_SHARE_COPY.switchA11y}
           accessibilityState={{ checked: sharing || choosing, disabled: busy }}
@@ -273,12 +271,9 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
                   <Text style={styles.rowTitle}>{LIVE_SHARE_COPY.battery}</Text>
                   <Text style={styles.rowSub}>{LIVE_SHARE_COPY.batteryHint}</Text>
                 </View>
-                <Switch
+                <AppSwitch
                   value={shareBattery}
                   onValueChange={setShareBattery}
-                  trackColor={{ false: t.colors.border.light, true: t.colors.aquaAlpha[30] }}
-                  ios_backgroundColor={t.colors.border.light}
-                  thumbColor={shareBattery ? t.colors.accent.aqua : t.colors.text.muted}
                   accessibilityRole="switch"
                   accessibilityLabel={LIVE_SHARE_COPY.battery}
                   accessibilityState={{ checked: shareBattery }}
@@ -290,12 +285,9 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
                     <Text style={styles.rowTitle}>{LIVE_SHARE_COPY.keepLocked}</Text>
                     <Text style={styles.rowSub}>{LIVE_SHARE_COPY.keepLockedHint}</Text>
                   </View>
-                  <Switch
+                  <AppSwitch
                     value={keepLocked}
                     onValueChange={setKeepLocked}
-                    trackColor={{ false: t.colors.border.light, true: t.colors.aquaAlpha[30] }}
-                    ios_backgroundColor={t.colors.border.light}
-                    thumbColor={keepLocked ? t.colors.accent.aqua : t.colors.text.muted}
                     accessibilityRole="switch"
                     accessibilityLabel={LIVE_SHARE_COPY.keepLocked}
                     accessibilityState={{ checked: keepLocked }}

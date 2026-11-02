@@ -9,12 +9,14 @@ import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   resolveStageColor,
   artistDisplayName,
+  festivalLoadState,
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
 } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import TimelineGrid from '../features/TimelineGrid';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import TBASection from '../components/timeline/TBASection';
@@ -178,12 +180,14 @@ function GridViewInner() {
     [currentFestival, savePick, clearPick, allDaySets, toast],
   );
 
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
+    if (loadState === 'error') return <FestivalLoadError />;
     return (
       <EmptyState
         icon={<CalendarX className="w-12 h-12" aria-hidden="true" />}
-        title="No festival loaded"
-        description="Choose a festival from the top menu to see the schedule grid."
+        title={COPY.festivalLoad.noneTitle}
+        description="Choose a festival on the Lineup tab to see the schedule grid."
       />
     );
   }
@@ -324,7 +328,7 @@ function GridViewInner() {
                 'shadow-[var(--shadow-glow-aqua),0_1px_3px_rgba(0,0,0,0.25)]',
                 'transition-[transform,box-shadow] duration-150',
                 'ease-out',
-                'hover:shadow-[0_8px_24px_rgba(0,232,208,0.45),0_1px_4px_rgba(0,0,0,0.3)]',
+                'hover:shadow-[0_8px_24px_var(--color-aqua-a4),0_1px_4px_rgba(0,0,0,0.3)]',
                 'active:scale-[0.96]',
               )}
               aria-label={COPY.jumpToNow.a11y}

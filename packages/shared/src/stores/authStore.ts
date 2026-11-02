@@ -235,7 +235,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
       void useFestivalDataStore.getState().mergeGuestPicks().catch(() => {});
       return { reactivated: response.reactivated === true };
     } catch (err) {
-      const message = mapErrorToUserMessage(err, 'Login failed');
+      const message = mapErrorToUserMessage(err, "Couldn't sign in. Try again.");
       set({ error: message, isLoading: false });
       throw err;
     }
