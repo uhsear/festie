@@ -1328,3 +1328,45 @@ describe('routes/crew-members.js -- feed rows and pushes', () => {
     assert.equal(row.detail, 'Maya');
   });
 });
+
+// =====================================================================
+//  T41: removing a member drops their live marker once, socket or HTTP
+// =====================================================================
+describe('routes/crew-members.js -- live location on removal', () => {
+  test('kick emits one location:peer-stopped with reason revoked and drops the cached fix', async () => {
+    const emitFn = mock.fn(() => {});
+    const ioObj = {
+      to: mock.fn(() => ({ emit: emitFn })),
+      // The removed member holds no sharing socket (an HTTP background sharer).
+      in: mock.fn(() => ({ fetchSockets: async () => [] })),
+    };
+    const hdel = mock.fn(async () => 1);
+    const deps: any = makeDeps({
+      io: ioObj,
+      stores: {
+        crews: {
+          getById: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getMember: mock.fn(async () => ({ userId: 'user-2', role: 'member' })),
+          removeMember: mock.fn(async () => {}),
+        },
+      },
+      resolveCrewOwnership: mock.fn(async () => ({ crew: { ...DEFAULT_CREW }, membership: { role: 'owner' } })),
+    });
+    deps.redis = { hdel };
+    const { default: createCrewMemberRoutes } = await import('../routes/crew-members.js');
+    const app = express();
+    app.use(express.json());
+    app.use('/', createCrewMemberRoutes(deps));
+
+    const res = await request(app).delete('/crew-1/members/user-2');
+
+    assert.equal(res.status, 200);
+    const stops = (emitFn.mock.calls as any[]).filter((c) => c.arguments[0] === 'location:peer-stopped');
+    assert.equal(stops.length, 1);
+    assert.deepEqual(stops[0].arguments[1], { _v: 1, crewId: 'crew-1', userId: 'user-2', reason: 'revoked' });
+    const toRooms = (ioObj.to.mock.calls as any[]).map((c) => c.arguments[0]);
+    assert.ok(toRooms.every((r) => r === 'crew:crew-1'));
+    assert.equal(hdel.mock.calls.length, 1);
+    assert.deepEqual((hdel.mock.calls as any[])[0].arguments, ['loc:pos:crew-1', 'user-2']);
+  });
+});

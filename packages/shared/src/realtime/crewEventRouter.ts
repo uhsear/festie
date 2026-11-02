@@ -318,8 +318,10 @@ export function routeActivityLogged(
 export function routeLocationPeerUpdate(
   payload: LocationPeerUpdatePayload,
   activeCrewId: string | null,
+  selfUserId?: string | null,
 ): LocationPeerUpdateIntent | null {
   if (!matchesActiveCrew(payload?.crewId, activeCrewId)) return null;
+  if (selfUserId && selfUserId === payload.userId) return null;
   return {
     kind: 'location-peer-update',
     crewId: payload.crewId,

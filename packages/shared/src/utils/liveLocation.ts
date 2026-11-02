@@ -51,6 +51,18 @@ export function shouldPublishLocation(
   return Number.isFinite(moved) && moved > LIVE_LOCATION.MIN_MOVE_METERS;
 }
 
+export type BackgroundFixDecision = 'send' | 'skip' | 'expire';
+
+/** What the mobile background task does with a fix: stop at the end time, else apply the publish throttle. */
+export function decideBackgroundFix(
+  state: { expiresAtMs: number; lastSentCoord: LatLng | null; lastSentAt: number | null },
+  next: LatLng,
+  now: number,
+): BackgroundFixDecision {
+  if (now >= state.expiresAtMs) return 'expire';
+  return shouldPublishLocation(state.lastSentCoord, next, state.lastSentAt, now) ? 'send' : 'skip';
+}
+
 /**
  * Whether a peer's last fix is "stale" — older than the freshness window but not
  * yet swept (peers are removed entirely past STALE_MS). Drives the Snap Map-style

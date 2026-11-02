@@ -119,7 +119,8 @@ const OFFLINE_ELIGIBLE_PATTERNS: RegExp[] = [
   // Saw it / Skipped marks: PUT /ratings/:setId/caught with clientId caught-<userId>-<setId>.
   /^\/ratings\/[^/]+\/caught$/,
   // DELIBERATELY ABSENT: /crews/:id/sos, /sos/clear, /sos/seen and
-  // /crews/:id/checkin (start and done). An SOS must be ONLINE-ONLY, and so
+  // /crews/:id/checkin (start and done), and /crews/:id/live-location (a queued
+  // fix would replay a stale position hours later). An SOS must be ONLINE-ONLY, and so
   // must a check-in timer. Queuing it would let a "rescue" replay hours later when signal
   // returns — dangerous and misleading. The safe failure here is to TELL the
   // user ("No signal — SOS not sent, use phone/radio"), not to silently queue.

@@ -12,3 +12,4 @@ export * from './adminFestivalTools';
 export * from './checkin';
 export * from './ratings';
 export * from './announcements';
+export * from './liveLocation';

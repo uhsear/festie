@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { parseJsonObject } from '../lib/db/connection';
 import { logCrewActivity } from '../lib/db/stores/activity';
+import { dropLivePosition } from '../lib/live-location-cache.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 
 export default function createCrewMemberRoutes(deps: any) {
@@ -20,6 +21,7 @@ export default function createCrewMemberRoutes(deps: any) {
     validateQuery,
     validateParams,
     io,
+    redis,
     crewNotify,
     getRequestIp,
   } = deps;
@@ -37,7 +39,8 @@ export default function createCrewMemberRoutes(deps: any) {
    * sos:raised broadcast (a cross-tenant privacy leak), and keeps a stamped
    * sharingCrewId it could inject from. Force the socket out of the room, clear
    * its crew/sharing stamps, tell peers to drop its live marker (it may have
-   * been sharing), and tell the evicted client to tear down its crew + SOS UI.
+   * been sharing over a socket or over HTTP), and tell the evicted client to
+   * tear down its crew + SOS UI.
    *
    * Best-effort: a failure here must never fail the HTTP removal (the DB row is
    * already gone). io may be absent in some test/CLI contexts.
@@ -52,9 +55,18 @@ export default function createCrewMemberRoutes(deps: any) {
   const EVICTION_TIMEOUT_MS = 3_000;
 
   async function evictUserFromCrewRoom(crewId: string, removedUserId: string) {
+    // A background (HTTP) sharer has no sharing socket, so evict the cached fix
+    // and tell peers to drop the marker once, whatever sockets the user holds.
+    void dropLivePosition(redis, crewId, removedUserId);
     if (!io || typeof io.in !== 'function') return;
     const room = `crew:${crewId}`;
     try {
+      io.to(room).emit('location:peer-stopped', {
+        _v: 1,
+        crewId,
+        userId: removedUserId,
+        reason: 'revoked',
+      });
       // fetchSockets() goes through the Redis adapter, which issues PUBSUB NUMSUB
       // on the pub connection. That connection now buffers while Redis is
       // unavailable (the offline queue is ON for pub/sub clients — see
@@ -69,15 +81,6 @@ export default function createCrewMemberRoutes(deps: any) {
       ]);
       for (const s of sockets) {
         if (s.data?.userId !== removedUserId) continue;
-        // If this socket was sharing live GPS, tell peers its marker is gone.
-        if (s.data?.sharingCrewId === crewId) {
-          s.to(room).emit('location:peer-stopped', {
-            _v: 1,
-            crewId,
-            userId: removedUserId,
-            reason: 'revoked',
-          });
-        }
         // Tell the evicted client to tear down crew + SOS state.
         s.emit('crew:access-revoked', { crewId });
         // Clear the sharing stamp so the socket can no longer inject location

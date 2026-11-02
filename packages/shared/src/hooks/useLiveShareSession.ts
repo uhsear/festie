@@ -15,6 +15,7 @@ function isPermissionDenied(err: unknown): boolean {
 /**
  * Runs the user's live-share session from the shared store, so no screen change
  * stops it. Mount once, app-wide. Pause stops the publisher but not the end timer.
+ * A background intent turns the socket publisher off, but the end timer and low-power rule still apply.
  */
 export function useLiveShareSession({ socket, watchPosition }: { socket: Socket | null; watchPosition: GeoWatcher }): void {
   const intent = useLiveLocationStore((s) => s.shareIntent);
@@ -36,7 +37,7 @@ export function useLiveShareSession({ socket, watchPosition }: { socket: Socket 
   useLiveLocationPublisher({
     socket,
     crewId: intent?.crewId ?? null,
-    enabled: !!intent && !intent.paused,
+    enabled: !!intent && !intent.paused && !intent.background,
     watchPosition,
     expiresAt: intent?.expiresAt,
     shareBattery: intent?.shareBattery ?? false,
