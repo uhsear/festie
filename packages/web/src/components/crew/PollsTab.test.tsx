@@ -45,12 +45,13 @@ function renderTab() {
 }
 
 describe('PollsTab cap', () => {
-  it('disables both create buttons at 3 open polls and shows the cap text', async () => {
+  it('disables every create button at 3 open polls and shows the cap text', async () => {
     apiGet.mockResolvedValue({ polls: [poll('1'), poll('2'), poll('3')] });
     renderTab();
     const create = await screen.findByRole('button', { name: /Create Poll/ });
     expect(create).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Schedule poll/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Which set\?/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Meet where\?/ })).toBeDisabled();
     expect(screen.getByText('Close a poll to start another. A crew can have 3 open polls.')).toBeInTheDocument();
   });
 
