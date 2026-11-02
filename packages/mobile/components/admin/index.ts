@@ -25,3 +25,6 @@ export type {
   HexColorFieldProps,
   DateTimeFieldProps,
 } from './AdminFields';
+
+export { default as ShiftTimesDialog } from './ShiftTimesDialog';
+export type { ShiftTimesDialogProps } from './ShiftTimesDialog';

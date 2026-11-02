@@ -250,3 +250,24 @@ export function listTimeZones(current?: string | null): string[] {
   if (isValidTimeZone(current) && !zones.includes(current)) zones.push(current);
   return zones;
 }
+
+/**
+ * Group festivals for a picker. Live and upcoming: soonest start first. Past:
+ * most recent start first. Undated (no usable dates): name order.
+ */
+export function groupFestivalsByStatus<F extends Festival & { startDate?: string | null; endDate?: string | null }>(
+  festivals: F[],
+  now: Date = new Date(),
+): { live: F[]; upcoming: F[]; past: F[]; undated: F[] } {
+  const groups = { live: [] as F[], upcoming: [] as F[], past: [] as F[], undated: [] as F[] };
+  for (const f of festivals) {
+    const status = festivalStatus(f, undefined, now);
+    groups[status === 'ongoing' ? 'live' : (status ?? 'undated')].push(f);
+  }
+  const start = (f: F) => f.startDate ?? '';
+  groups.live.sort((a, b) => start(a).localeCompare(start(b)));
+  groups.upcoming.sort((a, b) => start(a).localeCompare(start(b)));
+  groups.past.sort((a, b) => start(b).localeCompare(start(a)));
+  groups.undated.sort((a, b) => a.name.localeCompare(b.name));
+  return groups;
+}

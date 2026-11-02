@@ -26,10 +26,13 @@ const storeState = {
   currentProfile: { id: 'p1' } as { id: string } | null,
   onlyMine: false,
   setOnlyMine: vi.fn(),
+  isLoading: false,
 };
+const authState = { user: { id: 'u1' } as { id: string } | null };
 
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (selector: (s: typeof storeState) => unknown) => selector(storeState),
+  useAuthStore: (selector: (s: typeof authState) => unknown) => selector(authState),
 }));
 
 vi.mock('@festie/shared/hooks', () => ({
@@ -98,7 +101,7 @@ describe('SubHeader layout density', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     const tabs = screen.getByRole('group', { name: 'Festival days' });
     expect(tabs.className).toContain('gap-[var(--space-3)]');
-    expect(screen.getByRole('button', { name: 'Day: Fri' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Day: Fri, May 29' })).toBeInTheDocument();
   });
 
   it('hides day tabs and search when festivalOnly is set (behavior preserved)', () => {
@@ -147,6 +150,28 @@ describe('SubHeader My picks toggle', () => {
     expect(btn).toHaveAttribute('aria-pressed', 'true');
     btn.click();
     expect(storeState.setOnlyMine).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('SubHeader day chips and picks placeholder', () => {
+  afterEach(() => {
+    storeState.currentProfile = { id: 'p1' };
+    storeState.isLoading = false;
+    vi.clearAllMocks();
+  });
+
+  it('shows the date beside the label and puts it in the aria-label', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const chip = screen.getByRole('button', { name: 'Day: Fri, May 29' });
+    expect(chip).toHaveTextContent('FriMay 29');
+  });
+
+  it('holds the My picks place with a placeholder while the profile loads', () => {
+    storeState.currentProfile = null;
+    storeState.isLoading = true;
+    const { container } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Show only my picks' })).not.toBeInTheDocument();
+    expect(container.querySelector('.skeleton-shimmer.w-\\[104px\\]')).toBeInTheDocument();
   });
 });
 

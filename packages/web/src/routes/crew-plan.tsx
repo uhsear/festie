@@ -4,6 +4,7 @@ import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/sto
 import {
   artistDisplayName,
   formatTime,
+  formatSetTimeRange,
   pickActiveMeetingPoint,
   buildSlots,
   resolveFestivalTimeZone,
@@ -220,6 +221,7 @@ function CrewPlanInner() {
                           </span>
                           <span className="truncate">
                             <span className="text-text-primary font-medium">{artistDisplayName(g.set)}</span>
+                            <span className="text-text-secondary tabular-nums"> · {formatSetTimeRange(g.set) || 'TBA'}</span>
                             {stageName && <span className="text-text-secondary"> · {stageName}</span>}
                             <span className="text-text-secondary"> · {memberSummary(g.names)}</span>
                           </span>

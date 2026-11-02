@@ -1,13 +1,11 @@
-import React, { memo, useRef, useState, useEffect, useMemo } from 'react';
-import { Play, Square, AlertTriangle, StickyNote, Clock } from 'lucide-react';
+import React, { memo, useRef, useState, useMemo } from 'react';
+import { Play, AlertTriangle, StickyNote, Clock } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { usePicks, usePickSync } from '@festie/shared/hooks';
-import { formatTime, artistDisplayName, artistSubtitle, festivalPhase, PRIORITY_RANK } from '@festie/shared/utils';
+import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
-import { api } from '@festie/shared/services/api';
 import { useSetStatus } from '@/hooks/useSetStatus';
-import { useToast } from '@/lib/toastContext';
 import { useHaptics } from '@/hooks/useHaptics';
 import { cn } from '@/lib/utils';
 import LiveBadge from './LiveBadge';
@@ -15,19 +13,13 @@ import PriorityIcon from '../ui/PriorityIcon';
 import CrewOverlapAvatars from './CrewOverlapAvatars';
 import { ensureWhiteContrast } from '../ui/StageBadge';
 
-interface SpotifyPreviewResponse {
-  /** Direct mp3 URL if the backend has one. */
-  url?: string;
-  /** Fallback embed URL (real /spotify/preview/:setId response shape). */
-  embedUrl?: string;
-  embedType?: 'track' | 'artist' | null;
-}
-
 interface SetCardProps {
   set: FestivalSet;
   onTap: () => void;
   onPreview?: () => void;
   showPicks?: boolean;
+  /** True while the profile loads: grey placeholders hold the pick buttons' place. */
+  picksLoading?: boolean;
   stageName?: string;
   stageColor?: string;
   friendProfiles?: Array<{
@@ -53,6 +45,7 @@ function SetCard({
   onTap,
   onPreview,
   showPicks = true,
+  picksLoading = false,
   stageName = set.stageName || 'Unknown',
   stageColor = 'var(--color-accent-coral)',
   friendProfiles = [],
@@ -67,37 +60,14 @@ function SetCard({
   // already persisted (Foundations F1), so the cluster renders offline.
   const allProfiles = useFestivalStore((state) => state.allProfiles);
   const crewMembers = useCrewStore((state) => state.crewMembers);
-  const { toast } = useToast();
   const { tap, select, warning } = useHaptics();
   const [saving, setSaving] = useState(false);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewPlaying, setPreviewPlaying] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioListenersRef = useRef<{ ended: () => void; error: () => void } | null>(null);
   const setStatus = useSetStatus(set);
   const days = useFestivalStore((state) => state.days);
   // Dim ended sets only while the festival is running; before/after, every set reads the same.
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [spotlightPos, setSpotlightPos] = useState({ x: '50%', y: '50%' });
-
-  // Cleanup audio element and its event listeners on unmount to prevent leaks.
-  useEffect(() => {
-    return () => {
-      const audio = audioRef.current;
-      if (audio) {
-        audio.pause();
-        audio.src = '';
-        if (audioListenersRef.current) {
-          audio.removeEventListener('ended', audioListenersRef.current.ended);
-          audio.removeEventListener('error', audioListenersRef.current.error);
-        }
-        audioRef.current = null;
-        audioListenersRef.current = null;
-      }
-    };
-  }, []);
 
   // R12: Spotlight hover effect — mousemove listener updates CSS vars
   // for radial gradient spotlight. Desktop-only via @media (hover: hover).
@@ -172,61 +142,6 @@ function SetCard({
     }
   };
 
-  const handlePreviewClick = async (e: React.MouseEvent) => {
-    // Keep the outer card-click handler from firing (task: don't open detail).
-    e.stopPropagation();
-    e.preventDefault();
-
-    // Toggle stop if already playing.
-    if (previewPlaying && audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setPreviewPlaying(false);
-      return;
-    }
-
-    setPreviewError(null);
-    setPreviewLoading(true);
-    try {
-      const data = await api.get<SpotifyPreviewResponse>(`/spotify/preview/${set.id}`);
-      // Prefer a direct mp3 URL (task contract). Fall back to the real
-      // /spotify/preview response shape which returns embedUrl for non-mp3
-      // Spotify embeds — we can't inline-play those via <audio>, so surface
-      // a friendly "No preview" and let users open the detail panel.
-      const src = data?.url;
-      if (!src) {
-        if (data?.embedType) {
-          // No 30-sec clip but Spotify embed is available — open detail panel
-          // with Spotify auto-expanded (via onPreview), or fall back to onTap.
-          (onPreview ?? onTap)();
-        } else {
-          setPreviewError('No preview');
-          toast('No preview available', 'info');
-        }
-        return;
-      }
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-        const onEnded = () => setPreviewPlaying(false);
-        const onError = () => {
-          setPreviewPlaying(false);
-          setPreviewError('Playback failed');
-        };
-        audioRef.current.addEventListener('ended', onEnded);
-        audioRef.current.addEventListener('error', onError);
-        audioListenersRef.current = { ended: onEnded, error: onError };
-      }
-      audioRef.current.src = src;
-      await audioRef.current.play();
-      setPreviewPlaying(true);
-    } catch {
-      setPreviewError('No preview');
-      toast('No preview available', 'info');
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
   return (
     <div
       ref={cardRef}
@@ -292,31 +207,27 @@ function SetCard({
         }}
       />
 
-      {/* Spotify preview button — top-right corner, above click target */}
-      {set.artists?.some((a) => a.links?.spotify) && (
+      {/* Listen pill — top-right corner, above click target. Opens the set with the player open. */}
+      {primarySpotifyArtist(set) && (
         <button
           className={cn(
             'card-preview-btn',
             'absolute top-2 right-2 z-[2]',
-            'border',
-            previewPlaying
-              ? 'bg-spotify/20 border-spotify/40 text-spotify'
-              : 'bg-[var(--color-overlay-3)] border-border-light text-text-secondary hover:text-text-primary',
-            'rounded-full w-11 h-11 text-sm cursor-pointer',
+            'border bg-[var(--color-overlay-3)] border-border-light text-text-secondary hover:text-text-primary',
+            'min-h-11 px-3 gap-1.5 rounded-full text-sm font-medium cursor-pointer',
             'flex items-center justify-center',
             'transition-[background-color,border-color] duration-150',
           )}
           type="button"
-          aria-label={previewPlaying ? `Stop preview for ${artistName}` : `Preview ${artistName}`}
-          title={previewError || (previewPlaying ? 'Stop preview' : 'Play preview')}
-          disabled={previewLoading}
-          onClick={handlePreviewClick}
+          aria-label={`Listen to ${artistName}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            tap();
+            (onPreview ?? onTap)();
+          }}
         >
-          {previewPlaying ? (
-            <Square className="w-4 h-4" fill="currentColor" aria-hidden="true" />
-          ) : (
-            <Play className="w-4 h-4" fill="currentColor" aria-hidden="true" />
-          )}
+          <Play className="w-4 h-4" fill="currentColor" aria-hidden="true" />
+          Listen
         </button>
       )}
 
@@ -376,7 +287,7 @@ function SetCard({
         )}
       >
         <span aria-hidden="true">
-          {set.startTime && set.endTime ? `${formatTime(set.startTime)} - ${formatTime(set.endTime)}` : 'TBA'}
+          {formatSetTimeRange(set) || 'TBA'}
         </span>
         {myNote && (
           <span className="card-note-indicator inline-flex opacity-50" role="img" aria-label="Has note">
@@ -487,6 +398,14 @@ function SetCard({
           </div>
         )}
 
+        {!showPicks && picksLoading && (
+          <div className="flex gap-3" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <span key={i} className="skeleton-shimmer w-11 h-11 rounded-full" />
+            ))}
+          </div>
+        )}
+
         {/* Crew overlap / who's going */}
         {groupedFriends.length > 0 && <CrewOverlapAvatars friends={groupedFriends} artistName={artistName} />}
       </div>
@@ -537,6 +456,7 @@ function setCardPropsAreEqual(prev: Readonly<SetCardProps>, next: Readonly<SetCa
   if (prev.stageColor !== next.stageColor) return false;
   if (prev.stageName !== next.stageName) return false;
   if (prev.showPicks !== next.showPicks) return false;
+  if (prev.picksLoading !== next.picksLoading) return false;
   if (prev.b2bSeparator !== next.b2bSeparator) return false;
 
   // friendProfiles — compare length + element identity

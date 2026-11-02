@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
+import { fetchAdminEnv } from '@festie/shared/services/festivalAdmin';
 import { cn } from '../../lib/utils';
 
 export interface AdminLayoutProps {
@@ -17,9 +18,21 @@ export interface AdminLayoutProps {
  */
 export default function AdminLayout({ title, description, onTabChange, activeTab, tabs, children }: AdminLayoutProps) {
   const navigate = useNavigate();
+  const [envLabel, setEnvLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAdminEnv()
+      .then((env) => setEnvLabel(env.label))
+      .catch((err) => console.warn('Could not load the environment label', err));
+  }, []);
 
   return (
     <div className="flex flex-col min-h-full bg-bg-primary">
+      {envLabel && (
+        <div role="status" className="bg-accent-amber text-bg-primary text-sm font-semibold text-center py-1">
+          {envLabel} environment. Changes here do not reach festie.us.
+        </div>
+      )}
       {/* Top bar */}
       <div className="sticky top-0 z-30 border-b border-glass-border bg-bg-card/80 backdrop-blur-xl">
         <div className="flex items-center justify-between px-4 py-4 md:px-6">

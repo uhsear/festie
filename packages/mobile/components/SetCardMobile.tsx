@@ -11,14 +11,16 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import {
-  formatTime,
+  formatSetTimeRange,
   artistDisplayName,
   artistSubtitle,
   ensureWhiteContrast,
   PRIORITY_RANK,
   buildOverlapBreakdown,
+  festivalPhase,
+  primarySpotifyArtist,
 } from '@festie/shared/utils';
-import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
+import { useCrewStore, useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
 import { usePickSync } from '@festie/shared/hooks';
 import { duration, easing } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -72,6 +74,10 @@ interface SetCardMobileProps {
    * mirroring the web SetCard. Optional — omit to hide the cluster entirely.
    */
   friendProfiles?: FriendProfile[];
+  /** Festival's B2B separator ("x", "&"); defaults to the shared default. */
+  b2bSeparator?: string;
+  /** Opens the set with the player open. Shown only for sets with a Spotify artist link. */
+  onListen?: () => void;
 }
 
 
@@ -193,6 +199,8 @@ function SetCardMobileImpl({
   hasConflict = false,
   hasNote = false,
   friendProfiles,
+  b2bSeparator,
+  onListen,
 }: SetCardMobileProps) {
   const t = useTokens();
   const styles = useStyles();
@@ -200,9 +208,12 @@ function SetCardMobileImpl({
   const { sync, retry } = usePickSync(set.id);
   const pickPending = sync?.state === 'saving' || sync?.state === 'queued' ? sync.state : null;
 
-  const artistName = artistDisplayName(set);
-  const subtitle = artistSubtitle(set);
-  const timeLabel = set.startTime && set.endTime ? `${formatTime(set.startTime)} - ${formatTime(set.endTime)}` : 'TBA';
+  const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const days = useFestivalDataStore((s) => s.days);
+
+  const artistName = artistDisplayName(set, b2bSeparator);
+  const subtitle = artistSubtitle(set, b2bSeparator);
+  const timeLabel = formatSetTimeRange(set) || 'TBA';
 
   // R19: live state drives the aqua border AND the coral "now" progress bar.
   const isLive = setStatus.status === 'live';
@@ -212,6 +223,10 @@ function SetCardMobileImpl({
   const a11yBody = isLive
     ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
     : `${artistName}, ${stageName}, ${timeLabel}`;
+
+  // Ended sets dim only while the festival is on, mirroring web SetCard.
+  const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
+  const canListen = !!onListen && primarySpotifyArtist(set) !== null;
 
   // The stage pill renders white (onAccent) text on the stage color, so darken
   // the fill just enough for that text to clear WCAG AA (see shared
@@ -231,8 +246,8 @@ function SetCardMobileImpl({
     <View style={[styles.card, isLive && styles.cardLive]}>
       <AppPressable style={styles.body} onPress={onPress} accessibilityRole="button" accessibilityLabel={a11yBody}>
         <View style={styles.stagePill}>
-          <View style={[styles.stagePillBg, { backgroundColor: pillBg }]} pointerEvents="none" />
-          <Text style={styles.stageText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          <View style={[styles.stagePillBg, { backgroundColor: dimmed ? t.colors.overlay[3] : pillBg }]} pointerEvents="none" />
+          <Text style={[styles.stageText, dimmed && styles.dimmedText]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {/* Trailing NBSP absorbs Fabric's single-line self-under-measure so a
                 longer stage name doesn't drop its last glyph (the bg-sibling
                 already prevents the rounded-pill clip). */}
@@ -240,7 +255,7 @@ function SetCardMobileImpl({
           </Text>
         </View>
 
-        <Text style={styles.artist} numberOfLines={2} maxFontSizeMultiplier={typeScaleCap('title')}>
+        <Text style={[styles.artist, dimmed && styles.dimmedText]} numberOfLines={2} maxFontSizeMultiplier={typeScaleCap('title')}>
           {artistName}
         </Text>
         {subtitle ? (
@@ -250,7 +265,7 @@ function SetCardMobileImpl({
         ) : null}
 
         <View style={styles.metaRow}>
-          <Text style={styles.time}>{timeLabel}</Text>
+          <Text style={[styles.time, dimmed && styles.dimmedText]}>{timeLabel}</Text>
           <LiveBadge status={setStatus.status} label={setStatus.label} />
           {hasNote ? (
             <Ionicons
@@ -278,6 +293,17 @@ function SetCardMobileImpl({
             />
           ))}
         </View>
+
+        {canListen ? (
+          <AppPressable
+            style={styles.listenButton}
+            onPress={onListen}
+            accessibilityRole="button"
+            accessibilityLabel={`Listen to ${artistName}`}
+          >
+            <Ionicons name="musical-notes" size={18} color={t.colors.text.secondary} />
+          </AppPressable>
+        ) : null}
 
         {friendProfiles && friendProfiles.length > 0 ? <CrewCluster friendProfiles={friendProfiles} /> : null}
       </View>
@@ -361,7 +387,9 @@ function areEqual(prev: SetCardMobileProps, next: SetCardMobileProps): boolean {
     prev.stageColor !== next.stageColor ||
     prev.myPick !== next.myPick ||
     prev.hasConflict !== next.hasConflict ||
-    prev.hasNote !== next.hasNote
+    prev.hasNote !== next.hasNote ||
+    prev.b2bSeparator !== next.b2bSeparator ||
+    !!prev.onListen !== !!next.onListen
   ) {
     return false;
   }
@@ -554,6 +582,16 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: t.spacing[2],
     flexShrink: 1,
+  },
+  dimmedText: {
+    color: t.colors.text.secondary,
+  },
+  listenButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: t.radii.pill,
   },
   crewCluster: {
     flexDirection: 'row',

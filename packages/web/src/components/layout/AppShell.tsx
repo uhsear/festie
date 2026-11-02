@@ -14,6 +14,7 @@ import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
 import IOSInstallSheet from '../features/IOSInstallSheet';
+import NowNextStrip from '../features/NowNextStrip';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
 import LiveLocationSharing from '../crew/LiveLocationSharing';
@@ -168,6 +169,7 @@ export default function AppShell() {
         <div className="main-content flex flex-1 overflow-hidden flex-col">
           {!hideSubHeader && <SubHeader dayOnly={dayOnlySubHeader} festivalOnly={festivalOnlySubHeader} />}
           {isSchedulePath(location.pathname) && <ScheduleViewSwitcher />}
+          {isSchedulePath(location.pathname) && <NowNextStrip />}
 
           <main
             id="main-content"

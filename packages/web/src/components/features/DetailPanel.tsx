@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, hasSetStarted, buildHomeUrl, festivalTimeLabel, resolveFestivalTimeZone } from '@festie/shared/utils';
-import { useDebouncedNote } from '@festie/shared/hooks';
-import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
+import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist } from '@festie/shared/utils';
+import { useDebouncedNote, useSpotifyPreview } from '@festie/shared/hooks';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -10,16 +10,17 @@ import { Drawer } from 'vaul';
 import { useNavigate } from '@tanstack/react-router';
 import RatingButtons from './RatingButtons';
 import DetailArtistHeader from './DetailArtistHeader';
+import DetailArtistLinks from './DetailArtistLinks';
 import DetailSpotifySection from './DetailSpotifySection';
+import DetailReminderNotePanel from './DetailReminderNotePanel';
 import DetailConflictWarning from './DetailConflictWarning';
 import ClashPrompt from './ClashPrompt';
 import DetailPriorityPicker from './DetailPriorityPicker';
-import DetailReminderPicker from './DetailReminderPicker';
 import DetailCrewSection from './DetailCrewSection';
 import DetailNotesSection from './DetailNotesSection';
 import { useDetailPanelData } from './useDetailPanelData';
 import { useHaptics } from '../../hooks/useHaptics';
-import { useNow } from '../../hooks/useSetStatus';
+import { useSetStatus } from '../../hooks/useSetStatus';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useToast } from '../../lib/toastContext';
 import { Share2 } from 'lucide-react';
@@ -62,7 +63,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     getStageName,
     getMyPick,
   } = useDetailPanelData(set);
-  const timeLabel = festivalTimeLabel(resolveFestivalTimeZone(currentFestival), useNow());
 
   const { select: selectHaptic, success: successHaptic, warning: warningHaptic } = useHaptics();
   const { toast } = useToast();
@@ -83,55 +83,48 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     onSaved: successHaptic,
     onError: warningHaptic,
   });
-  const [spotifyPreview, setSpotifyPreview] = useState<{
-    embedUrl: string;
-    label: string;
-    embedType: string;
-  } | null>(null);
   const [spotifyVisible, setSpotifyVisible] = useState(false);
   const [priorityBusy, setPriorityBusy] = useState<Priority | null | 'clear'>(null);
   const [reminderBusy, setReminderBusy] = useState<number | null | 'clear'>(null);
 
+  const [snap, setSnap] = useState<number | string | null>(autoOpenSpotify ? 1 : 0.5);
+  const status = useSetStatus(set);
+  const { status: spotifyStatus, preview: spotifyPreview } = useSpotifyPreview(set.id);
+  const spotifyArtist = primarySpotifyArtist(set);
+  const canRemind = !!set.startTime && !(currentFestival && hasSetStarted(set, currentFestival, festivalDays));
+
+  // Open the player once the preview is ready, when the card's Listen button asked for it.
+  useEffect(() => {
+    if (autoOpenSpotify && spotifyStatus === 'ready') setSpotifyVisible(true);
+  }, [autoOpenSpotify, spotifyStatus]);
+
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Share this set with friends via the native share sheet (mobile web).
-  // No per-set web route exists, so the link points at festie.us and the
-  // artist/time live in the share text. Gated on navigator.share so it only
-  // appears where the OS sheet is available.
-  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  // Share the set's own page (festie.us/set/<id>). Where the browser has no share
+  // sheet, copy the link instead.
   const handleShare = useCallback(async () => {
     const time = set.startTime ? ` at ${formatTime(set.startTime)}` : '';
     const fest = currentFestival?.name ? ` — ${currentFestival.name}` : '';
     const text = `Catch ${artistName}${fest}${time} 🎶`;
+    const url = buildSetUrl(set.id);
     const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-    try {
-      await nav.share?.({ title: artistName, text, url: buildHomeUrl() });
-    } catch {
-      /* user dismissed or share failed */
-    }
-  }, [set.startTime, currentFestival?.name, artistName]);
-
-  // Fetch Spotify preview on mount
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    if (typeof nav.share === 'function') {
       try {
-        const preview = await api.get<{ embedUrl: string; label: string; embedType: string }>(
-          `/spotify/preview/${set.id}`,
-        );
-        if (!cancelled && preview?.embedType) {
-          setSpotifyPreview(preview);
-          if (autoOpenSpotify) setSpotifyVisible(true);
-        }
-      } catch {
-        /* No Spotify preview available */
+        await nav.share({ title: artistName, text, url });
+        return;
+      } catch (err) {
+        // AbortError = user dismissed the sheet; don't fall through to clipboard.
+        if (err instanceof DOMException && err.name === 'AbortError') return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [set.id, autoOpenSpotify]);
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Link copied', 'success');
+    } catch {
+      toast("Couldn't share this set. Try again.", 'error');
+    }
+  }, [set.id, set.startTime, currentFestival?.name, artistName, toast]);
 
   // Priority picker handler
   const handlePriorityClick = useCallback(
@@ -213,6 +206,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
       }}
       direction={isLg ? 'right' : 'bottom'}
       dismissible
+      {...(isLg ? {} : { snapPoints: [0.5, 1], activeSnapPoint: snap, setActiveSnapPoint: setSnap })}
     >
       <Drawer.Portal>
         {/* R4: scrim rgba(0,0,0,0.6) per spec (was bg-black/50 = 0.5) */}
@@ -223,9 +217,9 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             detail-glass utility owns all four glass properties; rounded-* owns radii. */}
         <Drawer.Content
           aria-label="Set detail panel"
-          className="fixed bottom-0 inset-x-0 z-[var(--z-modal)] max-h-[min(90dvh,calc(100dvh-32px))] flex flex-col
+          className="fixed bottom-0 inset-x-0 z-[var(--z-modal)] h-[96dvh] flex flex-col
                      rounded-tl-[24px] rounded-tr-[24px] detail-glass outline-none
-                     lg:inset-y-0 lg:right-0 lg:left-auto lg:bottom-auto lg:h-dvh lg:max-h-none
+                     lg:inset-y-0 lg:right-0 lg:left-auto lg:bottom-auto lg:h-dvh
                      lg:w-[420px] lg:max-w-full
                      lg:rounded-none lg:rounded-l-[16px]"
           onOpenAutoFocus={(e: Event) => {
@@ -238,8 +232,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
           <Drawer.Description className="sr-only">
             Set details, schedule, and crew info for {artistDisplayName(set, b2bSeparator)}
           </Drawer.Description>
-          {canNativeShare && (
-            <button
+          <button
               className="absolute top-4 right-[68px] w-11 h-11 min-w-11 min-h-11 rounded-full bg-bg-card border border-border-light flex items-center justify-center text-text-secondary cursor-pointer transition-[background-color,color,border-color] duration-200 ease-[var(--ease-standard)] hover:bg-accent-aqua hover:text-text-on-accent hover:border-accent-aqua focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 focus-visible:border-accent-aqua z-10"
               type="button"
               aria-label="Share this set"
@@ -247,7 +240,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             >
               <Share2 className="w-5 h-5" aria-hidden="true" />
             </button>
-          )}
           <button
             className="absolute top-4 right-4 w-11 h-11 min-w-11 min-h-11 rounded-full bg-bg-card border border-border-light flex items-center justify-center text-text-secondary text-lg cursor-pointer transition-[background-color,color,border-color] duration-200 ease-[var(--ease-standard)] hover:bg-accent-coral-strong hover:text-text-on-accent hover:border-accent-coral-strong focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 focus-visible:border-accent-aqua z-10"
             type="button"
@@ -258,7 +250,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             {'×'}
           </button>
           <div
-            className="min-h-0 flex flex-col gap-[var(--space-4)] overflow-y-auto overscroll-contain p-7 pb-[max(12px,env(safe-area-inset-bottom))]"
+            className={`min-h-0 flex flex-col gap-[var(--space-4)] ${isLg || snap === 1 ? 'overflow-y-auto' : 'overflow-hidden'} overscroll-contain p-7 pb-[max(12px,env(safe-area-inset-bottom))]`}
             ref={panelRef}
           >
             <div>
@@ -282,23 +274,57 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 subtitle={sub}
                 primaryArtist={primaryArtist}
                 stageColor={stageColor}
-                artistLinks={artistLinks}
-                isB2B={isB2B}
-                genres={allGenres}
                 setArtist={set.artist}
               />
 
-              <div className="text-base text-text-secondary tabular-nums">
-                {set.startTime && set.endTime ? formatTime(set.startTime) + ' - ' + formatTime(set.endTime) : 'TBA'}
-                {set.startTime && set.endTime && timeLabel && <span className="text-text-muted"> · {timeLabel}</span>}
+              <div className="text-base text-text-secondary tabular-nums" data-testid="set-when">
+                {formatSetWhen(set, festivalDays, status)}
               </div>
             </div>
 
-            {spotifyPreview && (
+            {user ? (
+              <>
+                <DetailPriorityPicker
+                  setId={set.id}
+                  myPick={myPick || null}
+                  priorityBusy={priorityBusy}
+                  onPriorityClick={handlePriorityClick}
+                />
+                <DetailReminderNotePanel
+                  myReminder={myReminder}
+                  reminderBusy={reminderBusy}
+                  onReminderClick={handleReminderClick}
+                  canRemind={canRemind}
+                  personalNote={personal.value}
+                  onPersonalChange={personal.setValue}
+                  personalStatus={personal.status}
+                  onRetryPersonal={personal.retry}
+                  onExpand={() => setSnap(1)}
+                />
+              </>
+            ) : (
+              <div className="p-4 rounded-DEFAULT bg-[var(--color-overlay-2)] border border-glass-border">
+                <p className="text-[length:var(--font-size-14)] text-text-secondary leading-normal mb-3">
+                  {GUEST_PROMPT_COPY.setSheet}
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="primary" type="button" onClick={() => goToAuth('/register')}>
+                    {GUEST_PROMPT_COPY.createAccount}
+                  </Button>
+                  <Button variant="secondary" type="button" onClick={() => goToAuth('/login')}>
+                    {GUEST_PROMPT_COPY.signIn}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {spotifyArtist && (
               <>
                 <hr className="border-t border-border -mx-7" />
                 <DetailSpotifySection
+                  status={spotifyStatus}
                   preview={spotifyPreview}
+                  spotifyUrl={spotifyArtist.url}
                   visible={spotifyVisible}
                   onToggle={() => setSpotifyVisible((v) => !v)}
                 />
@@ -325,40 +351,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               onSwitch={handleConflictSwitch}
             />
 
-            <hr className="border-t border-border -mx-7" />
-
-            {user ? (
-              <>
-                <DetailPriorityPicker
-                  setId={set.id}
-                  myPick={myPick || null}
-                  priorityBusy={priorityBusy}
-                  onPriorityClick={handlePriorityClick}
-                />
-                {set.startTime && !(currentFestival && hasSetStarted(set, currentFestival, festivalDays)) && (
-                  <DetailReminderPicker
-                    myReminder={myReminder}
-                    reminderBusy={reminderBusy}
-                    onReminderClick={handleReminderClick}
-                  />
-                )}
-              </>
-            ) : (
-              <div className="p-4 rounded-DEFAULT bg-[var(--color-overlay-2)] border border-glass-border">
-                <p className="text-[length:var(--font-size-14)] text-text-secondary leading-normal mb-3">
-                  {GUEST_PROMPT_COPY.setSheet}
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="primary" type="button" onClick={() => goToAuth('/register')}>
-                    {GUEST_PROMPT_COPY.createAccount}
-                  </Button>
-                  <Button variant="secondary" type="button" onClick={() => goToAuth('/login')}>
-                    {GUEST_PROMPT_COPY.signIn}
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {currentProfile && set && currentFestival && hasSetStarted(set, currentFestival, festivalDays) && (
               <div className="mx-0 text-center">
                 <div className="mb-2 text-[length:var(--font-size-12)] uppercase tracking-wide text-text-muted">
@@ -368,6 +360,8 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               </div>
             )}
 
+            <DetailArtistLinks artistLinks={artistLinks} isB2B={isB2B} genres={allGenres} hideLink={spotifyArtist} />
+
             <hr className="border-t border-border -mx-7" />
             <DetailCrewSection title={whoTitle} others={others} crewNotes={crewNotes} />
 
@@ -375,13 +369,9 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               <>
                 <hr className="border-t border-border -mx-7" />
                 <DetailNotesSection
-                  personalNote={personal.value}
                   crewNote={crew.value}
-                  onPersonalChange={personal.setValue}
                   onCrewChange={crew.setValue}
-                  personalStatus={personal.status}
                   crewStatus={crew.status}
-                  onRetryPersonal={personal.retry}
                   onRetryCrew={crew.retry}
                 />
               </>

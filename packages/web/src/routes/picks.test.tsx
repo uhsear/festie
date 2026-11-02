@@ -34,6 +34,7 @@ vi.mock('@festie/shared/hooks', () => ({
 
 vi.mock('@festie/shared/utils', () => ({
   formatTime: vi.fn((t: string) => t),
+  formatSetTimeRange: vi.fn((set: { startTime?: string }) => set.startTime || ''),
   artistDisplayName: vi.fn((set: { artist?: string }) => set.artist || 'Unknown'),
   buildPicksIcs: vi.fn(() => 'BEGIN:VCALENDAR\r\nEND:VCALENDAR'),
   buildPicksShareUrl: vi.fn((profileId: string) => `https://festie.us/s/${profileId}`),
@@ -78,6 +79,9 @@ vi.mock('../components/features/OfflineReadinessCard', () => ({
 
 // PickConflicts has its own render test; stub it so PicksView tests don't need
 // its crew-store mocks / extra lucide icons / shared buildPickConflicts mock.
+vi.mock('../components/features/ListenList', () => ({
+  default: () => <div data-testid="listen-list" />,
+}));
 vi.mock('../components/features/PickConflicts', () => ({
   default: () => <div data-testid="pick-conflicts" />,
 }));

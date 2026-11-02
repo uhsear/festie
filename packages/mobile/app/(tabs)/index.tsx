@@ -16,15 +16,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFestivalDataStore, useFestivalStore, useAuthStore, useUIStore } from '@festie/shared/stores';
+import { useFestivalDataStore, useFestivalStore, useAuthStore, useCrewStore, useUIStore } from '@festie/shared/stores';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import {
   artistDisplayName,
-  getSetHotness,
   getConflictingSetIds,
   setMinuteRange,
   festivalPhase,
-  byStartTime,
+  splitCardsByNow,
+  formatDayChip,
+  getHomeActions,
   festivalTimeLabel,
   logicalDayIndexAt,
   resolveFestivalTimeZone,
@@ -75,6 +76,7 @@ const VIEW_OPTIONS_WITH_GRID: readonly { value: SwitcherValue; label: string }[]
 
 type ListRow =
   | { kind: 'stageHeader'; key: string; stageName: string; stageColor: string }
+  | { kind: 'earlier'; key: 'earlier'; count: number }
   | { kind: 'set'; key: string; set: FestivalSet };
 
 export default function TimelineScreen() {
@@ -122,10 +124,12 @@ export default function TimelineScreen() {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const loadProfiles = useFestivalDataStore((s) => s.loadProfiles);
   const user = useAuthStore((s) => s.user);
+  const crews = useCrewStore((s) => s.crews);
   const isLoading = useFestivalDataStore((s) => s.isLoading);
   const error = useFestivalDataStore((s) => s.error);
   const stages = useFestivalDataStore((s) => s.stages);
   const allSets = useFestivalDataStore((s) => s.sets);
+  const festivalDays = useFestivalDataStore((s) => s.days);
 
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
@@ -151,6 +155,8 @@ export default function TimelineScreen() {
   // the list is scrolled past a threshold and expose a ref to snap it back.
   const listRef = useRef<FlatList<ListRow>>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  // Sets that ended earlier today fold into one row; collapsed by default.
+  const [earlierOpen, setEarlierOpen] = useState(false);
   // useNow ticks, so the "today" dot follows the festival's own day (06:00
   // cutoff, festival zone) rather than the device calendar.
   const nowMs = useNow();
@@ -277,32 +283,28 @@ export default function TimelineScreen() {
 
   // P1-5 — festival lifecycle phase (pre / live / post), derived from the
   // festival's date range vs now (shared `festivalPhase` → `festivalStatus`).
-  // Drives the phase-aware home action band below; null when the festival has no
-  // usable dates, in which case the band is hidden (phase-neutral fallback).
+  // Feeds the next-step band (`getHomeActions`); null when the festival has no
+  // usable dates, in which case the band is empty.
   const phase = useMemo(() => festivalPhase(currentFestival, days), [currentFestival, days]);
+  const pickCount = Object.keys(currentProfile?.picks ?? {}).length;
+  const hasCrew = crews.some((c) => !c.festivalId || c.festivalId === currentFestival?.id);
+  const homeActions = getHomeActions({ phase, signedIn: !!user, pickCount, hasCrew });
 
   // Day + active-stage + search filtering lives in the shared hook
-  // (getFilteredSets mirrors cards.tsx's filteredSets). We then apply the same
-  // hotness → time → name sort the web Cards view uses.
-  const filteredSets = useMemo(() => {
+  // (getFilteredSets mirrors cards.tsx's filteredSets). Time order, with sets
+  // that ended earlier today split out so Cards can fold them into one row.
+  const { earlier: earlierSets, rest: restSets } = useMemo(() => {
     let filtered = [...getFilteredSets()];
     if (onlyMine) filtered = filtered.filter((s) => getMyPick(s.id));
-    return filtered.sort((a, b) => {
-      const hotA = getSetHotness(a);
-      const hotB = getSetHotness(b);
-      if (hotA > 0 || hotB > 0) return hotB - hotA;
-
-      const byTime = byStartTime(a, b);
-      if (byTime !== 0) return byTime;
-
-      return artistDisplayName(a, currentFestival?.b2bSeparator).localeCompare(
-        artistDisplayName(b, currentFestival?.b2bSeparator),
-        undefined,
-        { sensitivity: 'base' },
-      );
+    return splitCardsByNow(filtered, {
+      days: festivalDays,
+      nowMs,
+      timeZone: festivalTimeZone,
+      separator: currentFestival?.b2bSeparator,
     });
     // getFilteredSets is recreated when day/stage/search/sets change.
-  }, [getFilteredSets, currentFestival?.b2bSeparator, onlyMine, getMyPick]);
+  }, [getFilteredSets, currentFestival?.b2bSeparator, onlyMine, getMyPick, festivalDays, nowMs, festivalTimeZone]);
+  const filteredSets = useMemo(() => [...earlierSets, ...restSets], [earlierSets, restSets]);
 
   // Search spans every day: matches on days other than the selected one, plus the
   // first other day that has any sets (the empty states' "Show another day").
@@ -333,8 +335,17 @@ export default function TimelineScreen() {
   // Conflict set IDs — same util the web Cards view uses.
   const conflictIds = useMemo(() => getConflictingSetIds(filteredSets, getMyPick), [filteredSets, getMyPick]);
 
-  // Cards view: a flat hotness-sorted list of set rows.
-  const rows = useMemo<ListRow[]>(() => filteredSets.map((set) => ({ kind: 'set', key: set.id, set })), [filteredSets]);
+  // Cards view: time-ordered set rows. Ended sets of today sit behind one
+  // "Earlier today (n)" row that comes first.
+  const rows = useMemo<ListRow[]>(() => {
+    const toRow = (set: FestivalSet): ListRow => ({ kind: 'set', key: set.id, set });
+    if (earlierSets.length === 0) return restSets.map(toRow);
+    return [
+      { kind: 'earlier', key: 'earlier', count: earlierSets.length },
+      ...(earlierOpen ? earlierSets.map(toRow) : []),
+      ...restSets.map(toRow),
+    ];
+  }, [earlierSets, restSets, earlierOpen]);
 
   // Timeline/Grid views consume the same day-filtered set list (filteredSets
   // already applies day + active-stage + search), split into timed vs. TBA and
@@ -442,10 +453,39 @@ export default function TimelineScreen() {
           </View>
         );
       }
+      if (item.kind === 'earlier') {
+        const label = earlierOpen
+          ? 'Hide sets that ended earlier today'
+          : `Show ${item.count} sets that ended earlier today`;
+        return (
+          <TouchableOpacity
+            style={styles.earlierRow}
+            onPress={() => {
+              haptics.select();
+              setEarlierOpen((open) => !open);
+            }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: earlierOpen }}
+            accessibilityLabel={label}
+          >
+            <Text style={styles.earlierText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Earlier today ({item.count})
+            </Text>
+            <Ionicons
+              name={earlierOpen ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={t.colors.text.secondary}
+            />
+          </TouchableOpacity>
+        );
+      }
       const set = item.set;
       return (
         <SetCardMobile
           set={set}
+          b2bSeparator={currentFestival?.b2bSeparator}
+          onListen={() => router.push(`/set/${set.id}?listen=1`)}
           stageName={getStageName(set.stageId) || 'Unknown'}
           stageColor={safeStageColor(getStageColor(set.stageId), t.colors.text.muted)}
           myPick={getMyPick(set.id)}
@@ -467,6 +507,10 @@ export default function TimelineScreen() {
       conflictIds,
       handlePickChange,
       router,
+      haptics,
+      earlierOpen,
+      currentFestival?.b2bSeparator,
+      t.colors.text.secondary,
       t.colors.text.muted,
     ],
   );
@@ -756,6 +800,7 @@ export default function TimelineScreen() {
             {days.map((day, dayPos) => {
               const active = day.index === selectedDay;
               const isToday = dayPos === todayIndex;
+              const chip = formatDayChip(day);
               return (
                 <TouchableOpacity
                   key={day.index}
@@ -767,7 +812,7 @@ export default function TimelineScreen() {
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
-                  accessibilityLabel={`Day: ${day.label ?? day.date}${isToday ? ' (today)' : ''}`}
+                  accessibilityLabel={`Day: ${chip.a11y}${isToday ? ' (today)' : ''}`}
                 >
                   <View style={[styles.dayChipBg, active && styles.dayChipBgActive]} pointerEvents="none" />
                   {isToday ? <View style={[styles.todayDot, active && styles.todayDotActive]} /> : null}
@@ -776,8 +821,17 @@ export default function TimelineScreen() {
                     maxFontSizeMultiplier={MAX_FONT_SCALE}
                     textBreakStrategy="simple"
                   >
-                    {day.label ?? day.date}
+                    {chip.label}
                   </Text>
+                  {chip.date ? (
+                    <Text
+                      style={[styles.dayText, styles.dayDate, active && styles.dayTextActive]}
+                      maxFontSizeMultiplier={MAX_FONT_SCALE}
+                      textBreakStrategy="simple"
+                    >
+                      {chip.date + ' '}
+                    </Text>
+                  ) : null}
                 </TouchableOpacity>
               );
             })}
@@ -939,15 +993,13 @@ export default function TimelineScreen() {
         onTitlePress={() => setPickingFestival(true)}
         titleAccessibilityLabel={`${currentFestival.name}. Switch festival`}
       />
-      {/* P1-5 — phase-aware home actions: re-prioritizes the crew's destinations
-          (Picks / crew / map / Now & Next / wrap) by festival phase. Hidden when
-          the festival has no usable dates (phase === null). Folds behind the
-          filter toggle (DC1) — it's a setup action, not a mid-crowd one — except
-          after the festival, when Wrap is the first shortcut. Sits
-          above the view switcher so it reads as the head of the Filters panel. */}
-      {phase && (filtersOpen || phase === 'post') ? (
+      {/* Next-step band from shared getHomeActions (picks and crew before the
+          festival, find the crew during it, wrap and settle-up after). It is
+          empty, and so hidden, when there is nothing left to do, so it no
+          longer folds behind the filter toggle. */}
+      {homeActions.length > 0 ? (
         <View style={{ paddingHorizontal: hPad }}>
-          <PhaseHomeActions phase={phase} />
+          <PhaseHomeActions actions={homeActions} />
         </View>
       ) : null}
 
@@ -1349,6 +1401,26 @@ const useStyles = makeStyles((t) => ({
     // Android Fabric under-measures the final Space Grotesk glyph in these
     // centered pills. The system face preserves the complete day label.
     fontFamily: Platform.OS === 'android' ? undefined : typeStyle('label').fontFamily,
+    color: t.colors.text.secondary,
+  },
+  dayDate: {
+    ...typeStyle('caption'),
+    fontFamily: Platform.OS === 'android' ? undefined : typeStyle('caption').fontFamily,
+    opacity: 0.75,
+  },
+  earlierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  earlierText: {
+    ...typeStyle('label'),
     color: t.colors.text.secondary,
   },
   dayTextActive: {

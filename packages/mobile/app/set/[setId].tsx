@@ -22,17 +22,27 @@ import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFestivalDataStore, useAuthStore, useUIStore, useNotificationPrefsStore } from '@festie/shared/stores';
-import { usePicks, usePickSync, useFestival, useCrew, useDebouncedNote, type NoteSaveStatus } from '@festie/shared/hooks';
+import {
+  usePicks,
+  usePickSync,
+  useFestival,
+  useCrew,
+  useDebouncedNote,
+  useSpotifyPreview,
+  type NoteSaveStatus,
+} from '@festie/shared/hooks';
 import { api, mapErrorToUserMessage } from '@festie/shared/services';
 import {
-  formatTime,
+  formatSetWhen,
+  reminderNoteSummary,
+  primarySpotifyArtist,
+  getSetStatus,
   artistDisplayName,
   artistSubtitle,
   getSetLinks,
   detectConflicts,
   hasSetStarted,
   buildSetUrl,
-  festivalTimeLabel,
   resolveFestivalTimeZone,
   reminderDeliveryProblem,
   QUEUED_WRITE_MESSAGE,
@@ -55,18 +65,6 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
-
-/**
- * Spotify preview payload returned by GET /spotify/preview/:setId. The server
- * returns artistName/trackName (NOT a `label` field) — we derive the display
- * label from trackName||artistName.
- */
-interface SpotifyPreview {
-  embedUrl: string;
-  embedType: 'artist' | 'track' | null;
-  artistName?: string;
-  trackName?: string;
-}
 
 const REMINDER_ASK_DISMISSED_KEY = 'festie-reminder-ask-dismissed';
 
@@ -123,7 +121,7 @@ export default function SetDetailScreen() {
   // drag handle / close / share clear the notch on Android and any full-screen
   // presentation. Inside an iOS formSheet the sheet already sits below the status bar.
   const topInset = Platform.OS === 'ios' ? t.spacing[3] : Math.max(t.spacing[3], insets.top);
-  const { setId } = useLocalSearchParams<{ setId: string }>();
+  const { setId, listen } = useLocalSearchParams<{ setId: string; listen?: string }>();
 
   // Safe dismiss: on a cold deep link there is no back stack, so router.back()
   // would strand the user on a blank screen. Fall back to the home tab.
@@ -223,11 +221,9 @@ export default function SetDetailScreen() {
     () => ensureStageTextContrast(stageColor, t.colors.bg.primary),
     [stageColor, t.colors.bg.primary],
   );
-  const zoneLabel = festivalTimeLabel(resolveFestivalTimeZone(currentFestival), nowMs);
-  const timeLabel =
-    set && set.startTime && set.endTime
-      ? `${formatTime(set.startTime)} - ${formatTime(set.endTime)}${zoneLabel ? ` · ${zoneLabel}` : ''}`
-      : 'TBA';
+  const timeZone = resolveFestivalTimeZone(currentFestival);
+  const status = set ? getSetStatus(set, new Date(nowMs), days, timeZone) : null;
+  const whenLine = set ? formatSetWhen(set, days, status) : '';
   const myPick = set ? getMyPick(set.id) : undefined;
   const myReminder = set ? getMyReminder(set.id) : undefined;
 
@@ -290,6 +286,8 @@ export default function SetDetailScreen() {
     onError: () => haptics.warning(),
   });
 
+  const canRemind = !!set?.startTime && !(set && currentFestival && hasSetStarted(set, currentFestival, days));
+  const reminderSummary = reminderNoteSummary(myReminder, !!personal.value, canRemind);
   // ---- Reminder delivery (OS permission + Account preference). ----
   // 'undetermined', and 'denied' while the OS can still ask, count as 'default' (not enabled yet).
   const [permission, setPermission] = useState<ReminderPermission>('granted');
@@ -327,28 +325,20 @@ export default function SetDetailScreen() {
   });
   const { sync: pickSync, retry: retryPick } = usePickSync(set?.id ?? '');
 
-  // ---- Spotify preview (fetched on mount, rendered inline via WebView). ----
-  const [spotify, setSpotify] = useState<SpotifyPreview | null>(null);
+  // ---- Spotify preview (shared hook; rendered inline via WebView). ----
+  const { status: spotifyStatus, preview } = useSpotifyPreview(set?.id);
+  const spotifyArtist = set ? primarySpotifyArtist(set) : null;
+  const embedUrl = preview?.embedUrl;
   const [spotifyOpen, setSpotifyOpen] = useState(false);
-
-  // Server returns artistName/trackName (no `label`); derive a display label.
-  const spotifyLabel = spotify?.trackName || spotify?.artistName || 'Play on Spotify';
-
+  const [noteOpen, setNoteOpen] = useState(false);
+  // Opened from a card's Listen button: open the player once it is ready.
+  const listenHandled = useRef(false);
   useEffect(() => {
-    if (!set) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const preview = await api.get<SpotifyPreview>(`/spotify/preview/${set.id}`);
-        if (!cancelled && preview?.embedType) setSpotify(preview);
-      } catch {
-        /* No Spotify preview available */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [set]);
+    if (listen === '1' && spotifyStatus === 'ready' && !listenHandled.current) {
+      listenHandled.current = true;
+      setSpotifyOpen(true);
+    }
+  }, [listen, spotifyStatus]);
 
   // ---- Actions. ------------------------------------------------------------
   const handlePriority = useCallback(
@@ -470,24 +460,6 @@ export default function SetDetailScreen() {
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-        {/* Artist photo (from Spotify backfill) — R15: wrapped in a container
-              that clips the image to its rounded corners. No text is overlaid
-              on the hero, so the previous stacked-rgba "gradient" (a hard
-              rgba(10,10,10,0.85) rectangle over the bottom 60% without
-              expo-linear-gradient) only obscured the portrait subject. The
-              photo now reads clean, with no scrim: a flat low-alpha band
-              also showed as a hard gray stripe on Daylight (iOS sweep). */}
-        {artistPhoto && !largeText ? (
-          <View style={styles.artistPhotoContainer}>
-            <Image
-              source={{ uri: artistPhoto }}
-              style={styles.artistPhoto}
-              resizeMode="cover"
-              accessibilityIgnoresInvertColors
-            />
-          </View>
-        ) : null}
-
         {/* Stage pill */}
         <View style={[styles.stagePill, { backgroundColor: stageColor + '25' }]}>
           <Text style={[styles.stageText, { color: stageTextColor }]} numberOfLines={1}>
@@ -495,12 +467,24 @@ export default function SetDetailScreen() {
           </Text>
         </View>
 
-        {/* Artist header */}
-        <Text style={styles.artist} accessibilityRole="header" maxFontSizeMultiplier={typeScaleCap('display-lg')}>
-          <DisplayWords text={artistName} fontSize={styles.artist.fontSize} />
-        </Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-        <Text style={styles.time}>{timeLabel}</Text>
+        {/* Artist header: small avatar beside the name keeps the pick buttons in the half-height detent. */}
+        <View style={styles.artistRow}>
+          {artistPhoto && !largeText ? (
+            <Image
+              source={{ uri: artistPhoto }}
+              style={styles.artistAvatar}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
+          ) : null}
+          <View style={styles.artistText}>
+            <Text style={styles.artist} accessibilityRole="header" maxFontSizeMultiplier={typeScaleCap('display-lg')}>
+              <DisplayWords text={artistName} fontSize={styles.artist.fontSize} />
+            </Text>
+            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          </View>
+        </View>
+        <Text style={styles.time}>{whenLine}</Text>
 
         {/* Priority picker / guest sign-in prompt */}
         {user ? (
@@ -558,9 +542,25 @@ export default function SetDetailScreen() {
                 </View>
               ) : null}
             </View>
-            {!(currentFestival && hasSetStarted(set, currentFestival, days)) ? (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Remind me before it starts</Text>
+              <TouchableOpacity
+                style={styles.panelButton}
+                onPress={() => setNoteOpen((v) => !v)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: noteOpen }}
+                accessibilityLabel={`Reminder and note: ${reminderSummary}`}
+              >
+                <Ionicons name="notifications-outline" size={16} color={t.colors.accent.aqua} />
+                <Text style={styles.spotifyText} numberOfLines={1}>
+                  {reminderSummary}
+                </Text>
+                <Ionicons name={noteOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+              </TouchableOpacity>
+              {noteOpen ? (
+                <>
+                  {canRemind ? (
+                    <>
               <View style={styles.reminderRow}>
                 {REMINDER_OPTIONS.map((opt) => {
                   const active = myReminder === opt.value;
@@ -633,8 +633,22 @@ export default function SetDetailScreen() {
                   </TouchableOpacity>
                 </View>
               ) : null}
+                    </>
+                  ) : null}
+                  <Text style={styles.sectionLabel}>Your note</Text>
+                  <TextInput
+                    style={styles.noteInput}
+                    value={personal.value}
+                    onChangeText={personal.setValue}
+                    placeholder='Private note, e.g. "meet at the rail"'
+                    placeholderTextColor={t.colors.text.placeholder}
+                    multiline
+                    accessibilityLabel="Personal note"
+                  />
+                  <NoteStatus status={personal.status} onRetry={personal.retry} />
+                </>
+              ) : null}
             </View>
-            ) : null}
           </>
         ) : (
           <View style={styles.joinBox}>
@@ -644,61 +658,32 @@ export default function SetDetailScreen() {
           </View>
         )}
 
-        {/* Genres */}
-        {allGenres.length > 0 ? (
-          <View style={styles.chipRow}>
-            {allGenres.map((g) => (
-              <View key={g} style={styles.chip}>
-                <Text style={styles.chipText}>{g}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Artist links */}
-        {artistLinks.length > 0 ? (
-          <View style={styles.linkRow}>
-            {artistLinks.flatMap((entry) =>
-              Object.entries(entry.links).map(([key, url]) => (
-                <TouchableOpacity
-                  key={`${entry.name}-${key}`}
-                  style={styles.linkButton}
-                  onPress={() => openLink(url)}
-                  activeOpacity={0.7}
-                  accessibilityRole="link"
-                  accessibilityLabel={`Open ${entry.name} on ${key}`}
-                >
-                  <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
-                  <Text style={styles.linkText}>{key}</Text>
-                </TouchableOpacity>
-              )),
-            )}
-          </View>
-        ) : null}
-
-        {/* Spotify preview — inline WebView embed behind a show/hide toggle.
-            The embedUrl already carries theme=0 (dark). The section renders
-            nothing when no preview is available (guarded on embedType). */}
-        {spotify && spotify.embedUrl ? (
+        {/* Listen: one Spotify entry point. The links row skips this artist's Spotify link. */}
+        {spotifyArtist ? (
           <View style={styles.spotifySection}>
-            <TouchableOpacity
-              style={styles.spotifyButton}
-              onPress={() => setSpotifyOpen((v) => !v)}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: spotifyOpen }}
-              accessibilityLabel={spotifyOpen ? `Hide preview: ${spotifyLabel}` : `Play preview: ${spotifyLabel}`}
-            >
-              <Ionicons name="musical-note" size={16} color={t.colors.accent.aqua} />
-              <Text style={styles.spotifyText} numberOfLines={1}>
-                {spotifyLabel}
-              </Text>
-              <Ionicons name={spotifyOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
-            </TouchableOpacity>
-            {spotifyOpen ? (
-              <View style={[styles.spotifyEmbed, { height: spotify.embedType === 'track' ? 152 : 352 }]}>
+            {spotifyStatus === 'ready' || spotifyStatus === 'loading' ? (
+              <TouchableOpacity
+                style={styles.spotifyButton}
+                onPress={() => setSpotifyOpen((v) => !v)}
+                disabled={spotifyStatus === 'loading'}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: spotifyOpen, disabled: spotifyStatus === 'loading' }}
+                accessibilityLabel={spotifyOpen ? 'Hide player' : `Listen to ${preview?.artistName ?? spotifyArtist.name}`}
+              >
+                <Ionicons name="musical-note" size={16} color={t.colors.accent.aqua} />
+                <Text style={styles.spotifyText} numberOfLines={1}>
+                  Listen
+                  {preview?.trackName ? <Text style={styles.spotifyTrack}>{`  ${preview.trackName}`}</Text> : null}
+                </Text>
+                <Ionicons name={spotifyOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+              </TouchableOpacity>
+            ) : null}
+            {spotifyStatus === 'offline' ? <Text style={styles.statusText}>Listening needs signal.</Text> : null}
+            {spotifyOpen && spotifyStatus === 'ready' && embedUrl ? (
+              <View style={[styles.spotifyEmbed, { height: preview?.embedType === 'track' ? 152 : 352 }]}>
                 <WebView
-                  source={{ uri: spotify.embedUrl }}
+                  source={{ uri: embedUrl }}
                   style={styles.spotifyWebView}
                   allowsInlineMediaPlayback
                   mediaPlaybackRequiresUserAction={false}
@@ -708,7 +693,7 @@ export default function SetDetailScreen() {
                     // resource loads stay in the WebView. User clicks (Spotify
                     // or not) open externally; any other origin is blocked so a
                     // hijacked iframe can't navigate the WebView off-Spotify.
-                    if (req.url === spotify.embedUrl) return true;
+                    if (req.url === embedUrl) return true;
                     let host = '';
                     try {
                       host = new URL(req.url).hostname;
@@ -726,6 +711,18 @@ export default function SetDetailScreen() {
                   }}
                 />
               </View>
+            ) : null}
+            {spotifyStatus !== 'loading' && (spotifyStatus !== 'ready' || spotifyOpen) ? (
+              <TouchableOpacity
+                style={styles.linkButton}
+                onPress={() => openLink(spotifyArtist.url)}
+                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityLabel={`Open ${spotifyArtist.name} in Spotify`}
+              >
+                <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
+                <Text style={styles.linkText}>Open in Spotify</Text>
+              </TouchableOpacity>
             ) : null}
           </View>
         ) : null}
@@ -750,6 +747,40 @@ export default function SetDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Rate this set</Text>
             <RatingButtons setId={set.id} festivalId={currentFestival.id} />
+          </View>
+        ) : null}
+
+        {/* Genres */}
+        {allGenres.length > 0 ? (
+          <View style={styles.chipRow}>
+            {allGenres.map((g) => (
+              <View key={g} style={styles.chip}>
+                <Text style={styles.chipText}>{g}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Artist links */}
+        {artistLinks.length > 0 ? (
+          <View style={styles.linkRow}>
+            {artistLinks.flatMap((entry) =>
+              Object.entries(entry.links)
+                .filter(([key, url]) => !(key === 'spotify' && url === spotifyArtist?.url))
+                .map(([key, url]) => (
+                <TouchableOpacity
+                  key={`${entry.name}-${key}`}
+                  style={styles.linkButton}
+                  onPress={() => openLink(url)}
+                  activeOpacity={0.7}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open ${entry.name} on ${key}`}
+                >
+                  <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
+                  <Text style={styles.linkText}>{key}</Text>
+                </TouchableOpacity>
+              )),
+            )}
           </View>
         ) : null}
 
@@ -780,27 +811,15 @@ export default function SetDetailScreen() {
           ))}
         </View>
 
-        {/* Notes */}
+        {/* Crew note */}
         {currentProfile ? (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Your note</Text>
-            <TextInput
-              style={styles.noteInput}
-              value={personal.value}
-              onChangeText={personal.setValue}
-              placeholder="Private note for yourself"
-              placeholderTextColor={t.colors.text.placeholder}
-              multiline
-              accessibilityLabel="Personal note"
-            />
-            <NoteStatus status={personal.status} onRetry={personal.retry} />
-            <View style={styles.noteDivider} />
-            <Text style={styles.sectionLabel}>Crew note</Text>
+            <Text style={styles.sectionLabel}>Crew note (your crew sees this)</Text>
             <TextInput
               style={styles.noteInput}
               value={crew.value}
               onChangeText={crew.setValue}
-              placeholder="Shared note for your crew"
+              placeholder="Share a note with your crew…"
               placeholderTextColor={t.colors.text.placeholder}
               multiline
               accessibilityLabel="Crew note"
@@ -911,24 +930,19 @@ const useStyles = makeStyles((t) => ({
     // the last input clears the home indicator on notched iPhones.
     gap: t.spacing[3],
   },
-  // R15: container clips the overlay Views to the rounded image corners.
-  // position:relative + overflow:hidden is the RN pattern for this. Negative
-  // horizontal margins achieve full-bleed: the parent content has padding
-  // (t.spacing[5]) that would shrink the image, so we pull the container out
-  // to the edges.
-  artistPhotoContainer: {
-    height: 120,
-    borderRadius: t.radii.default,
-    marginBottom: t.spacing[3],
-    marginHorizontal: -t.spacing[5],
-    overflow: 'hidden',
+  artistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+  },
+  artistAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: t.radii.pill,
     backgroundColor: t.colors.bg.secondary,
   },
-  // R15: the photo fills the container; border-radius is inherited from the
-  // container via overflow:hidden, so we don't duplicate it here.
-  artistPhoto: {
-    width: '100%',
-    height: '100%',
+  artistText: {
+    flex: 1,
   },
   stagePill: {
     alignSelf: 'flex-start',
@@ -1007,6 +1021,22 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label'),
     color: t.colors.text.primary,
     flex: 1,
+  },
+  spotifyTrack: {
+    ...typeStyle('label'),
+    color: t.colors.text.muted,
+  },
+  panelButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[4],
+    paddingVertical: t.spacing[3],
+    borderRadius: t.radii.pill,
+    borderWidth: 1,
+    borderColor: t.colors.border.light,
+    backgroundColor: t.colors.bg.card,
   },
   spotifyEmbed: {
     borderRadius: t.radii.default,
@@ -1159,12 +1189,5 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border.light,
     backgroundColor: t.colors.bg.input,
     textAlignVertical: 'top',
-  },
-  // R2 hairline divider between personal and crew note sections for visual
-  // separation (glass.border token).
-  noteDivider: {
-    height: 1,
-    backgroundColor: t.colors.glass.border,
-    marginVertical: t.spacing[3],
   },
 }));

@@ -1257,7 +1257,7 @@ function makeProfileDeps(overrides: any = {}) {
     setNoStore: (_res: any) => {},
     sanitizeIdentifier: (s: any, _max: any) => (typeof s === 'string' ? s.trim() : ''),
     getFestivalById: mock.fn(async (id: any) => ({
-      id, name: 'Test Fest',
+      id, name: 'Test Fest', publishedAt: '2026-01-01T00:00:00.000Z',
       stages: [{ id: 'stg-1', name: 'Main' }],
       days: [{ label: 'Friday', sets: [{ id: 'set-a' }, { id: 'set-b' }] }],
     })),
