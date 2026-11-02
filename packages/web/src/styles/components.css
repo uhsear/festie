@@ -553,3 +553,26 @@ button[aria-label='Back to app'] {
     transform: scale(1.6);
   }
 }
+
+/* "You are here" dot (useSelfMarker): aqua with a white border on any basemap,
+   above the peer discs. The ring is the GPS accuracy radius and does not animate. */
+.festie-self-marker {
+  position: relative;
+  z-index: 3;
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: 50%;
+  background: var(--color-accent-aqua, #19e3d3);
+  border: 2px solid #fff;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+}
+.festie-self-accuracy {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-accent-aqua, #19e3d3) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-aqua, #19e3d3) 40%, transparent);
+  pointer-events: none;
+}

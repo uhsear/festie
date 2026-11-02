@@ -3,11 +3,12 @@
 
 /**
  * Schedule diff for admin festival saves. Only a set that moved (day, stage,
- * start or end) or left the lineup alerts the people who picked it. A rename,
+ * start or end) or left the lineup alerts the people who picked it or set a
+ * reminder on it. A rename,
  * a new set, a link change or a map change alerts nobody.
  */
 
-import { formatClock12 } from './time-zone.js';
+import { festivalStartMinutes, formatClock12 } from './time-zone.js';
 import { MAX_BODY_LENGTH } from './notifications/payload.js';
 
 export type SetSlot = { dayLabel: string; startTime: string | null; endTime: string | null; stageName: string | null };
@@ -99,7 +100,42 @@ function describeOne(festivalName: string, change: ScheduleChange): { title: str
   };
 }
 
-/** One message per user who picked at least one changed set. */
+/** `+30 min`, `-15 min`, `+1 h`, `+1 h 30 min`. */
+export function formatShiftDelta(minutes: number): string {
+  const sign = minutes < 0 ? '-' : '+';
+  const h = Math.floor(Math.abs(minutes) / 60);
+  const m = Math.abs(minutes) % 60;
+  if (h === 0) return `${sign}${m} min`;
+  return m === 0 ? `${sign}${h} h` : `${sign}${h} h ${m} min`;
+}
+
+/** The stage and minutes when every change is the same bulk shift on one stage and day, else null. */
+function shiftOf(changes: ScheduleChange[]): { stageName: string; delta: number } | null {
+  let shift: { stageName: string; dayLabel: string; delta: number } | null = null;
+  for (const change of changes) {
+    if (change.kind !== 'moved') return null;
+    const { before, after } = change;
+    if (!before.stageName || before.stageName !== after.stageName || before.dayLabel !== after.dayLabel) return null;
+    if (!before.startTime || !after.startTime) return null;
+    const delta = festivalStartMinutes(after.startTime) - festivalStartMinutes(before.startTime);
+    // The bound rejects a slot that crosses the 06:00 festival-day start (05:45 to 06:15 reads -1410).
+    if (delta === 0 || Math.abs(delta) > 360) return null;
+    if (
+      before.endTime &&
+      after.endTime &&
+      festivalStartMinutes(after.endTime) - festivalStartMinutes(before.endTime) !== delta
+    ) {
+      return null;
+    }
+    if (!shift) shift = { stageName: before.stageName, dayLabel: before.dayLabel, delta };
+    else if (shift.stageName !== before.stageName || shift.dayLabel !== before.dayLabel || shift.delta !== delta) {
+      return null;
+    }
+  }
+  return shift && { stageName: shift.stageName, delta: shift.delta };
+}
+
+/** One message per user who picked at least one changed set or set a reminder on it. */
 export function buildSchedulePushes(
   festivalName: string,
   changes: ScheduleChange[],
@@ -129,9 +165,12 @@ export function buildSchedulePushes(
     }
     const rest = userChanges.length - 2;
     const names = rest > 0 ? `${first.artist}, ${second.artist} and ${rest} more` : `${first.artist} and ${second.artist}`;
+    const shift = shiftOf(userChanges);
     pushes.push({
       userId,
-      title: `${userChanges.length} of your picks changed`,
+      title: shift
+        ? `${shift.stageName}: ${userChanges.length} of your picks moved ${formatShiftDelta(shift.delta)}`
+        : `${userChanges.length} of your picks changed`,
       body: `${festivalName}: ${names}. Tap to see the new times.`.slice(0, MAX_BODY_LENGTH),
     });
   }

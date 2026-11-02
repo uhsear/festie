@@ -17,6 +17,7 @@ export function resetAllStores(): void {
     currentFestival: null,
     currentProfile: null,
     allProfiles: [],
+    pickCounts: {},
     sets: [],
     stages: [],
     days: [],
@@ -38,6 +39,7 @@ export function resetAllStores(): void {
     scheduleGroupBy: null,
     prefsFestivalId: null,
     byFestival: {},
+    viewAsProfileId: null,
   });
   useCrewStore.setState({
     crews: [],

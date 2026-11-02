@@ -57,8 +57,8 @@ describe('grid clash copy', () => {
     expect(clashChip(3)).toBe('3 clashes');
   });
   it('formats the chip a11y label', () => {
-    expect(clashChipA11y(1)).toBe('You have 1 schedule clash. Show it.');
-    expect(clashChipA11y(3)).toBe(`You have 3 schedule clashes. Show the first one.`);
+    expect(clashChipA11y(1)).toBe('You have 1 schedule clash. Open it in Picks.');
+    expect(clashChipA11y(3)).toBe('You have 3 schedule clashes. Open them in Picks.');
   });
   it('never says conflict in grid copy', () => {
     for (const v of Object.values(COPY.grid)) expect(v.toLowerCase()).not.toContain('conflict');
@@ -77,5 +77,29 @@ describe('clash fix and My day copy', () => {
   });
   it('keeps every T13 clash key', () => {
     expect(COPY.clash).toMatchObject({ one: 'Schedule clash', badge: 'Clash', filter: 'Clashes', none: 'No clashes' });
+  });
+});
+
+describe('also plays copy', () => {
+  it('formats the strings', () => {
+    expect(COPY.alsoPlays.heading).toBe('Also plays');
+    expect(COPY.alsoPlays.row('Sat 9:00 PM')).toBe('Also plays Sat 9:00 PM');
+    expect(COPY.alsoPlays.pickToo).toBe('Pick this one too');
+    expect(COPY.alsoPlays.pickTooA11y('A', 'Sat 9:00 PM')).toBe('Pick A Sat 9:00 PM too');
+    expect(COPY.alsoPlays.picked).toBe('In your picks');
+    expect(COPY.alsoPlays.catchInstead('A', 'Sat')).toBe('Catch A on Sat instead');
+    expect(COPY.alsoPlays.catchInsteadA11y('A', 'Sat 9:00 PM')).toBe(
+      'Catch A Sat 9:00 PM instead, and remove this slot from your picks',
+    );
+    expect(COPY.alsoPlays.caught('A', 'Sat 9:00 PM')).toBe('Catching A Sat 9:00 PM instead.');
+    expect(COPY.alsoPlays.gone).toBe('That other slot is no longer free. Pick another fix.');
+  });
+  it('never says "Log in"', () => {
+    const strings = [
+      ...Object.values(COPY.alsoPlays).map((v) => (typeof v === 'function' ? v('x', 'y') : v)),
+      clashChipA11y(1),
+      clashChipA11y(3),
+    ];
+    for (const v of strings) expect(v).not.toMatch(/log in/i);
   });
 });

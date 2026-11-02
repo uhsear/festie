@@ -3,6 +3,7 @@
 
 import crypto from 'crypto';
 import { diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
+import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 
 export default function createFestivalsRoutes(deps: any) {
@@ -319,8 +320,10 @@ export default function createFestivalsRoutes(deps: any) {
     validateQuery(schemas.festivalDepthQuery),
     async (req: any, res: any) => {
       try {
-        const festival = visible(await getFestivalById(req.validatedParams.id), req);
-        if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        const cached = visible(await getFestivalById(req.validatedParams.id), req);
+        if (!cached) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        // The cached record can outlive a mark's 48 hours, so drop stale marks per response.
+        const festival = withFreshMoves(cached, Date.now());
         // Public festival structure (stages/days/sets) — no user data. Use
         // `no-cache` (revalidate) rather than `no-store` (never cache) so the
         // service worker can serve the last-known copy when offline while
@@ -353,6 +356,7 @@ export default function createFestivalsRoutes(deps: any) {
                 stageId: s.stageId,
                 startTime: s.startTime,
                 endTime: s.endTime,
+                ...(s.movedAt ? { movedAt: s.movedAt, movedFrom: s.movedFrom } : {}),
               })),
             })),
             mapConfig: festival.mapConfig ?? null,

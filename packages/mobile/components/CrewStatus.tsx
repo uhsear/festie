@@ -91,8 +91,8 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
     if (crewId) loadStatuses(crewId).catch(() => {});
   }, [crewId, loadStatuses]);
 
-  // Realtime crew:status-updated patching is wired centrally (single shared
-  // socket), so this component just reads crewStore.crewStatuses.
+  // Realtime crew:status-updated patching lives in hooks/useRealtimeSync.ts
+  // (single shared socket), so this component just reads crewStore.crewStatuses.
 
   useAutoArrive({
     crewId,

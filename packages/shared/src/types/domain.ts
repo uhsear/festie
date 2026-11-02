@@ -150,6 +150,13 @@ export interface Artist {
 // serialized set (nullable `startTime`/`endTime`/`stageId`, no `festivalId`/
 // `stageName`/`date`/`dayIndex`/`createdAt`/`updatedAt`); this domain model is a
 // superset with required times. Kept hand-written.
+export interface SetMovedFrom {
+  dayIndex: number;
+  stageId: string | null;
+  start: string | null;
+  end: string | null;
+}
+
 export interface FestivalSet {
   id: string;
   festivalId: string;
@@ -162,6 +169,10 @@ export interface FestivalSet {
   artist?: string;
   artists?: Artist[];
   linkUrl?: string;
+  /** T46: present only for 48 hours after an admin moved the set. */
+  movedAt?: string;
+  /** T46: present only for 48 hours after an admin moved the set. */
+  movedFrom?: SetMovedFrom;
   createdAt: string;
   updatedAt: string;
 }

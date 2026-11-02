@@ -2182,7 +2182,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List profiles for festival */
+        /** List profiles for festival (picks of other users only for crew mates; meta.pickCounts holds anonymous per-set counts of other attendees) */
         get: {
             parameters: {
                 query?: never;
@@ -2592,6 +2592,13 @@ export type components = {
                     endTime: string | null;
                     id: string;
                     linkUrl: string | null;
+                    movedAt?: string;
+                    movedFrom?: {
+                        dayIndex: number;
+                        end: string | null;
+                        stageId: string | null;
+                        start: string | null;
+                    };
                     stageId: string | null;
                     startTime: string | null;
                 }[];
@@ -2678,6 +2685,13 @@ export type components = {
                     }[];
                     endTime: string | null;
                     id: string;
+                    movedAt?: string;
+                    movedFrom?: {
+                        dayIndex: number;
+                        end: string | null;
+                        stageId: string | null;
+                        start: string | null;
+                    };
                     stageId: string | null;
                     startTime: string | null;
                 }[];
@@ -2768,6 +2782,13 @@ export type components = {
             endTime: string | null;
             id: string;
             linkUrl: string | null;
+            movedAt?: string;
+            movedFrom?: {
+                dayIndex: number;
+                end: string | null;
+                stageId: string | null;
+                start: string | null;
+            };
             stageId: string | null;
             startTime: string | null;
         };

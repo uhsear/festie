@@ -266,6 +266,10 @@ const mapRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/map',
   component: MapView,
+  validateSearch: (s: Record<string, unknown>): { focusStage?: string } =>
+    typeof s.focusStage === 'string' && s.focusStage.length > 0 && s.focusStage.length <= 100
+      ? { focusStage: s.focusStage }
+      : {},
 });
 
 // /crew-plan — one-screen offline-native "what's my crew's plan" digest.

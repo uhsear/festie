@@ -35,7 +35,10 @@ export interface UsePicksReturn {
   getMyPick: (setId: string) => Priority | null | undefined;
   getMyNote: (setId: string) => string | undefined;
   getMyReminder: (setId: string) => number | undefined;
+  /** Crew mates' picks of a set: the server sends other attendees' picks only to their crew mates. */
   getOtherPicks: (setId: string) => Array<{ profileId: string; priority: Priority; name?: string }>;
+  /** How many other attendees picked a set, crew or not (anonymous; 0 when unknown). */
+  getPickCount: (setId: string) => number;
 }
 
 export function usePicks(): UsePicksReturn {
@@ -49,6 +52,7 @@ export function usePicks(): UsePicksReturn {
   const myNotes = useFestivalStore((state) => state.currentProfile?.notes ?? null);
   const myReminders = useFestivalStore((state) => state.currentProfile?.reminders ?? null);
   const allProfiles = useFestivalStore((state) => state.allProfiles);
+  const pickCounts = useFestivalStore((state) => state.pickCounts);
   const savePick = useFestivalStore((state) => state.savePick);
   const removePick = useFestivalStore((state) => state.removePick);
   const saveNoteStore = useFestivalStore((state) => state.saveNote);
@@ -146,6 +150,8 @@ export function usePicks(): UsePicksReturn {
     [currentProfileId, allProfiles],
   );
 
+  const getPickCount = useCallback((setId: string): number => pickCounts?.[setId] ?? 0, [pickCounts]);
+
   return {
     canPick,
     savePick: handleSavePick,
@@ -156,5 +162,6 @@ export function usePicks(): UsePicksReturn {
     getMyNote,
     getMyReminder,
     getOtherPicks,
+    getPickCount,
   };
 }

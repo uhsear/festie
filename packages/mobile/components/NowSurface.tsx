@@ -16,6 +16,7 @@ import {
   type ActiveMeet,
   type CrewWhereabout,
   type NowNextSelection,
+  type StageWalk,
 } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
@@ -67,6 +68,7 @@ interface HeroProps {
   onOpenSet: (set: FestivalSet) => void;
   onBrowse: () => void;
   onWrap?: () => void;
+  walk?: StageWalk | null;
 }
 
 export function NowHero({
@@ -79,6 +81,7 @@ export function NowHero({
   onOpenSet,
   onBrowse,
   onWrap,
+  walk,
 }: HeroProps) {
   const t = useTokens();
   const s = useStyles();
@@ -165,12 +168,13 @@ export function NowHero({
     const stage = getStageName(next.set.stageId) || '';
     const imminent = Math.floor((next.start - nowMs) / 60_000) <= IMMINENT_MIN;
     const startsIn = fmtStartsIn(next.start, nowMs, timeZone);
+    const walkA11y = walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : '';
     body = (
       <AppPressable
         style={s.card}
         onPress={() => onOpenSet(next.set)}
         accessibilityRole="button"
-        accessibilityLabel={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}. Open details`}
+        accessibilityLabel={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}${walkA11y}. Open details`}
       >
         <SectionLabel style={s.flushLabel}>Next</SectionLabel>
         <Text style={s.artist}>
@@ -180,11 +184,11 @@ export function NowHero({
           {stage ? (
             <View style={s.walk}>
               <Ionicons name="walk-outline" size={iconSize.sm} color={t.colors.accent.aqua} />
-              <Text style={s.walkText}>Head to {stage}</Text>
+              <Text style={s.walkText}>{walk ? `Head to ${stage} · ${walk.label}` : `Head to ${stage}`}</Text>
             </View>
           ) : null}
           <View style={s.countdownRow}>
-            <Text style={[s.countdown, imminent && s.countdownImminent]}>{startsIn}</Text>
+            <Text style={[s.countdown, (imminent || walk?.late) && s.countdownImminent]}>{startsIn}</Text>
             <Text style={s.figureMuted}>{fmtZonedClock(next.start, timeZone)}</Text>
           </View>
         </View>

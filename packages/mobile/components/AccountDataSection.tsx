@@ -1,78 +1,59 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import { api } from '@festie/shared/services';
+import { DATA_COPY } from '@festie/shared/constants';
+import { exportErrorMessage } from '@festie/shared/services';
+import { useUIStore } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { shareAccountExport } from '../lib/exportData';
 
 /**
- * GDPR data export for the Account screen — the mobile analog of the web
- * "Export my data" download. Fetches GET /account/export (the full data
- * bundle), writes it to a JSON file in the cache directory, then hands it to
- * the OS share sheet via expo-sharing so the user can save or send it.
- * The server rate-limits exports to 1 / 24h; a 429 surfaces as a friendly note.
+ * Data download for the Account screen — the mobile analog of the web "Download my data"
+ * card. shareAccountExport() fetches GET /account/export, writes a JSON file to the cache
+ * directory and opens the OS share sheet. The server allows one export a day;
+ * exportErrorMessage turns the 429 into plain words with a local time.
  */
 export default function AccountDataSection() {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const [busy, setBusy] = useState(false);
 
   const handleExport = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      const data = await api.get<Record<string, unknown>>('/account/export');
-      const json = JSON.stringify(data, null, 2);
-
-      // One fixed filename, overwritten each export. A timestamped name left a
-      // fresh full-account JSON bundle in the cache on every tap, forever —
-      // a privacy footgun. Overwriting keeps at most one copy on disk.
-      const file = new File(Paths.cache, 'festie-data-export.json');
-      file.create({ overwrite: true });
-      file.write(json);
-
+      await shareAccountExport();
       haptics.success();
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(file.uri, {
-          mimeType: 'application/json',
-          UTI: 'public.json',
-          dialogTitle: 'Export your Festie data',
-        });
-      } else {
-        Alert.alert('Export ready', `Saved to ${file.uri}`);
-      }
     } catch (err) {
       haptics.warning();
-      const message = err instanceof Error ? err.message : 'Could not export your data.';
-      // The server returns 429 with a "Next available" message when rate-limited.
-      Alert.alert('Export unavailable', message);
+      Alert.alert(DATA_COPY.title, exportErrorMessage(err));
     } finally {
       setBusy(false);
     }
   };
+
+  const disabled = busy || offlineMode;
 
   return (
     <View style={styles.card}>
       <TouchableOpacity
         style={styles.row}
         onPress={() => void handleExport()}
-        disabled={busy}
+        disabled={disabled}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel="Export my data"
-        accessibilityState={{ disabled: busy }}
+        accessibilityLabel="Download my data"
+        accessibilityState={{ disabled, busy }}
       >
         <View style={styles.rowIcon}>
           <Ionicons name="download-outline" size={20} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
-          <Text style={styles.rowTitle}>Export my data</Text>
-          <Text style={styles.rowHint} numberOfLines={3}>
-            {busy ? 'Preparing your export…' : 'A JSON copy of your account · once per day'}
-          </Text>
+          <Text style={styles.rowTitle}>{DATA_COPY.title}</Text>
+          <Text style={styles.rowHint}>{busy ? DATA_COPY.busy : DATA_COPY.hint}</Text>
         </View>
         {busy ? (
           <ActivityIndicator size="small" color={t.colors.accent.aqua} />

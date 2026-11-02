@@ -41,6 +41,18 @@ vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+const heroProps = vi.hoisted(() => ({ walk: undefined as unknown }));
+vi.mock('../hooks/useLastKnownFix', () => ({ useLastKnownFix: () => ({ coord: null, at: null }) }));
+vi.mock('../components/festival-mode/NowHero', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../components/festival-mode/NowHero')>();
+  return {
+    default: (props: React.ComponentProps<typeof actual.default>) => {
+      heroProps.walk = props.walk;
+      return <actual.default {...props} />;
+    },
+  };
+});
+
 import FestivalModeView from './festival-mode';
 
 // UTC festival zone keeps every assertion independent of the host zone.
@@ -105,6 +117,12 @@ describe('FestivalModeView (Now surface)', () => {
     // The hero holds the first upcoming pick; the list holds the rest.
     expect(screen.getAllByTestId('fm-next-card')).toHaveLength(1);
     expect(screen.getByText('No crew yet')).toBeInTheDocument();
+  });
+
+  it('passes walk: null to the hero when there is no fix', () => {
+    setup({ user: true, picks: { s2: 'must' } });
+    render(<FestivalModeView />);
+    expect(heroProps.walk).toBeNull();
   });
 
   it('signed in with no picks today: says so and offers the lineup', () => {

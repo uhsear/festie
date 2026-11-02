@@ -1,5 +1,8 @@
 import { useCallback, useMemo } from 'react';
-import { useFestivalStore } from '../stores/festivalStore';
+import { useFestivalStore, selectMyPicks } from '../stores/festivalStore';
+import { COPY } from '../constants/copy';
+import { catchInsteadOption, planCatchInstead, type CatchInstead } from '../utils/alsoPlays';
+import type { Priority } from '../types/domain';
 import { usePicks } from './usePicks';
 import { resolveFestivalTimeZone } from '../utils/festivalTime';
 import type { ConflictGroup } from '../utils/pickConflicts';
@@ -15,6 +18,8 @@ import {
   type SplitContext,
   type SplitPlan,
 } from '../utils/clashPlan';
+
+const EMPTY_PICKS: Record<string, Priority> = {};
 
 export interface ClashResolution {
   message: string;
@@ -33,9 +38,16 @@ export function useClashResolver(): {
   keep: (group: ConflictGroup, keepSetId: string) => Promise<ClashResolution>;
   split: (group: ConflictGroup) => Promise<ClashResolution>;
   clearSplit: (group: ConflictGroup) => Promise<ClashResolution>;
+  /** The first way to fix the clash with another slot of one of its acts, or null. */
+  catchOption: (group: ConflictGroup) => CatchInstead | null;
+  /** Remove the clashing pick and pick the other slot. Throws `COPY.alsoPlays.gone` when it is no longer free. */
+  catchInstead: (group: ConflictGroup) => Promise<ClashResolution>;
 } {
   const festival = useFestivalStore((s) => s.currentFestival);
   const stages = useFestivalStore((s) => s.stages);
+  const sets = useFestivalStore((s) => s.sets);
+  const days = useFestivalStore((s) => s.days);
+  const myPicks = useFestivalStore(selectMyPicks) ?? EMPTY_PICKS;
   const notes = useFestivalStore((s) => s.currentProfile?.notes);
   const { savePick, removePick, saveNote } = usePicks();
 
@@ -98,5 +110,20 @@ export function useClashResolver(): {
     [apply, notes, separator],
   );
 
-  return { splitPlan, plannedSplit, keep, split, clearSplit };
+  const catchOption = useCallback(
+    (group: ConflictGroup) =>
+      catchInsteadOption(group, { sets, myPicks, days, timeZone, stages, nowMs: Date.now(), b2bSeparator: separator }),
+    [sets, myPicks, days, timeZone, stages, separator],
+  );
+
+  const catchInstead = useCallback(
+    async (group: ConflictGroup) => {
+      const option = catchOption(group);
+      if (!option) throw new Error(COPY.alsoPlays.gone);
+      return apply(planCatchInstead(option));
+    },
+    [apply, catchOption],
+  );
+
+  return { splitPlan, plannedSplit, keep, split, clearSplit, catchOption, catchInstead };
 }

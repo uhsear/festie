@@ -13,6 +13,7 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
 
 const savePick = vi.fn();
 const clearPick = vi.fn();
+const moveMock = vi.hoisted(() => ({ value: null as null | { chip: string; line: string; a11y: string } }));
 const picksApi = {
   getMyPick: vi.fn((): string | null => 'must'),
   getMyNote: vi.fn((): string => ''),
@@ -23,6 +24,7 @@ vi.mock('@festie/shared/hooks', () => ({
   usePicks: () => picksApi,
   useFestival: () => ({ getStageColor: () => '#ccc', getStageName: () => 'Main Stage' }),
   usePickClear: () => clearPick,
+  useSetMove: () => moveMock.value,
 }));
 
 vi.mock('../../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
@@ -49,6 +51,7 @@ const set = {
 describe('PicksPlanRow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    moveMock.value = null;
     Object.keys(festivalState).forEach((k) => delete festivalState[k]);
     Object.assign(festivalState, { currentFestival: { id: 'f1', name: 'Bonnaroo' } });
     Object.keys(uiState).forEach((k) => delete uiState[k]);
@@ -69,6 +72,20 @@ describe('PicksPlanRow', () => {
     expect(
       screen.getByRole('button', { name: /^Odesza, .*, Main Stage, has note, reminder 15 minutes before, clash$/ }),
     ).toBeInTheDocument();
+  });
+
+  it('shows the moved chip and the old slot in the accessible name', () => {
+    moveMock.value = { chip: 'Moved', line: 'Moved from Sat 10:00 PM, Sahara', a11y: 'Moved from Saturday 10:00 PM, Sahara' };
+    render(<PicksPlanRow set={set} hasClash={false} />);
+    expect(screen.getByTestId('set-moved-chip')).toHaveTextContent('Moved');
+    expect(
+      screen.getByRole('button', { name: /^Odesza, .*, Main Stage, Moved from Saturday 10:00 PM, Sahara$/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the moved chip when the set has no fresh move', () => {
+    render(<PicksPlanRow set={set} hasClash={false} />);
+    expect(screen.queryByTestId('set-moved-chip')).toBeNull();
   });
 
   it('shows no marker line when there is nothing to mark', () => {

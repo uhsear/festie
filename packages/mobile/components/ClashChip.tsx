@@ -1,22 +1,36 @@
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { clashChip, clashChipA11y } from '@festie/shared/constants';
+import { clashChip, clashChipA11y, COPY } from '@festie/shared/constants';
+import { useViewAs } from '@festie/shared/hooks';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import AppPressable from './AppPressable';
 
 interface ClashChipProps {
   count: number;
-  onPress: () => void;
+  picked: number;
 }
 
-export default function ClashChip({ count, onPress }: ClashChipProps) {
+export default function ClashChip({ count, picked }: ClashChipProps) {
   const t = useTokens();
   const styles = useStyles();
-  if (count === 0) return null;
+  const router = useRouter();
+  const { target } = useViewAs();
+  if (count === 0) {
+    // View as shows someone else's sets, so "No clashes" would mislead.
+    if (picked === 0 || target !== null) return null;
+    return (
+      <View style={styles.none} accessibilityRole="text">
+        <Text style={styles.noneText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {COPY.clash.none}
+        </Text>
+      </View>
+    );
+  }
   return (
     <AppPressable
       style={styles.chip}
-      onPress={onPress}
+      onPress={() => router.navigate({ pathname: '/(tabs)/picks', params: { show: 'clashes' } })}
       accessibilityRole="button"
       accessibilityLabel={clashChipA11y(count)}
     >
@@ -39,6 +53,15 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.clash.tint,
     borderWidth: 1,
     borderColor: t.colors.clash.mark,
+  },
+  none: {
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+  },
+  noneText: {
+    ...typeStyle('label'),
+    color: t.colors.text.muted,
   },
   text: {
     ...typeStyle('label', 600),

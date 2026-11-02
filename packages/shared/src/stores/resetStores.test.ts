@@ -29,6 +29,7 @@ describe('resetAllStores', () => {
       selectedDay: 3,
       activeStages: ['st1', 'st2'],
       searchQuery: 'test',
+      viewAsProfileId: 'p2',
       byFestival: {
         f1: { view: 'grid', activeStages: [], onlyMine: false, searchQuery: '', hiddenDays: [], dismissedPhase: null, groupBy: null },
       },
@@ -96,6 +97,7 @@ describe('resetAllStores', () => {
     expect(state.activeStages).toEqual([]);
     expect(state.searchQuery).toBe('');
     expect(state.byFestival).toEqual({});
+    expect(state.viewAsProfileId).toBeNull();
   });
 
   it('resets crewStore to defaults', () => {

@@ -91,7 +91,7 @@ export default function AccountPublicScheduleSection() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Public schedule page</Text>
-          <Text style={styles.rowHint}>Anyone with the link can see your picks for your newest festival. Turning it off hides this page. Links you sent from Share picks keep working until you reset them below.</Text>
+          <Text style={styles.rowHint}>Anyone with your link can see your picks for your newest festival. Off by default.</Text>
         </View>
         <AppSwitch
           value={on}

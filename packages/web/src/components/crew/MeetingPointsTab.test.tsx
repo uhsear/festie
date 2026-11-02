@@ -106,10 +106,26 @@ vi.mock('./CrewStatus', () => ({ default: () => null }));
 
 // CrewMap is lazy (maplibre); stand in a button that fires a map click.
 vi.mock('./CrewMap', () => ({
-  default: ({ onMapClick }: { onMapClick?: (c: { latitude: number; longitude: number }) => void }) => (
-    <button type="button" onClick={() => onMapClick?.({ latitude: 1, longitude: 2 })}>
-      fake map click
-    </button>
+  default: ({
+    onMapClick,
+    onSetMeetingPoint,
+  }: {
+    onMapClick?: (c: { latitude: number; longitude: number }) => void;
+    onSetMeetingPoint?: (p: { id: string; kind: 'stage'; name: string; kindLabel: string; coord: { latitude: number; longitude: number } }) => void;
+  }) => (
+    <>
+      <button type="button" onClick={() => onMapClick?.({ latitude: 1, longitude: 2 })}>
+        fake map click
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onSetMeetingPoint?.({ id: 's1', kind: 'stage', name: 'Mainstage', kindLabel: 'Stage', coord: { latitude: 3, longitude: 4 } })
+        }
+      >
+        fake set meeting point
+      </button>
+    </>
   ),
 }));
 
@@ -300,6 +316,17 @@ describe('MeetingPointsTab', () => {
     await user.click(await screen.findByRole('button', { name: 'fake map click' }));
     expect(screen.getByText('New meeting point')).toBeInTheDocument();
     expect(screen.getByText(/1\.0000, 2\.0000/)).toBeInTheDocument();
+  });
+
+  it('prefills the form from a place card Set as meeting point', async () => {
+    const user = userEvent.setup();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('tab', { name: /Map/ }));
+    await user.click(await screen.findByRole('button', { name: 'fake set meeting point' }));
+    expect(screen.getByText('New meeting point')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Meet at Mainstage')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('Mainstage')).toHaveLength(2);
+    expect(screen.getByText(/3\.0000, 4\.0000/)).toBeInTheDocument();
   });
 
   it('scopes the live-location store to the open crew so peer guards filter', () => {

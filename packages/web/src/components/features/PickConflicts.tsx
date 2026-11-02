@@ -60,7 +60,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
   const crewMembers = useCrewStore((state) => state.crewMembers);
 
   const setDetailSet = useUIStore((state) => state.setDetailSet);
-  const { splitPlan, plannedSplit, keep, split, clearSplit } = useClashResolver();
+  const { splitPlan, plannedSplit, keep, split, clearSplit, catchOption, catchInstead } = useClashResolver();
   const { toast, toastUndo, toastError } = useToast();
   const [busy, setBusy] = useState(false);
   const { getStageName, getStageColor: getStageColorRaw } = useFestival();
@@ -95,6 +95,8 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
   }, [groupsProp, sets, myPicks, selectedDay, days, timeZone, stages, activeCrew, myUserId, allProfiles, crewMembers]);
   const groups = groupsProp ?? ownGroups;
 
+  const catchFor = useMemo(() => new Map(groups.map((g) => [g, catchOption(g)])), [groups, catchOption]);
+
   if (groups.length === 0) return null;
 
   // Find the set object behind a clashing pick so we can open its detail panel.
@@ -118,9 +120,10 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
   };
 
   return (
-    <section className="mb-3 flex flex-col gap-3" aria-label="Schedule clashes">
+    <section id="clashes" tabIndex={-1} className="mb-3 flex flex-col gap-3 outline-none" aria-label="Schedule clashes">
       {groups.map((group, gi) => {
         const plan = splitPlan(group);
+        const catchOpt = catchFor.get(group) ?? null;
         const planned = plannedSplit(group);
         const first = group.pairs[0];
         const walk = group.picks.length === 2 ? first?.walkMinutes : null;
@@ -225,6 +228,18 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
               <p className="mt-2 text-xs text-text-secondary">{planned ?? plan?.sentence}</p>
             )}
             <div className="mt-2 flex flex-wrap gap-2">
+              {catchOpt && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="min-h-[44px]"
+                  disabled={busy}
+                  aria-label={COPY.alsoPlays.catchInsteadA11y(catchOpt.artist, catchOpt.to.when)}
+                  onClick={() => run(() => catchInstead(group))}
+                >
+                  {COPY.alsoPlays.catchInstead(catchOpt.artist, catchOpt.to.day)}
+                </Button>
+              )}
               {group.picks.map((pick) => {
                 const dn = artistDisplayName(pick.set, b2bSeparator);
                 const others = group.picks.length - 1;

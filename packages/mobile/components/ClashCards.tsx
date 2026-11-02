@@ -161,6 +161,7 @@ function ClashCard({
 
   const plan = resolver.splitPlan(group);
   const planned = resolver.plannedSplit(group);
+  const catchOption = resolver.catchOption(group);
 
   const card = (
     <View style={styles.clashCard}>
@@ -221,6 +222,14 @@ function ClashCard({
         </Text>
       ) : null}
       <View style={styles.buttonRow}>
+        {catchOption ? (
+          <ActionButton
+            label={COPY.alsoPlays.catchInstead(catchOption.artist, catchOption.to.day)}
+            a11y={COPY.alsoPlays.catchInsteadA11y(catchOption.artist, catchOption.to.when)}
+            disabled={busy}
+            onPress={() => run(() => resolver.catchInstead(group))}
+          />
+        ) : null}
         {group.picks.map((pick) => {
           const name = artistDisplayName(pick.set, separator);
           return (

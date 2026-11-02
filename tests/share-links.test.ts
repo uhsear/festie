@@ -247,7 +247,7 @@ describe('revocable share links', { skip, concurrency: 1 }, () => {
     const get = () => server.request.get('/api/v1/account/sharing').set('x-user-token', user.token).expect(200);
 
     const off = await get();
-    assert.deepEqual(off.body.data, { publicSchedule: false, publicFestival: null, linksResetAt: null });
+    assert.deepEqual(off.body.data, { publicSchedule: false, publicFestival: null, linksResetAt: null, statusLocations: [] });
 
     await withPool((pool) => pool.query('UPDATE users SET public_schedule = TRUE WHERE username = $1', [user.username]));
     const on = await get();

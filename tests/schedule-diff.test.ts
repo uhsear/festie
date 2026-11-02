@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { buildSchedulePushes, diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff';
+import { buildSchedulePushes, diffPickedSchedule, formatShiftDelta, isTbaToTime } from '../lib/schedule-diff';
 
 function festival(sets: any[], extraDay: any[] = []) {
   return {
@@ -92,6 +92,14 @@ describe('buildSchedulePushes', () => {
     before: slot('22:00'),
     after: slot('23:30'),
   });
+  // A stage move, so a list of these with `moved` is never a bulk time shift.
+  const restaged = (setId: string, artist: string) => ({
+    kind: 'moved' as const,
+    setId,
+    artist,
+    before: slot('22:00'),
+    after: slot('22:00', 'Mojave'),
+  });
 
   it('writes the one-set-moved copy with a set link', () => {
     const pushes = buildSchedulePushes('Coachella', [moved('set-1', 'Peggy Gou')], new Map([['set-1', ['u1']]]));
@@ -119,7 +127,7 @@ describe('buildSchedulePushes', () => {
   it('writes the two-change copy', () => {
     const pushes = buildSchedulePushes(
       'Coachella',
-      [moved('a', 'A'), moved('b', 'B')],
+      [moved('a', 'A'), restaged('b', 'B')],
       new Map([
         ['a', ['u1']],
         ['b', ['u1']],
@@ -135,7 +143,7 @@ describe('buildSchedulePushes', () => {
     const ids = ['a', 'b', 'c', 'd', 'e'];
     const pushes = buildSchedulePushes(
       'Coachella',
-      ids.map((id) => moved(id, id.toUpperCase())),
+      ids.map((id) => (id === 'e' ? restaged : moved)(id, id.toUpperCase())),
       new Map(ids.map((id) => [id, ['u1']])),
     );
     assert.equal(pushes[0]!.title, '5 of your picks changed');
@@ -176,6 +184,112 @@ describe('buildSchedulePushes', () => {
       ['b', ['u1']],
     ]));
     assert.ok(push!.body.length <= 200);
+  });
+});
+
+describe('buildSchedulePushes shift form', () => {
+  const at = (startTime: string | null, endTime: string | null = null, stageName: string | null = 'Sahara', dayLabel = 'Sat') => ({
+    dayLabel,
+    startTime,
+    endTime,
+    stageName,
+  });
+  const change = (setId: string, before: any, after: any) => ({
+    kind: 'moved' as const,
+    setId,
+    artist: setId.toUpperCase(),
+    before,
+    after,
+  });
+  const allTo = (userId: string, changes: any[]) => new Map(changes.map((c) => [c.setId, [userId]]));
+  const titleOf = (changes: any[]) => buildSchedulePushes('Coachella', changes, allTo('u1', changes))[0]!.title;
+
+  it('titles a bulk shift with the stage, count and delta, and keeps the multi-change body', () => {
+    const changes = [
+      change('a', at('20:00', '21:00'), at('20:30', '21:30')),
+      change('b', at('21:00', '22:00'), at('21:30', '22:30')),
+      change('c', at('22:00', '23:00'), at('22:30', '23:30')),
+    ];
+    const [push] = buildSchedulePushes('Coachella', changes, allTo('u1', changes));
+    assert.equal(push!.title, 'Sahara: 3 of your picks moved +30 min');
+    assert.equal(push!.body, 'Coachella: A, B and 1 more. Tap to see the new times.');
+    assert.equal(push!.setId, undefined);
+  });
+
+  it('sends the shift only to the user who picked shifted sets', () => {
+    // 20 sets, 30 minutes apart from 12:00, all shifted +30.
+    const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    const changes = Array.from({ length: 20 }, (_, i) => change(`s${i}`, at(hhmm(720 + i * 30)), at(hhmm(750 + i * 30))));
+    const pickers = new Map([
+      ['s0', ['A']],
+      ['s5', ['A']],
+      ['s9', ['A']],
+    ]);
+    const pushes = buildSchedulePushes('Coachella', changes, pickers);
+    assert.deepEqual(
+      pushes.map((p) => [p.userId, p.title]),
+      [['A', 'Sahara: 3 of your picks moved +30 min']],
+    );
+  });
+
+  it('keeps the one-set copy with a set link for a single shifted set', () => {
+    const changes = [change('a', at('20:00'), at('20:30'))];
+    const [push] = buildSchedulePushes('Coachella', changes, allTo('u1', changes));
+    assert.equal(push!.title, 'A moved');
+    assert.equal(push!.setId, 'a');
+  });
+
+  it('counts a shift across midnight', () => {
+    const changes = [change('a', at('23:45'), at('00:15')), change('b', at('22:00'), at('22:30'))];
+    assert.equal(titleOf(changes), 'Sahara: 2 of your picks moved +30 min');
+  });
+
+  it('never reads a slot that crosses the 06:00 festival-day start as a shift', () => {
+    const changes = [change('a', at('05:45'), at('06:15')), change('b', at('05:30'), at('06:00'))];
+    assert.equal(titleOf(changes), '2 of your picks changed');
+  });
+
+  it('falls back to the changed form for mixed or partial shifts', () => {
+    const base = change('a', at('20:00', '21:00'), at('20:30', '21:30'));
+    const cases: [string, any][] = [
+      ['mixed deltas', change('b', at('21:00'), at('21:15'))],
+      ['two stages', change('b', at('21:00', null, 'Mojave'), at('21:30', null, 'Mojave'))],
+      ['two days', change('b', at('21:00', null, 'Sahara', 'Sun'), at('21:30', null, 'Sahara', 'Sun'))],
+      ['a day change', change('b', at('21:00'), at('21:30', null, 'Sahara', 'Sun'))],
+      ['a stage change', change('b', at('21:00'), at('21:30', null, 'Mojave'))],
+      ['a TBA', change('b', at(null), at('21:30'))],
+      ['a set to TBA', change('b', at('21:00'), at(null))],
+      ['no stage', change('b', at('21:00', null, null), at('21:30', null, null))],
+      ['an end that moved differently', change('b', at('21:00', '22:00'), at('21:30', '22:00'))],
+      ['an end-only move', change('b', at('21:00', '22:00'), at('21:00', '22:30'))],
+      ['a removed set', { kind: 'removed', setId: 'b', artist: 'B' }],
+    ];
+    for (const [name, other] of cases) {
+      assert.equal(titleOf([base, other]), '2 of your picks changed', name);
+    }
+  });
+
+  it('accepts a shift up to 6 hours and rejects more', () => {
+    const six = [change('a', at('12:00'), at('18:00')), change('b', at('13:00'), at('19:00'))];
+    assert.equal(titleOf(six), 'Sahara: 2 of your picks moved +6 h');
+    const more = [change('a', at('12:00'), at('18:15')), change('b', at('13:00'), at('19:15'))];
+    assert.equal(titleOf(more), '2 of your picks changed');
+  });
+
+  it('reads a backward shift with a minus sign', () => {
+    const changes = [change('a', at('22:00', '23:00'), at('21:45', '22:45')), change('b', at('23:00'), at('22:45'))];
+    assert.equal(titleOf(changes), 'Sahara: 2 of your picks moved -15 min');
+  });
+});
+
+describe('formatShiftDelta', () => {
+  it('writes minutes, hours, and both', () => {
+    assert.equal(formatShiftDelta(30), '+30 min');
+    assert.equal(formatShiftDelta(-15), '-15 min');
+    assert.equal(formatShiftDelta(60), '+1 h');
+    assert.equal(formatShiftDelta(90), '+1 h 30 min');
+    assert.equal(formatShiftDelta(-120), '-2 h');
+    assert.equal(formatShiftDelta(-90), '-1 h 30 min');
   });
 });
 
