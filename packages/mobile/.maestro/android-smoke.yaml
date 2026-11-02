@@ -75,7 +75,7 @@ env:
 - openLink: "festie://cards"
 - assertVisible:
     id: "schedule-screen"
-- tapOn: "Picks"
+- tapOn: "My Plan"
 - assertVisible:
     id: "picks-screen"
 - tapOn: "Crew"

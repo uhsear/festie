@@ -10,9 +10,13 @@ const PRIORITY_STYLE: Record<Priority, { label: string; bg: string; fg: string }
 
 interface CompareCellProps {
   priority: Priority | undefined;
+  /** With no priority, renders an "Add" button instead of the dash. */
+  onAdd?: () => void;
+  /** Accessible name for the Add button. */
+  label?: string;
 }
 
-export default memo(function CompareCell({ priority }: CompareCellProps) {
+export default memo(function CompareCell({ priority, onAdd, label }: CompareCellProps) {
   return (
     <td className="py-3 px-2 text-center align-middle">
       {priority ? (
@@ -23,6 +27,15 @@ export default memo(function CompareCell({ priority }: CompareCellProps) {
           <PriorityIcon priority={priority} className="w-3 h-3" filled />
           {PRIORITY_STYLE[priority].label}
         </span>
+      ) : onAdd ? (
+        <button
+          type="button"
+          onClick={onAdd}
+          aria-label={label}
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-accent-aqua/70 px-3 text-[length:var(--font-size-12)] font-semibold text-accent-aqua hover:border-accent-aqua focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        >
+          Add
+        </button>
       ) : (
         <span className="text-text-muted text-xs">{'—'}</span>
       )}
