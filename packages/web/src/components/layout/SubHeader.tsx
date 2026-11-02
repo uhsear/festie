@@ -283,7 +283,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                             'active',
                             // Accent rule: aqua = selection/primary, dark ink = text.onLightAccent.
                             'bg-day-tab-active text-[var(--text-on-light-accent)] border-day-tab-active font-bold',
-                            'shadow-[0_0_0_1px_rgba(0,232,208,0.45),var(--shadow-glow-aqua),0_4px_12px_rgba(0,0,0,0.25)]',
+                            'shadow-[0_0_0_1px_var(--color-aqua-a4),var(--shadow-glow-aqua),0_4px_12px_rgba(0,0,0,0.25)]',
                           ]
                         : 'bg-bg-card border border-border-light text-text-secondary',
                     )}

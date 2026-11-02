@@ -33,7 +33,7 @@ export const COPY = {
   },
   meetingPoint: {
     one: 'Meeting point', many: 'Meeting points', add: 'New meeting point', edit: 'Edit meeting point',
-    noTime: 'no time',
+    noTime: 'no time', loadFailed: "Couldn't load meeting points.",
   },
   auth: {
     signIn: 'Sign in', signingIn: 'Signing in…', createAccount: 'Create account',
@@ -46,6 +46,7 @@ export const COPY = {
     tight: 'Tight change', suggested: 'Suggested', split: 'Split',
     splitPlanned: 'Split planned', clearPlan: 'Clear plan', undo: 'Undo',
     failed: "Couldn't update your picks. Try again.",
+    noneBody: "None of your picks clash. You're all set.",
   },
   myDay: {
     name: 'My day', byPriority: 'By priority', allPicks: 'All picks', unscheduled: 'Time not announced',
@@ -77,9 +78,13 @@ export const COPY = {
     picked: 'In your picks',
     catchInstead: (artist: string, day: string) => `Catch ${artist} on ${day} instead`,
     catchInsteadA11y: (artist: string, when: string) =>
-      `Catch ${artist} ${when} instead, and remove this slot from your picks`,
+      `Catch ${artist} ${when} instead, and remove this set from your picks`,
     caught: (artist: string, when: string) => `Catching ${artist} ${when} instead.`,
-    gone: 'That other slot is no longer free. Pick another fix.',
+    gone: 'That other set is no longer free. Pick another fix.',
+  },
+  festivalLoad: {
+    errorTitle: "Couldn't load festivals", errorBody: 'Check your connection, then try again.',
+    retry: 'Try again', noneTitle: 'No festival selected',
   },
   status: { playing: 'Playing', playingA11y: 'Playing now', liveLocation: 'Live' },
 } as const;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, Switch, Alert } from 'react-native';
+import { View, Text, FlatList, Alert } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { File, Paths } from 'expo-file-system';
@@ -26,6 +26,7 @@ import {
 } from '@festie/shared/utils';
 import { useAuthStore } from '@festie/shared/stores';
 import ScreenHeader from '../../components/ScreenHeader';
+import AppSwitch from '../../components/AppSwitch';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
 import Button from '../../components/Button';
@@ -455,7 +456,7 @@ export default function LineupImportScreen() {
           <SectionLabel>Match columns</SectionLabel>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>First row is a header</Text>
-            <Switch value={hasHeader} onValueChange={handleHeaderToggle} accessibilityLabel="First row is a header" />
+            <AppSwitch value={hasHeader} onValueChange={handleHeaderToggle} accessibilityLabel="First row is a header" />
           </View>
           {LINEUP_IMPORT_FIELDS.map((f) => (
             <ModalSelect
@@ -518,7 +519,7 @@ export default function LineupImportScreen() {
             <Text style={styles.toggleLabel}>
               Update sets that match. Sets match by artist and day. When this is off, matching sets stay as they are.
             </Text>
-            <Switch
+            <AppSwitch
               value={updateExisting}
               onValueChange={(v) => handleToggle('update', v)}
               disabled={working}
@@ -527,7 +528,7 @@ export default function LineupImportScreen() {
           </View>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>Create new stages and days</Text>
-            <Switch
+            <AppSwitch
               value={createMissing}
               onValueChange={(v) => handleToggle('create', v)}
               disabled={working}

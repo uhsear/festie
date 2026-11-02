@@ -56,7 +56,7 @@ const cellBase =
 function AdminUsersList() {
   const navigate = useNavigate();
   const selfId = useAuthStore((s) => s.user?.id);
-  const { users, total, hasMore, loading, loadingMore, error, search, setSearch, loadMore, patchUser, removeUser } =
+  const { users, total, hasMore, loading, loadingMore, error, search, setSearch, loadMore, refresh, patchUser, removeUser } =
     useAdminUserList();
   const [{ q }, setAdminSearch] = useAdminSearch();
   // The box keeps what was typed (the URL value is trimmed); the URL follows after a pause.
@@ -221,8 +221,11 @@ function AdminUsersList() {
       />
 
       {error && users.length === 0 ? (
-        <div role="alert" className="text-center py-8 text-accent-coral">
-          {error}
+        <div role="alert" className="text-center py-8 space-y-3">
+          <p className="text-accent-coral">{error}</p>
+          <Button variant="secondary" size="md" onClick={refresh}>
+            Retry
+          </Button>
         </div>
       ) : users.length === 0 ? (
         <EmptyState

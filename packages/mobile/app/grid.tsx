@@ -19,6 +19,7 @@ import { useFestivalDataStore, useFestivalStore, useAuthStore } from '@festie/sh
 import { usePicks, useFestival, useDayClashes, useViewAs } from '@festie/shared/hooks';
 import { COPY } from '@festie/shared/constants';
 import {
+  festivalLoadState,
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
   twoUpColumnWidth,
@@ -47,6 +48,8 @@ import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
 import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
+import LoadingState from '../components/LoadingState';
+import { SCHEDULE_HREF } from '../lib/dayOfRoutes';
 import ClashHatch from '../components/ClashHatch';
 import ClashChip from '../components/ClashChip';
 import TBASection from '../components/TBASection';
@@ -105,6 +108,17 @@ export default function GridScreen() {
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const stages = useFestivalDataStore((s) => s.stages);
+  const festivals = useFestivalDataStore((s) => s.festivals);
+  const festivalsLoading = useFestivalDataStore((s) => s.isLoading);
+  const festivalsError = useFestivalDataStore((s) => s.error);
+  const loadFestivals = useFestivalDataStore((s) => s.loadFestivals);
+  // A cold deep link lands here before any screen has loaded the catalogue; without this the empty state never resolves.
+  useEffect(() => {
+    const { isLoading, error } = useFestivalDataStore.getState();
+    if (!currentFestival && festivals.length === 0 && !isLoading && !error) {
+      loadFestivals().catch(() => {});
+    }
+  }, [currentFestival, festivals.length, loadFestivals]);
   const user = useAuthStore((s) => s.user);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const activeStages = useFestivalStore((s) => s.activeStages);
@@ -315,14 +329,27 @@ export default function GridScreen() {
 
   // ── Empty states (mirror the web grid) ──
   if (!currentFestival) {
+    const loadState = festivalLoadState({ currentFestival, festivals, isLoading: festivalsLoading, error: festivalsError });
     return (
       <View style={styles.screen}>
         <Stack.Screen options={{ title: screenTitle, headerShown: true }} />
-        <EmptyState
-          icon="calendar-outline"
-          title="No festival selected"
-          message="Choose a festival from the schedule tab to view the grid."
-        />
+        {loadState === 'error' ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title={COPY.festivalLoad.errorTitle}
+            message={festivalsError ?? COPY.festivalLoad.errorBody}
+            action={{ label: COPY.festivalLoad.retry, onPress: () => void loadFestivals().catch(() => {}) }}
+          />
+        ) : loadState === 'loading' ? (
+          <LoadingState />
+        ) : (
+          <EmptyState
+            icon="calendar-outline"
+            title={COPY.festivalLoad.noneTitle}
+            message="Choose a festival on the Lineup tab to view the grid."
+            action={{ label: 'Choose a festival', onPress: () => router.navigate(SCHEDULE_HREF) }}
+          />
+        )}
       </View>
     );
   }

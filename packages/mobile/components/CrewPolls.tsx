@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, AccessibilityInfo, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { CrewPoll, FestivalDay, FestivalSet, PollSetRef, Stage } from '@festie/shared/types';
@@ -21,6 +21,7 @@ import {
 import type { PollEndChoice } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import AppSwitch from './AppSwitch';
 import Button from './Button';
 import EmptyState from './EmptyState';
 import CrewPollCard from './CrewPollCard';
@@ -345,11 +346,9 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
   const multiAnswerRow = (
     <View style={styles.switchRow}>
       <Text style={styles.switchLabel}>Allow more than one answer</Text>
-      <Switch
+      <AppSwitch
         value={multiAnswer}
         onValueChange={setMultiAnswer}
-        trackColor={{ true: t.colors.accent.aqua }}
-        ios_backgroundColor={t.colors.text.muted}
         accessibilityLabel="Allow more than one answer"
       />
     </View>

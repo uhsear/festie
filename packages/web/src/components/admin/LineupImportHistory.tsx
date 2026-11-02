@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { lineupImportApi } from '@festie/shared/services/lineupImport';
 import type { LineupImportHistoryItem, LineupImportUndoResult } from '@festie/shared/utils/lineupImport';
 import { useToast } from '../../lib/toastContext';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import EmptyState from '../ui/EmptyState';
 
 interface Props {
   festivalId: string;
@@ -19,6 +21,7 @@ const buttonClass =
 export default function LineupImportHistory({ festivalId, festivalName, refreshKey = 0 }: Props) {
   const [imports, setImports] = useState<LineupImportHistoryItem[]>([]);
   const [recipients, setRecipients] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [undoTarget, setUndoTarget] = useState<LineupImportHistoryItem | null>(null);
   const [announceOpen, setAnnounceOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -27,6 +30,7 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
 
   const reload = useCallback(async () => {
     try {
+      setLoadError(null);
       const [history, announcement] = await Promise.all([
         lineupImportApi.history(festivalId),
         lineupImportApi.announcement(festivalId),
@@ -34,6 +38,7 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
       setImports(history.imports);
       setRecipients(announcement.recipients);
     } catch (err: unknown) {
+      setLoadError(err);
       toastError(err, "Couldn't load import history. Try again.");
     }
   }, [festivalId, toastError]);
@@ -79,7 +84,13 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
     <div className="space-y-8">
       <section>
         <h3 className="type-heading text-text-primary mb-3">Import history</h3>
-        {imports.length === 0 ? (
+        {loadError && imports.length === 0 ? (
+          <EmptyState
+            title="Couldn't load import history"
+            description={mapErrorToUserMessage(loadError, 'Check your connection, then try again.')}
+            cta={{ label: 'Retry', onClick: () => void reload() }}
+          />
+        ) : imports.length === 0 ? (
           <p className="text-sm text-text-muted">No imports yet.</p>
         ) : (
           <ul className="space-y-2">

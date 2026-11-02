@@ -283,7 +283,7 @@ describe('PickConflicts', () => {
       const buttons = screen.getAllByRole('button').filter((b) => /Catch|Keep/.test(b.textContent ?? ''));
       expect(buttons[0]).toHaveTextContent('Catch Odesza on Sun instead');
       expect(buttons[0]).toHaveAccessibleName(
-        'Catch Odesza Sun 9:00 PM instead, and remove this slot from your picks',
+        'Catch Odesza Sun 9:00 PM instead, and remove this set from your picks',
       );
       await user.click(buttons[0]);
       expect(resolver.catchInstead).toHaveBeenCalledWith(expect.anything());

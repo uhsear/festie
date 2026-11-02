@@ -150,4 +150,13 @@ describe('AdminUsers', () => {
     await userEvent.click(screen.getByLabelText('Select bob'));
     expect(screen.getByRole('region', { name: 'Selection' })).toHaveTextContent('1 selected');
   });
+
+  it('load error shows the alert and a Retry that calls refresh', async () => {
+    const refresh = vi.fn();
+    listState = { ...listState, users: [], total: 0, error: 'Network down', refresh };
+    render(<AdminUsers />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Network down');
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
 });

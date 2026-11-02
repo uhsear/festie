@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, View, Text, ScrollView, Switch, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { Alert, View, Text, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +19,7 @@ import {
 } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import EmptyState from '../../components/EmptyState';
+import AppSwitch from '../../components/AppSwitch';
 import LoadingState from '../../components/LoadingState';
 import SectionLabel from '../../components/SectionLabel';
 import {
@@ -1207,12 +1208,9 @@ export default function FestivalEditScreen() {
                   Sends one alert to each person who picked a set you moved or removed.
                 </Text>
               </View>
-              <Switch
+              <AppSwitch
                 value={notifyPickers}
                 onValueChange={setNotifyPickers}
-                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-                ios_backgroundColor={t.colors.text.muted}
-                thumbColor={t.colors.text.onAccent}
                 accessibilityLabel="Tell people whose picks changed"
                 accessibilityState={{ checked: notifyPickers }}
               />

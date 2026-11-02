@@ -506,8 +506,8 @@ export const GUEST_PROMPT_COPY = {
       message: 'Create a free account to invite friends, compare picks and find the sets you all want to see.',
     },
     wrap: {
-      title: 'See your festival recap',
-      message: 'Create a free account to rate sets and get a recap of your festival to share.',
+      title: 'See your Festival Wrap',
+      message: 'Create a free account to rate sets and get a Festival Wrap to share.',
     },
   },
 } as const;

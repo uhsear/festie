@@ -82,7 +82,7 @@ export default function UserMenuProfileCard({ user }: UserMenuProfileCardProps) 
           <div className="flex flex-wrap gap-[var(--space-3)] mb-2.5">
             {currentProfile ? (
               <>
-                <span className="inline-flex items-center gap-[var(--space-2)] px-2 py-[3px] rounded-full bg-[var(--color-aqua-a1)] border border-[rgba(0,232,208,.28)] text-[length:var(--font-size-12)] font-bold tracking-[.4px] uppercase text-accent-aqua">
+                <span className="inline-flex items-center gap-[var(--space-2)] px-2 py-[3px] rounded-full bg-[var(--color-aqua-a1)] border border-[var(--color-aqua-a3)] text-[length:var(--font-size-12)] font-bold tracking-[.4px] uppercase text-accent-aqua">
                   Joined
                 </span>
                 <span className="inline-flex items-center gap-[var(--space-2)] px-2 py-[3px] rounded-full bg-[var(--color-overlay-2)] border border-border-light text-[length:var(--font-size-12)] font-bold tracking-[.4px] uppercase text-text-secondary">
