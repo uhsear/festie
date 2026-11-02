@@ -27,6 +27,7 @@ import { UIProvider } from '../contexts/UIContext';
 import OfflineBanner from '../components/OfflineBanner';
 import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
+import AnnouncementBanner from '../components/AnnouncementBanner';
 import FirstRunIntro from '../components/FirstRunIntro';
 import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -193,6 +194,8 @@ function AuthGate() {
   // The app-wide SOS banner sits under the OfflineBanner and takes the inset
   // only when the OfflineBanner is not showing.
   const [sosActive, setSosActive] = useState(false);
+  // The announcement banner sits under the SOS banner and takes the inset last.
+  const [announceActive, setAnnounceActive] = useState(false);
 
   // Ensure Android notification channels exist BEFORE any notification is
   // scheduled. useLocalReminders targets channelId 'updates' which must exist
@@ -392,7 +395,8 @@ function AuthGate() {
       <StatusBar style={theme === 'daylight' ? 'dark' : 'light'} />
       {!loading && <OfflineBanner onActiveChange={setBannerActive} />}
       {!loading && <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />}
-      <TopBannerContext.Provider value={bannerActive || sosActive}>
+      {!loading && <AnnouncementBanner padTop={!bannerActive && !sosActive} onActiveChange={setAnnounceActive} />}
+      <TopBannerContext.Provider value={bannerActive || sosActive || announceActive}>
         <View style={styles.appShell}>
           {/* Use expo-router's global router singleton (not the local useRouter
               instance): the root boundary sits OUTSIDE the Stack, so it must

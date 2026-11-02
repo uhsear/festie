@@ -17,6 +17,7 @@ import IOSInstallSheet from '../features/IOSInstallSheet';
 import NowNextStrip from '../features/NowNextStrip';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
+import AnnouncementBanner from '../features/AnnouncementBanner';
 import LiveLocationSharing from '../crew/LiveLocationSharing';
 import Onboarding from '../features/Onboarding';
 import JoinCrewSheet from '../crew/JoinCrewSheet';
@@ -163,6 +164,7 @@ export default function AppShell() {
         {joinCrewSheet}
         <Header />
         <SosBanner />
+        <AnnouncementBanner />
         <LiveLocationSharing />
 
         {showDayBanner && <FestivalDayBanner />}
