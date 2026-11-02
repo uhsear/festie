@@ -68,7 +68,7 @@ export function createCalendarFeedRoute(deps: any) {
       }
 
       const token = await stores.calendarTokens.getByToken(tokenId);
-      if (!token) return res.status(404).type('text/plain').send('Calendar not found');
+      if (!token) return res.status(404).type('text/plain').send('Calendar not found. It may have been reset. Subscribe again from Festie: Picks, then Add to calendar.');
 
       const festival = await stores.festivals.getById(token.festival_id);
       if (!festival) return res.status(404).type('text/plain').send('Festival not found');

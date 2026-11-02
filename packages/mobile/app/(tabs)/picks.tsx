@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Share,
+  Linking,
   TextInput,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
@@ -18,7 +18,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import type { ConflictGroup } from '@festie/shared/utils';
@@ -30,10 +30,10 @@ import {
   getSetTimeBounds,
   resolveFestivalTimeZone,
   formatTime,
-  buildPicksIcs,
-  buildPicksShareUrl,
+  buildPicksIcsExport,
+  describeIcsExport,
 } from '@festie/shared/utils';
-import { mapErrorToUserMessage } from '@festie/shared/services';
+import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
 import { COPY, GUEST_PROMPT_COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
@@ -597,11 +597,11 @@ export default function PicksScreen() {
   // Built fully client-side from the already-loaded store data (no server call,
   // works offline) and shared via the OS sheet — same write/share flow as the
   // account data export.
-  const handleExportCalendar = useCallback(async () => {
+  const handleDownloadCalendar = useCallback(async () => {
     if (!currentFestival || !currentProfile || exportBusy) return;
     setExportBusy(true);
     try {
-      const ics = buildPicksIcs({
+      const result = buildPicksIcsExport({
         festival: {
           id: currentFestival.id,
           name: currentFestival.name,
@@ -611,7 +611,9 @@ export default function PicksScreen() {
         stages,
         picks: currentProfile.picks,
         notes: currentProfile.notes,
+        reminders: currentProfile.reminders,
       });
+      const ics = result.ics;
       const safeName = (currentFestival.name || 'festival').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
       const file = new File(Paths.cache, `${safeName}_picks.ics`);
       file.create({ overwrite: true });
@@ -623,6 +625,7 @@ export default function PicksScreen() {
           UTI: 'com.apple.ical.ics',
           dialogTitle: 'Add picks to calendar',
         });
+        useUIStore.getState().showToast(describeIcsExport(result), { kind: 'success' });
       } else {
         Alert.alert('Sharing unavailable', 'Calendar sharing is not available on this device.');
       }
@@ -634,6 +637,41 @@ export default function PicksScreen() {
     }
   }, [currentFestival, currentProfile, sets, stages, exportBusy, haptics]);
 
+  // Subscribe to the live feed: webcal:// opens the iOS Calendar subscribe prompt.
+  // Android has no webcal handler, so the open rejects and Google Calendar's
+  // add-by-URL page takes over. No scheme probe: on iOS that needs a native plist entry.
+  const handleSubscribeCalendar = useCallback(async () => {
+    if (!currentFestival) return;
+    let links: Awaited<ReturnType<typeof fetchCalendarLinks>>;
+    try {
+      links = await fetchCalendarLinks(currentFestival.id);
+    } catch {
+      haptics.warning();
+      useUIStore
+        .getState()
+        .showToast("Couldn't get your calendar link. Check your connection and try again.", { kind: 'error' });
+      return;
+    }
+    try {
+      await Linking.openURL(links.webcalUrl);
+    } catch {
+      Linking.openURL(links.googleUrl).catch(() => haptics.warning());
+    }
+  }, [currentFestival, haptics]);
+
+  const handleAddToCalendar = useCallback(() => {
+    haptics.tap();
+    Alert.alert(
+      'Add to calendar',
+      'Subscribe keeps your calendar up to date when set times change. Download once saves a file that does not update.',
+      [
+        { text: 'Subscribe (stays up to date)', onPress: () => void handleSubscribeCalendar() },
+        { text: 'Download once', onPress: () => void handleDownloadCalendar() },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  }, [haptics, handleSubscribeCalendar, handleDownloadCalendar]);
+
   // Nothing to export / share with zero picks — disable so the action can't
   // produce an empty .ics or share an empty plan.
   const noPicks = stats.total === 0;
@@ -641,7 +679,7 @@ export default function PicksScreen() {
   const calendarButton = (
     <TouchableOpacity
       style={[styles.calendarButton, (exportBusy || noPicks) && styles.calendarButtonDisabled]}
-      onPress={handleExportCalendar}
+      onPress={handleAddToCalendar}
       disabled={exportBusy || noPicks}
       activeOpacity={0.8}
       accessibilityRole="button"
@@ -659,13 +697,11 @@ export default function PicksScreen() {
     </TouchableOpacity>
   );
 
-  // Share a public, read-only link to my picks (server route GET /s/:profileId).
+  // One share hub (link, QR, scan, text). Open even with no picks so Scan QR is reachable.
   const handleSharePicks = useCallback(() => {
-    if (!currentProfile || !currentFestival) return;
     haptics.tap();
-    const url = buildPicksShareUrl(currentProfile.id);
-    Share.share({ message: `My ${currentFestival.name} picks on Festie: ${url}`, url }).catch(() => {});
-  }, [currentProfile, currentFestival, haptics]);
+    router.push({ pathname: '/plan-share', params: { tab: 'link' } });
+  }, [router, haptics]);
 
   // ── At-a-glance summary + focus filter chips ─────────────────────────────
   const summaryRow =
@@ -899,12 +935,12 @@ export default function PicksScreen() {
       <View style={styles.headerActions}>
         {calendarButton}
         <TouchableOpacity
-          style={[styles.calendarButton, noPicks && styles.calendarButtonDisabled]}
+          style={[styles.calendarButton, !currentFestival && styles.calendarButtonDisabled]}
           onPress={handleSharePicks}
-          disabled={noPicks}
+          disabled={!currentFestival}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityState={{ disabled: noPicks }}
+          accessibilityState={{ disabled: !currentFestival }}
           accessibilityLabel="Share my picks"
         >
           <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />

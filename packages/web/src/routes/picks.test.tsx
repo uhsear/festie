@@ -35,8 +35,8 @@ vi.mock('@festie/shared/hooks', () => ({
 vi.mock('@festie/shared/utils', () => ({
   formatTime: vi.fn((t: string) => t),
   artistDisplayName: vi.fn((set: { artist?: string }) => set.artist || 'Unknown'),
-  buildPicksIcs: vi.fn(() => 'BEGIN:VCALENDAR\r\nEND:VCALENDAR'),
-  buildPicksShareUrl: vi.fn((profileId: string) => `https://festie.us/s/${profileId}`),
+  buildPicksIcsExport: vi.fn(() => ({ ics: 'BEGIN:VCALENDAR', timed: 1, timeTba: 0, skipped: 0 })),
+  describeIcsExport: vi.fn(() => 'Added 1 set to your calendar file.'),
   resolveStageColor: (c: string | null | undefined, fallback: string) => c || fallback,
   // Mirrors the real @festie/shared/utils/setStatus.isSetScheduled: a set is
   // scheduled only when dayIndex resolves to a real position in `days`.
@@ -96,9 +96,15 @@ vi.mock('lucide-react', () => ({
   UserPlus: () => <span data-testid="user-plus-icon" />,
   CalendarPlus: () => <span data-testid="calendar-plus-icon" />,
   Share2: () => <span data-testid="share-icon" />,
+  X: () => <span data-testid="x-icon" />,
   Sparkles: () => <span data-testid="sparkles-icon" />,
   Layers: () => <span data-testid="layers-icon" />,
   ChevronDown: () => <span data-testid="chevron-down-icon" />,
+}));
+
+// SharePicksDialog has its own test (it needs router, crew store and QR mocks).
+vi.mock('../components/features/SharePicksDialog', () => ({
+  default: () => <button type="button" aria-label="Share my picks">Share picks</button>,
 }));
 
 const mockToast = vi.fn();
@@ -108,7 +114,7 @@ vi.mock('../lib/toastContext', () => ({
 
 import PicksView from './picks';
 import { usePicks } from '@festie/shared/hooks';
-import { buildPicksIcs } from '@festie/shared/utils';
+import { buildPicksIcsExport, describeIcsExport } from '@festie/shared/utils';
 
 function setStoreState(overrides: Record<string, unknown> = {}) {
   // Clear and repopulate the shared state object
@@ -247,7 +253,7 @@ describe('PicksView', () => {
     expect(screen.queryByRole('button', { name: 'Add picks to calendar' })).toBeNull();
   });
 
-  it('shows the calendar export button and downloads an .ics when clicked', () => {
+  it('shows the calendar button and downloads an .ics via Download once', async () => {
     const sets = [
       {
         id: 's1',
@@ -274,78 +280,28 @@ describe('PicksView', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     render(<PicksView />);
-    const btn = screen.getByRole('button', { name: 'Add picks to calendar' });
-    expect(btn).toBeInTheDocument();
-    btn.click();
+    fireEvent.click(await screen.findByRole('button', { name: 'Add picks to calendar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Download once' }));
 
-    expect(buildPicksIcs).toHaveBeenCalledTimes(1);
+    expect(buildPicksIcsExport).toHaveBeenCalledTimes(1);
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(clickSpy).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(describeIcsExport).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith('Added 1 set to your calendar file.', 'success');
 
     clickSpy.mockRestore();
   });
 
-  it('shares picks via navigator.share when available', async () => {
+  it('renders the Share picks button when the profile has picks', async () => {
     const sets = [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }];
-    setStoreState({
-      sets,
-      currentFestival: { id: 'f1', name: 'Bonnaroo', b2bSeparator: undefined },
-      currentProfile: { id: 'p1', picks: { s1: 'must' }, notes: {} },
-    });
+    setStoreState({ sets, currentProfile: { id: 'p1', picks: { s1: 'must' }, notes: {} } });
     vi.mocked(usePicks).mockReturnValue({
       getMyPick: vi.fn(() => 'must'),
       savePick: vi.fn(),
       getMyNote: vi.fn(() => ''),
     });
-
-    const shareSpy = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'share', { value: shareSpy, configurable: true, writable: true });
-
     render(<PicksView />);
-    const btn = screen.getByRole('button', { name: 'Share my picks' });
-    btn.click();
-    // handleSharePicks is async; let the awaited share settle.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(shareSpy).toHaveBeenCalledTimes(1);
-    expect(shareSpy).toHaveBeenCalledWith({
-      title: 'My Bonnaroo picks on Festie',
-      text: 'My Bonnaroo picks on Festie',
-      url: 'https://festie.us/s/p1',
-    });
-
-    // Cleanup so the fallback test sees navigator.share as undefined.
-    delete (navigator as { share?: unknown }).share;
-  });
-
-  it('falls back to clipboard + toast when navigator.share is undefined', async () => {
-    const sets = [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }];
-    setStoreState({
-      sets,
-      currentFestival: { id: 'f1', name: 'Bonnaroo', b2bSeparator: undefined },
-      currentProfile: { id: 'p1', picks: { s1: 'must' }, notes: {} },
-    });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn(() => 'must'),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
-    });
-
-    // Ensure no native share is present so we exercise the desktop fallback.
-    delete (navigator as { share?: unknown }).share;
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true, writable: true });
-
-    render(<PicksView />);
-    const btn = screen.getByRole('button', { name: 'Share my picks' });
-    btn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(writeText).toHaveBeenCalledTimes(1);
-    expect(writeText).toHaveBeenCalledWith('https://festie.us/s/p1');
-    expect(mockToast).toHaveBeenCalledWith('Share link copied to clipboard', 'success');
+    expect(await screen.findByRole('button', { name: 'Share my picks' })).toBeInTheDocument();
   });
 });

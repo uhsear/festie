@@ -56,6 +56,29 @@ describe('Integration — Calendar Sync', { concurrency: 1 }, () => {
     assert.ok(icsBody.includes('Alpha'), 'ICS should include artist name Alpha from set-a');
   });
 
+  test('ICS feed carries a VALARM for a set with a reminder', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const erin = await registerUser(server, 'calsync-erin-' + Date.now());
+    const profile = await joinFestivalProfile(server, erin.token);
+
+    await server.request
+      .put(`/api/v1/profiles/${profile.id}`)
+      .set('x-user-token', erin.token)
+      .send({ picks: { 'set-a': 'must' }, reminders: { 'set-a': 15 } })
+      .expect(200);
+
+    const syncRes = await server.request
+      .post('/api/v1/calendar-sync/fest-1')
+      .set('x-user-token', erin.token)
+      .expect(200);
+
+    const icsRes = await server.request.get(`/cal/${syncRes.body.data.tokenId}.ics`).expect(200);
+    assert.ok(icsRes.text.includes('BEGIN:VALARM'), 'ICS should carry a VALARM for the reminder');
+    assert.ok(icsRes.text.includes('TRIGGER:-PT15M'));
+  });
+
   test('returns the same token on repeated calls (idempotent)', async () => {
     const server = await startServer();
     servers.push(server);

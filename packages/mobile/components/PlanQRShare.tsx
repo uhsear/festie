@@ -8,14 +8,13 @@ import QRCode from 'react-native-qrcode-svg';
 import { useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import {
   encodePlanSnapshot,
-  toPickPriority,
-  MAX_PICKS,
+  buildPlanSnapshotInput,
+  buildPlanQrUrl,
   MAX_ENCODED_LENGTH,
-  type PlanSnapshotInput,
 } from '@festie/shared/utils';
-import { COPY, PRIORITY_WEIGHT } from '@festie/shared/constants';
+import { COPY } from '@festie/shared/constants';
 import type { CrewMeetingPoint, Priority } from '@festie/shared/types';
-import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
+import { makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
 import EmptyState from './EmptyState';
@@ -28,25 +27,12 @@ import EmptyState from './EmptyState';
 // so an over-long plan still produces a single scannable code; the codec also
 // truncates defensively.
 
-/** Soonest active, future meeting point with a coord; falls back to any active+coord one. */
-function pickShareMeetingPoint(points: CrewMeetingPoint[], nowMs: number): CrewMeetingPoint | null {
-  const withCoord = points.filter((p) => p.active && typeof p.latitude === 'number' && typeof p.longitude === 'number');
-  const future = withCoord
-    .filter((p) => p.meet_at)
-    .map((p) => ({ p, ms: new Date(p.meet_at as string).getTime() }))
-    .filter(({ ms }) => Number.isFinite(ms) && ms >= nowMs)
-    .sort((a, b) => a.ms - b.ms);
-  if (future.length > 0) return future[0]!.p;
-  return withCoord[0] ?? null;
-}
-
 /**
  * Renders a QR code of the encoded plan snapshot. A nearby crew member scans it
  * (PlanQRScan) to import the plan onto their own device with NO internet on
  * either phone.
  */
 export default function PlanQRShare() {
-  const t = useTokens();
   const styles = useStyles();
   const bottomPad = useListBottomInset();
 
@@ -67,29 +53,17 @@ export default function PlanQRShare() {
       };
     }
 
-    // Rank picks must > want > maybe, then cap to MAX_PICKS so the most
-    // important picks survive the bound (the codec truncates the tail).
-    const picks = Object.entries(currentProfile.picks || {})
-      .map(([setId, priority]) => ({ setId, priority: priority as string }))
-      .sort((a, b) => (PRIORITY_WEIGHT[b.priority as Priority] ?? 0) - (PRIORITY_WEIGHT[a.priority as Priority] ?? 0))
-      .slice(0, MAX_PICKS)
-      .map((p) => ({ setId: p.setId, priority: toPickPriority(p.priority) }));
-
-    const mp = pickShareMeetingPoint(meetingPoints, now);
-
-    const input: PlanSnapshotInput = {
-      festivalId: currentFestival.id,
-      festivalName: currentFestival.name,
-      picks,
-      ...(mp && typeof mp.latitude === 'number' && typeof mp.longitude === 'number'
-        ? { meetingPoint: { label: mp.label, lat: mp.latitude, lng: mp.longitude } }
-        : {}),
-    };
+    const { input, picksCount, meetingPoint: mp } = buildPlanSnapshotInput({
+      festival: currentFestival,
+      picks: currentProfile.picks as Record<string, Priority> | undefined,
+      meetingPoints,
+      nowMs: now,
+    });
 
     const enc = encodePlanSnapshot(input);
     return {
       encoded: enc,
-      picksCount: picks.length,
+      picksCount,
       meetingPoint: mp,
       tooLong: enc.length > MAX_ENCODED_LENGTH,
     };
@@ -136,9 +110,13 @@ export default function PlanQRShare() {
         {meetingPoint ? ` · meet at ${meetingPoint.label}` : ''}
       </Text>
 
-      <View style={styles.qrCard}>
+      <View
+        style={styles.qrCard}
+        accessible
+        accessibilityLabel="QR code that opens your picks in a browser"
+      >
         <QRCode
-          value={encoded}
+          value={buildPlanQrUrl(encoded)}
           size={240}
           // High-contrast on a light tile so cameras lock fast in low festival light.
           color="#080810"
@@ -148,15 +126,10 @@ export default function PlanQRShare() {
         />
       </View>
 
+      <Text style={styles.instructions}>Point any phone camera here to open these picks in a browser.</Text>
       <Text style={styles.instructions}>
-        Have your friend open Festie and scan this. Works offline — nothing is sent over the internet.
-      </Text>
-      <Text style={styles.instructions}>
-        Have your friend open Crew › {COPY.picks.shareOffline} › Scan QR and point their camera here.
-      </Text>
-      <Text style={[styles.instructions, { color: t.colors.text.muted }]}>
-        Your friend sees your picks{meetingPoint ? ' and the meeting point' : ''} first, then chooses which to add to
-        their own plan. It's a snapshot, not a live link.
+        Friends with Festie can scan it in {COPY.picks.share} › Scan QR, then choose which picks to add. Works offline —
+        nothing is sent over the internet. It's a snapshot, not a live link.
       </Text>
     </ScrollView>
   );

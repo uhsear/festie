@@ -1,13 +1,14 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, ScrollView, AppState, Linking } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import {
   decodePlanSnapshot,
+  extractPlanSnapshotText,
   previewPlanImport,
   artistDisplayName,
   formatTime,
@@ -114,7 +115,7 @@ export default function PlanQRScan() {
   const styles = useStyles();
 
   const bottomPad = useListBottomInset();
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
   const [phase, setPhase] = useState<Phase>('scanning');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [scan, setScan] = useState<ScanPreview | null>(null);
@@ -126,11 +127,19 @@ export default function PlanQRScan() {
   // Guard against the camera firing the scan callback repeatedly for one code.
   const handledRef = useRef(false);
 
+  // Returning from system Settings: re-read the permission so the scanner appears.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void getPermission();
+    });
+    return () => sub.remove();
+  }, [getPermission]);
+
   const handleScanned = useCallback((result: BarcodeScanningResult) => {
     if (handledRef.current) return;
     handledRef.current = true;
 
-    const decoded = decodePlanSnapshot(result?.data);
+    const decoded = decodePlanSnapshot(extractPlanSnapshotText(result?.data));
     if (!decoded.ok) {
       setErrorMsg(friendlyError(decoded.error));
       setPhase('error');
@@ -196,7 +205,18 @@ export default function PlanQRScan() {
     return <View style={styles.screen} />;
   }
 
-  // Permission not granted — ask, honestly.
+  // Permission not granted. Once the OS will no longer prompt, only Settings can fix it.
+  if (!permission.granted && !permission.canAskAgain) {
+    return (
+      <EmptyState
+        icon="camera-outline"
+        title="Camera access needed"
+        message="Camera access is off for Festie. Turn it on in Settings to scan a friend's plan."
+        action={{ label: 'Open Settings', onPress: () => void Linking.openSettings() }}
+      />
+    );
+  }
+
   if (!permission.granted) {
     return (
       <EmptyState

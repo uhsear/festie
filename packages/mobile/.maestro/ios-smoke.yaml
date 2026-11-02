@@ -233,9 +233,10 @@ env:
 - takeScreenshot: 17-compass
 - openLink: "festie://plan-share"
 - extendedWaitUntil:
-    visible: "Share offline"
+    visible: "Share picks"
     timeout: 30000
-- tapOn: "Text crew"
+- tapOn:
+    id: "plan-share-tab-text"
 - assertVisible:
     id: "plan-share-tab-text"
     selected: true

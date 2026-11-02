@@ -50,6 +50,7 @@ const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
+const loadPlanSnapshot = () => import('./routes/plan-snapshot');
 const loadMap = () => import('./routes/map');
 
 // Generic minimal fallback for auth/admin routes — these chunks are tiny and
@@ -91,6 +92,7 @@ const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
 const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton);
+const PlanSnapshotView = withSkeleton(lazyRouteComponent(loadPlanSnapshot), MinimalFallback);
 const MapView = withSkeleton(lazyRouteComponent(loadMap), MinimalFallback);
 const AdminPanel = withSkeleton(lazyRouteComponent(loadAdmin), MinimalFallback);
 const LoginPage = withSkeleton(lazyRouteComponent(loadLogin), MinimalFallback);
@@ -284,6 +286,14 @@ const setRoute = new Route({
   component: SetDeepLinkView,
 });
 
+// /p#<snapshot> — read-only page a phone camera opens from a plan QR. Public:
+// no beforeLoad, so signed-out visitors see it.
+const planSnapshotRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/p',
+  component: PlanSnapshotView,
+});
+
 const adminRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/admin',
@@ -317,6 +327,7 @@ const routeTree = rootRoute.addChildren([
   meRoute,
   compareRoute,
   setRoute,
+  planSnapshotRoute,
   adminRoute,
 ]);
 

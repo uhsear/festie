@@ -1,7 +1,7 @@
 import 'dotenv/config';
 /**
  * Integration tests for share routes (routes/share.js).
- * Covers: public share HTML page (no auth), vanity URL /u/:username → /s/:profileId redirect,
+ * Covers: public share HTML page (no auth), vanity URL /u/:username rendered in place,
  *         JSON mirror, 404 for unknown users, input validation, rate limiting.
  *
  * Skip-gate on TEST_DATABASE_URL. DELETE BY EXACT ID on teardown.
@@ -258,7 +258,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     assert.equal(res.body.data.notes, undefined); // private notes must not surface
   });
 
-  test('vanity URL /u/:username redirects (302) to /s/:profileId', async () => {
+  test('vanity URL /u/:username renders the newest festival in place (200, no redirect)', async () => {
     if (!createFestivalPlanner) return;
     const server = (await startServer())!;
     servers.push(server);
@@ -267,8 +267,10 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     await setPublicSchedule(user.username, true);
 
     const res = await getVanity(server, user.username);
-    assert.equal(res.status, 302);
-    assert.match(res.headers.location || '', new RegExp(`/s/${profile.id}`));
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.location, undefined);
+    assert.match(res.text, /Share Test Fest/);
+    assert.ok(!res.text.includes(profile.id), 'the page must not leak the profile id');
   });
 
   test('vanity URL is case-insensitive for username matching', async () => {
@@ -280,8 +282,8 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     await setPublicSchedule(user.username, true);
 
     const res = await getVanity(server, user.username.toUpperCase());
-    assert.equal(res.status, 302);
-    assert.match(res.headers.location || '', /^\/s\//);
+    assert.equal(res.status, 200);
+    assert.match(res.text, /Share Test Fest/);
   });
 
   test('vanity URL for nonexistent user returns 404', async () => {
@@ -336,7 +338,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
       .send({ publicSchedule: true })
       .expect(200);
     assert.equal(on.body.data.user.publicSchedule, true);
-    assert.equal((await getVanity(server, user.username)).status, 302);
+    assert.equal((await getVanity(server, user.username)).status, 200);
 
     await server.request
       .put('/api/v1/account/public-schedule')

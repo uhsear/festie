@@ -8,8 +8,12 @@ import {
   buildPublicScheduleUrl,
   buildHomeUrl,
   buildAppDeepLink,
+  buildPlanQrUrl,
+  extractPlanSnapshotText,
+  buildCalendarLinks,
   safeReturnPath,
 } from './links';
+import { encodePlanSnapshot, decodePlanSnapshot } from './planSnapshot';
 
 describe('links — buildJoinUrl', () => {
   it('builds the production join link by default', () => {
@@ -82,6 +86,49 @@ describe('links — buildPublicScheduleUrl', () => {
   it('builds the vanity schedule URL and encodes the username', () => {
     expect(buildPublicScheduleUrl('raver_1')).toBe('https://festie.us/s/u/raver_1');
     expect(buildPublicScheduleUrl('a b', 'http://localhost:5173/')).toBe('http://localhost:5173/s/u/a%20b');
+  });
+});
+
+describe('links - plan QR url', () => {
+  it('puts the snapshot in the hash', () => {
+    expect(buildPlanQrUrl('abc_-1')).toBe('https://festie.us/p#abc_-1');
+    expect(buildPlanQrUrl('x', 'http://localhost:5173/')).toBe('http://localhost:5173/p#x');
+  });
+
+  it('extracts the hash text from the URL form', () => {
+    expect(extractPlanSnapshotText('https://festie.us/p#abc_-1')).toBe('abc_-1');
+    expect(extractPlanSnapshotText('  https://festie.us/p/#abc  ')).toBe('abc');
+  });
+
+  it('returns anything else unchanged', () => {
+    expect(extractPlanSnapshotText('eyJ2IjoxfQ')).toBe('eyJ2IjoxfQ');
+    expect(extractPlanSnapshotText('https://evil.example/x#abc')).toBe('https://evil.example/x#abc');
+    expect(extractPlanSnapshotText('https://festie.us/p#abc?x=1')).toBe('https://festie.us/p#abc?x=1');
+    expect(extractPlanSnapshotText(42)).toBe(42);
+  });
+
+  it('round-trips an encoded snapshot', () => {
+    const encoded = encodePlanSnapshot({
+      festivalId: 'f1',
+      festivalName: 'Fest',
+      picks: [{ setId: 's1', priority: 'must' }],
+    });
+    const decoded = decodePlanSnapshot(extractPlanSnapshotText(buildPlanQrUrl(encoded)));
+    expect(decoded.ok).toBe(true);
+  });
+});
+
+describe('links - buildCalendarLinks', () => {
+  it('maps https and http feeds to webcal and Google', () => {
+    for (const scheme of ['https', 'http']) {
+      const feed = `${scheme}://festie.us/cal/tok.ics`;
+      const links = buildCalendarLinks(feed);
+      expect(links.httpsUrl).toBe(feed);
+      expect(links.webcalUrl).toBe('webcal://festie.us/cal/tok.ics');
+      expect(links.googleUrl).toBe(
+        `https://calendar.google.com/calendar/render?cid=${encodeURIComponent('webcal://festie.us/cal/tok.ics')}`,
+      );
+    }
   });
 });
 
