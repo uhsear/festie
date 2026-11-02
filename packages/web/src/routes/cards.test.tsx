@@ -15,6 +15,7 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ setDetailSet: vi.fn(), setDetailAutoSpotify: vi.fn() }),
 }));
 vi.mock('@festie/shared/hooks', () => ({
+  useFestivalReady: () => ({ visible: false, items: [], doneCount: 0, total: 4, progressLabel: '', hide: vi.fn() }),
   useCanPick: () => true,
   usePicks: () => ({ getMyPick: () => null, getOtherPicks: () => [] }),
   useFestival: () => ({

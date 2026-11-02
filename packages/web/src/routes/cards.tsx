@@ -1,7 +1,7 @@
 import React, { Fragment, useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { useFestivalStore, useAuthStore, useCrewStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { usePicks, useFestival, useCanPick } from '@festie/shared/hooks';
+import { usePicks, useFestival, useCanPick, useFestivalReady } from '@festie/shared/hooks';
 import {
   getHomeActions,
   resolveFestivalTimeZone,
@@ -16,6 +16,7 @@ import {
 import { useNow } from '../hooks/useSetStatus';
 import SetCard from '../components/features/SetCard';
 import PhaseHomeActions from '../components/features/PhaseHomeActions';
+import FestivalReadyCard from '../components/features/FestivalReadyCard';
 import OtherDayMatches from '../components/features/OtherDayMatches';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
@@ -149,6 +150,10 @@ function CardsViewInner() {
   // phase-aware home action band; null when the festival has no usable dates.
   const phase = useMemo(() => festivalPhase(currentFestival, days), [currentFestival, days]);
 
+  // AppShell already runs usePushNotifications; read the permission directly instead of a second instance.
+  const notificationsAllowed = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  const ready = useFestivalReady(notificationsAllowed);
+
   // Show layout-matched skeleton while festivals are being fetched on boot
   // — same component the router uses for the chunk-load fallback so the
   // visual is continuous across route-transition → data-fetch.
@@ -166,8 +171,11 @@ function CardsViewInner() {
 
   return (
     <>
+      {/* Before the festival the Festival ready checklist takes the band's place until it is done or hidden. */}
       {/* Next useful steps for this phase; empty (hidden) when there is nothing to do or dismissed. */}
-      {actions.length > 0 && phase && dismissedPhase !== phase ? (
+      {ready.visible ? (
+        <FestivalReadyCard ready={ready} />
+      ) : actions.length > 0 && phase && dismissedPhase !== phase ? (
         <PhaseHomeActions actions={actions} onDismiss={() => dismissPhaseBand(phase)} />
       ) : null}
 

@@ -1,49 +1,43 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, useWindowDimensions, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
+import { ONBOARDING_COPY, ONBOARDING_SLIDES_SHARED, PRIORITY_LABELS } from '@festie/shared/constants';
+import {
+  formatFestivalDateRange,
+  getIntroSteps,
+  introCrewAction,
+  introFestivalChoices,
+  nextIntroStep,
+  type IntroCrewChoice,
+  type IntroStepKey,
+} from '@festie/shared/utils';
 import Button from './Button';
+import AppPressable from './AppPressable';
 import DisplayWords from './DisplayWords';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { setReturnTo } from '../lib/returnTo';
 
 /**
- * One-time first-run intro. A 3-slide explainer shown over the app on first
- * launch (gated by an AsyncStorage flag owned by the caller). Gives a cold
- * install context — what Festie does — instead of dropping users on a bare
- * festival picker. `onDone` fires for both Skip and Get started.
+ * First-run intro, also replayed from Account. Five steps (the festival step is
+ * left out until the festival list loads): three explainer slides, "Which
+ * festival?" and "Going with friends?". The copy and the step rules come from
+ * `@festie/shared`, so web and mobile say the same words. The last step routes
+ * into a crew (start, join, or sign in first). `onDone` fires for Skip and for
+ * every way out of the last step.
  *
  * Layout intent (design roadmap P2-1): the slide visual sits in the upper half
  * and the value-first copy is anchored low (just above the controls) rather than
  * dead-centered, so the screen doesn't read as a generic empty template. Slide 1
  * leads with a product visual (a miniature of the picks/schedule surface); the
- * remaining slides use a single accent glyph. Copy is single-sourced in `SLIDES`.
+ * remaining slides use a single accent glyph.
  */
-interface Slide {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  body: string;
-  /** Slide 1 renders the product visual instead of the icon glyph. */
-  showProductVisual?: boolean;
-}
-
-const SLIDES: Slide[] = [
-  {
-    icon: 'calendar-outline',
-    title: 'Plan your whole weekend',
-    body: 'Pick the sets you want across every stage and see your whole weekend in one place.',
-    showProductVisual: true,
-  },
-  {
-    icon: 'people-outline',
-    title: 'Keep your crew together',
-    body: 'Compare schedules, set meeting points, and find each other when there’s no signal.',
-  },
-  {
-    icon: 'notifications-outline',
-    title: 'Reminders for your picks',
-    body: 'Get a reminder before each set, online or off.',
-  },
-];
+const SLIDE_ICON: Record<'crew' | 'reminders', keyof typeof Ionicons.glyphMap> = {
+  crew: 'people-outline',
+  reminders: 'notifications-outline',
+};
 
 /** A miniature of the picks surface — a "Friday" day card with priority-tiered
  *  set rows. Pure decoration (hidden from the a11y tree) that signals the
@@ -51,10 +45,10 @@ const SLIDES: Slide[] = [
 function ProductVisual() {
   const t = useTokens();
   const styles = useStyles();
-  const rows: { color: string; w: number; time: string }[] = [
-    { color: t.colors.priority.must, w: 0.78, time: '8:30' },
-    { color: t.colors.priority.want, w: 0.62, time: '9:45' },
-    { color: t.colors.priority.maybe, w: 0.7, time: '11:00' },
+  const rows = [
+    { color: t.colors.priority.must, label: PRIORITY_LABELS.must, time: '8:30' },
+    { color: t.colors.priority.want, label: PRIORITY_LABELS['want-to-see'], time: '9:45' },
+    { color: t.colors.priority.maybe, label: PRIORITY_LABELS.maybe, time: '11:00' },
   ];
   return (
     <View style={styles.visualCard} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -67,10 +61,7 @@ function ProductVisual() {
       {rows.map((r, i) => (
         <View key={i} style={styles.visualRow}>
           <View style={[styles.visualDot, { backgroundColor: r.color }]} />
-          <View style={styles.visualBars}>
-            <View style={[styles.visualBar, { width: `${r.w * 100}%` }]} />
-            <View style={[styles.visualBarSub, { width: `${r.w * 64}%` }]} />
-          </View>
+          <Text style={styles.visualLabel}>{r.label}</Text>
           <Text style={styles.visualTime}>{r.time}</Text>
         </View>
       ))}
@@ -79,23 +70,51 @@ function ProductVisual() {
 }
 
 /**
- * DC16: Real horizontal paging pager. Slides are laid out in a horizontal
- * ScrollView with pagingEnabled; `index` is driven by onMomentumScrollEnd so
+ * DC16: Real horizontal paging pager. Pages are laid out in a horizontal
+ * ScrollView with pagingEnabled; `stepKey` is driven by onMomentumScrollEnd so
  * the dots always reflect where the user actually landed. The Next button
  * remains as a secondary/keyboard path — it programmatically scrolls to the
  * next page instead of toggling state directly, keeping both paths in sync.
+ * The step is tracked by key, so a festival list that arrives while the intro
+ * is open adds the "festival" page without moving the user off their page.
  */
 export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const largeText = useLargeText();
-  const [index, setIndex] = useState(0);
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const festivals = useFestivalDataStore((s) => s.festivals);
+  const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const isLoading = useFestivalDataStore((s) => s.isLoading);
+  const loadFestivals = useFestivalDataStore((s) => s.loadFestivals);
+  const selectFestival = useFestivalDataStore((s) => s.selectFestival);
+
+  const [stepKey, setStepKey] = useState<IntroStepKey>('plan');
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollViewInstance>(null);
 
   const { width: screenWidth } = useWindowDimensions();
   const previousWidth = useRef(screenWidth);
-  const isLast = index === SLIDES.length - 1;
+
+  // Cold install: the list may not be cached yet.
+  useEffect(() => {
+    if (festivals.length === 0 && !isLoading) {
+      // The store error shows on the festival picker.
+      loadFestivals().catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, []);
+
+  const steps = useMemo(() => getIntroSteps(festivals.length), [festivals.length]);
+  const index = Math.max(steps.indexOf(stepKey), 0);
+  const isLast = index === steps.length - 1;
+  const { choices, defaultId } = useMemo(
+    () => introFestivalChoices(festivals, currentFestival?.id ?? null),
+    [festivals, currentFestival?.id],
+  );
+  const selectedId = pickedId ?? defaultId;
 
   // Scroll to the target page programmatically (used by the Next button).
   const scrollToPage = useCallback(
@@ -109,41 +128,164 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
   const handleMomentumScrollEnd = useCallback(
     (e: { nativeEvent: { contentOffset: { x: number } } }) => {
       const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-      setIndex(page);
+      const target = steps[page];
+      if (target) setStepKey(target);
     },
-    [screenWidth],
+    [screenWidth, steps],
+  );
+
+  const goTo = useCallback(
+    (target: IntroStepKey | null) => {
+      if (!target) return;
+      setStepKey(target);
+      scrollToPage(steps.indexOf(target));
+    },
+    [steps, scrollToPage],
   );
 
   const handleNext = useCallback(() => {
-    if (isLast) {
-      onDone();
-    } else {
-      const nextPage = index + 1;
-      setIndex(nextPage);
-      scrollToPage(nextPage);
+    if (stepKey === 'festival' && selectedId && selectedId !== currentFestival?.id) {
+      // The store error shows on the schedule, as in FestivalList.
+      selectFestival(selectedId).catch(() => {});
     }
-  }, [isLast, index, onDone, scrollToPage]);
+    goTo(nextIntroStep(steps, stepKey));
+  }, [stepKey, selectedId, currentFestival?.id, selectFestival, goTo, steps]);
 
-  // Keep current slide aligned after rotation or split-screen resize.
+  const handleCrewChoice = useCallback(
+    (choice: IntroCrewChoice) => {
+      const { start, needsAccount } = introCrewAction(choice, !!user);
+      onDone();
+      if (!start) return;
+      if (needsAccount) {
+        setReturnTo(`/(tabs)/crew?start=${start}`);
+        router.push('/(auth)/register');
+        return;
+      }
+      router.push({ pathname: '/(tabs)/crew', params: { start } });
+    },
+    [user, onDone, router],
+  );
+
+  const handleSignIn = useCallback(() => {
+    onDone();
+    router.push('/(auth)/login');
+  }, [onDone, router]);
+
+  // Keep the current page aligned after rotation, split-screen resize, or the
+  // festival page joining the list.
+  const previousStepCount = useRef(steps.length);
   useEffect(() => {
-    if (previousWidth.current === screenWidth) return;
+    if (previousWidth.current === screenWidth && previousStepCount.current === steps.length) return;
     previousWidth.current = screenWidth;
+    previousStepCount.current = steps.length;
     scrollRef.current?.scrollTo({ x: index * screenWidth, animated: false });
-  }, [index, screenWidth]);
+  }, [index, screenWidth, steps.length]);
 
   const handleAccessibilityAction = useCallback(
     (actionName: string) => {
       const nextIndex =
         actionName === 'increment'
-          ? Math.min(index + 1, SLIDES.length - 1)
+          ? Math.min(index + 1, steps.length - 1)
           : actionName === 'decrement'
             ? Math.max(index - 1, 0)
             : index;
       if (nextIndex === index) return;
-      setIndex(nextIndex);
-      scrollToPage(nextIndex);
+      goTo(steps[nextIndex] ?? null);
     },
-    [index, scrollToPage],
+    [index, steps, goTo],
+  );
+
+  const renderSlide = (slideKey: 'plan' | 'crew' | 'reminders') => {
+    const slide = ONBOARDING_SLIDES_SHARED.find((s) => s.key === slideKey)!;
+    return (
+      <>
+        {/* Upper region. The product card (slide 1) anchors high — it has
+            enough visual mass to own the top third. The bare icon slides
+            center in the region instead: a 112px circle pinned to the top
+            of a mostly-empty screen reads as unfinished. */}
+        {!largeText && (
+          <View style={[styles.hero, slideKey !== 'plan' && styles.heroCentered]}>
+            {slideKey === 'plan' ? (
+              <ProductVisual />
+            ) : (
+              <View
+                style={styles.iconCircle}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+              >
+                <Ionicons name={SLIDE_ICON[slideKey]} size={88} color={t.colors.accent.aqua} />
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Value-first copy, anchored low (just above the controls). */}
+        <View style={styles.copy}>
+          <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            <DisplayWords text={slide.title} fontSize={styles.title.fontSize} />
+          </Text>
+          <Text style={styles.text}>{slide.description}</Text>
+        </View>
+      </>
+    );
+  };
+
+  const renderFestivalStep = () => (
+    <View style={styles.formPage}>
+      <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        {ONBOARDING_COPY.festival.title}
+      </Text>
+      <Text style={styles.text}>{ONBOARDING_COPY.festival.description}</Text>
+      <View accessibilityRole="radiogroup" style={styles.choiceList}>
+        {choices.map((f) => {
+          const selected = f.id === selectedId;
+          const dates = formatFestivalDateRange(f.startDate, f.endDate);
+          return (
+            <AppPressable
+              key={f.id}
+              onPress={() => setPickedId(f.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={dates ? `${f.name}, ${dates}` : f.name}
+              style={[styles.choice, selected && styles.choiceSelected]}
+            >
+              <View style={styles.choiceText}>
+                <Text style={styles.choiceName} maxFontSizeMultiplier={MAX_FONT_SCALE}>{f.name}</Text>
+                {dates ? <Text style={styles.choiceDates} maxFontSizeMultiplier={MAX_FONT_SCALE}>{dates}</Text> : null}
+              </View>
+              {selected ? <Ionicons name="checkmark-circle" size={22} color={t.colors.accent.aqua} /> : null}
+            </AppPressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const renderGoingStep = () => (
+    <View style={styles.formPage}>
+      <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        {ONBOARDING_COPY.going.title}
+      </Text>
+      <Text style={styles.text}>{ONBOARDING_COPY.going.description}</Text>
+      <View style={styles.goingButtons}>
+        <Button label={ONBOARDING_COPY.going.start} onPress={() => handleCrewChoice('start')} />
+        <Button label={ONBOARDING_COPY.going.join} variant="secondary" onPress={() => handleCrewChoice('join')} />
+        <Button label={ONBOARDING_COPY.going.solo} variant="ghost" onPress={() => handleCrewChoice('solo')} />
+      </View>
+      {!user ? (
+        <View style={styles.signInRow}>
+          <Text style={styles.signInPrompt} maxFontSizeMultiplier={MAX_FONT_SCALE}>{ONBOARDING_COPY.signInPrompt}</Text>
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleSignIn}
+            accessibilityRole="button"
+            accessibilityLabel={ONBOARDING_COPY.signIn}
+          >
+            <Text style={styles.signInLink} maxFontSizeMultiplier={MAX_FONT_SCALE}>{ONBOARDING_COPY.signIn}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </View>
   );
 
   return (
@@ -154,14 +296,14 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
           style={styles.skipButton}
           onPress={onDone}
           accessibilityRole="button"
-          accessibilityLabel="Skip intro"
+          accessibilityLabel={ONBOARDING_COPY.skipA11y}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.skip} maxFontSizeMultiplier={MAX_FONT_SCALE}>Skip</Text>
+          <Text style={styles.skip} maxFontSizeMultiplier={MAX_FONT_SCALE}>{ONBOARDING_COPY.skip}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Paging ScrollView — each slide gets exactly one screen-width slot. */}
+      {/* Paging ScrollView — each step gets exactly one screen-width slot. */}
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -173,59 +315,33 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
         contentContainerStyle={styles.pagerContent}
         accessibilityRole="adjustable"
         accessibilityLabel="Intro slides"
-        accessibilityValue={{ min: 1, max: SLIDES.length, now: index + 1, text: `Slide ${index + 1} of ${SLIDES.length}` }}
+        accessibilityValue={{ min: 1, max: steps.length, now: index + 1, text: `Step ${index + 1} of ${steps.length}` }}
         accessibilityActions={[
-          { name: 'increment', label: 'Next slide' },
-          { name: 'decrement', label: 'Previous slide' },
+          { name: 'increment', label: 'Next step' },
+          { name: 'decrement', label: 'Previous step' },
         ]}
         onAccessibilityAction={(event) => handleAccessibilityAction(event.nativeEvent.actionName)}
       >
-        {SLIDES.map((slide, i) => (
+        {steps.map((step) => (
           <ScrollView
-            key={i}
+            key={step}
             style={{ width: screenWidth }}
             contentContainerStyle={[styles.slide, largeText && styles.slideCentered]}
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            {/* Upper region. The product card (slide 1) anchors high — it has
-                enough visual mass to own the top third. The bare icon slides
-                center in the region instead: a 112px circle pinned to the top
-                of a mostly-empty screen reads as unfinished. */}
-            {!largeText && (
-            <View style={[styles.hero, !slide.showProductVisual && styles.heroCentered]}>
-              {slide.showProductVisual ? (
-                <ProductVisual />
-              ) : (
-                <View
-                  style={styles.iconCircle}
-                  accessibilityElementsHidden
-                  importantForAccessibility="no-hide-descendants"
-                >
-                  <Ionicons name={slide.icon} size={88} color={t.colors.accent.aqua} />
-                </View>
-              )}
-            </View>
-            )}
-
-            {/* Value-first copy, anchored low (just above the controls). */}
-            <View style={styles.copy}>
-              <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                <DisplayWords text={slide.title} fontSize={styles.title.fontSize} />
-              </Text>
-              <Text style={styles.text}>{slide.body}</Text>
-            </View>
+            {step === 'festival' ? renderFestivalStep() : step === 'going' ? renderGoingStep() : renderSlide(step)}
           </ScrollView>
         ))}
       </ScrollView>
 
       <View style={styles.footer}>
         <View style={styles.dots}>
-          {SLIDES.map((_, i) => (
-            <View key={i} style={[styles.dot, i === index && styles.dotActive]} />
+          {steps.map((step) => (
+            <View key={step} style={[styles.dot, step === steps[index] && styles.dotActive]} />
           ))}
         </View>
-        <Button label={isLast ? 'Get started' : 'Next'} onPress={handleNext} style={styles.button} />
+        {isLast ? null : <Button label={ONBOARDING_COPY.next} onPress={handleNext} style={styles.button} />}
       </View>
     </View>
   );
@@ -286,6 +402,60 @@ const useStyles = makeStyles((t) => ({
   heroCentered: {
     justifyContent: 'center',
     paddingTop: 0,
+  },
+  // Form pages (festival, going) read top-down; the copy is not anchored low.
+  formPage: {
+    gap: t.spacing[3],
+    paddingTop: t.spacing[6],
+    paddingBottom: t.spacing[8],
+  },
+  choiceList: {
+    gap: t.spacing[2],
+    marginTop: t.spacing[2],
+  },
+  choice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+    minHeight: 56,
+    paddingVertical: t.spacing[3],
+    paddingHorizontal: t.spacing[4],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.light,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  choiceSelected: {
+    borderColor: t.colors.accent.aqua,
+  },
+  choiceText: {
+    flex: 1,
+  },
+  choiceName: {
+    ...typeStyle('label'),
+    color: t.colors.text.primary,
+  },
+  choiceDates: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+  },
+  goingButtons: {
+    gap: t.spacing[3],
+    marginTop: t.spacing[2],
+  },
+  signInRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing[2],
+  },
+  signInPrompt: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+  },
+  signInLink: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
   },
   copy: {
     gap: t.spacing[3],
@@ -352,19 +522,10 @@ const useStyles = makeStyles((t) => ({
     height: 10,
     borderRadius: 5,
   },
-  visualBars: {
+  visualLabel: {
+    ...typeStyle('label'),
     flex: 1,
-    gap: t.spacing[2],
-  },
-  visualBar: {
-    height: 8,
-    borderRadius: t.radii.xs,
-    backgroundColor: t.colors.overlay[5],
-  },
-  visualBarSub: {
-    height: 6,
-    borderRadius: t.radii.xs,
-    backgroundColor: t.colors.overlay[3],
+    color: t.colors.text.primary,
   },
   visualTime: {
     ...typeStyle('caption'),
