@@ -21,6 +21,7 @@ import ListenList from '../components/features/ListenList';
 // picks bundle until the user actually opens the share modal.
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
 const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
+const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
 import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X } from 'lucide-react';
 
 // Dot accent token and the matching tint-ring Badge variant per priority —
@@ -84,6 +85,7 @@ function PicksViewInner() {
     <Suspense fallback={null}>
       <SharePicksDialog />
       <CalendarDialog />
+      <ScheduleImageDialog />
     </Suspense>
   ) : null;
 

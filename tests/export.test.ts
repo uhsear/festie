@@ -1,8 +1,8 @@
 import 'dotenv/config';
 /**
  * Integration tests for export routes (routes/export.js).
- * Covers: HTML export, ICS export, calendar JSON API, picks-card PNG, auth gating,
- *         rate-limit cooldown (SSE/429 fallback trigger).
+ * Covers: HTML export, auth gating, rate-limit cooldown (SSE/429 fallback trigger),
+ *         and that the removed ICS, calendar JSON and picks-card routes stay gone.
  *
  * Skip-gate on TEST_DATABASE_URL. DELETE BY EXACT ID on teardown.
  */
@@ -198,95 +198,12 @@ describe('export routes', { skip, concurrency: 1 }, () => {
     assert.equal(res.headers['x-frame-options'], 'DENY');
   });
 
-  test('ICS export returns RFC-5545-compliant VCALENDAR with picked sets', async () => {
-    if (!createFestivalPlanner) return;
-    const server = (await startServer())!;
-    servers.push(server);
-    const user = await registerUser(server, 'ics');
-    const profile = await joinFestival(server, user.token!);
-
-    await server.request
-      .put(`/api/v1/profiles/${profile.id}`)
-      .set('x-user-token', user.token!)
-      .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ picks: { [SET_A]: 'must' } })
-      .expect(200);
-
-    const res = await server.request
-      .get(`/api/v1/export/${FEST_ID}/${profile.id}/calendar`)
-      .set('x-user-token', user.token!)
-      .expect(200);
-
-    assert.match(res.headers['content-type']!, /text\/calendar/);
-    assert.match(res.text, /^BEGIN:VCALENDAR/);
-    assert.match(res.text, /VERSION:2\.0/);
-    assert.match(res.text, /PRODID:-\/\/FestivalPlanner\/\/EN/);
-    assert.match(res.text, /BEGIN:VEVENT/);
-    assert.match(res.text, /SUMMARY:Alpha/);
-    assert.match(res.text, /END:VEVENT/);
-    assert.match(res.text, /END:VCALENDAR$/);
-    // RFC 5545: lines use CRLF
-    assert.ok(res.text.includes('\r\n'), 'ICS must use CRLF line endings');
-  });
-
-  test('ICS export with no picks still produces valid empty VCALENDAR', async () => {
-    if (!createFestivalPlanner) return;
-    const server = (await startServer())!;
-    servers.push(server);
-    const user = await registerUser(server, 'icsempty');
-    const profile = await joinFestival(server, user.token!);
-
-    const res = await server.request
-      .get(`/api/v1/export/${FEST_ID}/${profile.id}/calendar`)
-      .set('x-user-token', user.token!)
-      .expect(200);
-
-    assert.match(res.text, /BEGIN:VCALENDAR/);
-    assert.match(res.text, /END:VCALENDAR/);
-    assert.ok(!res.text.includes('BEGIN:VEVENT'), 'no picks → no VEVENT blocks');
-  });
-
-  test('calendar JSON API returns envelope {data, error:null} with events array', async () => {
-    if (!createFestivalPlanner) return;
-    const server = (await startServer())!;
-    servers.push(server);
-    const user = await registerUser(server, 'json');
-    const profile = await joinFestival(server, user.token!);
-
-    await server.request
-      .put(`/api/v1/profiles/${profile.id}`)
-      .set('x-user-token', user.token!)
-      .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ picks: { [SET_A]: 'must', [SET_B]: 'want-to-see' } })
-      .expect(200);
-
-    const res = await server.request
-      .get(`/api/v1/festivals/${FEST_ID}/calendar`)
-      .set('x-user-token', user.token!)
-      .expect(200);
-
-    // Envelope shape
-    assert.ok(res.body.data, 'envelope has data');
-    assert.equal(res.body.error ?? null, null, 'envelope error is null');
-    assert.equal(res.body.data.festival.id, FEST_ID);
-    assert.ok(Array.isArray(res.body.data.events));
-    assert.equal(res.body.data.events.length, 2);
-    const evt = res.body.data.events.find((e: any) => e.id === SET_A);
-    assert.ok(evt);
-    assert.equal(evt.priority, 'must');
-    // Internal fields must not leak
-    assert.equal(evt.user_id, undefined);
-    assert.equal(evt.deleted_at, undefined);
-  });
-
-  test('export requires auth — unauth returns 401 for HTML, ICS, calendar JSON', async () => {
+  test('export requires auth — unauth returns 401 for HTML', async () => {
     if (!createFestivalPlanner) return;
     const server = (await startServer())!;
     servers.push(server);
 
     await server.request.get(`/api/v1/export/${FEST_ID}/anyprof`).expect(401);
-    await server.request.get(`/api/v1/export/${FEST_ID}/anyprof/calendar`).expect(401);
-    await server.request.get(`/api/v1/festivals/${FEST_ID}/calendar`).expect(401);
   });
 
   test('export rejects cross-user profile access with 403', async () => {
@@ -453,5 +370,20 @@ describe('GET /export/:festivalId/:profileId — crew scoping (Finding #6)', () 
     const res = await request(app).get('/export/f1/p1').expect(200);
     assert.ok(!res.text.includes('StrangerName'), "export leaked a non-crewmate's name into the Crew Schedules section");
     assert.ok(res.text.includes('DJ Test'), "sanity: the exporter's own picks must still render");
+  });
+
+  // T38 (planning-56/57): on-device images replaced the server picks card, and the
+  // apps build calendars themselves, so these routes must stay unregistered.
+  test('GET /export-card/:festivalId and the server calendar routes are gone (404)', async () => {
+    const { default: createExportRoutes } = await import('../routes/export.js');
+    const app = express();
+    app.use(createExportRoutes(makeExportDeps()));
+
+    // Express's own "Cannot GET" 404 proves no handler matched; a handler's 404
+    // (festival not found, not joined) would send the JSON error envelope instead.
+    for (const url of ['/export-card/f1', '/festivals/f1/calendar', '/export/f1/p1/calendar']) {
+      const res = await request(app).get(url).expect(404);
+      assert.match(res.text, /Cannot GET/, `${url} is still routed`);
+    }
   });
 });

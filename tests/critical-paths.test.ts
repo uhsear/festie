@@ -569,37 +569,11 @@ describe('export', { concurrency: 1 }, () => {
     assert.match(res.text, /<!DOCTYPE html>/i);
   });
 
-  test('ICS export returns valid iCalendar with picks', async () => {
-    const server = await startServer();
-    servers.push(server);
-    const user = await registerUser(server, 'icsuser');
-    const profile = await joinFestival(server, user.token);
-
-    // Save a pick first
-    await server.request
-      .put(`/api/v1/profiles/${profile.id}`)
-      .set('x-user-token', user.token)
-      .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ picks: { 'set-a': 'must' } })
-      .expect(200);
-
-    const res = await server.request
-      .get(`/api/v1/export/fest-1/${profile.id}/calendar`)
-      .set('x-user-token', user.token)
-      .expect(200);
-
-    assert.match(res.headers['content-type']!, /text\/calendar/);
-    assert.match(res.text, /BEGIN:VCALENDAR/);
-    assert.match(res.text, /BEGIN:VEVENT/);
-    assert.match(res.text, /END:VCALENDAR/);
-  });
-
   test('export requires auth', async () => {
     const server = await startServer();
     servers.push(server);
 
     await server.request.get('/api/v1/export/fake-fest/fake-profile').expect(401);
-    await server.request.get('/api/v1/export/fake-fest/fake-profile/calendar').expect(401);
   });
 });
 

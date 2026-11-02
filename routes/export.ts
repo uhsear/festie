@@ -3,20 +3,16 @@
  * All Rights Reserved. See the LICENSE file.
  */
 /**
- * Export routes: HTML/ICS/image generation and presence.
+ * Export routes: the printable HTML export and presence.
  *
- * Heavy lifting is delegated to helpers:
- *   lib/helpers/ics-builder.ts   — ICS calendar generation (shared with calendar-sync)
- *   lib/helpers/export-image.ts  — SVG picks-card builder
- *   lib/export-worker.ts         — HTML rendering (worker thread)
+ * HTML rendering is delegated to lib/export-worker.ts (worker thread) and
+ * lib/helpers/export-utils.ts (inline fallback). Calendar sync lives in
+ * routes/calendar-sync.ts; share images are rendered on the device.
  */
 
 import path from 'path';
 import fs from 'fs';
 import { Worker } from 'worker_threads';
-import sharp from 'sharp';
-import { buildVCalendar, buildIcsEventsFromPicks } from '../lib/helpers/ics-builder.js';
-import { buildPicksCardSvg } from '../lib/helpers/export-image.js';
 import { buildExportHtml } from '../lib/helpers/export-utils.js';
 
 export default function createExportRoutes(deps: any) {
@@ -187,12 +183,6 @@ export default function createExportRoutes(deps: any) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // Shared: build ICS events from festival picks
-  // ═══════════════════════════════════════════════════════════════════
-
-  // buildIcsEventsFromPicks is imported from lib/helpers/ics-builder.ts
-
-  // ═══════════════════════════════════════════════════════════════════
   // Routes
   // ═══════════════════════════════════════════════════════════════════
 
@@ -303,51 +293,9 @@ export default function createExportRoutes(deps: any) {
     }
   });
 
-  // ICS Calendar Export: Justified. Integrates picks into native phone calendar for reliable reminders.
-  // Native calendar is more reliable than browser notifications for offline scenarios.
-  /**
-   * ICS export intentionally uses res.send() instead of sendSuccess().
-   * Export endpoints return rendered HTML/ICS content, not JSON envelope.
-   * This is by design — see Finding #54.
-   */
-  router.get('/export/:festivalId/:profileId/calendar', userAuth, rateLimit(30, 'export-cal'), validateParams(schemas.festivalIdParams), async (req: any, res: any) => {
-    try {
-      setNoStore(res);
-      const festivalId = sanitizeIdentifier(req.validatedParams.festivalId);
-      const profileId = sanitizeIdentifier(req.params.profileId);
-      if (!festivalId || !profileId) return sendError(res, 400, 'Invalid festival or profile ID', ErrorCodes.INVALID_INPUT);
-      const festival = await getFestivalById(festivalId);
-      if (!festival) return sendError(res, 404, 'Not found', ErrorCodes.NOT_FOUND);
-
-      // Use store method to get single profile directly instead of loading all profiles
-      const profile = await deps.stores.profiles.getById(profileId);
-      if (!profile || profile.festivalId !== festivalId) return sendError(res, 404, 'Not found', ErrorCodes.NOT_FOUND);
-      if (profile.userId !== req.user.userId) return sendError(res, 403, 'Not allowed', ErrorCodes.FORBIDDEN);
-
-      const userId = req.user.userId;
-      const lastIcsExport = exportCooldowns.get(`ics:${userId}`) || 0;
-      if (Date.now() - lastIcsExport < EXPORT_COOLDOWN_MS) {
-        return sendError(res, 429, 'Please wait a few seconds before exporting again', ErrorCodes.RATE_LIMITED);
-      }
-      exportCooldowns.set(`ics:${userId}`, Date.now());
-
-      const origin = (config.PUBLIC_ORIGIN || 'localhost').replace(/^https?:\/\//, '');
-      const events = buildIcsEventsFromPicks(festival, profile, origin);
-      const ics = buildVCalendar(events, { calendarName: festival.name });
-
-      const safeName = (festival.name || 'festival').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-      const icsFilename = `${safeName}_schedule.ics`;
-      res.setHeader('Content-Disposition', `attachment; filename="${icsFilename}"; filename*=UTF-8''${encodeURIComponent(icsFilename)}`);
-      return res.send(ics);
-    } catch (error: any) {
-      log.error('ics export failed', { error: error.message });
-      return sendError(res, 500, 'Failed to export calendar', ErrorCodes.INTERNAL_ERROR);
-    }
-  });
-
   // JSON and NDJSON exports removed as part of Finding #37: feature bloat reduction.
-  // Maintaining only HTML (printable/offline) and ICS (native calendar integration).
+  // The server ICS, calendar JSON and picks-card PNG routes were removed in T38
+  // (planning-56): the apps build ICS themselves and render share images on the device.
 
   router.get('/presence/:festivalId', userAuth, rateLimit(60, 'presence'), validateParams(schemas.festivalIdParams), async (req: any, res: any) => {
     try {
@@ -365,83 +313,6 @@ export default function createExportRoutes(deps: any) {
     } catch (error: any) {
       log.error('presence load failed', { error: error.message, festivalId: req.validatedParams?.festivalId });
       return sendError(res, 500, 'Failed to load presence', ErrorCodes.INTERNAL_ERROR);
-    }
-  });
-
-  // Calendar export JSON API for native calendar integration
-  router.get('/festivals/:festivalId/calendar', userAuth, rateLimit(30, 'festival-cal'), validateParams(schemas.festivalIdParams), async (req: any, res: any) => {
-    try {
-      const festivalId = req.validatedParams.festivalId;
-      const festival = await getFestivalById(festivalId);
-      if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-
-      const profile = (await getProfiles()).find(
-        (p: any) => p.festivalId === festivalId && p.userId === req.user.userId && !p.deletedAt,
-      );
-      if (!profile) return sendError(res, 404, 'Not joined', ErrorCodes.NOT_FOUND);
-
-      const picks = profile.picks || {};
-      const stageMap = new Map((festival.stages || []).map((s: any) => [s.id, s.name]));
-      const events = (festival.days || []).flatMap((day: any) =>
-        (day.sets || [])
-          .filter((set: any) => picks[set.id])
-          .map((set: any) => ({
-            id: set.id,
-            title: set.name || set.artist || 'Unknown',
-            stage: stageMap.get(set.stageId) || 'Unknown',
-            day: day.date || day.name,
-            startTime: set.startTime || null,
-            endTime: set.endTime || null,
-            priority: picks[set.id],
-            linkUrl: set.linkUrl || null,
-          })),
-      );
-
-      return sendSuccess(res, {
-        festival: { id: festival.id, name: festival.name },
-        events,
-      });
-    } catch (error: any) {
-      log.error('calendar API failed', { error: error.message });
-      return sendError(res, 500, 'Calendar export failed', ErrorCodes.INTERNAL_ERROR);
-    }
-  });
-
-  // ═══════════════════════════════════════════════════════════════════
-  // Phase 1C: Shareable Picks Card — SVG -> PNG via Sharp
-  // ═══════════════════════════════════════════════════════════════════
-
-  router.get('/export-card/:festivalId', userAuth, rateLimit(30, 'export-card'), validateParams(schemas.festivalIdParams), async (req: any, res: any) => {
-    try {
-      setNoStore(res);
-      const festivalId = sanitizeIdentifier(req.validatedParams.festivalId);
-      if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
-
-      const festival = await getFestivalById(festivalId);
-      if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-
-      const profile = await getUserFestivalProfile(req.user.userId, festivalId);
-      if (!profile) return sendError(res, 404, 'Not joined', ErrorCodes.NOT_FOUND);
-
-      const userId = req.user.userId;
-      const lastCardExport = exportCooldowns.get('card:' + userId) || 0;
-      if (Date.now() - lastCardExport < EXPORT_COOLDOWN_MS) {
-        return sendError(res, 429, 'Please wait before generating another card', ErrorCodes.RATE_LIMITED);
-      }
-      exportCooldowns.set('card:' + userId, Date.now());
-
-      const brandDomain = (config.PUBLIC_ORIGIN || 'festie.us').replace(/^https?:\/\//, '');
-      const svg = buildPicksCardSvg(festival, profile, { brandDomain });
-      const png = await sharp(Buffer.from(svg)).png({ quality: 90 }).toBuffer();
-
-      const safeName = (festival.name || 'picks').replace(/[^a-z0-9_-]/gi, '_').slice(0, 40);
-      res.setHeader('Content-Type', 'image/png');
-      res.setHeader('Content-Disposition', 'inline; filename="' + safeName + '_picks.png"');
-      res.setHeader('Cache-Control', 'no-store');
-      return res.send(png);
-    } catch (err: any) {
-      log.error('picks card generation failed', { error: err.message });
-      return sendError(res, 500, 'Failed to generate picks card', ErrorCodes.INTERNAL_ERROR);
     }
   });
 

@@ -205,6 +205,9 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
     assert.ok(setCRating, 'set-c should appear in aggregate ratings');
     assert.equal(setCRating.totalRatings, 2);
     assert.equal(setCRating.avgRating, 3); // (4+2)/2
+    // Public endpoint: per-set aggregates only, never per-user rows.
+    assert.equal('ratings' in setCRating, false);
+    assert.ok(!JSON.stringify(aggRes.body).includes('userId'), 'aggregate response must not expose user ids');
   });
 
   test('wrap stats returns summary for user ratings', async () => {

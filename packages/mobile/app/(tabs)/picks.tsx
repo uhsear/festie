@@ -776,6 +776,20 @@ export default function PicksScreen() {
         <View style={styles.headerActions}>
           {calendarButton}
           <TouchableOpacity
+            style={[styles.calendarButton, noPicks && styles.calendarButtonDisabled]}
+            onPress={() => router.push('/picks-image')}
+            disabled={noPicks}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: noPicks }}
+            accessibilityLabel="Save my picks as an image"
+          >
+            <Ionicons name="image-outline" size={16} color={t.colors.accent.aqua} />
+            <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+              {COPY.picks.saveImage}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.calendarButton, !currentFestival && styles.calendarButtonDisabled]}
             onPress={handleSharePicks}
             disabled={!currentFestival}

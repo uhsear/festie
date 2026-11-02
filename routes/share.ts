@@ -11,10 +11,15 @@
  * A legacy profile-id link still resolves until the owner resets their links
  * (POST /account/sharing/reset). Pages are `private, no-cache` so a reset takes
  * effect at once, even behind the CDN.
+ *
+ * GET /s/:shareId/og.png and /s/u/:username/og.png render the link-preview
+ * image; GET /s/:shareId/json and /s/u/:username/json feed the compare page.
  */
 
+import sharp from 'sharp';
 import { escapeHtml } from '../lib/helpers/sanitize.js';
-import { festivalStartMinutes } from '../lib/time-zone.js';
+import { buildShareOgSvg, CLOCK_TIME_RE, pickOgArtists } from '../lib/helpers/share-og-image.js';
+import { festivalStartMinutes, formatClock12 } from '../lib/time-zone.js';
 
 export default function createShareRoutes(deps: any) {
   const {
@@ -33,28 +38,85 @@ export default function createShareRoutes(deps: any) {
     return res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0f;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}.error-box{text-align:center;padding:40px 24px;max-width:400px}.error-icon{font-size:48px;margin-bottom:16px;opacity:.5}.error-title{font-size:20px;font-weight:700;margin-bottom:8px}.error-msg{font-size:14px;color:#888;margin-bottom:24px}.error-btn{display:inline-block;background:#ff3366;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px}.error-btn:hover{background:#e62e5c}</style></head><body><div class="error-box"><div class="error-icon">🎵</div><div class="error-title">${escapeHtml(title)}</div><div class="error-msg">${escapeHtml(message)}</div><a class="error-btn" href="${escapeHtml(config.PUBLIC_ORIGIN || '/')}">Go to Festie</a></div></body></html>`);
   }
 
+  // Sanitize username: lowercase, alphanumeric + underscore + hyphen, max 30 chars. Null when invalid.
+  function vanityUsername(raw: unknown) {
+    const username = String(raw || '').trim().toLowerCase();
+    return username && username.length <= 30 && /^[a-z0-9_-]+$/.test(username) ? username : null;
+  }
+
+  // The newest profile of a public user. Private users answer exactly like a
+  // nonexistent one ('no-user'), so no response reveals the account.
+  async function findVanityProfile(username: string): Promise<{ profileId?: string; missing?: 'no-user' | 'no-profile' }> {
+    // Look up user by username (case-insensitive, targeted query)
+    const user = await stores.users.getByUsername(username);
+    if (!user || !user.publicSchedule) return { missing: 'no-user' };
+    const newest = await stores.shareLinks.newestProfile(user.id);
+    return newest ? { profileId: newest.profileId } : { missing: 'no-profile' };
+  }
+
+  // GET /u/:username/og.png and /:shareId/og.png — link-preview image. Same
+  // lookups as the page, so a reset link also stops its image.
+  router.get('/u/:username/og.png', rateLimit(30, 'share-og'), async (req: any, res: any) => {
+    try {
+      const username = vanityUsername(req.params.username);
+      if (!username) return res.status(400).end();
+      const found = await findVanityProfile(username);
+      if (!found.profileId) return res.status(404).end();
+      return await sendShareOg(res, found.profileId);
+    } catch (error: any) {
+      log.error('share og render failed', { error: error.message, username: req.params.username });
+      return res.status(500).end();
+    }
+  });
+
+  router.get('/:shareId/og.png', rateLimit(30, 'share-og'), async (req: any, res: any) => {
+    try {
+      const shareId = String(req.params.shareId || '').trim();
+      if (!isValidShareId(shareId)) return res.status(400).end();
+      const profileId = await stores.shareLinks.findProfileId(shareId);
+      if (!profileId) return res.status(404).end();
+      return await sendShareOg(res, profileId);
+    } catch (error: any) {
+      log.error('share og render failed', { error: error.message, shareId: req.params.shareId });
+      return res.status(500).end();
+    }
+  });
+
+  // GET /u/:username/json — JSON mirror of the vanity page, with the same checks.
+  router.get('/u/:username/json', rateLimit(30, 'share-json'), async (req: any, res: any) => {
+    try {
+      const username = vanityUsername(req.params.username);
+      if (!username) {
+        return sendError(res, 400, 'Invalid share link', ErrorCodes.INVALID_INPUT);
+      }
+      const found = await findVanityProfile(username);
+      if (!found.profileId) {
+        return sendError(res, 404, 'Schedule not found', ErrorCodes.NOT_FOUND);
+      }
+      return await sendProfileJson(res, found.profileId);
+    } catch (error: any) {
+      log.error('vanity share json error', { error: error.message, username: req.params.username });
+      return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
   // GET /u/:username — opt-in vanity page. Renders in place: a redirect would
   // leak the revocable token, or break after a reset.
   router.get('/u/:username', rateLimit(30, 'share'), async (req: any, res: any) => {
     try {
-      const username = String(req.params.username || '').trim();
-      // Sanitize username: lowercase, alphanumeric + underscore + hyphen, max 30 chars
-      if (!username || username.length > 30 || !/^[a-z0-9_-]+$/.test(username.toLowerCase())) {
+      const username = vanityUsername(req.params.username);
+      if (!username) {
         return sendShareError(res, 400, 'Invalid Link', 'This share link is not valid.');
       }
 
-      // Look up user by username (case-insensitive, targeted query)
-      const user = await stores.users.getByUsername(username.toLowerCase());
-      // Private users answer exactly like a nonexistent one so the page does not reveal the account.
-      if (!user || !user.publicSchedule) {
+      const found = await findVanityProfile(username);
+      if (found.missing === 'no-user') {
         return sendShareError(res, 404, 'User Not Found', 'No account with this username exists.');
       }
-
-      const newest = await stores.shareLinks.newestProfile(user.id);
-      if (!newest) {
+      if (!found.profileId) {
         return sendShareError(res, 404, 'No Schedule Yet', 'This user hasn\'t joined a festival yet.');
       }
-      return await renderProfileShare(req, res, newest.profileId, `${shareOrigin(req)}/s/u/${username.toLowerCase()}`);
+      return await renderProfileShare(req, res, found.profileId, `u/${username}`);
     } catch (error: any) {
       log.error('vanity share lookup failed', { error: error.message, username: req.params.username });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
@@ -68,10 +130,10 @@ export default function createShareRoutes(deps: any) {
         .filter((set: any) => pickedSetIds.has(set.id))
         .map((set: any) => ({
           artist: escapeHtml(set.artist),
+          timeText: escapeHtml(shareTimeText(set.startTime, set.endTime)),
           stage: escapeHtml(getStageNameById(festival.stages, set.stageId)),
           stageColor: sanitizeColor(getStageColorById(festival.stages, set.stageId)),
           startTime: escapeHtml(set.startTime || ''),
-          endTime: escapeHtml(set.endTime || ''),
           priority: picks[set.id] || 'want-to-see',
         }))
         .sort(
@@ -103,19 +165,31 @@ export default function createShareRoutes(deps: any) {
 
   const SCHEDULE_NOT_FOUND = 'This schedule may have been removed or the link is incorrect. If someone sent you this link, ask them for a new one.';
 
-  async function renderProfileShare(req: any, res: any, profileId: string, shareUrl: string) {
+  // The shared profile and its festival; profile is null when missing or not owned by a user.
+  async function loadShare(profileId: string) {
     const profile = await stores.profiles.getById(profileId);
-    if (!profile || !profile.userId) {
+    if (!profile || !profile.userId) return { profile: null, festival: null };
+    return { profile, festival: await getFestivalById(profile.festivalId) };
+  }
+
+  // shareRef is the part after /s/: a share token, or `u/<username>` for the vanity page.
+  async function renderProfileShare(req: any, res: any, profileId: string, shareRef: string) {
+    const { profile, festival } = await loadShare(profileId);
+    if (!profile) {
       return sendShareError(res, 404, 'Schedule Not Found', SCHEDULE_NOT_FOUND);
     }
-
-    const festival = await getFestivalById(profile.festivalId);
     if (!festival) {
       return sendShareError(res, 404, 'Festival Not Found', 'The festival for this schedule no longer exists.');
     }
 
     const user = await getUserById(profile.userId);
     const picks = profile.picks || {};
+    const origin = shareOrigin(req);
+    const shareUrl = `${origin}/s/${shareRef}`;
+    const ogUrl = `${shareUrl}/og.png`;
+    const username = user?.username || profile.name || 'Anonymous';
+    const stats = buildPickStats(picks);
+    const compareUrl = `${origin}/friend-picks?from=${encodeURIComponent(shareRef)}`;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     // Not cacheable by the CDN, so a link reset takes effect at once.
@@ -124,15 +198,72 @@ export default function createShareRoutes(deps: any) {
     res.setHeader('X-Robots-Tag', 'noindex');
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https:; frame-ancestors 'none'");
     return res.send(renderSharePage({
-      username: escapeHtml(user?.username || profile.name || 'Anonymous'),
+      username: escapeHtml(username),
       avatarUrl: escapeHtml(buildAvatarUrl(user) || ''),
       festivalName: escapeHtml(festival.name),
       festivalLocation: escapeHtml(festival.location || ''),
       days: buildShareDays(festival, picks),
-      ...buildPickStats(picks),
-      origin: escapeHtml(shareOrigin(req)),
+      ...stats,
+      origin: escapeHtml(origin),
       shareUrl: escapeHtml(shareUrl),
+      ogUrl: escapeHtml(ogUrl),
+      ogAlt: escapeHtml(`${username}'s picks for ${festival.name}`),
+      jsonLd: buildEventJsonLd(festival, { shareUrl, ogUrl, description: shareDescription(stats) }),
+      compareUrl: escapeHtml(compareUrl),
+      addUrl: escapeHtml(`${compareUrl}#add`),
+      appUrl: escapeHtml(`festie://friend-picks?from=${encodeURIComponent(shareRef)}`),
     }));
+  }
+
+  async function sendShareOg(res: any, profileId: string) {
+    const { profile, festival } = await loadShare(profileId);
+    // Crawlers need no HTML error page.
+    if (!profile || !festival) return res.status(404).end();
+
+    const user = await getUserById(profile.userId);
+    const picks = profile.picks || {};
+    const { totalPicks, mustCount } = buildPickStats(picks);
+    const svg = buildShareOgSvg({
+      username: user?.username || profile.name || 'Anonymous',
+      festivalName: festival.name,
+      location: festival.location || '',
+      artists: pickOgArtists(festival, picks, festival.b2bSeparator || 'b2b'),
+      total: totalPicks,
+      must: mustCount,
+    });
+    const png = await sharp(Buffer.from(svg)).png().toBuffer();
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('X-Robots-Tag', 'noindex');
+    return res.send(png);
+  }
+
+  async function sendProfileJson(res: any, profileId: string) {
+    const { profile, festival } = await loadShare(profileId);
+    if (!profile) {
+      return sendError(res, 404, 'Schedule not found', ErrorCodes.NOT_FOUND);
+    }
+    if (!festival) {
+      return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+    }
+
+    const user = await getUserById(profile.userId);
+    const username = user?.username || profile.name || 'Anonymous';
+
+    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('X-Robots-Tag', 'noindex');
+    return sendSuccess(res, {
+      username,
+      festivalName: festival.name,
+      festivalId: festival.id,
+      picks: profile.picks || {},
+      festival: {
+        stages: festival.stages,
+        days: festival.days,
+        b2bSeparator: festival.b2bSeparator ?? null,
+      },
+    });
   }
 
   // GET /s/:shareId — public share page (rate limited to prevent scraping)
@@ -147,7 +278,7 @@ export default function createShareRoutes(deps: any) {
       if (!profileId) {
         return sendShareError(res, 404, 'Schedule Not Found', SCHEDULE_NOT_FOUND);
       }
-      return await renderProfileShare(req, res, profileId, `${shareOrigin(req)}/s/${shareId}`);
+      return await renderProfileShare(req, res, profileId, shareId);
     } catch (error: any) {
       log.error('share page error', { error: error.message, profileId: req.params.profileId });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
@@ -163,31 +294,10 @@ export default function createShareRoutes(deps: any) {
       }
 
       const profileId = await stores.shareLinks.findProfileId(shareId);
-      const profile = profileId ? await stores.profiles.getById(profileId) : null;
-      if (!profile || !profile.userId) {
+      if (!profileId) {
         return sendError(res, 404, 'Schedule not found', ErrorCodes.NOT_FOUND);
       }
-
-      const festival = await getFestivalById(profile.festivalId);
-      if (!festival) {
-        return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-      }
-
-      const user = await getUserById(profile.userId);
-      const username = user?.username || profile.name || 'Anonymous';
-
-      res.setHeader('Cache-Control', 'private, no-cache');
-      res.setHeader('X-Robots-Tag', 'noindex');
-      return sendSuccess(res, {
-        username,
-        festivalName: festival.name,
-        festivalId: festival.id,
-        picks: profile.picks || {},
-        festival: {
-          stages: festival.stages,
-          days: festival.days,
-        },
-      });
+      return await sendProfileJson(res, profileId);
     } catch (error: any) {
       log.error('share json error', { error: error.message, profileId: req.params.profileId });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
@@ -217,6 +327,50 @@ function sanitizeColor(color: any) {
   return '#666';
 }
 
+// `9:30 PM – 10:45 PM`, `9:30 PM` with no end, `Time TBA` with no valid start.
+function shareTimeText(start: any, end: any) {
+  if (!CLOCK_TIME_RE.test(String(start || ''))) return 'Time TBA';
+  return formatClock12(start) + (CLOCK_TIME_RE.test(String(end || '')) ? ` – ${formatClock12(end)}` : '');
+}
+
+function shareDescription({ mustCount, wantCount, maybeCount, totalPicks }: any) {
+  return `${mustCount} must-see, ${wantCount} want-to-see, ${maybeCount} maybe - ${totalPicks} total picks`;
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+
+// schema.org Event from raw festival values. The escapes keep a festival name
+// from closing the <script> block; JSON-LD is data and does not run under the CSP.
+function buildEventJsonLd(festival: any, { shareUrl, ogUrl, description }: { shareUrl: string; ogUrl: string; description: string }) {
+  // Festivals carry no start or end date of their own; the days' dates give the range.
+  const dates = (festival.days || [])
+    .map((day: any) => String(day?.date || ''))
+    .filter((date: string) => ISO_DATE_RE.test(date))
+    .map((date: string) => date.slice(0, 10))
+    .sort();
+  const event: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: festival.name,
+    ...(dates.length > 0 ? { startDate: dates[0], endDate: dates[dates.length - 1] } : {}),
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    eventStatus: 'https://schema.org/EventScheduled',
+    url: shareUrl,
+    image: [ogUrl],
+    description,
+  };
+  if (festival.location) {
+    const hasGeo = Number.isFinite(festival.latitude) && Number.isFinite(festival.longitude);
+    event.location = {
+      '@type': 'Place',
+      name: festival.location,
+      address: festival.location,
+      ...(hasGeo ? { geo: { '@type': 'GeoCoordinates', latitude: festival.latitude, longitude: festival.longitude } } : {}),
+    };
+  }
+  return JSON.stringify(event).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+}
+
 function priorityLabel(priority: any) {
   return ({ must: 'Must See', 'want-to-see': 'Want to See', maybe: 'Maybe' } as any)[priority] || priority;
 }
@@ -225,14 +379,14 @@ function priorityColor(priority: any) {
   return ({ must: '#ff3366', 'want-to-see': '#ffaa00', maybe: '#888' } as any)[priority] || '#888';
 }
 
-function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, days, totalPicks, mustCount, wantCount, maybeCount, origin, shareUrl }: any) {
+function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, days, totalPicks, mustCount, wantCount, maybeCount, origin, shareUrl, ogUrl, ogAlt, jsonLd, compareUrl, addUrl, appUrl }: any) {
   const dayHtml = days.map((day: any) => `
     <div class="share-day">
       <h3>${day.label}${day.date ? ` <span class="share-date">${day.date}</span>` : ''}</h3>
       <div class="share-sets">
         ${day.sets.map((set: any) => `
           <div class="share-set" style="border-left: 3px solid ${set.stageColor}">
-            <div class="share-set-time">${set.startTime}${set.endTime ? ' - ' + set.endTime : ''}</div>
+            <div class="share-set-time">${set.timeText}</div>
             <div class="share-set-artist">${set.artist}</div>
             <div class="share-set-meta">
               <span class="share-stage">${set.stage}</span>
@@ -251,11 +405,19 @@ function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${username}'s ${festivalName} Schedule</title>
   <meta name="description" content="${username}'s picks for ${festivalName} - ${totalPicks} sets selected">
-  <meta property="og:title" content="${username}'s ${festivalName} Schedule">
-  <meta property="og:description" content="${mustCount} must-see, ${wantCount} want-to-see, ${maybeCount} maybe - ${totalPicks} total picks">
+  <meta property="og:title" content="${username}'s ${festivalName} picks">
+  <meta property="og:description" content="${shareDescription({ mustCount, wantCount, maybeCount, totalPicks })}">
   <meta property="og:url" content="${shareUrl}">
   <meta property="og:type" content="website">
-  <meta name="twitter:card" content="summary">
+  <meta name="theme-color" content="#080810">
+  <meta property="og:site_name" content="Festie">
+  <meta property="og:image" content="${ogUrl}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="${ogAlt}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="${ogUrl}">
+  <script type="application/ld+json">${jsonLd}</script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -389,6 +551,24 @@ function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, 
     .share-cta a:hover {
       background: #e62e5c;
     }
+    .share-cta a.share-cta-outline {
+      background: transparent;
+      color: #ff3366;
+      border: 1px solid #ff3366;
+      margin: 8px 0 0 8px;
+    }
+    .share-cta a.share-cta-outline:hover {
+      background: rgba(255,51,102,0.1);
+    }
+    .share-cta p a,
+    .share-cta p a:hover {
+      display: inline;
+      background: none;
+      color: #ff3366;
+      padding: 0;
+      font-size: inherit;
+      text-decoration: underline;
+    }
     .share-cta p {
       font-size: 13px;
       color: #888;
@@ -421,8 +601,10 @@ function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, 
     }
 
     <div class="share-cta">
-      <a href="${origin}">Plan your own schedule</a>
-      <p>Compare picks with your crew on Festie</p>
+      <a href="${compareUrl}">Compare with my picks</a>
+      <a class="share-cta-outline" href="${addUrl}">Add their picks to my plan</a>
+      <p>Have the Festie app? <a href="${appUrl}">Open in the app</a></p>
+      <p><a href="${origin}">New to Festie? Plan your own schedule</a></p>
     </div>
   </div>
 </body>
