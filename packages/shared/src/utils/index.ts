@@ -78,3 +78,4 @@ export * from './announcements';
 export * from './onboarding';
 export * from './festivalReady';
 export * from './guestPicks';
+export * from './pickMenu';

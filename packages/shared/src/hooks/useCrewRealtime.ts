@@ -19,6 +19,7 @@
 import { useEffect } from 'react';
 import type { Socket } from '../services/socket';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
+import { useAuthStore } from '../stores/authStore';
 import {
   routeHomeBaseUpdated,
   routeMeetingPointUpsert,
@@ -177,7 +178,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     // ── Live Location + SOS handlers (applied IMMEDIATELY — full payloads, no
     // debounce; the 300ms debounce is only for reload-style intents above). ───
     const handleLocationPeerUpdate = (data: LocationPeerUpdatePayload) => {
-      const intent = routeLocationPeerUpdate(data, getActiveCrewId());
+      const intent = routeLocationPeerUpdate(data, getActiveCrewId(), useAuthStore.getState().user?.id ?? null);
       if (intent) sink.onLocationPeerUpdate(intent.crewId, intent.peer);
     };
 

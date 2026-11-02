@@ -22,6 +22,9 @@
  * Two notions of "sharing": `shareIntent` is what the USER asked for (crew, end
  * time, paused, battery opt-in) and outlives any screen; `sharingCrewId` /
  * `startSharing` / `stopSharing` only track what the publisher is sending right now.
+ *
+ * A `background` intent is published by the mobile native task over HTTP, not by
+ * the socket publisher.
  */
 
 import { create, StateCreator } from 'zustand';
@@ -37,6 +40,8 @@ export interface LiveShareIntent {
   expiresAt: string;
   paused: boolean;
   shareBattery: boolean;
+  /** True when the mobile native task publishes this share, not the socket publisher. */
+  background: boolean;
 }
 
 export interface LiveLocationState {
@@ -97,7 +102,7 @@ export interface LiveLocationActions {
   /** Stop publishing our own position; clears publisher bookkeeping. */
   stopSharing: () => void;
   /** Start a time-boxed share session. Clears any earlier end reason. */
-  beginShare: (crewId: string, expiresAt: string, shareBattery: boolean) => void;
+  beginShare: (crewId: string, expiresAt: string, shareBattery: boolean, background?: boolean) => void;
   /** Pause hides our dot from the crew; the end time keeps running. No-op without a session. */
   setSharePaused: (paused: boolean) => void;
   /** End the session and record why. No-op without a session. */
@@ -178,8 +183,8 @@ const liveLocationStore: StateCreator<LiveLocationStore> = (set, get) => ({
     set({ sharingCrewId: null, sharingExpiresAt: null, lastSentAt: null, lastSentCoord: null });
   },
 
-  beginShare: (crewId, expiresAt, shareBattery) => {
-    set({ shareIntent: { crewId, expiresAt, paused: false, shareBattery }, shareEndedReason: null });
+  beginShare: (crewId, expiresAt, shareBattery, background = false) => {
+    set({ shareIntent: { crewId, expiresAt, paused: false, shareBattery, background }, shareEndedReason: null });
   },
 
   setSharePaused: (paused) => {

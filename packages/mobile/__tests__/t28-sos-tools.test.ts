@@ -28,7 +28,8 @@ describe('T28 mobile SOS tools', () => {
     for (const spec of specs) {
       const ok =
         spec.startsWith('.') ||
-        ['react', 'react-native', '@expo/vector-icons'].includes(spec) ||
+        // T41: expo (native-module gate) plus type-only imports of the gated modules.
+        ['react', 'react-native', '@expo/vector-icons', 'expo', 'expo-keep-awake', 'expo-brightness'].includes(spec) ||
         spec.startsWith('@festie/shared/');
       expect(ok, spec).toBe(true);
     }

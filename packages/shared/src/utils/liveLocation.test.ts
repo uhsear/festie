@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   shouldPublishLocation,
+  decideBackgroundFix,
   isPeerStale,
   headingToArrow,
   formatBatteryLabel,
@@ -236,5 +237,32 @@ describe('liveLocation.sosSeenLabel', () => {
     expect(sosSeenLabel(entry('Sam'))).toBe('Seen by Sam');
     expect(sosSeenLabel(entry('Sam', 'Alex'))).toBe('Seen by Sam and Alex');
     expect(sosSeenLabel(entry('Sam', 'Alex', 'Jo', 'Kim'))).toBe('Seen by Sam, Alex and 2 more');
+  });
+});
+
+describe('liveLocation.decideBackgroundFix', () => {
+  const EXPIRES = NOW + 60_000;
+  const state = (lastSentAt: number | null, lastSentCoord: LatLng | null = A) => ({ expiresAtMs: EXPIRES, lastSentCoord, lastSentAt });
+
+  it('expires at and after the end time', () => {
+    expect(decideBackgroundFix(state(null, null), A, EXPIRES)).toBe('expire');
+    expect(decideBackgroundFix(state(null, null), A, EXPIRES + 1)).toBe('expire');
+  });
+
+  it('sends the first fix', () => {
+    expect(decideBackgroundFix(state(null, null), A, NOW)).toBe('send');
+  });
+
+  it('skips 5 s after the last send with no movement', () => {
+    expect(decideBackgroundFix(state(NOW), A, NOW + 5_000)).toBe('skip');
+  });
+
+  it('sends after 10 s', () => {
+    expect(decideBackgroundFix(state(NOW), A, NOW + 10_000)).toBe('send');
+  });
+
+  it('sends after a 20 m move', () => {
+    const moved: LatLng = { lat: A.lat + 20 / 111_320, lng: A.lng };
+    expect(decideBackgroundFix(state(NOW), moved, NOW + 1_000)).toBe('send');
   });
 });

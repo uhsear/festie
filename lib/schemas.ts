@@ -1165,6 +1165,17 @@ export const locationStopSchema = z
   .strip();
 export type LocationStopInput = z.infer<typeof locationStopSchema>;
 
+// T41: one background fix posted over HTTP (POST /crews/:crewId/live-location),
+// because a locked phone has no socket. crewId comes from the path. expiresAt is
+// required so the server can enforce the share's time box.
+export const liveLocationFixSchema = liveCoord
+  .extend({
+    speed: z.number().min(0).max(1000).optional(),
+    expiresAt: z.string().datetime(),
+  })
+  .strip();
+export type LiveLocationFixInput = z.infer<typeof liveLocationFixSchema>;
+
 // OPTIONAL (Phase 1.5, Redis-backed late-joiner snapshot). Phase 1 omits the
 // server handler; the schema is registered so the type contract exists.
 export const locationSyncSchema = z
@@ -1532,6 +1543,7 @@ export const schemas = {
   locationShare: locationShareSchema,
   locationUpdate: locationUpdateSchema,
   locationStop: locationStopSchema,
+  liveLocationFix: liveLocationFixSchema,
   locationSync: locationSyncSchema,
   sosRaise: sosRaiseSchema,
   sosClear: sosClearSchema,

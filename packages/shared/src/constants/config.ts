@@ -283,7 +283,8 @@ export const LIVE_LOCATION = {
  * publisher auto-expires — no silent indefinite sharing. There is no "until the
  * festival ends" preset: sharing is foreground-only on mobile, so it cannot
  * honestly promise that. "Rest of today" is built per call by liveShareOptions.
- * LIVE_SHARE_MAX_MS caps any session.
+ * LIVE_SHARE_MAX_MS caps every share, including background shares. The server
+ * mirrors it as MAX_SHARE_WINDOW_MS.
  */
 export const LIVE_SHARE_MAX_MS = 12 * 3_600_000;
 
@@ -311,7 +312,23 @@ export function resolveLiveShareMs(d: LiveShareDuration): number {
 export const LIVE_SHARE_COPY = {
   title: 'Share my live location',
   switchA11y: 'Share my live location with this crew',
-  ruleNative: 'Only this crew sees it. It stops at the time you pick, or when you lock your phone or leave the app.',
+  ruleNative: 'Only this crew sees it. It stops at the time you pick.',
+  keepLocked: 'Keep sharing when my phone is locked',
+  keepLockedHint: 'Uses more battery. Without this, sharing stops when you lock your phone or leave the app.',
+  lockedOnSub: 'Keeps sharing while your phone is locked',
+  lockedOffSub: 'Stops if you lock your phone or leave the app',
+  bgDisclosureTitle: 'Share while your phone is locked?',
+  bgDisclosureBody: (crewName: string, clock: string) =>
+    `Festie will collect your location in the background, even when the app is closed or not in use, and send it only to ${crewName} until ${clock}. You can stop it any time in the Crew tab.`,
+  bgDisclosureContinue: 'Continue',
+  bgDeniedTitle: 'Allow location all the time',
+  bgDeniedBodyIos: 'To keep sharing while your phone is locked, set Festie\'s location access to "Always" in Settings.',
+  bgDeniedBodyAndroid: 'To keep sharing while your phone is locked, set Festie\'s location permission to "Allow all the time" in Settings.',
+  bgDeniedShareOpen: 'Share while open',
+  openSettings: 'Open Settings',
+  fgsTitle: (crewName: string) => `Sharing your location with ${crewName}`,
+  fgsBody: (clock: string) => `Until ${clock}. Open Festie to stop.`,
+  stoppedNoticeTitle: 'Sharing stopped',
   ruleWeb: 'Only this crew sees it. It stops at the time you pick, or when you close this tab.',
   chooserTitle: 'Share your location for…',
   restOfToday: (clock: string) => `Rest of today (until ${clock})`,

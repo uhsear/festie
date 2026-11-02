@@ -42,6 +42,34 @@ const POSITION_TTL_MS = 120_000;
 /** Default freshness window for what a snapshot returns (mirrors STALE_MS). */
 const SNAPSHOT_FRESH_MS = POSITION_TTL_MS;
 
+/**
+ * Longest share window a client may claim (12 h). Mirrors `LIVE_SHARE_MAX_MS`
+ * in @festie/shared, mirrored for the same reason as POSITION_TTL_MS; keep the
+ * two in sync.
+ */
+export const MAX_SHARE_WINDOW_MS = 12 * 3_600_000;
+
+/** capturedAt may not be more than this far in the past relative to server time. */
+const CAPTURED_AT_MAX_AGE_MS = 60_000;
+/** ...nor more than this far in the future (clock skew tolerance). */
+const CAPTURED_AT_MAX_SKEW_MS = 30_000;
+
+/**
+ * Clamp a client-supplied `capturedAt` to a small window around server time
+ * (L4): a client must not be able to appear perpetually "live · N ago" nor
+ * stamp a future fix. Returns an ISO string clamped to [now-MAXAGE, now+SKEW].
+ * Falls back to `serverNowIso` if the input is unparseable.
+ */
+export function clampCapturedAt(capturedAt: any, serverNow: number, serverNowIso: string): string {
+  const t = Date.parse(capturedAt);
+  if (!Number.isFinite(t)) return serverNowIso;
+  const lo = serverNow - CAPTURED_AT_MAX_AGE_MS;
+  const hi = serverNow + CAPTURED_AT_MAX_SKEW_MS;
+  if (t < lo) return new Date(lo).toISOString();
+  if (t > hi) return new Date(hi).toISOString();
+  return new Date(t).toISOString();
+}
+
 function positionsKey(crewId: string): string {
   return `loc:pos:${crewId}`;
 }

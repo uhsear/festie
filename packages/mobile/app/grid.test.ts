@@ -5,13 +5,14 @@ import { join } from 'node:path';
 const src = readFileSync(join(__dirname, 'grid.tsx'), 'utf8');
 
 describe('mobile Grid screen', () => {
-  it('snaps, zooms, fits two stages, picks on hold, marks clashes and shows TBA', () => {
+  it('snaps, zooms, fits two stages, picks on hold, offers pick actions to screen readers, marks clashes and shows TBA', () => {
     for (const needle of [
       'snapToOffsets',
       'snapToInterval={colW}',
       'GRID_ZOOM_LEVELS',
       'twoUpColumnWidth(',
       'holdToPick(',
+      'accessibilityActions=',
       'ClashHatch',
       'ClashChip',
       'allTba',

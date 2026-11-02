@@ -6,8 +6,9 @@
  *
  * Mounted once in app/_layout.tsx so no tab or screen change stops a share. It
  * runs the shared session (`useLiveShareSession`) from the `shareIntent` that
- * CrewLiveLocation writes to liveLocationStore. Foreground-only until T41: when
- * the app goes inactive or background, the session ends with 'background'.
+ * CrewLiveLocation writes to liveLocationStore. A foreground intent ends with
+ * 'background' when the app goes inactive or background. A background intent is
+ * published by lib/backgroundShare.ts, so this host leaves it alone.
  * Renders nothing.
  */
 
@@ -20,6 +21,7 @@ import { useLiveLocationStore } from '@festie/shared/stores';
 import { LIVE_LOCATION } from '@festie/shared/constants';
 import { liveShareEndedText } from '@festie/shared/utils';
 import { useLiveSocket } from '../lib/liveSocket';
+import { notifyShareStopped } from '../lib/backgroundShare';
 
 export default function LiveSharePublisher() {
   const socket = useLiveSocket();
@@ -126,11 +128,16 @@ export default function LiveSharePublisher() {
 
   useLiveShareSession({ socket, watchPosition });
 
-  // Foreground-only: stop sharing the moment the app backgrounds so the toggle
+  // Foreground intent: stop sharing the moment the app backgrounds so the toggle
   // is OFF when the user returns (useRealtimeSync emits the server-side stop).
+  // A background intent keeps running; backgroundShare owns it.
   useEffect(() => {
     const onChange = (next: AppStateStatus) => {
-      if (next.match(/inactive|background/)) endShare('background');
+      if (!next.match(/inactive|background/)) return;
+      const intent = useLiveLocationStore.getState().shareIntent;
+      if (!intent || intent.background) return;
+      endShare('background');
+      void notifyShareStopped('background');
     };
     const sub = AppState.addEventListener('change', onChange);
     return () => sub.remove();
