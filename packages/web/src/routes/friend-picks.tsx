@@ -193,7 +193,7 @@ function FriendPicksInner() {
       </header>
 
       {!user ? (
-        <Banner text="Log in to compare these picks with yours.">
+        <Banner text="Sign in to compare these picks with yours.">
           <button type="button" className="btn-primary min-h-11 px-4" onClick={() => navigate({ to: '/login' })}>
             Log in
           </button>

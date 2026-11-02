@@ -90,7 +90,7 @@ describe('FriendPicksView', () => {
   it('shows no checkboxes for a guest', async () => {
     authUser.value = null;
     renderView();
-    await screen.findByText('Log in to compare these picks with yours.');
+    await screen.findByText('Sign in to compare these picks with yours.');
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
 
