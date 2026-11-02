@@ -16,6 +16,7 @@ export function resetAllStores(): void {
     currentFestival: null,
     currentProfile: null,
     allProfiles: [],
+    pickCounts: {},
     sets: [],
     stages: [],
     days: [],

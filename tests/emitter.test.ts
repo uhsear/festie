@@ -81,40 +81,72 @@ describe('emitter: profileCreated', () => {
 });
 
 describe('emitter: profileUpdated', () => {
-  it('batches updates and emits after debounce', async () => {
+  it('batches updates and emits picks to the author crew rooms only', async () => {
     const io = makeIo();
-    const emitter = createSocketEmitter(defaultDeps({ io }));
+    const stores = crewStores({ c1: ['user-1', 'bob'], c2: ['user-1', 'cara'] });
+    const emitter = createSocketEmitter(defaultDeps({ io, stores }));
 
     emitter.profileUpdated({
-      profile: { festivalId: 'fest-1', id: 'prof-1', name: 'Alice', picks: { s1: 'must' }, updatedAt: new Date().toISOString() },
+      profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'user-1', name: 'Alice', picks: { s1: 'must' }, updatedAt: new Date().toISOString() },
       user: { avatarKey: 'abc' },
     });
 
     // Wait for batch debounce (200ms)
     await new Promise((r) => setTimeout(r, 300));
 
-    const emitted = io._rooms['fest-1'];
-    assert.ok(emitted, 'should have emitted to fest-1');
+    assert.equal(io._rooms['fest-1'], undefined, 'never broadcast picks to the whole festival room');
+    assert.deepEqual(io.to.mock.calls.at(-1)!.arguments[0], ['user:user-1', 'crew:c1', 'crew:c2']);
+    const emitted = io._rooms['user:user-1,crew:c1,crew:c2'];
     assert.equal(emitted.length, 1);
     assert.equal(emitted[0][0], 'profile:updated');
     assert.equal(emitted[0][1].profileId, 'prof-1');
+    assert.deepEqual(emitted[0][1].picks, { s1: 'must' });
+    assert.equal(emitted[0][1].userId, undefined);
+    emitter.flushAll();
+  });
+
+  it('still emits to the author own devices when the author has no crew', async () => {
+    const io = makeIo();
+    const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({}) }));
+    emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'user-1', name: 'Alice', picks: { s1: 'must' } },
+      user: {},
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(Object.keys(io._rooms), ['user:user-1']);
+    assert.deepEqual(io._rooms['user:user-1'][0][1].picks, { s1: 'must' });
+    emitter.flushAll();
+  });
+
+  it('still emits to the author own devices when the crew lookup fails', async () => {
+    const io = makeIo();
+    const log = makeLog();
+    const stores = { crews: { listByUserAndFestival: async () => { throw new Error('db down'); } } };
+    const emitter = createSocketEmitter(defaultDeps({ io, log, stores }));
+    emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'user-1', name: 'Alice', picks: {} },
+      user: {},
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(Object.keys(io._rooms), ['user:user-1']);
+    assert.equal(log.warn.mock.calls[0]!.arguments[0], 'profile:updated crew lookup failed');
     emitter.flushAll();
   });
 
   it('coalesces multiple rapid updates into one broadcast', async () => {
     const io = makeIo();
-    const emitter = createSocketEmitter(defaultDeps({ io }));
+    const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({ c1: ['user-1'] }) }));
 
     for (let i = 0; i < 5; i++) {
       emitter.profileUpdated({
-        profile: { festivalId: 'fest-1', id: 'prof-1', name: `Alice-${i}`, picks: {}, updatedAt: new Date().toISOString() },
+        profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'user-1', name: `Alice-${i}`, picks: {}, updatedAt: new Date().toISOString() },
         user: {},
       });
     }
 
     await new Promise((r) => setTimeout(r, 300));
 
-    const emitted = io._rooms['fest-1'] || [];
+    const emitted = io._rooms['user:user-1,crew:c1'] || [];
     assert.equal(emitted.length, 1, 'should batch into one emission');
     // Last update wins
     assert.equal(emitted[0][1].name, 'Alice-4');
@@ -263,7 +295,7 @@ describe('emitter: profileUpdated', () => {
     t.mock.timers.tick(5 * 60 * 1000);
     for (let i = 0; i < 20; i++) await Promise.resolve();
     assert.equal(send.mock.callCount(), 0);
-    assert.equal(log.warn.mock.calls[0]!.arguments[0], 'crew push failed');
+    assert.ok(log.warn.mock.calls.some((c: any) => c.arguments[0] === 'crew push failed'));
     emitter.flushAll();
   });
 
@@ -454,23 +486,27 @@ describe('emitter: presenceUpdate', () => {
 describe('emitter: flushAll', () => {
   it('flushes all pending batched profile updates', async () => {
     const io = makeIo();
-    const emitter = createSocketEmitter(defaultDeps({ io }));
+    const stores = {
+      crews: { listByUserAndFestival: async (_userId: string, festivalId: string) => [{ id: `c-${festivalId}` }] },
+    };
+    const emitter = createSocketEmitter(defaultDeps({ io, stores }));
 
     // Queue two profile updates for different profiles
     emitter.profileUpdated({
-      profile: { festivalId: 'fest-1', id: 'prof-1', name: 'Alice', picks: {} },
+      profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'u1', name: 'Alice', picks: {} },
       user: {},
     });
     emitter.profileUpdated({
-      profile: { festivalId: 'fest-2', id: 'prof-2', name: 'Bob', picks: {} },
+      profile: { festivalId: 'fest-2', id: 'prof-2', userId: 'u2', name: 'Bob', picks: {} },
       user: {},
     });
 
-    // Flush immediately (before debounce)
+    // Flush immediately (before debounce); the crew lookup resolves on the next ticks.
     emitter.flushAll();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
 
-    const fest1 = io._rooms['fest-1'] || [];
-    const fest2 = io._rooms['fest-2'] || [];
+    const fest1 = io._rooms['user:u1,crew:c-fest-1'] || [];
+    const fest2 = io._rooms['user:u2,crew:c-fest-2'] || [];
     assert.equal(fest1.length, 1, 'fest-1 should have been flushed');
     assert.equal(fest2.length, 1, 'fest-2 should have been flushed');
   });

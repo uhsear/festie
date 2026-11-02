@@ -4,14 +4,13 @@ import { useAuthStore } from './authStore';
 import { api } from '../services/api';
 import type { Profile, User } from '../types/domain';
 
-vi.mock('../services/api', () => ({
-  api: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+vi.mock('../services/api', () => {
+  const get = vi.fn();
+  // The profiles list reads meta.pickCounts through getEnvelope; route it through
+  // the get mock so each test's queued responses still apply in order.
+  const getEnvelope = vi.fn(async (path: string) => ({ data: await get(path), meta: {} }));
+  return { api: { get, getEnvelope, post: vi.fn(), put: vi.fn(), delete: vi.fn() } };
+});
 
 const user = { id: 'user-1' } as User;
 const store = () => useFestivalDataStore.getState();

@@ -87,7 +87,26 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     const payload = _profileBatchPayloads.get(key);
     _profileBatchPayloads.delete(key);
     if (!payload) return;
-    io.to(payload.festivalId).emit('profile:updated', {
+    void _emitToAuthorCrews(payload);
+  }
+
+  // Picks reach only the author's own devices (user room) and crews on this
+  // festival, never the whole festival room: other attendees see anonymous
+  // counts on their next GET /profiles/:festivalId. The user room keeps the
+  // offline queue's post-drain re-sync working for a crewless author.
+  // shortcut: a socket sits in one crew room (its active crew), so a crew mate
+  // viewing a different shared crew catches up on reload.
+  async function _emitToAuthorCrews(payload: any) {
+    if (!payload.userId) return;
+    // A failed crew lookup still re-syncs the author's own devices.
+    const crews = stores?.crews
+      ? await stores.crews.listByUserAndFestival(payload.userId, payload.festivalId).catch((err: any) => {
+        log.warn('profile:updated crew lookup failed', { error: err.message });
+        return [];
+      })
+      : [];
+    const rooms = ['user:' + payload.userId, ...(crews || []).map((c: any) => 'crew:' + c.id)];
+    io.to(rooms).emit('profile:updated', {
       _v: EVENT_VERSION,
       festivalId: payload.festivalId,
       profileId: payload.profileId,
@@ -129,6 +148,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     _profileBatchPayloads.set(key, {
       festivalId: profile.festivalId,
       profileId: profile.id,
+      userId: profile.userId,
       name: profile.name,
       avatarUrl: buildAvatarUrl(user),
       picks: profile.picks || {},

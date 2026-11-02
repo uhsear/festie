@@ -102,7 +102,7 @@ export default function PublicScheduleSection() {
             Public schedule page
           </h3>
           <p className="text-xs text-text-muted">
-            Anyone with the link can see your picks for your newest festival. Turning it off hides this page. Links you sent from Share picks keep working until you reset them below.
+            Anyone with your link can see your picks for your newest festival. Off by default.
           </p>
         </div>
         <Switch checked={on} onChange={toggle} label="Public schedule page" disabled={saving || offlineMode} />

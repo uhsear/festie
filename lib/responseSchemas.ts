@@ -316,8 +316,9 @@ export type PickPriorityResponse = z.infer<typeof pickPriorityResponseSchema>;
 /**
  * A festival participation profile as serialized to a CLIENT. Models the VIEWER
  * superset (`serializeProfileForViewer`): identity, `avatarUrl` (null until the
- * owner has both avatarKey + avatarVersion), the public `picks` map (setId →
- * priority), and timestamps. `userId` is nullable because an unclaimed orphan
+ * owner has both avatarKey + avatarVersion), the `picks` map (setId →
+ * priority; empty on GET /profiles/:festivalId unless the viewer owns the
+ * profile or shares a crew with its owner on that festival), and timestamps. `userId` is nullable because an unclaimed orphan
  * profile (imported lineup, no account yet) carries `user_id = NULL`.
  *
  * `notes` (setId → free text, the "Note" entity) and `reminders` (setId →

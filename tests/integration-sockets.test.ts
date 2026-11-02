@@ -199,6 +199,24 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token });
     await presenceAfterRejoin;
 
+    // Picks reach only crew mates, through the crew room.
+    const crew = (
+      await server.request
+        .post('/api/v1/crews')
+        .set('x-user-token', alice.token)
+        .send({ name: 'Alpha', festivalId: 'fest-1' })
+        .expect(201)
+    ).body.data;
+    await server.request
+      .post('/api/v1/crews/join')
+      .set('x-user-token', bob.token)
+      .send({ inviteCode: crew.inviteCode })
+      .expect(200);
+    const joinedCrew: any = await new Promise((resolve) =>
+      bobSocket.emit('join:crew', { _v: 1, crewId: crew.id }, resolve),
+    );
+    assert.equal(joinedCrew.ok, true);
+
     const updatedProfile = waitForEvent(bobSocket, 'profile:updated', (payload) => payload.profileId === aliceProfile.id);
     await server.request
       .put(`/api/v1/profiles/${aliceProfile.id}`)
@@ -235,6 +253,45 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
 
     aliceSocket.close();
     bobSocket.close();
+  });
+
+  test('profile:updated reaches the author other device without a crew, never an outsider', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    const carl = await registerUser(server, 'carl');
+    const aliceProfile = await joinFestivalProfile(server, alice.token);
+    await joinFestivalProfile(server, carl.token);
+
+    const alicePhone = connectSocket(server.baseUrl);
+    const aliceLaptop = connectSocket(server.baseUrl);
+    const carlSocket = connectSocket(server.baseUrl);
+    const sockets = [alicePhone, aliceLaptop, carlSocket];
+    await Promise.all(sockets.map((socket) => waitForEvent(socket, 'connect')));
+    const join = (socket: any, token: string) =>
+      new Promise<any>((resolve) => socket.emit('join:festival', 'fest-1', { userToken: token }, resolve));
+    for (const ack of await Promise.all([join(alicePhone, alice.token), join(aliceLaptop, alice.token), join(carlSocket, carl.token)])) {
+      assert.equal(ack.ok, true);
+    }
+
+    let carlGotPicks = false;
+    carlSocket.on('profile:updated', () => {
+      carlGotPicks = true;
+    });
+    const laptopUpdate = waitForEvent(aliceLaptop, 'profile:updated', (payload) => payload.profileId === aliceProfile.id);
+    await server.request
+      .put(`/api/v1/profiles/${aliceProfile.id}`)
+      .set('x-user-token', alice.token)
+      .send({ picks: { 'set-a': 'must' } })
+      .expect(200);
+    const payload: any = await laptopUpdate;
+    assert.deepEqual(payload.picks, { 'set-a': 'must' });
+    // Same 200ms batch emit; give a straggler time to arrive before asserting absence.
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(carlGotPicks, false);
+
+    for (const socket of sockets) socket.close();
   });
 
   test('disconnect cleans up presence and room switching works', async () => {
