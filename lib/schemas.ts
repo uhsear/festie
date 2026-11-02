@@ -1471,6 +1471,12 @@ export const genericIdParams = z.object({
 });
 export type GenericIdParams = z.infer<typeof genericIdParams>;
 
+export const alsoPickedParams = z.object({
+  festivalId: identifier,
+  setId: identifier,
+});
+export type AlsoPickedParams = z.infer<typeof alsoPickedParams>;
+
 export const profileIdParams = z.object({
   id: z.string().min(1, 'Profile ID required').max(100),
 });
@@ -1563,5 +1569,6 @@ export const schemas = {
   crewIdFestivalIdParams,
   festivalIdParams,
   genericIdParams,
+  alsoPickedParams,
   profileIdParams,
 };

@@ -4,7 +4,9 @@ import 'dotenv/config';
  * preview, commit, history and undo with JSON rows.
  * Covers: new stages and days in an empty festival, re-import idempotency, no
  *         fallback to the first stage, updateExisting, errors block the commit,
- *         no lineup-drop notification, undo (kept picked sets), auth and 404/400.
+ *         no lineup-drop notification, undo (kept picked sets), auth and 404/400,
+ *         and the "set times are out" marker after the first timed import.
+ *         A unit describe with mocked deps checks the commit calls sendSetTimesOut.
  *
  * Spotify external calls are NOT exercised live — we pass skipSpotify: true to
  * prevent outbound HTTP. That branch is documented in the report.
@@ -15,10 +17,12 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
-import { after, afterEach, describe, test } from 'node:test';
+import { after, afterEach, describe, mock, test } from 'node:test';
+import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import createLineupImportRoute from '../routes/lineup-import';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -215,6 +219,7 @@ afterEach(async () => {
       FEST_ID, [STAGE_MAIN, STAGE_FOREST]]);
     await pool.query(`DELETE FROM festival_days WHERE festival_id = $1`, [EMPTY_FEST_ID]);
     await pool.query(`DELETE FROM festival_stages WHERE festival_id = $1`, [EMPTY_FEST_ID]);
+    await pool.query(`UPDATE festivals SET set_times_out_at = NULL WHERE id = ANY($1::text[])`, [[FEST_ID, EMPTY_FEST_ID]]);
   });
 });
 
@@ -234,6 +239,67 @@ const SAMPLE_ROWS = [
   { row: 3, artist: 'Kai b2b Mira', stage: 'Forest', day: 'Friday', date: '2026-08-21', startTime: '23:30', endTime: '01:30' },
   { row: 4, artist: 'Night Owl', stage: 'Main Stage', day: 'Friday', date: '2026-08-21', startTime: '01:00', endTime: '02:30' },
 ];
+
+describe('lineup-import commit: set times are out (mocked deps)', () => {
+  function build(committed: boolean) {
+    const sendSetTimesOut = mock.fn(async (_id: string) => ({ queued: true }));
+    const festival = { id: 'f-1', name: 'Fest', stages: [], days: [], b2bSeparator: 'b2b' };
+    const plan = { rows: [], counts: { error: 0 }, problems: [] };
+    const deps: any = {
+      express,
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      config: {},
+      adminAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'admin-1' };
+        next();
+      },
+      setNoStore: () => {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      sanitizeIdentifier: (v: string) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      stores: {
+        festivals: { getById: async () => festival },
+        lineupImports: {
+          commit: async () =>
+            committed
+              ? {
+                  committed: true,
+                  plan,
+                  importId: 'imp-1',
+                  writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+                }
+              : { committed: false, plan },
+        },
+        auditLog: null,
+      },
+      invalidateFestivalCache: () => {},
+      getRequestIp: () => '127.0.0.1',
+      reengagement: { sendSetTimesOut },
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(createLineupImportRoute(deps));
+    return { app, sendSetTimesOut };
+  }
+  const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+
+  test('a committed import fires sendSetTimesOut for the festival', async () => {
+    const { app, sendSetTimesOut } = build(true);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.deepEqual(
+      sendSetTimesOut.mock.calls.map((c: any) => c.arguments),
+      [['f-1']],
+    );
+  });
+
+  test('an import that did not commit does not fire', async () => {
+    const { app, sendSetTimesOut } = build(false);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.equal(sendSetTimesOut.mock.calls.length, 0);
+  });
+});
 
 describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
   test('an empty festival gets new stages, days and sets', async () => {
@@ -381,6 +447,21 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
       `SELECT actor_type FROM audit_log WHERE action = 'lineup_import' AND target_id = $1`, [FEST_ID]));
     assert.equal(rows.length, 1);
     assert.equal(rows[0].actor_type, 'admin');
+  });
+
+  test('an import that adds the first set times sets the "set times are out" marker', async () => {
+    if (!createFestivalPlanner) return;
+    const { server, admin } = await adminServer();
+    await postImport(server, admin, EMPTY_FEST_ID, { rows: SAMPLE_ROWS, createMissing: true, skipSpotify: true }).expect(200);
+    // The trigger runs after the response, so poll (bounded). The push is not observable here.
+    let marker = null;
+    for (let i = 0; i < 50 && !marker; i++) {
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 20));
+      const { rows } = await withPool((pool) =>
+        pool.query(`SELECT set_times_out_at FROM festivals WHERE id = $1`, [EMPTY_FEST_ID]));
+      marker = rows[0]?.set_times_out_at ?? null;
+    }
+    assert.ok(marker);
   });
 
   test('the old { text } payload is a 400', async () => {

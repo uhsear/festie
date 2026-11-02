@@ -4,6 +4,7 @@ import { useFestivalStore } from '@festie/shared/stores';
 import { formatFestivalDateRange, groupFestivalsByStatus } from '@festie/shared/utils';
 import type { Festival } from '@festie/shared/types';
 import Dialog from '../ui/Dialog';
+import FollowButton from '../features/FollowButton';
 import Input from '../ui/Input';
 import { useToast } from '../../lib/toastContext';
 import { cn } from '../../lib/utils';
@@ -32,10 +33,10 @@ export default function FestivalPicker() {
       : festivals;
     const g = groupFestivalsByStatus(matches);
     return [
-      { heading: 'Live now', items: g.live },
-      { heading: 'Upcoming', items: g.upcoming },
-      { heading: 'Past', items: g.past },
-      { heading: 'Dates to come', items: g.undated },
+      { heading: 'Live now', items: g.live, followable: false },
+      { heading: 'Upcoming', items: g.upcoming, followable: true },
+      { heading: 'Past', items: g.past, followable: false },
+      { heading: 'Dates to come', items: g.undated, followable: true },
     ].filter((group) => group.items.length > 0);
   }, [festivals, q]);
 
@@ -53,10 +54,10 @@ export default function FestivalPicker() {
     }
   };
 
-  const renderRow = (f: Festival) => {
+  const renderRow = (f: Festival, followable: boolean) => {
     const detail = [formatFestivalDateRange(f.startDate, f.endDate), f.location].filter(Boolean).join(' · ');
     const isCurrent = f.id === currentFestival?.id;
-    return (
+    const button = (
       <button
         key={f.id}
         type="button"
@@ -64,7 +65,7 @@ export default function FestivalPicker() {
         aria-current={isCurrent ? 'true' : undefined}
         onClick={() => void handleChoose(f.id)}
         className={cn(
-          'flex w-full items-center gap-3 rounded-xl px-3 py-2 min-h-[52px] text-left cursor-pointer',
+          'flex w-full min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2 min-h-[52px] text-left cursor-pointer',
           'hover:bg-bg-input focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
         )}
       >
@@ -74,6 +75,13 @@ export default function FestivalPicker() {
         </span>
         {isCurrent && <Check className="w-4 h-4 shrink-0 text-accent-aqua" aria-hidden="true" />}
       </button>
+    );
+    if (!followable) return button;
+    return (
+      <div key={f.id} className="flex items-center gap-2">
+        {button}
+        <FollowButton festivalId={f.id} festivalName={f.name} size="sm" />
+      </div>
     );
   };
 
@@ -134,7 +142,7 @@ export default function FestivalPicker() {
               <h3 className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 {group.heading}
               </h3>
-              {group.items.map(renderRow)}
+              {group.items.map((f) => renderRow(f, group.followable))}
             </section>
           ))
         )}

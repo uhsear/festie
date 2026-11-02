@@ -7,4 +7,5 @@ export * from './festivalModeStore';
 export * from './notificationPrefsStore';
 export * from './offlineReadinessStore';
 export * from './weatherStore';
+export * from './followStore';
 export * from './announcementStore';

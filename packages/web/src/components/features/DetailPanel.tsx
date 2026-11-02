@@ -16,6 +16,7 @@ import DetailReminderNotePanel from './DetailReminderNotePanel';
 import ClashPrompt from './ClashPrompt';
 import DetailPriorityPicker from './DetailPriorityPicker';
 import DetailCrewSection from './DetailCrewSection';
+import AlsoPickedSection from './AlsoPickedSection';
 import DetailNotesSection from './DetailNotesSection';
 import { useDetailPanelData } from './useDetailPanelData';
 import { useHaptics } from '../../hooks/useHaptics';
@@ -337,6 +338,8 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
 
             <hr className="border-t border-border -mx-7" />
             <DetailCrewSection title={whoTitle} others={others} crewNotes={crewNotes} />
+
+            <AlsoPickedSection set={set} />
 
             {currentProfile && (
               <>

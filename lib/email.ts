@@ -302,6 +302,24 @@ export async function sendLineupDropEmail({ to, username, festivalName, festival
 }
 
 /**
+ * "{Festival} set times are out" — deep-links to the festival page.
+ */
+export async function sendSetTimesOutEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
+  const origin = _origin(config);
+  const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
+  const name = festivalName || 'Your festival';
+  const bodyHtml = `
+    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
+    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The set times for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. Pick your sets and spot clashes before the weekend.</p>
+    ${_buttonHtml(festivalUrl, 'See the schedule')}
+    ${_urlFallback(festivalUrl)}`;
+  const footer = _reengagementFooter('New lineups and set times', config);
+  const html = _wrapTemplate('Set Times Are Out', bodyHtml, footer.html);
+  const text = `Hey ${username || 'there'},\n\nThe set times for ${name} are out. Pick your sets and spot clashes before the weekend.\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
+  return sendEmail({ to, subject: `${name} set times are out`, html, text, headers: reengagementHeaders(config), config, log, _client });
+}
+
+/**
  * "Your crew reformed for the next one" — deep-links to the new crew.
  */
 export async function sendCrewReformEmail({

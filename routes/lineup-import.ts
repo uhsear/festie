@@ -12,8 +12,9 @@
  *
  * The client parses the CSV or TSV file and posts JSON rows (lineupImportRequestSchema).
  * planLineupImport decides each row; commit plans again inside the write transaction.
- * Imports never delete sets and never notify users: the lineup announcement is a
- * separate, manual admin action.
+ * Imports never delete sets. The lineup announcement is a separate, manual admin
+ * action. A commit that adds a published festival's first set times sends the
+ * one-time "set times are out" alert (reengagement.sendSetTimesOut).
  *
  * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, commit searches
  * Spotify once for the artists of new sets that have no link.
@@ -77,6 +78,7 @@ export default function createLineupImportRoute(deps: any) {
     stores,
     invalidateFestivalCache,
     getRequestIp,
+    reengagement,
   } = deps;
 
   const router = express.Router();
@@ -193,6 +195,10 @@ export default function createLineupImportRoute(deps: any) {
       if (!outcome.committed) return sendSuccess(res, { committed: false, plan: outcome.plan });
 
       invalidateFestivalCache();
+      // The executor checks publish state, the marker and the times itself.
+      reengagement
+        ?.sendSetTimesOut?.(festivalId)
+        ?.catch((err: any) => log.warn('set_times_out notify failed', { festivalId, error: err?.message }));
       const result = buildResult(outcome.plan, outcome.writes, outcome.importId, warnings, festival.b2bSeparator || 'b2b');
       log.info('lineup imported', {
         festivalId,

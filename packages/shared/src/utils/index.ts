@@ -70,6 +70,7 @@ export * from './beacon';
 export * from './expenseSplit';
 export * from './crewLogistics';
 export * from './crewWrapPoster';
+export * from './discover';
 export * from './scheduleImage';
 export * from './sharedPicks';
 export * from './ratingSummary';

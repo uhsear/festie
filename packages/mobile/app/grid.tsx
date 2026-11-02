@@ -109,6 +109,8 @@ export default function GridScreen() {
   const onlyMine = useFestivalStore((s) => s.onlyMine);
   const searchQuery = useFestivalStore((s) => s.searchQuery);
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
+  const activeGenres = useFestivalStore((s) => s.activeGenres);
+  const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const picks = useFestivalDataStore((s) => s.currentProfile)?.picks;
@@ -323,11 +325,13 @@ export default function GridScreen() {
     );
   }
   const stageFilterActive = isStageFilterActive(activeStages, stages.length);
-  const filterNarrows = searchQuery.trim() !== '' || (onlyMine && hasAnyPick(picks)) || stageFilterActive;
+  const filterNarrows =
+    searchQuery.trim() !== '' || (onlyMine && hasAnyPick(picks)) || stageFilterActive || activeGenres.length > 0;
   const clearAllFilters = () => {
     setSearchQuery('');
     setOnlyMine(false);
     setActiveStages([]);
+    setActiveGenres([]);
   };
   const resultsRow = filterNarrows ? (
     <ScheduleResultsRow
@@ -335,6 +339,7 @@ export default function GridScreen() {
         count: timedSets.length,
         onlyMine: onlyMine && hasAnyPick(picks),
         activeStageCount: stageFilterActive ? activeStages.length : 0,
+        activeGenreCount: activeGenres.length,
       })}
       onClearAll={clearAllFilters}
       hPad={t.spacing[4]}
@@ -370,6 +375,7 @@ export default function GridScreen() {
       onlyMine,
       hasAnyPick: hasAnyPick(picks),
       stageFilterActive,
+      genreFilterActive: activeGenres.length > 0,
     });
     let empty: { title: string; message: string; actionLabel?: string; onAction?: () => void };
     if (reason === 'search') {
@@ -387,6 +393,8 @@ export default function GridScreen() {
       empty = { ...scheduleEmptyCopy('picks', dayLabel), onAction: () => setOnlyMine(false) };
     } else if (reason === 'stages') {
       empty = { ...scheduleEmptyCopy('stages', dayLabel), onAction: () => setActiveStages([]) };
+    } else if (reason === 'genres') {
+      empty = { ...scheduleEmptyCopy('genres', dayLabel), onAction: () => setActiveGenres([]) };
     } else {
       empty = {
         title: 'No timed sets to display',

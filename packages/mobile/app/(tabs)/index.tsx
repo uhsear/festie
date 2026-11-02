@@ -26,6 +26,7 @@ import {
   selectMyPicks,
 } from '@festie/shared/stores';
 import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady } from '@festie/shared/hooks';
+import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
 import {
   artistDisplayName,
   detectConflicts,
@@ -46,6 +47,8 @@ import {
   hasAnyPick,
   isStageFilterActive,
   toggleStageFilter,
+  toggleGenreFilter,
+  festivalGenres,
   toggleHiddenDay,
   scheduleEmptyCopy,
   scheduleEmptyReason,
@@ -81,6 +84,8 @@ import ScreenHeader from '../../components/ScreenHeader';
 import { Skeleton } from '../../components/Skeleton';
 import TimelineView from '../../components/TimelineView';
 import TBASection from '../../components/TBASection';
+import SetTimesBanner from '../../components/SetTimesBanner';
+import DiscoverRow from '../../components/DiscoverRow';
 
 const SLOT_MINUTES = 15;
 const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
@@ -160,6 +165,8 @@ export default function TimelineScreen() {
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const activeStages = useFestivalStore((s) => s.activeStages);
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
+  const activeGenres = useFestivalStore((s) => s.activeGenres);
+  const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
   const onlyMine = useFestivalStore((s) => s.onlyMine);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const scheduleView = useFestivalStore((s) => s.scheduleView);
@@ -314,6 +321,8 @@ export default function TimelineScreen() {
   const canFilterMine = hasAnyPick(picks);
   const mineActive = onlyMine && canFilterMine;
   const stageFilterActive = isStageFilterActive(activeStages, stages.length);
+  const genreFilterActive = activeGenres.length > 0;
+  const genreChips = useMemo(() => festivalGenres(allSets), [allSets]);
   const visibleDays = visibleDayIndexes(days.length, hiddenDays, selectedDay);
 
   // Day + stage + My picks + search filtering lives in the shared hook
@@ -466,7 +475,8 @@ export default function TimelineScreen() {
     setSearchQuery('');
     setOnlyMine(false);
     setActiveStages([]);
-  }, [haptics, setSearchQuery, setOnlyMine, setActiveStages]);
+    setActiveGenres([]);
+  }, [haptics, setSearchQuery, setOnlyMine, setActiveStages, setActiveGenres]);
 
   // Cards scroll tracking: reveal the scroll-to-top FAB once the user is well
   // past the fold. Guarded so the setState only fires on an actual transition.
@@ -662,10 +672,16 @@ export default function TimelineScreen() {
     onlyMine,
     hasAnyPick: canFilterMine,
     stageFilterActive,
+    genreFilterActive,
   });
-  const filterEmptyState = (reason: 'picks' | 'stages') => {
+  const filterEmptyState = (reason: 'picks' | 'stages' | 'genres') => {
     const copy = scheduleEmptyCopy(reason, selectedDayLabel ?? 'this day');
-    const undo = reason === 'picks' ? () => setOnlyMine(false) : () => setActiveStages([]);
+    const undo =
+      reason === 'picks'
+        ? () => setOnlyMine(false)
+        : reason === 'genres'
+          ? () => setActiveGenres([])
+          : () => setActiveStages([]);
     return (
       <EmptyState
         icon={reason === 'picks' ? 'star-outline' : 'filter-outline'}
@@ -682,7 +698,7 @@ export default function TimelineScreen() {
   const emptyScheduleState =
     emptyReason === 'search' ? (
       searchEmptyState
-    ) : (emptyReason === 'picks' || emptyReason === 'stages') && timelessSets.length === 0 ? (
+    ) : (emptyReason === 'picks' || emptyReason === 'stages' || emptyReason === 'genres') && timelessSets.length === 0 ? (
       filterEmptyState(emptyReason)
     ) : (
       <EmptyState
@@ -710,7 +726,7 @@ export default function TimelineScreen() {
     errorScheduleState
   ) : emptyReason === 'search' ? (
     searchEmptyState
-  ) : emptyReason === 'picks' || emptyReason === 'stages' ? (
+  ) : emptyReason === 'picks' || emptyReason === 'stages' || emptyReason === 'genres' ? (
     filterEmptyState(emptyReason)
   ) : (
     <EmptyState
@@ -763,7 +779,7 @@ export default function TimelineScreen() {
   // user can always see (and clear) a filter that's shrinking the schedule,
   // even though both default to collapsed.
   // Hidden days are a preference, not a filter, so they never force the panel open.
-  const filtersActive = mineActive || stageFilterActive;
+  const filtersActive = mineActive || stageFilterActive || genreFilterActive;
   const searchOpen = showSearch || searchQuery.length > 0;
   const filtersOpen = showFilters || filtersActive;
   // Any narrowing in effect (search OR my-picks OR a stage subset) — gates the
@@ -979,6 +995,54 @@ export default function TimelineScreen() {
                   })}
                 </>
               ) : null}
+              {stages.length > 1 && genreChips.length > 0 ? (
+                <View style={styles.genreGroup} accessibilityRole="toolbar" accessibilityLabel={DISCOVER_COPY.genres.groupA11y}>
+                  <TouchableOpacity
+                    style={[styles.filterChip, !genreFilterActive && styles.filterChipActiveTinted]}
+                    onPress={() => {
+                      haptics.select();
+                      setActiveGenres([]);
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: !genreFilterActive }}
+                    accessibilityLabel={DISCOVER_COPY.genres.clear}
+                  >
+                    <Text
+                      style={[styles.filterChipText, !genreFilterActive && styles.filterChipTextTinted]}
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    >
+                      {DISCOVER_COPY.genres.clear}
+                    </Text>
+                  </TouchableOpacity>
+                  {genreChips.map((g) => {
+                    const on = activeGenres.some((a) => a.toLocaleLowerCase() === g.toLocaleLowerCase());
+                    return (
+                      <TouchableOpacity
+                        key={g}
+                        style={[styles.filterChip, on && styles.filterChipActiveTinted]}
+                        onPress={() => {
+                          haptics.select();
+                          setActiveGenres(toggleGenreFilter(activeGenres, g));
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        accessibilityLabel={genreChipLabel(g)}
+                      >
+                        <Text
+                          style={[styles.filterChipText, on && styles.filterChipTextTinted]}
+                          numberOfLines={1}
+                          maxFontSizeMultiplier={MAX_FONT_SCALE}
+                        >
+                          {genreChipLabel(g)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : null}
             </ScrollView>
           ) : null}
           {days.length > 1 ? (
@@ -1036,6 +1100,7 @@ export default function TimelineScreen() {
             count: filteredSets.length,
             onlyMine: mineActive,
             activeStageCount: stageFilterActive ? activeStages.length : 0,
+            activeGenreCount: activeGenres.length,
             tbaCount: viewMode === 'timeline' ? timelessSets.length : 0,
           })}
           onClearAll={clearAllFilters}
@@ -1173,6 +1238,11 @@ export default function TimelineScreen() {
             ListHeaderComponent={
               <>
                 {controls}
+                <SetTimesBanner hPad={hPad} />
+                <DiscoverRow
+                  hPad={hPad}
+                  hidden={phase === 'post' || searchQuery.trim() !== '' || stageFilterActive || genreFilterActive}
+                />
                 {filteredSets.length > 0 ? (
                   <View style={[styles.groupByRow, { paddingHorizontal: hPad }]}>
                     <Text style={styles.groupByLabel}>Group by</Text>
@@ -1498,6 +1568,11 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.muted,
     paddingTop: t.spacing[2],
+  },
+  genreGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
   },
   stageDotSmall: {
     width: 10,

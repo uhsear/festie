@@ -4,13 +4,18 @@ import 'dotenv/config';
  * Covers: migration default publishes existing rows, a new festival is a hidden draft,
  * the admin checklist, publish blocked and allowed, no festival:updated for a draft
  * save (unit-tested in routes-auth-account-festivals), structured 400 issues,
- * archive and restore, and the delete-impact counts.
+ * archive and restore, the delete-impact counts, and the "set times are out" marker.
  *
  * Skip-gate on TEST_DATABASE_URL. The helpers module exits the process without
- * it, so it is imported only when the database is there.
+ * it, so it is imported only when the database is there. The first describe is a
+ * unit test of the "set times are out" wiring with mocked deps and always runs.
  */
 
-import { after, afterEach, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { after, afterEach, describe, mock, test } from 'node:test';
+import express from 'express';
+import request from 'supertest';
+import createFestivalsRoutes from '../routes/festivals.js';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
@@ -24,6 +29,158 @@ afterEach(async () => {
 
 after(() => {
   if (skip) console.log('festival-publish: skipped (TEST_DATABASE_URL not set)');
+});
+
+// ── "set times are out" wiring (mocked deps, no database) ────────────────
+describe('set times are out: PUT and publish', () => {
+  const pass = () => (req: any, _res: any, next: any) => {
+    req.validatedBody = req.body;
+    req.validatedParams = req.params;
+    next();
+  };
+  const stages = [
+    { id: 'main', name: 'Main' },
+    { id: 'tent', name: 'Tent' },
+  ];
+  const tbaFestival = (publishedAt: string | null): any => ({
+    id: 'f-1',
+    name: 'Fest',
+    publishedAt,
+    latitude: 1,
+    location: 'Field',
+    stages,
+    days: [
+      {
+        label: 'Fri',
+        date: '2026-06-05',
+        sets: [
+          { id: 's1', artist: 'Alpha', stageId: 'main', startTime: null, endTime: null },
+          { id: 's2', artist: 'Beta', stageId: 'main', startTime: null, endTime: null },
+        ],
+      },
+    ],
+  });
+  // s1 gets its first time; s2 gets a time AND changes stage (a real move).
+  const timedDays = [
+    {
+      label: 'Fri',
+      date: '2026-06-05',
+      sets: [
+        { id: 's1', artist: 'Alpha', stageId: 'main', startTime: '20:00', endTime: '21:00' },
+        { id: 's2', artist: 'Beta', stageId: 'tent', startTime: '21:00', endTime: '22:00' },
+      ],
+    },
+  ];
+
+  function build({
+    existing = tbaFestival('2026-01-01T00:00:00.000Z'),
+    setTimesOutAt = null as string | null,
+    sendFails = false,
+  } = {}) {
+    const warnings: any[] = [];
+    const sendSetTimesOut = mock.fn(async (_id: string) => {
+      if (sendFails) throw new Error('redis down');
+      return { queued: true };
+    });
+    const pickersBySet = mock.fn(
+      async (_festivalId: string, setIds: string[]) => new Map(setIds.map((id) => [id, [`picker-${id}`]])),
+    );
+    const deps: any = {
+      express,
+      config: {},
+      log: { info() {}, warn: (...args: any[]) => warnings.push(args), error() {}, debug() {} },
+      adminAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'admin-1' };
+        next();
+      },
+      hasRecentAuth: () => true,
+      requireRecentAuth: (_req: any, _res: any, next: any) => next(),
+      getFestivalById: mock.fn(async () => existing),
+      validateFestivalIssues: () => [],
+      publishChecklist: () => [],
+      sanitizeFestivalPayload: (body: any, current: any) => ({ ...current, ...body }),
+      getRequestIp: () => '127.0.0.1',
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string, code: string) =>
+        res.status(status).json({ data: null, error: { message, code } }),
+      ErrorCodes: { NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR', INVALID_INPUT: 'INVALID_INPUT' },
+      rateLimit: pass,
+      stores: {
+        festivals: {
+          update: mock.fn(async (id: string, data: any) => ({ ...existing, id, ...data })),
+          getSetTimesOutAt: mock.fn(async () => setTimesOutAt),
+          publish: mock.fn(async () => ({ publishedAt: '2026-11-01T00:00:00.000Z' })),
+        },
+        profiles: { pickersBySet },
+        pool: { query: async () => ({ rows: [{ count: '0' }] }) },
+      },
+      emitter: { festivalCreated: mock.fn(), festivalUpdated: mock.fn(), scheduleChanged: mock.fn() },
+      schemas: {},
+      validate: pass,
+      validateQuery: pass,
+      validateParams: pass,
+      invalidateFestivalCache: () => {},
+      reengagement: { sendSetTimesOut },
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(createFestivalsRoutes(deps));
+    return { app, deps, sendSetTimesOut, pickersBySet, warnings };
+  }
+
+  const alertedSets = (deps: any) =>
+    deps.emitter.scheduleChanged.mock.calls[0]?.arguments[0].changes.map((c: any) => c.setId);
+
+  test('the first timed save drops TBA-to-time alerts, keeps real moves and fires once', async () => {
+    const { app, deps, sendSetTimesOut, pickersBySet } = build();
+    const res = await request(app).put('/f-1').send({ stages, days: timedDays });
+    assert.equal(res.status, 200);
+    assert.deepEqual(pickersBySet.mock.calls[0]!.arguments[1], ['s2']);
+    assert.deepEqual(alertedSets(deps), ['s2']);
+    assert.deepEqual(res.body.data.scheduleNotice, { changes: 1, people: 1, notified: true });
+    assert.deepEqual(
+      sendSetTimesOut.mock.calls.map((c: any) => c.arguments),
+      [['f-1']],
+    );
+  });
+
+  test('after the marker is set, TBA-to-time changes alert their pickers again', async () => {
+    const { app, deps } = build({ setTimesOutAt: '2026-10-01T00:00:00.000Z' });
+    await request(app).put('/f-1').send({ stages, days: timedDays }).expect(200);
+    assert.deepEqual(alertedSets(deps), ['s1', 's2']);
+  });
+
+  test('a festival that already had a time keeps every alert', async () => {
+    const existing = tbaFestival('2026-01-01T00:00:00.000Z');
+    existing.days[0].sets[1] = { ...existing.days[0].sets[1], startTime: '23:00', endTime: '23:30' };
+    const { app, deps } = build({ existing });
+    await request(app).put('/f-1').send({ stages, days: timedDays }).expect(200);
+    assert.equal(deps.stores.festivals.getSetTimesOutAt.mock.calls.length, 0);
+    assert.deepEqual(alertedSets(deps), ['s1', 's2']);
+  });
+
+  test('a save without days does not fire', async () => {
+    const { app, sendSetTimesOut } = build();
+    await request(app).put('/f-1').send({ name: 'Fest 2' }).expect(200);
+    assert.equal(sendSetTimesOut.mock.calls.length, 0);
+  });
+
+  test('a failed enqueue is logged and the save still answers 200', async () => {
+    const { app, warnings } = build({ sendFails: true });
+    await request(app).put('/f-1').send({ stages, days: timedDays }).expect(200);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(warnings.some(([msg]) => msg === 'set_times_out notify failed'));
+  });
+
+  test('publish fires after the festival is announced', async () => {
+    const { app, deps, sendSetTimesOut } = build({ existing: tbaFestival(null) });
+    await request(app).post('/f-1/publish').expect(200);
+    assert.equal(deps.emitter.festivalCreated.mock.calls.length, 1);
+    assert.deepEqual(
+      sendSetTimesOut.mock.calls.map((c: any) => c.arguments),
+      [['f-1']],
+    );
+  });
 });
 
 const admin = (token: string, req: any) => req.set('x-user-token', token).set(h.TRUSTED_MUTATION_HEADER, '1');
@@ -207,5 +364,69 @@ describe('festival drafts and publish', { skip, concurrency: 1 }, () => {
 
     const res = await admin(token, server.request.get('/api/v1/admin/festivals/fest-1/impact')).expect(200);
     h.assert.deepEqual(res.body.data, { profiles: 2, crews: 1, picks: 3 });
+  });
+
+  // The push itself is not observable here (no push provider in tests); the marker is.
+  async function readMarker(server: any, id: string, wantSet: boolean) {
+    const pool = new h.Pool({ connectionString: server.databaseUrl });
+    try {
+      // The trigger runs after the response, so poll (bounded).
+      let value = null;
+      for (let i = 0; i < 50; i++) {
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 20));
+        const { rows } = await pool.query('SELECT set_times_out_at FROM festivals WHERE id = $1', [id]);
+        value = rows[0]?.set_times_out_at ?? null;
+        if (Boolean(value) === wantSet) break;
+      }
+      return value;
+    } finally {
+      await pool.end();
+    }
+  }
+
+  const tbaDays = (id: string) => [
+    {
+      label: 'Friday',
+      date: '2026-06-05',
+      sets: [{ id: `${id}-s1`, artist: 'Alpha', stageId: 'main', startTime: '', endTime: '' }],
+    },
+  ];
+
+  test('a draft save with times sets no marker, and publishing it does', async () => {
+    const { server, token } = await setup();
+    await admin(token, server.request.post('/api/v1/admin/festivals')).send(draftPayload('fest-tm')).expect(201);
+    await admin(token, server.request.put('/api/v1/admin/festivals/fest-tm'))
+      .send(draftPayload('fest-tm', { timeZone: 'America/New_York' }))
+      .expect(200);
+    h.assert.equal(await readMarker(server, 'fest-tm', false), null);
+
+    await admin(token, server.request.post('/api/v1/admin/festivals/fest-tm/publish')).expect(200);
+    h.assert.ok(await readMarker(server, 'fest-tm', true));
+  });
+
+  test('the first timed save of a published festival sets the marker once', async () => {
+    const { server, token } = await setup();
+    await admin(token, server.request.post('/api/v1/admin/festivals'))
+      .send(draftPayload('fest-tb', { timeZone: 'America/New_York', days: tbaDays('fest-tb') }))
+      .expect(201);
+    await admin(token, server.request.post('/api/v1/admin/festivals/fest-tb/publish')).expect(200);
+    h.assert.equal(await readMarker(server, 'fest-tb', false), null);
+
+    await admin(token, server.request.put('/api/v1/admin/festivals/fest-tb'))
+      .send(draftPayload('fest-tb', { timeZone: 'America/New_York' }))
+      .expect(200);
+    const first = await readMarker(server, 'fest-tb', true);
+    h.assert.ok(first);
+
+    // Blank every time, then add them again: the marker does not move.
+    await admin(token, server.request.put('/api/v1/admin/festivals/fest-tb'))
+      .send(draftPayload('fest-tb', { timeZone: 'America/New_York', days: tbaDays('fest-tb') }))
+      .expect(200);
+    await admin(token, server.request.put('/api/v1/admin/festivals/fest-tb'))
+      .send(draftPayload('fest-tb', { timeZone: 'America/New_York' }))
+      .expect(200);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const after = await readMarker(server, 'fest-tb', true);
+    h.assert.equal(new Date(after).getTime(), new Date(first).getTime());
   });
 });

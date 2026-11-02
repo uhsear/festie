@@ -57,6 +57,10 @@ describe('lineup-announce route', () => {
     const { app, calls } = build({ recipients: 0 });
     const res = await request(app).post('/api/v1/admin/festivals/f1/lineup-announcement');
     assert.equal(res.status, 400);
+    assert.equal(
+      res.body.error,
+      'No one to notify. Everyone who follows this festival or went to an earlier edition already got this announcement.',
+    );
     assert.equal(calls.sendLineupDrop, 0);
   });
 
