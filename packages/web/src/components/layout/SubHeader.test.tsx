@@ -23,9 +23,11 @@ const storeState = {
   setActiveStages: vi.fn(),
   setSearchQuery: vi.fn(),
   // My picks toggle: gated on currentProfile + currentFestival.
-  currentProfile: { id: 'p1' } as { id: string } | null,
+  currentProfile: { id: 'p1', picks: { set1: 'must' } } as { id: string; picks: Record<string, string> } | null,
   onlyMine: false,
   setOnlyMine: vi.fn(),
+  hiddenDays: [] as number[],
+  setHiddenDays: vi.fn(),
 };
 
 vi.mock('@festie/shared/stores', () => ({
@@ -33,7 +35,7 @@ vi.mock('@festie/shared/stores', () => ({
 }));
 
 vi.mock('@festie/shared/hooks', () => ({
-  useFestival: () => ({ getStageColor: () => '#00e8d0' }),
+  useFestival: () => ({ getStageColor: () => '#00e8d0', getFilteredSets: () => [] }),
   useSaveStatus: () => ({ kind: 'saved', label: 'Saved' }),
 }));
 
@@ -116,7 +118,7 @@ describe('SubHeader layout density', () => {
 describe('SubHeader My picks toggle', () => {
   afterEach(() => {
     // Restore the default state mutated by the tests below.
-    storeState.currentProfile = { id: 'p1' };
+    storeState.currentProfile = { id: 'p1', picks: { set1: 'must' } };
     storeState.currentFestival = { id: 'f1', name: 'Festival One' };
     storeState.onlyMine = false;
     vi.clearAllMocks();
@@ -185,27 +187,67 @@ describe('SubHeader stage chips', () => {
     expect(storeState.setActiveStages).toHaveBeenCalledWith([]);
   });
 
-  it('shows the active-filter summary on Timeline (no chips there) and clears it', () => {
-    storeState.activeStages = ['s2'];
+  it('shows the search box and stage chips on Timeline', () => {
     mockPathname = '/timeline';
-    render(<SubHeader dayOnly={true} festivalOnly={false} />);
-    expect(screen.queryByRole('button', { name: 'Forest' })).not.toBeInTheDocument();
-    // Timeline/Grid have no fold buttons, so the summary must stay visible on phones.
-    expect(screen.getByTestId('stage-filter-summary').closest('[class~="max-md:hidden"]')).toBeNull();
-    fireEvent.click(screen.getByTestId('stage-filter-summary'));
-    expect(storeState.setActiveStages).toHaveBeenCalledWith([]);
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All stages' })).toBeInTheDocument();
   });
 
-  it('hides the summary when no stage filter is active and on /picks', () => {
-    mockPathname = '/timeline';
-    const { unmount } = render(<SubHeader dayOnly={true} festivalOnly={false} />);
-    expect(screen.queryByTestId('stage-filter-summary')).not.toBeInTheDocument();
+  it('toggles chips through toggleStageFilter', () => {
+    storeState.activeStages = ['s1'];
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dome' }));
+    expect(storeState.setActiveStages).toHaveBeenCalledWith(['s1', 's3']);
+  });
+});
+
+describe('SubHeader search clear button', () => {
+  afterEach(() => {
+    storeState.searchQuery = '';
+  });
+
+  it('appears only with a query and empties it', () => {
+    const { unmount } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
     unmount();
-    storeState.activeStages = ['s2'];
+    storeState.searchQuery = 'foo';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(storeState.setSearchQuery).toHaveBeenCalledWith('');
+    expect(screen.getByLabelText('Search festival artists')).toHaveFocus();
+  });
+});
+
+describe('SubHeader guarded My picks and hidden days', () => {
+  afterEach(() => {
+    storeState.currentProfile = { id: 'p1', picks: { set1: 'must' } };
+    storeState.hiddenDays = [];
+    storeState.selectedDay = 0;
+    mockPathname = '/cards';
+  });
+
+  it('reads "Pick a set first" and ignores clicks when there are no picks', () => {
+    storeState.currentProfile = { id: 'p1', picks: {} };
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const chip = screen.getByText('Pick a set first').closest('button') as HTMLElement;
+    expect(chip).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(chip);
+    expect(storeState.setOnlyMine).not.toHaveBeenCalled();
+  });
+
+  it('drops a hidden day tab on /cards and offers "+1 hidden"; /picks shows every day', () => {
+    storeState.hiddenDays = [0];
+    storeState.selectedDay = 1;
+    const { unmount } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Day: Fri' })).not.toBeInTheDocument();
+    expect(screen.getByText('+1 hidden')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 hidden day' }));
+    expect(storeState.setHiddenDays).toHaveBeenCalledWith([]);
+    unmount();
     mockPathname = '/picks';
     render(<SubHeader dayOnly={true} festivalOnly={false} />);
-    expect(screen.queryByTestId('stage-filter-summary')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show only my picks' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Day: Fri' })).toBeInTheDocument();
   });
 });
 

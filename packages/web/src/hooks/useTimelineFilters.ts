@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
-import { usePicks } from '@festie/shared/hooks';
-import { applyScheduleFilters } from './useScheduleFilters';
+import { usePicks, useFestival } from '@festie/shared/hooks';
 import { FestivalSet, Stage } from '@festie/shared/types';
 import { setMinuteRange, artistDisplayName, getConflictingSetIds } from '@festie/shared/utils';
 
@@ -15,12 +14,11 @@ export interface TimeBounds {
 
 export function useTimelineFilters() {
   const currentFestival = useFestivalStore((state) => state.currentFestival);
-  const sets = useFestivalStore((state) => state.sets);
   const stages = useFestivalStore((state) => state.stages);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
   const activeStages = useFestivalStore((state) => state.activeStages);
-  const onlyMine = useFestivalStore((state) => state.onlyMine);
   const { getMyPick } = usePicks();
+  const { getFilteredSets } = useFestival();
 
   // Ensure all stages are active if none selected
   const effectiveActiveStages = useMemo(() => {
@@ -34,13 +32,8 @@ export function useTimelineFilters() {
     return stages.filter((st: Stage) => effectiveActiveStages.includes(st.id));
   }, [stages, effectiveActiveStages]);
 
-  // Filter sets for the selected day using dayIndex
-  const allDaySets = useMemo(() => {
-    return applyScheduleFilters(
-      sets.filter((s: FestivalSet) => s.dayIndex === selectedDay),
-      { activeStages: effectiveActiveStages, stageCount: stages.length, onlyMine, getMyPick },
-    );
-  }, [sets, selectedDay, stages, effectiveActiveStages, onlyMine, getMyPick]);
+  // Day, stage chips, My picks and search come from the shared filter.
+  const allDaySets = useMemo(() => getFilteredSets(), [getFilteredSets]);
 
   const timedSets = useMemo(() => allDaySets.filter((s: FestivalSet) => s.startTime && s.endTime), [allDaySets]);
 

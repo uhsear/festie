@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { setMatchesSearch, searchOtherDays, searchEmptyCopy } from './setSearch';
+import { setMatchesSearch, searchOtherDays } from './setSearch';
 import type { FestivalSet, Stage } from '../types/domain';
 
 const stages: Stage[] = [
@@ -87,29 +87,5 @@ describe('searchOtherDays', () => {
   it('skips sets without a dayIndex', () => {
     const groups = searchOtherDays([mk('x', { artist: 'Kaskade', dayIndex: undefined })], 'kaskade', 0, stages);
     expect(groups).toEqual([]);
-  });
-});
-
-describe('searchEmptyCopy', () => {
-  const sets = [mk('fri', { artist: 'Justice', dayIndex: 0 }), mk('sat', { artist: 'Daft Punk', dayIndex: 1 })];
-  const base = { sets, selectedDay: 0, stages, dayLabel: 'Friday' };
-
-  it('says the artist is not in the lineup when nothing matches anywhere', () => {
-    const copy = searchEmptyCopy({ ...base, query: 'zedd', otherDayCount: 0 });
-    expect(copy.hiddenByFilters).toBe(false);
-    expect(copy.title).toBe('No artist called “zedd” in this lineup');
-    expect(copy.description).toBe('Check the spelling, or clear the search to see everyone.');
-  });
-
-  it('names the selected day when the match is on another day', () => {
-    const copy = searchEmptyCopy({ ...base, query: ' daft ', otherDayCount: 1 });
-    expect(copy.title).toBe('No “daft” on Friday');
-    expect(copy.description).toBe('Found on other days:');
-  });
-
-  it('blames the filters when a selected-day match is hidden', () => {
-    const copy = searchEmptyCopy({ ...base, query: 'justice', otherDayCount: 0 });
-    expect(copy.hiddenByFilters).toBe(true);
-    expect(copy.title).toBe('“justice” is hidden by your filters');
   });
 });

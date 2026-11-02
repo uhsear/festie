@@ -3,9 +3,9 @@ import { renderHook } from '@testing-library/react';
 import type { FestivalSet, Stage } from '@festie/shared/types';
 
 // --- Mocks ---------------------------------------------------------------
-// useTimelineFilters reads festival data via useFestivalStore selectors and
-// the current user's picks via usePicks().getMyPick. We mock ONLY those two
-// boundaries and let the real utils (timeToMinutes, getConflictingSetIds,
+// useTimelineFilters reads festival data via useFestivalStore selectors,
+// filtered sets via useFestival().getFilteredSets and the current user's picks
+// via usePicks().getMyPick. We mock ONLY those boundaries and let the real utils (timeToMinutes, getConflictingSetIds,
 // artistDisplayName) run, so the filtering/time-bounds logic is exercised
 // end-to-end against real implementations.
 
@@ -16,9 +16,30 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (selector: (s: Record<string, unknown>) => unknown) => selector(storeState),
 }));
 
-vi.mock('@festie/shared/hooks', () => ({
-  usePicks: () => ({ getMyPick: mockGetMyPick }),
-}));
+// useFestival().getFilteredSets is mocked with the real shared filter so the
+// day, stage and My picks rules still run against the store fixture.
+vi.mock('@festie/shared/hooks', async () => {
+  const { filterScheduleSets } = await import('@festie/shared/utils');
+  return {
+    usePicks: () => ({ getMyPick: mockGetMyPick }),
+    useFestival: () => ({
+      getFilteredSets: () => {
+        const st = storeState as {
+          sets: FestivalSet[];
+          stages: Stage[];
+          selectedDay: number;
+          activeStages: string[];
+          onlyMine: boolean;
+          picks?: Record<string, string>;
+        };
+        return filterScheduleSets(
+          st.sets.filter((x) => x.dayIndex === st.selectedDay),
+          { activeStages: st.activeStages, stages: st.stages, onlyMine: st.onlyMine, picks: st.picks, query: '' },
+        );
+      },
+    }),
+  };
+});
 
 import { useTimelineFilters } from './useTimelineFilters';
 
@@ -101,6 +122,7 @@ describe('useTimelineFilters — onlyMine filter', () => {
     mockGetMyPick.mockImplementation((setId: string) =>
       setId === 'picked-1' || setId === 'picked-2' ? 'must' : undefined,
     );
+    storeState.picks = { 'picked-1': 'must', 'picked-2': 'must' };
 
     const { result } = renderHook(() => useTimelineFilters());
 

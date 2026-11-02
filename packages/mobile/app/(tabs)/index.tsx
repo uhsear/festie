@@ -26,17 +26,30 @@ import {
   festivalPhase,
   byStartTime,
   festivalTimeLabel,
-  logicalDayIndexAt,
   resolveFestivalTimeZone,
   searchOtherDays,
   searchEmptyCopy,
+  searchHiddenByFilters,
+  SCHEDULE_VIEWS,
+  SCHEDULE_GROUP_BYS,
+  groupScheduleSets,
+  defaultScheduleView,
+  hasAnyPick,
+  isStageFilterActive,
+  toggleStageFilter,
+  toggleHiddenDay,
+  scheduleEmptyCopy,
+  scheduleEmptyReason,
+  scheduleResultsSummary,
+  visibleDayIndexes,
+  type ScheduleView,
+  type ScheduleGroupBy,
 } from '@festie/shared/utils';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import { safeStageColor } from '../../lib/stageColor';
-import { useUI, type ViewMode } from '../../contexts/UIContext';
 import type { TimeBounds } from '../../hooks/useNowIndicator';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useNow';
@@ -44,6 +57,8 @@ import { useReduceMotion } from '../../hooks/useReduceMotion';
 import SegmentedControl from '../../components/SegmentedControl';
 import NowNextStrip from '../../components/NowNextStrip';
 import PhaseHomeActions from '../../components/PhaseHomeActions';
+import ScheduleDayChips from '../../components/ScheduleDayChips';
+import ScheduleResultsRow from '../../components/ScheduleResultsRow';
 import FestivalList from '../../components/FestivalList';
 import FreshnessChip from '../../components/FreshnessChip';
 import SaveStatusChip from '../../components/SaveStatusChip';
@@ -58,23 +73,22 @@ import TBASection from '../../components/TBASection';
 const SLOT_MINUTES = 15;
 const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
 
-// Mobile schedule views: Timeline (single-axis, time-gutter + now line) and a
-// flat Cards list. The dense 2D stage×time Grid is intentionally web/tablet-only
-// (see UIContext ViewMode + routes/grid.tsx) — it doesn't fit a phone.
-const VIEW_OPTIONS: readonly { value: ViewMode; label: string }[] = [
-  { value: 'timeline', label: 'Timeline' },
-  { value: 'cards', label: 'Cards' },
-];
-// Grid is a pushed route, not a ViewMode. It rides in the switcher (instead of a
-// header icon) so Find your crew keeps its header slot on 360dp phones.
-type SwitcherValue = ViewMode | 'grid';
-const VIEW_OPTIONS_WITH_GRID: readonly { value: SwitcherValue; label: string }[] = [
-  ...VIEW_OPTIONS,
-  { value: 'grid', label: 'Grid' },
-];
+// Mobile schedule views, in the shared order: Cards, Timeline, then Grid. Grid
+// is a pushed route, not a view the Schedule tab can show or remember (T18 makes
+// it in-place). It rides in the switcher (instead of a header icon) so Find your
+// crew keeps its header slot on 360dp phones.
+const VIEW_OPTIONS_WITH_GRID: readonly { value: ScheduleView; label: string }[] = SCHEDULE_VIEWS.map((v) => ({
+  value: v.key,
+  label: v.label,
+}));
+const VIEW_OPTIONS = VIEW_OPTIONS_WITH_GRID.filter((v) => v.value !== 'grid');
+const GROUP_BY_OPTIONS: readonly { value: ScheduleGroupBy; label: string }[] = SCHEDULE_GROUP_BYS.map((g) => ({
+  value: g.key,
+  label: g.label,
+}));
 
 type ListRow =
-  | { kind: 'stageHeader'; key: string; stageName: string; stageColor: string }
+  | { kind: 'groupHeader'; key: string; label: string; stageColor?: string }
   | { kind: 'set'; key: string; set: FestivalSet };
 
 export default function TimelineScreen() {
@@ -83,14 +97,10 @@ export default function TimelineScreen() {
   const router = useRouter();
   const haptics = useHaptics();
   const reduceMotion = useReduceMotion();
-  const { viewMode, setViewMode } = useUI();
-  const { scheduleView } = useLocalSearchParams<{ scheduleView?: string | string[] }>();
-  const requestedViewMode: ViewMode | null =
-    (Array.isArray(scheduleView) ? scheduleView[0] : scheduleView) === 'cards'
-      ? 'cards'
-      : (Array.isArray(scheduleView) ? scheduleView[0] : scheduleView) === 'timeline'
-        ? 'timeline'
-        : null;
+  const { scheduleView: scheduleViewParam } = useLocalSearchParams<{ scheduleView?: string | string[] }>();
+  const requestedView = Array.isArray(scheduleViewParam) ? scheduleViewParam[0] : scheduleViewParam;
+  const requestedViewMode: 'cards' | 'timeline' | null =
+    requestedView === 'cards' || requestedView === 'timeline' ? requestedView : null;
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
@@ -133,13 +143,21 @@ export default function TimelineScreen() {
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const activeStages = useFestivalStore((s) => s.activeStages);
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
+  const onlyMine = useFestivalStore((s) => s.onlyMine);
+  const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
+  const scheduleView = useFestivalStore((s) => s.scheduleView);
+  const setScheduleView = useFestivalStore((s) => s.setScheduleView);
+  const hiddenDays = useFestivalStore((s) => s.hiddenDays);
+  const setHiddenDays = useFestivalStore((s) => s.setHiddenDays);
+  const dismissedPhase = useFestivalStore((s) => s.dismissedPhase);
+  const dismissPhaseBand = useFestivalStore((s) => s.dismissPhaseBand);
+  const prefsFestivalId = useFestivalStore((s) => s.prefsFestivalId);
+  const groupBy = useFestivalStore((s) => s.scheduleGroupBy) ?? 'time';
+  const setScheduleGroupBy = useFestivalStore((s) => s.setScheduleGroupBy);
 
   const { getDays, getFilteredSets, getStageColor, getStageName } = useFestival();
   const { getMyPick, getOtherPicks, getMyNote, savePick } = usePicks();
 
-  const [search, setSearch] = useState(searchQuery);
-  // "My picks only" filter — on-site you mostly want to read your own day.
-  const [onlyMine, setOnlyMine] = useState(false);
   // DC1 — search bar and the stage/my-picks + phase-action setup chrome fold
   // behind a compact icon row so the timeline owns the viewport on small
   // phones. Day chips stay always visible (the one mid-festival control). Both
@@ -207,44 +225,14 @@ export default function TimelineScreen() {
   // Timeline/Grid views — Cards is the only useful view for it.
   const festivalHasTimedSets = useMemo(() => allSets.some((s) => s.startTime && s.endTime), [allSets]);
 
-  // Pick a sensible default view per festival: Timeline for festivals with a
-  // timed schedule, Cards for all-TBA festivals (otherwise they'd open on an
-  // empty Timeline). Runs once per festival load — after that the user's manual
-  // view choice stands until they switch festivals.
-  const defaultedFestivalRef = useRef<string | null>(null);
-  // Shared /cards and /timeline links carry an explicit mobile view request.
-  // Apply it before the per-festival default below; otherwise an all-TBA
-  // festival remount immediately overwrites a requested Timeline with Cards.
+  // Shared /cards and /timeline links carry an explicit mobile view request. It
+  // is stored once the UI store has restored this festival's remembered choices
+  // (a cached festival can render before that), then the one-shot param is cleared.
   useEffect(() => {
-    if (!requestedViewMode) return;
-    setViewMode(requestedViewMode);
-    const id = currentFestival?.id;
-    if (!id) return;
-    // The deep-link request is one-shot. Mark this festival as intentionally
-    // chosen before removing the param so the default effect below cannot
-    // immediately overwrite it; future festival switches regain their default.
-    defaultedFestivalRef.current = id;
+    if (!requestedViewMode || !currentFestival?.id || prefsFestivalId !== currentFestival.id) return;
+    setScheduleView(requestedViewMode);
     router.setParams({ scheduleView: undefined });
-  }, [currentFestival?.id, requestedViewMode, router, setViewMode]);
-
-  useEffect(() => {
-    if (requestedViewMode) return;
-    const id = currentFestival?.id;
-    if (!id || allSets.length === 0) return;
-    if (defaultedFestivalRef.current === id) return;
-    defaultedFestivalRef.current = id;
-    setViewMode(festivalHasTimedSets ? 'timeline' : 'cards');
-  }, [currentFestival?.id, allSets.length, festivalHasTimedSets, requestedViewMode, setViewMode]);
-
-  // Keep the local search box in sync with the shared store (debounce-free; the
-  // store filter recomputes filteredSets on every keystroke, matching web).
-  const handleSearch = useCallback(
-    (text: string) => {
-      setSearch(text);
-      setSearchQuery(text);
-    },
-    [setSearchQuery],
-  );
+  }, [currentFestival?.id, prefsFestivalId, requestedViewMode, router, setScheduleView]);
 
   // Android Back should dismiss transient schedule chrome before it exits the
   // root tab. useFocusEffect matters because native tabs keep screens mounted.
@@ -252,7 +240,7 @@ export default function TimelineScreen() {
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
         if (showSearch) {
-          handleSearch('');
+          setSearchQuery('');
           setShowSearch(false);
           return true;
         }
@@ -267,12 +255,11 @@ export default function TimelineScreen() {
         return false;
       });
       return () => subscription.remove();
-    }, [handleSearch, pickingFestival, showFilters, showSearch]),
+    }, [setSearchQuery, pickingFestival, showFilters, showSearch]),
   );
 
   const days = useMemo(() => getDays(), [getDays]);
   const festivalTimeZone = resolveFestivalTimeZone(currentFestival);
-  const todayIndex = logicalDayIndexAt(days, nowMs, festivalTimeZone);
   const zoneLabel = festivalTimeLabel(festivalTimeZone, nowMs);
 
   // P1-5 — festival lifecycle phase (pre / live / post), derived from the
@@ -281,13 +268,24 @@ export default function TimelineScreen() {
   // usable dates, in which case the band is hidden (phase-neutral fallback).
   const phase = useMemo(() => festivalPhase(currentFestival, days), [currentFestival, days]);
 
-  // Day + active-stage + search filtering lives in the shared hook
-  // (getFilteredSets mirrors cards.tsx's filteredSets). We then apply the same
-  // hotness → time → name sort the web Cards view uses.
+  // The person's remembered view for this festival wins; otherwise Timeline on a
+  // live day with timed sets, Cards. A stored 'grid' never reaches here because
+  // Grid is a pushed route that is not remembered.
+  const viewMode: 'cards' | 'timeline' =
+    scheduleView === 'cards' || scheduleView === 'timeline'
+      ? scheduleView
+      : defaultScheduleView({ hasTimedSets: festivalHasTimedSets, phase });
+  const picks = currentProfile?.picks;
+  const canFilterMine = hasAnyPick(picks);
+  const mineActive = onlyMine && canFilterMine;
+  const stageFilterActive = isStageFilterActive(activeStages, stages.length);
+  const visibleDays = visibleDayIndexes(days.length, hiddenDays, selectedDay);
+
+  // Day + stage + My picks + search filtering lives in the shared hook
+  // (getFilteredSets). We then apply the same hotness → time → name sort the web
+  // Cards view uses.
   const filteredSets = useMemo(() => {
-    let filtered = [...getFilteredSets()];
-    if (onlyMine) filtered = filtered.filter((s) => getMyPick(s.id));
-    return filtered.sort((a, b) => {
+    return [...getFilteredSets()].sort((a, b) => {
       const hotA = getSetHotness(a);
       const hotB = getSetHotness(b);
       if (hotA > 0 || hotB > 0) return hotB - hotA;
@@ -301,14 +299,14 @@ export default function TimelineScreen() {
         { sensitivity: 'base' },
       );
     });
-    // getFilteredSets is recreated when day/stage/search/sets change.
-  }, [getFilteredSets, currentFestival?.b2bSeparator, onlyMine, getMyPick]);
+    // getFilteredSets is recreated when day/stage/My picks/search/sets change.
+  }, [getFilteredSets, currentFestival?.b2bSeparator]);
 
   // Search spans every day: matches on days other than the selected one, plus the
   // first other day that has any sets (the empty states' "Show another day").
   const otherDayGroups = useMemo(
-    () => (search.trim() ? searchOtherDays(allSets, search, selectedDay, stages) : []),
-    [allSets, search, selectedDay, stages],
+    () => (searchQuery.trim() ? searchOtherDays(allSets, searchQuery, selectedDay, stages) : []),
+    [allSets, searchQuery, selectedDay, stages],
   );
   const otherDayWithSets = useMemo(
     () => days.find((d) => d.index !== selectedDay && allSets.some((s) => s.dayIndex === d.index))?.index,
@@ -333,8 +331,21 @@ export default function TimelineScreen() {
   // Conflict set IDs — same util the web Cards view uses.
   const conflictIds = useMemo(() => getConflictingSetIds(filteredSets, getMyPick), [filteredSets, getMyPick]);
 
-  // Cards view: a flat hotness-sorted list of set rows.
-  const rows = useMemo<ListRow[]>(() => filteredSets.map((set) => ({ kind: 'set', key: set.id, set })), [filteredSets]);
+  // Cards view: a header row per "Group by" section (Time, Stage or A-Z), then its sets.
+  const rows = useMemo<ListRow[]>(
+    () =>
+      groupScheduleSets(filteredSets, groupBy, stages, currentFestival?.b2bSeparator).flatMap((g) => [
+        {
+          kind: 'groupHeader' as const,
+          key: `group-${g.key}`,
+          label: g.label,
+          stageColor:
+            groupBy === 'stage' && g.key ? safeStageColor(getStageColor(g.key), t.colors.text.muted) : undefined,
+        },
+        ...g.sets.map((set) => ({ kind: 'set' as const, key: set.id, set })),
+      ]),
+    [filteredSets, groupBy, stages, currentFestival?.b2bSeparator, getStageColor, t.colors.text.muted],
+  );
 
   // Timeline/Grid views consume the same day-filtered set list (filteredSets
   // already applies day + active-stage + search), split into timed vs. TBA and
@@ -376,21 +387,8 @@ export default function TimelineScreen() {
     return stages.filter((st) => activeStages.includes(st.id));
   }, [stages, activeStages]);
 
-  // Stage filter chips — wires the previously-dead setActiveStages path. A stage
-  // is "on" when it's in the effective set (all when activeStages is empty).
-  const allStageIds = useMemo(() => stages.map((s) => s.id), [stages]);
-  const effectiveStages = activeStages.length ? activeStages : allStageIds;
-  const toggleStage = useCallback(
-    (id: string) => {
-      const sel = new Set(effectiveStages);
-      if (sel.has(id)) sel.delete(id);
-      else sel.add(id);
-      const next = allStageIds.filter((sid) => sel.has(sid));
-      // empty or all-selected both mean "show all" — store [] to keep it clean
-      setActiveStages(next.length === 0 || next.length === allStageIds.length ? [] : next);
-    },
-    [effectiveStages, allStageIds, setActiveStages],
-  );
+  // Stage chips are tap-to-show-only, the same model as web (shared toggleStageFilter).
+  const allStageIds = useMemo(() => stages.map((st) => st.id), [stages]);
 
   const handlePickChange = useCallback(
     (setId: string, priority: Priority | null) => {
@@ -409,10 +407,10 @@ export default function TimelineScreen() {
   // selection) — the recoverability companion to the results summary chip.
   const clearAllFilters = useCallback(() => {
     haptics.select();
-    handleSearch('');
+    setSearchQuery('');
     setOnlyMine(false);
     setActiveStages([]);
-  }, [haptics, handleSearch, setActiveStages]);
+  }, [haptics, setSearchQuery, setOnlyMine, setActiveStages]);
 
   // Cards scroll tracking: reveal the scroll-to-top FAB once the user is well
   // past the fold. Guarded so the setState only fires on an actual transition.
@@ -432,12 +430,12 @@ export default function TimelineScreen() {
 
   const renderRow = useCallback<ListRenderItem<ListRow>>(
     ({ item }) => {
-      if (item.kind === 'stageHeader') {
+      if (item.kind === 'groupHeader') {
         return (
-          <View style={styles.stageHeader}>
-            <View style={[styles.stageDot, { backgroundColor: item.stageColor }]} />
+          <View style={styles.stageHeader} accessibilityRole="header">
+            {item.stageColor ? <View style={[styles.stageDot, { backgroundColor: item.stageColor }]} /> : null}
             <Text style={styles.stageHeaderText} numberOfLines={1}>
-              {item.stageName}
+              {item.label}
             </Text>
           </View>
         );
@@ -533,51 +531,69 @@ export default function TimelineScreen() {
   // Search found nothing on the selected day. A selected-day match hidden by the
   // stage or my-picks filter says so; a match on another day lists those days;
   // otherwise the artist is not in the lineup.
-  const searchCopy = searchEmptyCopy({
-    sets: allSets,
-    query: search,
-    selectedDay,
+  const searchHidden = searchHiddenByFilters(
+    allSets.filter((s) => s.dayIndex === selectedDay),
+    searchQuery,
     stages,
-    otherDayCount: otherDayGroups.length,
-    dayLabel: selectedDayLabel,
-  });
+  );
+  const searchCopy = searchEmptyCopy(
+    searchQuery,
+    selectedDayLabel ?? 'this day',
+    otherDayGroups.length > 0,
+    searchHidden,
+  );
   const searchEmptyState = (
     <>
       <EmptyState
         icon="search"
         title={searchCopy.title}
-        message={searchCopy.description}
+        message={searchCopy.message}
         action={
-          searchCopy.hiddenByFilters
+          searchHidden
             ? {
-                label: 'Clear filters',
+                label: searchCopy.actionLabel,
                 onPress: () => {
                   setOnlyMine(false);
                   setActiveStages([]);
                 },
               }
-            : { label: 'Clear search', onPress: () => handleSearch('') }
+            : { label: searchCopy.actionLabel, onPress: () => setSearchQuery('') }
         }
       />
       {otherDayMatches}
     </>
   );
 
-  // When "my picks only" filters the timed timeline (and the TBA list) down to
-  // nothing, the day still HAS sets — they're just unpicked. Reuse the same
-  // onlyMine-aware branch as cardsEmpty ("No picks… / Show all sets") instead of
-  // the false "No sets for this day" / "Switch festival". The timeless-picks
-  // hint still wins when the user does have TBA picks (timelessSets non-empty).
-  const emptyScheduleState =
-    onlyMine && search.length === 0 && timelessSets.length === 0 ? (
+  // The empty list blames the filter that caused it (search, then My picks, then
+  // the stage filter) and offers the button that undoes it. Only an empty day
+  // falls through to the day copy below.
+  const emptyReason = scheduleEmptyReason({
+    query: searchQuery,
+    onlyMine,
+    hasAnyPick: canFilterMine,
+    stageFilterActive,
+  });
+  const filterEmptyState = (reason: 'picks' | 'stages') => {
+    const copy = scheduleEmptyCopy(reason, selectedDayLabel ?? 'this day');
+    const undo = reason === 'picks' ? () => setOnlyMine(false) : () => setActiveStages([]);
+    return (
       <EmptyState
-        icon="star-outline"
-        title="No picks for this day yet"
-        message="Tap a priority on any set to add it here, or browse the full lineup."
-        action={{ label: 'Show all sets', onPress: () => setOnlyMine(false) }}
+        icon={reason === 'picks' ? 'star-outline' : 'filter-outline'}
+        title={copy.title}
+        message={copy.message}
+        action={copy.actionLabel ? { label: copy.actionLabel, onPress: undo } : undefined}
       />
-    ) : search.length > 0 ? (
+    );
+  };
+
+  // A filtered-out day still HAS sets, so the filter is blamed instead of the
+  // false "No sets for this day". The timeless-sets hint still wins when the day
+  // has TBA sets (timelessSets non-empty).
+  const emptyScheduleState =
+    emptyReason === 'search' ? (
       searchEmptyState
+    ) : (emptyReason === 'picks' || emptyReason === 'stages') && timelessSets.length === 0 ? (
+      filterEmptyState(emptyReason)
     ) : (
       <EmptyState
         icon="musical-notes"
@@ -588,28 +604,24 @@ export default function TimelineScreen() {
             : 'Pick another day from the day selector to browse the schedule.'
         }
         action={
-          timelessSets.length > 0 ? { label: 'Show Cards', onPress: () => setViewMode('cards') } : showAnotherDayAction
+          timelessSets.length > 0
+            ? { label: 'Show Cards', onPress: () => setScheduleView('cards') }
+            : showAnotherDayAction
         }
       />
     );
 
-  // Cards-view empty element. Layers three honest cases: a failed load (error +
-  // retry), the "my picks only" filter resolving to nothing (nudge to pick or
-  // show all), and the generic no-results / no-search states.
+  // Cards-view empty element. Layers the honest cases: a failed load (error +
+  // retry), the filter that emptied the day, and the plain empty-day state.
   const cardsEmpty = scheduleColdLoading ? (
     // The FlatList's contentContainerStyle already applies hPad here.
     <ScheduleSkeleton />
   ) : scheduleLoadError ? (
     errorScheduleState
-  ) : onlyMine && search.length === 0 ? (
-    <EmptyState
-      icon="star-outline"
-      title="No picks for this day yet"
-      message="Tap a priority on any set to add it here, or browse the full lineup."
-      action={{ label: 'Show all sets', onPress: () => setOnlyMine(false) }}
-    />
-  ) : search.length > 0 ? (
+  ) : emptyReason === 'search' ? (
     searchEmptyState
+  ) : emptyReason === 'picks' || emptyReason === 'stages' ? (
+    filterEmptyState(emptyReason)
   ) : (
     <EmptyState
       icon="musical-notes"
@@ -660,13 +672,13 @@ export default function TimelineScreen() {
   // search and filter panels stay forced-open while their state is active so a
   // user can always see (and clear) a filter that's shrinking the schedule,
   // even though both default to collapsed.
-  const stageFilterActive = activeStages.length > 0;
-  const filtersActive = onlyMine || stageFilterActive;
-  const searchOpen = showSearch || search.length > 0;
+  // Hidden days are a preference, not a filter, so they never force the panel open.
+  const filtersActive = mineActive || stageFilterActive;
+  const searchOpen = showSearch || searchQuery.length > 0;
   const filtersOpen = showFilters || filtersActive;
   // Any narrowing in effect (search OR my-picks OR a stage subset) — gates the
   // results-summary + Clear-all chip.
-  const anyFilterActive = search.length > 0 || filtersActive;
+  const anyFilterActive = searchQuery.trim() !== '' || filtersActive;
 
   // Schedule controls (Now & Next, phase actions, search, day + stage filters).
   // In Cards view these ride in the FlatList's ListHeaderComponent so the WHOLE
@@ -677,6 +689,15 @@ export default function TimelineScreen() {
   // focus across keystroke re-renders.
   const controls = (
     <>
+      {/* Phase shortcuts: always on tablets, after the festival on phones. They
+          ride in the controls so they scroll with the Cards list. The close
+          button hides them for this festival and phase. */}
+      {user && phase && dismissedPhase !== phase && (isTablet || phase === 'post') ? (
+        <View style={{ paddingHorizontal: hPad }}>
+          <PhaseHomeActions phase={phase} onDismiss={() => dismissPhaseBand(phase)} />
+        </View>
+      ) : null}
+
       {/* Live-day Now & Next surface: shows the picked set playing now / up next
           inline, tapping through to the full Now & Next screen. Renders nothing
           when there's no current/upcoming pick. */}
@@ -722,19 +743,19 @@ export default function TimelineScreen() {
           <Ionicons name="search" size={16} color={t.colors.text.placeholder} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            value={search}
-            onChangeText={handleSearch}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
             placeholder="Search artists or stages"
             placeholderTextColor={t.colors.text.placeholder}
             autoCapitalize="none"
             autoCorrect={false}
-            autoFocus={showSearch && search.length === 0}
+            autoFocus={showSearch && searchQuery.length === 0}
             accessibilityLabel="Search the lineup"
             returnKeyType="search"
           />
-          {search.length > 0 ? (
+          {searchQuery.length > 0 ? (
             <TouchableOpacity
-              onPress={() => handleSearch('')}
+              onPress={() => setSearchQuery('')}
               accessibilityRole="button"
               accessibilityLabel="Clear search"
               hitSlop={13}
@@ -746,143 +767,171 @@ export default function TimelineScreen() {
       ) : null}
 
       {/* Day selector */}
-      {days.length > 1 ? (
-        <View style={styles.daysWrap}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.daysContent, { paddingHorizontal: hPad }]}
-          >
-            {days.map((day, dayPos) => {
-              const active = day.index === selectedDay;
-              const isToday = dayPos === todayIndex;
-              return (
-                <TouchableOpacity
-                  key={day.index}
-                  style={styles.dayChip}
-                  onPress={() => {
-                    haptics.select();
-                    setSelectedDay(day.index);
-                  }}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={`Day: ${day.label ?? day.date}${isToday ? ' (today)' : ''}`}
-                >
-                  <View style={[styles.dayChipBg, active && styles.dayChipBgActive]} pointerEvents="none" />
-                  {isToday ? <View style={[styles.todayDot, active && styles.todayDotActive]} /> : null}
-                  <Text
-                    style={[styles.dayText, active && styles.dayTextActive]}
-                    maxFontSizeMultiplier={MAX_FONT_SCALE}
-                    textBreakStrategy="simple"
-                  >
-                    {day.label ?? day.date}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-          {zoneLabel ? (
-            <Text style={[styles.zoneLabel, { paddingHorizontal: hPad }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {zoneLabel}
-            </Text>
-          ) : null}
-        </View>
+      <ScheduleDayChips hPad={hPad} />
+      {days.length > 1 && zoneLabel ? (
+        <Text style={[styles.zoneLabel, { paddingHorizontal: hPad }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {zoneLabel}
+        </Text>
       ) : null}
 
-      {/* Stage + my-picks filters — folded behind the filter toggle (DC1). */}
-      {filtersOpen && (currentProfile || stages.length > 1) ? (
+      {/* Stage + my-picks filters, then the days the person attends — folded
+          behind the filter toggle (DC1). */}
+      {filtersOpen && (currentProfile || stages.length > 1 || days.length > 1) ? (
         <View style={styles.filterRow}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.filterContent, { paddingHorizontal: hPad }]}
-            // Android-native right-edge fade — signals scrollable overflow without
-            // requiring expo-linear-gradient. No-op on iOS (ignored silently).
-            fadingEdgeLength={Platform.OS === 'android' ? 32 : 0}
-          >
-            {currentProfile ? (
-              // R3 single-accent-fill-per-screen: the SegmentedControl already
-              // holds the solid-aqua primary fill. The My picks chip uses the
-              // outlined/tinted secondary variant (aqua border + aqua text on
-              // transparent bg) so two solid aqua fills never appear together.
-              <TouchableOpacity
-                style={[styles.filterChip, onlyMine && styles.filterChipActiveTinted]}
-                onPress={() => setOnlyMine((v) => !v)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityState={{ selected: onlyMine }}
-                accessibilityLabel="Show only my picks"
-              >
-                <Ionicons name={CONCEPT_IONICON.picks} size={12} color={onlyMine ? t.colors.accent.aqua : t.colors.text.muted} />
-                <Text
-                  style={[styles.filterChipText, onlyMine && styles.filterChipTextTinted]}
-                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+          {currentProfile || stages.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.filterContent, { paddingHorizontal: hPad }]}
+              // Android-native right-edge fade — signals scrollable overflow without
+              // requiring expo-linear-gradient. No-op on iOS (ignored silently).
+              fadingEdgeLength={Platform.OS === 'android' ? 32 : 0}
+            >
+              {currentProfile ? (
+                // R3 single-accent-fill-per-screen: the SegmentedControl already
+                // holds the solid-aqua primary fill. The My picks chip uses the
+                // outlined/tinted secondary variant (aqua border + aqua text on
+                // transparent bg) so two solid aqua fills never appear together.
+                // With no picks it is muted and inert so it can never blank the lineup.
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    !canFilterMine && styles.filterChipMuted,
+                    mineActive && styles.filterChipActiveTinted,
+                  ]}
+                  onPress={canFilterMine ? () => setOnlyMine(!onlyMine) : undefined}
+                  activeOpacity={canFilterMine ? 0.7 : 1}
+                  accessibilityRole="button"
+                  accessibilityState={canFilterMine ? { selected: onlyMine } : { disabled: true, selected: false }}
+                  accessibilityLabel="Show only my picks"
                 >
-                  My picks
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-            {stages.length > 1
-              ? stages.map((st) => {
-                  const on = effectiveStages.includes(st.id);
-                  // Stage dots keep their data-driven identity color (matching the
-                  // timeline columns) — the accent rule governs UI accents, not the
-                  // stage palette. Active chips stay neutral; a solid aqua fill per
-                  // chip would flood the screen with accent fills (R3).
+                  <Ionicons name={CONCEPT_IONICON.picks} size={12} color={mineActive ? t.colors.accent.aqua : t.colors.text.muted} />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      !canFilterMine && styles.filterChipTextMuted,
+                      mineActive && styles.filterChipTextTinted,
+                    ]}
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  >
+                    {canFilterMine ? 'My picks' : 'Pick a set first'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              {stages.length > 1 ? (
+                <>
+                  <TouchableOpacity
+                    style={[styles.filterChip, activeStages.length === 0 && styles.filterChipActiveTinted]}
+                    onPress={() => {
+                      haptics.select();
+                      setActiveStages([]);
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: activeStages.length === 0 }}
+                    accessibilityLabel="All stages"
+                  >
+                    <Text
+                      style={[styles.filterChipText, activeStages.length === 0 && styles.filterChipTextTinted]}
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    >
+                      All stages
+                    </Text>
+                  </TouchableOpacity>
+                  {stages.map((st) => {
+                    const on = activeStages.includes(st.id);
+                    // Stage dots keep their data-driven identity color (matching the
+                    // timeline columns) — the accent rule governs UI accents, not the
+                    // stage palette.
+                    return (
+                      <TouchableOpacity
+                        key={st.id}
+                        style={[styles.filterChip, on && styles.filterChipActiveTinted]}
+                        onPress={() => {
+                          haptics.select();
+                          setActiveStages(toggleStageFilter(activeStages, allStageIds, st.id));
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        accessibilityLabel={st.name}
+                      >
+                        <View style={[styles.stageDotSmall, { backgroundColor: resolveStageColor(st.id) }]} />
+                        <Text
+                          style={[styles.filterChipText, on && styles.filterChipTextTinted]}
+                          numberOfLines={1}
+                          maxFontSizeMultiplier={MAX_FONT_SCALE}
+                        >
+                          {st.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              ) : null}
+            </ScrollView>
+          ) : null}
+          {days.length > 1 ? (
+            <>
+              <Text style={[styles.daysGoingLabel, { paddingHorizontal: hPad }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                Days I&apos;m going
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[styles.filterContent, { paddingHorizontal: hPad }]}
+              >
+                {days.map((day) => {
+                  const shown = !hiddenDays.includes(day.index);
+                  const onlyShown = shown && visibleDays.length === 1;
                   return (
                     <TouchableOpacity
-                      key={st.id}
-                      style={[styles.filterChip, !on && styles.filterChipOff]}
-                      onPress={() => toggleStage(st.id)}
+                      key={day.index}
+                      style={[styles.filterChip, shown && styles.filterChipActiveTinted]}
+                      onPress={() => {
+                        haptics.select();
+                        setHiddenDays(toggleHiddenDay(hiddenDays, days.length, day.index));
+                      }}
+                      disabled={onlyShown}
                       activeOpacity={0.7}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                      accessibilityLabel={`${on ? 'Hide' : 'Show'} ${st.name}`}
+                      accessibilityState={onlyShown ? { selected: shown, disabled: true } : { selected: shown }}
+                      accessibilityLabel={day.label ?? day.date}
                     >
-                      <View style={[styles.stageDotSmall, { backgroundColor: resolveStageColor(st.id) }]} />
                       <Text
-                        style={[styles.filterChipText, !on && styles.filterChipTextOff]}
+                        style={[styles.filterChipText, shown && styles.filterChipTextTinted]}
                         numberOfLines={1}
                         maxFontSizeMultiplier={MAX_FONT_SCALE}
                       >
-                        {st.name}
+                        {day.label ?? day.date}
                       </Text>
                     </TouchableOpacity>
                   );
-                })
-              : null}
-          </ScrollView>
+                })}
+              </ScrollView>
+            </>
+          ) : null}
         </View>
       ) : null}
 
       {/* Results summary + Clear-all. Surfaces honestly how many sets the active
           search/stage/my-picks filters resolve to, and gives a single recovery
           tap when a filter is hiding most of the lineup. Only shown while a
-          filter is actually narrowing the list. */}
+          filter is actually narrowing the list. In Timeline mode the count spans
+          the whole filtered day but only timed sets are plotted, so the TBA
+          count qualifies the number. */}
       {anyFilterActive ? (
-        <View style={[styles.resultsRow, { paddingHorizontal: hPad }]}>
-          <Text style={styles.resultsText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {filteredSets.length} {filteredSets.length === 1 ? 'set' : 'sets'}
-            {onlyMine ? ' · my picks' : ''}
-            {stageFilterActive ? ` · ${activeStages.length} ${activeStages.length === 1 ? 'stage' : 'stages'}` : ''}
-            {/* The count spans the whole filtered day, but in Timeline mode the
-                timeline only plots timed sets — TBA sets live in the docked TBA
-                list below. Qualify how many of the N are unscheduled so the
-                number can't read as "missing" rows from the timeline. */}
-            {viewMode === 'timeline' && timelessSets.length > 0 ? ` · ${timelessSets.length} TBA` : ''}
-          </Text>
-          <TouchableOpacity
-            onPress={clearAllFilters}
-            hitSlop={14}
-            accessibilityRole="button"
-            accessibilityLabel="Clear all filters"
-          >
-            <Text style={styles.clearAllText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              Clear all
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <ScheduleResultsRow
+          summary={scheduleResultsSummary({
+            count: filteredSets.length,
+            onlyMine: mineActive,
+            activeStageCount: stageFilterActive ? activeStages.length : 0,
+            tbaCount: viewMode === 'timeline' ? timelessSets.length : 0,
+          })}
+          onClearAll={clearAllFilters}
+          hPad={hPad}
+        />
       ) : null}
     </>
   );
@@ -939,18 +988,6 @@ export default function TimelineScreen() {
         onTitlePress={() => setPickingFestival(true)}
         titleAccessibilityLabel={`${currentFestival.name}. Switch festival`}
       />
-      {/* P1-5 — phase-aware home actions: re-prioritizes the crew's destinations
-          (Picks / crew / map / Now & Next / wrap) by festival phase. Hidden when
-          the festival has no usable dates (phase === null). Folds behind the
-          filter toggle (DC1) — it's a setup action, not a mid-crowd one — except
-          after the festival, when Wrap is the first shortcut. Sits
-          above the view switcher so it reads as the head of the Filters panel. */}
-      {phase && (filtersOpen || phase === 'post') ? (
-        <View style={{ paddingHorizontal: hPad }}>
-          <PhaseHomeActions phase={phase} />
-        </View>
-      ) : null}
-
       {/* DC1 — one consolidated control row: LiveDot now-indicator, the
           view switcher, and the search/filter toggles. The search bar and the
           stage/phase filters fold inline below (in `controls`) only when their
@@ -963,7 +1000,7 @@ export default function TimelineScreen() {
           <SegmentedControl
             options={festivalHasTimedSets ? VIEW_OPTIONS_WITH_GRID : VIEW_OPTIONS}
             value={viewMode}
-            onChange={(next: SwitcherValue) => (next === 'grid' ? router.push('/grid') : setViewMode(next))}
+            onChange={(next: ScheduleView) => (next === 'grid' ? router.push('/grid') : setScheduleView(next))}
             accessibilityLabel="Schedule view"
           />
         </View>
@@ -975,7 +1012,7 @@ export default function TimelineScreen() {
           // query so the X reliably collapses the bar.
           onPress={() => {
             if (searchOpen) {
-              handleSearch('');
+              setSearchQuery('');
               setShowSearch(false);
             } else {
               setShowSearch(true);
@@ -1024,7 +1061,24 @@ export default function TimelineScreen() {
             data={rows}
             renderItem={renderRow}
             keyExtractor={keyExtractor}
-            ListHeaderComponent={controls}
+            ListHeaderComponent={
+              <>
+                {controls}
+                {filteredSets.length > 0 ? (
+                  <View style={[styles.groupByRow, { paddingHorizontal: hPad }]}>
+                    <Text style={styles.groupByLabel}>Group by</Text>
+                    <View style={styles.switcherFlex}>
+                      <SegmentedControl
+                        options={GROUP_BY_OPTIONS}
+                        value={groupBy}
+                        onChange={setScheduleGroupBy}
+                        accessibilityLabel="Group sets by"
+                      />
+                    </View>
+                  </View>
+                ) : null}
+              </>
+            }
             // The controls already apply hPad themselves, so cancel the container's.
             ListHeaderComponentStyle={{ marginHorizontal: -hPad }}
             contentContainerStyle={[styles.listContent, { paddingHorizontal: hPad, paddingBottom: listBottomPad }]}
@@ -1251,31 +1305,12 @@ const useStyles = makeStyles((t) => ({
   freshnessRow: {
     paddingTop: t.spacing[2],
   },
-  // Results summary + Clear-all chip. Sits between the filter chrome and the
-  // list; the count reads left, the recovery action right.
-  resultsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: t.spacing[3],
-    paddingTop: t.spacing[2],
-    paddingBottom: t.spacing[1],
-  },
   compactRefreshButton: {
     minWidth: 44,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: t.radii.default,
-  },
-  resultsText: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    flexShrink: 1,
-  },
-  clearAllText: {
-    ...typeStyle('caption', 700),
-    color: t.colors.accent.aqua,
   },
   // Scroll-to-top FAB (cards view, long lineups). Aqua pill with dark ink to
   // match the timeline's Now FAB; sits above the tab bar, right-aligned.
@@ -1301,67 +1336,10 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label', 700),
     color: t.colors.text.onLightAccent,
   },
-  daysWrap: {
-    paddingVertical: t.spacing[3],
-  },
   zoneLabel: {
     ...typeStyle('caption'),
     color: t.colors.text.muted,
     marginTop: t.spacing[1],
-  },
-  daysContent: {
-    paddingHorizontal: t.spacing[4],
-    gap: t.spacing[2],
-  },
-  dayChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    // spacing[6] (was [4]): enough horizontal room that the longest day labels
-    // ("Saturday"/"Sunday") clear the pill's rounded edge comfortably — the
-    // bg-sibling stops the clip, this keeps the trailing glyph off the edge.
-    paddingHorizontal: t.spacing[6],
-    paddingVertical: t.spacing[3],
-    // WCAG 2.5.5 / 2.5.8 minimum 44x44px touch target (motor accessibility).
-    minHeight: 44,
-  },
-  // Visual (bg/border/radius) lives on this absolutely-positioned sibling,
-  // painted behind the label — not on dayChip itself. A Text that's a CHILD of
-  // a bg+borderRadius View gets clipped to the rounded bounds on Android; as a
-  // sibling it can't be (see SegmentedControl's thumb for the same pattern).
-  dayChipBg: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    borderRadius: t.radii.pill,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  dayChipBgActive: {
-    backgroundColor: t.colors.accent.aqua,
-    borderColor: t.colors.accent.aqua,
-  },
-  dayText: {
-    ...typeStyle('label'),
-    // Android Fabric under-measures the final Space Grotesk glyph in these
-    // centered pills. The system face preserves the complete day label.
-    fontFamily: Platform.OS === 'android' ? undefined : typeStyle('label').fontFamily,
-    color: t.colors.text.secondary,
-  },
-  dayTextActive: {
-    color: t.colors.text.onLightAccent,
-  },
-  todayDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: t.colors.accent.aqua,
-  },
-  todayDotActive: {
-    backgroundColor: t.colors.text.onLightAccent,
   },
   filterRow: {
     paddingBottom: t.spacing[2],
@@ -1392,13 +1370,9 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.aquaAlpha[12],
     borderColor: t.colors.aquaAlpha[70],
   },
-  // Inactive (filtered-out) stage chip. A deselected chip is still interactive
-  // (tap to re-enable), so it must NOT read as a disabled control. Instead of
-  // opacity — which screen readers can't perceive and which dropped the muted
-  // label below AA (~2.7:1) — we signal "off" structurally: a recessed
-  // background + lighter border. The label keeps text.secondary (≥4.5:1) and
-  // the stage dot stays full-opacity (3:1+), so contrast never regresses.
-  filterChipOff: {
+  // Inert "Pick a set first" chip: recessed background + lighter border, with a
+  // muted label, so it reads as unavailable without relying on opacity.
+  filterChipMuted: {
     backgroundColor: t.colors.bg.primary,
     borderColor: t.colors.border.light,
   },
@@ -1410,8 +1384,13 @@ const useStyles = makeStyles((t) => ({
   filterChipTextTinted: {
     color: t.colors.accent.aqua,
   },
-  filterChipTextOff: {
-    color: t.colors.text.secondary,
+  filterChipTextMuted: {
+    color: t.colors.text.muted,
+  },
+  daysGoingLabel: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+    paddingTop: t.spacing[2],
   },
   stageDotSmall: {
     width: 10,
@@ -1433,6 +1412,16 @@ const useStyles = makeStyles((t) => ({
   stageHeaderText: {
     ...typeStyle('label'),
     color: t.colors.text.primary,
+  },
+  groupByRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    paddingTop: t.spacing[2],
+  },
+  groupByLabel: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
   },
   listContent: {
     padding: t.spacing[4],

@@ -12,22 +12,56 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: Object.assign(vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)), { subscribe: vi.fn() }),
 }));
 
-vi.mock('@festie/shared/hooks', () => ({
-  usePicks: vi.fn(() => ({
-    getMyPick: vi.fn(() => null),
-    savePick: vi.fn(),
-  })),
-  useFestival: vi.fn(() => ({
-    getStageColor: vi.fn(() => '#ccc'),
-    getStageName: vi.fn(() => 'Main Stage'),
-  })),
-}));
+// getFilteredSets runs the real shared filter against the store fixture.
+vi.mock('@festie/shared/hooks', async () => {
+  const { filterScheduleSets } = await import('@festie/shared/utils');
+  return {
+    usePicks: vi.fn(() => ({
+      getMyPick: vi.fn(() => null),
+      savePick: vi.fn(),
+    })),
+    useFestival: vi.fn(() => ({
+      getStageColor: vi.fn(() => '#ccc'),
+      getStageName: vi.fn(() => 'Main Stage'),
+      getFilteredSets: () => {
+        const st = storeState as {
+          sets: { dayIndex: number }[];
+          stages: never[];
+          selectedDay: number;
+          activeStages: string[];
+          onlyMine?: boolean;
+          searchQuery?: string;
+          currentProfile?: { picks?: Record<string, string> };
+        };
+        return filterScheduleSets(
+          st.sets.filter((x) => x.dayIndex === st.selectedDay) as never[],
+          {
+            activeStages: st.activeStages,
+            stages: st.stages,
+            onlyMine: !!st.onlyMine,
+            picks: st.currentProfile?.picks,
+            query: st.searchQuery ?? '',
+          },
+        );
+      },
+    })),
+  };
+});
 
 vi.mock('../components/ui/EmptyState', () => ({
-  default: ({ title, description }: { title: string; description?: string }) => (
+  default: ({
+    title,
+    description,
+    cta,
+  }: {
+    title: string;
+    description?: string;
+    cta?: { label: string; onClick: () => void };
+  }) => (
     <div data-testid="empty-state">
       <h3>{title}</h3>
       {description && <p>{description}</p>}
+      {cta && <button onClick={cta.onClick}>{cta.label}</button>}
     </div>
   ),
 }));
@@ -64,6 +98,10 @@ vi.mock('../components/grid/gridUtils', () => ({
 vi.mock('lucide-react', () => ({
   CalendarX: () => <span data-testid="calendar-x-icon" />,
   Clock: () => <span data-testid="clock-icon" />,
+  Filter: () => <span />,
+  Music: () => <span />,
+  SearchX: () => <span />,
+  Star: () => <span />,
 }));
 
 import GridView from './grid';
@@ -76,6 +114,13 @@ function setStoreState(overrides: Record<string, unknown> = {}) {
     stages: [{ id: 'st1', name: 'Main Stage' }],
     selectedDay: 0,
     activeStages: [],
+    days: [{ index: 0, label: 'Friday', date: '2026-06-12' }],
+    searchQuery: '',
+    onlyMine: false,
+    currentProfile: null,
+    setSearchQuery: vi.fn(),
+    setOnlyMine: vi.fn(),
+    setActiveStages: vi.fn(),
     setDetailSet: vi.fn(),
     ...overrides,
   });
@@ -120,14 +165,18 @@ describe('GridView', () => {
     expect(screen.getByText('No timed sets to display')).toBeInTheDocument();
   });
 
-  it('honours the My picks filter (onlyMine) like Timeline does', () => {
+  it('shows the picks empty state when My picks is on and no picked set matches', () => {
+    const setOnlyMine = vi.fn();
     setStoreState({
       sets: [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', endTime: '15:00', dayIndex: 0 }],
       onlyMine: true,
+      currentProfile: { picks: { other: 'must' } },
+      setOnlyMine,
     });
     render(<GridView />);
-    // getMyPick is mocked to return null, so nothing is picked and nothing shows.
-    expect(screen.getByText('No timed sets to display')).toBeInTheDocument();
+    expect(screen.getByText('No picks for this day yet')).toBeInTheDocument();
+    screen.getByText('Show all sets').click();
+    expect(setOnlyMine).toHaveBeenCalledWith(false);
   });
 
   it('renders grid with header and columns when timed sets exist', () => {

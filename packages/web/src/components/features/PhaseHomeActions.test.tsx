@@ -28,4 +28,13 @@ describe('PhaseHomeActions', () => {
     first.click();
     expect(navigate).toHaveBeenCalledWith({ to: '/map' });
   });
+
+  it('renders a dismiss button only when onDismiss is given', () => {
+    const onDismiss = vi.fn();
+    const { rerender } = render(<PhaseHomeActions phase="pre" />);
+    expect(screen.queryByRole('button', { name: 'Hide these shortcuts' })).toBeNull();
+    rerender(<PhaseHomeActions phase="pre" onDismiss={onDismiss} />);
+    screen.getByRole('button', { name: 'Hide these shortcuts' }).click();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
 });

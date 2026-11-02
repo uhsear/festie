@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useFestivalStore } from '../stores/festivalStore';
 import { FestivalSet } from '../types';
 import { STAGE_COLOR_FALLBACK } from '../utils/stageColor';
-import { setMatchesSearch } from '../utils/setSearch';
+import { filterScheduleSets } from '../utils/scheduleFilters';
 
 export interface UseFestivalReturn {
   getDays: () => { index: number; date: string; label?: string }[];
@@ -36,23 +36,17 @@ export function useFestival(): UseFestivalReturn {
     return sets.filter((s) => s.dayIndex === selectedDay);
   }, [selectedDay, days, sets]);
 
-  const getFilteredSets = useCallback(() => {
-    const daySets = getCurrentDaySets();
-
-    return daySets.filter((set) => {
-      // Legacy: only filter when SOME but NOT ALL stages are selected
-      if (activeStages.length > 0 && activeStages.length < stages.length && !activeStages.includes(set.stageId)) {
-        return false;
-      }
-
-      // "My picks only" — show just the sets the user has picked.
-      if (onlyMine && !currentProfile?.picks?.[set.id]) {
-        return false;
-      }
-
-      return setMatchesSearch(set, searchQuery, stages);
-    });
-  }, [getCurrentDaySets, activeStages, searchQuery, stages, onlyMine, currentProfile]);
+  const getFilteredSets = useCallback(
+    () =>
+      filterScheduleSets(getCurrentDaySets(), {
+        activeStages,
+        stages,
+        onlyMine,
+        picks: currentProfile?.picks,
+        query: searchQuery,
+      }),
+    [getCurrentDaySets, activeStages, searchQuery, stages, onlyMine, currentProfile],
+  );
 
   // Use actual stage.color from API response. When a stage has no color we
   // return the platform-neutral STAGE_COLOR_FALLBACK sentinel (NOT a web CSS var

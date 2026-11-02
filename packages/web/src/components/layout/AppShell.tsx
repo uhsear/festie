@@ -52,7 +52,7 @@ function RouteFallback() {
 const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan', '/festival-mode'];
 
 // Routes that keep ONLY the day toggle (Sat/Sun).
-const dayOnlySubHeaderRoutes = ['/timeline', '/grid', '/picks', '/compare'];
+const dayOnlySubHeaderRoutes = ['/picks', '/compare'];
 
 // Routes that keep ONLY the festival selector.
 const festivalOnlySubHeaderRoutes = ['/wrap'];

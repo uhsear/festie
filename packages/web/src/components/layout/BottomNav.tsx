@@ -7,6 +7,7 @@ import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { SECTION_HREF, activeSection } from './sections';
+import { useLineupHref } from '../../hooks/useLineupHref';
 
 // Per-tab chunk prefetchers. Called from onPointerDown so the tap-up navigation
 // happens with the chunk already loaded — no chunk-load pause that made the
@@ -87,6 +88,7 @@ export default function BottomNav() {
   // Picks/Crew gate in-place via GuestTeaser, and the More slot reads "Sign in"
   // and opens /login directly.
   const current = activeSection(location.pathname);
+  const lineupHref = useLineupHref();
 
   return (
     <footer
@@ -107,7 +109,7 @@ export default function BottomNav() {
     >
       <nav className="flex justify-around w-full max-md:gap-0.5" aria-label="Primary">
         {APP_SECTIONS.map((section) => {
-          const href = SECTION_HREF[section.key];
+          const href = section.key === 'lineup' ? lineupHref : SECTION_HREF[section.key];
           const isGuestTab = section.key === 'more' && !user;
           const label = isGuestTab ? GUEST_PROMPT_COPY.signIn : section.label;
           const active = current === section.key;

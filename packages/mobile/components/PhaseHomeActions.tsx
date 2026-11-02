@@ -32,6 +32,8 @@ const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
 
 interface PhaseHomeActionsProps {
   phase: FestivalPhase;
+  /** When set, a close button hides the band for this festival and phase. */
+  onDismiss?: () => void;
 }
 
 /**
@@ -45,7 +47,7 @@ interface PhaseHomeActionsProps {
  * The destination set is fixed — phase only reorders —
  * so nothing is ever hidden, only re-prioritized.
  */
-export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
+export default function PhaseHomeActions({ phase, onDismiss }: PhaseHomeActionsProps) {
   const t = useTokens();
   const styles = useStyles();
   const router = useRouter();
@@ -55,7 +57,20 @@ export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.heading}>{heading.label}</Text>
+      <View style={styles.headingRow}>
+        <Text style={styles.heading}>{heading.label}</Text>
+        {onDismiss ? (
+          <TouchableOpacity
+            style={styles.dismissButton}
+            onPress={onDismiss}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Hide these shortcuts"
+          >
+            <Ionicons name="close" size={18} color={t.colors.text.muted} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
       <Text style={styles.hint}>{heading.hint}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {order.map((key) => {
@@ -96,6 +111,18 @@ const useStyles = makeStyles((t) => ({
     // Separate the phase block from the filter controls above it.
     marginTop: t.spacing[3],
     paddingBottom: t.spacing[2],
+  },
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dismissButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    // WCAG 2.5.5 / 2.5.8 minimum 44px touch target.
+    minWidth: 44,
+    minHeight: 44,
   },
   heading: {
     // typeStyle('caption', 700) selects SpaceGrotesk_700Bold — correct cut.

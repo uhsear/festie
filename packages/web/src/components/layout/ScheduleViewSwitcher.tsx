@@ -1,5 +1,8 @@
+import { useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
 import { LayoutGrid, AlignLeft, Columns3 } from 'lucide-react';
+import { useFestivalStore } from '@festie/shared';
+import { SCHEDULE_VIEWS, isScheduleView } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
 
 /**
@@ -11,11 +14,8 @@ import { cn } from '../../lib/utils';
  * Per-tab chunk prefetchers live in BottomNav; navigating here reuses the
  * already-warmed route chunks.
  */
-const VIEWS = [
-  { key: '/cards', label: 'Cards', Icon: LayoutGrid },
-  { key: '/timeline', label: 'Timeline', Icon: AlignLeft },
-  { key: '/grid', label: 'Grid', Icon: Columns3 },
-] as const;
+const VIEW_ICON = { cards: LayoutGrid, timeline: AlignLeft, grid: Columns3 } as const;
+const VIEWS = SCHEDULE_VIEWS.map(({ key, label }) => ({ key: `/${key}` as const, label, Icon: VIEW_ICON[key] }));
 
 /** Paths the schedule switcher applies to. `/` is the cards view alias. */
 export const SCHEDULE_PATHS = ['/', '/cards', '/timeline', '/grid'] as const;
@@ -27,7 +27,16 @@ export function isSchedulePath(pathname: string): boolean {
 export default function ScheduleViewSwitcher() {
   const location = useLocation();
 
+  const scheduleView = useFestivalStore((s) => s.scheduleView);
+  const setScheduleView = useFestivalStore((s) => s.setScheduleView);
+
   const activeKey = location.pathname === '/' ? '/cards' : location.pathname;
+
+  // Remember the view the person chose. `/` is an alias nobody chose, so it is not recorded.
+  useEffect(() => {
+    const view = location.pathname.slice(1);
+    if (isScheduleView(view) && view !== scheduleView) setScheduleView(view);
+  }, [location.pathname, scheduleView, setScheduleView]);
 
   return (
     <nav

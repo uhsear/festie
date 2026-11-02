@@ -42,6 +42,7 @@ export * from './crewActivity';
 export * from './lineupImport';
 export * from './setArtists';
 export * from './navigation';
+export * from './scheduleFilters';
 export * from './authValidation';
 export * from './pushTarget';
 export * from './notificationSettings';
