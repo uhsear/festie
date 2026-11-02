@@ -39,6 +39,15 @@ describe('ChangeEmailModal', () => {
     expect(screen.getByText('Add Email')).toBeInTheDocument();
   });
 
+  it('drops the password field for a provider-only account and submits without one', async () => {
+    const user = userEvent.setup();
+    render(<ChangeEmailModal currentEmail="old@example.com" needsPassword={false} onClose={onClose} onSubmit={onSubmit} />);
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('New email'), 'new@example.com');
+    await user.click(screen.getByRole('button', { name: 'Send Verification Link' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('new@example.com', undefined));
+  });
+
   it('disables submit until both fields are filled', async () => {
     const user = userEvent.setup();
     renderModal();

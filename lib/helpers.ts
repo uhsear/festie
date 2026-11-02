@@ -103,6 +103,14 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
   const firebaseScriptSrc = config.FIREBASE_CREDENTIALS_PATH ? 'https://www.gstatic.com/firebasejs/' : '';
   const scriptParts = ["'self'", 'https://static.cloudflareinsights.com'];
   if (firebaseScriptSrc) scriptParts.push(firebaseScriptSrc);
+  // Sign-in providers (T45). Hosts are added only for a configured provider so the CSP stays
+  // as tight as before when the feature is off. Google hosts follow Google's CSP guide for
+  // Identity Services (developers.google.com/identity/gsi/web/guides/get-google-api-clientid);
+  // the Apple hosts were confirmed on staging through /api/csp-report.
+  const googleSignIn = Boolean(config.OAUTH_GOOGLE_ENABLED);
+  const appleWebSignIn = Boolean(config.OAUTH_APPLE_WEB_ENABLED);
+  if (googleSignIn) scriptParts.push('https://accounts.google.com/gsi/client');
+  if (appleWebSignIn) scriptParts.push('https://appleid.cdn-apple.com');
   scriptParts.push(...inlineHashes.script);
   const scriptSrc = scriptParts.join(' ');
   // SECURITY TRADEOFF: 'unsafe-inline' in style-src.
@@ -124,7 +132,9 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
   // Accepted because: the CSS exfiltration attack requires pre-existing HTML
   // injection which is already mitigated, and removing 'unsafe-inline' would
   // break all motion/react animations across the app.
-  const styleSrc = ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'].join(' ');
+  const styleParts = ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'];
+  if (googleSignIn) styleParts.push('https://accounts.google.com/gsi/style');
+  const styleSrc = styleParts.join(' ');
   const websocketOrigin = config.PUBLIC_ORIGIN
     ? config.PUBLIC_ORIGIN.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')
     : null;
@@ -144,6 +154,8 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
   // img-src for its raster hillshade and sprite images. Sentry's RN/web SDK
   // POSTs envelopes to *.sentry.io.
   connectParts.push('https://tiles.openfreemap.org https://*.sentry.io');
+  if (googleSignIn) connectParts.push('https://accounts.google.com/gsi/');
+  if (appleWebSignIn) connectParts.push('https://appleid.apple.com');
   const connectSrc = connectParts.join(' ');
 
   const directives = [
@@ -169,7 +181,10 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
   ];
 
   if (allowStyleAttributes) directives.push("style-src-attr 'unsafe-inline'");
-  directives.push("frame-src 'self' https://open.spotify.com");
+  const frameParts = ["'self'", 'https://open.spotify.com'];
+  if (googleSignIn) frameParts.push('https://accounts.google.com/gsi/');
+  if (appleWebSignIn) frameParts.push('https://appleid.apple.com');
+  directives.push(`frame-src ${frameParts.join(' ')}`);
   directives.push("media-src 'none'");
 
   // Auto-upgrade http→https sub-requests in production (prevents mixed-content downgrade)

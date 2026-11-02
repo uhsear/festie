@@ -36,6 +36,7 @@ import { AUTH_COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
+import ProviderButtons from '../../components/ProviderButtons';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
@@ -674,6 +675,8 @@ export default function RegisterScreen() {
           accessibilityState={{ disabled: isLoading, busy: isLoading }}
           style={styles.button}
         />
+
+        <ProviderButtons mode="signin" register />
 
         <Link href="/(auth)/login" asChild>
           <TouchableOpacity

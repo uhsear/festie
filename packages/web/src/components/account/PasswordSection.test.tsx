@@ -19,13 +19,31 @@ vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
+let mockHasPassword: boolean | undefined;
+vi.mock('../../lib/useIdentities', () => ({
+  useIdentities: () => ({ data: mockHasPassword === undefined ? undefined : { hasPassword: mockHasPassword, identities: [] } }),
+}));
+
 beforeEach(() => {
+  mockHasPassword = undefined;
   vi.clearAllMocks();
   useUIStore.setState({ offlineMode: false });
   mockChangePassword.mockResolvedValue(undefined);
 });
 
 describe('PasswordSection', () => {
+  it('renders nothing for a provider-only account', () => {
+    mockHasPassword = false;
+    render(<PasswordSection />);
+    expect(screen.queryByText('Change Password')).not.toBeInTheDocument();
+  });
+
+  it('renders for an account that has a password', () => {
+    mockHasPassword = true;
+    render(<PasswordSection />);
+    expect(screen.getByText('Change Password')).toBeInTheDocument();
+  });
+
   it('renders the Change Password heading', () => {
     render(<PasswordSection />);
     expect(screen.getByText('Change Password')).toBeInTheDocument();

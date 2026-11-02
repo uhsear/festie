@@ -56,6 +56,12 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     return;
   }
 
+  // A half-configured sign-in provider stays off and never fails boot (T45).
+  // Logged here, on the leader only, so the warning appears once per boot.
+  for (const [provider, missing] of Object.entries(config.OAUTH_CONFIG_MISSING ?? {})) {
+    if ((missing as string[]).length > 0) log.warn('oauth:config-incomplete', { provider, missing });
+  }
+
   // Session cleanup — evict expired sessions and disconnect their sockets
   const _sessionCleanupTimer = setInterval(async () => {
     try {
@@ -146,6 +152,12 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         }
       } catch (err: any) {
         log.warn('audit log cleanup failed', { error: err.message });
+      }
+      try {
+        const purged = await stores.identities.purgeExpiredStates();
+        if (purged > 0) log.info('oauth state cleanup', { purged });
+      } catch (err: any) {
+        log.warn('oauth state cleanup failed', { error: err.message });
       }
     },
     6 * 60 * 60 * 1000,

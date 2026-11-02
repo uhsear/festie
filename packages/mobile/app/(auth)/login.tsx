@@ -20,6 +20,7 @@ import { AUTH_COPY, COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
+import ProviderButtons from '../../components/ProviderButtons';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
@@ -290,6 +291,8 @@ export default function LoginScreen() {
           accessibilityState={{ disabled: isLoading, busy: isLoading }}
           style={styles.button}
         />
+
+        <ProviderButtons mode="signin" />
 
         <Link href="/(auth)/forgot-password" asChild>
           <TouchableOpacity style={styles.forgotButton} accessibilityRole="link" accessibilityLabel="Forgot password?">

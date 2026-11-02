@@ -3,8 +3,11 @@ import { Mail } from 'lucide-react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { withReauth } from '@festie/shared/services/admin';
 import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
+import { useIdentities } from '../../lib/useIdentities';
+import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import Button from '../ui/Button';
 import ChangeEmailModal from '../layout/ChangeEmailModal';
 
@@ -16,6 +19,13 @@ export default function EmailSection() {
   const offlineMode = useUIStore((s) => s.offlineMode);
   const [resending, setResending] = useState(false);
   const [showChange, setShowChange] = useState(false);
+  // A provider-only account has no password; it confirms the change with a recent re-auth instead.
+  const { data: identities } = useIdentities();
+  const providerOnly = identities?.hasPassword === false;
+  const { ask, reauthDialog } = useReauthPrompt({
+    hasPassword: !providerOnly,
+    linked: identities?.identities.map((i) => i.provider),
+  });
 
   if (!user) return null;
 
@@ -31,8 +41,11 @@ export default function EmailSection() {
     }
   };
 
-  const handleChange = async (email: string, password: string) => {
-    const message = await changeEmail(email, password);
+  const handleChange = async (email: string, password?: string) => {
+    const message = providerOnly
+      ? await withReauth(() => changeEmail(email), ask)
+      : await changeEmail(email, password);
+    if (message === null) return;
     toast(message || 'Check your new address for the verification link.', 'success');
     setShowChange(false);
     await useAuthStore.getState().checkSession();
@@ -61,8 +74,14 @@ export default function EmailSection() {
         </Button>
       </div>
       {showChange && (
-        <ChangeEmailModal currentEmail={user.email} onClose={() => setShowChange(false)} onSubmit={handleChange} />
+        <ChangeEmailModal
+          currentEmail={user.email}
+          needsPassword={!providerOnly}
+          onClose={() => setShowChange(false)}
+          onSubmit={handleChange}
+        />
       )}
+      {reauthDialog}
     </section>
   );
 }

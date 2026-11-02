@@ -16,6 +16,10 @@ import {
   CrewHandoverChoice,
   ForgotPasswordRequest,
   AvatarResponse,
+  ProviderName,
+  ProviderCredentialBody,
+  ProviderSignInResult,
+  ProviderSignupCompleteRequest,
 } from '../types';
 
 export interface AuthState {
@@ -34,6 +38,9 @@ export interface AuthState {
 export interface AuthActions {
   login: (request: LoginRequest) => Promise<{ reactivated: boolean }>;
   register: (request: RegisterRequest) => Promise<{ emailVerificationSent: boolean }>;
+  /** Neither provider action writes `error`; the caller maps the thrown error. */
+  signInWithProvider: (provider: ProviderName, body: ProviderCredentialBody) => Promise<ProviderSignInResult>;
+  completeProviderSignup: (request: ProviderSignupCompleteRequest) => Promise<{ emailVerificationSent: boolean }>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   setUser: (user: User | null) => void;
@@ -41,7 +48,8 @@ export interface AuthActions {
   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
   resetPassword: (request: { token: string; newPassword: string; confirmPassword: string }) => Promise<void>;
   resendVerification: () => Promise<void>;
-  requestEmailChange: (email: string, password: string) => Promise<string>;
+  /** `password` is omitted for a provider-only account, which confirms with a recent re-auth instead. */
+  requestEmailChange: (email: string, password?: string) => Promise<string>;
   changePassword: (request: ChangePasswordRequest) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
   deleteAccount: (password: string, crewHandover?: CrewHandoverChoice[]) => Promise<{ deletionDate: string | null }>;
@@ -50,7 +58,7 @@ export interface AuthActions {
   /** Like the other account actions below, these leave `isLoading` and `error` alone; the caller maps the thrown error. */
   updatePaymentHandles: (h: { venmoHandle: string; cashappCashtag: string; paypalHandle: string }) => Promise<User>;
   setPublicSchedule: (on: boolean) => Promise<void>;
-  changeEmail: (email: string, password: string) => Promise<string | undefined>;
+  changeEmail: (email: string, password?: string) => Promise<string | undefined>;
   setError: (error: string | null) => void;
 }
 
@@ -258,6 +266,32 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     }
   },
 
+  signInWithProvider: async (provider, body) => {
+    const response = await api.post<
+      | { status: 'signed-in'; user: User; token?: string; roles?: string[]; reactivated?: boolean }
+      | Extract<ProviderSignInResult, { status: 'needs-signup' }>
+    >(`/auth/oauth/${provider}`, body);
+    if (response.status === 'needs-signup') return response;
+    const { user, token, roles } = response;
+    if (token) setAuthToken(token);
+    const isAdmin = roles?.includes('admin') || user.isAdmin || false;
+    set({ user: { ...user, isAdmin }, userToken: token || null, isAdmin });
+    void useFestivalDataStore.getState().mergeGuestPicks().catch(() => {});
+    return { status: 'signed-in', reactivated: response.reactivated === true };
+  },
+
+  completeProviderSignup: async (request) => {
+    const response = await api.post<{ user: User; token?: string; emailVerificationSent?: boolean }>(
+      '/auth/oauth/complete',
+      request,
+    );
+    const { user, token } = response;
+    if (token) setAuthToken(token);
+    set({ user, userToken: token || null });
+    void useFestivalDataStore.getState().mergeGuestPicks().catch(() => {});
+    return { emailVerificationSent: response.emailVerificationSent ?? false };
+  },
+
   logout: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -371,7 +405,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     }
   },
 
-  requestEmailChange: async (email: string, password: string) => {
+  requestEmailChange: async (email: string, password?: string) => {
     const res = await api.post<{ message?: string }>('/account/email', { email: email.trim(), password });
     return res?.message ?? '';
   },
@@ -539,7 +573,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     }));
   },
 
-  changeEmail: async (email: string, password: string) => {
+  changeEmail: async (email: string, password?: string) => {
     const res = await api.post<{ message?: string }>('/account/email', { email, password });
     return res?.message;
   },

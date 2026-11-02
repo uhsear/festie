@@ -9,6 +9,8 @@ import {
 } from '@festie/shared/stores';
 import type { CrewMember } from '@festie/shared/types';
 import { crewCopy, ownedCrewsForDeletion, type OwnedCrewHandover } from '@festie/shared/utils';
+import { api, withReauth } from '@festie/shared/services';
+import { useReauthPrompt } from './admin';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -16,6 +18,8 @@ interface AccountDangerSectionProps {
   /** Called after a successful delete (store + token already cleared) so the
    *  screen can route to login. */
   onDeleted: () => void;
+  /** false = provider-only account. The Account screen passes true while loading or after a failed load. */
+  hasPassword: boolean;
 }
 
 /**
@@ -32,8 +36,11 @@ interface AccountDangerSectionProps {
  * Flow: expand the danger row → enter the account password → a double-confirm
  * Alert spells out the 30-day window → on confirm we call deleteAccount.
  * A wrong password surfaces inline (server returns PASSWORD_INCORRECT / 403).
+ *
+ * A provider-only account has no password: the field is hidden and the delete runs through
+ * withReauth, so the user confirms with Google or Apple first (DELETE /account/ with no password).
  */
-export default function AccountDangerSection({ onDeleted }: AccountDangerSectionProps) {
+export default function AccountDangerSection({ onDeleted, hasPassword }: AccountDangerSectionProps) {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
@@ -41,6 +48,8 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
   const user = useAuthStore((s) => s.user);
   const crews = useCrewStore((s) => s.crews);
   const loadCrews = useCrewStore((s) => s.loadCrews);
+
+  const { ask, reauthDialog } = useReauthPrompt();
 
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -82,7 +91,7 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
     ]);
 
   const confirmDelete = () => {
-    if (!password) {
+    if (hasPassword && !password) {
       setError('Enter your password to confirm.');
       return;
     }
@@ -106,10 +115,19 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
     setSubmitting(true);
     setError(null);
     try {
-      const { deletionDate } = await deleteAccount(
-        password,
-        handover.map((h) => ({ crewId: h.crew.id, newOwnerId: ownerFor(h) })),
-      );
+      const crewHandover = handover.map((h) => ({ crewId: h.crew.id, newOwnerId: ownerFor(h) }));
+      let deletionDate: string | null;
+      if (hasPassword) {
+        ({ deletionDate } = await deleteAccount(password, crewHandover));
+      } else {
+        const res = await withReauth(
+          () => api.delete<{ deletionDate?: string | null }>('/account/', { body: crewHandover.length ? { crewHandover } : {} }),
+          ask,
+        );
+        if (res === null) return;
+        await useAuthStore.getState().logout();
+        deletionDate = res?.deletionDate ?? null;
+      }
       // deleteAccount → logout already cleared token + reset stores.
       Alert.alert('Account deletion scheduled', accountDeletionNotice(deletionDate));
       onDeleted();
@@ -180,6 +198,7 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
           ) : null}
           {soloCount > 0 ? <Text style={styles.calloutText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteSolo(soloCount)}</Text> : null}
 
+          {hasPassword ? (
           <TextInput
             style={styles.input}
             value={password}
@@ -195,6 +214,7 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
             onSubmitEditing={confirmDelete}
             accessibilityLabel="Account password to confirm deletion"
           />
+          ) : null}
 
           {error ? (
             <Text style={styles.error} accessibilityLiveRegion="polite">
@@ -222,6 +242,7 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
           </TouchableOpacity>
         </View>
       ) : null}
+      {reauthDialog}
     </View>
   );
 }

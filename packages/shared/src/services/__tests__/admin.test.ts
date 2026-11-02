@@ -70,6 +70,16 @@ describe('withReauth', () => {
     expect(init.body).toBe(JSON.stringify({ password: 'pw' }));
   });
 
+  it('posts a provider body as-is', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(200, { data: { reauthUntil: 'x' }, error: null }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const run = vi.fn().mockRejectedValueOnce(reauthErr()).mockResolvedValueOnce('done');
+    const body = { provider: 'google' as const, idToken: 'tok'.repeat(10), nonce: 'n'.repeat(20) };
+    expect(await withReauth(run, async () => body)).toBe('done');
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.body).toBe(JSON.stringify(body));
+  });
+
   it('returns null on cancel', async () => {
     const run = vi.fn().mockRejectedValue(reauthErr());
     expect(await withReauth(run, async () => null)).toBeNull();

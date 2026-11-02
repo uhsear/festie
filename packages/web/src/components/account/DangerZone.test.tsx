@@ -35,8 +35,29 @@ vi.mock('@festie/shared/services/api', () => ({
     (err as { code?: string }).code ? (err as Error).message : fallback,
 }));
 
+let mockHasPassword: boolean | undefined;
+vi.mock('../../lib/useIdentities', () => ({
+  useIdentities: () => ({ data: mockHasPassword === undefined ? undefined : { hasPassword: mockHasPassword, identities: [] } }),
+}));
+const mockAsk = vi.fn();
+vi.mock('../../lib/useReauthPrompt', () => ({
+  useReauthPrompt: () => ({ ask: mockAsk, reauthDialog: null }),
+}));
+vi.mock('@festie/shared/services/admin', () => ({
+  withReauth: async (run: () => Promise<unknown>, ask: () => Promise<unknown>) => {
+    try {
+      return await run();
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'REAUTH_REQUIRED') throw err;
+    }
+    if ((await ask()) === null) return null;
+    return run();
+  },
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockHasPassword = undefined;
   mockCrews = [];
   mockLoadCrews.mockResolvedValue(undefined);
 });
@@ -80,6 +101,25 @@ describe('DangerZone', () => {
     await user.type(screen.getByPlaceholderText('Password'), 'mypass123');
 
     expect(screen.getByText('Confirm Delete').closest('button')).not.toBeDisabled();
+  });
+
+  it('shows no password field for a provider-only account and re-auths before deleting', async () => {
+    const user = userEvent.setup();
+    mockHasPassword = false;
+    mockAsk.mockResolvedValue({ provider: 'google', idToken: 'x'.repeat(30) });
+    mockDeleteAccount
+      .mockRejectedValueOnce(Object.assign(new Error('Confirm it is you'), { code: 'REAUTH_REQUIRED' }))
+      .mockResolvedValueOnce({ deletionDate: '30 November 2026' });
+
+    render(<DangerZone />);
+    await user.click(screen.getByText('Delete My Account'));
+    expect(screen.queryByPlaceholderText('Password')).not.toBeInTheDocument();
+    expect(screen.getByText('Confirm Delete').closest('button')).not.toBeDisabled();
+    await user.click(screen.getByText('Confirm Delete'));
+
+    await waitFor(() => expect(mockDeleteAccount).toHaveBeenCalledTimes(2));
+    expect(mockAsk).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
   });
 
   it('hides confirmation and clears password on Cancel', async () => {

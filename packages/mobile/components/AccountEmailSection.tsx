@@ -4,8 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { isValidEmail } from '@festie/shared/utils';
-import { mapErrorToUserMessage } from '@festie/shared/services';
+import { mapErrorToUserMessage, withReauth } from '@festie/shared/services';
 import Button from './Button';
+import { useReauthPrompt } from './admin';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -15,13 +16,17 @@ import { useHaptics } from '../hooks/useHaptics';
  * Calls authStore.requestEmailChange (POST /account/email). The server mails a
  * link to the new address; the login email changes only when that link opens,
  * so the user object here stays the same after a successful send.
+ *
+ * A provider-only account (hasPassword false) has no password field: the request runs
+ * through withReauth, so the user confirms with Google or Apple instead.
  */
-export default function AccountEmailSection() {
+export default function AccountEmailSection({ hasPassword }: { hasPassword: boolean }) {
   const t = useTokens();
   const offlineMode = useUIStore((s) => s.offlineMode);
   const styles = useStyles();
   const haptics = useHaptics();
   const user = useAuthStore((s) => s.user);
+  const { ask, reauthDialog } = useReauthPrompt();
 
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -45,7 +50,7 @@ export default function AccountEmailSection() {
     const clean = email.trim();
     if (!isValidEmail(clean)) return ACCOUNT_COPY.emailInvalid;
     if (current && clean.toLowerCase() === current.toLowerCase()) return ACCOUNT_COPY.emailSame;
-    if (!password) return ACCOUNT_COPY.emailPasswordRequired;
+    if (hasPassword && !password) return ACCOUNT_COPY.emailPasswordRequired;
     return null;
   };
 
@@ -60,7 +65,9 @@ export default function AccountEmailSection() {
     setSubmitting(true);
     setError(null);
     try {
-      await useAuthStore.getState().requestEmailChange(clean, password);
+      const send = () => useAuthStore.getState().requestEmailChange(clean, hasPassword ? password : undefined);
+      const done = hasPassword ? await send() : await withReauth(send, ask);
+      if (done === null) return;
       haptics.success();
       setEmail('');
       setPassword('');
@@ -123,26 +130,28 @@ export default function AccountEmailSection() {
             textContentType="emailAddress"
             editable={!submitting}
             accessibilityLabel={ACCOUNT_COPY.emailNewLabel}
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            blurOnSubmit={false}
+            returnKeyType={hasPassword ? 'next' : 'go'}
+            onSubmitEditing={() => (hasPassword ? passwordRef.current?.focus() : void submit())}
+            blurOnSubmit={!hasPassword}
           />
-          <TextInput
-            ref={passwordRef}
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder={ACCOUNT_COPY.emailCurrentPasswordLabel}
-            placeholderTextColor={t.colors.text.placeholder}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="current-password"
-            textContentType="password"
-            editable={!submitting}
-            accessibilityLabel={ACCOUNT_COPY.emailCurrentPasswordLabel}
-            returnKeyType="go"
-            onSubmitEditing={() => void submit()}
-          />
+          {hasPassword ? (
+            <TextInput
+              ref={passwordRef}
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder={ACCOUNT_COPY.emailCurrentPasswordLabel}
+              placeholderTextColor={t.colors.text.placeholder}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="current-password"
+              textContentType="password"
+              editable={!submitting}
+              accessibilityLabel={ACCOUNT_COPY.emailCurrentPasswordLabel}
+              returnKeyType="go"
+              onSubmitEditing={() => void submit()}
+            />
+          ) : null}
           <Text style={styles.rowHint}>{ACCOUNT_COPY.emailExplainer}</Text>
 
           {error ? (
@@ -154,6 +163,7 @@ export default function AccountEmailSection() {
           <Button label={ACCOUNT_COPY.emailSendLink} onPress={() => void submit()} loading={submitting} disabled={offlineMode} />
         </View>
       ) : null}
+      {reauthDialog}
     </View>
   );
 }

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 import { AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED } from '../lib/db/stores/audit.js';
+import { revokeAppleForUser } from '../lib/oauth/revoke-user.js';
 
 /**
  * Admin user/role management routes
@@ -452,6 +453,10 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         // Verify user exists before proceeding
         const existingUser = await getUserById(targetUserId);
         if (!existingUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+
+        // Apple requires the revoke on delete. It runs first because the hard delete
+        // cascades the identity rows away. Best effort: it never throws.
+        await revokeAppleForUser(targetUserId, deps);
 
         // Delete profiles first — to capture them for socket cleanup
         const removedProfiles = await stores.profiles.deleteByUserId(targetUserId);

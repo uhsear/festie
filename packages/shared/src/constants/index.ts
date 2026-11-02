@@ -7,3 +7,4 @@ export * from './copy';
 export * from './accountSettings';
 export * from './accountCopy';
 export * from './announcementCopy';
+export * from './providerCopy';

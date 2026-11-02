@@ -165,7 +165,11 @@ function configureMiddleware(app: Application, ctx: any) {
       // COEP disabled to allow cross-origin image/CDN embeds (Spotify, FCM, avatars). Revisit with 'credentialless' mode if isolation needed.
       crossOriginEmbedderPolicy: false,
       // Cross-origin isolation (safe defaults; avatars/Spotify/FCM are either same-origin or loaded as images/iframes, not fetched credentialed)
-      crossOriginOpenerPolicy: { policy: 'same-origin' },
+      // Google and Apple sign-in popups need window.opener back to Festie, so allow popups only when one is
+      // enabled at boot. Embedding stays blocked by frame-ancestors 'none'.
+      crossOriginOpenerPolicy: {
+        policy: config.OAUTH_GOOGLE_ENABLED || config.OAUTH_APPLE_WEB_ENABLED ? 'same-origin-allow-popups' : 'same-origin',
+      },
       crossOriginResourcePolicy: { policy: 'same-origin' },
       originAgentCluster: true,
       referrerPolicy: { policy: 'no-referrer' },

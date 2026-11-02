@@ -28,6 +28,9 @@ vi.mock('../components/account/ProfileSection', () => ({
 vi.mock('../components/account/PasswordSection', () => ({
   default: () => <div data-testid="password-section" />,
 }));
+vi.mock('../components/account/SignInMethodsSection', () => ({
+  default: () => <div data-testid="sign-in-methods" />,
+}));
 vi.mock('../components/account/NotificationSection', () => ({
   default: () => <div data-testid="notification-section" />,
 }));

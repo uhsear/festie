@@ -68,28 +68,70 @@ export function isAtLeastYearsOld(iso: string, years: number): boolean {
 export const SIGNUP_REF_PATTERN = /^[a-z0-9_-]{1,40}$/;
 const signupRef = z.string().trim().toLowerCase().regex(SIGNUP_REF_PATTERN).optional().catch(undefined);
 
+const dateOfBirth = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter your date of birth')
+  .refine((s) => !Number.isNaN(Date.parse(s)), 'Invalid date of birth');
+const tosAccepted = z.literal(true, { error: 'You must accept the Terms of Service' });
+const adultRule = {
+  message: 'You must be at least 18 to use Festie',
+  path: ['dateOfBirth'],
+};
+
 export const registerSchema = z
   .object({
     username,
     password,
     confirmPassword: z.string(),
     email: email.optional(),
-    dateOfBirth: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter your date of birth')
-      .refine((s) => !Number.isNaN(Date.parse(s)), 'Invalid date of birth'),
-    tosAccepted: z.literal(true, { error: 'You must accept the Terms of Service' }),
+    dateOfBirth,
+    tosAccepted,
     ref: signupRef,
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: 'Passwords do not match',
     path: ['confirmPassword'],
   })
-  .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), {
-    message: 'You must be at least 18 to use Festie',
-    path: ['dateOfBirth'],
-  });
+  .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
 export type RegisterInput = z.infer<typeof registerSchema>;
+
+// ── Sign in with Google and Apple (T45) ──
+const providerName = z.enum(['google', 'apple']);
+const idToken = z.string().min(20).max(4096);
+const oauthNonce = z.string().min(16).max(128).optional();
+const authorizationCode = z.string().max(512).optional(); // Apple only
+
+export const oauthProviderParams = z.object({ provider: providerName });
+
+export const oauthSignInSchema = z.object({
+  idToken,
+  nonce: oauthNonce,
+  authorizationCode,
+  redirectUri: z.string().url().max(300).optional(), // Apple web code exchange
+  name: z
+    .object({ givenName: z.string().max(50).optional(), familyName: z.string().max(50).optional() })
+    .optional(),
+});
+export type OAuthSignInInput = z.infer<typeof oauthSignInSchema>;
+
+// /register minus the password: the provider is the sign-in method.
+export const oauthCompleteSchema = z
+  .object({
+    signupToken: z.string().min(20).max(128),
+    username,
+    dateOfBirth,
+    tosAccepted,
+  })
+  .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
+export type OAuthCompleteInput = z.infer<typeof oauthCompleteSchema>;
+
+export const setPasswordSchema = z
+  .object({ newPassword: password, confirmPassword: z.string() })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+export type SetPasswordInput = z.infer<typeof setPasswordSchema>;
 
 export const loginSchema = z.object({
   username: z.string().trim().min(1, 'Username or email required').max(254),
@@ -255,16 +297,19 @@ export const publicScheduleSchema = z.object({
 export type PublicScheduleInput = z.infer<typeof publicScheduleSchema>;
 
 export const accountDeleteSchema = z.object({
-  password: z.string().min(1, 'Password confirmation required'),
+  // Optional: a provider-only account has no password and confirms with a recent re-auth.
+  password: z.string().min(1, 'Password confirmation required').optional(),
   // Who takes over each crew the account owns. Optional: the server picks the
   // earliest-joined active member when a choice is missing or invalid.
   crewHandover: z.array(z.object({ crewId: identifier, newOwnerId: identifier })).max(50).optional(),
 });
 export type AccountDeleteInput = z.infer<typeof accountDeleteSchema>;
 
-export const reauthSchema = z.object({
-  password: z.string().min(1).max(200),
-});
+// A password, or a fresh token from a linked Google or Apple account.
+export const reauthSchema = z.union([
+  z.object({ password: z.string().min(1).max(200) }),
+  z.object({ provider: providerName, idToken, nonce: oauthNonce, authorizationCode }),
+]);
 export type ReauthInput = z.infer<typeof reauthSchema>;
 
 export const forgotPasswordSchema = z.object({
@@ -274,7 +319,8 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 
 export const updateEmailSchema = z.object({
   email: z.string().email('Valid email required').max(254),
-  password: z.string().min(1, 'Password confirmation required'),
+  // Optional: a provider-only account has no password and confirms with a recent re-auth.
+  password: z.string().min(1, 'Password confirmation required').optional(),
 });
 export type UpdateEmailInput = z.infer<typeof updateEmailSchema>;
 
@@ -1505,6 +1551,10 @@ export const schemas = {
   publicSchedule: publicScheduleSchema,
   accountDelete: accountDeleteSchema,
   reauth: reauthSchema,
+  oauthSignIn: oauthSignInSchema,
+  oauthComplete: oauthCompleteSchema,
+  oauthProviderParams,
+  setPassword: setPasswordSchema,
   topicSubscription: topicSubscriptionSchema,
   festivalCreate: festivalCreateSchema,
   festivalUpdate: festivalUpdateSchema,
