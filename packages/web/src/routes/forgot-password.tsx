@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useSearch } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { AUTH_COPY } from '@festie/shared/constants';
 import AuthBrand from '../components/auth/AuthBrand';
-import { useToast } from '../lib/toastContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { CheckCircle } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 export default function ForgotPasswordPage() {
   return (
@@ -20,7 +19,7 @@ export default function ForgotPasswordPage() {
 
 function ForgotPasswordPageInner() {
   const { forgotPassword, isLoading } = useAuth();
-  const { toast } = useToast();
+  const { expired } = useSearch({ from: '/forgot-password' });
 
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -55,7 +54,6 @@ function ForgotPasswordPageInner() {
     try {
       await forgotPassword({ email });
       setSubmitted(true);
-      toast('Password reset link sent to your email', 'success');
     } catch (err) {
       // Read the thrown error, not the hook's `error`, which is still the value
       // from before the request failed.
@@ -67,26 +65,22 @@ function ForgotPasswordPageInner() {
   return (
     <div className="flex flex-col items-center px-4 py-12">
       <div className="w-full max-w-sm">
-        {/* Logo — matches Header (FESTIE all-caps, display font)
-           and /login + /register Tailwind logo heading. */}
-        <div className="text-center mb-8 flex flex-col items-center">
-          <AuthBrand />
-          <h1
-            className={cn(
-              'font-display text-[clamp(22px,5vw,36px)] font-bold tracking-[6px] uppercase',
-              'text-accent-coral mb-3 relative z-[1]',
-              )}
+        <AuthBrand subtitle={AUTH_COPY.resetTitle} />
+
+        {expired && !submitted && (
+          <div
+            role="status"
+            className="mb-4 p-3 bg-bg-card border border-border rounded-lg text-sm text-text-primary text-left"
           >
-            FESTIE
-          </h1>
-          <p className="text-text-muted">Reset your password</p>
-        </div>
+            {AUTH_COPY.resetLinkExpired}
+          </div>
+        )}
 
         {!submitted ? (
           // Form
-          <form onSubmit={handleSubmit} className="bg-bg-card border border-border rounded-lg p-6 space-y-4">
+          <form onSubmit={handleSubmit} className="bg-bg-card border border-border rounded-lg p-6 space-y-4 text-left">
             <Input
-              label="Email Address"
+              label={AUTH_COPY.emailLabel}
               name="email"
               type="email"
               value={email}
@@ -104,7 +98,7 @@ function ForgotPasswordPageInner() {
             )}
 
             <Button type="submit" variant="primary" fullWidth isLoading={isLoading} disabled={isLoading}>
-              Send Reset Link
+              {AUTH_COPY.sendResetLink}
             </Button>
           </form>
         ) : (
@@ -120,24 +114,35 @@ function ForgotPasswordPageInner() {
 
             <div>
               <h2 className="text-lg font-semibold text-text-primary mb-2">Check your email</h2>
-              <p className="text-text-muted text-sm mb-4">
-                We've sent a password reset link to <strong>{email}</strong>
-              </p>
-              <p className="text-text-muted text-xs">
-                The link will expire in 1 hour. If you don't see it, check your spam folder.
-              </p>
+              <p className="text-text-muted text-sm mb-4">{AUTH_COPY.forgotSent(email)}</p>
+              <p className="text-text-muted text-xs">{AUTH_COPY.forgotSentHint}</p>
             </div>
 
             <Button variant="secondary" fullWidth onClick={() => setSubmitted(false)}>
-              Try a different email
+              {AUTH_COPY.useDifferentEmail}
             </Button>
           </div>
         )}
 
+        <p className="mt-4 text-center text-xs text-text-muted">
+          {AUTH_COPY.noEmailHint.split(AUTH_COPY.supportEmail).map((part, i) =>
+            i === 0 ? (
+              <React.Fragment key={i}>
+                {part}
+                <a href={`mailto:${AUTH_COPY.supportEmail}`} className="text-accent-aqua underline underline-offset-2">
+                  {AUTH_COPY.supportEmail}
+                </a>
+              </React.Fragment>
+            ) : (
+              part
+            ),
+          )}
+        </p>
+
         {/* Back to login */}
         <div className="mt-6 text-center">
           <Link to="/login" className="text-sm text-accent-aqua hover:opacity-75 transition-opacity">
-            Back to sign in
+            {AUTH_COPY.backToSignIn}
           </Link>
         </div>
       </div>

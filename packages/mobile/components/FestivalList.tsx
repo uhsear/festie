@@ -3,8 +3,9 @@ import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl } fr
 import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
+import { FESTIVAL_STATUS_LABEL } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
-import { formatFestivalDateRange, festivalStatus, type FestivalStatus } from '@festie/shared/utils';
+import { formatFestivalDateRange, festivalStatus, sortFestivalsForPicker, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
@@ -18,11 +19,11 @@ function statusBadge(status: FestivalStatus | null): { label: string; bg: string
   // onLightAccent is the token-documented AA-safe pair for aqua fills.
   switch (status) {
     case 'ongoing':
-      return { label: 'Live', bg: 'aqua', fg: 'onLightAccent' };
+      return { label: FESTIVAL_STATUS_LABEL.ongoing, bg: 'aqua', fg: 'onLightAccent' };
     case 'upcoming':
-      return { label: 'Upcoming', bg: 'secondary', fg: 'aqua' };
+      return { label: FESTIVAL_STATUS_LABEL.upcoming, bg: 'secondary', fg: 'aqua' };
     case 'past':
-      return { label: 'Past', bg: 'secondary', fg: 'muted' };
+      return { label: FESTIVAL_STATUS_LABEL.past, bg: 'secondary', fg: 'muted' };
     default:
       return null;
   }
@@ -269,24 +270,7 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const haptics = useHaptics();
 
-  // Order: live first, then upcoming (soonest first), then past (most recent
-  // first), so the festivals a user is most likely choosing sit at the top.
-  const sortedFestivals = useMemo(() => {
-    // Pre-compute status + sort rank per festival ONCE, then sort by the cached
-    // rank instead of re-deriving festivalStatus on every comparison (O(n) vs
-    // O(n log n) calls).
-    const ranked = festivals.map((f) => {
-      const s = festivalStatus(f);
-      const r = s === 'ongoing' ? 0 : s === 'past' ? 2 : 1;
-      return { f, r, start: f.startDate || '' };
-    });
-    ranked.sort((a, b) => {
-      if (a.r !== b.r) return a.r - b.r;
-      // ISO date strings sort lexicographically. Past = most recent first.
-      return a.r === 2 ? b.start.localeCompare(a.start) : a.start.localeCompare(b.start);
-    });
-    return ranked.map(({ f }) => f);
-  }, [festivals]);
+  const sortedFestivals = useMemo(() => sortFestivalsForPicker(festivals), [festivals]);
 
   const handleRefresh = useCallback(() => {
     loadFestivals().catch(() => {});

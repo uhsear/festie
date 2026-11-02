@@ -18,13 +18,13 @@ vi.mock('lucide-react', () => ({
   List: () => <span data-testid="list-icon" />,
   // 055: daily-recurrence toggle + badge.
   Repeat: () => <span data-testid="repeat-icon" />,
-  // Meeting-point category icons (replaced emoji).
-  Tent: () => <span data-testid="tent-icon" />,
-  Crosshair: () => <span data-testid="crosshair-icon" />,
+  // Meeting-point kind icons, via CONCEPT_ICON (lib/conceptIcons.ts, which imports all eight).
   Flag: () => <span data-testid="flag-icon" />,
-  Moon: () => <span data-testid="moon-icon" />,
   AlertTriangle: () => <span data-testid="alert-triangle-icon" />,
-  Bookmark: () => <span data-testid="bookmark-icon" />,
+  Home: () => <span data-testid="home-icon" />,
+  Gift: () => <span data-testid="gift-icon" />,
+  ListChecks: () => <span data-testid="list-checks-icon" />,
+  Zap: () => <span data-testid="zap-icon" />,
   Clock: () => <span data-testid="clock-icon" />,
   // CrewStatus (rendered by MeetingPointsTab) pulls these too.
   LocateFixed: () => <span data-testid="locate-fixed-icon" />,
@@ -184,6 +184,20 @@ describe('MeetingPointsTab', () => {
   it('links to the full map page', () => {
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     expect(screen.getByRole('link', { name: 'Open full map' })).toHaveAttribute('href', '/map');
+  });
+
+  it('offers exactly two kinds: Meet-up and Emergency spot', async () => {
+    const user = userEvent.setup();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getAllByRole('button', { name: /add meeting point/i })[0]!);
+    expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['Meet-up', 'Emergency spot']);
+  });
+
+  it('shows a legacy pre-show point as Meet-up', () => {
+    setQuery({ data: [{ ...POINT, type: 'pre-show' }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText('Meet-up')).toBeInTheDocument();
+    expect(screen.queryByText(/pre-show/i)).not.toBeInTheDocument();
   });
 
   it('leaving the tab keeps sharing, so the full-map link carries no stop-sharing note', () => {

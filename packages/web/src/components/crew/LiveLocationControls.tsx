@@ -174,7 +174,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
             </p>
             <p id="live-share-desc" className="text-xs text-text-muted">
               {lowPowerMode
-                ? 'Paused by low-power mode to save battery. Turn it off in Festival Mode to share.'
+                ? 'Paused by low-power mode to save battery. Turn it off in Now & Next to share.'
                 : `Ephemeral and crew-only. Keeps running on other pages and auto-stops after ${SESSION_MINUTES} min.`}
             </p>
           </div>

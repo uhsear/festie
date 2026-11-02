@@ -51,7 +51,7 @@ function setState({
 
 /** Open the modal so the body (QR / messaging) renders into the portal. */
 function open() {
-  fireEvent.click(screen.getByRole('button', { name: 'Share plan as QR code' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Share your picks by QR code' }));
 }
 
 describe('PlanQRShare', () => {
@@ -63,7 +63,7 @@ describe('PlanQRShare', () => {
 
   it('renders the trigger button', () => {
     render(<PlanQRShare />);
-    expect(screen.getByRole('button', { name: 'Share plan as QR code' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share your picks by QR code' })).toBeInTheDocument();
   });
 
   it('encodes a scannable snapshot and renders it as a QR given picks', () => {

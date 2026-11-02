@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@festie/shared/services';
+import { ratingCaption } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import { useHaptics } from '../../hooks/useHaptics';
 import { RATING_META, RATING_SCALE } from '../../lib/ratingIcon';
@@ -121,34 +122,54 @@ export default function RatingButtons({ setId, festivalId, compact = false }: Pr
   const iconSize = compact ? 'w-4 h-4' : 'w-5 h-5';
 
   return (
-    <div
-      className={cn('flex items-center justify-center gap-1', compact && 'scale-90 origin-left')}
-      role="radiogroup"
-      aria-label="Rate this set"
-    >
-      {RATINGS.map((r) => {
-        const active = current === r.n;
-        return (
-          <button
-            key={r.n}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            aria-label={`${r.label} (${r.n}/5)`}
-            title={r.label}
-            disabled={busy}
-            onClick={() => handleClick(r.n)}
-            className={cn(
-              'w-11 h-11 rounded-full flex items-center justify-center transition-[background-color,box-shadow,transform]',
-              active
-                ? 'bg-accent-amber/25 scale-110 shadow-[0_0_12px_theme(colors.accent-amber/40)] ring-2 ring-accent-amber/60 text-accent-amber'
-                : 'bg-bg-card/60 border border-border hover:border-border-light text-text-secondary',
-            )}
-          >
-            <r.Icon className={iconSize} aria-hidden="true" />
-          </button>
-        );
-      })}
+    <div>
+      <div
+        className={cn('flex items-start justify-center gap-2', compact && 'scale-90 origin-left')}
+        role="radiogroup"
+        aria-label="Rate this set"
+      >
+        {RATINGS.map((r) => {
+          const active = current === r.n;
+          return (
+            <div key={r.n} className="flex flex-col items-center gap-1">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={active}
+                aria-label={`${r.label} (${r.n} of 5)`}
+                disabled={busy}
+                onClick={() => handleClick(r.n)}
+                className={cn(
+                  'w-11 h-11 rounded-full flex items-center justify-center transition-[background-color,box-shadow,transform]',
+                  active
+                    ? 'bg-accent-amber/25 scale-110 shadow-[0_0_12px_theme(colors.accent-amber/40)] ring-2 ring-accent-amber/60 text-accent-amber'
+                    : 'bg-bg-card/60 border border-border hover:border-border-light text-text-secondary',
+                )}
+              >
+                <r.Icon className={iconSize} aria-hidden="true" />
+              </button>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'text-[10px] font-semibold',
+                  active ? 'text-accent-amber' : 'text-text-secondary',
+                )}
+              >
+                {r.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p
+        aria-hidden="true"
+        className={cn(
+          'mt-2 text-center text-xs',
+          current != null ? 'text-accent-amber' : 'text-text-muted',
+        )}
+      >
+        {ratingCaption(current)}
+      </p>
     </div>
   );
 }

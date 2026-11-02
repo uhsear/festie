@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { LayoutGrid, AlignLeft, Columns3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -26,7 +26,6 @@ export function isSchedulePath(pathname: string): boolean {
 
 export default function ScheduleViewSwitcher() {
   const location = useLocation();
-  const navigate = useNavigate();
 
   const activeKey = location.pathname === '/' ? '/cards' : location.pathname;
 
@@ -39,18 +38,16 @@ export default function ScheduleViewSwitcher() {
       )}
       aria-label="Schedule view"
     >
-      <div className="flex gap-1 p-1 rounded-full bg-bg-secondary" role="group">
+      <div className="flex gap-1 p-1 rounded-full bg-bg-secondary">
         {VIEWS.map(({ key, label, Icon }) => {
           const active = key === activeKey;
           return (
-            <button
+            <Link
               key={key}
-              type="button"
+              to={key}
               aria-current={active ? 'page' : undefined}
-              aria-label={`${label} view`}
-              onClick={() => navigate({ to: key })}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-[length:var(--font-size-14)] font-semibold',
+                'inline-flex no-underline items-center gap-1.5 rounded-full px-3.5 min-h-11 text-[length:var(--font-size-14)] font-semibold',
                 'cursor-pointer transition-colors duration-[var(--duration-med)] ease-[var(--ease-out)]',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
                 '[&_svg]:w-4 [&_svg]:h-4',
@@ -61,7 +58,7 @@ export default function ScheduleViewSwitcher() {
             >
               <Icon aria-hidden="true" />
               <span>{label}</span>
-            </button>
+            </Link>
           );
         })}
       </div>

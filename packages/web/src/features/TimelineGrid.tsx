@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { FestivalSet, Priority, Stage, Profile, Festival } from '@festie/shared/types';
+import { FestivalSet, Priority, Stage, Festival } from '@festie/shared/types';
 import { setMinuteRange } from '@festie/shared/utils';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { cn } from '../lib/utils';
@@ -116,7 +116,7 @@ export interface TimelineGridProps {
   vpW: number;
   nowIndicator: number | null;
   conflictIds: Set<string>;
-  currentProfile: Profile | null;
+  canPick: boolean;
   currentFestival: Festival | null;
   gridRef: React.RefObject<HTMLDivElement | null>;
   getMyPick: (setId: string) => Priority | null | undefined;
@@ -135,7 +135,7 @@ export default function TimelineGrid({
   vpW,
   nowIndicator,
   conflictIds,
-  currentProfile,
+  canPick,
   currentFestival,
   gridRef,
   getMyPick,
@@ -260,7 +260,7 @@ export default function TimelineGrid({
               myPick={getMyPick(s.id)}
               others={othersBySet.get(s.id) ?? EMPTY_OTHERS}
               hasConflict={conflictIds.has(s.id)}
-              hasProfile={!!currentProfile}
+              canPick={canPick}
               festival={currentFestival}
               onSetClick={onSetClick}
               onSavePick={onSavePick}

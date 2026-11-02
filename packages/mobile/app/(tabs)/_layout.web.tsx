@@ -3,6 +3,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fontSize, spacing } from '@festie/shared/tokens';
 import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
+import { useAuthStore } from '@festie/shared/stores';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { useTokens } from '../../hooks/useTokens';
 
@@ -22,6 +24,7 @@ const TAB_ROUTES: Record<AppSectionKey, { name: string; icon: keyof typeof Ionic
 
 export default function TabLayoutWeb() {
   useRealtimeSync();
+  const user = useAuthStore((s) => s.user);
   const { colors } = useTokens();
   const insets = useSafeAreaInsets();
   const tabBarBottomInset = Math.max(insets.bottom, spacing[1]);
@@ -50,7 +53,7 @@ export default function TabLayoutWeb() {
             key={key}
             name={name}
             options={{
-              title: label,
+              title: key === 'more' && !user ? GUEST_PROMPT_COPY.signIn : label,
               tabBarIcon: ({ color, size }) => <Ionicons name={icon} size={size} color={color as string} />,
             }}
           />

@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, festivalStartMinutes } from '@festie/shared/utils';
 import { AlertTriangle } from 'lucide-react';
+import { clashPromptCopy } from '@festie/shared/constants';
 import Button from '../ui/Button';
 
 interface Props {
@@ -97,12 +98,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
         const at = overlapStartLabel(currentSet, c);
         // Both sides a must-see → escalate to an explicit conflict.
         const hard = getPriority?.(currentSet.id) === 'must' && getPriority?.(c.id) === 'must';
-        const title = hard
-          ? `You have a conflict${at ? ` at ${at}` : ''}: keep one`
-          : `2 acts${at ? ` at ${at}` : ''}: keep one`;
-        const body = hard
-          ? `Both ${currentName} and ${otherName} are must-sees but overlap. Keep one and we'll clear the other.`
-          : `${currentName} and ${otherName} overlap. Keep one and we'll clear the other.`;
+        const { title, body } = clashPromptCopy({ hard, at, currentName, otherName });
         return (
           <div
             key={c.id}

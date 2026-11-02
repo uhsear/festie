@@ -23,8 +23,8 @@ describe('t3 schedule and picks list source guards', () => {
 
   it('SetCardMobile announces a saving or queued pick', () => {
     const src = read('components/SetCardMobile.tsx');
-    expect(src).toContain(', waiting to sync');
-    expect(src).toContain(', saving');
+    expect(src).toContain('waiting to sync');
+    expect(src).toContain("'waiting to sync' : 'saving'");
   });
 
   it('FestivalList reports a finished selection', () => {

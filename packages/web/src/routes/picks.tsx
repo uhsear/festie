@@ -5,6 +5,7 @@ import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
+import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import {
   formatTime,
   byStartTime,
@@ -41,10 +42,20 @@ const PRIORITY_SECTIONS: Array<{
   accent: string;
   badge: 'must' | 'want' | 'maybe';
 }> = [
-  { value: 'must', label: 'Must See', accent: 'var(--color-priority-must)', badge: 'must' },
-  { value: 'want-to-see', label: 'Want to See', accent: 'var(--color-priority-want)', badge: 'want' },
-  { value: 'maybe', label: 'Maybe', accent: 'var(--color-priority-maybe)', badge: 'maybe' },
+  { value: 'must', label: PRIORITY_SYMBOLS['must'].label, accent: 'var(--color-priority-must)', badge: 'must' },
+  { value: 'want-to-see', label: PRIORITY_SYMBOLS['want-to-see'].label, accent: 'var(--color-priority-want)', badge: 'want' },
+  { value: 'maybe', label: PRIORITY_SYMBOLS['maybe'].label, accent: 'var(--color-priority-maybe)', badge: 'maybe' },
 ];
+
+// Renders the real priority glyph inline so the hint text and the icon cannot drift apart.
+function PickHint({ pri, word, tail }: { pri: Priority; word: string; tail: string }) {
+  return (
+    <>
+      Tap <PriorityIcon priority={pri} className="inline w-3 h-3 align-[-2px]" />
+      <span className="sr-only"> {word}</span> {tail}
+    </>
+  );
+}
 
 function PicksViewInner() {
   const navigate = useNavigate();
@@ -219,8 +230,8 @@ function PicksViewInner() {
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
         <EmptyState
           icon={<UserPlus className="w-9 h-9" aria-hidden="true" />}
-          title="Join this festival first"
-          description="Open the Schedule tab and tap Join festival to start saving picks."
+          title="No picks yet"
+          description="Tap Must See, Want to See or Maybe on any set to start your plan. Your first pick joins the festival."
           cta={{ label: 'Browse Artists', onClick: () => navigate({ to: '/cards' }) }}
         />
       </div>
@@ -312,11 +323,13 @@ function PicksViewInner() {
                 // broken/stuck UI once the user already had picks in another
                 // bucket. The header + 0 badge above already signals "empty".
                 <p className="px-1 py-1 text-xs text-text-muted">
-                  {pri === 'must'
-                    ? 'Tap the star on any set to mark it as must-see.'
-                    : pri === 'want-to-see'
-                      ? "Tap the diamond on sets you'd like to catch."
-                      : "Tap the circle on sets you're considering."}
+                  {pri === 'must' ? (
+                    <PickHint pri={pri} word="the star" tail="on any set to mark it as Must See." />
+                  ) : pri === 'want-to-see' ? (
+                    <PickHint pri={pri} word="the heart" tail="on sets you'd like to catch." />
+                  ) : (
+                    <PickHint pri={pri} word="the circle" tail="on sets you're considering." />
+                  )}
                 </p>
               )}
             </div>
@@ -329,8 +342,11 @@ function PicksViewInner() {
 
 export default function PicksView() {
   return (
-    <RenderErrorBoundary name="picks">
-      <PicksViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">My picks</h1>
+      <RenderErrorBoundary name="picks">
+        <PicksViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }

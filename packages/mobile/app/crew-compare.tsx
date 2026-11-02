@@ -7,7 +7,7 @@ import { useAuthStore, useFestivalStore, useUIStore } from '@festie/shared/store
 import { useActiveCrew, useCrewCompare, useCrewFestival, useFestival, usePicks } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { artistDisplayName, formatTime } from '@festie/shared/utils';
-import { PRIORITY_LABEL } from '@festie/shared/constants';
+import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
@@ -86,7 +86,7 @@ export default function CrewCompareScreen() {
   if (!user) {
     return (
       <Wrapper>
-        <EmptyState icon="lock-closed" title="Sign in required" message="Log in to compare schedules." />
+        <EmptyState icon="lock-closed" title={COPY.auth.signInRequired} message={signInTo('compare schedules')} />
       </Wrapper>
     );
   }

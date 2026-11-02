@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import type { Artist } from '@festie/shared/types';
 import SetEditor, { SetRow, Stage } from './SetEditor';
 
 export interface Day {
@@ -11,6 +12,7 @@ export interface Day {
 export interface DayEditorProps {
   day: Day;
   stages: Stage[];
+  separator?: string;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onLabelChange: (value: string) => void;
@@ -19,6 +21,7 @@ export interface DayEditorProps {
   onAddSet: () => void;
   onRemoveSet: (setId: string) => void;
   onSetField: (setId: string, field: string, value: string | null) => void;
+  onSetArtists: (setId: string, artists: Artist[]) => void;
 }
 
 /**
@@ -27,6 +30,7 @@ export interface DayEditorProps {
 export default function DayEditor({
   day,
   stages,
+  separator,
   isExpanded,
   onToggleExpand,
   onLabelChange,
@@ -35,6 +39,7 @@ export default function DayEditor({
   onAddSet,
   onRemoveSet,
   onSetField,
+  onSetArtists,
 }: DayEditorProps) {
   const setCount = (day.sets || []).length;
 
@@ -87,7 +92,7 @@ export default function DayEditor({
         <div className="border-t border-glass-border p-3 space-y-2">
           {setCount === 0 ? (
             <p className="text-xs text-text-muted italic">
-              No artists yet. Click "Add Artist" to add one, or use the Import Lineup tab.
+              No artists yet. Click "Add Artist" to add one, or use Import on the festival list.
             </p>
           ) : (
             <div className="space-y-2">
@@ -104,6 +109,8 @@ export default function DayEditor({
                   set={s}
                   dayLabel={day.label}
                   stages={stages}
+                  separator={separator}
+                  onSetArtists={(artists) => onSetArtists(s.id, artists)}
                   onField={(field, value) => onSetField(s.id, field, value)}
                   onRemove={() => onRemoveSet(s.id)}
                 />

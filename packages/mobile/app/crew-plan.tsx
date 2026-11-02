@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewFestival, useCrewHub, useFestival, usePicks } from '@festie/shared/hooks';
 import { artistDisplayName, formatTime, memberSummary, timeAgo } from '@festie/shared/utils';
-import { PRIORITY_LABEL } from '@festie/shared/constants';
+import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { priorityIconName } from '../lib/prioritySymbol';
@@ -45,7 +45,7 @@ export default function CrewPlanScreen() {
   );
 
   if (!user) {
-    return gate(<EmptyState icon="lock-closed" title="Sign in required" message="Log in to see your crew's plan." />);
+    return gate(<EmptyState icon="lock-closed" title={COPY.auth.signInRequired} message={signInTo("see your crew's plan")} />);
   }
   if (status === 'loading') return gate(<LoadingState label="Loading your crew…" />);
   if (status === 'error') {
@@ -142,7 +142,7 @@ export default function CrewPlanScreen() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="home" size={iconSize.action} color={t.colors.accent.aqua} />
-            <Text style={styles.cardTitle}>Home base</Text>
+            <Text style={styles.cardTitle}>{COPY.homeBase.name}</Text>
           </View>
           {crew.homeBaseLocation || crew.homeBaseTime ? (
             <View style={styles.cardBody}>
@@ -151,11 +151,11 @@ export default function CrewPlanScreen() {
             </View>
           ) : hub.isOwner ? (
             <>
-              <Text style={styles.emptyLine}>No home base yet.</Text>
-              <Button label="Set home base" variant="secondary" size="sm" onPress={() => openCrewTab('find')} />
+              <Text style={styles.emptyLine}>No Home Base yet.</Text>
+              <Button label={COPY.homeBase.set} variant="secondary" size="sm" onPress={() => openCrewTab('find')} />
             </>
           ) : (
-            <Text style={styles.emptyLine}>{`No home base yet. Ask ${hub.ownerName ?? 'the crew owner'} to set one.`}</Text>
+            <Text style={styles.emptyLine}>{`No Home Base yet. Ask ${hub.ownerName ?? 'the crew owner'} to set one.`}</Text>
           )}
         </View>
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { FestivalSet, Priority, Festival } from '@festie/shared/types';
 import { fmtShort, artistDisplayName } from '@festie/shared/utils';
 import { AlertTriangle } from 'lucide-react';
-import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
+import { PRIORITY_SYMBOLS, COPY } from '@festie/shared/constants';
 import { cn } from '../lib/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
 
@@ -31,7 +31,7 @@ export interface TimelineGridCellProps {
   myPick: Priority | null | undefined;
   others: Array<{ profileId: string; priority: Priority; name?: string }>;
   hasConflict: boolean;
-  hasProfile: boolean;
+  canPick: boolean;
   festival: Festival | null;
   onSetClick: (set: FestivalSet) => void;
   onSavePick: (setId: string, priority: string | null) => void;
@@ -48,7 +48,7 @@ function TimelineGridCell({
   myPick,
   others,
   hasConflict,
-  hasProfile,
+  canPick,
   festival,
   onSetClick,
   onSavePick,
@@ -117,7 +117,7 @@ function TimelineGridCell({
             'pointer-events-none z-[2]',
           )}
           aria-hidden="true"
-          title="Schedule conflict with another of your picks"
+          title={COPY.clash.gridHint}
         >
           <AlertTriangle className="w-3 h-3" aria-hidden="true" />
         </span>
@@ -166,7 +166,7 @@ function TimelineGridCell({
       </button>
 
       {/* Priority pick buttons */}
-      {hasProfile && !isShort && blockPx >= 60 && (
+      {canPick && !isShort && blockPx >= 60 && (
         <div className="flex gap-[var(--space-1)] mt-0.5">
           {PICK_BUTTONS.map((p) => {
             const active = myPick === p;
@@ -199,7 +199,7 @@ function TimelineGridCell({
                 )}
                 type="button"
                 aria-pressed={active ? 'true' : 'false'}
-                aria-label={pickLabel(p) + (active ? ' (selected)' : '')}
+                aria-label={pickLabel(p)}
                 title={pickLabel(p)}
                 onClick={(e) => {
                   e.preventDefault();

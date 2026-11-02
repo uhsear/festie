@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import DisplayWords from './DisplayWords';
+import AppPressable from './AppPressable';
 
 /**
  * Signals whether a full-width chrome banner (OfflineBanner) is currently
@@ -29,6 +30,10 @@ interface ScreenHeaderProps {
   right?: ReactNode;
   /** Optional Ionicons name rendered before the title. */
   icon?: keyof typeof Ionicons.glyphMap;
+  /** Makes the title a button (shows a chevron). */
+  onTitlePress?: () => void;
+  /** Spoken name of the title button; used only with `onTitlePress`. */
+  titleAccessibilityLabel?: string;
 }
 
 /**
@@ -53,13 +58,35 @@ interface ScreenHeaderProps {
  *   geometry is different from a card push and the sheet is dismissed by
  *   swipe-down, not a back chevron.
  */
-export default function ScreenHeader({ title, subtitle, right, icon }: ScreenHeaderProps) {
+export default function ScreenHeader({
+  title,
+  subtitle,
+  right,
+  icon,
+  onTitlePress,
+  titleAccessibilityLabel,
+}: ScreenHeaderProps) {
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   // When an in-flow chrome banner already cleared the notch above us, drop our
   // own top inset so the title doesn't sit below a second insets.top dead gap.
   const bannerActive = useContext(TopBannerContext);
+  const titleText = (
+    <Text
+      style={styles.title}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      // Floor the shrink at 70% so very long names stay legible instead of
+      // collapsing to an unreadable size (pairs with adjustsFontSizeToFit).
+      minimumFontScale={0.7}
+      maxFontSizeMultiplier={MAX_FONT_SCALE}
+      // The title button owns the name when the title is pressable.
+      accessibilityRole={onTitlePress ? undefined : 'header'}
+    >
+      <DisplayWords text={title} fontSize={styles.title.fontSize} />
+    </Text>
+  );
   return (
     <View style={[styles.row, { paddingTop: (bannerActive ? 0 : insets.top) + t.spacing[4] }]}>
       {icon ? (
@@ -80,18 +107,19 @@ export default function ScreenHeader({ title, subtitle, right, icon }: ScreenHea
             maxFontSizeMultiplier caps Dynamic Type at 1.4× so the heading
             doesn't overflow the header row at AX sizes; body/notes text in
             the screen body is left uncapped to scale fully (F12). */}
-        <Text
-          style={styles.title}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          // Floor the shrink at 70% so very long names stay legible instead of
-          // collapsing to an unreadable size (pairs with adjustsFontSizeToFit).
-          minimumFontScale={0.7}
-          maxFontSizeMultiplier={MAX_FONT_SCALE}
-          accessibilityRole="header"
-        >
-          <DisplayWords text={title} fontSize={styles.title.fontSize} />
-        </Text>
+        {onTitlePress ? (
+          <AppPressable
+            onPress={onTitlePress}
+            accessibilityRole="button"
+            accessibilityLabel={titleAccessibilityLabel}
+            style={styles.titleButton}
+          >
+            <View style={styles.titleButtonText}>{titleText}</View>
+            <Ionicons name="chevron-down" size={18} color={t.colors.text.secondary} />
+          </AppPressable>
+        ) : (
+          titleText
+        )}
         {subtitle ? (
           <Text style={styles.subtitle} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {subtitle}
@@ -125,6 +153,15 @@ const useStyles = makeStyles((t) => ({
     // the smaller text on Android).
     lineHeight: undefined,
     color: t.colors.text.primary,
+  },
+  titleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
+    minHeight: 44,
+  },
+  titleButtonText: {
+    flexShrink: 1,
   },
   subtitle: {
     ...typeStyle('caption'),

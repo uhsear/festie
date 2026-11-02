@@ -11,6 +11,7 @@ let mockPathname = '/cards';
 vi.mock('@tanstack/react-router', () => ({
   useLocation: vi.fn(() => ({ pathname: mockPathname })),
   useNavigate: vi.fn(() => mockNavigate),
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => <a href={to}>{children}</a>,
   Outlet: () => <div data-testid="outlet">Route content</div>,
 }));
 
@@ -102,6 +103,11 @@ describe('AppShell', () => {
     const skipLink = screen.getByText('Skip to main content');
     expect(skipLink).toBeInTheDocument();
     expect(skipLink).toHaveAttribute('href', '#main-content');
+  });
+
+  it('renders a polite route announcer region', () => {
+    render(<AppShell />);
+    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
   });
 
   it('renders the main content area with correct id', () => {
