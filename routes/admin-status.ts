@@ -19,10 +19,15 @@ export default function createAdminStatusRoutes(deps: any): { router: Router } {
     express,
     adminAuth, setNoStore,
     getUsers: _getUsers, getFestivals, getProfiles, io, stores, state, pool,
-    sendSuccess, sendError, ErrorCodes, log,
+    sendSuccess, sendError, ErrorCodes, log, config,
   } = deps;
 
   const router = express.Router();
+
+  router.get('/admin/env', adminAuth, (_req: any, res: any) => {
+    setNoStore(res);
+    return sendSuccess(res, { label: config.FESTIE_ENV_LABEL || null });
+  });
 
   // Strict nonce-based CSP for HTML routes served from this module. Replaces
   // an earlier per-route CSP that whitelisted 'unsafe-inline' and silently

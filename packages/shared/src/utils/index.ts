@@ -41,6 +41,7 @@ export * from './saveStatus';
 export * from './crewActivity';
 export * from './lineupImport';
 export * from './setArtists';
+export * from './festivalAdmin';
 export * from './navigation';
 export * from './authValidation';
 export * from './pushTarget';

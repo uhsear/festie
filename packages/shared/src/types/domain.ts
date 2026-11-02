@@ -80,6 +80,8 @@ export interface Festival {
   endDate: string;
   location?: string;
   b2bSeparator?: string;
+  /** null = draft, visible to admins only. */
+  publishedAt?: string | null;
   /**
    * Optional IANA time-zone id (e.g. `America/New_York`). When present, set
    * reminders are anchored in the festival's zone so they fire at the right

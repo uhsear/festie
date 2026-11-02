@@ -198,6 +198,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
           }
         }
         if (deps.invalidateFestivalListCache) deps.invalidateFestivalListCache();
+        deps.invalidateFestivalCache?.();
         if (stores.auditLog) {
           await stores.auditLog.insert({
             actorType: 'admin',

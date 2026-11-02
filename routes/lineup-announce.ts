@@ -24,6 +24,7 @@ export default function createLineupAnnounceRoute(deps: any) {
     sendError,
     ErrorCodes,
     stores,
+    getFestivalById,
     getRequestIp,
     reengagement,
     reengagementExecutor,
@@ -48,6 +49,11 @@ export default function createLineupAnnounceRoute(deps: any) {
     try {
       const festivalId = sanitizeIdentifier(req.params.id, 100);
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
+      const festival = await getFestivalById(festivalId);
+      if (festival && !festival.publishedAt) {
+        // The push deep-links to the festival, which attendees cannot open while it is a draft.
+        return sendError(res, 409, 'Publish the festival before you announce its lineup.', ErrorCodes.INVALID_INPUT);
+      }
       const { festivalName, recipients } = await reengagementExecutor.countLineupDrop(festivalId);
       if (!festivalName) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       if (recipients === 0) {

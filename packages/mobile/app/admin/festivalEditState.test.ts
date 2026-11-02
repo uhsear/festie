@@ -9,6 +9,9 @@ import {
   setDayField,
   toggleDay,
   addSet,
+  prependSet,
+  sortFormSets,
+  shiftDaySets,
   removeSet,
   setSetField,
   setSetArtistNames,
@@ -188,5 +191,51 @@ describe('setSetArtistNames', () => {
     expect(next.days[0].sets[0].artist).toBe('A vs C');
     next = setSetArtistNames(next, 'd1', 's1', spliced, ['A', 'C', 'D']);
     expect(next.days[0].sets[0].artists[2]).toEqual({ name: 'D', links: {} });
+  });
+});
+
+describe('prependSet', () => {
+  it('puts the set first in that day only', () => {
+    const f = form({
+      days: [day({ id: 'd1', sets: [set({ id: 'a' })] }), day({ id: 'd2', sets: [set({ id: 'b' })] })],
+    });
+    const next = prependSet(f, 'd1', set({ id: 'new' }));
+    expect(next.days[0].sets.map((s) => s.id)).toEqual(['new', 'a']);
+    expect(next.days[1]).toBe(f.days[1]);
+  });
+});
+
+describe('sortFormSets', () => {
+  it('sorts by stage order, then start, with 01:00 after 23:00', () => {
+    const f = form({
+      stages: [stage({ id: 'main' }), stage({ id: 'tent' })],
+      days: [
+        day({
+          id: 'd1',
+          sets: [
+            set({ id: 't1', stageId: 'tent', startTime: '20:00' }),
+            set({ id: 'm3', stageId: 'main', startTime: '01:00' }),
+            set({ id: 'm2', stageId: 'main', startTime: '23:00' }),
+            set({ id: 'm1', stageId: 'main', startTime: '18:00' }),
+          ],
+        }),
+      ],
+    });
+    expect(sortFormSets(f).days[0].sets.map((s) => s.id)).toEqual(['m1', 'm2', 'm3', 't1']);
+  });
+});
+
+describe('shiftDaySets', () => {
+  it('shifts the listed sets, returns the counts and leaves other days alone', () => {
+    const f = form({
+      days: [
+        day({ id: 'd1', sets: [set({ id: 'a', startTime: '22:00', endTime: '23:00' }), set({ id: 'b', startTime: '' })] }),
+        day({ id: 'd2', sets: [set({ id: 'a', startTime: '22:00' })] }),
+      ],
+    });
+    const { form: next, result } = shiftDaySets(f, 'd1', ['a', 'b'], 30);
+    expect(next.days[0].sets[0]).toMatchObject({ startTime: '22:30', endTime: '23:30' });
+    expect(result).toEqual({ shifted: 1, skipped: 1, crossedDayStart: 0 });
+    expect(next.days[1]).toBe(f.days[1]);
   });
 });

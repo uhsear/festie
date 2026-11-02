@@ -9,6 +9,10 @@ vi.mock('../../lib/toastContext', () => ({
 }));
 vi.mock('./LineupImport', () => ({ default: () => null }));
 vi.mock('./FestivalMapEditor', () => ({ default: () => null }));
+vi.mock('./FestivalStatusPanel', () => ({ default: () => null }));
+vi.mock('../../lib/useUnsavedChangesGuard', () => ({
+  useUnsavedChangesGuard: () => ({ confirmLeave: (fn: () => void) => fn(), guardDialog: null }),
+}));
 vi.mock('./FestivalEditForm', () => ({
   default: ({ onSave }: { onSave: () => void }) => <button onClick={onSave}>save form</button>,
 }));

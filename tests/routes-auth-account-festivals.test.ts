@@ -94,8 +94,8 @@ function makeMockDeps(overrides: any = {}) {
     createOpaqueId: mock.fn(() => 'opaque-123'),
     serializePublicUser: mock.fn((u: any) => ({ id: u.id, username: u.username })),
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
-    sendError: (res: any, status: any, msg: any, code: any) =>
-      res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
+    sendError: (res: any, status: any, msg: any, code: any, details: any = null) =>
+      res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR', ...details } }),
     ErrorCodes: {
       INVALID_INPUT: 'INVALID_INPUT',
       NOT_FOUND: 'NOT_FOUND',
@@ -114,6 +114,7 @@ function makeMockDeps(overrides: any = {}) {
       REAUTH_REQUIRED: 'REAUTH_REQUIRED',
       CONFIRM_REMOVALS: 'CONFIRM_REMOVALS',
       FESTIVAL_CHANGED: 'FESTIVAL_CHANGED',
+      PUBLISH_BLOCKED: 'PUBLISH_BLOCKED',
     },
     rateLimit: () => (_req: any, _res: any, next: any) => next(),
     io: { to: () => ({ emit: () => {} }), sockets: { sockets: new Map() } },
@@ -204,7 +205,8 @@ function makeMockDeps(overrides: any = {}) {
     // festivals.js deps
     getFestivals: mock.fn(async () => []),
     getFestivalById: mock.fn(async () => null),
-    validateFestival: mock.fn(() => []),
+    validateFestivalIssues: mock.fn(() => []),
+    publishChecklist: mock.fn(() => []),
     sanitizeFestivalPayload: mock.fn((input) => ({
       id: input.id || 'fest-1',
       name: input.name || 'Test Fest',
@@ -236,6 +238,19 @@ function createApp(router: any, prefix = '') {
   const app = express();
   app.use(express.json());
   app.use(prefix, router);
+  return app;
+}
+
+// The /admin/festivals mount: adminAuth there sets req.isAdmin before the router runs.
+function createAdminApp(router: any) {
+  const app = express();
+  app.use(express.json());
+  app.use((req: any, _res: any, next: any) => {
+    req.isAdmin = true;
+    req.user = { userId: 'admin-1' };
+    next();
+  });
+  app.use(router);
   return app;
 }
 
@@ -1328,8 +1343,8 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
     test('returns list of festivals', async () => {
       const deps = makeMockDeps({
         getFestivals: mock.fn(async () => [
-          { id: 'f-1', name: 'Fest One', location: 'Here', stages: [1, 2], days: [1], createdAt: '2026-01-01' },
-          { id: 'f-2', name: 'Fest Two', location: 'There', stages: [], days: [1, 2, 3], createdAt: '2026-01-02' },
+          { id: 'f-1', name: 'Fest One', location: 'Here', stages: [1, 2], days: [1], createdAt: '2026-01-01', publishedAt: '2026-01-01T00:00:00.000Z' },
+          { id: 'f-2', name: 'Fest Two', location: 'There', stages: [], days: [1, 2, 3], createdAt: '2026-01-02', publishedAt: '2026-01-01T00:00:00.000Z' },
         ]),
       });
       const router = createFestivalsRoutes(deps);
@@ -1345,7 +1360,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
     });
 
     test('returns 304 for matching ETag', async () => {
-      const festivals = [{ id: 'f-1', name: 'Fest', location: 'Here', stages: [], days: [], createdAt: '2026-01-01' }];
+      const festivals = [{ id: 'f-1', name: 'Fest', location: 'Here', stages: [], days: [], createdAt: '2026-01-01', publishedAt: '2026-01-01T00:00:00.000Z' }];
       const deps = makeMockDeps({
         getFestivals: mock.fn(async () => festivals),
       });
@@ -1360,6 +1375,28 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       const second = await request(app).get('/').set('If-None-Match', etag);
 
       assert.equal(second.status, 304);
+    });
+
+    test('lists drafts for admins only, and keeps the public item shape', async () => {
+      const deps = makeMockDeps({
+        getFestivals: mock.fn(async () => [
+          { id: 'f-pub', name: 'Live', location: '', stages: [], days: [], updatedAt: '2026-01-02', publishedAt: '2026-01-01' },
+          { id: 'f-draft', name: 'Draft', location: '', stages: [], days: [], updatedAt: '2026-01-03', publishedAt: null },
+        ]),
+      });
+      const router = createFestivalsRoutes(deps);
+
+      const pub = await request(createApp(router)).get('/');
+      assert.deepEqual(pub.body.data.map((f: any) => f.id), ['f-pub']);
+      assert.equal('published' in pub.body.data[0], false);
+      assert.equal('updatedAt' in pub.body.data[0], false);
+
+      const admin = await request(createAdminApp(router)).get('/');
+      assert.deepEqual(
+        admin.body.data.map((f: any) => [f.id, f.published, f.updatedAt]),
+        [['f-pub', true, '2026-01-02'], ['f-draft', false, '2026-01-03']],
+      );
+      assert.notEqual(admin.headers.etag, pub.headers.etag);
     });
 
     test('returns 500 on internal error', async () => {
@@ -1385,6 +1422,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
         id: 'f-1',
         name: 'Big Fest',
         location: 'Miami',
+        publishedAt: '2026-01-01T00:00:00.000Z',
         stages: [{ id: 's-1', name: 'Main', color: '#ff0000' }],
         days: [{ label: 'Day 1', date: '2026-03-01', sets: [] }],
       };
@@ -1416,6 +1454,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
         ],
         createdAt: '2026-01-01',
         updatedAt: '2026-01-01',
+        publishedAt: '2026-01-01T00:00:00.000Z',
       };
       const deps = makeMockDeps({
         getFestivalById: mock.fn(async () => festival),
@@ -1430,6 +1469,33 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       assert.equal(res.body.data.id, 'f-1');
       assert.equal(res.body.data.stages.length, 1);
       assert.equal(res.body.data.days[0].sets[0].artist, 'DJ X');
+    });
+
+    test('a draft is 404 on the public detail and the basemap', async () => {
+      const deps = makeMockDeps({
+        getFestivalById: mock.fn(async () => ({ id: 'f-d', name: 'Draft', publishedAt: null, stages: [], days: [] })),
+      });
+      const app = createApp(createFestivalsRoutes(deps));
+
+      assert.equal((await request(app).get('/f-d')).status, 404);
+      assert.equal((await request(app).get('/f-d?depth=1')).status, 404);
+      assert.equal((await request(app).get('/f-d/basemap')).status, 404);
+    });
+
+    test('admin detail adds publishedAt, the editor name and the checklist', async () => {
+      const checklist = [{ key: 'timeZone', status: 'todo', label: "Choose the festival's time zone." }];
+      const deps = makeMockDeps({
+        getFestivalById: mock.fn(async () => ({ id: 'f-d', name: 'Draft', publishedAt: null, stages: [], days: [] })),
+        publishChecklist: mock.fn(() => checklist),
+        getUserById: mock.fn(async () => ({ id: 'admin-1', username: 'asir' })),
+        stores: { festivals: { getEditor: mock.fn(async () => 'admin-1') } },
+      });
+      const res = await request(createAdminApp(createFestivalsRoutes(deps))).get('/f-d');
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.publishedAt, null);
+      assert.equal(res.body.data.updatedByUsername, 'asir');
+      assert.deepEqual(res.body.data.checklist, checklist);
     });
 
     test('returns 404 when festival not found', async () => {
@@ -1486,13 +1552,22 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
 
       assert.equal(res.status, 201);
       assert.equal(res.body.error, null);
+      assert.equal(res.body.data.publishedAt, null);
       assert.equal(createFn.mock.calls.length, 1);
-      assert.equal(deps.emitter.festivalCreated.mock.calls.length, 1);
+      const created = (createFn.mock.calls[0] as any).arguments[0];
+      assert.equal(created.publishedAt, null);
+      assert.equal(created.updatedBy, 'admin-1');
+      // A draft is announced only when it is published.
+      assert.equal(deps.emitter.festivalCreated.mock.calls.length, 0);
     });
 
-    test('returns 400 when validation fails', async () => {
+    test('returns 400 with structured issues when validation fails', async () => {
+      const issues = [
+        { code: 'name_required', message: 'Festival name is required', target: { kind: 'festival', field: 'name' } },
+        { code: 'stage_name_required', message: 'Every stage requires a name', target: { kind: 'stage', field: 'name', stageIndex: 0 } },
+      ];
       const deps = makeMockDeps({
-        validateFestival: mock.fn(() => ['Name is required']),
+        validateFestivalIssues: mock.fn(() => issues),
       });
       const router = createFestivalsRoutes(deps);
       const app = createApp(router);
@@ -1501,7 +1576,8 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
 
       assert.equal(res.status, 400);
       assert.equal(res.body.error.code, 'INVALID_INPUT');
-      assert.match(res.body.error.message, /Name is required/);
+      assert.equal(res.body.error.message, 'Festival name is required (and 1 more)');
+      assert.deepEqual(res.body.error.issues, issues);
     });
 
     test('returns 500 on internal error', async () => {
@@ -1532,7 +1608,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
   // ── PUT /:id (update festival) ────────────────────────────────────
   describe('PUT /:id', () => {
     test('updates festival successfully', async () => {
-      const existingFestival = { id: 'f-1', name: 'Old Name', location: 'Old Place' };
+      const existingFestival = { id: 'f-1', name: 'Old Name', location: 'Old Place', publishedAt: '2026-01-01T00:00:00.000Z' };
       const updateFn = mock.fn(async (id, data) => ({ id, ...data }));
       const deps = makeMockDeps({
         getFestivalById: mock.fn(async () => existingFestival),
@@ -1553,6 +1629,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
       assert.equal(updateFn.mock.calls.length, 1);
+      assert.equal((updateFn.mock.calls[0] as any).arguments[1].updatedBy, 'admin-1');
       assert.equal(deps.emitter.festivalUpdated.mock.calls.length, 1);
       assert.deepEqual(res.body.data.scheduleNotice, { changes: 0, people: 0, notified: false });
       assert.equal(deps.emitter.scheduleChanged.mock.calls.length, 0);
@@ -1613,6 +1690,16 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       });
     });
 
+    test('a draft save emits no festival:updated', async () => {
+      const deps = makeMockDeps({
+        getFestivalById: mock.fn(async () => ({ id: 'f-d', name: 'Draft', location: 'X', publishedAt: null })),
+      });
+      const res = await request(createApp(createFestivalsRoutes(deps))).put('/f-d').send({ name: 'Draft 2', location: 'X' });
+
+      assert.equal(res.status, 200);
+      assert.equal(deps.emitter.festivalUpdated.mock.calls.length, 0);
+    });
+
     test('returns 404 when festival not found', async () => {
       const deps = makeMockDeps({
         getFestivalById: mock.fn(async () => null),
@@ -1629,7 +1716,9 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
     test('returns 400 when validation fails', async () => {
       const deps = makeMockDeps({
         getFestivalById: mock.fn(async () => ({ id: 'f-1', name: 'Fest' })),
-        validateFestival: mock.fn(() => ['Invalid stage count']),
+        validateFestivalIssues: mock.fn(() => [
+          { code: 'max_stages', message: 'Maximum 50 stages', target: { kind: 'festival' } },
+        ]),
       });
       const router = createFestivalsRoutes(deps);
       const app = createApp(router);
@@ -1638,6 +1727,82 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
 
       assert.equal(res.status, 400);
       assert.equal(res.body.error.code, 'INVALID_INPUT');
+      assert.equal(res.body.error.message, 'Maximum 50 stages');
+      assert.equal(res.body.error.issues[0].code, 'max_stages');
+    });
+  });
+
+  // ── POST /:id/publish and /:id/restore ────────────────────────────
+  describe('POST /:id/publish', () => {
+    const draft = { id: 'f-d', name: 'Draft', publishedAt: null, stages: [], days: [] };
+
+    test('a todo item blocks publish with 409 and the checklist', async () => {
+      const checklist = [{ key: 'timeZone', status: 'todo', label: "Choose the festival's time zone." }];
+      const publishFn = mock.fn(async () => ({ publishedAt: 'now' }));
+      const deps = makeMockDeps({
+        getFestivalById: mock.fn(async () => draft),
+        publishChecklist: mock.fn(() => checklist),
+        stores: { festivals: { publish: publishFn } },
+      });
+      const res = await request(createAdminApp(createFestivalsRoutes(deps))).post('/f-d/publish');
+
+      assert.equal(res.status, 409);
+      assert.equal(res.body.error.code, 'PUBLISH_BLOCKED');
+      assert.equal(res.body.error.message, 'Finish the checklist before you publish.');
+      assert.deepEqual(res.body.error.checklist, checklist);
+      assert.equal(publishFn.mock.calls.length, 0);
+    });
+
+    test('publishes when only warnings remain, and announces the festival', async () => {
+      const checklist = [{ key: 'pins', status: 'warn', label: '1 stage(s) have no map pin' }];
+      const publishFn = mock.fn(async () => ({ publishedAt: '2026-11-01T00:00:00.000Z' }));
+      const deps = makeMockDeps({
+        getFestivalById: mock.fn(async () => draft),
+        publishChecklist: mock.fn(() => checklist),
+        stores: { festivals: { publish: publishFn } },
+      });
+      const res = await request(createAdminApp(createFestivalsRoutes(deps))).post('/f-d/publish');
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body.data, { publishedAt: '2026-11-01T00:00:00.000Z', checklist });
+      assert.deepEqual((publishFn.mock.calls[0] as any).arguments, ['f-d', 'admin-1']);
+      assert.deepEqual((deps.emitter.festivalCreated.mock.calls[0] as any).arguments[0], { id: 'f-d', name: 'Draft' });
+    });
+
+    test('an already published festival returns its publishedAt with no event', async () => {
+      const publishFn = mock.fn(async () => null);
+      const deps = makeMockDeps({
+        getFestivalById: mock.fn(async () => ({ ...draft, publishedAt: '2026-01-01T00:00:00.000Z' })),
+        stores: { festivals: { publish: publishFn } },
+      });
+      const res = await request(createAdminApp(createFestivalsRoutes(deps))).post('/f-d/publish');
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.publishedAt, '2026-01-01T00:00:00.000Z');
+      assert.equal(publishFn.mock.calls.length, 0);
+      assert.equal(deps.emitter.festivalCreated.mock.calls.length, 0);
+    });
+  });
+
+  describe('POST /:id/restore', () => {
+    test('restores an archived draft without announcing it', async () => {
+      const deps = makeMockDeps({
+        getFestivalById: mock.fn(async () => ({ id: 'f-d', name: 'Draft' })),
+        stores: { festivals: { restore: mock.fn(async () => ({ id: 'f-d', publishedAt: null })) } },
+      });
+      const res = await request(createAdminApp(createFestivalsRoutes(deps))).post('/f-d/restore');
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body.data, { id: 'f-d', published: false });
+      assert.equal(deps.emitter.festivalCreated.mock.calls.length, 0);
+    });
+
+    test('a festival not in Archived is 404', async () => {
+      const deps = makeMockDeps({ stores: { festivals: { restore: mock.fn(async () => null) } } });
+      const res = await request(createAdminApp(createFestivalsRoutes(deps))).post('/f-1/restore');
+
+      assert.equal(res.status, 404);
+      assert.equal(res.body.error.message, 'This festival is not in Archived.');
     });
   });
 

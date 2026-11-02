@@ -1,29 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '@festie/shared/services/api';
 import { describeRemovals, removalFromError, withReauth } from '@festie/shared/services/admin';
+import {
+  fetchAdminFestival,
+  fetchAdminFestivals,
+  fetchArchivedFestivals,
+  fetchDeleteImpact,
+  issuesFromError,
+  restoreFestival,
+} from '@festie/shared/services/festivalAdmin';
+import type { AdminFestivalSummary, ArchivedFestival } from '@festie/shared/services/festivalAdmin';
+import { countFestivalChanges, describeDeleteImpact, sortLineup, timeAgo } from '@festie/shared/utils';
+import type { EditableFestival, FestivalIssue } from '@festie/shared/utils';
 import { describeScheduleNotice, type ScheduleNotice } from '@festie/shared/utils';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import { useToast } from '../../lib/toastContext';
+import { useUnsavedChangesGuard } from '../../lib/useUnsavedChangesGuard';
 import LineupImport from './LineupImport';
 import FestivalEditForm, { Festival as FormFestival } from './FestivalEditForm';
 import FestivalMapEditor from './FestivalMapEditor';
+import FestivalStatusPanel, { FestivalMeta } from './FestivalStatusPanel';
 import { cn } from '../../lib/utils';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { SearchX } from 'lucide-react';
-import type { SetRow } from './SetEditor';
-
-interface Festival {
-  id: string;
-  name: string;
-  location: string;
-  stageCount?: number; // from list endpoint
-  dayCount?: number; // from list endpoint
-  stages?: Array<{ id: string; name: string; color: string }>; // from detail endpoint
-  days?: Array<{ id: string; label: string; date: string; sets: SetRow[] }>; // from detail
-}
+import type { Day } from './DayEditor';
 
 type Tab = 'list' | 'create' | 'import';
+type View = 'live' | 'archived';
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
  * Festival management: CRUD, CSV import/export, lineup management.
@@ -33,12 +39,21 @@ type Tab = 'list' | 'create' | 'import';
  * DayEditor → SetEditor.
  */
 export default function AdminFestivals() {
-  const [festivals, setFestivals] = useState<Festival[]>([]);
+  const [festivals, setFestivals] = useState<AdminFestivalSummary[]>([]);
+  const [archived, setArchived] = useState<ArchivedFestival[]>([]);
+  const [view, setView] = useState<View>('live');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editorLoading, setEditorLoading] = useState(false);
   const [notifyPickers, setNotifyPickers] = useState(true);
   const [formData, setFormData] = useState<Partial<FormFestival>>({});
+  const [original, setOriginal] = useState<Partial<FormFestival> | null>(null);
+  const [meta, setMeta] = useState<FestivalMeta>({});
+  const [issues, setIssues] = useState<FestivalIssue[]>([]);
+  const [saving, setSaving] = useState(false);
+  // Bumped by Discard to remount the form: SetEditor keeps artist-name drafts in local state.
+  const [discardCount, setDiscardCount] = useState(0);
   const [initialExpandedDays, setInitialExpandedDays] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; title: string; description: string } | null>(null);
@@ -52,6 +67,12 @@ export default function AdminFestivals() {
   const { toast, toastError } = useToast();
   const { askPassword, reauthDialog } = useReauthPrompt();
 
+  const changes = useMemo(
+    () => countFestivalChanges(original as EditableFestival | null, formData as EditableFestival),
+    [original, formData],
+  );
+  const { confirmLeave, guardDialog } = useUnsavedChangesGuard(tab === 'create' && changes.total > 0);
+
   useEffect(() => {
     loadFestivals();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load once on mount
@@ -59,7 +80,7 @@ export default function AdminFestivals() {
   const loadFestivals = async () => {
     try {
       setLoading(true);
-      const result = await api.get<Festival[]>('/admin/festivals');
+      const result = await fetchAdminFestivals();
       setFestivals(Array.isArray(result) ? result : []);
     } catch (err: unknown) {
       toastError(err, "Couldn't load festivals. Try again.");
@@ -68,13 +89,65 @@ export default function AdminFestivals() {
     }
   };
 
-  const finishSave = async (created: boolean, notice?: ScheduleNotice) => {
-    toast(created ? 'Festival created' : notice ? describeScheduleNotice(notice) : 'Festival updated', 'success');
+  const loadArchived = async () => {
+    try {
+      const result = await fetchArchivedFestivals();
+      setArchived(Array.isArray(result) ? result : []);
+    } catch (err: unknown) {
+      toastError(err, "Couldn't load archived festivals. Try again.");
+    }
+  };
+
+  const showView = (next: View) => {
+    setView(next);
+    if (next === 'archived') loadArchived();
+  };
+
+  const clearEditor = () => {
     setEditingId(null);
     setNotifyPickers(true);
     setFormData({});
+    setOriginal(null);
+    setMeta({});
+    setIssues([]);
     setInitialExpandedDays(new Set());
-    setTab('list');
+  };
+
+  // Loads the saved festival into the editor. Every day gets an id (the list
+  // endpoint omits them) and each day's sets sort by stage, then start time.
+  const openEditor = async (id: string) => {
+    setEditingId(id);
+    setNotifyPickers(true);
+    setTab('create');
+    setEditorLoading(true);
+    try {
+      const { checklist, publishedAt, updatedByUsername, ...full } = await fetchAdminFestival(id);
+      const stages = (full.stages || []) as unknown as NonNullable<FormFestival['stages']>;
+      const days: Day[] = ((full.days || []) as unknown as Partial<Day>[]).map((d, i) => ({
+        id: d.id ?? `day-${i}`,
+        label: d.label ?? '',
+        date: d.date ?? '',
+        sets: sortLineup(d.sets ?? [], stages),
+      }));
+      const form = { ...full, stages, days } as unknown as Partial<FormFestival>;
+      setOriginal(form);
+      setFormData(form);
+      setMeta({ publishedAt, updatedAt: full.updatedAt, updatedByUsername, checklist });
+      setIssues([]);
+      setInitialExpandedDays(new Set(days.length === 1 && days[0] ? [days[0].id] : []));
+    } catch (err: unknown) {
+      toastError(err, "Couldn't load festival details. Try again.");
+      clearEditor();
+      setTab('list');
+    } finally {
+      setEditorLoading(false);
+    }
+  };
+
+  const afterEditSave = async (id: string, notice?: ScheduleNotice) => {
+    const n = changes.total;
+    await openEditor(id);
+    toast(notice ? describeScheduleNotice(notice) : `Saved ${plural(n, 'change')}.`, 'success');
     await loadFestivals();
   };
 
@@ -88,6 +161,7 @@ export default function AdminFestivals() {
       return;
     }
 
+    setSaving(true);
     try {
       if (editingId) {
         const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
@@ -95,10 +169,17 @@ export default function AdminFestivals() {
           expectedUpdatedAt: formData.updatedAt,
           notify: notifyPickers,
         });
-        await finishSave(false, res?.scheduleNotice);
+        await afterEditSave(editingId, res?.scheduleNotice);
       } else {
-        await api.post<void>('/admin/festivals', formData);
-        await finishSave(true);
+        const created = await api.post<{ id?: string }>('/admin/festivals', formData);
+        toast('Festival created as a draft. Only admins can see it.', 'success');
+        await loadFestivals();
+        if (created?.id) {
+          await openEditor(created.id);
+        } else {
+          clearEditor();
+          setTab('list');
+        }
       }
     } catch (err: unknown) {
       const removal = removalFromError(err);
@@ -106,7 +187,12 @@ export default function AdminFestivals() {
         setPendingRemoval(describeRemovals(removal));
         return;
       }
-      toastError(err, "Couldn't save festival. Try again.");
+      const found = issuesFromError(err);
+      setIssues(found);
+      if (found.length > 0) toast('Fix the highlighted problems, then save again.', 'error');
+      else toastError(err, "Couldn't save festival. Try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -128,7 +214,7 @@ export default function AdminFestivals() {
       );
       if (done === null) return;
       setPendingRemoval(null);
-      await finishSave(false, done.notice);
+      await afterEditSave(editingId, done.notice);
     } catch (err: unknown) {
       setPendingRemoval(null);
       toastError(err, "Couldn't save festival. Try again.");
@@ -137,14 +223,15 @@ export default function AdminFestivals() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    const festival = festivals.find((f) => f.id === id);
-    const name = festival?.name || 'this festival';
-    setConfirmDelete({
-      id,
-      title: `Delete ${name}?`,
-      description: 'This soft-deletes the festival and hides it from users. Users with picks for it will lose access.',
-    });
+  const handleDelete = async (id: string) => {
+    const name = festivals.find((f) => f.id === id)?.name || 'this festival';
+    let description = describeDeleteImpact(null);
+    try {
+      description = describeDeleteImpact(await fetchDeleteImpact(id));
+    } catch (err: unknown) {
+      console.warn('Could not load delete impact', err);
+    }
+    setConfirmDelete({ id, title: `Delete ${name}?`, description });
   };
 
   const doDelete = async () => {
@@ -168,39 +255,58 @@ export default function AdminFestivals() {
     }
   };
 
-  const handleEdit = async (festival: Festival) => {
-    setEditingId(festival.id);
-    setNotifyPickers(true);
-    setTab('create');
-    // List endpoint returns only summary (stageCount, dayCount). Fetch full
-    // festival to get nested stages[] and days[] for the edit form.
+  const handleRestore = async (item: ArchivedFestival) => {
     try {
-      const full = await api.get<Festival>(`/festivals/${festival.id}`);
-      const days = full.days || [];
-      setFormData({
-        ...full,
-        stages: full.stages || [],
-        days,
-      });
-      // Auto-expand all days so artists are visible immediately
-      setInitialExpandedDays(new Set(days.map((d) => d.id)));
+      const { published } = await restoreFestival(item.id);
+      toast(published ? `${item.name} is restored.` : `${item.name} is restored as a draft.`, 'success');
+      await Promise.all([loadFestivals(), loadArchived()]);
     } catch (err: unknown) {
-      toastError(err, "Couldn't load festival details. Try again.");
-      setFormData(festival as Partial<FormFestival>);
+      toastError(err, "Couldn't restore festival. Try again.");
+    }
+  };
+
+  const startCreate = () => {
+    clearEditor();
+    setTab('create');
+  };
+
+  const openImport = (target: { id: string; name: string } | null) => {
+    clearEditor();
+    setImportTarget(target);
+    setTab('import');
+  };
+
+  // Hands the festival to the map editor; the editor reloads when the map closes.
+  const openMap = (id: string) => {
+    setFormData({});
+    setOriginal(null);
+    setIssues([]);
+    setMapEditingId(id);
+  };
+
+  const closeMap = () => {
+    setMapEditingId(null);
+    if (editingId) openEditor(editingId);
+  };
+
+  const switchTab = (t: Tab) => {
+    if (t === tab) return;
+    if (t === 'create') startCreate();
+    else {
+      clearEditor();
+      setTab(t);
     }
   };
 
   const handleCancel = () => {
+    clearEditor();
     setTab('list');
-    setEditingId(null);
-    setFormData({});
-    setInitialExpandedDays(new Set());
   };
 
   const filteredFestivals = festivals.filter(
     (f) =>
       f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.location.toLowerCase().includes(searchQuery.toLowerCase()),
+      (f.location ?? '').toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   if (loading && tab === 'list') {
@@ -210,8 +316,14 @@ export default function AdminFestivals() {
   // Map editor takes over the panel when active — it loads the festival itself
   // and persists the geo edits, then returns here on close.
   if (mapEditingId) {
-    return <FestivalMapEditor festivalId={mapEditingId} onClose={() => setMapEditingId(null)} />;
+    return <FestivalMapEditor festivalId={mapEditingId} onClose={closeMap} />;
   }
+
+  const toggleClass = (active: boolean) =>
+    cn(
+      'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+      active ? 'bg-accent-aqua/20 text-accent-aqua' : 'text-text-secondary hover:text-text-primary',
+    );
 
   return (
     <div className="space-y-6">
@@ -220,7 +332,7 @@ export default function AdminFestivals() {
         {(['list', 'create', 'import'] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => confirmLeave(() => switchTab(t))}
             className={cn(
               'px-4 py-2 font-medium text-sm transition-colors border-b-2',
               tab === t
@@ -236,6 +348,19 @@ export default function AdminFestivals() {
       {/* Festivals List */}
       {tab === 'list' && (
         <div>
+          <div className="mb-3 flex gap-2">
+            <button type="button" aria-pressed={view === 'live'} onClick={() => showView('live')} className={toggleClass(view === 'live')}>
+              Live
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === 'archived'}
+              onClick={() => showView('archived')}
+              className={toggleClass(view === 'archived')}
+            >
+              Archived
+            </button>
+          </div>
           <div className="mb-4 flex gap-2">
             <input
               type="text"
@@ -246,86 +371,144 @@ export default function AdminFestivals() {
               className="flex-1 px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
             />
             <button
-              onClick={() => {
-                setEditingId(null);
-                setFormData({});
-                setInitialExpandedDays(new Set());
-                setTab('create');
-              }}
+              onClick={() => confirmLeave(startCreate)}
               className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap"
             >
               + Create New
             </button>
           </div>
 
-          {filteredFestivals.length === 0 ? (
-            <EmptyState
-              icon={<SearchX className="w-9 h-9" aria-hidden="true" />}
-              title="No festivals found"
-              description="Try adjusting your search or create a new festival."
-            />
-          ) : (
-            <div className="space-y-3">
-              {filteredFestivals.map((festival) => (
-                <div
-                  key={festival.id}
-                  className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex items-center justify-between hover:bg-bg-card/80 transition-colors"
-                >
-                  <div className="flex-1">
-                    <h2 className="text-base font-semibold text-text-primary">{festival.name}</h2>
-                    <p className="text-sm text-text-muted">
-                      {festival.location} · {festival.stageCount ?? festival.stages?.length ?? 0} stages ·{' '}
-                      {festival.dayCount ?? festival.days?.length ?? 0} days
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
+          {view === 'archived' &&
+            (archived.length === 0 ? (
+              <EmptyState
+                icon={<SearchX className="w-9 h-9" aria-hidden="true" />}
+                title="No archived festivals."
+                description="Deleted festivals appear here so you can restore them."
+              />
+            ) : (
+              <div className="space-y-3">
+                {archived.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex items-center justify-between"
+                  >
+                    <div className="flex-1">
+                      <h2 className="text-base font-semibold text-text-primary">{item.name}</h2>
+                      <p className="text-sm text-text-muted">
+                        {item.location} · Deleted {timeAgo(Date.parse(item.deletedAt))}
+                      </p>
+                    </div>
                     <button
-                      onClick={() => handleEdit(festival)}
+                      onClick={() => handleRestore(item)}
                       className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
                     >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => {
-                        setImportTarget({ id: festival.id, name: festival.name });
-                        setTab('import');
-                      }}
-                      className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
-                    >
-                      Import
-                    </button>
-                    <button
-                      onClick={() => setMapEditingId(festival.id)}
-                      className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
-                    >
-                      Map
-                    </button>
-                    <button
-                      onClick={() => handleDelete(festival.id)}
-                      className="px-3 py-1.5 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm font-medium"
-                    >
-                      Delete
+                      Restore
                     </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            ))}
+
+          {view === 'live' &&
+            (filteredFestivals.length === 0 ? (
+              <EmptyState
+                icon={<SearchX className="w-9 h-9" aria-hidden="true" />}
+                title="No festivals found"
+                description="Try adjusting your search or create a new festival."
+              />
+            ) : (
+              <div className="space-y-3">
+                {filteredFestivals.map((festival) => (
+                  <div
+                    key={festival.id}
+                    className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex items-center justify-between hover:bg-bg-card/80 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <h2 className="text-base font-semibold text-text-primary">
+                        {festival.name}
+                        {!festival.published && (
+                          <span className="ml-2 px-2 py-0.5 rounded-full bg-accent-amber/20 text-accent-amber text-xs font-semibold">
+                            Draft
+                          </span>
+                        )}
+                      </h2>
+                      <p className="text-sm text-text-muted">
+                        {festival.location} · {festival.stageCount ?? 0} stages · {festival.dayCount ?? 0} days
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => confirmLeave(() => openEditor(festival.id))}
+                        className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => confirmLeave(() => openImport({ id: festival.id, name: festival.name }))}
+                        className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+                      >
+                        Import
+                      </button>
+                      <button
+                        onClick={() => confirmLeave(() => openMap(festival.id))}
+                        className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+                      >
+                        Map
+                      </button>
+                      <button
+                        onClick={() => handleDelete(festival.id)}
+                        className="px-3 py-1.5 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm font-medium"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
         </div>
       )}
 
       {/* Create/Edit Form */}
-      {tab === 'create' && (
-        <FestivalEditForm
-          formData={formData}
-          setFormData={setFormData}
-          editingId={editingId}
-          notifyPickers={notifyPickers}
-          onNotifyPickersChange={setNotifyPickers}
-          initialExpandedDays={initialExpandedDays}
-          onSave={handleSave}
-          onCancel={handleCancel}
-        />
+      {tab === 'create' && editorLoading && <div className="text-center py-12 text-text-muted">Loading festival…</div>}
+      {tab === 'create' && !editorLoading && (
+        <div className="space-y-4">
+          {editingId && (
+            <FestivalStatusPanel
+              festivalId={editingId}
+              name={formData.name || 'this festival'}
+              meta={meta}
+              dirty={changes.total > 0}
+              onPublished={() => {
+                openEditor(editingId);
+                loadFestivals();
+              }}
+              onImport={() =>
+                confirmLeave(() => openImport({ id: editingId, name: formData.name || 'this festival' }))
+              }
+              onEditMap={() => confirmLeave(() => openMap(editingId))}
+            />
+          )}
+          <FestivalEditForm
+            key={`${editingId ?? 'new'}-${discardCount}`}
+            formData={formData}
+            setFormData={setFormData}
+            editingId={editingId}
+            notifyPickers={notifyPickers}
+            onNotifyPickersChange={setNotifyPickers}
+            initialExpandedDays={initialExpandedDays}
+            changes={changes}
+            issues={issues}
+            saving={saving}
+            onSave={handleSave}
+            onDiscard={() => {
+              setFormData(original ?? {});
+              setIssues([]);
+              setDiscardCount((n) => n + 1);
+            }}
+            onCancel={() => confirmLeave(handleCancel)}
+          />
+        </div>
       )}
 
       {/* Import */}
@@ -379,6 +562,7 @@ export default function AdminFestivals() {
         busy={removalBusy}
         onConfirm={confirmRemovals}
       />
+      {guardDialog}
       {reauthDialog}
     </div>
   );
