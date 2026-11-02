@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
-import { useCrew } from '@festie/shared/hooks';
+import { useCrew, useActiveCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { COPY, GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import {
@@ -182,19 +182,8 @@ export default function CrewScreen() {
     return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
   }, [mpLatParam, mpLngParam]);
 
-  // Load the user's crews once on mount.
-  useEffect(() => {
-    if (user?.id && crews.length === 0) {
-      loadCrews().catch(() => {});
-    }
-  }, [user?.id, crews.length, loadCrews]);
-
-  // Auto-select the first crew when none is active yet.
-  useEffect(() => {
-    if (user?.id && crews.length > 0 && !activeCrew) {
-      selectCrew(crews[0]!.id).catch(() => {});
-    }
-  }, [user?.id, crews, activeCrew, selectCrew]);
+  // Loads crews and selects the first one; status drives the loading/error/none branches.
+  const { status, retry } = useActiveCrew();
 
   // Reset the transient sub-feature UI whenever the active crew changes. Done
   // with the render-time "previous value" pattern (keyed off the crew id) rather
@@ -552,7 +541,7 @@ export default function CrewScreen() {
   // chrome + member-row geometry instead of a bare spinner, so the layout
   // doesn't jump when data lands. (Cached crews render immediately and skip
   // this branch entirely — this is the cold-start case only.)
-  if (crewLoading && crews.length === 0 && !activeCrew) {
+  if (status === 'loading') {
     return (
       <View style={styles.screen} testID="crew-screen">
         <ScreenHeader title="Crew" icon="people" />
@@ -578,7 +567,21 @@ export default function CrewScreen() {
     );
   }
 
-  // No active crew: show create / join forms.
+  if (status === 'error') {
+    return (
+      <View style={styles.screen} testID="crew-screen">
+        <ScreenHeader title="Crew" icon="people" />
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Couldn't load your crew"
+          message="Check your connection, then try again."
+          action={{ label: 'Try again', onPress: retry }}
+        />
+      </View>
+    );
+  }
+
+  // No crews: show create / join forms.
   if (!activeCrew) {
     return (
       // KAV is dropped: behavior='padding' is a no-op on Android and

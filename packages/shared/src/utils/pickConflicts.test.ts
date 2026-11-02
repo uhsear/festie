@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPickConflicts, buildFestivalPickConflicts, conflictSetIds } from './pickConflicts';
+import { buildCrewSplits, buildPickConflicts, buildFestivalPickConflicts, conflictSetIds } from './pickConflicts';
 import type { FestivalSet, FestivalDay, Priority } from '../types/domain';
 
 function makeSet(overrides: Partial<FestivalSet> & { id: string }): FestivalSet {
@@ -233,5 +233,61 @@ describe('buildFestivalPickConflicts', () => {
   it('conflictSetIds lists every set in the groups', () => {
     const out = buildFestivalPickConflicts({ sets, myPicks, days: DAYS });
     expect([...conflictSetIds(out)].sort()).toEqual(['a1', 'a2', 'b1', 'b2']);
+  });
+});
+
+describe('buildCrewSplits', () => {
+  const sets = [
+    makeSet({ id: 'a', startTime: '14:00', endTime: '15:00' }),
+    makeSet({ id: 'b', startTime: '14:30', endTime: '15:30' }),
+    makeSet({ id: 'c', startTime: '16:00', endTime: '17:00' }),
+    makeSet({ id: 'd', startTime: '17:00', endTime: '18:00' }),
+    makeSet({ id: 'e', startTime: '16:30', endTime: '17:30', dayIndex: 1 }),
+  ];
+  const crew = (picks: Record<string, Record<string, Priority>>) =>
+    Object.entries(picks).map(([id, p]) => ({ id, picks: p }));
+
+  it('lists a split with who goes where, and together sets with no clash', () => {
+    const out = buildCrewSplits({
+      sets,
+      days: DAYS,
+      dayIndex: 0,
+      profiles: crew({ ana: { a: 'must', c: 'want' }, ben: { b: 'want', c: 'must', d: 'maybe' } }),
+    });
+    expect(out.split).toHaveLength(1);
+    expect(out.split[0]!.sides.map((s) => [s.set.id, s.memberIds])).toEqual([
+      ['a', ['ana']],
+      ['b', ['ben']],
+    ]);
+    expect(out.split[0]!.endMs - out.split[0]!.startMs).toBe(90 * 60000);
+    // c touches d back-to-back, so ben has no clash at c.
+    expect(out.together.map((t) => [t.set.id, t.memberIds])).toEqual([['c', ['ana', 'ben']]]);
+  });
+
+  it('drops a together set when one of its pickers has an overlapping pick', () => {
+    const out = buildCrewSplits({
+      sets,
+      days: DAYS,
+      dayIndex: 0,
+      profiles: crew({ ana: { a: 'must', b: 'want' }, ben: { a: 'must' } }),
+    });
+    expect(out.together).toEqual([]);
+    expect(out.split).toHaveLength(1);
+  });
+
+  it('does not call one member clashing with themselves a split', () => {
+    const out = buildCrewSplits({
+      sets,
+      days: DAYS,
+      dayIndex: 0,
+      profiles: crew({ ana: { a: 'must', b: 'want' }, ben: { c: 'must' } }),
+    });
+    expect(out.split).toEqual([]);
+  });
+
+  it('is empty for a crew of one', () => {
+    expect(
+      buildCrewSplits({ sets, days: DAYS, dayIndex: 0, profiles: crew({ ana: { a: 'must', b: 'must' } }) }),
+    ).toEqual({ split: [], together: [] });
   });
 });

@@ -18,7 +18,7 @@ describe('ios round 2 crew-safety source guards', () => {
     expect(read('components/CrewStatus.tsx')).toMatch(/header: \{[^}]*flexWrap/);
   });
   it('crew-plan uses the priority color', () => {
-    expect(read('app/crew-plan.tsx')).toContain('priorityColor(t, p.priority)');
+    expect(read('app/crew-plan.tsx')).toContain('priorityColor(t, g.priority)');
   });
   it('PlanQRShare has an empty state and no legend', () => {
     const src = read('components/PlanQRShare.tsx');

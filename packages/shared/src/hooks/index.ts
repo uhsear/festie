@@ -22,3 +22,6 @@ export * from './useDayClashes';
 export * from './usePicksPlan';
 export * from './usePickClear';
 export * from './useBulkAddPicks';
+export * from './useActiveCrew';
+export * from './useCrewHub';
+export * from './useCrewCompare';

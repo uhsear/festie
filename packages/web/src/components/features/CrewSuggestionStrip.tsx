@@ -22,7 +22,7 @@ function dismissKey(setId: string): string {
  * the underlying useCrewNudges drops the row (getMyPick is now set). Renders
  * nothing when there are no suggestions.
  */
-export default function CrewSuggestionStrip() {
+export default function CrewSuggestionStrip({ title = 'Your crew is seeing these' }: { title?: string } = {}) {
   const nudges = useCrewNudges();
   const { savePick } = usePicks();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
@@ -76,7 +76,7 @@ export default function CrewSuggestionStrip() {
       className="mb-3 rounded-xl border border-glass-border bg-bg-card p-3"
       aria-label="Crew suggestions"
     >
-      <h2 className="mb-2 text-sm font-bold text-text-primary">Your crew is seeing these</h2>
+      <h2 className="mb-2 text-sm font-bold text-text-primary">{title}</h2>
       <ul className="flex flex-col gap-2">
         {visible.map((nudge) => {
           const set = nudge.set;
