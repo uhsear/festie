@@ -16,6 +16,9 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
+vi.mock('../lib/useUndoNotifier', () => ({
+  useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
+}));
 vi.mock('../lib/toastContext', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
@@ -44,6 +47,7 @@ vi.mock('../components/layout/RouteErrorBoundary', () => ({
 vi.mock('@festie/shared/hooks', () => {
   const picks = () => (storeState.picks ?? {}) as Record<string, Priority>;
   return {
+    usePickClear: () => vi.fn(),
     usePicks: () => ({
       getMyPick: (id: string) => picks()[id] ?? null,
       getOtherPicks: () => [],

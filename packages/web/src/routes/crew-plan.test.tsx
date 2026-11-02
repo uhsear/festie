@@ -1,12 +1,13 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 // ── Store state the mocks read from (mutated per test) ─────────────────────
 const authState: Record<string, unknown> = { user: { id: 'u-me' } };
 const crewState: Record<string, unknown> = {};
 const festivalState: Record<string, unknown> = {};
-const uiState: Record<string, unknown> = { offlineMode: false, pendingSync: 0 };
+const setDetailSet = vi.fn();
+const uiState: Record<string, unknown> = { offlineMode: false, pendingSync: 0, setDetailSet };
 
 vi.mock('@festie/shared/stores', () => ({
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(authState)),
@@ -27,7 +28,12 @@ vi.mock('@festie/shared/stores/festivalDataStore', () => ({
 
 // Real router would need a RouterProvider context; stub the two primitives.
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, ...rest }: { children: React.ReactNode }) => <a {...rest}>{children}</a>,
+  // Builds the href the real Link would, so tests can check a copied or new-tab link.
+  Link: ({ children, to, params, ...rest }: { children: React.ReactNode; to: string; params?: Record<string, string> }) => (
+    <a href={Object.entries(params ?? {}).reduce((path, [k, v]) => path.replace(`$${k}`, v), to)} {...rest}>
+      {children}
+    </a>
+  ),
   useNavigate: () => vi.fn(),
 }));
 
@@ -184,6 +190,20 @@ describe('CrewPlanView', () => {
     expect(screen.getByText(/Main Stage/)).toBeInTheDocument();
     expect(screen.getByText(/Me, Jo \+3/)).toBeInTheDocument();
     expect(screen.getAllByText('Disclosure')).toHaveLength(1);
+  });
+
+  it('opens the set panel in place on a plain click, not on a modified click', () => {
+    setDetailSet.mockClear();
+    render(<CrewPlanView />);
+    const link = screen.getByText('Disclosure').closest('a')!;
+    expect(link).toHaveAttribute('href', '/set/s1');
+    // fireEvent.click returns false when the handler called preventDefault.
+    expect(fireEvent.click(link)).toBe(false);
+    expect(setDetailSet).toHaveBeenCalledTimes(1);
+    expect(setDetailSet).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }));
+    expect(fireEvent.click(link, { ctrlKey: true })).toBe(true);
+    expect(fireEvent.click(link, { metaKey: true })).toBe(true);
+    expect(setDetailSet).toHaveBeenCalledTimes(1);
   });
 
   it('offers a way forward when no picks exist', () => {

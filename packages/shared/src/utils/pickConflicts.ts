@@ -207,3 +207,21 @@ export function buildPickConflicts(input: BuildPickConflictsInput): ConflictGrou
 
   return groups;
 }
+
+/**
+ * `buildPickConflicts` run once per festival day (position in `days`),
+ * concatenated. Spans the whole plan for views with no day selector. Returns
+ * `[]` when `days` is missing or empty; day 0 also catches an undefined dayIndex.
+ */
+export function buildFestivalPickConflicts(input: Omit<BuildPickConflictsInput, 'selectedDay'>): ConflictGroup[] {
+  const { days } = input;
+  if (!days || days.length === 0) return [];
+  return days.flatMap((_, selectedDay) => buildPickConflicts({ ...input, selectedDay }));
+}
+
+/** Every set id that takes part in any group. */
+export function conflictSetIds(groups: ConflictGroup[]): Set<string> {
+  const ids = new Set<string>();
+  for (const g of groups) for (const p of g.picks) ids.add(p.set.id);
+  return ids;
+}

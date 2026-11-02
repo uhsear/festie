@@ -11,6 +11,9 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
+vi.mock('../lib/useUndoNotifier', () => ({
+  useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
+}));
 vi.mock('../lib/toastContext', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
@@ -34,6 +37,7 @@ vi.mock('../components/features/LowPowerIndicator', () => ({
 const noClashes = { count: 0, marks: new Map(), groups: [] as ConflictGroup[] };
 
 vi.mock('@festie/shared/hooks', () => ({
+  usePickClear: () => vi.fn(),
   usePicks: vi.fn(() => ({
     getMyPick: vi.fn(() => null),
     getOtherPicks: vi.fn(() => []),

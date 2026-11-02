@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AccessibilityInfo, Platform, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import { FullWindowOverlay } from 'react-native-screens';
 import { useUIStore, type Toast } from '@festie/shared/stores';
 import { durationEffects, durationSpatial } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
@@ -76,7 +77,7 @@ export default function Toaster() {
   const styles = useStyles();
   const reduceMotion = useReduceMotion();
   const visible = toasts.slice(-MAX_VISIBLE);
-  return (
+  const host = (
     <View
       pointerEvents="box-none"
       accessibilityLiveRegion="polite"
@@ -87,6 +88,10 @@ export default function Toaster() {
       ))}
     </View>
   );
+  // iOS native sheets (the formSheet set screen) cover the root view, so an
+  // Undo toast fired from a sheet would sit hidden behind it. The overlay window
+  // floats above them and passes touches outside the toasts through.
+  return Platform.OS === 'ios' ? <FullWindowOverlay>{host}</FullWindowOverlay> : host;
 }
 
 const useStyles = makeStyles((t) => ({

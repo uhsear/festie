@@ -3,11 +3,12 @@ import { useReducedMotion } from 'motion/react';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { usePicks, useFestival, useDayClashes } from '@festie/shared/hooks';
+import { usePicks, useFestival, useDayClashes, usePickClear } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   resolveStageColor,
+  artistDisplayName,
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
   pickClashTarget,
@@ -31,6 +32,7 @@ import { CalendarX, Music, Filter } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { cn } from '../lib/utils';
+import { useUndoNotifier } from '../lib/useUndoNotifier';
 import { useToast } from '../lib/toastContext';
 
 const JumpToNowIcon = CONCEPT_ICON.jumpToNow;
@@ -54,6 +56,7 @@ function GridViewInner() {
   // battery-costing reflow loop). The manual "Now" button stays available.
   const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
   const { getMyPick, getOtherPicks, savePick } = usePicks();
+  const clearPick = usePickClear(useUndoNotifier());
   const { toast } = useToast();
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
@@ -172,14 +175,19 @@ function GridViewInner() {
   const handleSavePick = useCallback(
     async (setId: string, priority: string | null) => {
       if (!currentFestival) return;
+      if (priority === null) {
+        const found = allDaySets.find((s) => s.id === setId);
+        clearPick(setId, found ? artistDisplayName(found, currentFestival.b2bSeparator) : 'pick');
+        return;
+      }
       try {
-        await savePick(currentFestival.id, setId, priority as Priority | null);
+        await savePick(currentFestival.id, setId, priority as Priority);
       } catch (err) {
         // Grid and TBA cells show no failed chip, so a failed save (first-pick join included) toasts.
         toast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), 'error');
       }
     },
-    [currentFestival, savePick, toast],
+    [currentFestival, savePick, clearPick, allDaySets, toast],
   );
 
   if (!currentFestival) {

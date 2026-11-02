@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPickConflicts } from './pickConflicts';
+import { buildPickConflicts, buildFestivalPickConflicts, conflictSetIds } from './pickConflicts';
 import type { FestivalSet, FestivalDay, Priority } from '../types/domain';
 
 function makeSet(overrides: Partial<FestivalSet> & { id: string }): FestivalSet {
@@ -207,5 +207,31 @@ describe('buildPickConflicts', () => {
     expect(dur.c).toBe(45);
     // Max pairwise overlap is a∩c = 45m (a∩b is 30m; b and c only touch at 15:00).
     expect(out[0]!.overlapMin).toBe(45);
+  });
+});
+
+describe('buildFestivalPickConflicts', () => {
+  const sets = [
+    makeSet({ id: 'a1', dayIndex: 0, startTime: '14:00', endTime: '15:00' }),
+    makeSet({ id: 'a2', dayIndex: 0, startTime: '14:30', endTime: '15:30' }),
+    makeSet({ id: 'b1', dayIndex: 1, startTime: '16:00', endTime: '17:00' }),
+    makeSet({ id: 'b2', dayIndex: 1, startTime: '16:30', endTime: '17:30' }),
+  ];
+  const myPicks: Record<string, Priority> = { a1: 'must', a2: 'maybe', b1: 'must', b2: 'maybe' };
+
+  it('finds a clash on each day in one call', () => {
+    const out = buildFestivalPickConflicts({ sets, myPicks, days: DAYS });
+    expect(out).toHaveLength(2);
+    expect(out.map((g) => g.picks[0]!.set.id)).toEqual(['a1', 'b1']);
+  });
+
+  it('returns [] with no days', () => {
+    expect(buildFestivalPickConflicts({ sets, myPicks })).toEqual([]);
+    expect(buildFestivalPickConflicts({ sets, myPicks, days: [] })).toEqual([]);
+  });
+
+  it('conflictSetIds lists every set in the groups', () => {
+    const out = buildFestivalPickConflicts({ sets, myPicks, days: DAYS });
+    expect([...conflictSetIds(out)].sort()).toEqual(['a1', 'a2', 'b1', 'b2']);
   });
 });
