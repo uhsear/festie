@@ -88,6 +88,14 @@ export const colors = {
     error: '#ff6b6b',
   },
   /**
+   * Clash = two of the user's picks overlap. Alias of status.warning (amber means warning; coral is danger only).
+   * Never colour alone: pair with the warning icon, the hatching or the word Clash.
+   */
+  clash: {
+    mark: '#f0a030',
+    tint: 'rgba(240, 160, 48, 0.16)',
+  },
+  /**
    * Confidence — HOW OLD A FACT IS. Aliases only: every value below is an
    * existing hue, so this group adds no new contrast risk and no new brand
    * colour (the one-accent rule in `accent` still holds).

@@ -13,7 +13,6 @@ import { SECTION_HREF, activeSection } from './sections';
 // first scroll after tab switch feel laggy.
 const prefetchers: Record<string, () => Promise<unknown>> = {
   '/cards': () => import('../../routes/cards'),
-  '/timeline': () => import('../../routes/timeline'),
   '/grid': () => import('../../routes/grid'),
   '/picks': () => import('../../routes/picks'),
   '/crew': () => import('../../routes/crew'),

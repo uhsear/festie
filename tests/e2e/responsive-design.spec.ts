@@ -13,7 +13,7 @@ const viewports = [
 async function gotoSchedule(
   page: Page,
   app: { baseUrl: string },
-  route: '/cards' | '/timeline' = '/cards',
+  route: '/cards' | '/grid' = '/cards',
 ) {
   // The suite verifies settled layout, not entrance-animation keyframes. This
   // also avoids Chromium's screenshot animation fast-forward leaving
@@ -26,12 +26,12 @@ async function gotoSchedule(
   if (route === '/cards') {
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
   } else {
-    await expect(page.getByRole('region', { name: 'Timeline view' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Schedule grid' })).toBeVisible();
   }
 
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
   // Give Chromium two painted frames after lazy route/content-visibility work.
-  // Without this, the 320px timeline intermittently captures blank chrome.
+  // Without this, the 320px grid intermittently captures blank chrome.
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   );
@@ -71,7 +71,7 @@ async function createJoinedUser(page: Page, app: { baseUrl: string }) {
 
 async function expectViewportScreenshot(page: Page, name: string) {
   // toHaveScreenshot's animation fast-forward drops composited chrome on the
-  // Timeline route. The page already emulates reduced motion, so compare a raw
+  // grid route. The page already emulates reduced motion, so compare a raw
   // settled viewport capture and keep the same snapshot/update workflow.
   const image = await page.screenshot({ animations: 'allow', fullPage: false });
   expect(image).toMatchSnapshot(name, { maxDiffPixelRatio: 0.05 });
@@ -108,6 +108,19 @@ test.describe('responsive design', () => {
       expect(overflow).toBe(false);
     });
   }
+
+  test('grid fits two stages without sideways scroll at 390px', async ({ app, page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoSchedule(page, app, '/grid');
+
+    // Fixture day 1 has two stages, and the phone grid shows two columns at a time.
+    const scroller = page.getByRole('region', { name: 'Schedule grid' });
+    const { scrollWidth, clientWidth } = await scroller.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+  });
 
   test('header stays above scrolled content', async ({ app, page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -191,10 +204,10 @@ test.describe('responsive design', () => {
       await expectViewportScreenshot(page, `cards-${vp.name}.png`);
     });
 
-    test(`timeline view screenshot ${vp.name}`, async ({ app, page }) => {
+    test(`grid view screenshot ${vp.name}`, async ({ app, page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await gotoSchedule(page, app, '/timeline');
-      await expectViewportScreenshot(page, `timeline-${vp.name}.png`);
+      await gotoSchedule(page, app, '/grid');
+      await expectViewportScreenshot(page, `grid-${vp.name}.png`);
     });
   }
 });

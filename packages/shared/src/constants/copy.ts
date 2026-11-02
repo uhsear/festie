@@ -31,6 +31,17 @@ export const COPY = {
     one: 'Schedule clash', badge: 'Clash', filter: 'Clashes', none: 'No clashes',
     gridHint: 'Clashes with another of your picks',
   },
+  grid: {
+    zoomIn: 'Zoom in', zoomInHint: 'Show less of the day, larger',
+    zoomOut: 'Zoom out', zoomOutHint: 'Show more of the day',
+    holdToPick: 'Hold a set to pick', swipeAndHold: 'Swipe for stages · Hold a set to pick',
+    holdHint: 'Hold to change your pick', clearPick: 'Clear pick',
+    tbaTitle: "Set times aren't out yet",
+    tbaBody: "Here's who plays each stage. Pick sets now. They move onto the grid when times are published.",
+    stageUnknown: 'Stage not set',
+    regionLabel: 'Schedule grid',
+    gridLabel: 'Festival schedule grid: stages as columns, time as rows',
+  },
   status: { playing: 'Playing', playingA11y: 'Playing now', liveLocation: 'Live' },
 } as const;
 
@@ -40,6 +51,9 @@ export const FESTIVAL_STATUS_LABEL: Record<FestivalStatus, string> = {
 
 export const signInTo = (what: string): string => `Sign in to ${what}.`;
 export const clashCount = (n: number): string => (n === 1 ? COPY.clash.one : `${n} schedule clashes`);
+export const clashChip = (n: number): string => (n === 1 ? '1 clash' : `${n} clashes`);
+export const clashChipA11y = (n: number): string =>
+  n === 1 ? 'You have 1 schedule clash. Show it.' : `You have ${n} schedule clashes. Show the first one.`;
 export const clashesWith = (names: string[]): string => `Clashes with ${names.join(', ')}`;
 
 /** Inline clash prompt copy, shared by web and mobile ClashPrompt. */
