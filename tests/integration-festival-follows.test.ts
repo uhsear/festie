@@ -36,7 +36,8 @@ describe('Integration — festival follows and co-picks', { skip, concurrency: 1
     for (let i = 0; i < count; i++) {
       const userId = `${prefix}-u${i}`;
       const profileId = `${prefix}-p${i}`;
-      await pool.query('INSERT INTO users (id, username, password_hash, created_at) VALUES ($1, $1, $2, NOW())', [
+      await pool.query('INSERT INTO users (id, username, password_hash, created_at) VALUES ($1, $2, $3, NOW())', [
+        userId,
         userId,
         'x',
       ]);
