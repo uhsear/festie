@@ -45,6 +45,7 @@ const loadRate = () => import('./routes/rate');
 const loadAdmin = () => import('./routes/admin');
 const loadLogin = () => import('./routes/login');
 const loadRegister = () => import('./routes/register');
+const loadFinishSignup = () => import('./routes/finish-signup');
 const loadForgot = () => import('./routes/forgot-password');
 const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
@@ -98,6 +99,7 @@ const MapView = withSkeleton(lazyRouteComponent(loadMap), MinimalFallback);
 const AdminPanel = withSkeleton(lazyRouteComponent(loadAdmin), MinimalFallback);
 const LoginPage = withSkeleton(lazyRouteComponent(loadLogin), MinimalFallback);
 const RegisterPage = withSkeleton(lazyRouteComponent(loadRegister), MinimalFallback);
+const FinishSignupPage = withSkeleton(lazyRouteComponent(loadFinishSignup), MinimalFallback);
 const ForgotPasswordPage = withSkeleton(lazyRouteComponent(loadForgot), MinimalFallback);
 const ResetPasswordPage = withSkeleton(lazyRouteComponent(loadReset), MinimalFallback);
 
@@ -212,6 +214,13 @@ const registerRoute = new Route({
     const next = safeReturnPath(s.next);
     return next ? { next } : {};
   },
+  beforeLoad: redirectIfSignedIn,
+});
+
+const finishSignupRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/signup/finish',
+  component: FinishSignupPage,
   beforeLoad: redirectIfSignedIn,
 });
 
@@ -344,6 +353,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   registerRoute,
+  finishSignupRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
   cardsRoute,

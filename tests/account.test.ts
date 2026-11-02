@@ -304,7 +304,9 @@ describe('account: soft-delete', { concurrency: 1, skip }, () => {
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({});
-    assert.ok(res.status >= 400);
+    // The schema allows no password (provider-only accounts); a password account still needs it.
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'MISSING_FIELD');
   });
 
   test('rejects wrong password with 403', async () => {

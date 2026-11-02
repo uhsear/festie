@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, type TextInputInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@festie/shared/hooks';
-import { mapErrorToUserMessage } from '@festie/shared/services';
+import { mapErrorToUserMessage, setPassword, withReauth } from '@festie/shared/services';
+import { PROVIDER_COPY } from '@festie/shared/constants';
 import { PASSWORD_CHANGED_MESSAGE, useAuthStore, useUIStore } from '@festie/shared/stores';
-import { PASSWORD_RULES, passwordPolicyError } from '@festie/shared/utils';
+import { PASSWORD_RULES, passwordPolicyError, validateNewPassword } from '@festie/shared/utils';
 import Button from './Button';
+import { useReauthPrompt } from './admin';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { passwordStrength } from '../lib/accountFormat';
@@ -19,7 +21,131 @@ import { passwordStrength } from '../lib/accountFormat';
  * secure fields, the shared password policy (PASSWORD_RULES) checked before
  * submit, in-flight spinner, and inline errors.
  */
-export default function AccountPasswordSection() {
+interface AccountPasswordSectionProps {
+  /** null = still loading. The Account screen passes true when the load failed; the server still checks. */
+  hasPassword: boolean | null;
+  /** Reloads the shared sign-in methods after a password is set. */
+  onChanged: () => void;
+}
+
+export default function AccountPasswordSection({ hasPassword, onChanged }: AccountPasswordSectionProps) {
+  if (hasPassword === null) return null;
+  return hasPassword ? <ChangePasswordForm /> : <SetPasswordForm onDone={onChanged} />;
+}
+
+/** A provider-only account has no password to change; this adds one (POST /auth/set-password). */
+function SetPasswordForm({ onDone }: { onDone: () => void }) {
+  const t = useTokens();
+  const styles = useStyles();
+  const haptics = useHaptics();
+  const user = useAuthStore((s) => s.user);
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const { ask, reauthDialog } = useReauthPrompt();
+  const [open, setOpen] = useState(false);
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirmRef = useRef<TextInputInstance>(null);
+
+  const problems = validateNewPassword(next, confirm, { username: user?.username, email: user?.email });
+  const canSubmit = !problems.password && !problems.confirmPassword;
+
+  const submit = async () => {
+    if (!canSubmit) {
+      setError(problems.password ?? problems.confirmPassword ?? null);
+      haptics.warning();
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const done = await withReauth(() => setPassword({ newPassword: next, confirmPassword: confirm }), ask);
+      if (done === null) return;
+      haptics.success();
+      onDone();
+    } catch (err) {
+      haptics.warning();
+      setError(mapErrorToUserMessage(err, 'Could not set password.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.row}
+        onPress={() => setOpen((o) => !o)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={open ? 'Hide set password form' : PROVIDER_COPY.setPassword}
+        accessibilityState={{ expanded: open }}
+      >
+        <View style={styles.rowIcon}>
+          <Ionicons name="key-outline" size={20} color={t.colors.text.secondary} />
+        </View>
+        <View style={styles.rowBody}>
+          <Text style={styles.rowTitle}>{PROVIDER_COPY.setPassword}</Text>
+          <Text style={styles.rowHint}>So you can also sign in with a password</Text>
+        </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
+      </TouchableOpacity>
+      {open ? (
+        <View style={styles.form}>
+          <TextInput
+            style={styles.input}
+            value={next}
+            onChangeText={setNext}
+            placeholder="New password"
+            placeholderTextColor={t.colors.text.placeholder}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password-new"
+            textContentType="newPassword"
+            editable={!submitting}
+            accessibilityLabel="New password"
+            returnKeyType="next"
+            onSubmitEditing={() => confirmRef.current?.focus()}
+            blurOnSubmit={false}
+          />
+          <Text style={styles.rowHint}>{PASSWORD_RULES}</Text>
+          <TextInput
+            ref={confirmRef}
+            style={styles.input}
+            value={confirm}
+            onChangeText={setConfirm}
+            placeholder="Confirm new password"
+            placeholderTextColor={t.colors.text.placeholder}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password-new"
+            textContentType="newPassword"
+            editable={!submitting}
+            accessibilityLabel="Confirm new password"
+            returnKeyType="go"
+            onSubmitEditing={() => void submit()}
+          />
+          {error ? (
+            <Text style={styles.error} accessibilityLiveRegion="polite">
+              {error}
+            </Text>
+          ) : null}
+          <Button
+            label={PROVIDER_COPY.setPassword}
+            onPress={() => void submit()}
+            loading={submitting}
+            disabled={!canSubmit || offlineMode}
+            accessibilityLabel="Save new password"
+          />
+        </View>
+      ) : null}
+      {reauthDialog}
+    </View>
+  );
+}
+
+function ChangePasswordForm() {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();

@@ -149,22 +149,30 @@ export const REAUTH_COPY = {
   button: 'Confirm',
 } as const;
 
+export interface ReauthBody {
+  provider: 'google' | 'apple';
+  idToken: string;
+  nonce?: string;
+  authorizationCode?: string;
+}
+
 /**
- * Runs `run`. If the server asks for a recent password check, prompts once,
- * posts it to /auth/reauth and runs `run` again. `null` means the admin cancelled.
+ * Runs `run`. If the server asks for a recent check, prompts once,
+ * posts it to /auth/reauth and runs `run` again. `null` means the user cancelled.
+ * `ask` returns a password string, or a ReauthBody for an account with no password.
  */
 export async function withReauth<T>(
   run: () => Promise<T>,
-  askPassword: () => Promise<string | null>,
+  ask: () => Promise<string | ReauthBody | null>,
 ): Promise<T | null> {
   try {
     return await run();
   } catch (err) {
     if (!(err instanceof ApiClientError) || err.code !== 'REAUTH_REQUIRED') throw err;
   }
-  const password = await askPassword();
-  if (password === null) return null;
-  await api.post('/auth/reauth', { password });
+  const answer = await ask();
+  if (answer === null) return null;
+  await api.post('/auth/reauth', typeof answer === 'string' ? { password: answer } : answer);
   return run();
 }
 

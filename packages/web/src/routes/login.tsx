@@ -10,6 +10,7 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import AuthTabs from '../components/ui/AuthTabs';
 import AuthBrand from '../components/auth/AuthBrand';
+import ProviderButtons from '../components/auth/ProviderButtons';
 import InviteBanner from '../components/auth/InviteBanner';
 import { cn } from '../lib/utils';
 
@@ -126,6 +127,8 @@ function LoginPageInner() {
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
           {isLoading ? COPY.auth.signingIn : AUTH_COPY.signIn}
         </Button>
+
+        <ProviderButtons mode="signin" next={next} />
 
         <div className="mt-3 flex flex-col items-center">
           <Link to="/forgot-password" className={authLinkClass}>

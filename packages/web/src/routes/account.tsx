@@ -10,6 +10,7 @@ import ProfileSection from '../components/account/ProfileSection';
 import EmailSection from '../components/account/EmailSection';
 import PaymentHandlesSection from '../components/account/PaymentHandlesSection';
 import PasswordSection from '../components/account/PasswordSection';
+import SignInMethodsSection from '../components/account/SignInMethodsSection';
 import NotificationSection from '../components/account/NotificationSection';
 import NotificationPrefsSection from '../components/account/NotificationPrefsSection';
 import PublicScheduleSection from '../components/account/PublicScheduleSection';
@@ -70,6 +71,7 @@ function AccountPageInner() {
         <ProfileSection user={user} />
         <EmailSection />
         <PasswordSection />
+        <SignInMethodsSection />
         <DevicesSection />
         <PaymentHandlesSection />
       </>

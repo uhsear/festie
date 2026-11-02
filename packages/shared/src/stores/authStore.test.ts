@@ -238,6 +238,65 @@ describe('authStore', () => {
     });
   });
 
+  describe('provider sign-in', () => {
+    const idToken = 'x'.repeat(30);
+    it('signed-in sets user and token', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({
+        status: 'signed-in',
+        user: mockUser,
+        token: 'tok',
+        roles: ['admin'],
+        reactivated: true,
+      });
+      const res = await useAuthStore.getState().signInWithProvider('google', { idToken });
+      expect(res).toEqual({ status: 'signed-in', reactivated: true });
+      expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/auth/oauth/google');
+      expect(setAuthToken).toHaveBeenCalledWith('tok');
+      expect(useAuthStore.getState().user?.id).toBe('user-1');
+      expect(useAuthStore.getState().userToken).toBe('tok');
+      expect(useAuthStore.getState().isAdmin).toBe(true);
+    });
+    it('needs-signup leaves user null', async () => {
+      const payload = {
+        status: 'needs-signup',
+        signupToken: 's'.repeat(30),
+        suggestedUsername: 'al',
+        email: null,
+        name: null,
+      };
+      vi.mocked(api.post).mockResolvedValueOnce(payload);
+      const res = await useAuthStore.getState().signInWithProvider('apple', { idToken });
+      expect(res).toEqual(payload);
+      expect(useAuthStore.getState().user).toBeNull();
+    });
+    it('completeProviderSignup sets the user', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, token: 'tok2' });
+      await useAuthStore.getState().completeProviderSignup({
+        signupToken: 's'.repeat(30),
+        username: 'alice',
+        dateOfBirth: '1990-01-01',
+        tosAccepted: true,
+      });
+      expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/auth/oauth/complete');
+      expect(useAuthStore.getState().user?.id).toBe('user-1');
+      expect(useAuthStore.getState().userToken).toBe('tok2');
+    });
+    it('rejections rethrow and leave error null', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('nope'));
+      await expect(useAuthStore.getState().signInWithProvider('google', { idToken })).rejects.toThrow('nope');
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('nope2'));
+      await expect(
+        useAuthStore.getState().completeProviderSignup({
+          signupToken: 's'.repeat(30),
+          username: 'a',
+          dateOfBirth: '1990-01-01',
+          tosAccepted: true,
+        }),
+      ).rejects.toThrow('nope2');
+      expect(useAuthStore.getState().error).toBeNull();
+    });
+  });
+
   describe('register emailVerificationSent', () => {
     const req = { username: 'alice', password: 'pass', confirmPassword: 'pass', tosAccepted: true };
     it('returns true when the response says so', async () => {

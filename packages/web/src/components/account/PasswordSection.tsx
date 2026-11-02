@@ -5,6 +5,7 @@ import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { isPasswordIncorrect, mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
+import { useIdentities } from '../../lib/useIdentities';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { Lock } from 'lucide-react';
@@ -14,6 +15,7 @@ export default function PasswordSection() {
   const changePassword = useAuthStore((s) => s.changePassword);
   const offlineMode = useUIStore((s) => s.offlineMode);
   const user = useAuthStore((s) => s.user);
+  const { data: identities } = useIdentities();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -53,6 +55,9 @@ export default function PasswordSection() {
       setSavingPassword(false);
     }
   };
+
+  // A provider-only account has no password to change; Sign-in methods offers Set a password.
+  if (identities?.hasPassword === false) return null;
 
   return (
     <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">

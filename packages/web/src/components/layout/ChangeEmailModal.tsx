@@ -7,11 +7,13 @@ import Button from '../ui/Button';
 interface ChangeEmailModalProps {
   /** Address currently on file. Absent means the account has no email yet, which switches the copy from "change" to "add". */
   currentEmail?: string;
+  /** false for a provider-only account: no password field, and onSubmit gets no password. */
+  needsPassword?: boolean;
   onClose: () => void;
-  onSubmit: (email: string, password: string) => Promise<void>;
+  onSubmit: (email: string, password?: string) => Promise<void>;
 }
 
-export default function ChangeEmailModal({ currentEmail, onClose, onSubmit }: ChangeEmailModalProps) {
+export default function ChangeEmailModal({ currentEmail, needsPassword = true, onClose, onSubmit }: ChangeEmailModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -22,7 +24,7 @@ export default function ChangeEmailModal({ currentEmail, onClose, onSubmit }: Ch
     setError(null);
     setBusy(true);
     try {
-      await onSubmit(email.trim(), password);
+      await onSubmit(email.trim(), needsPassword ? password : undefined);
     } catch (err) {
       setError(mapErrorToUserMessage(err, "Couldn't request the email change."));
     } finally {
@@ -57,20 +59,22 @@ export default function ChangeEmailModal({ currentEmail, onClose, onSubmit }: Ch
               required
             />
           </div>
-          <div className="flex flex-col items-stretch gap-1.5 py-2.5">
-            <label className="text-xs font-semibold text-text-secondary uppercase tracking-[.8px]" htmlFor="ce-password">
-              Current password
-            </label>
-            <input
-              id="ce-password"
-              type="password"
-              autoComplete="current-password"
-              className={inputBase}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+          {needsPassword && (
+            <div className="flex flex-col items-stretch gap-1.5 py-2.5">
+              <label className="text-xs font-semibold text-text-secondary uppercase tracking-[.8px]" htmlFor="ce-password">
+                Current password
+              </label>
+              <input
+                id="ce-password"
+                type="password"
+                autoComplete="current-password"
+                className={inputBase}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+          )}
           {error && (
             <div
               role="alert"
@@ -83,7 +87,7 @@ export default function ChangeEmailModal({ currentEmail, onClose, onSubmit }: Ch
             <Button variant="ghost" size="sm" type="button" onClick={onClose} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" type="submit" disabled={busy || !email || !password}>
+            <Button variant="primary" size="sm" type="submit" disabled={busy || !email || (needsPassword && !password)}>
               {busy ? 'Sending…' : 'Send Verification Link'}
             </Button>
           </div>

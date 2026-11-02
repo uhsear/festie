@@ -17,6 +17,7 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import AuthTabs from '../components/ui/AuthTabs';
 import AuthBrand from '../components/auth/AuthBrand';
+import ProviderButtons from '../components/auth/ProviderButtons';
 import InviteBanner from '../components/auth/InviteBanner';
 import { cn } from '../lib/utils';
 import { readSignupRef } from '../hooks/useFestivalLoader';
@@ -254,6 +255,8 @@ function RegisterPageInner() {
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
           {isLoading ? COPY.auth.creatingAccount : AUTH_COPY.createAccount}
         </Button>
+
+        <ProviderButtons mode="signin" next={next} />
 
         <div className="mt-3 flex flex-col items-center">
           <Link to="/cards" className={cn(linkClass, 'inline-flex items-center min-h-11 text-[length:var(--font-size-14)]')}>

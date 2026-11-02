@@ -8,9 +8,12 @@ import {
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { crewCopy, ownedCrewsForDeletion } from '@festie/shared/utils/crewManage';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { withReauth } from '@festie/shared/services/admin';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
+import { useIdentities } from '../../lib/useIdentities';
+import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { AlertTriangle } from 'lucide-react';
@@ -25,6 +28,12 @@ export default function DangerZone() {
   const loadCrews = useCrewStore((s) => s.loadCrews);
   const [newOwners, setNewOwners] = useState<Record<string, string>>({});
   const offlineMode = useUIStore((s) => s.offlineMode);
+  const { data: identities } = useIdentities();
+  const providerOnly = identities?.hasPassword === false;
+  const { ask, reauthDialog } = useReauthPrompt({
+    hasPassword: !providerOnly,
+    linked: identities?.identities.map((i) => i.provider),
+  });
 
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -48,7 +57,7 @@ export default function DangerZone() {
   }, [showDeleteConfirm]);
 
   const handleDelete = async () => {
-    if (!deletePassword) return;
+    if (!providerOnly && !deletePassword) return;
 
     setDeleting(true);
     try {
@@ -56,8 +65,12 @@ export default function DangerZone() {
         crewId: h.crew.id,
         newOwnerId: newOwners[h.crew.id] ?? h.defaultOwnerId,
       }));
-      const { deletionDate } = await deleteAccount(deletePassword, choices);
-      toast(accountDeletionNotice(deletionDate), 'info');
+      // A provider-only account sends no password; the server needs a recent provider re-auth instead.
+      const outcome = providerOnly
+        ? await withReauth(() => deleteAccount(undefined as unknown as string, choices), ask)
+        : await deleteAccount(deletePassword, choices);
+      if (!outcome) return;
+      toast(accountDeletionNotice(outcome.deletionDate), 'info');
       navigate({ to: '/login' });
     } catch (err) {
       setDeleteError(mapErrorToUserMessage(err, ACCOUNT_COPY.deleteFailed));
@@ -99,7 +112,7 @@ export default function DangerZone() {
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              if (deletePassword && !deleting) handleDelete();
+              if ((providerOnly || deletePassword) && !deleting) handleDelete();
             }}
           >
             {handover.length > 0 && (
@@ -125,6 +138,7 @@ export default function DangerZone() {
               </div>
             )}
             {soloCount > 0 && <p className="text-sm text-text-muted">{crewCopy.deleteSolo(soloCount)}</p>}
+            {!providerOnly && (
             <Input
               label="Enter your password to confirm"
               type="password"
@@ -138,6 +152,10 @@ export default function DangerZone() {
               autoComplete="current-password"
               error={deleteError ?? undefined}
             />
+            )}
+            {providerOnly && deleteError && (
+              <p role="alert" className="text-sm text-accent-coral">{deleteError}</p>
+            )}
 
             <div className="flex gap-2">
               <Button
@@ -156,7 +174,7 @@ export default function DangerZone() {
                 type="submit"
                 variant="danger"
                 isLoading={deleting}
-                disabled={offlineMode || !deletePassword}
+                disabled={offlineMode || (!providerOnly && !deletePassword)}
                 className="flex-1 min-h-[44px]"
               >
                 Confirm Delete
@@ -165,6 +183,7 @@ export default function DangerZone() {
           </form>
         )}
       </section>
+      {reauthDialog}
     </>
   );
 }

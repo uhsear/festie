@@ -20,9 +20,17 @@ const mockToast = vi.fn();
 vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
+let identities: { hasPassword: boolean; identities: { provider: string }[] } | undefined;
+vi.mock('../../lib/useIdentities', () => ({ useIdentities: () => ({ data: identities }) }));
+const mockAsk = vi.fn();
+vi.mock('../../lib/useReauthPrompt', () => ({ useReauthPrompt: () => ({ ask: mockAsk, reauthDialog: null }) }));
+const mockWithReauth = vi.fn();
+vi.mock('@festie/shared/services/admin', () => ({
+  withReauth: (run: () => Promise<unknown>, ask: unknown) => mockWithReauth(run, ask),
+}));
 vi.mock('../layout/ChangeEmailModal', () => ({
-  default: ({ onSubmit }: { onSubmit: (e: string, p: string) => Promise<void> }) => (
-    <button onClick={() => onSubmit('new@x.us', 'pw')}>submit-change</button>
+  default: ({ onSubmit, needsPassword }: { onSubmit: (e: string, p?: string) => Promise<void>; needsPassword: boolean }) => (
+    <button onClick={() => onSubmit('new@x.us', needsPassword ? 'pw' : undefined)}>submit-change</button>
   ),
 }));
 
@@ -34,6 +42,8 @@ function setAuth(user: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  identities = { hasPassword: true, identities: [] };
+  mockWithReauth.mockImplementation((run: () => Promise<unknown>) => run());
   mockChangeEmail.mockResolvedValue('Check it');
   mockResend.mockResolvedValue(undefined);
   mockCheckSession.mockResolvedValue(undefined);
@@ -66,6 +76,18 @@ describe('EmailSection', () => {
     await waitFor(() => expect(mockChangeEmail).toHaveBeenCalledWith('new@x.us', 'pw'));
     expect(mockToast).toHaveBeenCalledWith('Check it', 'success');
     await waitFor(() => expect(mockCheckSession).toHaveBeenCalled());
+  });
+
+  it('sends no password for a provider-only account and confirms through withReauth', async () => {
+    const user = userEvent.setup();
+    identities = { hasPassword: false, identities: [{ provider: 'google' }] };
+    setAuth({ id: 'u1', email: 'a@x.us', emailVerified: true });
+    render(<EmailSection />);
+    await user.click(screen.getByRole('button', { name: ACCOUNT_COPY.emailChange }));
+    await user.click(screen.getByText('submit-change'));
+    await waitFor(() => expect(mockChangeEmail).toHaveBeenCalledWith('new@x.us'));
+    expect(mockWithReauth).toHaveBeenCalledWith(expect.any(Function), mockAsk);
+    expect(mockToast).toHaveBeenCalledWith('Check it', 'success');
   });
 
   it('shows the pending address until it is confirmed', () => {
