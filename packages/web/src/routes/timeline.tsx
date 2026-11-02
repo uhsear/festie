@@ -20,8 +20,12 @@ import { useNowIndicator } from '../hooks/useNowIndicator';
 import { useScrollProgress } from '../hooks/useScrollProgress';
 import { useNow } from '../hooks/useSetStatus';
 import { CalendarX, Music, Filter } from 'lucide-react';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { cn } from '../lib/utils';
 import { useToast } from '../lib/toastContext';
+
+const JumpToNowIcon = CONCEPT_ICON.jumpToNow;
 
 export default function TimelineView() {
   return (
@@ -289,11 +293,11 @@ function TimelineViewInner() {
                 'hover:shadow-[0_8px_24px_rgba(0,232,208,0.45),0_1px_4px_rgba(0,0,0,0.3)]',
                 'active:scale-[0.96]',
               )}
-              aria-label="Scroll to current time"
+              aria-label={COPY.jumpToNow.a11y}
               onClick={scrollToNow}
             >
-              <Music aria-hidden="true" className="w-4 h-4" />
-              <span>Now</span>
+              <JumpToNowIcon aria-hidden="true" className="w-4 h-4" />
+              <span>{COPY.jumpToNow.label}</span>
             </button>
           )}
 

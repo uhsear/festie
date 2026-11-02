@@ -2,7 +2,7 @@ import React from 'react';
 import { FestivalSet, Priority, Festival } from '@festie/shared/types';
 import { fmtShort, artistDisplayName } from '@festie/shared/utils';
 import { AlertTriangle } from 'lucide-react';
-import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
+import { PRIORITY_SYMBOLS, COPY } from '@festie/shared/constants';
 import { cn } from '../lib/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
 
@@ -117,7 +117,7 @@ function TimelineGridCell({
             'pointer-events-none z-[2]',
           )}
           aria-hidden="true"
-          title="Schedule conflict with another of your picks"
+          title={COPY.clash.gridHint}
         >
           <AlertTriangle className="w-3 h-3" aria-hidden="true" />
         </span>

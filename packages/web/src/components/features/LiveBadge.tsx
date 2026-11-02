@@ -1,4 +1,5 @@
 import { m, useReducedMotion } from 'motion/react';
+import { COPY } from '@festie/shared/constants';
 import { SetStatus } from '@/hooks/useSetStatus';
 import { cn } from '@/lib/utils';
 
@@ -30,7 +31,7 @@ export default function LiveBadge({ status, label, className }: LiveBadgeProps) 
           'gap-1.5 bg-accent-coral-strong text-text-on-accent ring-1 ring-accent-coral/60 shadow-[0_0_10px_rgba(var(--accent-coral-rgb),0.45)]',
           className,
         )}
-        aria-label="Live"
+        aria-label={COPY.status.playingA11y}
       >
         {prefersReducedMotion ? (
           <div className="w-1.5 h-1.5 rounded-full bg-text-on-accent" aria-hidden="true" />

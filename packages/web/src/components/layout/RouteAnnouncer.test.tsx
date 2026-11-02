@@ -29,8 +29,8 @@ describe('RouteAnnouncer', () => {
 
     mockPathname = '/picks';
     rerender(<RouteAnnouncer />);
-    expect(screen.getByRole('status')).toHaveTextContent('My Picks page');
-    expect(document.title).toBe('My Picks · Test Fest · Festie');
+    expect(screen.getByRole('status')).toHaveTextContent('My picks page');
+    expect(document.title).toBe('My picks · Test Fest · Festie');
 
     mockPathname = '/account';
     rerender(<RouteAnnouncer />);

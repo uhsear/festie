@@ -80,10 +80,10 @@ describe('Header', () => {
   });
 
   describe('desktop tabs for guest users', () => {
-    it('shows Lineup, My Plan, Crew and Map but no More button', () => {
+    it('shows Lineup, Picks, Crew and Map but no More button', () => {
       mockAuthStore.mockReturnValue(null);
       render(<Header />);
-      for (const name of ['Lineup', 'My Plan', 'Crew', 'Map']) {
+      for (const name of ['Lineup', 'Picks', 'Crew', 'Map']) {
         expect(screen.getByRole('link', { name })).toBeInTheDocument();
       }
       expect(screen.queryByRole('link', { name: 'More' })).not.toBeInTheDocument();
@@ -98,7 +98,7 @@ describe('Header', () => {
       const nav = screen.getByRole('navigation', { name: 'Main navigation' });
       expect(within(nav).getAllByRole('link').map((b) => b.textContent)).toEqual([
         'Lineup',
-        'My Plan',
+        'Picks',
         'Crew',
         'Map',
         'More',
@@ -142,7 +142,7 @@ describe('Header', () => {
     it('renders tabs as real links', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'My Plan' })).toHaveAttribute('href', '/picks');
+      expect(screen.getByRole('link', { name: 'Picks' })).toHaveAttribute('href', '/picks');
     });
   });
 

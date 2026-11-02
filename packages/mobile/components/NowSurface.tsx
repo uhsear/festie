@@ -14,6 +14,8 @@ import {
   type CrewWhereabout,
   type NowNextSelection,
 } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import AppPressable from './AppPressable';
 import Avatar from './Avatar';
@@ -137,10 +139,10 @@ export function NowHero({
   } else if (phase === 'after') {
     body = (
       <Quiet
-        icon="sparkles-outline"
+        icon={CONCEPT_IONICON.wrap}
         title="That's a wrap"
         body="The festival is over."
-        action={onWrap ? <Button label="See your Wrap" variant="secondary" onPress={onWrap} /> : undefined}
+        action={onWrap ? <Button label={COPY.wrap.open} variant="secondary" onPress={onWrap} /> : undefined}
       />
     );
   } else if (!lineupMode && todayCount === 0) {

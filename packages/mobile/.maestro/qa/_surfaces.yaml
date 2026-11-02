@@ -80,7 +80,7 @@ appId: us.festie.app
     optional: true
 
 - tapOn:
-    text: "My Plan"
+    text: "Picks"
     optional: true
 - waitForAnimationToEnd:
     timeout: 6000

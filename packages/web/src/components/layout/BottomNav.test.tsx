@@ -38,7 +38,7 @@ describe('BottomNav', () => {
     const links = within(nav).getAllByRole('link');
     expect(links.map((l) => l.getAttribute('aria-label'))).toEqual([
       'View Lineup',
-      'View My Plan',
+      'View Picks',
       'View Crew',
       'View Map',
       'View More',
@@ -116,10 +116,18 @@ describe('BottomNav', () => {
     expect(screen.getByLabelText('View Crew')).not.toHaveAttribute('tabindex', '-1');
   });
 
+  it('gives Picks its own icon, not the star', () => {
+    mockUser = { id: 'u1', username: 'alice' };
+    render(<BottomNav />);
+    const picks = screen.getByLabelText('View Picks').querySelector('svg')!;
+    expect(picks.getAttribute('class')).toContain('lucide-list-checks');
+    expect(picks.getAttribute('class')).not.toContain('lucide-star');
+  });
+
   it('renders label text for each section', () => {
     mockUser = { id: 'u1', username: 'alice' };
     render(<BottomNav />);
-    for (const label of ['Lineup', 'My Plan', 'Crew', 'Map', 'More']) {
+    for (const label of ['Lineup', 'Picks', 'Crew', 'Map', 'More']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });

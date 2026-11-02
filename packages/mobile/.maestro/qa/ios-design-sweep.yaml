@@ -69,7 +69,7 @@ env:
     timeout: 6000
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/02c-forgot-password
 - tapOn:
-    text: "My Plan"
+    text: "Picks"
     optional: true
 - waitForAnimationToEnd
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/02d-guest-picks

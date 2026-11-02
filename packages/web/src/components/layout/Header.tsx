@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
 import { useAuthStore, useUIStore } from '@festie/shared';
 import { APP_SECTIONS } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { cn } from '@/lib/utils';
 import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
@@ -249,7 +250,7 @@ export default function Header() {
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             )}
           >
-            Sign in
+            {COPY.auth.signIn}
           </Link>
         )}
       </div>

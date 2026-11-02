@@ -16,11 +16,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
 import { useCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
+import { COPY, GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import {
   setLabel,
   getInitials,
@@ -1251,12 +1251,12 @@ export default function CrewScreen() {
             onPress={() => router.push('/plan-share')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Share your plan — QR or SMS handoff, works offline"
+            accessibilityLabel="Share offline: QR or text, works without signal"
           >
             <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
             <View style={styles.overlapToggleLabelStack}>
-              <Text style={styles.overlapToggleText}>Share plan</Text>
-              <Text style={styles.overlapToggleHint}>QR / SMS handoff, works offline</Text>
+              <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
+              <Text style={styles.overlapToggleHint}>QR or text, works without signal</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
@@ -1371,10 +1371,10 @@ export default function CrewScreen() {
             onPress={() => router.push('/plan-share')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Share your plan with a friend (QR or text)"
+            accessibilityLabel="Share offline with a friend (QR or text)"
           >
             <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>Share plan (QR / text)</Text>
+            <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
 

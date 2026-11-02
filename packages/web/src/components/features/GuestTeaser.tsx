@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from '@tanstack/react-router';
-import { Star, Users, Sparkles, type LucideIcon } from 'lucide-react';
+import { Users, type LucideIcon } from 'lucide-react';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
 
@@ -10,9 +11,9 @@ interface GuestTeaserProps {
 }
 
 const ICONS: Record<GuestTeaserProps['mode'], LucideIcon> = {
-  picks: Star,
+  picks: CONCEPT_ICON.picks,
   crew: Users,
-  wrap: Sparkles,
+  wrap: CONCEPT_ICON.wrap,
 };
 
 export default function GuestTeaser({ mode, className }: GuestTeaserProps) {

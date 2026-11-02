@@ -103,6 +103,15 @@ vi.mock('lucide-react', () => ({
   CalendarX: () => <span data-testid="calendar-x-icon" />,
   Music: () => <span data-testid="music-icon" />,
   Filter: () => <span data-testid="filter-icon" />,
+  // conceptIcons.ts reads all eight concept icons at import time.
+  Zap: () => null,
+  Clock: () => <span data-testid="clock-icon" />,
+  ListChecks: () => null,
+  Gift: () => null,
+  MapPin: () => null,
+  Home: () => null,
+  Flag: () => null,
+  AlertTriangle: () => null,
 }));
 
 import TimelineView from './timeline';
@@ -226,8 +235,8 @@ describe('TimelineView', () => {
       scrollToNow: vi.fn(),
     });
     render(<TimelineView />);
-    expect(screen.getByLabelText('Scroll to current time')).toBeInTheDocument();
-    expect(screen.getByText('Now')).toBeInTheDocument();
+    expect(screen.getByLabelText('Scroll to the current time')).toBeInTheDocument();
+    expect(screen.getByText('Jump to now')).toBeInTheDocument();
   });
 
   it('does not show "Now" button when nowIndicator is null', () => {
@@ -239,7 +248,7 @@ describe('TimelineView', () => {
       timeBounds: { minMin: 840, maxMin: 900, totalSlots: 4 },
     });
     render(<TimelineView />);
-    expect(screen.queryByText('Now')).not.toBeInTheDocument();
+    expect(screen.queryByText('Jump to now')).not.toBeInTheDocument();
   });
 
   it('renders TBA section alongside timeline grid when timeless sets exist', () => {

@@ -18,10 +18,10 @@ import type { Page } from '@playwright/test';
  *   - [data-testid="set-card"][data-artist=…] .... SetCard
  *   - .card-priority-btn (aria-label "Must See" …) SetCard footer priority buttons
  *   - [aria-label="Set detail panel"] ............ DetailPanel (vaul Drawer.Content)
- *   - "Sign in" / "Create Account" buttons ....... login.tsx / register.tsx
+ *   - "Sign in" / "Create account" buttons ....... login.tsx / register.tsx
  *   - [data-testid="profile-badge"] .............. UserMenu trigger
  *   - "Lineup"/"Cards"/"Timeline"/"Grid" tabs .. Header desktop nav + ScheduleViewSwitcher
- *   - "My Plan"/"Crew" nav ......................... Header (desktop) / BottomNav (mobile)
+ *   - "Picks"/"Crew" nav ......................... Header (desktop) / BottomNav (mobile)
  *   - toast role="status"/"alert" ................ Toast.tsx
  *
  * No screenshot/visual assertions (the CI run uses --grep-invert screenshot).
@@ -52,7 +52,7 @@ async function registerUser(page: Page, app: { baseUrl: string }, username: stri
   // TOS checkbox (label wraps a checkbox with id="authTos").
   await page.locator('#authTos').check();
 
-  await page.getByRole('button', { name: 'Create Account' }).click();
+  await page.getByRole('button', { name: 'Create account' }).click();
 
   // Lands on the authed schedule with the profile badge present.
   await expect(page.locator('#app')).toBeVisible();
@@ -101,8 +101,8 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="set-card"][data-artist="Beta"]')).toBeVisible();
 
     // Guests now get the full nav (parity with mobile) instead of a guest
-    // banner: the "My Plan" tab is visible even when logged out.
-    await expect(page.getByRole('link', { name: 'My Plan' })).toBeVisible();
+    // banner: the "Picks" tab is visible even when logged out.
+    await expect(page.getByRole('link', { name: 'Picks' })).toBeVisible();
 
     // Switch to fest-2 → Omega appears (Friday/Sunday differ; Sunday is the only day).
     await page.locator('[data-testid="festival-select"]').selectOption('fest-2');
@@ -148,7 +148,7 @@ test.describe('festival planner browser regression', () => {
     await page.getByLabel('Date of birth').fill('1995-01-01');
     await page.getByLabel('Email', { exact: true }).fill('tosskip@example.test');
     // Intentionally do NOT check TOS.
-    await page.getByRole('button', { name: 'Create Account' }).click();
+    await page.getByRole('button', { name: 'Create account' }).click();
 
     // formError region (role="alert") renders the TOS message.
     await expect(page.getByRole('alert')).toContainText('Terms of Service');
@@ -168,7 +168,7 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="user-menu-profile"]')).toBeVisible();
   });
 
-  test('saving a pick from the detail panel reflects on the card and in My Picks', async ({ app, page }) => {
+  test('saving a pick from the detail panel reflects on the card and in Picks', async ({ app, page }) => {
     await registerUser(page, app, `picker_${Date.now()}`);
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
@@ -184,7 +184,7 @@ test.describe('festival planner browser regression', () => {
     const alphaCard = page.locator('[data-testid="set-card"][data-artist="Alpha"]');
     await expect(alphaCard.getByRole('button', { name: /^Must See/ })).toHaveAttribute('aria-pressed', 'true');
 
-    // Navigate to My Picks (desktop Header nav OR mobile BottomNav both expose
+    // Navigate to Picks (desktop Header nav OR mobile BottomNav both expose
     // the destination; click whichever is visible).
     await openMyPicks(page);
     await expect(page).toHaveURL(/\/picks$/);
@@ -255,16 +255,16 @@ test.describe('festival planner browser regression', () => {
 
 // ── Nav helpers that tolerate desktop (Header) vs mobile (BottomNav) ─────────
 
-// The desktop Header nav uses plain text links ("My Plan", "Crew"); the
-// mobile BottomNav uses links with aria-label "View My Plan" / "View Crew".
+// The desktop Header nav uses plain text links ("Picks", "Crew"); the
+// mobile BottomNav uses links with aria-label "View Picks" / "View Crew".
 // Click whichever exists for the current viewport.
 async function openMyPicks(page: Page) {
-  const desktop = page.getByRole('link', { name: 'My Plan' });
+  const desktop = page.getByRole('link', { name: 'Picks' });
   if (await desktop.count()) {
     await desktop.first().click();
     return;
   }
-  await page.getByRole('link', { name: 'View My Plan' }).click();
+  await page.getByRole('link', { name: 'View Picks' }).click();
 }
 
 async function openCrew(page: Page) {

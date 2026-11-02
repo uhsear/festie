@@ -5,6 +5,7 @@ import { useAuthStore } from '@festie/shared';
 import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { SECTION_HREF, activeSection } from './sections';
 
 // Per-tab chunk prefetchers. Called from onPointerDown so the tap-up navigation
@@ -30,13 +31,6 @@ const ScheduleIcon = () => (
   </svg>
 );
 
-/** Picks icon — star */
-const PicksIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-);
-
 /** Crew icon — people */
 const CrewIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -59,7 +53,7 @@ const ProfileIcon = () => (
 
 const SECTION_ICON: Record<AppSectionKey, React.ReactNode> = {
   lineup: <ScheduleIcon />,
-  myPlan: <PicksIcon />,
+  myPlan: <CONCEPT_ICON.picks aria-hidden="true" />,
   crew: <CrewIcon />,
   map: <MapIcon aria-hidden="true" />,
   more: <ProfileIcon />,
@@ -90,7 +84,7 @@ export default function BottomNav() {
   }, []);
 
   // All five sections stay visible for guests (parity with mobile's NativeTabs):
-  // My Plan/Crew gate in-place via GuestTeaser, and the More slot reads "Sign in"
+  // Picks/Crew gate in-place via GuestTeaser, and the More slot reads "Sign in"
   // and opens /login directly.
   const current = activeSection(location.pathname);
 
