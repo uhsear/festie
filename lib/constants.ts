@@ -20,3 +20,9 @@ export const MAX_ARTISTS_PER_SET = 4;
 
 export const MEETING_POINT_TYPES = ['pre-show', 'during', 'post-show', 'post-event', 'emergency', 'general'] as const;
 export const MAX_MEETING_POINTS_PER_CREW = 20;
+
+// Crew limits. Mirrored in packages/shared/src/constants/config.ts so clients can
+// show them before submit; tests/constants-parity.test.ts guards the copy.
+export const MAX_CREWS_PER_FESTIVAL = 3;
+export const MAX_OPEN_POLLS_PER_CREW = 3;
+export const DEFAULT_CREW_MAX_MEMBERS = 30;

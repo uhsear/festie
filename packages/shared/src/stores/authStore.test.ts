@@ -449,6 +449,18 @@ describe('authStore', () => {
         deletionDate: '2026-11-30T00:00:00.000Z',
       });
     });
+
+    it('sends crewHandover only when it is non-empty', async () => {
+      vi.mocked(api.delete).mockResolvedValue({ success: true });
+      vi.mocked(api.post).mockResolvedValue({});
+      const choices = [{ crewId: 'c1', newOwnerId: 'u2' }];
+      await useAuthStore.getState().deleteAccount('pw', choices);
+      expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: { password: 'pw', crewHandover: choices } });
+      await useAuthStore.getState().deleteAccount('pw', []);
+      expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: { password: 'pw' } });
+      await useAuthStore.getState().deleteAccount('pw');
+      expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: { password: 'pw' } });
+    });
   });
 
   describe('accountDeletionNotice', () => {

@@ -230,7 +230,8 @@ export interface CrewMember {
 // SINGLE-SOURCING NOTE (Phase 3): NOT aliased to api.gen.ts
 // `components['schemas']['Crew']`. The generated type requires
 // `createdBy`/`memberCount` (and adds `maxMembers`/`inviteExpiresAt`/`role`);
-// this domain model omits those, makes `festivalId?` optional, and carries the
+// this domain model carries `role`/`maxMembers`/`memberCount` as optional,
+// omits `createdBy`, makes `festivalId?` optional, and carries the
 // client-only `_optimistic` flag. Broader client model — kept hand-written.
 export interface Crew {
   id: string;
@@ -239,6 +240,10 @@ export interface Crew {
   /** Sent to every member; regenerate is owner-only. */
   inviteExpiresAt?: string | null;
   owner: string;
+  /** The caller's role in this crew (the server sends it on list and detail reads). */
+  role?: 'owner' | 'member';
+  maxMembers?: number;
+  memberCount?: number;
   festivalId?: string;
   members: CrewMember[];
   // Home base is surfaced on the serialized crew (routes/crews.ts:48-50);

@@ -129,6 +129,7 @@ function makeDeps(overrides: any = {}) {
       MAX_LIMIT_REACHED: 'MAX_LIMIT_REACHED',
       MISSING_FIELD: 'MISSING_FIELD',
       INTERNAL_ERROR: 'INTERNAL_ERROR',
+      CONFLICT: 'CONFLICT',
     },
     rateLimit: overrides.rateLimit || ((_max: any, _key: any) => (_req: any, _res: any, next: any) => next()),
     validate: overrides.validate || ((_schema: any) => (req: any, _res: any, next: any) => { req.validatedBody = req.body; next(); }),
@@ -597,7 +598,7 @@ describe('routes/crew-members.js — PUT /:crewId/transfer', () => {
       { userId: 'owner-1', username: 'crewowner', role: 'member', joinedAt: '2026-01-01' },
       { userId: 'user-2', username: 'member2', role: 'owner', joinedAt: '2026-01-02' },
     ];
-    const { app } = await buildApp({
+    const { app, deps } = await buildApp({
       stores: {
         crews: {
           getById: mock.fn(async () => ({ ...DEFAULT_CREW })),
@@ -619,6 +620,11 @@ describe('routes/crew-members.js — PUT /:crewId/transfer', () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.error, null);
     assert.equal(res.body.data.id, 'crew-1');
+    // The fallback path (no transferOwnership) also moves crews.created_by.
+    const createdByUpdate = (deps.pool.query.mock.calls as any[]).find((c) =>
+      String(c.arguments[0]).includes('UPDATE crews SET created_by'),
+    );
+    assert.deepEqual(createdByUpdate?.arguments[1], ['user-2', 'crew-1']);
     // updateMemberRole should be called twice: once for new owner, once for old owner
     assert.equal(updateMemberRole.mock.calls.length, 2);
     assert.equal((updateMemberRole.mock.calls as any[])[0].arguments[1], 'user-2');
@@ -733,6 +739,60 @@ describe('routes/crew-members.js — PUT /:crewId/transfer', () => {
 
     assert.equal(res.status, 400);
     assert.equal(res.body.error.code, 'MISSING_FIELD');
+  });
+
+  test('re-reads the crew so the response and broadcast carry the new owner', async () => {
+    const ioObj = makeIo();
+    const transferOwnership = mock.fn(async () => {});
+    const getById = mock.fn(async () => ({ ...DEFAULT_CREW, createdBy: 'user-2' }));
+    const { app } = await buildApp({
+      io: ioObj,
+      stores: {
+        crews: {
+          getById,
+          transferOwnership,
+          getMember: mock.fn(async () => ({ userId: 'user-2', role: 'member' })),
+        },
+      },
+      resolveCrewOwnership: mock.fn(async () => ({
+        crew: { ...DEFAULT_CREW, createdBy: 'user-1' },
+        membership: { role: 'owner' },
+      })),
+    });
+
+    const res = await request(app).put('/crew-1/transfer').send({ userId: 'user-2' });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual((transferOwnership.mock.calls as any[])[0].arguments, ['crew-1', 'user-1', 'user-2']);
+    assert.equal(getById.mock.calls.length, 1, 'crew is read again after the transfer');
+    assert.equal(res.body.data.createdBy, 'user-2');
+    const broadcast = (ioObj._emit.mock.calls as any[])[0].arguments[1];
+    assert.equal(broadcast.createdBy, 'user-2');
+  });
+
+  test('returns 409 when the new owner already runs a reform of this crew', async () => {
+    const clash = Object.assign(new Error('duplicate key'), { code: '23505' });
+    const { app } = await buildApp({
+      stores: {
+        crews: {
+          transferOwnership: mock.fn(async () => { throw clash; }),
+          getMember: mock.fn(async () => ({ userId: 'user-2', role: 'member' })),
+        },
+      },
+      resolveCrewOwnership: mock.fn(async () => ({
+        crew: { ...DEFAULT_CREW },
+        membership: { role: 'owner' },
+      })),
+    });
+
+    const res = await request(app).put('/crew-1/transfer').send({ userId: 'user-2' });
+
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'CONFLICT');
+    assert.equal(
+      res.body.error.message,
+      'That member already runs a copy of this crew for this festival. Pick someone else.',
+    );
   });
 
   // ── Internal error ────────────────────────────────────────────────

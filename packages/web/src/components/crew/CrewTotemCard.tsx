@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { crewCopy } from '@festie/shared/utils/crewManage';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
@@ -143,7 +144,10 @@ export default function CrewTotemCard({ crewId, totemName, totemEmoji, isOwner, 
         ) : (
           <>
             <Flag className="w-4 h-4 flex-shrink-0 text-text-muted" aria-hidden="true" />
-            <span className="text-xs text-text-secondary">Tap to set your crew totem</span>
+            <div className="min-w-0 flex-1">
+              <span className="text-xs text-text-secondary">{crewCopy.addTotem}</span>
+              <p className="text-xs text-text-muted mt-0.5">{crewCopy.totemExplainer}</p>
+            </div>
           </>
         )}
       </div>

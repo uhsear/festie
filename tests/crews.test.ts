@@ -252,7 +252,7 @@ describe('crews routes', { concurrency: 1, skip }, () => {
     assert.equal(res.status, 400);
   });
 
-  test('POST /api/v1/crews rejects non-festival-member with 403', async () => {
+  test('POST /api/v1/crews creates the festival profile for a user without one', async () => {
     const server = await startServer();
     servers.push(server);
     const user = await registerUser(server, uniqueUsername('noprofile'));
@@ -262,7 +262,34 @@ describe('crews routes', { concurrency: 1, skip }, () => {
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ name: 'NoProfile', festivalId: server.festivalId });
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 201);
+
+    const pool = new Pool({ connectionString: server.databaseUrl });
+    try {
+      const { rows } = await pool.query(
+        'SELECT 1 FROM festival_profiles WHERE user_id = $1 AND festival_id = $2 AND deleted_at IS NULL',
+        [user.id, server.festivalId],
+      );
+      assert.equal(rows.length, 1, 'create made the festival profile');
+    } finally {
+      await pool.end();
+    }
+  });
+
+  test('POST /api/v1/crews refuses a fourth crew in the same festival', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const user = await createMember(server, 'capped');
+    for (let i = 0; i < 3; i++) await createCrew(server, user.token);
+
+    const res = await server.request
+      .post('/api/v1/crews')
+      .set('x-user-token', user.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ name: 'Fourth', festivalId: server.festivalId });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'MAX_LIMIT_REACHED');
+    assert.equal(res.body.error.message, "You're already in 3 crews for this festival. Leave one to start another.");
   });
 
   test('GET /api/v1/crews/:crewId returns the crew for a member', async () => {

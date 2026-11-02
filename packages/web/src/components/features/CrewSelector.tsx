@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Crew } from '@festie/shared/types';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import type { Crew, Festival } from '@festie/shared/types';
+import { festivalLabel, groupCrewsByFestival } from '@festie/shared/utils';
 import { ChevronDown, Plus, LogIn, Users } from 'lucide-react';
 import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
@@ -11,6 +12,8 @@ interface CrewSelectorProps {
   onSelectCrew: (crewId: string) => void;
   onCreateCrew: () => void;
   onJoinCrew: () => void;
+  festivals?: Festival[];
+  currentFestivalId?: string | null;
 }
 
 export default function CrewSelector({
@@ -19,9 +22,16 @@ export default function CrewSelector({
   onSelectCrew,
   onCreateCrew,
   onJoinCrew,
+  festivals = [],
+  currentFestivalId,
 }: CrewSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedCrew = crews.find((c) => c.id === selectedCrewId) || crews[0];
+  const groups = useMemo(
+    () => groupCrewsByFestival(crews, festivals, currentFestivalId),
+    [crews, festivals, currentFestivalId],
+  );
+  const selectedFestival = festivals.find((f) => f.id === selectedCrew?.festivalId);
   const { tap, select } = useHaptics();
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -106,7 +116,12 @@ export default function CrewSelector({
           'hover:border-border-light flex items-center justify-between',
         )}
       >
-        <span>{selectedCrew?.name || 'Select Crew'}</span>
+        <span className="min-w-0 text-left">
+          <span className="block truncate">{selectedCrew?.name || 'Select Crew'}</span>
+          {selectedFestival && (
+            <span className="block truncate text-xs font-normal text-text-muted">{festivalLabel(selectedFestival)}</span>
+          )}
+        </span>
         <ChevronDown className={cn('w-4 h-4 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
       </button>
 
@@ -125,28 +140,44 @@ export default function CrewSelector({
           )}
         >
           {crews.length > 0 && (
-            <div className="max-h-48 overflow-y-auto overscroll-contain">
-              {crews.map((crew) => (
-                <button
-                  key={crew.id}
-                  role="option"
-                  aria-selected={selectedCrewId === crew.id}
-                  onClick={() => {
-                    select();
-                    onSelectCrew(crew.id);
-                    close();
-                  }}
-                  className={cn(
-                    'w-full px-4 py-2.5 text-left font-semibold transition-colors border-b border-border last:border-b-0',
-                    selectedCrewId === crew.id
-                      ? 'bg-accent-aqua/20 text-accent-aqua'
-                      : 'text-text-primary hover:bg-bg-card',
-                  )}
-                >
-                  {crew.name}
-                  <Users className="ml-2 w-3.5 h-3.5 text-text-muted" aria-hidden="true" />
-                </button>
-              ))}
+            <div className="max-h-64 overflow-y-auto overscroll-contain">
+              {groups.map((group) => {
+                const options = group.crews.map((crew) => (
+                  <button
+                    key={crew.id}
+                    role="option"
+                    aria-selected={selectedCrewId === crew.id}
+                    onClick={() => {
+                      select();
+                      onSelectCrew(crew.id);
+                      close();
+                    }}
+                    className={cn(
+                      'w-full px-4 py-2.5 text-left font-semibold transition-colors border-b border-border last:border-b-0',
+                      selectedCrewId === crew.id
+                        ? 'bg-accent-aqua/20 text-accent-aqua'
+                        : 'text-text-primary hover:bg-bg-card',
+                    )}
+                  >
+                    {crew.name}
+                    <Users className="ml-2 w-3.5 h-3.5 text-text-muted" aria-hidden="true" />
+                  </button>
+                ));
+                if (!group.label) return <React.Fragment key="unknown">{options}</React.Fragment>;
+                return (
+                  <div
+                    key={group.festivalId}
+                    role="group"
+                    aria-label={group.label}
+                    className={cn(group.status === 'past' && 'opacity-60')}
+                  >
+                    <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                      {group.label}
+                    </div>
+                    {options}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -161,7 +192,7 @@ export default function CrewSelector({
               className="w-full flex items-center gap-2 justify-center"
             >
               <Plus className="w-4 h-4" aria-hidden="true" />
-              Create Crew
+              Create crew
             </Button>
 
             <Button
@@ -174,7 +205,7 @@ export default function CrewSelector({
               className="w-full flex items-center gap-2 justify-center"
             >
               <LogIn className="w-4 h-4" aria-hidden="true" />
-              Join by Code
+              Join with code
             </Button>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { registerCreateReconciler } from '../services/offlineQueue';
 import { mapErrorToUserMessage } from '../services/errors';
 import { getStorage } from '../platform/storage';
 import { writeOutcomeOf, type WriteOutcome } from '../utils/crewWrites';
+import { crewCopy } from '../utils/crewManage';
 import { useAuthStore } from './authStore';
 import {
   Crew,
@@ -106,6 +107,9 @@ export interface CrewActions {
   leaveCrew: (crewId: string) => Promise<void>;
   kickMember: (crewId: string, memberId: string) => Promise<void>;
   transferOwnership: (crewId: string, newOwnerId: string) => Promise<void>;
+  // Owner leave: transfer, then leave. 'owner-changed' means the transfer
+  // worked but leave failed; the user is now a regular member and can retry.
+  handOverAndLeave: (crewId: string, newOwnerId: string) => Promise<'left' | 'owner-changed'>;
   regenerateInvite: (crewId: string) => Promise<string>;
   // Reform the given (source) crew for another festival: server creates a NEW
   // crew in `targetFestivalId`, auto-adds prior members who already have a
@@ -116,6 +120,8 @@ export interface CrewActions {
   deleteCrew: (crewId: string) => Promise<void>;
   loadOverlap: (crewId: string, festivalId: string) => Promise<void>;
   forceAddMember: (crewId: string, userId: string) => Promise<void>;
+  // Admin add by exact username. Returns the matched username.
+  forceAddByUsername: (crewId: string, username: string) => Promise<string>;
   // Polls (routes/crew-polls.ts).
   loadPolls: (crewId: string) => Promise<void>;
   // `setRefs` (optional) carries the schedule-aware composer's option→set
@@ -228,7 +234,7 @@ function dropOptimistic<T extends { _optimistic?: boolean }>(list: T[]): T[] {
 
 let _lastSelectCrewId: string | null = null;
 
-const crewStore: StateCreator<CrewStore> = (set) => ({
+const crewStore: StateCreator<CrewStore> = (set, get) => ({
   crews: [],
   activeCrew: null,
   crewMembers: [],
@@ -405,6 +411,16 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     }
   },
 
+  handOverAndLeave: async (crewId: string, newOwnerId: string) => {
+    await get().transferOwnership(crewId, newOwnerId);
+    try {
+      await get().leaveCrew(crewId);
+      return 'left';
+    } catch {
+      return 'owner-changed';
+    }
+  },
+
   kickMember: async (crewId: string, memberId: string) => {
     set({ error: null });
     try {
@@ -536,6 +552,21 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       set({ error: message });
       throw err;
     }
+  },
+
+  forceAddByUsername: async (crewId: string, username: string) => {
+    const q = username.trim().replace(/^@/, '');
+    const matches = await api.get<Array<{ id: string; username: string }>>(
+      `/crews/search-users?q=${encodeURIComponent(q)}`,
+    );
+    const match = (matches ?? []).find((u) => u.username.toLowerCase() === q.toLowerCase());
+    if (!match) {
+      const message = crewCopy.noUserCalled(q);
+      set({ error: message });
+      throw new Error(message);
+    }
+    await get().forceAddMember(crewId, match.id);
+    return match.username;
   },
 
   // ── Polls ──────────────────────────────────────────────────────

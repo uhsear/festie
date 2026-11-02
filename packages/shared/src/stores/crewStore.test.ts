@@ -754,6 +754,52 @@ describe('crewStore', () => {
   // clobbers a sibling change (another member's vote/status) that a socket
   // setter applied while the write was in flight; the rollback must scope to
   // only the row this action touched, against the LATEST state.
+  describe('handOverAndLeave', () => {
+    it('transfers then leaves and returns left', async () => {
+      vi.mocked(api.put).mockResolvedValueOnce({});
+      vi.mocked(api.delete).mockResolvedValueOnce({});
+      await expect(useCrewStore.getState().handOverAndLeave('crew-1', 'user-2')).resolves.toBe('left');
+      expect(api.put).toHaveBeenCalledWith('/crews/crew-1/transfer', { userId: 'user-2' });
+      expect(api.delete).toHaveBeenCalledWith('/crews/crew-1/leave');
+    });
+
+    it('returns owner-changed when leave rejects', async () => {
+      vi.mocked(api.put).mockResolvedValueOnce({});
+      vi.mocked(api.delete).mockRejectedValueOnce(new Error('boom'));
+      await expect(useCrewStore.getState().handOverAndLeave('crew-1', 'user-2')).resolves.toBe('owner-changed');
+      expect(useCrewStore.getState().error).toBeTruthy();
+    });
+
+    it('throws when transfer rejects and never leaves', async () => {
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('Transfer denied'));
+      await expect(useCrewStore.getState().handOverAndLeave('crew-1', 'user-2')).rejects.toThrow('Transfer denied');
+      expect(api.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forceAddByUsername', () => {
+    it('strips @, matches exactly ignoring case, and returns the matched username', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce([
+        { id: 'u-9', username: 'asirhelper' },
+        { id: 'u-2', username: 'Asir' },
+      ]);
+      vi.mocked(api.post).mockResolvedValueOnce({ ...mockCrew, members: [] });
+      const name = await useCrewStore.getState().forceAddByUsername('crew-1', ' @asir ');
+      expect(name).toBe('Asir');
+      expect(api.get).toHaveBeenCalledWith('/crews/search-users?q=asir');
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/members', { userId: 'u-2' });
+    });
+
+    it('throws and sets the error when there is no exact match', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce([{ id: 'u-9', username: 'asirhelper' }]);
+      await expect(useCrewStore.getState().forceAddByUsername('crew-1', 'x')).rejects.toThrow(
+        'No user called "x". Check the spelling.',
+      );
+      expect(useCrewStore.getState().error).toBe('No user called "x". Check the spelling.');
+      expect(api.post).not.toHaveBeenCalled();
+    });
+  });
+
   describe('optimistic rollback preserves concurrent socket updates', () => {
     it('votePoll rolls back only my vote, keeping a concurrent peer vote', async () => {
       useAuthStore.setState({ user: { id: 'user-1' } as never });

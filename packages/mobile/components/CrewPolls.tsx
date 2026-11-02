@@ -20,6 +20,7 @@ import {
   isPending,
   resolveFestivalTimeZone,
   QUEUED_WRITE_MESSAGE,
+  openPollState,
 } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -307,6 +308,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
     ]);
   };
 
+  const pollState = openPollState(polls);
   const canCreate = !!question.trim() && options.map((o) => o.trim()).filter(Boolean).length >= 2;
 
   return (
@@ -501,27 +503,36 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
       ) : (
         <>
           <TouchableOpacity
-            style={styles.toggle}
+            style={[styles.toggle, pollState.atCap && styles.toggleDisabled]}
             onPress={() => setShowForm(true)}
+            disabled={pollState.atCap}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Create a poll"
+            accessibilityState={{ disabled: pollState.atCap }}
           >
             <Ionicons name="bar-chart-outline" size={16} color={t.colors.accent.aqua} />
             <Text style={styles.toggleText}>Create poll</Text>
             <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.toggle}
+            style={[styles.toggle, pollState.atCap && styles.toggleDisabled]}
             onPress={() => setShowSchedule(true)}
+            disabled={pollState.atCap}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Create a schedule poll"
+            accessibilityState={{ disabled: pollState.atCap }}
           >
             <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
             <Text style={styles.toggleText}>Schedule poll (which set?)</Text>
             <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
+          {pollState.text ? (
+            <Text style={styles.capText} accessibilityLiveRegion="polite">
+              {pollState.text}
+            </Text>
+          ) : null}
         </>
       )}
 
@@ -642,6 +653,13 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.secondary,
+  },
+  toggleDisabled: {
+    opacity: 0.5,
+  },
+  capText: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
   },
   toggleText: {
     ...typeStyle('label'),

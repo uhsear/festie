@@ -97,7 +97,7 @@ env:
       - inputText: "Maestro Test Crew"
       - hideKeyboard
       - tapOn:
-          text: "Create Crew"
+          text: "Create crew"
       - waitForAnimationToEnd:
           timeout: 5000
       - takeScreenshot: ci-04-crew-created
