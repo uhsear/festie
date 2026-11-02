@@ -1123,45 +1123,29 @@ describe('createSessionsStore', () => {
       });
     });
 
-    describe('rotate', () => {
-      it('revokes old token and inserts new within transaction', async () => {
-        const pool = mockPool([
-          { rows: [] }, // BEGIN
-          { rows: [{ user_id: 'u1' }] }, // SELECT old token
-          { rows: [] }, // UPDATE revoke
-          { rows: [] }, // INSERT new token
-          { rows: [] }, // COMMIT
-        ]);
+    describe('claim', () => {
+      it('spends only a live, unrevoked token in one conditional UPDATE', async () => {
+        const pool = mockPool([{ rows: [{ userId: 'u1' }], rowCount: 1 }]);
         const sessions = createSessionsStore(pool, mockUtils);
 
-        await sessions.refreshTokens.rotate('old-rt', 'new-rt', 'new-st', '2026-07-01T00:00:00.000Z');
-        assert.ok(pool.calls[1].sql.includes('SELECT user_id'));
-        assert.ok(pool.calls[2].sql.includes('UPDATE refresh_tokens SET revoked'));
-        assert.ok(pool.calls[3].sql.includes('INSERT INTO refresh_tokens'));
+        const result = await sessions.refreshTokens.claim('rt1');
+        assert.deepEqual(result, { userId: 'u1' });
+        assert.equal(pool.calls.length, 1);
+        const sql = norm(pool.calls[0].sql);
+        assert.ok(sql.startsWith('UPDATE refresh_tokens SET revoked = TRUE'));
+        assert.ok(sql.includes('revoked = FALSE'));
+        assert.ok(sql.includes('expires_at > NOW()'));
+        assert.deepEqual(pool.calls[0].params, ['rt1']);
       });
 
-      it('throws when old token not found', async () => {
-        const pool = mockPool([
-          { rows: [] }, // BEGIN
-          { rows: [] }, // SELECT (not found)
-          // withTransaction will ROLLBACK on error
-          { rows: [] }, // ROLLBACK
-        ]);
-        const sessions = createSessionsStore(pool, mockUtils);
+      for (const kind of ['revoked', 'expired', 'unknown']) {
+        it(`returns null for a ${kind} token (UPDATE matches no row)`, async () => {
+          const pool = mockPool([{ rows: [], rowCount: 0 }]);
+          const sessions = createSessionsStore(pool, mockUtils);
 
-        await assert.rejects(() => sessions.refreshTokens.rotate('missing', 'new-rt', 'new-st', new Date()), {
-          message: 'Old refresh token not found',
+          assert.equal(await sessions.refreshTokens.claim(`rt-${kind}`), null);
         });
-      });
-
-      it('uses transaction (BEGIN/COMMIT)', async () => {
-        const pool = mockPool([{ rows: [] }, { rows: [{ user_id: 'u1' }] }, { rows: [] }, { rows: [] }, { rows: [] }]);
-        const sessions = createSessionsStore(pool, mockUtils);
-
-        await sessions.refreshTokens.rotate('old', 'new', 'st', new Date());
-        assert.equal(pool.calls[0].sql, 'BEGIN');
-        assert.equal(pool.calls[pool.calls.length - 1].sql, 'COMMIT');
-      });
+      }
     });
 
     describe('revokeAll', () => {
@@ -1438,7 +1422,7 @@ describe('createSessionsStore', () => {
       assert.ok(sessions.refreshTokens);
       assert.equal(typeof sessions.refreshTokens.create, 'function');
       assert.equal(typeof sessions.refreshTokens.validate, 'function');
-      assert.equal(typeof sessions.refreshTokens.rotate, 'function');
+      assert.equal(typeof sessions.refreshTokens.claim, 'function');
       assert.equal(typeof sessions.refreshTokens.revokeAll, 'function');
       assert.equal(typeof sessions.refreshTokens.deleteExpired, 'function');
     });

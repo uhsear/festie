@@ -170,7 +170,12 @@ export default function AdminUsersScreen() {
         Alert.alert(grant ? 'Admin granted' : 'Admin revoked', `@${user.username} ${grant ? 'now has' : 'no longer has'} admin access.`);
       } else if (pending.kind === 'reset-link') {
         const { user } = pending;
-        const { resetUrl, username, expiresAt } = await createResetLink(user.id);
+        const result = await withReauth(() => createResetLink(user.id), askPassword);
+        if (cancelled || !result) {
+          setPending(null);
+          return;
+        }
+        const { resetUrl, username, expiresAt } = result;
         setPending(null);
         await Share.share({ message: resetUrl });
         Alert.alert('Reset link ready', resetLinkReadyMessage(username, expiresAt));

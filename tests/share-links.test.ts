@@ -178,23 +178,26 @@ describe('revocable share links', { skip, concurrency: 1 }, () => {
     await post(server, user.token, '/api/v1/account/share-link/bad%20id!').expect(400);
   });
 
-  test('legacy /s/<profileId> works before reset; reset stops it, the token and the calendar feed', async () => {
+  test('a raw profile id never resolves; a share token resolves until Reset', async () => {
     const server = await boot();
     const user = await registerUser(server, 'reset');
     const profile = await joinWithPick(server, user.token);
     const oldToken = await shareToken(server, user.token);
     const feed = await calendarUrl(server, user.token);
 
-    await server.request.get(`/s/${profile.id}`).expect(200);
+    const legacy = await server.request.get(`/s/${profile.id}`).expect(404);
+    assert.match(legacy.text, /ask them for a new one/);
+    await server.request.get(`/s/${profile.id}/json`).expect(404);
+    await server.request.get(`/s/${profile.id}/og.png`).expect(404);
+    await server.request.get(`/s/${oldToken}`).expect(200);
     await server.request.get(feed).expect(200);
 
     const reset = await post(server, user.token, '/api/v1/account/sharing/reset').expect(200);
     assert.ok(!Number.isNaN(Date.parse(reset.body.data.linksResetAt)));
 
-    const legacy = await server.request.get(`/s/${profile.id}`).expect(404);
-    assert.match(legacy.text, /ask them for a new one/);
-    await server.request.get(`/s/${profile.id}/json`).expect(404);
+    await server.request.get(`/s/${profile.id}`).expect(404);
     await server.request.get(`/s/${oldToken}`).expect(404);
+    await server.request.get(`/s/${oldToken}/json`).expect(404);
     await server.request.get(feed).expect(404);
 
     const newToken = await shareToken(server, user.token);
@@ -209,7 +212,7 @@ describe('revocable share links', { skip, concurrency: 1 }, () => {
     const server = await boot();
     const alice = await registerUser(server, 'alice');
     const bob = await registerUser(server, 'bob');
-    const aliceProfile = await joinWithPick(server, alice.token);
+    await joinWithPick(server, alice.token);
     await joinWithPick(server, bob.token);
     const aliceToken = await shareToken(server, alice.token);
     const aliceFeed = await calendarUrl(server, alice.token);
@@ -217,8 +220,23 @@ describe('revocable share links', { skip, concurrency: 1 }, () => {
     await post(server, bob.token, '/api/v1/account/sharing/reset').expect(200);
 
     await server.request.get(`/s/${aliceToken}`).expect(200);
-    await server.request.get(`/s/${aliceProfile.id}`).expect(200);
     await server.request.get(aliceFeed).expect(200);
+  });
+
+  test('a profile id read from the festival attendee list opens no picks', async () => {
+    const server = await boot();
+    const alice = await registerUser(server, 'listed');
+    const bob = await registerUser(server, 'lister');
+    const aliceProfile = await joinWithPick(server, alice.token);
+    await joinWithPick(server, bob.token);
+
+    const list = await server.request.get(`/api/v1/profiles/${FEST_ID}`).set('x-user-token', bob.token).expect(200);
+    const seen = list.body.data.find((p: { id: string }) => p.id === aliceProfile.id);
+    assert.ok(seen, 'the attendee list exposes the profile id');
+
+    const json = await server.request.get(`/s/${seen.id}/json`).expect(404);
+    assert.equal(json.body.error.code, 'NOT_FOUND');
+    await server.request.get(`/s/${seen.id}`).expect(404);
   });
 
   test('/s/u/<username> renders in place with the festival name; 404 when private', async () => {

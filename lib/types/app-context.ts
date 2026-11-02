@@ -141,7 +141,7 @@ export interface AppContext {
   // Auth / rate limiting middleware
   userAuth: Middleware;
   adminAuth: Middleware;
-  rateLimit: (max: number, key: string) => Middleware;
+  rateLimit: (max: number, key: string, opts?: { anonIpCap?: boolean }) => Middleware;
 
   // Stores
   stores: Stores;

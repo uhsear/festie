@@ -3,8 +3,8 @@ import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
 
 /**
- * Revocable picks links. A profile's link is /s/<share_token>. Legacy
- * /s/<profileId> links resolve until the owner resets (users.share_links_reset_at).
+ * Revocable picks links. A profile's link is /s/<share_token>. A raw profile id
+ * never resolves: every attendee can read other attendees' ids, so it is not a secret.
  */
 export function createShareLinksStore(pool: Pool) {
   return {
@@ -28,10 +28,18 @@ export function createShareLinksStore(pool: Pool) {
 
     async findProfileId(shareId: string): Promise<string | null> {
       const { rows } = await pool.query(
-        `SELECT fp.id FROM festival_profiles fp JOIN users u ON u.id = fp.user_id
-         WHERE fp.deleted_at IS NULL
-           AND (fp.share_token = $1 OR (fp.id = $1 AND u.share_links_reset_at IS NULL))
-         LIMIT 1`,
+        `
+  SELECT
+    fp.id
+  FROM
+    festival_profiles fp
+  WHERE
+    fp.share_token = $1
+    AND fp.deleted_at IS NULL
+    AND fp.user_id IS NOT NULL
+  LIMIT
+    1
+`,
         [shareId],
       );
       return rows[0]?.id ?? null;

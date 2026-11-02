@@ -510,8 +510,8 @@ function configureMiddleware(app: Application, ctx: any) {
   app.use('/api/v1/auth/refresh-token', authRateLimit);
   app.use('/api/v1/auth/forgot-password', authRateLimit);
   app.use('/api/v1/auth/reset-password', authRateLimit);
-  app.use('/api/v1/profiles', rateLimit(config.PROFILE_RATE_LIMIT_MAX, 'profiles'));
-  app.use('/api/v1/crews', rateLimit(config.OVERLAP_RATE_LIMIT_MAX, 'crews'));
+  app.use('/api/v1/profiles', rateLimit(config.PROFILE_RATE_LIMIT_MAX, 'profiles', { anonIpCap: false }));
+  app.use('/api/v1/crews', rateLimit(config.OVERLAP_RATE_LIMIT_MAX, 'crews', { anonIpCap: false }));
 
   // ── Idempotency key middleware ────────────────────────────────────────
   // ponytail: values stay the literals they were — lib/config.ts already defines

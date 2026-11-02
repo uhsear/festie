@@ -238,6 +238,7 @@ describe('Integration — admin user detail and support routes', { skip, concurr
   test('reset link returns expiresAt one RESET_TOKEN_TTL from now', async () => {
     const { h, server, adminToken } = await setUp({ PUBLIC_ORIGIN: 'http://localhost:3000' });
     const hank = await h.registerUser(server, 'hank');
+    await reauth(server, adminToken);
     const before = Date.now();
     const res = await server.request
       .post(`/api/v1/admin/users/${hank.user.id}/reset-link`)
