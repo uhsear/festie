@@ -35,7 +35,6 @@ async function gotoSchedule(
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   );
-  await page.waitForTimeout(100);
 }
 
 async function createJoinedUser(page: Page, app: { baseUrl: string }) {

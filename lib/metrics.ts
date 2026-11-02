@@ -22,6 +22,9 @@ try {
   available = false;
 }
 
+// shortcut: process-wide metrics object, pass it explicitly if a second registry ever appears
+let lastMetrics: any = null;
+
 function createMetrics() {
   if (!available) {
     return {
@@ -33,13 +36,13 @@ function createMetrics() {
       pgPoolIdleGauge: null,
       pgPoolWaitingGauge: null,
       errorCounter: null,
-      rateLimitCounter: null,
-      authFailuresCounter: null,
       dbQueryHistogram: null,
       rateLimitHitsCounter: null,
       pushProviderOutageCounter: null,
       reengagementWorkerErrorsCounter: null,
       reengagementQueueDepthGauge: null,
+      jobRunsCounter: null,
+      jobLastSuccessGauge: null,
     };
   }
 
@@ -94,13 +97,6 @@ function createMetrics() {
   });
   registry.registerMetric(errorCounter);
 
-  const rateLimitCounter = new client.Counter({
-    name: 'festie_rate_limit_hits_total',
-    help: 'Rate limit rejections',
-    labelNames: ['scope'],
-  });
-  registry.registerMetric(rateLimitCounter);
-
   const rateLimitFallbackCounter = new client.Counter({
     name: 'festie_rate_limit_fallback_total',
     help: 'Rate limiter failed-over to in-memory cluster-unaware fallback',
@@ -111,13 +107,6 @@ function createMetrics() {
   // --- fp_* namespace: auth/db/rate-limit observability counters ---
   // Named fp_* to match the web-vitals histogram + future frontend-facing
   // metrics. Coexist with the existing festie_* series (different names).
-
-  const authFailuresCounter = new client.Counter({
-    name: 'fp_auth_failures_total',
-    help: 'Authentication failures by reason (bad-password, expired-token, locked, ...)',
-    labelNames: ['reason'],
-  });
-  registry.registerMetric(authFailuresCounter);
 
   const dbQueryHistogram = new client.Histogram({
     name: 'fp_db_query_duration_seconds',
@@ -168,7 +157,23 @@ function createMetrics() {
   });
   registry.registerMetric(reengagementQueueDepthGauge);
 
-  return {
+  // --- in-process background jobs (lib/shutdown.ts leader timers), via recordJobRun ---
+
+  const jobRunsCounter = new client.Counter({
+    name: 'festie_job_runs_total',
+    help: 'Background job runs by job and result (ok | error)',
+    labelNames: ['job', 'result'],
+  });
+  registry.registerMetric(jobRunsCounter);
+
+  const jobLastSuccessGauge = new client.Gauge({
+    name: 'festie_job_last_success_timestamp_seconds',
+    help: 'Unix time of the last successful run of each background job',
+    labelNames: ['job'],
+  });
+  registry.registerMetric(jobLastSuccessGauge);
+
+  lastMetrics = {
     available: true,
     client,
     registry,
@@ -179,15 +184,23 @@ function createMetrics() {
     pgPoolIdleGauge,
     pgPoolWaitingGauge,
     errorCounter,
-    rateLimitCounter,
     rateLimitFallbackCounter,
-    authFailuresCounter,
     dbQueryHistogram,
     rateLimitHitsCounter,
     pushProviderOutageCounter,
     reengagementWorkerErrorsCounter,
     reengagementQueueDepthGauge,
+    jobRunsCounter,
+    jobLastSuccessGauge,
   };
+  return lastMetrics;
+}
+
+/** Count one background job run; on success also stamp its last-success time. No-op without metrics. */
+function recordJobRun(job: string, ok: boolean) {
+  if (!lastMetrics) return;
+  lastMetrics.jobRunsCounter.inc({ job, result: ok ? 'ok' : 'error' });
+  if (ok) lastMetrics.jobLastSuccessGauge.set({ job }, Date.now() / 1000);
 }
 
 /** Express middleware — records timing histogram + counter per request. */
@@ -347,6 +360,7 @@ export {
   metricsHandler,
   startMetricsSampler,
   startReengagementQueueSampler,
+  recordJobRun,
   available,
   startMetricsListener,
 };

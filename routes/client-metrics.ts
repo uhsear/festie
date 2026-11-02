@@ -88,8 +88,7 @@ export default function createClientMetricsRoutes(deps: any) {
       try { webVitalsHistogram.observe({ metric: name, nav }, recorded); } catch { /* swallow */ }
     }
 
-    log.info({
-      msg: 'web-vitals',
+    log.debug('web-vitals', {
       metric: name,
       value,
       rating: rating || null,

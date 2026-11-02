@@ -224,6 +224,7 @@ function createRateLimiters({
             });
           }
           res.setHeader('Retry-After', String(result.retryAfter));
+          promMetrics?.rateLimitHitsCounter?.inc({ tier: 'route', action: scope });
           return sendError(res, 429, 'Too many requests', ErrorCodes.RATE_LIMITED);
         }
         return next();
@@ -253,6 +254,7 @@ function createRateLimiters({
           });
         }
         res.setHeader('Retry-After', String(result.retryAfter));
+        promMetrics?.rateLimitHitsCounter?.inc({ tier: 'route', action: 'default' });
         return sendError(res, 429, 'Too many requests', ErrorCodes.RATE_LIMITED);
       }
       return next();
@@ -269,6 +271,7 @@ function createRateLimiters({
             if (result.limited) {
               log.warn('rate-limit:exceeded', { scope: `auth:${ip}`, ip, path: req.path, userId: req.user?.userId });
               res.set('Retry-After', String(Math.max(1, Math.ceil(result.resetMs / 1000))));
+              promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
               return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
             }
             return next();
@@ -297,6 +300,7 @@ function createRateLimiters({
         });
         const retryAfter = Math.ceil((entry.start + config.AUTH_RATE_LIMIT_WINDOW - now) / 1000);
         res.set('Retry-After', String(Math.max(1, retryAfter)));
+        promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
         return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
       }
       return next();

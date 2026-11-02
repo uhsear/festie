@@ -14,6 +14,7 @@ import { mountSwaggerUI } from './swagger-ui-setup.js';
 import { default as createAuditMiddleware } from './audit-middleware.js';
 import { recordRecentRequest } from './recent-requests.js';
 import { sentry } from './sentry.js';
+import { runWithRequestContext } from './logger.js';
 
 /**
  * Idempotency-Key middleware: caches the JSON response per `${userId||ip}:${key}`
@@ -227,6 +228,9 @@ function configureMiddleware(app: Application, ctx: any) {
 
   // ── Distributed tracing ───────────────────────────────────────────────
   app.use(createTracingMiddleware() as any);
+
+  // ── Request context for log lines (reqId/traceId via AsyncLocalStorage) ──
+  app.use((req: any, _res: any, next: any) => runWithRequestContext({ reqId: req.id, traceId: req.traceId }, next));
 
   // ── CSP + security headers ────────────────────────────────────────────
   app.use((req: any, res: any, next: any) => {

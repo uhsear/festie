@@ -5,7 +5,9 @@ const artifactDir = process.env.PLAYWRIGHT_ARTIFACT_DIR || 'output/playwright';
 module.exports = defineConfig({
   testDir: './tests/e2e',
   timeout: 60_000,
-  retries: process.env.CI ? 2 : 0,
+  // One retry, and a test that needed it fails the run, so a flake shows up instead of hiding.
+  retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: !!process.env.CI,
   expect: {
     timeout: 10_000,
     toHaveScreenshot: {
