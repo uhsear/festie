@@ -718,6 +718,11 @@ export interface PeerLocation {
  * coordinate is the one intentional durable location datum (see crew_activity);
  * everything else about live location is ephemeral.
  */
+export interface SosViewer {
+  userId: string;
+  username: string;
+}
+
 export interface SosEntry {
   crewId: string;
   userId: string;
@@ -731,6 +736,8 @@ export interface SosEntry {
   };
   activityId?: string;
   raisedAt: string;
+  /** Crew members who have seen this SOS. */
+  seenBy?: SosViewer[];
 }
 
 export interface NotificationPrefs {

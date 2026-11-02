@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { AlertCircle, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '@festie/shared/stores';
 import { useActiveSos, useLiveLocationCrewSync } from '@festie/shared/hooks';
-import { sosHeadline, sosWhen } from '@festie/shared/utils';
+import { sosHeadline, sosSeenLabel, sosWhen } from '@festie/shared/utils';
 
 /**
  * App-wide SOS banner: filled coral (the AA-safe strong fill) under the
@@ -28,6 +28,7 @@ export default function SosBanner() {
   if (!active) return null;
   const headline = sosHeadline(entries, selfId);
   const when = sosWhen(entries);
+  const seen = entries[0]!.userId === selfId ? sosSeenLabel(entries[0]!) : null;
 
   return (
     <div className="shrink-0" data-testid="sos-banner">
@@ -39,13 +40,13 @@ export default function SosBanner() {
       <button
         type="button"
         onClick={() => navigate({ to: '/crew', search: { sos: entries[0]!.userId } })}
-        aria-label={`${headline}, ${when}. Open the map to find them`}
+        aria-label={`${headline}, ${when}${seen ? `, ${seen}` : ''}. Open the map to find them`}
         className="flex items-center gap-3 w-full min-h-12 px-4 py-2 text-left bg-accent-coral-strong text-text-on-accent hover:bg-[var(--color-accent-coral-strong-hover)] transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-text-on-accent"
       >
         <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2">
           <span className="type-label font-bold">{headline}</span>
-          <span className="type-caption tabular-nums opacity-90">{when}</span>
+          <span className="type-caption tabular-nums opacity-90">{seen ? `${when} · ${seen}` : when}</span>
         </span>
         <span className="flex items-center gap-0.5 type-label font-semibold shrink-0">
           Find

@@ -10,6 +10,7 @@ import {
   RATING_SCALE,
   RATING_LABEL,
   ratingCaption,
+  LIVE_SHARE_DURATIONS,
 } from './config';
 import { PRIORITY_WEIGHT } from '../utils/crewNudges';
 
@@ -86,6 +87,11 @@ describe('CREW_ACTIVITY_LABELS', () => {
     for (const key of required) {
       expect(CREW_ACTIVITY_LABELS[key], `missing key: ${key}`).toBeTruthy();
     }
+  });
+
+  it('has the check-in labels', () => {
+    expect(CREW_ACTIVITY_LABELS['checkin-started']).toBe('started a check-in timer');
+    expect(CREW_ACTIVITY_LABELS['checkin-done']).toBe('checked in safe');
   });
 
   it('all values are non-empty strings', () => {
@@ -178,5 +184,12 @@ describe('PRIORITY_SYMBOLS', () => {
       expect(PRIORITY_SYMBOLS[opt.value].short).toBe(PRIORITY_LABEL[opt.value]);
       expect(PRIORITY_SYMBOLS[opt.value].label).toBe(opt.label);
     }
+  });
+});
+
+describe('LIVE_SHARE_DURATIONS', () => {
+  it('has only numeric bounds', () => {
+    expect(LIVE_SHARE_DURATIONS.map((d) => d.id)).toEqual(['1h', '2h', '4h']);
+    for (const d of LIVE_SHARE_DURATIONS) expect(typeof d.ms).toBe('number');
   });
 });

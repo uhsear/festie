@@ -10,6 +10,8 @@ import {
   fmtZonedClock,
   fmtZonedDayClock,
   settleUpLine,
+  formatBatteryLabel,
+  lostContactLabel,
   timeAgo,
   type ActiveMeet,
   type CrewWhereabout,
@@ -213,10 +215,16 @@ function Freshness({ row }: { row: CrewWhereabout }) {
   const s = useStyles();
   if (row.sos) return <Text style={s.sosTag}>SOS</Text>;
   if (row.live === 'live') {
+    const battery = formatBatteryLabel(row.battery);
     return (
       <View style={s.fresh}>
         <View style={[s.dot, { backgroundColor: t.colors.confidence.live }]} />
         <Text style={s.freshText}>Live</Text>
+        {battery ? (
+          <Text style={s.freshMuted} accessibilityLabel={`Battery ${battery}`}>
+            {` · ${battery}`}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -225,6 +233,13 @@ function Freshness({ row }: { row: CrewWhereabout }) {
       <View style={s.fresh}>
         <View style={[s.dot, s.ring, { borderColor: t.colors.confidence.aging }]} />
         <Text style={s.freshMuted}>Seen {timeAgo(row.liveAt)}</Text>
+      </View>
+    );
+  }
+  if (row.lostAt) {
+    return (
+      <View style={s.fresh}>
+        <Text style={s.freshMuted}>{lostContactLabel(row.lostAt)}</Text>
       </View>
     );
   }

@@ -8,3 +8,4 @@ export * from './sharing';
 export * from './lineupImport';
 export * from './festivalAdmin';
 export * from './adminFestivalTools';
+export * from './checkin';

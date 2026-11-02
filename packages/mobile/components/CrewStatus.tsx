@@ -18,6 +18,7 @@ import {
   statusNoteLine,
 } from '@festie/shared/utils';
 import type { CrewMemberStatus, CrewStatusKey } from '@festie/shared/types';
+import { CREW_STATUS_HONESTY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useNow } from '../hooks/useNow';
@@ -282,7 +283,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
       </View>
 
       {/* Honesty banner: this is NEVER live. */}
-      <Text style={styles.banner}>Not live: each status shows when that crewmate last had signal.</Text>
+      <Text style={styles.banner}>{CREW_STATUS_HONESTY}</Text>
 
       {showPresets ? (
         <View style={styles.formBox}>

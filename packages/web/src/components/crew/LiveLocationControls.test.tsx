@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { SHARE_EXPLAINER_SEEN_KEY } from '@festie/shared/hooks';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -27,21 +28,16 @@ vi.mock('./SosRaiseButton', () => ({
   ),
 }));
 
-// constants (SESSION_MINUTES is derived from MAX_SESSION_MS).
-vi.mock('@festie/shared/constants', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@festie/shared/constants')>()),
-  LIVE_LOCATION: { MAX_SESSION_MS: 3_600_000 },
-}));
+// The check-in card and Beacon have their own test files; stub them here.
+vi.mock('./CheckInCard', () => ({ default: () => <div data-testid="checkin-card" /> }));
+vi.mock('./BeaconOverlay', () => ({ BeaconButton: () => <div data-testid="beacon-button" /> }));
 
-// utils — formatStaleness is the only one used by this component.
-vi.mock('@festie/shared/utils', () => ({ formatStaleness: () => 'as of just now' }));
-
-// The real (in-memory, non-persisted) liveLocationStore: the switch writes the
-// opt-in there and the app-level LiveLocationSharing publishes from it.
+// The real (in-memory, non-persisted) liveLocationStore: the chooser writes the
+// share session there and the app-level LiveLocationSharing runs it.
 
 // festivalModeStore — low-power mode gates the share affordance. Controllable
 // so a test can flip lowPowerMode on and assert the toggle is disabled.
-const { fmState } = vi.hoisted(() => ({ fmState: { lowPowerMode: false } }));
+const { fmState } = vi.hoisted(() => ({ fmState: { lowPowerMode: false, setLowPowerMode: vi.fn() } }));
 vi.mock('@festie/shared/stores/festivalModeStore', () => ({
   useFestivalModeStore: (selector: (s: typeof fmState) => unknown) => selector(fmState),
 }));
@@ -56,6 +52,7 @@ vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: toastSpy })
 
 import type { SosEntry } from '@festie/shared/types';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
+import { LIVE_SHARE_COPY, LOW_POWER_COPY } from '@festie/shared/constants';
 import LiveLocationControls from './LiveLocationControls';
 
 const CREW_ID = 'crew-1';
@@ -68,11 +65,14 @@ function setSos(list: unknown[]) {
 function resetStore() {
   useLiveLocationStore.getState().reset();
   fmState.lowPowerMode = false;
+  fmState.setLowPowerMode.mockClear();
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   resetStore();
+  // The one-time explainer is covered by its own test; skip it here.
+  localStorage.setItem(SHARE_EXPLAINER_SEEN_KEY, '1');
   // jsdom has no geolocation by default; provide a stub so toggleSharing's
   // capability check passes. watchPosition/getCurrentPosition are never invoked
   // here because the publisher hook is mocked.
@@ -97,33 +97,81 @@ describe('LiveLocationControls — share toggle', () => {
     const sw = screen.getByRole('switch');
     expect(sw).toHaveAccessibleName('Share my live location with this crew');
     expect(sw).toHaveAttribute('aria-checked', 'false');
-    // No sharing indicator until opted in.
     expect(screen.queryByTestId('sharing-indicator')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('live-share-chooser')).not.toBeInTheDocument();
   });
 
-  it('records the opt-in for this crew and flips aria-checked once sharing starts', async () => {
+  it('shows the web stop rule, not the old Festival Mode or Ephemeral copy', () => {
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    expect(screen.getByText(LIVE_SHARE_COPY.ruleWeb)).toBeInTheDocument();
+  });
+
+  it('the first share shows the explainer, then the durations after Got it', async () => {
+    localStorage.removeItem(SHARE_EXPLAINER_SEEN_KEY);
     const user = userEvent.setup();
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
-
     await user.click(screen.getByRole('switch'));
-    expect(useLiveLocationStore.getState().shareIntentCrewId).toBe(CREW_ID);
 
-    // The app-level publisher marks the share live once it starts.
-    act(() => useLiveLocationStore.getState().startSharing(CREW_ID));
+    const chooser = screen.getByTestId('live-share-chooser');
+    expect(await within(chooser).findByText(LIVE_SHARE_COPY.explainerTitle)).toBeInTheDocument();
+    for (const point of LIVE_SHARE_COPY.explainerPoints) expect(within(chooser).getByText(point)).toBeInTheDocument();
+    expect(within(chooser).queryByRole('button', { name: '1 hour' })).not.toBeInTheDocument();
+
+    await user.click(within(chooser).getByRole('button', { name: LIVE_SHARE_COPY.explainerOk }));
+    expect(within(chooser).getByRole('button', { name: '1 hour' })).toBeInTheDocument();
+    expect(localStorage.getItem(SHARE_EXPLAINER_SEEN_KEY)).toBe('1');
+  });
+
+  it('switch on opens the chooser with the duration buttons and a cancel', async () => {
+    const user = userEvent.setup();
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    await user.click(screen.getByRole('switch'));
+
+    const chooser = screen.getByTestId('live-share-chooser');
+    expect(within(chooser).getByText(LIVE_SHARE_COPY.chooserTitle)).toBeInTheDocument();
+    for (const label of ['1 hour', '2 hours', '4 hours']) {
+      expect(within(chooser).getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    expect(within(chooser).getByRole('checkbox', { name: /show my battery level/i })).not.toBeChecked();
+    await user.click(within(chooser).getByRole('button', { name: LIVE_SHARE_COPY.cancel }));
+    expect(screen.queryByTestId('live-share-chooser')).not.toBeInTheDocument();
+    expect(useLiveLocationStore.getState().shareIntent).toBeNull();
+  });
+
+  it('picking 1 hour begins a session one hour out without battery', async () => {
+    const user = userEvent.setup();
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    await user.click(screen.getByRole('switch'));
+    const before = Date.now();
+    await user.click(screen.getByRole('button', { name: '1 hour' }));
+
+    const intent = useLiveLocationStore.getState().shareIntent;
+    expect(intent).toMatchObject({ crewId: CREW_ID, paused: false, shareBattery: false });
+    const ms = Date.parse(intent!.expiresAt) - before;
+    expect(ms).toBeGreaterThanOrEqual(3_600_000 - 1000);
+    expect(ms).toBeLessThanOrEqual(3_600_000 + 5000);
+    expect(screen.queryByTestId('live-share-chooser')).not.toBeInTheDocument();
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
-    // The indicator is app-wide (LiveLocationSharing), not on this tab.
-    expect(screen.queryByTestId('sharing-indicator')).not.toBeInTheDocument();
   });
 
-  it('withdraws the opt-in when the switch is turned off', async () => {
+  it('passes shareBattery true when the battery box is checked', async () => {
     const user = userEvent.setup();
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
     await user.click(screen.getByRole('switch'));
-    act(() => useLiveLocationStore.getState().startSharing(CREW_ID));
+    await user.click(screen.getByRole('checkbox', { name: /show my battery level/i }));
+    await user.click(screen.getByRole('button', { name: '2 hours' }));
+    expect(useLiveLocationStore.getState().shareIntent?.shareBattery).toBe(true);
+  });
+
+  it('switch off ends the session', async () => {
+    const user = userEvent.setup();
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    act(() => useLiveLocationStore.getState().beginShare(CREW_ID, new Date(Date.now() + 3_600_000).toISOString(), false));
 
     await user.click(screen.getByRole('switch'));
 
-    expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
+    expect(useLiveLocationStore.getState().shareIntent).toBeNull();
+    expect(useLiveLocationStore.getState().shareEndedReason).toBe('user');
   });
 
   it('refuses to start sharing (and warns) when the socket is disconnected', async () => {
@@ -132,24 +180,35 @@ describe('LiveLocationControls — share toggle', () => {
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     await user.click(screen.getByRole('switch'));
+    await user.click(screen.getByRole('button', { name: '1 hour' }));
 
     expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/not connected/i), 'error');
-    expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
+    expect(useLiveLocationStore.getState().shareIntent).toBeNull();
     socketState.connected = true; // restore for other tests
   });
 
-  it('disables the share affordance in low-power mode (battery gate) and warns on tap', async () => {
+  it('in low-power mode disables the switch, explains why and offers a turn-off button', async () => {
     const user = userEvent.setup();
     fmState.lowPowerMode = true;
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
 
     const sw = screen.getByTestId('live-share-toggle');
     expect(sw).toBeDisabled();
+    expect(screen.getByText(LOW_POWER_COPY.livePaused)).toBeInTheDocument();
     // SOS — an essential — stays available even in low-power mode.
     expect(screen.getByTestId('sos-raise')).toBeInTheDocument();
-    // A disabled switch swallows the click, so sharing never goes live.
+    expect(screen.getByTestId('beacon-button')).toBeInTheDocument();
     await user.click(sw);
-    expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
+    expect(useLiveLocationStore.getState().shareIntent).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: LOW_POWER_COPY.turnOff }));
+    expect(fmState.setLowPowerMode).toHaveBeenCalledWith(false);
+  });
+
+  it('mounts the check-in card and the Beacon button', () => {
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    expect(screen.getByTestId('checkin-card')).toBeInTheDocument();
+    expect(screen.getByTestId('beacon-button')).toBeInTheDocument();
   });
 });
 
@@ -196,6 +255,17 @@ describe('LiveLocationControls — active SOS banner', () => {
     // Any member may resolve any SOS (raiser's phone may be dead) — the clear
     // control is present for someone else's SOS, worded for that raiser.
     expect(within(banner).getByRole('button', { name: /mark dana's sos resolved/i })).toBeInTheDocument();
+  });
+
+  it('shows who has seen the SOS', () => {
+    setSos([{ ...baseSos }]);
+    const { unmount } = render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    expect(within(screen.getByTestId('sos-banner')).getByText('Not seen yet')).toBeInTheDocument();
+    unmount();
+
+    setSos([{ ...baseSos, seenBy: [{ userId: 'a', username: 'Sam' }, { userId: 'b', username: 'Alex' }] }]);
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    expect(within(screen.getByTestId('sos-banner')).getByText('Seen by Sam and Alex')).toBeInTheDocument();
   });
 
   it('lets ANY member resolve another member\'s SOS via a confirm dialog', async () => {

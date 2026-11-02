@@ -10,7 +10,8 @@
  *   1. emits `location:share` on enable (server sets sharingCrewId),
  *   2. starts the injected watcher,
  *   3. throttles fixes via shouldPublishLocation and emits `location:update`,
- *   4. auto-stops after MAX_SESSION_MS (forgotten sharing can't run forever),
+ *   4. auto-stops at `expiresAt` (an absolute end time), else after `durationMs`,
+ *      else after MAX_SESSION_MS (forgotten sharing can't run forever),
  *   5. emits `location:stop` + stops the watcher on disable / unmount / teardown.
  *
  * The actual GPS source is injected so this stays free of platform deps. All
@@ -70,6 +71,16 @@ export interface UseLiveLocationPublisherOptions {
    * even if the app stays foregrounded — no silent indefinite sharing.
    */
   durationMs?: number;
+  /**
+   * Absolute ISO end time. Takes precedence over `durationMs`. A time already in
+   * the past calls onAutoStop and emits nothing.
+   */
+  expiresAt?: string;
+  /**
+   * Whether to relay battery and low-power state. `false` strips both from every
+   * emit (the sharer did not opt in); undefined keeps the fix as the watcher gave it.
+   */
+  shareBattery?: boolean;
   /** Called when sharing auto-stops (hit the session time-box) so UI can update. */
   onAutoStop?: () => void;
   /** Called if the geolocation source errors (permission revoked, etc.). */
@@ -91,6 +102,8 @@ export function useLiveLocationPublisher({
   enabled,
   watchPosition,
   durationMs,
+  expiresAt,
+  shareBattery,
   onAutoStop,
   onError,
   onShareRejected,
@@ -105,11 +118,18 @@ export function useLiveLocationPublisher({
     // the absolute expiry ONCE at session start and relay it on every emit so
     // peers can render a "sharing ends in Nm" countdown. A reconnect re-uses the
     // same expiry (the wall-clock deadline doesn't move).
-    const cap =
-      typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
+    const expiresMs = expiresAt ? Date.parse(expiresAt) : NaN;
+    const hasAbsoluteEnd = Number.isFinite(expiresMs);
+    const cap = hasAbsoluteEnd
+      ? expiresMs - Date.now()
+      : typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
         ? durationMs
         : LIVE_LOCATION.MAX_SESSION_MS;
-    const sessionExpiresAt = new Date(Date.now() + cap).toISOString();
+    if (cap <= 0) {
+      onAutoStop?.();
+      return;
+    }
+    const sessionExpiresAt = hasAbsoluteEnd ? (expiresAt as string) : new Date(Date.now() + cap).toISOString();
 
     // 1. Declare intent to share. Send the first fix inline once we have it.
     store.getState().startSharing(crewId, sessionExpiresAt);
@@ -147,11 +167,11 @@ export function useLiveLocationPublisher({
           // share-window expiry so peers can render direction/battery/countdown.
           // TODO(expo-battery): mobile fix.battery is undefined until a native
           // build adds expo-battery; this passes it through with no native read.
-          battery: fix.battery,
+          battery: shareBattery === false ? undefined : fix.battery,
           // Peer low-power flag (#5): relay the sharer's battery-saver state (when
           // a source supplies it) so peers see a low-power cue next to the battery
           // chip. Optional — undefined on web / when unavailable; pure pass-through.
-          lowPower: fix.lowPower,
+          lowPower: shareBattery === false ? undefined : fix.lowPower,
           expiresAt: sessionExpiresAt,
           capturedAt: fix.capturedAt ?? new Date(now).toISOString(),
         });
@@ -212,9 +232,9 @@ export function useLiveLocationPublisher({
     }
 
     return stop;
-    // crewId / enabled / socket / durationMs identity changes re-run the effect
+    // crewId / enabled / socket / durationMs / expiresAt / shareBattery identity changes re-run the effect
     // (cleanup stops the old session). watchPosition is assumed stable by the
     // caller. onAutoStop / onError are read lazily so they need not be stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, crewId, enabled, durationMs]);
+  }, [socket, crewId, enabled, durationMs, expiresAt, shareBattery]);
 }

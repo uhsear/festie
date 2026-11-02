@@ -225,7 +225,7 @@ describe('MeetingPointsTab', () => {
 
   it('leaving the tab keeps sharing, so the full-map link carries no stop-sharing note', () => {
     useLiveLocationStore.getState().setActiveCrew('c1');
-    useLiveLocationStore.getState().requestSharing('c1');
+    useLiveLocationStore.getState().beginShare('c1', new Date(Date.now() + 3_600_000).toISOString(), false);
     useLiveLocationStore.getState().startSharing('c1');
     const { unmount } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     const link = screen.getByRole('link', { name: 'Open full map' });
@@ -234,7 +234,7 @@ describe('MeetingPointsTab', () => {
     expect(screen.queryByText(/stops sharing your location/)).not.toBeInTheDocument();
     unmount();
     expect(useLiveLocationStore.getState().sharingCrewId).toBe('c1');
-    expect(useLiveLocationStore.getState().shareIntentCrewId).toBe('c1');
+    expect(useLiveLocationStore.getState().shareIntent?.crewId).toBe('c1');
     useLiveLocationStore.getState().reset();
   });
 

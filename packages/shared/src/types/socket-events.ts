@@ -242,6 +242,13 @@ export interface SosRaisedPayload extends VersionedPayload {
   raisedAt: string;
 }
 
+/** Server to crew room: the full list of members who have seen one raiser's SOS. */
+export interface SosSeenPayload extends VersionedPayload {
+  crewId: string;
+  raiserId: string;
+  seenBy: Array<{ userId: string; username: string }>;
+}
+
 /**
  * server→client: emitted by POST /crews/:crewId/sos/clear. `userId` is the
  * raiser whose SOS was cleared; `clearedBy` is the username of the person who
@@ -320,6 +327,7 @@ export interface ServerToClientEvents {
   'location:peer-stopped': (data: LocationPeerStoppedPayload) => void;
   'sos:raised': (data: SosRaisedPayload) => void;
   'sos:cleared': (data: SosClearedPayload) => void;
+  'sos:seen': (data: SosSeenPayload) => void;
 
   // Identity
   'profile:identity': (data: { festivalId: string; profileId: string; username: string; avatarUrl?: string }) => void;

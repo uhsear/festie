@@ -1,5 +1,6 @@
 import React from 'react';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
+import { LOW_POWER_COPY } from '@festie/shared/constants';
 import { BatteryLow } from 'lucide-react';
 import { useHaptics } from '../../hooks/useHaptics';
 import Switch from '../ui/Switch';
@@ -36,11 +37,10 @@ export default function LowPowerToggle({ className }: Props) {
       />
       <div className="min-w-0 flex-1">
         <p id="low-power-label" className="text-sm font-semibold text-text-primary">
-          Festival low-power mode
+          {LOW_POWER_COPY.name}
         </p>
         <p id="low-power-desc" className="text-xs text-text-muted">
-          Saves battery: pauses ambient animation and the live-location auto-share. Reminders and your crew plan keep
-          working.
+          {LOW_POWER_COPY.hint}
         </p>
       </div>
       <Switch

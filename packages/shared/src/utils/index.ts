@@ -63,3 +63,4 @@ export * from './weather';
 export * from './offlineReminder';
 export * from './passwordPolicy';
 export * from './supportMail';
+export * from './beacon';

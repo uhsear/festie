@@ -22,7 +22,7 @@ import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
 import { useCrew, useActiveCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { COPY, GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { COPY, GUEST_PROMPT_COPY, LOW_POWER_COPY } from '@festie/shared/constants';
 import {
   setLabel,
   buildJoinUrl,
@@ -68,6 +68,8 @@ import CrewExpenses from '../../components/CrewExpenses';
 import CrewActivity from '../../components/CrewActivity';
 import CrewLiveLocation from '../../components/CrewLiveLocation';
 import CrewSos from '../../components/CrewSos';
+import CrewCheckIn from '../../components/CrewCheckIn';
+import { BeaconRow } from '../../components/BeaconModal';
 import InviteQRSheet from '../../components/InviteQRSheet';
 import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
@@ -142,8 +144,8 @@ export default function CrewScreen() {
   const loadFestivals = useFestivalStore((s) => s.loadFestivals);
 
   // Festival low-power mode gates battery-hungry features (live-location
-  // auto-share). Read from the shared store; the toggle itself lives on the
-  // Now & Next screen.
+  // auto-share). Read from the shared store; the toggle lives on the festival
+  // mode screen and can be turned off from the Find tab.
   const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
 
   // Per-set crew picks (shared hook) — used to enrich the overlap UI without
@@ -1503,6 +1505,7 @@ export default function CrewScreen() {
           {/* DC2: SOS must be reachable without any scroll — top of the pane,
               always visible the instant the Find tab opens. */}
           <CrewSos crewId={crew.id} currentUserId={user.id} />
+          <CrewCheckIn crewId={crew.id} />
 
           <TouchableOpacity
             testID="crew-action-map"
@@ -1536,15 +1539,18 @@ export default function CrewScreen() {
             {lowPowerMode ? (
               <View style={styles.lowPowerPaused}>
                 <LowPowerIndicator />
-                <Text style={styles.lowPowerPausedText}>
-                  Live location is paused to save battery. Turn off low-power mode on the Now & Next screen to share
-                  again.
-                </Text>
+                <Text style={styles.lowPowerPausedText}>{LOW_POWER_COPY.livePaused}</Text>
+                <Button
+                  variant="secondary"
+                  label={LOW_POWER_COPY.turnOff}
+                  onPress={() => useFestivalModeStore.getState().setLowPowerMode(false)}
+                />
               </View>
             ) : (
               <CrewLiveLocation crewId={crew.id} />
             )}
           </View>
+          <BeaconRow />
 
           <CrewPhotoLink crewId={crew.id} photoAlbumUrl={crew.photoAlbumUrl} />
 
