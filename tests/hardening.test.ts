@@ -432,9 +432,9 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
         .set('x-user-token', token)
         .set(TRUSTED_MUTATION_HEADER, '1')
         .send({ festivalId });
-      const profileId = profileRes.body.data.id;
+      assert.ok(profileRes.body.data.id);
 
-      const shareRes = await request(app).get(`/s/${profileId}`);
+      const shareRes = await request(app).get(`/s/${(await request(app).post(`/api/v1/account/share-link/${festivalId}`).set('x-user-token', token).set(TRUSTED_MUTATION_HEADER, '1').expect(200)).body.data.token}`);
       assert.equal(shareRes.status, 200);
       assert.ok(shareRes.text.includes('<!DOCTYPE html') || shareRes.text.includes('<!doctype html'));
     });
@@ -516,9 +516,9 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
         .set('x-user-token', token)
         .set(TRUSTED_MUTATION_HEADER, '1')
         .send({ festivalId });
-      const profileId = profileRes.body.data.id;
+      assert.ok(profileRes.body.data.id);
 
-      const jsonRes = await request(app).get(`/s/${profileId}/json`);
+      const jsonRes = await request(app).get(`/s/${(await request(app).post(`/api/v1/account/share-link/${festivalId}`).set('x-user-token', token).set(TRUSTED_MUTATION_HEADER, '1').expect(200)).body.data.token}/json`);
       assert.equal(jsonRes.status, 200);
       assert.ok(jsonRes.body.data || jsonRes.body);
     });

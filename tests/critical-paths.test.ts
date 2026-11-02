@@ -197,6 +197,15 @@ async function joinFestival(server: any, userToken: string, festivalId: string =
   return res.body.data;
 }
 
+async function shareToken(server: any, userToken: string, festivalId: string = 'fest-1') {
+  const res = await server.request
+    .post(`/api/v1/account/share-link/${festivalId}`)
+    .set('x-user-token', userToken)
+    .set(TRUSTED_MUTATION_HEADER, '1')
+    .expect(200);
+  return res.body.data.token as string;
+}
+
 async function loginAdmin(server: any) {
   const adminUsername = 'testadmin-' + Date.now();
   await server.request
@@ -768,7 +777,7 @@ describe('shareable pick links', { concurrency: 1 }, () => {
       .expect(200);
 
     // Access share page without auth
-    const res = await server.request.get(`/s/${profile.id}`).expect(200);
+    const res = await server.request.get(`/s/${await shareToken(server, user.token)}`).expect(200);
     assert.match(res.headers['content-type']!, /text\/html/);
     assert.match(res.text, /sharer/); // username in page
     assert.match(res.text, /Test Fest/); // festival name
@@ -789,7 +798,7 @@ describe('shareable pick links', { concurrency: 1 }, () => {
       .send({ picks: { 'set-c': 'maybe' } })
       .expect(200);
 
-    const res = await server.request.get(`/s/${profile.id}/json`).expect(200);
+    const res = await server.request.get(`/s/${await shareToken(server, user.token)}/json`).expect(200);
     assert.equal(res.body.data.username, 'jsonsharer');
     assert.equal(res.body.data.festivalName, 'Test Fest');
     assert.equal(res.body.data.picks['set-c'], 'maybe');
@@ -815,9 +824,9 @@ describe('shareable pick links', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const user = await registerUser(server, 'cachesharer');
-    const profile = await joinFestival(server, user.token);
+    await joinFestival(server, user.token);
 
-    const res = await server.request.get(`/s/${profile.id}`).expect(200);
+    const res = await server.request.get(`/s/${await shareToken(server, user.token)}`).expect(200);
     assert.equal(res.headers['cache-control'], 'private, no-cache');
   });
 });

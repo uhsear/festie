@@ -142,6 +142,16 @@ async function joinFestival(server: any, userToken: any) {
   return res.body.data;
 }
 
+// A picks link opens only by its revocable share token, never by the raw profile id.
+async function shareToken(server: any, userToken: any) {
+  const res = await server.request
+    .post(`/api/v1/account/share-link/${FEST_ID}`)
+    .set('x-user-token', userToken)
+    .set(TRUSTED_MUTATION_HEADER, '1')
+    .expect(200);
+  return res.body.data.token as string;
+}
+
 const servers: any[] = [];
 afterEach(async () => {
   while (servers.length > 0) {
@@ -192,7 +202,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
       .send({ picks: { [SET_A]: 'must' } })
       .expect(200);
 
-    const res = await getShareHtml(server, profile.id);
+    const res = await getShareHtml(server, await shareToken(server, user.token));
     assert.equal(res.status, 200);
     assert.match(res.headers['content-type'], /text\/html/);
     assert.match(res.text, /Share Test Fest/);
@@ -214,7 +224,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
       .send({ picks: { [SET_A]: 'must', [SET_LATE]: 'must', [SET_NIGHT]: 'must' } })
       .expect(200);
 
-    const res = await getShareHtml(server, profile.id);
+    const res = await getShareHtml(server, await shareToken(server, user.token));
     assert.equal(res.status, 200);
     const order = ['Aria', 'Zed Late', 'Yan Night'].map((n) => res.text.indexOf(n));
     assert.ok(order.every((i) => i >= 0), 'all picked artists render');
@@ -226,9 +236,9 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     const server = (await startServer())!;
     servers.push(server);
     const user = await registerUser(server, 'csp');
-    const profile = await joinFestival(server, user.token);
+    await joinFestival(server, user.token);
 
-    const res = await getShareHtml(server, profile.id);
+    const res = await getShareHtml(server, await shareToken(server, user.token));
     assert.equal(res.status, 200);
     const csp = res.headers['content-security-policy'] || '';
     assert.match(csp, /frame-ancestors 'none'/);
@@ -248,7 +258,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
       .send({ picks: { [SET_A]: 'must', [SET_B]: 'want-to-see' } })
       .expect(200);
 
-    const res = await getShareJson(server, profile.id);
+    const res = await getShareJson(server, await shareToken(server, user.token));
     assert.equal(res.status, 200);
     assert.ok(res.body.data);
     assert.equal(res.body.error ?? null, null);
@@ -383,13 +393,14 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     const server = (await startServer())!;
     servers.push(server);
     const user = await registerUser(server, 'rl');
-    const profile = await joinFestival(server, user.token);
+    await joinFestival(server, user.token);
+    const token = await shareToken(server, user.token);
 
     // limit is 30/min per IP in route source — blast 60 requests and expect at least one 429.
     let saw429 = false;
     for (let i = 0; i < 60; i++) {
       // eslint-disable-next-line no-await-in-loop
-      const res = await server.request.get(`/s/${profile.id}`);
+      const res = await server.request.get(`/s/${token}`);
       if (res.status === 429) { saw429 = true; break; }
     }
     // If rate limit is disabled in test env, accept a no-429 outcome but surface a soft assertion.
