@@ -89,8 +89,8 @@ env:
     timeout: 20000
 - takeScreenshot: c09-crew-expenses-activity
 
-# --- Account (prefs / data / legal) ---
-- tapOn: "Account"
+# --- More (prefs / data / legal) ---
+- tapOn: "More"
 - extendedWaitUntil:
     visible: "Settings & preferences"
     timeout: 20000

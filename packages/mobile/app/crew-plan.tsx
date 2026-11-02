@@ -110,7 +110,7 @@ export default function CrewPlanScreen() {
                 label="Add meeting point"
                 variant="ghost"
                 size="sm"
-                onPress={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } })}
+                onPress={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'find' } })}
               />
             </>
           )}
@@ -136,7 +136,7 @@ export default function CrewPlanScreen() {
                 label="Set home base"
                 variant="ghost"
                 size="sm"
-                onPress={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } })}
+                onPress={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'find' } })}
               />
             </>
           )}

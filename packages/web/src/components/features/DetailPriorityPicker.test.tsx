@@ -54,7 +54,7 @@ describe('DetailPriorityPicker', () => {
 
   it('marks active priority as pressed', () => {
     render(<DetailPriorityPicker {...defaultProps} myPick="must" />);
-    expect(screen.getByLabelText('Must See (selected)')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Must See')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByLabelText('Want to See')).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -103,7 +103,7 @@ describe('DetailPriorityPicker', () => {
 
   it('adds active styling when priority is selected', () => {
     render(<DetailPriorityPicker {...defaultProps} myPick="want-to-see" />);
-    const btn = screen.getByLabelText('Want to See (selected)');
+    const btn = screen.getByLabelText('Want to See');
     expect(btn.className).toContain('border-priority-want');
   });
 

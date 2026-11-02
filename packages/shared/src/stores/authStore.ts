@@ -29,12 +29,13 @@ export interface AuthState {
 
 export interface AuthActions {
   login: (request: LoginRequest) => Promise<{ reactivated: boolean }>;
-  register: (request: RegisterRequest) => Promise<void>;
+  register: (request: RegisterRequest) => Promise<{ emailVerificationSent: boolean }>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   setUser: (user: User | null) => void;
   checkSession: () => Promise<boolean>;
   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
+  resetPassword: (request: { token: string; newPassword: string; confirmPassword: string }) => Promise<void>;
   resendVerification: () => Promise<void>;
   changePassword: (request: ChangePasswordRequest) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
@@ -225,7 +226,10 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
   register: async (request: RegisterRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.post<{ user: User; token?: string }>('/auth/register', request);
+      const response = await api.post<{ user: User; token?: string; emailVerificationSent?: boolean }>(
+        '/auth/register',
+        request,
+      );
       const { user, token } = response;
       if (token) {
         setAuthToken(token);
@@ -235,6 +239,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
         userToken: token || null,
         isLoading: false,
       });
+      return { emailVerificationSent: response.emailVerificationSent ?? false };
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Registration failed');
       set({ error: message, isLoading: false });
@@ -333,6 +338,13 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
       set({ error: message, isLoading: false });
       throw err;
     }
+  },
+
+  resetPassword: async (request) => {
+    // No isLoading/error writes: the caller maps the thrown error, so it cannot leak onto other screens.
+    await api.post('/auth/reset-password', request);
+    // The server revoked every session for the account, so the local copy is stale.
+    if (get().user) await get().logout();
   },
 
   resendVerification: async () => {

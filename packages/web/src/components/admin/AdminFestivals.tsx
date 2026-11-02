@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@festie/shared/services/api';
 import { describeRemovals, removalFromError, withReauth } from '@festie/shared/services/admin';
+import { describeScheduleNotice, type ScheduleNotice } from '@festie/shared/utils';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import { useToast } from '../../lib/toastContext';
 import LineupImport from './LineupImport';
@@ -36,6 +37,7 @@ export default function AdminFestivals() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [notifyPickers, setNotifyPickers] = useState(true);
   const [formData, setFormData] = useState<Partial<FormFestival>>({});
   const [initialExpandedDays, setInitialExpandedDays] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,6 +46,7 @@ export default function AdminFestivals() {
   // When set, the dedicated map editor is shown for this festival (Phase D). It
   // owns stage-pin + amenity authoring and persists via the same PUT path.
   const [mapEditingId, setMapEditingId] = useState<string | null>(null);
+  const [importTarget, setImportTarget] = useState<{ id: string; name: string } | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
   const [removalBusy, setRemovalBusy] = useState(false);
   const { toast, toastError } = useToast();
@@ -65,9 +68,10 @@ export default function AdminFestivals() {
     }
   };
 
-  const finishSave = async (created: boolean) => {
-    toast(created ? 'Festival created' : 'Festival updated', 'success');
+  const finishSave = async (created: boolean, notice?: ScheduleNotice) => {
+    toast(created ? 'Festival created' : notice ? describeScheduleNotice(notice) : 'Festival updated', 'success');
     setEditingId(null);
+    setNotifyPickers(true);
     setFormData({});
     setInitialExpandedDays(new Set());
     setTab('list');
@@ -86,8 +90,12 @@ export default function AdminFestivals() {
 
     try {
       if (editingId) {
-        await api.put<void>(`/admin/festivals/${editingId}`, { ...formData, expectedUpdatedAt: formData.updatedAt });
-        await finishSave(false);
+        const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
+          ...formData,
+          expectedUpdatedAt: formData.updatedAt,
+          notify: notifyPickers,
+        });
+        await finishSave(false, res?.scheduleNotice);
       } else {
         await api.post<void>('/admin/festivals', formData);
         await finishSave(true);
@@ -108,18 +116,19 @@ export default function AdminFestivals() {
     try {
       const done = await withReauth(
         async () => {
-          await api.put<void>(`/admin/festivals/${editingId}`, {
+          const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
             ...formData,
             expectedUpdatedAt: formData.updatedAt,
             confirmRemovals: true,
+            notify: notifyPickers,
           });
-          return true;
+          return { notice: res?.scheduleNotice };
         },
         askPassword,
       );
       if (done === null) return;
       setPendingRemoval(null);
-      await finishSave(false);
+      await finishSave(false, done.notice);
     } catch (err: unknown) {
       setPendingRemoval(null);
       toastError(err, "Couldn't save festival. Try again.");
@@ -161,6 +170,7 @@ export default function AdminFestivals() {
 
   const handleEdit = async (festival: Festival) => {
     setEditingId(festival.id);
+    setNotifyPickers(true);
     setTab('create');
     // List endpoint returns only summary (stageCount, dayCount). Fetch full
     // festival to get nested stages[] and days[] for the edit form.
@@ -210,14 +220,7 @@ export default function AdminFestivals() {
         {(['list', 'create', 'import'] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => {
-              setTab(t);
-              if (t === 'create') {
-                setEditingId(null);
-                setFormData({});
-                setInitialExpandedDays(new Set());
-              }
-            }}
+            onClick={() => setTab(t)}
             className={cn(
               'px-4 py-2 font-medium text-sm transition-colors border-b-2',
               tab === t
@@ -225,7 +228,7 @@ export default function AdminFestivals() {
                 : 'border-transparent text-text-secondary hover:text-text-primary',
             )}
           >
-            {t === 'list' ? 'Festivals' : t === 'create' ? 'Create/Edit' : 'Import Lineup'}
+            {t === 'list' ? 'Festivals' : t === 'create' ? (editingId ? 'Edit festival' : 'New festival') : 'Import lineup'}
           </button>
         ))}
       </div>
@@ -283,6 +286,15 @@ export default function AdminFestivals() {
                       Edit
                     </button>
                     <button
+                      onClick={() => {
+                        setImportTarget({ id: festival.id, name: festival.name });
+                        setTab('import');
+                      }}
+                      className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+                    >
+                      Import
+                    </button>
+                    <button
                       onClick={() => setMapEditingId(festival.id)}
                       className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
                     >
@@ -308,6 +320,8 @@ export default function AdminFestivals() {
           formData={formData}
           setFormData={setFormData}
           editingId={editingId}
+          notifyPickers={notifyPickers}
+          onNotifyPickersChange={setNotifyPickers}
           initialExpandedDays={initialExpandedDays}
           onSave={handleSave}
           onCancel={handleCancel}
@@ -315,17 +329,35 @@ export default function AdminFestivals() {
       )}
 
       {/* Import */}
-      {tab === 'import' && editingId && (
+      {tab === 'import' && importTarget && (
         <LineupImport
-          festivalId={editingId}
-          onSuccess={() => {
+          key={importTarget.id}
+          festivalId={importTarget.id}
+          festivalName={importTarget.name}
+          onDone={() => {
             loadFestivals();
-            setTab('list');
           }}
         />
       )}
-      {tab === 'import' && !editingId && (
-        <p className="text-center text-[var(--color-text-muted)] py-8">Select a festival to import a lineup.</p>
+      {tab === 'import' && !importTarget && (
+        <label className="block text-sm text-text-primary">
+          Choose a festival
+          <select
+            className="mt-2 w-full px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary"
+            value=""
+            onChange={(e) => {
+              const f = festivals.find((x) => x.id === e.target.value);
+              if (f) setImportTarget({ id: f.id, name: f.name });
+            }}
+          >
+            <option value="">Select…</option>
+            {festivals.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
       <ConfirmDialog
         open={!!confirmDelete}

@@ -3,6 +3,12 @@ import { render, screen } from '@testing-library/react';
 import GridSkeleton from './GridSkeleton';
 
 describe('GridSkeleton', () => {
+  it('announces loading as a status with sr-only text', () => {
+    render(<GridSkeleton />);
+    expect(screen.getByRole('status', { name: 'Loading grid' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading grid…')).toBeInTheDocument();
+  });
+
   it('renders with aria-busy for loading state', () => {
     render(<GridSkeleton />);
     expect(screen.getByLabelText('Loading grid')).toHaveAttribute('aria-busy', 'true');

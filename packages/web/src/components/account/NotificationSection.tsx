@@ -8,6 +8,8 @@ export default function NotificationSection() {
   const { toast, toastError } = useToast();
   const push = usePushNotifications();
   const [pushBusy, setPushBusy] = useState(false);
+  // Render nothing while the key request is in flight, so a supported browser never flashes "Not supported".
+  if (push.unsupportedReason === 'not-configured' || push.checking) return null;
 
   const handleEnablePush = async () => {
     if (!push.isSupported) {
@@ -29,6 +31,19 @@ export default function NotificationSection() {
       } else {
         toast('Permission prompt dismissed.', 'info');
       }
+    } catch (e) {
+      toastError(e, "Couldn't turn on notifications. Try again.");
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  // Permission already granted but no subscription (after Disable): subscribe without a prompt.
+  const handleResubscribe = async () => {
+    setPushBusy(true);
+    try {
+      await push.registerToken();
+      toast('Push notifications enabled', 'success');
     } catch (e) {
       toastError(e, "Couldn't turn on notifications. Try again.");
     } finally {
@@ -58,7 +73,16 @@ export default function NotificationSection() {
         )}
         Push Notifications
       </h3>
-      {!push.isSupported ? (
+      {push.keyError ? (
+        <>
+          <p className="text-sm text-text-muted" role="alert">
+            Couldn't check push notifications. Check your connection, then try again.
+          </p>
+          <Button variant="outline" fullWidth onClick={push.retry} className="min-h-[44px]">
+            Try again
+          </Button>
+        </>
+      ) : !push.isSupported ? (
         push.unsupportedReason === 'ios-needs-install' ? (
           <p className="text-sm text-text-muted">
             On iOS, notifications work only when Festie is installed to your Home Screen. Tap the{' '}
@@ -78,9 +102,15 @@ export default function NotificationSection() {
           <p className="text-sm text-text-muted">
             SOS alerts from your crew always come through, even when other alerts are muted.
           </p>
-          <Button variant="outline" fullWidth isLoading={pushBusy} onClick={handleDisablePush} className="min-h-[44px]">
-            Disable Notifications
-          </Button>
+          {push.subscribed ? (
+            <Button variant="outline" fullWidth isLoading={pushBusy} onClick={handleDisablePush} className="min-h-[44px]">
+              Disable Notifications
+            </Button>
+          ) : (
+            <Button variant="primary" fullWidth isLoading={pushBusy} onClick={handleResubscribe} className="min-h-[44px]">
+              Enable Notifications
+            </Button>
+          )}
         </>
       ) : push.permission === 'denied' ? (
         <p className="text-sm text-text-muted">

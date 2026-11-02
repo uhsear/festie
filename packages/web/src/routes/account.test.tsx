@@ -5,6 +5,11 @@ import { render, screen } from '@testing-library/react';
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 // account.tsx imports the auth store from the deep path, not the barrel.
@@ -106,5 +111,10 @@ describe('AccountPage', () => {
     // Display name (and avatar) fall back to the username.
     expect(screen.getByTestId('avatar')).toHaveAttribute('data-name', 'testuser');
     expect(screen.getByText('@testuser')).toBeInTheDocument();
+  });
+
+  it('links Festival Wrap to /wrap', () => {
+    render(<AccountPage />);
+    expect(screen.getByRole('link', { name: /Festival Wrap/ })).toHaveAttribute('href', '/wrap');
   });
 });

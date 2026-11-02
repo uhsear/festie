@@ -58,14 +58,7 @@ export function resetAllStores(): void {
     onlineUsers: [],
     toasts: [],
   });
-  useFestivalModeStore.setState({
-    isFestivalMode: false,
-    festivalStarted: false,
-    showPastSets: true,
-    autoScrollToNow: false,
-    manuallyDisabled: false,
-    lowPowerMode: false,
-  });
+  useFestivalModeStore.setState({ lowPowerMode: false });
   useLiveLocationStore.getState().reset();
   // Offline-readiness (disk-persisted per-festival download state) and
   // notification prefs are account-scoped too -- clear them so a shared-device
