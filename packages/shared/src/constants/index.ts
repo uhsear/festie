@@ -4,3 +4,4 @@ export * from './authCopy';
 // consumers can import everything pick-priority-related from one subpath.
 export { PRIORITY_WEIGHT } from '../utils/crewNudges';
 export * from './copy';
+export * from './accountSettings';

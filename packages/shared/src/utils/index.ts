@@ -56,3 +56,5 @@ export * from './scheduleGrid';
 export * from './crewManage';
 export * from './admin';
 export * from './adminFestivalTools';
+export * from './avatarFile';
+export * from './registerValidation';

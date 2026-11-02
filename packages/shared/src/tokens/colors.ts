@@ -56,6 +56,10 @@ export const colors = {
     default: 'rgba(255, 255, 255, 0.06)',
     light: 'rgba(255, 255, 255, 0.1)',
   },
+  /** Off-state track of a switch: 3:1 on bg.secondary, and the white thumb stays visible on it. */
+  control: {
+    trackOff: '#66666f',
+  },
   priority: {
     must: '#ff3366',
     want: '#00e8d0',

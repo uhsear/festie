@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -36,6 +36,17 @@ export default function AccountEmailVerifySection() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // Verifying on another device changes the server, not this store. Re-read the
+  // session whenever the app returns to the foreground while the card is showing.
+  const needsVerify = !!user?.email && !user.emailVerified;
+  useEffect(() => {
+    if (!needsVerify) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void useAuthStore.getState().checkSession();
+    });
+    return () => sub.remove();
+  }, [needsVerify]);
 
   // Soft indicator only — hidden entirely for email-less or already-verified users.
   if (!user?.email || user.emailVerified) return null;

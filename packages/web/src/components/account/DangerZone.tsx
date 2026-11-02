@@ -7,11 +7,11 @@ import {
 } from '@festie/shared/stores/authStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { crewCopy, ownedCrewsForDeletion } from '@festie/shared/utils/crewManage';
-import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { Download, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function DangerZone() {
@@ -23,7 +23,6 @@ export default function DangerZone() {
   const loadCrews = useCrewStore((s) => s.loadCrews);
   const [newOwners, setNewOwners] = useState<Record<string, string>>({});
 
-  const [exporting, setExporting] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -43,27 +42,6 @@ export default function DangerZone() {
   useEffect(() => {
     if (showDeleteConfirm) deleteFormRef.current?.querySelector('input')?.focus();
   }, [showDeleteConfirm]);
-
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const data = await api.get<Record<string, unknown>>('/account/export');
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: 'application/json',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `festie-export-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast('Export downloaded', 'success');
-    } catch (err) {
-      toast(mapErrorToUserMessage(err, "Couldn't export data. Try again."), 'error');
-    } finally {
-      setExporting(false);
-    }
-  };
 
   const handleDelete = async () => {
     if (!deletePassword) return;
@@ -86,28 +64,6 @@ export default function DangerZone() {
 
   return (
     <>
-      {/* GDPR export section */}
-      <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
-        <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
-          <Download className="w-4 h-4" aria-hidden="true" />
-          Export Data
-        </h3>
-
-        <p className="text-sm text-text-muted">
-          Download all your data in JSON format.
-        </p>
-
-        <Button
-          variant="outline"
-          fullWidth
-          isLoading={exporting}
-          onClick={handleExport}
-          className="min-h-[44px]"
-        >
-          Download My Data
-        </Button>
-      </section>
-
       {/* Delete account section */}
       <section
         className={cn(

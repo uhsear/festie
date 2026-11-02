@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
-import { api } from '@festie/shared/services/api';
 import { fetchSharingStatus, resetShareLinks, type SharingStatus } from '@festie/shared/services/sharing';
 import { buildPublicScheduleUrl } from '@festie/shared/utils';
 import { Globe } from 'lucide-react';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import Switch from '../ui/Switch';
 
 /** Opt-in switch for the public schedule page (off by default), plus the reset for every share link. */
 export default function PublicScheduleSection() {
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
+  const setPublicSchedule = useAuthStore((s) => s.setPublicSchedule);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [status, setStatus] = useState<SharingStatus | null>(null);
@@ -44,13 +44,10 @@ export default function PublicScheduleSection() {
   const url = buildPublicScheduleUrl(user.username, window.location.origin);
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  const toggle = async () => {
+  const toggle = async (next: boolean) => {
     setSaving(true);
     try {
-      const res = await api.put<{ user: { publicSchedule?: boolean } }>('/account/public-schedule', {
-        publicSchedule: !on,
-      });
-      setUser({ ...user, publicSchedule: res.user?.publicSchedule ?? !on });
+      await setPublicSchedule(next);
     } catch {
       toast("Couldn't update your public schedule page. Try again.", 'error');
     } finally {
@@ -105,19 +102,7 @@ export default function PublicScheduleSection() {
             Anyone with the link can see your picks for your newest festival. Turning it off hides this page. Links you sent from Share picks keep working until you reset them below.
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
-          aria-label="Public schedule page"
-          disabled={saving}
-          onClick={toggle}
-          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${on ? 'bg-accent-aqua' : 'bg-border'}`}
-        >
-          <span
-            className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white transition-transform ${on ? 'translate-x-5' : ''}`}
-          />
-        </button>
+        <Switch checked={on} onChange={toggle} label="Public schedule page" disabled={saving} />
       </div>
       {on && (
         <>

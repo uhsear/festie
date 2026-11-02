@@ -110,7 +110,7 @@ describe('RegisterPage', () => {
         'Username is required',
         'Password is required',
         'Date of birth is required',
-        'You must accept the Terms of Service and Privacy Policy',
+        'Accept the Terms of Service and Privacy Policy to continue',
       ]),
     );
     const username = screen.getByLabelText('Username');
