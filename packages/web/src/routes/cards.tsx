@@ -19,6 +19,8 @@ import PhaseHomeActions from '../components/features/PhaseHomeActions';
 import FestivalReadyCard from '../components/features/FestivalReadyCard';
 import OtherDayMatches from '../components/features/OtherDayMatches';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
+import SetTimesBanner from '../components/features/SetTimesBanner';
+import DiscoverRow from '../components/features/DiscoverRow';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -178,6 +180,9 @@ function CardsViewInner() {
       ) : actions.length > 0 && phase && dismissedPhase !== phase ? (
         <PhaseHomeActions actions={actions} onDismiss={() => dismissPhaseBand(phase)} />
       ) : null}
+
+      <SetTimesBanner />
+      <DiscoverRow />
 
       {filteredSets.length > 0 && (
         <div className="flex items-center gap-2 w-full mx-auto max-w-[1440px] mb-[var(--space-3)]">

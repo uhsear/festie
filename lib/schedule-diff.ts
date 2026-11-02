@@ -67,6 +67,17 @@ export function diffPickedSchedule(before: any, after: any): ScheduleChange[] {
   return changes;
 }
 
+/** True when a set only got its first start time: same day, same stage, TBA before. */
+export function isTbaToTime(change: ScheduleChange): boolean {
+  return (
+    change.kind === 'moved' &&
+    change.before.startTime === null &&
+    change.after.startTime !== null &&
+    change.before.dayLabel === change.after.dayLabel &&
+    change.before.stageName === change.after.stageName
+  );
+}
+
 function formatSlot(slot: SetSlot, withEnd: boolean): string {
   let text = `${slot.dayLabel} ${slot.startTime ? formatClock12(slot.startTime) : 'time to be announced'}`;
   if (withEnd && slot.endTime) text += ` to ${formatClock12(slot.endTime)}`;

@@ -60,7 +60,7 @@ export default function createLineupAnnounceRoute(deps: any) {
         return sendError(
           res,
           400,
-          'No one to notify. Everyone who went to an earlier edition already got this announcement.',
+          'No one to notify. Everyone who follows this festival or went to an earlier edition already got this announcement.',
           ErrorCodes.INVALID_INPUT,
         );
       }

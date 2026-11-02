@@ -2,7 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import crypto from 'crypto';
-import { diffPickedSchedule } from '../lib/schedule-diff.js';
+import { diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
 
 export default function createFestivalsRoutes(deps: any) {
   const {
@@ -33,6 +33,7 @@ export default function createFestivalsRoutes(deps: any) {
     validateParams,
     invalidateFestivalCache,
     geocodeVenue,
+    reengagement,
   } = deps;
 
   const router = express.Router();
@@ -140,6 +141,14 @@ export default function createFestivalsRoutes(deps: any) {
         log.warn('audit log write failed', { error: e.message });
       }
     });
+  }
+
+  // Fire and forget after the write. A rejection must not become an unhandled
+  // rejection, which shuts the server down (server.ts).
+  function notifySetTimesOut(festivalId: string) {
+    reengagement
+      ?.sendSetTimesOut?.(festivalId)
+      ?.catch((err: any) => log.warn('set_times_out notify failed', { festivalId, error: err?.message }));
   }
 
   const setsOf = (festival: any): any[] => (festival?.days || []).flatMap((d: any) => d.sets || []);
@@ -458,7 +467,17 @@ export default function createFestivalsRoutes(deps: any) {
         }
 
         // Only a moved or removed set alerts anyone, and only the people who picked it.
-        const changes = daysSent ? diffPickedSchedule(existingFestival, nextFestival) : [];
+        let changes = daysSent ? diffPickedSchedule(existingFestival, nextFestival) : [];
+        // The first timed save of a published festival sends "set times are out" to
+        // everyone, so its TBA-to-time changes do not also send a "moved" alert.
+        const hasTimes = (f: any) => setsOf(f).some((set: any) => set.startTime);
+        const timesOut =
+          daysSent &&
+          !!existingFestival.publishedAt &&
+          !hasTimes(existingFestival) &&
+          hasTimes(nextFestival) &&
+          (await stores.festivals.getSetTimesOutAt(existingFestival.id)) === null;
+        if (timesOut) changes = changes.filter((change) => !isTbaToTime(change));
         // Read pickers before the update: it deletes picks on removed sets.
         const pickersBySet: Map<string, string[]> = changes.length
           ? await stores.profiles.pickersBySet(existingFestival.id, changes.map((change) => change.setId))
@@ -490,6 +509,8 @@ export default function createFestivalsRoutes(deps: any) {
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
         if (notified) void emitter.scheduleChanged({ festival, changes, pickersBySet });
+        // The executor checks publish state, the marker and the times itself.
+        if (daysSent) notifySetTimesOut(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
         if (venueMissing || nextFestival.location !== existingFestival.location) {
           void fillVenueCoords(festival.id, nextFestival.location);
@@ -542,6 +563,7 @@ export default function createFestivalsRoutes(deps: any) {
         });
         log.info('festival:published', { festivalId: festival.id, name: festival.name });
         emitter.festivalCreated({ id: festival.id, name: festival.name });
+        notifySetTimesOut(festival.id);
         return sendSuccess(res, { publishedAt: row.publishedAt, checklist });
       } catch (error: any) {
         log.error('festival publish failed', { error: error.message, festivalId: req.validatedParams?.id });

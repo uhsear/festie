@@ -27,4 +27,5 @@ export * from './useCrewHub';
 export * from './useCrewCompare';
 export * from './useAutoArrive';
 export * from './useCreateCrew';
+export * from './useAlsoPicked';
 export * from './useFestivalReady';

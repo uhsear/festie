@@ -55,6 +55,7 @@ export * from './notificationSettings';
 export * from './homeActions';
 export * from './scheduleGrid';
 export * from './crewManage';
+export * from './discover';
 export * from './scheduleImage';
 export * from './sharedPicks';
 export * from './ratingSummary';
