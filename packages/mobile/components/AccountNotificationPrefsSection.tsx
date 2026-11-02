@@ -1,137 +1,126 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Switch, Alert } from 'react-native';
+import { View, Text, Switch, Alert, AppState, Linking, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { AndroidImportance } from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, useNotificationPrefsStore, useFestivalStore } from '@festie/shared/stores';
-import { api } from '@festie/shared/services';
-import { COPY } from '@festie/shared/constants';
-import { timeZoneCity } from '@festie/shared/utils';
+import { useAuthStore, useNotificationPrefsStore } from '@festie/shared/stores';
+import { useNotificationTopics } from '@festie/shared/hooks';
+import {
+  MUST_SEE_REMINDER_OPTIONS,
+  QUIET_HOURS_PRESETS,
+  TOPIC_GLOBAL_KEY,
+  isValidQuietWindow,
+  mustSeeOptionLabel,
+  timeZoneCity,
+  visibleNotificationRows,
+  type NotificationBoolKey,
+  type NotificationTypeRow,
+} from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
-import { CONCEPT_IONICON } from '../lib/conceptIcons';
+import { ModalSelect, TimeField } from './admin/AdminFields';
+import AppPressable from './AppPressable';
 import { formatQuietHours } from '../lib/accountFormat';
+import { mutedPrefKeys } from '../lib/notificationChannels';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import SectionLabel from './SectionLabel';
 
 /**
- * Per-category notification preferences (crew / set reminders / schedule) plus
- * a quiet-hours toggle, wired to GET/PUT /notifications/prefs via the shared
- * notificationPrefs store. These gate which FCM sends the server delivers, so
- * a user can keep time-critical set reminders while silencing 3am crew noise.
- * Quiet hours maps to the backend DND window (23:00–08:00 when on).
+ * Per-category notification preferences plus quiet hours, wired to
+ * GET/PUT /notifications/prefs via the shared notificationPrefs store. Set
+ * reminders are scheduled on the device, so they sit in their own group and
+ * never depend on push. The other types gate which pushes the server delivers.
  */
 const QUIET_START = '23:00';
 const QUIET_END = '08:00';
 
-type TopicSubscriptions = { crew: boolean; schedule: boolean };
+const ROW_ICONS: Record<NotificationBoolKey, keyof typeof Ionicons.glyphMap> = {
+  setReminders: 'alarm-outline',
+  scheduleChanges: 'calendar-outline',
+  crewUpdates: 'people-outline',
+  crewMeetingPoints: 'location-outline',
+  crewPolls: 'stats-chart-outline',
+  crewMoney: 'wallet-outline',
+  crewRides: 'car-outline',
+  lineupDrops: 'megaphone-outline',
+  crewReformed: 'refresh-outline',
+  wrapReady: 'sparkles-outline',
+};
+
+const TOPIC_ROWS = [
+  { key: 'crew', title: 'Crew picks', icon: 'people-outline' },
+  { key: 'schedule', title: 'Schedule changes', icon: 'calendar-outline' },
+] as const;
 
 /**
- * Per-festival notification opt-out, scoped to the currently selected festival.
- * Toggling a topic OFF mutes that topic's push for this festival via
- * GET/PUT /notifications/topics/:festivalId (topics: crew, schedule). Defaults
- * to ON before load; the real subscription state loads on mount. Renders
- * nothing until a current festival is selected.
+ * Per-festival mute for the current festival (GET/PUT /notifications/topics/:festivalId).
+ * Renders nothing unless the user joined the current festival.
  */
 function FestivalTopicsRows() {
   const styles = useStyles();
   const t = useTokens();
   const haptics = useHaptics();
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const currentProfile = useFestivalStore((s) => s.currentProfile);
-  // Auth gate: /notifications/topics is an authenticated endpoint, and this
-  // section can be mounted eagerly (NativeTabs pre-renders the Account tab).
-  // A guest fetch here 401s for nothing.
-  const user = useAuthStore((s) => s.user);
-  // Festival topics are member-scoped. An authenticated user may browse a
-  // public festival without joining it; calling this endpoint then always
-  // returns 403 and previously rendered a permanent settings error.
-  const festivalId =
-    user && currentFestival && currentProfile?.festivalId === currentFestival.id ? currentFestival.id : null;
+  const prefs = useNotificationPrefsStore((s) => s.prefs);
+  const { festival, subs, error, setTopic } = useNotificationTopics();
 
-  // null = not yet resolved (renders a skeleton); the real subscription state
-  // loads on mount. We no longer assume "subscribed" before the GET lands — a
-  // failed/in-flight load must not masquerade as a confirmed opt-in.
-  const [subs, setSubs] = useState<TopicSubscriptions | null>(null);
-  const [error, setError] = useState(false);
+  if (!festival) return null;
 
-  useEffect(() => {
-    if (!festivalId) return;
-    let cancelled = false;
-    // Re-resolve when the festival changes: clear stale state back to loading.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: reset to the loading state before the async GET /notifications/topics keyed on festivalId; tracks the in-flight request, not render inputs.
-    setSubs(null);
-    setError(false);
-    api
-      .get<TopicSubscriptions>(`/notifications/topics/${encodeURIComponent(festivalId)}`)
-      .then((data) => {
-        if (cancelled) return;
-        setSubs({ crew: data.crew !== false, schedule: data.schedule !== false });
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [festivalId]);
-
-  if (!currentFestival || !festivalId) return null;
-
-  const setTopic = (topic: keyof TopicSubscriptions, value: boolean) => {
+  const onTopic = (topic: 'crew' | 'schedule', value: boolean) => {
     haptics.select();
-    setSubs((s) => (s ? { ...s, [topic]: value } : s));
-    api.put(`/notifications/topics/${encodeURIComponent(festivalId)}`, { [topic]: value }).catch(() => {
-      // Roll back ONLY the key we mutated, not a full snapshot — a snapshot
-      // would clobber a concurrent toggle of the other topic.
-      setSubs((s) => (s ? { ...s, [topic]: !value } : s));
+    setTopic(topic, value).catch(() => {
       Alert.alert('Update failed', "Couldn't update notification setting. Try again.");
     });
   };
 
-  const rows: { key: keyof TopicSubscriptions; title: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { key: 'crew', title: 'Crew updates', icon: 'people-outline' },
-    { key: 'schedule', title: 'Schedule changes', icon: 'calendar-outline' },
-  ];
-
   return (
     <>
-      <SectionLabel>For {currentFestival.name}</SectionLabel>
+      <SectionLabel>Only for {festival.name}</SectionLabel>
+      <Text style={styles.groupCaption}>
+        Turn one off to mute it for this festival only. The switches above apply to every festival.
+      </Text>
       <View style={styles.card}>
-      {/* Skeleton until the subscription state resolves so the switches never
-          show a guessed "on" before the GET confirms it. */}
-      {subs === null ? (
-        error ? (
-          <View style={styles.errorRow} accessibilityLiveRegion="polite">
-            <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
-            <Text style={styles.errorText}>Couldn’t load festival settings.</Text>
-          </View>
+        {subs === null ? (
+          error ? (
+            <View style={styles.errorRow} accessibilityLiveRegion="polite">
+              <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
+              <Text style={styles.errorText}>Couldn’t load festival settings.</Text>
+            </View>
+          ) : (
+            <View style={styles.skeleton}>
+              {[0, 1].map((i) => (
+                <View key={i} style={styles.skelRow}>
+                  <Skeleton width={140} height={14} radius={t.radii.xs} />
+                  <Skeleton width={40} height={22} radius={t.radii.pill} />
+                </View>
+              ))}
+            </View>
+          )
         ) : (
-          <View style={styles.skeleton}>
-            {[0, 1].map((i) => (
-              <View key={i} style={styles.skelRow}>
-                <Skeleton width={140} height={14} radius={t.radii.xs} />
-                <Skeleton width={40} height={22} radius={t.radii.pill} />
+          TOPIC_ROWS.map((r) => {
+            const globalOff = !prefs[TOPIC_GLOBAL_KEY[r.key]];
+            return (
+              <View key={r.key} style={styles.row}>
+                <View style={styles.rowIcon}>
+                  <Ionicons name={r.icon} size={18} color={t.colors.text.secondary} />
+                </View>
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>{r.title}</Text>
+                  {globalOff ? <Text style={styles.rowHint}>Off for every festival</Text> : null}
+                </View>
+                <Switch
+                  value={subs[r.key]}
+                  disabled={globalOff}
+                  onValueChange={(v) => onTopic(r.key, v)}
+                  trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
+                  ios_backgroundColor={t.colors.text.muted}
+                  thumbColor={t.colors.text.onAccent}
+                  accessibilityLabel={`${r.title} for ${festival.name}`}
+                  accessibilityState={{ disabled: globalOff }}
+                />
               </View>
-            ))}
-          </View>
-        )
-      ) : (
-        rows.map((r) => (
-        <View key={r.key} style={styles.row}>
-          <View style={styles.rowIcon}>
-            <Ionicons name={r.icon} size={18} color={t.colors.text.secondary} />
-          </View>
-          <Text style={styles.rowTitle}>{r.title}</Text>
-          <Switch
-            value={subs[r.key]}
-            onValueChange={(v) => setTopic(r.key, v)}
-            trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-            ios_backgroundColor={t.colors.text.muted}
-            thumbColor={t.colors.text.onAccent}
-            accessibilityLabel={`${r.title} for ${currentFestival.name}`}
-          />
-        </View>
-        ))
-      )}
+            );
+          })
+        )}
       </View>
     </>
   );
@@ -148,6 +137,9 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
   const storeError = useNotificationPrefsStore((s) => s.error);
   const loadPrefs = useNotificationPrefsStore((s) => s.loadPrefs);
   const updatePrefs = useNotificationPrefsStore((s) => s.updatePrefs);
+  const [muted, setMuted] = useState<Set<NotificationBoolKey>>(new Set());
+  const [startText, setStartText] = useState(prefs.dndStart ?? QUIET_START);
+  const [endText, setEndText] = useState(prefs.dndEnd ?? QUIET_END);
 
   useEffect(() => {
     // Auth gate: /notifications/prefs 401s for guests (section can be mounted
@@ -156,180 +148,218 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
     loadPrefs().catch(() => {});
   }, [user, loadPrefs]);
 
+  // Android only: a channel the user muted in system settings silences its rows.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const read = () =>
+      Notifications.getNotificationChannelsAsync()
+        .then((channels) => setMuted(mutedPrefKeys(channels, AndroidImportance.NONE)))
+        // Best-effort: without a reading no row is flagged.
+        .catch(() => {});
+    void read();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void read();
+    });
+    return () => sub.remove();
+  }, []);
+
   // Remember the last real DND window so toggling quiet hours OFF (which nulls
-  // the bounds) then back ON restores the user's own window instead of forcing
-  // the 23:00/08:00 default.
+  // the bounds) then back ON restores the user's own window.
   const lastWindow = useRef<{ start: string; end: string }>({ start: QUIET_START, end: QUIET_END });
   useEffect(() => {
     if (prefs.dndStart && prefs.dndEnd) {
       lastWindow.current = { start: prefs.dndStart, end: prefs.dndEnd };
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror the saved window into the editable text fields.
+      setStartText(prefs.dndStart);
+      setEndText(prefs.dndEnd);
     }
   }, [prefs.dndStart, prefs.dndEnd]);
 
   if (!user) return null;
 
   const quietOn = !!prefs.dndStart;
-  // Caption reflects the actual stored window, not a hardcoded "11 PM – 8 AM"
-  // that lies for any custom window. When off there is no stored window, so we
-  // show a generic line (the remembered window lives in a ref, read only in the
-  // toggle handler — never during render).
   const quietCaption = formatQuietHours(prefs.dndStart, prefs.dndEnd);
   const set = (patch: Parameters<typeof updatePrefs>[0]) => {
     haptics.select();
     updatePrefs(patch).catch(() => {});
   };
 
-  const rows: {
-    key: keyof typeof prefs;
-    title: string;
-    icon: keyof typeof Ionicons.glyphMap;
-    value: boolean;
-    onChange: (v: boolean) => void;
-    hint?: string;
-  }[] = [
-    {
-      key: 'setReminders',
-      title: 'Set reminders',
-      icon: 'alarm-outline',
-      value: prefs.setReminders,
-      onChange: (v) => set({ setReminders: v }),
-    },
-    {
-      key: 'crewUpdates',
-      title: 'Crew updates',
-      icon: 'people-outline',
-      value: prefs.crewUpdates,
-      onChange: (v) => set({ crewUpdates: v }),
-    },
-    {
-      key: 'scheduleChanges',
-      title: 'Schedule changes',
-      icon: 'calendar-outline',
-      value: prefs.scheduleChanges,
-      onChange: (v) => set({ scheduleChanges: v }),
-    },
-    {
-      key: 'lineupDrops',
-      title: 'New lineups',
-      icon: 'megaphone-outline',
-      value: prefs.lineupDrops,
-      onChange: (v) => set({ lineupDrops: v }),
-      hint: 'By push and email.',
-    },
-    {
-      key: 'crewReformed',
-      title: 'Crew re-forms',
-      icon: 'refresh-outline',
-      value: prefs.crewReformed,
-      onChange: (v) => set({ crewReformed: v }),
-      hint: 'By push and email.',
-    },
-    {
-      key: 'wrapReady',
-      title: COPY.wrap.ready,
-      icon: CONCEPT_IONICON.wrap,
-      value: prefs.wrapReady,
-      onChange: (v) => set({ wrapReady: v }),
-      hint: `${COPY.wrap.readyHint}. By push and email.`,
-    },
-  ];
+  // Save only a valid window; an invalid draft stays in the text fields.
+  const editWindow = (start: string, end: string) => {
+    setStartText(start);
+    setEndText(end);
+    if (isValidQuietWindow(start, end)) set({ dndStart: start, dndEnd: end });
+  };
 
   // Until the first load resolves, the switches would show defaults (all on)
   // which is a quiet lie — render a skeleton instead so toggles reflect truth.
   const showSkeleton = !loaded && isLoading;
 
+  const renderRow = (r: NotificationTypeRow) => {
+    const value = prefs[r.key];
+    return (
+      <View key={r.key} style={styles.row}>
+        <View style={styles.rowIcon}>
+          <Ionicons name={ROW_ICONS[r.key]} size={18} color={value ? t.colors.accent.aqua : t.colors.text.secondary} />
+        </View>
+        <View style={styles.rowBody}>
+          <Text style={styles.rowTitle}>{r.label}</Text>
+          <Text style={styles.rowHint}>{r.hint}</Text>
+          {muted.has(r.key) ? <Text style={styles.mutedHint}>Muted in Android settings</Text> : null}
+        </View>
+        <Switch
+          value={value}
+          onValueChange={(v) => set({ [r.key]: v })}
+          trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
+          ios_backgroundColor={t.colors.text.muted}
+          thumbColor={t.colors.text.onAccent}
+          accessibilityLabel={r.label}
+          accessibilityState={{ checked: value }}
+        />
+      </View>
+    );
+  };
+
+  if (showSkeleton) {
+    return (
+      <>
+        <SectionLabel>Notification types</SectionLabel>
+        <View style={styles.card}>
+          <View style={styles.skeleton}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={styles.skelRow}>
+                <Skeleton width={140} height={14} radius={t.radii.xs} />
+                <Skeleton width={40} height={22} radius={t.radii.pill} />
+              </View>
+            ))}
+          </View>
+        </View>
+        <FestivalTopicsRows />
+      </>
+    );
+  }
+
+  const rows = visibleNotificationRows();
+
   return (
     <>
-    <SectionLabel>Notification types</SectionLabel>
-    <View style={styles.card}>
-
-      {showSkeleton ? (
-        <View style={styles.skeleton}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={styles.skelRow}>
-              <Skeleton width={140} height={14} radius={t.radii.xs} />
-              <Skeleton width={40} height={22} radius={t.radii.pill} />
-            </View>
-          ))}
+      <SectionLabel>On this phone</SectionLabel>
+      <Text style={styles.groupCaption}>Works offline. Push notifications not needed.</Text>
+      <View style={styles.card}>
+        {rows.filter((r) => r.onDevice).map(renderRow)}
+        <View style={styles.selectWrap}>
+          <ModalSelect
+            label="Must-see reminders"
+            value={String(prefs.mustSeeReminderMinutes ?? 'off')}
+            options={MUST_SEE_REMINDER_OPTIONS.map((v) => ({ label: mustSeeOptionLabel(v), value: String(v ?? 'off') }))}
+            onSelect={(v) =>
+              set({ mustSeeReminderMinutes: v === 'off' ? null : (Number(v) as 5 | 10 | 15 | 30 | 60) })
+            }
+            hint="Reminds you before every set you mark Must see."
+          />
         </View>
-      ) : (
-        <>
-          {pushOn ? null : (
-            <Text style={styles.pushHint}>Turn on push notifications to get these.</Text>
-          )}
-          <View style={pushOn ? undefined : { opacity: 0.5 }}>
-          {rows.map((r) => (
-            <View key={r.key} style={styles.row}>
-              <View style={styles.rowIcon}>
-                <Ionicons name={r.icon} size={18} color={r.value ? t.colors.accent.aqua : t.colors.text.secondary} />
+      </View>
+
+      <SectionLabel>From your crew and Festie</SectionLabel>
+      {pushOn ? null : <Text style={styles.groupCaption}>Turn on push notifications above to get these.</Text>}
+      <View style={styles.card}>
+        {rows.filter((r) => !r.onDevice).map(renderRow)}
+        <View style={styles.row} accessible accessibilityLabel="SOS from your crew: always on">
+          <View style={styles.rowIcon}>
+            <Ionicons name="alert-circle" size={18} color={t.colors.accent.coral} />
+          </View>
+          <Text style={styles.rowTitle}>SOS from your crew</Text>
+          <Text style={styles.alwaysOn}>Always on</Text>
+        </View>
+
+        <View style={styles.row}>
+          <View style={styles.rowIcon}>
+            <Ionicons name="moon-outline" size={18} color={quietOn ? t.colors.accent.aqua : t.colors.text.secondary} />
+          </View>
+          <View style={styles.rowBody}>
+            <Text style={styles.rowTitle}>Quiet hours</Text>
+            <Text style={styles.rowHint}>
+              {quietOn && quietCaption
+                ? `Mutes everything except SOS ${quietCaption}${prefs.dndTimeZone ? ` (${timeZoneCity(prefs.dndTimeZone)} time)` : ''}`
+                : 'Mutes notifications during your chosen window, except SOS'}
+            </Text>
+          </View>
+          <Switch
+            value={quietOn}
+            onValueChange={(v) =>
+              set(
+                v
+                  ? { dndStart: lastWindow.current.start, dndEnd: lastWindow.current.end }
+                  : { dndStart: null, dndEnd: null },
+              )
+            }
+            trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
+            ios_backgroundColor={t.colors.text.muted}
+            thumbColor={t.colors.text.onAccent}
+            accessibilityLabel="Quiet hours"
+            accessibilityState={{ checked: quietOn }}
+          />
+        </View>
+
+        {quietOn ? (
+          <View style={styles.quietEditor}>
+            <View style={styles.chips}>
+              {QUIET_HOURS_PRESETS.map((p) => {
+                const selected = prefs.dndStart === p.start && prefs.dndEnd === p.end;
+                const label = p.id === 'festival' ? `${p.label} (4 AM to 11 AM)` : p.label;
+                return (
+                  <AppPressable
+                    key={p.id}
+                    onPress={() => editWindow(p.start, p.end)}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={label}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+                  </AppPressable>
+                );
+              })}
+            </View>
+            <View style={styles.timeFields}>
+              <View style={styles.timeField}>
+                <TimeField label="From" value={startText} onChangeText={(v) => editWindow(v, endText)} />
               </View>
-              {r.hint ? (
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowTitle}>{r.title}</Text>
-                  <Text style={styles.rowHint}>{r.hint}</Text>
-                </View>
-              ) : (
-                <Text style={styles.rowTitle}>{r.title}</Text>
-              )}
-              <Switch
-                value={r.value}
-                onValueChange={r.onChange}
-                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-                ios_backgroundColor={t.colors.text.muted}
-                thumbColor={t.colors.text.onAccent}
-                accessibilityLabel={r.title}
-                accessibilityState={{ checked: r.value }}
-              />
+              <View style={styles.timeField}>
+                <TimeField label="To" value={endText} onChangeText={(v) => editWindow(startText, v)} />
+              </View>
             </View>
-          ))}
-          <View style={styles.row} accessible accessibilityLabel="SOS from your crew: always on">
-            <View style={styles.rowIcon}>
-              <Ionicons name="alert-circle" size={18} color={t.colors.accent.coral} />
-            </View>
-            <Text style={styles.rowTitle}>SOS from your crew</Text>
-            <Text style={styles.alwaysOn}>Always on</Text>
-          </View>
-          </View>
-
-          <View style={styles.row}>
-            <View style={styles.rowIcon}>
-              <Ionicons name="moon-outline" size={18} color={quietOn ? t.colors.accent.aqua : t.colors.text.secondary} />
-            </View>
-            <View style={styles.rowBody}>
-              <Text style={styles.rowTitle}>Quiet hours</Text>
-              <Text style={styles.rowHint}>
-                {quietOn && quietCaption
-                  ? `Mutes everything except SOS ${quietCaption}${prefs.dndTimeZone ? ` (${timeZoneCity(prefs.dndTimeZone)} time)` : ''}`
-                  : 'Mutes notifications during your chosen window, except SOS'}
+            {!isValidQuietWindow(startText, endText) ? (
+              <Text style={styles.errorText} accessibilityLiveRegion="polite">
+                Start and end can't be the same.
               </Text>
-            </View>
-            <Switch
-              value={quietOn}
-              onValueChange={(v) =>
-                set(
-                  v
-                    ? { dndStart: lastWindow.current.start, dndEnd: lastWindow.current.end }
-                    : { dndStart: null, dndEnd: null },
-                )
-              }
-              trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-              ios_backgroundColor={t.colors.text.muted}
-              thumbColor={t.colors.text.onAccent}
-              accessibilityLabel="Quiet hours"
-              accessibilityState={{ checked: quietOn }}
-            />
+            ) : null}
           </View>
+        ) : null}
 
-          {storeError ? (
-            <View style={styles.errorRow} accessibilityLiveRegion="polite">
-              <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
-              <Text style={styles.errorText}>{storeError}</Text>
+        {Platform.OS === 'android' ? (
+          <AppPressable
+            onPress={() => void Linking.openSettings()}
+            style={styles.row}
+            accessibilityRole="button"
+            accessibilityLabel="Manage in Android settings"
+          >
+            <View style={styles.rowIcon}>
+              <Ionicons name="settings-outline" size={18} color={t.colors.text.secondary} />
             </View>
-          ) : null}
-        </>
-      )}
-    </View>
-    <FestivalTopicsRows />
+            <Text style={styles.rowTitle}>Manage in Android settings</Text>
+            <Ionicons name="chevron-forward" size={16} color={t.colors.text.secondary} />
+          </AppPressable>
+        ) : null}
+
+        {storeError ? (
+          <View style={styles.errorRow} accessibilityLiveRegion="polite">
+            <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
+            <Text style={styles.errorText}>{storeError}</Text>
+          </View>
+        ) : null}
+      </View>
+      <FestivalTopicsRows />
     </>
   );
 }
@@ -368,15 +398,56 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
+  mutedHint: {
+    ...typeStyle('caption'),
+    color: t.colors.text.danger,
+  },
   alwaysOn: {
     ...typeStyle('label'),
     color: t.colors.text.secondary,
   },
-  pushHint: {
+  groupCaption: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+    marginBottom: t.spacing[2],
+  },
+  selectWrap: {
     paddingHorizontal: t.spacing[4],
-    paddingTop: t.spacing[2],
+    paddingVertical: t.spacing[3],
+  },
+  quietEditor: {
+    paddingHorizontal: t.spacing[4],
+    paddingBottom: t.spacing[3],
+    gap: t.spacing[3],
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    borderRadius: t.radii.pill,
+    paddingHorizontal: t.spacing[3],
+    paddingVertical: t.spacing[2],
+  },
+  chipSelected: {
+    borderColor: t.colors.accent.aqua,
+  },
+  chipText: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
+  },
+  chipTextSelected: {
+    color: t.colors.accent.aqua,
+  },
+  timeFields: {
+    flexDirection: 'row',
+    gap: t.spacing[3],
+  },
+  timeField: {
+    flex: 1,
   },
   skeleton: {
     paddingHorizontal: t.spacing[4],

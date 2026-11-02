@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useFestivalStore } from '@festie/shared/stores';
+import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { usePicks, useFestival, usePickClear } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { selectNowNext, resolveFestivalTimeZone, artistDisplayName, resolveStageColor } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -23,19 +24,24 @@ import { COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { cn } from '../lib/utils';
 import { useUndoNotifier } from '../lib/useUndoNotifier';
+import { useToast } from '../lib/toastContext';
 
 const JumpToNowIcon = CONCEPT_ICON.jumpToNow;
 
 export default function TimelineView() {
   return (
-    <RenderErrorBoundary name="timeline">
-      <TimelineViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Timeline</h1>
+      <RenderErrorBoundary name="timeline">
+        <TimelineViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 
 function TimelineViewInner() {
   const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const user = useAuthStore((state) => state.user);
   const days = useFestivalStore((state) => state.days);
   const allSets = useFestivalStore((state) => state.sets);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
@@ -44,6 +50,7 @@ function TimelineViewInner() {
   const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
   const { getMyPick, getOtherPicks, savePick } = usePicks();
   const clearPick = usePickClear(useUndoNotifier());
+  const { toast } = useToast();
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
@@ -143,9 +150,15 @@ function TimelineViewInner() {
         clearPick(setId, found ? artistDisplayName(found, currentFestival.b2bSeparator) : 'pick');
         return;
       }
+      try {
+        await savePick(currentFestival.id, setId, priority as Priority);
+      } catch (err) {
+        // Grid and TBA cells show no failed chip, so a failed save (first-pick join included) toasts.
+        toast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), 'error');
+      }
       await savePick(currentFestival.id, setId, priority as Priority);
     },
-    [currentFestival, savePick, clearPick, allSets],
+    [currentFestival, savePick, clearPick, allSets, toast],
   );
 
   if (!currentFestival) {
@@ -174,7 +187,7 @@ function TimelineViewInner() {
             getMyPick={getMyPick}
             getOtherPicks={getOtherPicks}
             conflictIds={conflictIds}
-            currentProfile={currentProfile}
+            canPick={!!user}
             currentFestival={currentFestival}
             getStageColor={getStageColor}
             onSavePick={handleSavePick}
@@ -259,7 +272,7 @@ function TimelineViewInner() {
             vpW={vpW}
             nowIndicator={nowIndicator}
             conflictIds={conflictIds}
-            currentProfile={currentProfile}
+            canPick={!!user}
             currentFestival={currentFestival}
             gridRef={gridRef}
             getMyPick={getMyPick}
@@ -303,7 +316,7 @@ function TimelineViewInner() {
               getMyPick={getMyPick}
               getOtherPicks={getOtherPicks}
               conflictIds={conflictIds}
-              currentProfile={currentProfile}
+              canPick={!!user}
               currentFestival={currentFestival}
               getStageColor={getStageColor}
               onSavePick={handleSavePick}

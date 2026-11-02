@@ -140,13 +140,15 @@ vi.mock('../../hooks/usePushNotifications', () => ({
     registerToken: vi.fn(),
   }),
 }));
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+const mockNavigate = vi.hoisted(() => vi.fn());
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => mockNavigate }));
 
 import DetailPanel from './DetailPanel';
 import { festivalTimeLabel, hasSetStarted } from '@festie/shared/utils';
 import { useDetailPanelData } from './useDetailPanelData';
 import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
-import { useNotificationPrefsStore } from '@festie/shared/stores';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { useNotificationPrefsStore, useAuthStore } from '@festie/shared/stores';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
   return {
@@ -202,6 +204,7 @@ describe('DetailPanel', () => {
     vi.mocked(hasSetStarted).mockReturnValue(false);
     useFestivalDataStore.setState({ saveNote: mockSaveNote } as never);
     useNotificationPrefsStore.setState({ loadPrefs: vi.fn(async () => {}) } as never);
+    useAuthStore.setState({ user: { id: 'u1', username: 'asir' } } as never);
   });
 
   it('renders the drawer with set detail aria-label', () => {
@@ -247,14 +250,29 @@ describe('DetailPanel', () => {
     expect(screen.getByTestId('priority-picker')).toBeInTheDocument();
   });
 
-  it('renders Join Festival CTA when user has no profile', () => {
+  it('renders the priority picker and no Join Festival button when signed in with no profile', () => {
     vi.mocked(useDetailPanelData).mockReturnValue({
       ...defaultDetailData(),
       currentProfile: null,
     });
     render(<DetailPanel {...defaultProps} />);
-    expect(screen.getByRole('button', { name: /Join Festival/ })).toBeInTheDocument();
+    expect(screen.getByTestId('priority-picker')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Join Festival/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the sign-in prompt to a guest and returns to the set after sign-in', async () => {
+    useAuthStore.setState({ user: null } as never);
+    vi.mocked(useDetailPanelData).mockReturnValue({
+      ...defaultDetailData(),
+      currentProfile: null,
+    });
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.getByText(GUEST_PROMPT_COPY.setSheet)).toBeInTheDocument();
     expect(screen.queryByTestId('priority-picker')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(defaultProps.onClose).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/login', search: { next: '/set/set-1' } });
   });
 
   it('routes a ClashPrompt clear through usePickClear with the set id and label', async () => {

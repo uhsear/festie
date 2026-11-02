@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -98,8 +98,12 @@ export async function ensureAndroidChannels(): Promise<void> {
   });
 }
 
+export type PushPermission = 'granted' | 'denied' | 'undetermined';
+
 export interface MobilePush {
   registered: boolean;
+  permission: PushPermission | null;
+  canAskAgain: boolean;
   busy: boolean;
   error: string | null;
   register: () => Promise<void>;
@@ -120,6 +124,24 @@ export function useMobilePush(): MobilePush {
   const [registered, setRegistered] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [permission, setPermission] = useState<PushPermission | null>(null);
+  const [canAskAgain, setCanAskAgain] = useState(true);
+
+  useEffect(() => {
+    const readPermission = () =>
+      Notifications.getPermissionsAsync()
+        .then((p) => {
+          setPermission(p.status);
+          setCanAskAgain(p.canAskAgain);
+        })
+        // Best-effort: without a reading the UI keeps the plain switch.
+        .catch(() => {});
+    void readPermission();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void readPermission();
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(TOKEN_KEY)
@@ -140,14 +162,14 @@ export function useMobilePush(): MobilePush {
     setError(null);
     try {
       const existing = await Notifications.getPermissionsAsync();
-      let status = existing.status;
-      if (status !== 'granted') {
-        const req = await Notifications.requestPermissionsAsync();
-        status = req.status;
+      let final = existing;
+      if (existing.status !== 'granted') {
+        final = await Notifications.requestPermissionsAsync();
       }
-      if (status !== 'granted') {
-        throw new Error('Notifications permission was denied.');
-      }
+      setPermission(final.status);
+      setCanAskAgain(final.canAskAgain);
+      // The UI shows the way forward (Open Settings), so a refusal is not an error.
+      if (final.status !== 'granted') return;
 
       await ensureAndroidChannels();
 
@@ -187,5 +209,5 @@ export function useMobilePush(): MobilePush {
     }
   }, []);
 
-  return { registered, busy, error, register, unregister };
+  return { registered, permission, canAskAgain, busy, error, register, unregister };
 }

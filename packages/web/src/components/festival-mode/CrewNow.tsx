@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ChevronRight, Home, MapPin, Users } from 'lucide-react';
 import {
   fmtStartsIn,
@@ -44,8 +45,9 @@ interface CrewProps {
 
 /** Crew members' latest status and live-location freshness, with one tap to Meet. */
 export function CrewNowSection({ crewName, rows, onOpenCrew }: CrewProps) {
-  const shown = rows.slice(0, MAX_ROWS);
-  const more = rows.length - shown.length;
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? rows : rows.slice(0, MAX_ROWS);
+  const more = rows.length - MAX_ROWS;
   return (
     <section aria-labelledby="fm-crew-title" className="flex flex-col gap-2" data-testid="fm-crew">
       <h2 id="fm-crew-title" className="type-label font-semibold text-text-primary flex items-center gap-1.5 min-w-0">
@@ -56,7 +58,7 @@ export function CrewNowSection({ crewName, rows, onOpenCrew }: CrewProps) {
         {shown.length === 0 ? (
           <p className="type-label text-text-secondary p-4">Nobody else in your crew yet.</p>
         ) : (
-          <ul className="list-none m-0 p-0 divide-y divide-border">
+          <ul id="fm-crew-list" className="list-none m-0 p-0 divide-y divide-border">
             {shown.map((row) => (
               <li key={row.userId} className="flex items-center gap-3 px-4 py-2.5 min-h-[52px]">
                 <Avatar name={row.name} size="sm" />
@@ -73,7 +75,17 @@ export function CrewNowSection({ crewName, rows, onOpenCrew }: CrewProps) {
             ))}
           </ul>
         )}
-        {more > 0 && <p className="type-caption text-text-secondary px-4 pb-2">+{more} more</p>}
+        {more > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-controls="fm-crew-list"
+            className="w-full min-h-11 px-4 text-left type-caption font-semibold text-accent-aqua"
+          >
+            {expanded ? 'Show fewer' : `Show ${more} more`}
+          </button>
+        )}
       </div>
       <Button variant="primary" fullWidth onClick={onOpenCrew} data-testid="fm-find-crew">
         Find your crew

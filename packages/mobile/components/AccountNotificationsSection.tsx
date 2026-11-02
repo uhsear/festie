@@ -1,8 +1,9 @@
-import { View, Text, Switch, Alert } from 'react-native';
+import { View, Text, Switch, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMobilePush } from '../hooks/useMobilePush';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import Button from './Button';
 
 /**
  * Push-notification toggle for the Account screen. Flips FCM registration on/off
@@ -13,7 +14,8 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
-  const { registered, busy, error, register, unregister } = push;
+  const { registered, busy, error, register, unregister, permission, canAskAgain } = push;
+  const blocked = permission === 'denied' && !canAskAgain && !registered;
 
   const onToggle = async (next: boolean) => {
     haptics.select();
@@ -26,7 +28,9 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
     }
   };
 
-  const hint = busy
+  const hint = blocked
+    ? "Notifications are off in your phone's Settings."
+    : busy
     ? registered
       ? 'Turning off…'
       : 'Turning on…'
@@ -53,6 +57,9 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
             </Text>
           </View>
         </View>
+        {blocked ? (
+          <Button label="Open Settings" size="sm" variant="secondary" onPress={() => void Linking.openSettings()} />
+        ) : (
         <Switch
           value={registered}
           onValueChange={(v) => void onToggle(v)}
@@ -63,6 +70,7 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
           accessibilityLabel="Push notifications"
           accessibilityState={{ disabled: busy, checked: registered }}
         />
+        )}
       </View>
 
       {error ? (

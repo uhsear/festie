@@ -6,7 +6,7 @@ const root = join(__dirname, '..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
 
 describe('T13 crew words', () => {
-  it.each(['app/crew-compare.tsx', 'app/crew-plan.tsx', 'app/map.tsx', 'app/(tabs)/crew.tsx'])(
+  it.each(['app/crew-compare.tsx', 'app/crew-plan.tsx', 'app/(tabs)/map.tsx', 'app/(tabs)/crew.tsx'])(
     '%s says "Sign in to", not "Log in to"',
     (f) => {
       expect(read(f)).not.toContain('Log in to');
@@ -21,6 +21,6 @@ describe('T13 crew words', () => {
     expect(src).toContain('MEETING_POINT_KINDS');
   });
   it('map header is "Map", not the crew name', () => {
-    expect(read('app/map.tsx')).not.toContain('<HeaderTitle>{activeCrew.name}');
+    expect(read('app/(tabs)/map.tsx')).not.toContain('<HeaderTitle>{activeCrew.name}');
   });
 });

@@ -13,7 +13,8 @@ describe('day-of routes', () => {
     });
   });
 
-  it('falls back to the crew logistics tab', () => {
+  it('falls back to the crew Find tab', () => {
+    expect(CREW_MEET_HREF).toEqual({ pathname: '/(tabs)/crew', params: { tab: 'find' } });
     expect(meetHref({ kind: 'meeting-point', id: 'mp2' }, [{ id: 'mp2', latitude: null, longitude: null }])).toBe(
       CREW_MEET_HREF,
     );
@@ -25,6 +26,7 @@ describe('day-of routes', () => {
     expect(sosPushCrewId({ crewId: 'c1', deepLink: 'rave://crew/c1/sos' })).toBe('c1');
     expect(sosPushCrewId({ deepLink: 'rave://crew/c1/sos' })).toBeNull();
     expect(sosPushCrewId({ crewId: 'c1', deepLink: 'rave://crew/c1' })).toBeNull();
+    expect(sosPushCrewId({ type: 'crew_sos', crewId: 'c1', deepLink: 'https://festie.us/crew?sos=u1' })).toBe('c1');
     expect(sosPushCrewId(undefined)).toBeNull();
   });
 });

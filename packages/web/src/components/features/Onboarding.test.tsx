@@ -1,8 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
 import Onboarding from './Onboarding';
 
@@ -52,5 +50,17 @@ describe('Onboarding sequencing', () => {
     unmount();
     render(<Onboarding />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes on the last step and stays on the current page', async () => {
+    window.history.replaceState({}, '', '/timeline');
+    const user = userEvent.setup();
+    render(<Onboarding />);
+    for (let i = 0; i < 10 && !screen.queryByRole('button', { name: 'Get Started' }); i++) {
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+    }
+    await user.click(screen.getByRole('button', { name: 'Get Started' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/timeline');
   });
 });

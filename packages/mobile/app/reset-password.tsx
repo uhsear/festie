@@ -13,15 +13,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { api } from '@festie/shared/services';
+import { useAuthStore } from '@festie/shared/stores';
+import { isResetLinkExpired, mapErrorToUserMessage } from '@festie/shared/services';
+import { AUTH_COPY } from '@festie/shared/constants';
+import { validateNewPassword } from '@festie/shared/utils';
 import Button from '../components/Button';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 
 /**
  * Reset-password screen reached via the deep link festie.us/reset-password?token=…
- * (Android App Link now; iOS Universal Link once APPLE_TEAM_ID is set). Posts to
- * /auth/reset-password { token, newPassword, confirmPassword }. If opened without
- * a token (or the app isn't installed) the web page handles it as a fallback.
+ * (Android App Link now; iOS Universal Link once APPLE_TEAM_ID is set). Calls the
+ * shared authStore.resetPassword. If the app isn't installed, the web SPA route
+ * /reset-password handles the link as a fallback.
  */
 
 const useStyles = makeStyles((t) => ({
@@ -99,36 +102,54 @@ export default function ResetPasswordScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
+  const resetPassword = useAuthStore((s) => s.resetPassword);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [expired, setExpired] = useState(false);
   const confirmRef = useRef<TextInputInstance>(null);
 
   const handleSubmit = async () => {
     Keyboard.dismiss();
     if (!token) {
-      setError('This reset link is missing its token. Request a new link.');
+      setExpired(true);
       return;
     }
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match');
+    const invalid = validateNewPassword(newPassword, confirmPassword);
+    const first = invalid.password ?? invalid.confirmPassword;
+    if (first) {
+      setError(first);
       return;
     }
     setError(null);
     setBusy(true);
     try {
-      await api.post('/auth/reset-password', { token, newPassword, confirmPassword });
+      await resetPassword({ token, newPassword, confirmPassword });
       setDone(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't reset your password. The link may have expired.");
+      if (isResetLinkExpired(e)) setExpired(true);
+      else setError(mapErrorToUserMessage(e, "Couldn't reset your password. Try again."));
     } finally {
       setBusy(false);
     }
   };
+
+  if (expired || !token) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.inner}>
+          <Ionicons name="time-outline" size={56} color={t.colors.text.muted} style={styles.icon} />
+          <Text style={styles.title}>{AUTH_COPY.expiredTitle}</Text>
+          <Text style={styles.subtitle}>{AUTH_COPY.expiredBody}</Text>
+          <Button
+            label={AUTH_COPY.sendNewLink}
+            onPress={() => router.replace('/(auth)/forgot-password')}
+            style={styles.button}
+          />
+        </View>
+      </View>
+    );
+  }
 
   if (done) {
     return (
@@ -158,7 +179,7 @@ export default function ResetPasswordScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Set a new password</Text>
+        <Text style={styles.title}>{AUTH_COPY.newPasswordTitle}</Text>
         <Text style={styles.subtitle}>Choose a new password for your account.</Text>
 
         {error ? (
@@ -170,9 +191,9 @@ export default function ResetPasswordScreen() {
         <View style={styles.passwordRow}>
           <TextInput
             style={styles.passwordInput}
-            placeholder="New password"
+            placeholder={AUTH_COPY.newPasswordLabel}
             placeholderTextColor={t.colors.text.placeholder}
-            accessibilityLabel="New password"
+            accessibilityLabel={AUTH_COPY.newPasswordLabel}
             value={newPassword}
             onChangeText={setNewPassword}
             secureTextEntry={!showPw}
@@ -191,14 +212,14 @@ export default function ResetPasswordScreen() {
             <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.colors.text.secondary} />
           </TouchableOpacity>
         </View>
-        <Text style={styles.hint}>At least 8 characters. Avoid common passwords and your name.</Text>
+        <Text style={styles.hint}>{AUTH_COPY.passwordHint}</Text>
 
         <TextInput
           ref={confirmRef}
           style={styles.input}
-          placeholder="Confirm new password"
+          placeholder={AUTH_COPY.confirmNewPasswordLabel}
           placeholderTextColor={t.colors.text.placeholder}
-          accessibilityLabel="Confirm new password"
+          accessibilityLabel={AUTH_COPY.confirmNewPasswordLabel}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           secureTextEntry={!showPw}
@@ -208,7 +229,7 @@ export default function ResetPasswordScreen() {
           onSubmitEditing={handleSubmit}
         />
 
-        <Button label="Reset password" onPress={handleSubmit} loading={busy} style={styles.button} />
+        <Button label={AUTH_COPY.resetPasswordButton} onPress={handleSubmit} loading={busy} style={styles.button} />
 
         <TouchableOpacity
           style={styles.linkButton}

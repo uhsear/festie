@@ -1,42 +1,26 @@
-import { useNavigate } from '@tanstack/react-router';
-import { Users, Clock, type LucideIcon } from 'lucide-react';
-import { COPY } from '@festie/shared/constants';
+import { useLocation, useNavigate } from '@tanstack/react-router';
+import { Users, type LucideIcon } from 'lucide-react';
+import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
 
 interface GuestTeaserProps {
-  mode: 'picks' | 'crew' | 'grid';
+  mode: 'picks' | 'crew' | 'wrap';
   className?: string;
 }
 
-const CONFIG: Record<GuestTeaserProps['mode'], { Icon: LucideIcon; title: string; description: string; cta: string }> =
-  {
-    picks: {
-      Icon: CONCEPT_ICON.picks,
-      title: 'Save your festival picks',
-      description: 'Sign in to mark Must See, Want to See, or Maybe picks and share them with your crew.',
-      cta: COPY.auth.createAccount,
-    },
-    crew: {
-      Icon: Users,
-      title: 'Plan with your crew',
-      description: 'Invite friends, compare picks, and find sets you all want to see.',
-      cta: COPY.auth.createAccount,
-    },
-    grid: {
-      Icon: Clock,
-      title: 'See every stage at once',
-      description:
-        'The grid shows every stage and set across the festival. Sign in to see clashes and plan your day.',
-      cta: COPY.auth.createAccount,
-    },
-  };
+const ICONS: Record<GuestTeaserProps['mode'], LucideIcon> = {
+  picks: CONCEPT_ICON.picks,
+  crew: Users,
+  wrap: CONCEPT_ICON.wrap,
+};
 
 export default function GuestTeaser({ mode, className }: GuestTeaserProps) {
   const navigate = useNavigate();
-  const config = CONFIG[mode];
-  const Icon = config.Icon;
+  const { href } = useLocation();
+  const { title, message } = GUEST_PROMPT_COPY.teasers[mode];
+  const Icon = ICONS[mode];
 
   return (
     <section
@@ -48,12 +32,17 @@ export default function GuestTeaser({ mode, className }: GuestTeaserProps) {
         id={`guest-teaser-${mode}-heading`}
         className="text-2xl font-display font-bold text-text-primary mb-3 text-center"
       >
-        {config.title}
+        {title}
       </h2>
-      <p className="text-center text-text-secondary mb-8 max-w-sm text-sm leading-relaxed">{config.description}</p>
-      <Button variant="primary" onClick={() => navigate({ to: '/register' })}>
-        {config.cta}
-      </Button>
+      <p className="text-center text-text-secondary mb-8 max-w-sm text-sm leading-relaxed">{message}</p>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Button variant="primary" onClick={() => navigate({ to: '/register', search: { next: href } })}>
+          {GUEST_PROMPT_COPY.createAccount}
+        </Button>
+        <Button variant="secondary" onClick={() => navigate({ to: '/login', search: { next: href } })}>
+          {GUEST_PROMPT_COPY.signIn}
+        </Button>
+      </div>
     </section>
   );
 }

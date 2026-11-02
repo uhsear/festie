@@ -1,64 +1,71 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { ApiClientError } from '@festie/shared/services/api';
-import AdminFestivals from './AdminFestivals';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+const toast = vi.fn();
+const get = vi.fn();
+const put = vi.fn();
+
+vi.mock('@festie/shared/services/api', () => ({
+  api: { get: (...a: unknown[]) => get(...a), put: (...a: unknown[]) => put(...a), post: vi.fn(), delete: vi.fn() },
+}));
 vi.mock('../../lib/toastContext', () => ({
-  useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
+  useToast: () => ({ toast, toastError: vi.fn() }),
 }));
 vi.mock('./LineupImport', () => ({ default: () => null }));
 vi.mock('./FestivalMapEditor', () => ({ default: () => null }));
-vi.mock('./FestivalEditForm', () => ({
-  default: ({ onSave }: { onSave: () => void }) => <button onClick={onSave}>save form</button>,
-}));
 
-const mockGet = vi.fn();
-const mockPut = vi.fn();
-vi.mock('@festie/shared/services/api', async (orig) => ({
-  ...(await orig<Record<string, unknown>>()),
-  api: {
-    get: (...a: unknown[]) => mockGet(...a),
-    put: (...a: unknown[]) => mockPut(...a),
-    post: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+import AdminFestivals from './AdminFestivals';
 
-const FULL = {
+const festival = {
   id: 'f1',
   name: 'Fest',
-  location: 'Here',
-  timeZone: 'UTC',
-  updatedAt: '2026-10-01T00:00:00.000Z',
+  location: 'Orlando',
+  timeZone: 'America/New_York',
   stages: [],
   days: [],
 };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockGet.mockImplementation(async (path: string) => (path === '/admin/festivals' ? [FULL] : FULL));
-});
+async function openEditorAndSave() {
+  render(<AdminFestivals />);
+  fireEvent.click(await screen.findByText('Edit'));
+  const box = (await screen.findByRole('checkbox', { name: /Tell people whose picks changed/ })) as HTMLInputElement;
+  await waitFor(() => expect((screen.getByLabelText('Festival Name') as HTMLInputElement).value).toBe('Fest'));
+  return box;
+}
 
-describe('AdminFestivals', () => {
-  it('opens the removal dialog on CONFIRM_REMOVALS and re-sends with confirmRemovals', async () => {
-    mockPut.mockRejectedValueOnce(
-      new ApiClientError('This save removes sets', 409, 'CONFIRM_REMOVALS', undefined, undefined, {
-        removal: { days: 1, sets: 24, picks: 113, ratings: 0 },
-      }),
+describe('AdminFestivals notify switch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    get.mockImplementation(async (url: string) => (url === '/admin/festivals' ? [festival] : festival));
+  });
+
+  it('sends notify: false when the box is unchecked', async () => {
+    put.mockResolvedValue({ ...festival });
+    const box = await openEditorAndSave();
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    fireEvent.click(screen.getByText('Update Festival'));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0]).toBe('/admin/festivals/f1');
+    expect(put.mock.calls[0][1]).toMatchObject({ notify: false });
+  });
+
+  it('toasts the schedule notice', async () => {
+    put.mockResolvedValue({ ...festival, scheduleNotice: { changes: 2, people: 0, notified: false } });
+    await openEditorAndSave();
+    fireEvent.click(screen.getByText('Update Festival'));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        'Saved. No one had picked the changed sets, so no alerts were sent.',
+        'success',
+      ),
     );
-    mockPut.mockResolvedValueOnce(undefined);
+  });
 
-    render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
-
-    expect(await screen.findByText('Remove sets with picks?')).toBeInTheDocument();
-    expect(screen.getByText(/removes 1 day, 24 sets and 113 picks/)).toBeInTheDocument();
-    expect(mockPut.mock.calls[0][1]).toMatchObject({ expectedUpdatedAt: FULL.updatedAt });
-
-    await userEvent.click(screen.getByRole('button', { name: 'Remove and save' }));
-    await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
-    expect(mockPut.mock.calls[1][1]).toMatchObject({ confirmRemovals: true, expectedUpdatedAt: FULL.updatedAt });
+  it('keeps Festival updated when the server sends no notice', async () => {
+    put.mockResolvedValue({ ...festival });
+    await openEditorAndSave();
+    fireEvent.click(screen.getByText('Update Festival'));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('Festival updated', 'success'));
   });
 });

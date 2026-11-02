@@ -126,10 +126,10 @@ env:
 - stopApp
 - launchApp
 - extendedWaitUntil:
-    visible: "Schedule"
+    visible: "Lineup"
     timeout: 30000
 
-- tapOn: "Account"
+- tapOn: "More"
 - scrollUntilVisible:
     element:
       id: "daylight-switch"
@@ -156,7 +156,7 @@ env:
 - stopApp
 - launchApp
 - extendedWaitUntil:
-    visible: "Schedule"
+    visible: "Lineup"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 8000

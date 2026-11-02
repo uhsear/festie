@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -7,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   Linking,
+  Alert,
   Share,
   Image,
   BackHandler,
@@ -39,9 +41,10 @@ import {
 import type { Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import DisplayWords from '../../components/DisplayWords';
+import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
-import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
+import { PRIORITY_SYMBOLS, GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS, priorityIconName } from '../../lib/prioritySymbol';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import { ensureStageTextContrast } from '../../lib/stageTextContrast';
@@ -64,6 +67,27 @@ interface SpotifyPreview {
   embedType: 'artist' | 'track' | null;
   artistName?: string;
   trackName?: string;
+}
+
+const REMINDER_ASK_DISMISSED_KEY = 'festie-reminder-ask-dismissed';
+
+/** Soft ask before the first system permission prompt. The reminder is saved whatever the user picks. */
+async function askNotificationPermission(artist: string): Promise<void> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'undetermined') return;
+    if (await AsyncStorage.getItem(REMINDER_ASK_DISMISSED_KEY)) return;
+    Alert.alert(
+      `Get a heads-up before ${artist}?`,
+      'Allow notifications so Festie can remind you before sets start, even when the app is closed.',
+      [
+        { text: 'Not now', style: 'cancel', onPress: () => void AsyncStorage.setItem(REMINDER_ASK_DISMISSED_KEY, '1') },
+        { text: 'Allow', onPress: () => void Notifications.requestPermissionsAsync() },
+      ],
+    );
+  } catch {
+    // Best effort: the reminder is saved either way and the delivery line explains a missing permission.
+  }
 }
 
 /** Reminder lead-time options (minutes) — must match the server's allowed set. */
@@ -129,7 +153,6 @@ export default function SetDetailScreen() {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const allProfiles = useFestivalDataStore((s) => s.allProfiles);
-  const loadProfiles = useFestivalDataStore((s) => s.loadProfiles);
   const days = useFestivalDataStore((s) => s.days);
 
   const { getMyPick, savePick, getOtherPicks, saveReminder, getMyReminder } = usePicks();
@@ -269,21 +292,35 @@ export default function SetDetailScreen() {
   });
 
   // ---- Reminder delivery (OS permission + Account preference). ----
-  // 'undetermined' counts as granted: useLocalReminders asks on the first reminder.
+  // 'undetermined', and 'denied' while the OS can still ask, count as 'default' (not enabled yet).
   const [permission, setPermission] = useState<ReminderPermission>('granted');
   const setRemindersPref = useNotificationPrefsStore((s) => s.prefs.setReminders);
+  const readPermission = useCallback(() => {
+    Notifications.getPermissionsAsync()
+      .then((p) =>
+        setPermission(
+          p.status === 'granted'
+            ? 'granted'
+            : p.status === 'denied' && !p.canAskAgain
+              ? 'denied'
+              : 'default',
+        ),
+      )
+      .catch(() => {});
+  }, []);
   useEffect(() => {
-    const read = () => {
-      Notifications.getPermissionsAsync()
-        .then((p) => setPermission(p.status === 'denied' ? 'denied' : 'granted'))
-        .catch(() => {});
-    };
+    const read = readPermission;
     read();
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') read();
     });
     return () => sub.remove();
-  }, []);
+  }, [readPermission]);
+  const turnOnNotifications = useCallback(() => {
+    Notifications.requestPermissionsAsync()
+      .catch(() => {})
+      .finally(readPermission);
+  }, [readPermission]);
   const deliveryProblem = reminderDeliveryProblem({
     hasReminder: myReminder != null,
     permission,
@@ -341,13 +378,14 @@ export default function SetDetailScreen() {
       if (!set || !currentFestival) return;
       haptics.select();
       setReminderFailed(null);
+      if (minutes != null) void askNotificationPermission(artistName || 'this set');
       saveReminder(currentFestival.id, set.id, minutes).catch((err) => {
         haptics.warning();
         setReminderFailed({ minutes });
         useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your reminder. Try again."), { kind: 'error' });
       });
     },
-    [set, currentFestival, saveReminder, haptics],
+    [set, currentFestival, saveReminder, haptics, artistName],
   );
 
   // Clash-prompt clear — demote one side of a clash to null, with an undo
@@ -361,30 +399,13 @@ export default function SetDetailScreen() {
   );
 
   const user = useAuthStore((s) => s.user);
-  const [joinBusy, setJoinBusy] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
-  const handleJoin = useCallback(async () => {
-    if (!currentFestival) return;
-    // A guest has no account yet — send them to sign in first. After auth they
-    // land back on the tabs and can re-open the set to join.
-    if (!user) {
-      router.push('/(auth)/login');
-      return;
-    }
-    setJoinBusy(true);
-    setJoinError(null);
-    try {
-      await api.post('/profiles', { festivalId: currentFestival.id });
-      await loadProfiles(currentFestival.id);
-    } catch (err) {
-      // The store does NOT surface this failure (loadProfiles is never called
-      // when the join itself rejects), so map and show it here — mirrors web's
-      // DetailPanel handleJoinFestival catch (toast on join failure).
-      setJoinError(mapErrorToUserMessage(err, "Couldn't join festival. Try again."));
-    } finally {
-      setJoinBusy(false);
-    }
-  }, [currentFestival, user, router, loadProfiles]);
+  const goToAuth = useCallback(
+    (route: '/(auth)/register' | '/(auth)/login') => {
+      if (set) setReturnTo(`/set/${set.id}`);
+      router.push(route);
+    },
+    [set, router],
+  );
 
   const openLink = useCallback((url: string) => {
     Linking.openURL(url).catch(() => {});
@@ -483,8 +504,8 @@ export default function SetDetailScreen() {
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         <Text style={styles.time}>{timeLabel}</Text>
 
-        {/* Priority picker / Join CTA */}
-        {currentProfile ? (
+        {/* Priority picker / guest sign-in prompt */}
+        {user ? (
           <>
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Your pick</Text>
@@ -586,6 +607,14 @@ export default function SetDetailScreen() {
                   </TouchableOpacity>
                 </View>
               ) : null}
+              {deliveryProblem === 'not-enabled' ? (
+                <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                  <Text style={styles.statusWarn}>Notifications are off, so this reminder can't reach you.</Text>
+                  <TouchableOpacity style={styles.statusAction} onPress={turnOnNotifications} accessibilityRole="button">
+                    <Text style={styles.statusActionText}>Turn on</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
               {deliveryProblem === 'denied' || deliveryProblem === 'pref-off' ? (
                 <View style={styles.statusRow} accessibilityLiveRegion="polite">
                   <Text style={styles.statusWarn}>
@@ -611,22 +640,9 @@ export default function SetDetailScreen() {
           </>
         ) : (
           <View style={styles.joinBox}>
-            <Text style={styles.joinCopy}>
-              {user
-                ? 'Join this festival to save picks, keep private notes, and compare crew overlap.'
-                : 'Sign in to save picks, keep private notes, and compare crew overlap.'}
-            </Text>
-            {joinError ? (
-              <Text style={styles.joinErrorText} accessibilityRole="alert" accessibilityLiveRegion="assertive">
-                {joinError}
-              </Text>
-            ) : null}
-            <Button
-              label={user ? 'Join Festival' : 'Sign in to join'}
-              onPress={handleJoin}
-              loading={joinBusy}
-              accessibilityLabel={user ? 'Join festival' : 'Sign in to join'}
-            />
+            <Text style={styles.joinCopy}>{GUEST_PROMPT_COPY.setSheet}</Text>
+            <Button label={GUEST_PROMPT_COPY.createAccount} onPress={() => goToAuth('/(auth)/register')} />
+            <Button variant="ghost" label={GUEST_PROMPT_COPY.signIn} onPress={() => goToAuth('/(auth)/login')} />
           </View>
         )}
 
@@ -1072,11 +1088,6 @@ const useStyles = makeStyles((t) => ({
   joinCopy: {
     ...typeStyle('body'),
     color: t.colors.text.secondary,
-  },
-  // Mirrors app/(auth)/login.tsx's `error` style — same danger token + role.
-  joinErrorText: {
-    ...typeStyle('label'),
-    color: t.colors.text.danger,
   },
   // Join CTA migrated to components/Button (F8).
   crewRow: {

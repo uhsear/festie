@@ -33,7 +33,9 @@ import {
   List,
   Repeat,
   Clock,
+  Maximize2,
 } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import { COPY, MEETING_POINT_KINDS, meetingPointKind } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import IconButton from '../ui/IconButton';
@@ -118,14 +120,10 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
   // Scopes the store to the open crew — the peer/SOS guards in liveLocationStore
   // fall open while crewId is null, so this must stay unconditional.
+  // No cleanup: the crew scope stays (useLiveLocationCrewSync owns it app-wide),
+  // and sharing outlives this tab (LiveLocationSharing in AppShell owns it).
   useEffect(() => {
     useLiveLocationStore.getState().setActiveCrew(crewId);
-    return () => {
-      // Leaving the tab stops local sharing bookkeeping (re-opt-in on return). The
-      // crew scope stays: useLiveLocationCrewSync owns it app-wide, and clearing it
-      // here wiped active SOS from the app-wide banner.
-      useLiveLocationStore.getState().stopSharing();
-    };
   }, [crewId]);
 
   useEffect(() => {
@@ -310,6 +308,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       <CrewStatus crewId={crewId} currentUserId={currentUserId} meetingPoints={points} />
 
       {/* List/Map toggle. Map lazy-loads MapLibre only when selected. */}
+      <div className="flex flex-wrap items-center gap-2">
       <div
         ref={viewTablistRef}
         className="inline-flex gap-1 p-1 rounded-lg bg-bg-card border border-border"
@@ -340,6 +339,13 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         >
           <MapIcon className="w-4 h-4" aria-hidden="true" /> Map
         </button>
+      </div>
+      <Link
+        to="/map"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 text-text-secondary hover:text-text-primary"
+      >
+        <Maximize2 className="w-4 h-4" aria-hidden="true" /> Open full map
+      </Link>
       </div>
 
       <div id="meeting-points-panel">
