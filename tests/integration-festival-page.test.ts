@@ -63,8 +63,10 @@ describe('Integration — public festival page', { skip, concurrency: 1 }, () =>
     const draft = await server.request.get('/f/draft-page-fest-2026').expect(404);
     const gone = await server.request.get(`/f/${archived.slug}`).expect(404);
     const unknown = await server.request.get('/f/no-such-festival').expect(404);
-    assert.equal(draft.text, unknown.text);
-    assert.equal(gone.text, unknown.text);
+    // Each request gets its own ephemeral port, so compare bodies with the origin removed.
+    const noOrigin = (html: string) => html.replace(/http:\/\/127\.0\.0\.1:\d+/g, 'ORIGIN');
+    assert.equal(noOrigin(draft.text), noOrigin(unknown.text));
+    assert.equal(noOrigin(gone.text), noOrigin(unknown.text));
     assert.equal(unknown.headers['x-robots-tag'], 'noindex');
 
     const og = await server.request.get(`/f/${open.slug}/og.png`).expect(200);
