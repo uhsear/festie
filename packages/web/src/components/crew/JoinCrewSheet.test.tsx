@@ -72,9 +72,16 @@ describe('JoinCrewSheet', () => {
     expect(screen.getByRole('button', { name: 'Crew is full' })).toBeDisabled();
   });
 
-  it.each(['invalid', 'expired'])('disables Join when the invite is %s', (status) => {
+  it.each(['invalid', 'expired', 'locked'])('disables Join when the invite is %s', (status) => {
     h.preview = { status, preview: null };
     renderSheet();
+    expect(screen.getByRole('button', { name: 'Join crew' })).toBeDisabled();
+  });
+
+  it('shows the locked message and disables Join for a locked crew', () => {
+    h.preview = { status: 'locked', preview: null };
+    renderSheet();
+    expect(screen.getByText("This crew isn't taking new members.")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Join crew' })).toBeDisabled();
   });
 

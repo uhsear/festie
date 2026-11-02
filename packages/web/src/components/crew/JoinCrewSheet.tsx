@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useInvitePreview, useJoinCrewByInvite } from '@festie/shared/hooks';
-import { describeInvitePreview, inviteStatusMessage } from '@festie/shared/utils';
+import { describeInvitePreview, inviteIsDead, inviteStatusMessage } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import Sheet from '../ui/Sheet';
 import Button from '../ui/Button';
@@ -28,7 +28,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
 
   const lines = preview ? describeInvitePreview(preview) : null;
   const full = preview?.spotsLeft === 0;
-  const unusable = status === 'invalid' || status === 'expired';
+  const unusable = inviteIsDead(status);
   const switchNote =
     preview?.festivalId && preview.festivalName && preview.festivalId !== currentFestivalId
       ? `Joining switches you to ${preview.festivalName}.`

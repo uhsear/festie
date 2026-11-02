@@ -7,6 +7,7 @@
 // is escaped here, inside the renderer, so no caller can forget.
 
 import { festivalTint } from './festival-tint.js';
+import { addDaysCompact, buildVCalendar } from './helpers/ics-builder.js';
 import { escapeHtml } from './helpers/sanitize.js';
 import { formatInviteDateRange, type InvitePreview } from './invite-preview.js';
 
@@ -14,6 +15,7 @@ export const INVITE_ERROR_MESSAGES = {
   expired: 'This invite has expired. Ask someone in the crew for a new link.',
   invalid: "We couldn't find a crew with this code. Check the link or ask for a new one.",
   failed: "We couldn't load this invite. Try again in a moment.",
+  locked: "This crew isn't taking new members.",
 } as const;
 
 const PAGE_STYLE = `
@@ -62,7 +64,8 @@ const PAGE_STYLE = `
     .invite-error-title { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
     .invite-error-message { font-size: 14px; color: #aaa; margin-bottom: 32px; line-height: 1.6; }
     .invite-link { color: #ff3366; text-decoration: none; font-weight: 600; font-size: 14px; }
-    .invite-link:hover { text-decoration: underline; }`;
+    .invite-link:hover { text-decoration: underline; }
+    .invite-save { display: inline-block; margin-top: 16px; padding: 12px 8px; }`;
 
 /** "Crew of 6 · 2 spots left", or "Crew of 30 · full". */
 export function inviteStateLine(memberCount: number, spotsLeft: number): string {
@@ -94,6 +97,11 @@ export function renderInviteJoinPage({
   const code = encodeURIComponent(inviteCode);
   const pageUrl = escapeHtml(`${origin}/join/${code}`);
   const joinUrl = escapeHtml(`${origin}/?joinCrew=${code}`);
+  const saveLink = dates
+    ? `      <a href="${escapeHtml(`${origin}/join/${code}/save.ics`)}" class="invite-link invite-save" download>Save for later</a>
+      <p class="invite-footer">Adds the festival dates and this invite to your calendar.</p>
+`
+    : '';
   const imageUrl = escapeHtml(`${origin}/og-image.png`);
   const tint = festivalTint(festivalName);
   // Hex values come from a fixed function, so they need no escaping.
@@ -127,11 +135,37 @@ export function renderInviteJoinPage({
       <h1>${escapeHtml(crewName)}</h1>
       <p class="invite-line">${escapeHtml(stateLine)}</p>
 ${festivalLine ? `      <p class="invite-line">${escapeHtml(festivalLine)}</p>\n` : ''}${ownerName ? `      <p class="invite-line">Started by ${escapeHtml(ownerName)}</p>\n` : ''}      <a href="${joinUrl}" class="invite-button">Join ${escapeHtml(crewName)}</a>
-      <p class="invite-footer">New to Festie? You can create an account after you tap Join.</p>
+${saveLink}      <p class="invite-footer">New to Festie? You can create an account after you tap Join.</p>
     </div>
   </main>
 </body>
 </html>`;
+}
+
+type InviteIcsArgs = Pick<InvitePreview, 'festivalName' | 'crewName'> & {
+  startDate: string;
+  endDate: string;
+  inviteCode: string;
+  origin: string;
+};
+
+/**
+ * "Save for later": one all-day event over the festival dates. It is public, so
+ * it carries only what the invite page shows plus the invite URL. No owner or
+ * member names and no user ids.
+ */
+export function renderInviteIcs({ festivalName, crewName, startDate, endDate, inviteCode, origin }: InviteIcsArgs) {
+  const code = encodeURIComponent(inviteCode);
+  const event = {
+    uid: `invite-${code}@${origin}`,
+    summary: festivalName || 'Festival',
+    dtstart: startDate.replace(/-/g, ''),
+    // DTEND is exclusive for all-day events.
+    dtend: addDaysCompact(endDate, 1),
+    allDay: true,
+    description: `Crew invite to ${crewName} on Festie: ${origin}/join/${code}`,
+  };
+  return buildVCalendar([event], { calendarName: festivalName || 'Festie', prodId: '-//Festie//Invite//EN' });
 }
 
 export function renderInviteErrorPage(origin: string, message: string) {

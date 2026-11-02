@@ -50,6 +50,7 @@ const loadFinishSignup = () => import('./routes/finish-signup');
 const loadForgot = () => import('./routes/forgot-password');
 const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
+const loadInbox = () => import('./routes/inbox');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
 const loadFriendPicks = () => import('./routes/friend-picks');
@@ -93,6 +94,7 @@ const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
 const RateView = withSkeleton(lazyRouteComponent(loadRate), MinimalFallback);
 const CaughtView = withSkeleton(lazyRouteComponent(loadCaught), MinimalFallback);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
+const InboxView = withSkeleton(lazyRouteComponent(loadInbox), MinimalFallback);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
 const FriendPicksView = withSkeleton(lazyRouteComponent(loadFriendPicks), MinimalFallback);
 const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton);
@@ -304,6 +306,16 @@ const accountRoute = new Route({
   },
 });
 
+const inboxRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/inbox',
+  component: InboxView,
+  beforeLoad: async ({ location }) => {
+    await authReady();
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
+  },
+});
+
 // /compare — side-by-side schedule compare with your crew.
 // Ported from the legacy `renderCrewSchedule` view in public/views/crew.js.
 const compareRoute = new Route({
@@ -385,6 +397,7 @@ const routeTree = rootRoute.addChildren([
   rateRoute,
   caughtRoute,
   accountRoute,
+  inboxRoute,
   meRoute,
   compareRoute,
   setRoute,

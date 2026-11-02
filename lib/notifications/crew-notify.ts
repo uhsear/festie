@@ -6,9 +6,11 @@
  *   queue()   grouped: buffered per crew, one push per recipient per flush.
  *   now()     instant meeting-point push, type `crew_meeting_point`: to the given
  *             userIds that are still members, else to every member; never the actor.
- *   toUsers() instant, to named users (removed member, deleted crew, poll reminder).
- * Title is the crew name. queue() and toUsers() send type `crew_update`. Quiet
- * hours and the opt-out are enforced again by notificationService.send.
+ *   toUsers() instant, to named users (removed member, deleted crew, poll reminder,
+ *             "Looking for you" with type `crew_nudge`).
+ * Title is the crew name. queue() and toUsers() send type `crew_update` unless
+ * toUsers() is given a type. Quiet hours and the opt-out are enforced again by
+ * notificationService.send.
  */
 
 const MAX_BUFFERED = 20;
@@ -174,13 +176,14 @@ export function createCrewNotifier({ stores, notificationService, log, windowMs 
     userIds: string[];
     text: string;
     kind: 'member' | 'poll';
+    type?: 'crew_update' | 'crew_nudge';
   }) {
     if (!enabled()) return;
     try {
       const title = item.crewName || (await stores.crews.getById(item.crewId))?.name || 'Festie';
       await sendAll(item.userIds, (userId) => ({
         userId,
-        type: 'crew_update',
+        type: item.type ?? 'crew_update',
         title,
         body: item.text,
         data: dataFor(item.crewId),

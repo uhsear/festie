@@ -26,9 +26,13 @@ vi.mock('@festie/shared/utils', async (importOriginal) => ({
   isFestivalOver: () => true,
 }));
 
+const mockBadge = vi.hoisted(() => ({ value: { count: 0, dot: false, label: null as string | null } }));
+vi.mock('../../hooks/useCrewAttention', () => ({ useCrewAttention: () => mockBadge.value }));
+
 describe('BottomNav', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockBadge.value = { count: 0, dot: false, label: null };
     mockUser = null;
     mockFestival.scheduleView = null;
     mockLocation.pathname = '/cards';
@@ -47,6 +51,20 @@ describe('BottomNav', () => {
       'View More',
     ]);
     expect(links.map((l) => l.getAttribute('href'))).toEqual(['/cards', '/picks', '/crew', '/map', '/account']);
+  });
+
+  it('shows a count on the Crew tab and labels it', () => {
+    mockUser = { id: 'u1', username: 'alice' };
+    mockBadge.value = { count: 2, dot: false, label: '2' };
+    render(<BottomNav />);
+    expect(screen.getByLabelText('View Crew, 2 new')).toHaveTextContent('2');
+  });
+
+  it('shows a dot on the Crew tab when only the balance changed', () => {
+    mockUser = { id: 'u1', username: 'alice' };
+    mockBadge.value = { count: 0, dot: true, label: '' };
+    render(<BottomNav />);
+    expect(screen.getByLabelText('View Crew, needs attention')).toBeInTheDocument();
   });
 
   it('points Lineup at the remembered view', () => {

@@ -71,6 +71,18 @@ describe('crew feed additions', () => {
     expect(describeCrewActivity(row).action).toBeNull();
   });
 
+  it('words the battery-low line with the percentage and the festival clock', () => {
+    expect(
+      describeCrewActivity({ type: 'battery-low', detail: '9%', created_at: '2026-07-04T01:42:00Z' }, 'America/New_York'),
+    ).toEqual({ verb: 'has 9% battery left', detail: 'last location update 9:42 PM', action: null });
+  });
+
+  it('falls back to the plain battery label for a bad or missing detail', () => {
+    const plain = { verb: 'is low on battery', detail: null, action: null };
+    expect(describeCrewActivity({ type: 'battery-low', detail: 'abc', created_at: at })).toEqual(plain);
+    expect(describeCrewActivity({ type: 'battery-low', detail: null, created_at: at })).toEqual(plain);
+  });
+
   it('drops poll-voted rows', () => {
     expect(visibleCrewActivity([{ type: 'poll-voted' }, { type: 'poll-closed' }])).toEqual([{ type: 'poll-closed' }]);
   });

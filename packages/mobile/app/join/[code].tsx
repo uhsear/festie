@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, useCrewStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
 import { useJoinCrewByInvite } from '@festie/shared/hooks';
-import type { InviteStatus } from '@festie/shared/utils';
+import { inviteIsDead, type InviteStatus } from '@festie/shared/utils';
 import type { InvitePreview } from '@festie/shared/types';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
@@ -66,7 +66,7 @@ export default function JoinInviteScreen() {
     setPreview(p);
   }, []);
   // Loading and unreachable still allow Join; only a confirmed-dead invite hides the actions.
-  const inviteDead = inviteStatus === 'invalid' || inviteStatus === 'expired';
+  const inviteDead = inviteIsDead(inviteStatus);
   const inviteUsable = !!validCode && !inviteDead;
   const full = preview?.spotsLeft === 0;
   const switchesFestival = !!preview?.festivalId && !!preview.festivalName && preview.festivalId !== currentFestivalId;

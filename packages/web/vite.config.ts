@@ -99,8 +99,9 @@ export default defineConfig({
           // which means the token never reaches the server and the flow breaks.
           /^\/reset(\/|-password)/,
           /^\/join\//,
-          // Server-rendered share pages and calendar feeds (/s/<token>, /s/u/<username>, /cal/<token>.ics).
+          // Server-rendered share pages and calendar feeds (/s/<token>, /s/u/<username>, /f/<slug>, /cal/<token>.ics).
           /^\/s\//,
+          /^\/f\//,
           /^\/cal\//,
         ],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],

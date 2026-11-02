@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@festie/shared';
 import { Pencil } from 'lucide-react';
 import { useCrewStore } from '@festie/shared/stores';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { useFestivalStore } from '@festie/shared/stores';
 import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
@@ -34,8 +33,11 @@ import UserPickerDialog from '../components/admin/UserPickerDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useActiveCrew } from '@festie/shared/hooks';
+import { balancesQueryOptions, pollsQueryOptions } from '../hooks/useCrewAttention';
 import {
   DEFAULT_CREW_TAB,
+  balanceCents,
+  openPollIds,
   crewCopy,
   deleteCrewConfirmMessage,
   handOverCandidates,
@@ -114,27 +116,25 @@ function CrewViewInner() {
   const activeCrewId = activeCrew?.id;
   const userId = user?.id;
   const { data: openPollCount = 0 } = useQuery({
-    queryKey: ['polls', activeCrewId],
-    queryFn: async () => {
-      const res = await api.get<{ polls: { closed?: boolean }[] } | { closed?: boolean }[]>(
-        `/crews/${activeCrewId}/polls`,
-      );
-      return Array.isArray(res) ? res : res?.polls || [];
-    },
-    enabled: !!activeCrewId,
+    ...pollsQueryOptions(activeCrewId),
     select: (list) => list.filter((p) => !p.closed).length,
   });
   const { data: hasUnsettledBalance = false } = useQuery({
-    queryKey: ['expense-balances', activeCrewId],
-    queryFn: async () => {
-      const res = await api.get<
-        { userId: string; balance: number }[] | { balances: { userId: string; balance: number }[] }
-      >(`/crews/${activeCrewId}/expenses/balances`);
-      return Array.isArray(res) ? res : res?.balances || [];
-    },
-    enabled: !!activeCrewId,
+    ...balancesQueryOptions(activeCrewId),
     select: (balances) => Math.abs(balances.find((b) => b.userId === userId)?.balance ?? 0) > 0.01,
   });
+  // Raw lists (same cache entries, no extra request) feed the Crew tab badge's "seen" marks.
+  const { data: rawPolls } = useQuery(pollsQueryOptions(activeCrewId));
+  const { data: rawBalances } = useQuery(balancesQueryOptions(activeCrewId));
+  const markCrewBadgeSeen = useUIStore((state) => state.markCrewBadgeSeen);
+  useEffect(() => {
+    if (!activeCrewId) return;
+    if (tab === 'plan' && rawPolls) markCrewBadgeSeen(activeCrewId, { pollIds: openPollIds(rawPolls) });
+    if (tab === 'money' && rawBalances) {
+      const mine = rawBalances.find((b) => b.userId === userId)?.balance;
+      markCrewBadgeSeen(activeCrewId, { balanceCents: balanceCents(mine) });
+    }
+  }, [activeCrewId, tab, rawPolls, rawBalances, userId, markCrewBadgeSeen]);
 
   // /crew?start=create|join (from the intro) opens that prompt once, then drops the param.
   useEffect(() => {

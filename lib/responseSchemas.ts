@@ -158,6 +158,7 @@ export const festivalDepth1ResponseSchema = z.object({
   longitude: z.number().nullable().optional(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalDepth1DaySchema),
+  slug: z.string().nullable().optional(),
   mapConfig: festivalMapConfigSchema.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -182,6 +183,7 @@ export const festivalResponseSchema = z.object({
   updatedAt: z.string(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalFullDaySchema),
+  slug: z.string().nullable().optional(),
 });
 export type FestivalResponse = z.infer<typeof festivalResponseSchema>;
 
@@ -231,6 +233,9 @@ export const crewResponseSchema = z.object({
   photoAlbumUrl: z.string().nullable(),
   totem_name: z.string().nullable(),
   totem_emoji: z.string().nullable(),
+  // T54: owner lock and the Home Base Plan B line.
+  inviteLocked: z.boolean(),
+  homeBasePlanB: z.string().nullable(),
   // Membership-conditional (present when the requester is a member):
   role: z.enum(['owner', 'member']).optional(),
   joinedAt: z.string().optional(),
@@ -274,6 +279,14 @@ export const meetingPointResponseSchema = z.object({
   creator_name: z.string().optional(),
   // 090: user ids who tapped "I'll be there", oldest first. Absent on the `/past` list.
   coming: z.array(z.string()).optional(),
+  // T54: last time or place edit. Absent on the `/past` list.
+  edited_by: z.string().nullable().optional(),
+  edited_at: z.string().nullable().optional(),
+  edit_was: z
+    .object({ location: z.string().optional(), meetAt: z.string().nullable().optional() })
+    .nullable()
+    .optional(),
+  editor_name: z.string().nullable().optional(),
 });
 export type MeetingPointResponse = z.infer<typeof meetingPointResponseSchema>;
 
@@ -297,6 +310,7 @@ export const festivalListItemResponseSchema = z.object({
   dayCount: z.number(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
+  slug: z.string().nullable().optional(),
 });
 export type FestivalListItemResponse = z.infer<typeof festivalListItemResponseSchema>;
 

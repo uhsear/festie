@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
 import * as Location from 'expo-location';
+import { router } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
@@ -40,6 +41,7 @@ import {
   findMapPin,
   showingWayLabel,
   locationPromptCopy,
+  nearStageName,
   type Coord,
   type GeoState,
   type MapPlace,
@@ -47,6 +49,7 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
+import { FIND_FRIEND_COPY } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
@@ -54,6 +57,7 @@ import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '..
 import type { AuthoringMode } from '../lib/webviewBridge';
 import { ensureBasemapCached, basemapCacheDir } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
+import { peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
 import MapPlaceCard from './MapPlaceCard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -390,10 +394,12 @@ export default function OfflineMap({
       // Peer low-power flag (#5): only cue a live (non-stale) peer in battery-saver mode.
       const lowPower = stale ? false : p.lowPower === true;
       const windowLabel = stale ? null : formatShareWindow(p.expiresAt, now);
+      const near = nearStageName({ latitude: p.lat, longitude: p.lng }, stagePins);
+      const base = stale ? `last seen ${age}` : `live · ${age}`;
       items.push({
         id: `peer:${p.userId}`,
         label: p.username || 'Crew member',
-        sublabel: stale ? `last seen ${age}` : `live · ${age}`,
+        sublabel: near ? `${base} · ${FIND_FRIEND_COPY.nearStage(near)}` : base,
         initial: getInitials(p.username ?? '') || '?',
         latitude: p.lat,
         longitude: p.lng,
@@ -420,7 +426,7 @@ export default function OfflineMap({
       }
     }
     return items;
-  }, [peers, sosList, now]);
+  }, [peers, sosList, now, stagePins]);
 
   // Meeting points present but without coords — listed so they're never lost,
   // even though they can't be plotted.
@@ -1436,6 +1442,18 @@ export default function OfflineMap({
                     </TouchableOpacity>
                   )}
                 </View>
+                {liveTarget.id.startsWith('peer:') ? (
+                  <TouchableOpacity
+                    onPress={() => router.push(peerCompassHref(liveTarget.id.slice('peer:'.length)))}
+                    accessibilityRole="button"
+                    accessibilityLabel={FIND_FRIEND_COPY.openCompassA11y(liveTarget.label)}
+                    hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.pursueEnable} maxFontSizeMultiplier={1.4}>
+                      {FIND_FRIEND_COPY.openCompass}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
                   onPress={clearPursue}
                   style={styles.pursueClose}

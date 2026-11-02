@@ -17,6 +17,7 @@ describe('festivalUIStore', () => {
       prefsFestivalId: null,
       prefsScope: { stageIds: [], dayCount: 0 },
       byFestival: {},
+      viewAsProfileId: null,
     });
   });
 
@@ -235,6 +236,37 @@ describe('festivalUIStore', () => {
       ui().setActiveGenres(['house']);
       ui().restoreForFestival('A', scope);
       expect(ui().activeGenres).toEqual(['house']);
+    });
+  });
+
+  describe('viewAsProfileId', () => {
+    const scope = { stageIds: ['s1', 's2'], dayCount: 3, todayIdx: 1 };
+    const ui = () => useFestivalUIStore.getState();
+
+    it('starts null and is set and cleared by setViewAs', () => {
+      expect(ui().viewAsProfileId).toBeNull();
+      ui().setViewAs('p2');
+      expect(ui().viewAsProfileId).toBe('p2');
+      ui().setViewAs(null);
+      expect(ui().viewAsProfileId).toBeNull();
+    });
+
+    it('is cleared by a festival switch and kept by a same-festival refresh', () => {
+      ui().restoreForFestival('A', scope);
+      ui().setViewAs('p2');
+      ui().restoreForFestival('A', scope);
+      expect(ui().viewAsProfileId).toBe('p2');
+      ui().restoreForFestival('B', scope);
+      expect(ui().viewAsProfileId).toBeNull();
+    });
+
+    it('is never remembered', () => {
+      ui().restoreForFestival('A', scope);
+      ui().setViewAs('p2');
+      expect(ui().byFestival.A).toBeUndefined();
+      const persisted = useFestivalUIStore.persist.getOptions().partialize?.(ui());
+      expect(persisted).not.toHaveProperty('viewAsProfileId');
+      expect(JSON.stringify(persisted)).not.toContain('p2');
     });
   });
 });

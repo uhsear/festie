@@ -7,6 +7,10 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
+let viewAs: { name: string } | null = null;
+const clearViewAs = vi.fn();
+vi.mock('@festie/shared/hooks', () => ({ useViewAs: () => ({ target: viewAs, clear: clearViewAs }) }));
+
 vi.mock('../ui/EmptyState', () => ({
   default: ({
     title,
@@ -58,6 +62,7 @@ function setStore(overrides: Record<string, unknown> = {}) {
 describe('ScheduleEmptyState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    viewAs = null;
     setStore();
   });
 
@@ -121,5 +126,14 @@ describe('ScheduleEmptyState', () => {
     render(<ScheduleEmptyState dayLabel="Sunday" dayFallback={dayFallback} />);
     expect(screen.getByText('Day empty')).toBeInTheDocument();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('viewAs: names the member and the day and offers Show everyone', () => {
+    viewAs = { name: 'Ana' };
+    render(<ScheduleEmptyState dayLabel="Saturday" dayFallback={dayFallback} />);
+    expect(screen.getByText('Ana has no picks on Saturday')).toBeInTheDocument();
+    expect(screen.getByText("Show everyone's sets, or pick another day.")).toBeInTheDocument();
+    screen.getByText('Show everyone').click();
+    expect(clearViewAs).toHaveBeenCalledOnce();
   });
 });

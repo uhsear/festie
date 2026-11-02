@@ -664,6 +664,8 @@ describe('responseSchemas: serialized payloads parse', () => {
       photoAlbumUrl: null,
       totem_name: null,
       totem_emoji: null,
+      inviteLocked: false,
+      homeBasePlanB: null,
       role: 'owner',
       joinedAt: now,
       inviteCode: 'ABCD12',

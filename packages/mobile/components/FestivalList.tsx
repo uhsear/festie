@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
-import { FESTIVAL_STATUS_LABEL } from '@festie/shared/constants';
+import { FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
-import { formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, type FestivalStatus } from '@festie/shared/utils';
+import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
@@ -160,8 +160,10 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label'),
     color: t.colors.text.secondary,
   },
-  followButton: {
-    alignSelf: 'flex-start' as const,
+  actionRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: t.spacing[2],
     marginTop: t.spacing[2],
   },
 }));
@@ -189,6 +191,16 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
   const a11yLabel = [festival.name, badgeSpec?.label, dateRange, festival.location].filter(Boolean).join(', ');
 
   const followable = status === 'upcoming' || status === null;
+  const shareSlug = festival.slug;
+
+  const handleShare = () => {
+    if (!shareSlug) return;
+    const url = buildFestivalPageUrl(shareSlug);
+    // Android ignores `url`, so the message carries the link.
+    Share.share({ message: `${FESTIVAL_SHARE_COPY.text(festival.name)}: ${url}`, url, title: festival.name }).catch(
+      () => undefined,
+    );
+  };
 
   return (
     <View>
@@ -253,8 +265,21 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
         importantForAccessibility="no-hide-descendants"
       />
     </TouchableOpacity>
-    {followable ? (
-      <FollowButton festivalId={festival.id} festivalName={festival.name} style={styles.followButton} />
+    {followable || festival.slug ? (
+      <View style={styles.actionRow}>
+        {followable ? <FollowButton festivalId={festival.id} festivalName={festival.name} /> : null}
+        {festival.slug ? (
+          <Button
+            label={FESTIVAL_SHARE_COPY.button}
+            variant="secondary"
+            size="sm"
+            icon="share-outline"
+            onPress={handleShare}
+            accessibilityLabel={FESTIVAL_SHARE_COPY.a11y(festival.name)}
+            testID={`festival-share-${festival.id}`}
+          />
+        ) : null}
+      </View>
     ) : null}
     </View>
   );

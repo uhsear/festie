@@ -8,6 +8,7 @@ interface TestFestival {
   startDate: string;
   endDate: string;
   location?: string;
+  slug?: string | null;
 }
 
 const day = (offset: number) => {
@@ -36,8 +37,9 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
   useLocation: () => ({ href: '/' }),
 }));
+const toastMock = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/toastContext', () => ({
-  useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
+  useToast: () => ({ toast: toastMock, toastError: vi.fn() }),
 }));
 
 const fest = (id: string, name: string, start: number, end: number, location?: string): TestFestival => ({
@@ -125,5 +127,66 @@ describe('FestivalPicker dialog', () => {
     render(<FestivalPicker />);
     fireEvent.click(screen.getByTestId('festival-select'));
     expect(screen.getByText('No festivals yet.')).toBeInTheDocument();
+  });
+});
+
+describe('FestivalPicker share', () => {
+  const withSlug = (f: TestFestival, slug: string | null): TestFestival => ({ ...f, slug });
+  const open = () => {
+    render(<FestivalPicker />);
+    fireEvent.click(screen.getByTestId('festival-select'));
+  };
+  const setNav = (share: unknown, writeText?: unknown) => {
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  };
+  afterEach(() => setNav(undefined, undefined));
+
+  it('renders Share only for festivals with a slug, on every group, without selecting', () => {
+    state.festivals = [
+      withSlug(fest('live', 'Live Fest', -1, 1), 'live-fest'),
+      withSlug(fest('past', 'Past Fest', -30, -28), 'past-fest'),
+      withSlug(fest('up', 'Upcoming Fest', 20, 22), null),
+    ];
+    open();
+    expect(screen.getByLabelText('Share Live Fest')).toBeInTheDocument();
+    expect(screen.getByLabelText('Share Past Fest')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Share Upcoming Fest')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Share Live Fest'));
+    expect(state.selectFestival).not.toHaveBeenCalled();
+  });
+
+  it('uses navigator.share with title, text and the /f/ url; AbortError shows no toast', async () => {
+    const share = vi.fn().mockRejectedValue(new DOMException('x', 'AbortError'));
+    setNav(share, vi.fn());
+    state.festivals = [withSlug(fest('a', 'Alpha', 5, 6), 'alpha')];
+    open();
+    fireEvent.click(screen.getByLabelText('Share Alpha'));
+    await waitFor(() =>
+      expect(share).toHaveBeenCalledWith({
+        title: 'Alpha',
+        text: 'Alpha lineup and set times on Festie',
+        url: `${window.location.origin}/f/alpha`,
+      }),
+    );
+    expect(toastMock).not.toHaveBeenCalled();
+  });
+
+  it('copies the link without navigator.share and toasts', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    setNav(undefined, writeText);
+    state.festivals = [withSlug(fest('a', 'Alpha', 5, 6), 'alpha')];
+    open();
+    fireEvent.click(screen.getByLabelText('Share Alpha'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/f/alpha`));
+    expect(toastMock).toHaveBeenCalledWith('Link copied', 'success');
+  });
+
+  it('toasts the failure string when the clipboard rejects', async () => {
+    setNav(undefined, vi.fn().mockRejectedValue(new Error('no')));
+    state.festivals = [withSlug(fest('a', 'Alpha', 5, 6), 'alpha')];
+    open();
+    fireEvent.click(screen.getByLabelText('Share Alpha'));
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith("Couldn't share this festival. Try again.", 'error'));
   });
 });

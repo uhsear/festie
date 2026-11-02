@@ -68,37 +68,6 @@ export function buildClashMarks(
   return marks;
 }
 
-function earliestOverlapStart(group: ConflictGroup): number {
-  let best = Infinity;
-  for (let i = 0; i < group.picks.length; i++) {
-    for (let j = i + 1; j < group.picks.length; j++) {
-      const a = group.picks[i]!;
-      const b = group.picks[j]!;
-      if (Math.min(a.endMs, b.endMs) <= Math.max(a.startMs, b.startMs)) continue;
-      best = Math.min(best, Math.max(a.startMs, b.startMs));
-    }
-  }
-  return best;
-}
-
-/** The clash to show first: the group with the earliest overlap start, then its earliest pick on a visible stage. */
-export function pickClashTarget(
-  groups: ConflictGroup[],
-  visibleStageIds: ReadonlySet<string>,
-): { set: FestivalSet; visible: boolean } | null {
-  let first: ConflictGroup | null = null;
-  let firstStart = Infinity;
-  for (const g of groups) {
-    const start = earliestOverlapStart(g);
-    if (start < firstStart) { first = g; firstStart = start; }
-  }
-  if (!first) return null;
-  const sorted = [...first.picks].sort((a, b) => a.startMs - b.startMs);
-  const shown = sorted.find((p) => visibleStageIds.has(p.set.stageId));
-  if (shown) return { set: shown.set, visible: true };
-  return { set: sorted[0]!.set, visible: false };
-}
-
 export interface UntimedStageGroup { stage: Stage | null; sets: FestivalSet[] }
 
 /** Stage order from `stages`; sets sorted by display name; sets with an unknown stage last (stage: null). Empty groups left out. */

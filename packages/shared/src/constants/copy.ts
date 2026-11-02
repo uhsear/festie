@@ -21,8 +21,20 @@ export const COPY = {
   homeBase: {
     name: 'Home Base', set: 'Set Home Base', empty: "Tap to set your crew's Home Base",
     hint: "Your crew's main meeting spot. Only the crew owner can change it.", icon: 'homeBase',
+    planBLabel: 'Plan B (optional)', planBPlaceholder: 'Here at the top of each hour',
   },
-  meetingPoint: { one: 'Meeting point', many: 'Meeting points', add: 'New meeting point', edit: 'Edit meeting point' },
+  crewLock: {
+    label: 'Lock crew',
+    hint: "New people can't join with the invite. Unlock to let them in with the same code.",
+    lockedLine: 'Locked. Not taking new members.',
+    locked: 'Crew locked',
+    unlocked: 'Crew unlocked',
+    failed: "Couldn't change the lock. Try again.",
+  },
+  meetingPoint: {
+    one: 'Meeting point', many: 'Meeting points', add: 'New meeting point', edit: 'Edit meeting point',
+    noTime: 'no time',
+  },
   auth: {
     signIn: 'Sign in', signingIn: 'Signing in…', createAccount: 'Create account',
     creatingAccount: 'Creating account…', signOut: 'Sign out',
@@ -57,6 +69,18 @@ export const COPY = {
     regionLabel: 'Schedule grid',
     gridLabel: 'Festival schedule grid: stages as columns, time as rows',
   },
+  alsoPlays: {
+    heading: 'Also plays',
+    row: (when: string) => `Also plays ${when}`,
+    pickToo: 'Pick this one too',
+    pickTooA11y: (artist: string, when: string) => `Pick ${artist} ${when} too`,
+    picked: 'In your picks',
+    catchInstead: (artist: string, day: string) => `Catch ${artist} on ${day} instead`,
+    catchInsteadA11y: (artist: string, when: string) =>
+      `Catch ${artist} ${when} instead, and remove this slot from your picks`,
+    caught: (artist: string, when: string) => `Catching ${artist} ${when} instead.`,
+    gone: 'That other slot is no longer free. Pick another fix.',
+  },
   status: { playing: 'Playing', playingA11y: 'Playing now', liveLocation: 'Live' },
 } as const;
 
@@ -68,7 +92,10 @@ export const signInTo = (what: string): string => `Sign in to ${what}.`;
 export const clashCount = (n: number): string => (n === 1 ? COPY.clash.one : `${n} schedule clashes`);
 export const clashChip = (n: number): string => (n === 1 ? '1 clash' : `${n} clashes`);
 export const clashChipA11y = (n: number): string =>
-  n === 1 ? 'You have 1 schedule clash. Show it.' : `You have ${n} schedule clashes. Show the first one.`;
+  n === 1 ? 'You have 1 schedule clash. Open it in Picks.' : `You have ${n} schedule clashes. Open them in Picks.`;
+export const planBLine = (text: string): string => `If we lose each other: ${text}`;
+export const meetingPointEditedBy = (name: string, was: string): string => `Edited by ${name}, was ${was}`;
+export const meetingPointEditedNoName = (was: string): string => `Edited, was ${was}`;
 export const clashesWith = (names: string[]): string => `Clashes with ${names.join(', ')}`;
 
 /** Inline clash prompt copy, shared by web and mobile ClashPrompt. */
@@ -91,6 +118,15 @@ export const MEETING_POINT_KINDS = [
 export function meetingPointKind(type: string) {
   return type === 'emergency' ? MEETING_POINT_KINDS[1] : MEETING_POINT_KINDS[0];
 }
+
+/** Share a festival's public page (T50), shared by the web picker and the mobile festival card. */
+export const FESTIVAL_SHARE_COPY = {
+  button: 'Share',
+  a11y: (name: string) => `Share ${name}`,
+  text: (name: string) => `${name} lineup and set times on Festie`,
+  copied: 'Link copied',
+  failed: "Couldn't share this festival. Try again.",
+} as const;
 
 /** Discover the lineup (T42): co-picks, genre chips, the Discover row, follow and the set-times banner. */
 export const DISCOVER_COPY = {

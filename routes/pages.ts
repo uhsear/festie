@@ -1,12 +1,21 @@
 /**
- * Static page routes — crew invite page, password reset redirects, static pages, SPA catch-all
+ * Static page routes — crew invite page, public festival page, password reset
+ * redirects, static pages, SPA catch-all
  */
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 
-import { renderInviteJoinPage, renderInviteErrorPage, INVITE_ERROR_MESSAGES } from '../lib/invite-pages.js';
+import sharp from 'sharp';
+
+import { festivalDateRange, renderFestivalNotFoundPage, renderFestivalPage } from '../lib/festival-page.js';
+import { buildFestivalOgSvg } from '../lib/helpers/share-og-image.js';
+import { renderInviteJoinPage, renderInviteErrorPage, renderInviteIcs, INVITE_ERROR_MESSAGES } from '../lib/invite-pages.js';
 import { loadInvitePreview } from '../lib/invite-preview.js';
+
+// Public festival page slug (migration 094). Checked before any query; upper case fails too.
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const isFestivalSlug = (slug: string) => slug.length <= 80 && SLUG_RE.test(slug);
 
 export default function createPageRoutes(deps: any) {
   const {
@@ -16,12 +25,17 @@ export default function createPageRoutes(deps: any) {
 
   const router = express.Router();
 
+  const INVITE_ERROR_STATUS = { expired: 410, invalid: 404, locked: 403 } as const;
+  const cleanInviteCode = (raw: unknown) =>
+    String(raw || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase();
+  const requestOrigin = (req: any) => config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
+
   // Crew invite page — server-rendered so link scrapers get crew-specific OG
   // tags. No auto-redirect: some scrapers follow a meta refresh and would lose
   // the tags. The Join button opens the app with ?joinCrew=CODE.
   router.get('/join/:code', rateLimit(30, 'crew-invite-page'), async (req: any, res: any) => {
-    const code = String(req.params.code || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase();
-    const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
+    const code = cleanInviteCode(req.params.code);
+    const origin = requestOrigin(req);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=60');
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
@@ -31,12 +45,93 @@ export default function createPageRoutes(deps: any) {
         return res.status(200).send(renderInviteJoinPage({ ...result.preview, inviteCode: code, origin }));
       }
       return res
-        .status(result.status === 'expired' ? 410 : 404)
+        .status(INVITE_ERROR_STATUS[result.status])
         .send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES[result.status]));
     } catch (error: any) {
       log.error('crew invite page failed', { error: error.message });
       res.setHeader('Cache-Control', 'no-store');
       return res.status(500).send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES.failed));
+    }
+  });
+
+  // "Save for later": one all-day calendar event for the festival dates. Express
+  // 5 params never match '/', so /join/:code above cannot shadow this route.
+  // no-store, so a lock or a new code applies at once. Anything but a usable,
+  // dated invite goes back to the invite page, which explains why.
+  router.get('/join/:code/save.ics', rateLimit(30, 'crew-invite-page'), async (req: any, res: any) => {
+    const code = cleanInviteCode(req.params.code);
+    const origin = requestOrigin(req);
+    const fallback = code ? `/join/${encodeURIComponent(code)}` : '/';
+    try {
+      const result = await loadInvitePreview({ stores, getFestivalById }, code);
+      if (result.status !== 'ok' || !result.preview.startDate || !result.preview.endDate) {
+        return res.redirect(302, fallback);
+      }
+      const { festivalName, crewName, startDate, endDate } = result.preview;
+      res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="festie-invite.ics"');
+      res.setHeader('Cache-Control', 'no-store');
+      return res
+        .status(200)
+        .send(renderInviteIcs({ festivalName, crewName, startDate, endDate, inviteCode: code, origin }));
+    } catch (error: any) {
+      log.error('crew invite ics failed', { error: error.message });
+      return res.redirect(302, fallback);
+    }
+  });
+
+  // The festival behind a public slug: published and not archived, else null.
+  // Never look up by id first: getFestivalById alone also returns drafts.
+  async function loadPublicFestival(slug: string) {
+    if (!isFestivalSlug(slug)) return null;
+    const id = await stores.festivals.findPublicIdBySlug(slug);
+    return id ? getFestivalById(id) : null;
+  }
+
+  // Public festival page. Owner decision 2026-11-02: shareable by link but
+  // noindex, with no sitemap entry, until a legal check clears indexing.
+  router.get('/f/:slug', rateLimit(60, 'festival-page'), async (req: any, res: any) => {
+    const slug = String(req.params.slug || '');
+    const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    res.setHeader('X-Robots-Tag', 'noindex');
+    try {
+      const festival = await loadPublicFestival(slug);
+      if (!festival) {
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        return res.status(404).send(renderFestivalNotFoundPage(origin));
+      }
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      return res.status(200).send(renderFestivalPage({ festival, origin, slug }));
+    } catch (error: any) {
+      log.error('festival page failed', { error: error.message, slug });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(500).send(renderFestivalNotFoundPage(origin));
+    }
+  });
+
+  router.get('/f/:slug/og.png', rateLimit(30, 'festival-og'), async (req: any, res: any) => {
+    try {
+      const festival = await loadPublicFestival(String(req.params.slug || ''));
+      // Crawlers need no HTML error page.
+      if (!festival) return res.status(404).end();
+      const days = festival.days || [];
+      const svg = buildFestivalOgSvg({
+        festivalName: festival.name,
+        dateRange: festivalDateRange(festival),
+        location: festival.location || '',
+        setCount: days.reduce((sum: number, day: any) => sum + (day?.sets?.length || 0), 0),
+        stageCount: (festival.stages || []).length,
+      });
+      const png = await sharp(Buffer.from(svg)).png().toBuffer();
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.send(png);
+    } catch (error: any) {
+      log.error('festival og render failed', { error: error.message, slug: req.params.slug });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(500).end();
     }
   });
 

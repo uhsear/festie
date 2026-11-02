@@ -103,6 +103,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
         sink.onHomeBaseUpdated(intent.crewId, {
           location: intent.location,
           time: intent.time,
+          ...('planB' in intent ? { planB: intent.planB } : {}),
         });
       }
     };
