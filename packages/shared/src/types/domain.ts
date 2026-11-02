@@ -448,8 +448,9 @@ export interface UpdateCrewMeetingPointRequest {
 /**
  * Crew packing-board item (M2 logistics) as serialized by the backend
  * (routes/crew-packing.ts). snake_case from Postgres. A shared "who's bringing
- * what" checklist row: a `label`, an optional `brought_by` owner, and a
- * `claimed` flag.
+ * what" checklist row: a `label`, a `claimed` flag, and `brought_by`, the
+ * claimer's user id (the server sets it to the caller on claim). `packed` is
+ * the claimer's own "packed" tick.
  */
 export interface CrewPackingItem {
   id: string;
@@ -458,6 +459,8 @@ export interface CrewPackingItem {
   label: string;
   brought_by: string | null;
   claimed: boolean;
+  /** The claimer has packed it. Absent on servers before migration 080. */
+  packed?: boolean;
   created_at: string;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */
   _optimistic?: boolean;
@@ -473,13 +476,16 @@ export interface UpdateCrewPackingItemRequest {
   label?: string;
   broughtBy?: string | null;
   claimed?: boolean;
+  packed?: boolean;
 }
 
 /**
  * Crew carpool / ride-board offer (M2 logistics) as serialized by the backend
  * (routes/crew-rides.ts). snake_case from Postgres. A shared "who's driving"
  * board row: an optional `driver` name, `seats` count, `depart_from` origin,
- * free-text `depart_at` time, and a `note`. Cloned from CrewPackingItem.
+ * `direction`, `depart_time` (a real instant, shown in festival time), a
+ * `note`, and the `passenger_ids` who took a seat. `depart_at` is legacy free
+ * text, shown only when `depart_time` is empty. Cloned from CrewPackingItem.
  */
 export interface CrewRideOffer {
   id: string;
@@ -490,6 +496,10 @@ export interface CrewRideOffer {
   depart_from: string | null;
   depart_at: string | null;
   note: string | null;
+  direction?: 'to_festival' | 'home' | null;
+  /** ISO instant of departure. Absent on servers before migration 080. */
+  depart_time?: string | null;
+  passenger_ids?: string[];
   created_at: string;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */
   _optimistic?: boolean;
@@ -501,6 +511,8 @@ export interface CreateCrewRideOfferRequest {
   departFrom?: string | null;
   departAt?: string | null;
   note?: string | null;
+  direction?: 'to_festival' | 'home' | null;
+  departTime?: string | null;
 }
 
 export interface UpdateCrewRideOfferRequest {
@@ -509,6 +521,8 @@ export interface UpdateCrewRideOfferRequest {
   departFrom?: string | null;
   departAt?: string | null;
   note?: string | null;
+  direction?: 'to_festival' | 'home' | null;
+  departTime?: string | null;
 }
 
 /**
@@ -592,6 +606,16 @@ export interface CrewExpense {
    */
   planned?: boolean;
   created_at: string;
+  /** Uneven split in integer cents by user id. Null/absent = equal split. */
+  split_amounts?: Record<string, number> | null;
+  /** Who added the row; can differ from `paid_by`. Null on rows before migration 079. */
+  created_by?: string | null;
+  updated_by?: string | null;
+  updated_at?: string | null;
+  /** Payment rows only: the payee confirmed it arrived. */
+  confirmed_at?: string | null;
+  /** Payment rows only: the payee said it has not arrived. */
+  disputed_at?: string | null;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */
   _optimistic?: boolean;
 }
@@ -609,7 +633,14 @@ export interface CreateCrewExpenseRequest {
   category: string;
   /** Mark as a planned/budget row (forecast-only, excluded from settle-up). */
   planned?: boolean;
+  /** The member who paid. The server defaults it to the caller. */
+  paidBy?: string;
+  /** Uneven split in integer cents. Same people as `splitWith`, summing to `amount`. */
+  shares?: { userId: string; cents: number }[];
 }
+
+/** PUT is a full replacement, so the edit body is the create body. */
+export type UpdateCrewExpenseRequest = CreateCrewExpenseRequest;
 
 export interface SettleCrewExpenseRequest {
   toUserId: string;
@@ -641,6 +672,8 @@ export interface CrewSettlement {
 export interface CrewSettlementPlan {
   balances: CrewExpenseBalance[];
   settlements: CrewSettlement[];
+  /** The crew's currency label (ISO 4217). Absent on old servers: treat as USD. */
+  currency?: string;
 }
 
 /**

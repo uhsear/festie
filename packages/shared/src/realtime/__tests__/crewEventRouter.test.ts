@@ -7,6 +7,8 @@ import {
   routePollVoted,
   routePollClosed,
   routeExpensesChanged,
+  routePackingChanged,
+  routeRidesChanged,
   routeActivityLogged,
 } from '../crewEventRouter';
 import { createStoreSink } from '../crewRealtimeSink';
@@ -211,6 +213,22 @@ describe('crewEventRouter — pure routers', () => {
 
     it('routeExpensesChanged rejects a different-crew event', () => {
       expect(routeExpensesChanged(expenseAddedPayload, OTHER)).toBeNull();
+    });
+
+    it('routeExpensesChanged accepts an expense-updated payload and ignores another crew', () => {
+      const updated = { _v: 1, crewId: ACTIVE };
+      expect(routeExpensesChanged(updated, ACTIVE)).toEqual({ kind: 'expenses-changed', crewId: ACTIVE });
+      expect(routeExpensesChanged(updated, OTHER)).toBeNull();
+    });
+
+    it('routePackingChanged and routeRidesChanged route the active crew only', () => {
+      const payload = { crewId: ACTIVE };
+      expect(routePackingChanged(payload, ACTIVE)).toEqual({ kind: 'packing-changed', crewId: ACTIVE });
+      expect(routeRidesChanged(payload, ACTIVE)).toEqual({ kind: 'rides-changed', crewId: ACTIVE });
+      expect(routePackingChanged(payload, OTHER)).toBeNull();
+      expect(routeRidesChanged(payload, OTHER)).toBeNull();
+      expect(routePackingChanged(payload, null)).toBeNull();
+      expect(routeRidesChanged(payload, null)).toBeNull();
     });
 
     it('routeActivityLogged accepts active crew, rejects others / null', () => {

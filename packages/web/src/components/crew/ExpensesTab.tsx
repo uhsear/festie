@@ -1,8 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@festie/shared';
 import { useCrewStore } from '@festie/shared/stores';
-import type { SettleCrewExpenseRequest, CrewSettlementPlan, CrewSettlement } from '@festie/shared/types';
+import type {
+  SettleCrewExpenseRequest,
+  CreateCrewExpenseRequest,
+  CrewExpense,
+  CrewSettlementPlan,
+  CrewSettlement,
+} from '@festie/shared/types';
 import {
   formatBalance,
   formatAmount,
@@ -15,35 +21,29 @@ import {
   ledgerRows,
   settlementPayments,
   describePayment,
+  formatCents,
+  settlementSentence,
+  balanceSentence,
+  paymentsToConfirm,
+  paymentStatusLine,
+  expenseTrailLine,
+  expenseShareCents,
 } from '@festie/shared/utils';
-import { EXPENSE_CATEGORIES, expenseCategoryFor } from '@festie/shared/constants';
+import { CREW_CURRENCIES, expenseCategoryFor } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
-import { ExpenseIcon } from '../../lib/expenseIcon';
 import { cn } from '@/lib/utils';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
 import EmptyState from '../ui/EmptyState';
 import Skeleton from '../ui/Skeleton';
 import ExpenseItem from './ExpenseItem';
+import ExpenseForm from './ExpenseForm';
 import ConfirmDialog from '../ui/ConfirmDialog';
-import { DollarSign, Plus, HandCoins, X } from 'lucide-react';
-import IconButton from '../ui/IconButton';
+import { DollarSign, Plus, HandCoins } from 'lucide-react';
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import { useRovingTabs } from '@/hooks/useRovingTabs';
+import { inputBase } from '../../lib/styles';
 
-interface RawExpense {
-  id: string;
-  crew_id: string;
-  paid_by: string;
-  paid_by_name: string;
-  description: string;
-  amount: string | number;
-  split_with: string[];
-  category: string;
-  planned?: boolean;
-  created_at: string;
-  _optimistic?: boolean;
-}
+type RawExpense = CrewExpense;
 
 interface Balance {
   userId: string;
@@ -72,28 +72,25 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   const { toast, toastError } = useToast();
   const qc = useQueryClient();
   const settleExpense = useCrewStore((s) => s.settleExpense);
+  const updateExpense = useCrewStore((s) => s.updateExpense);
+  const confirmPayment = useCrewStore((s) => s.confirmPayment);
+  const remindPayment = useCrewStore((s) => s.remindPayment);
+  const setExpenseCurrency = useCrewStore((s) => s.setExpenseCurrency);
+  const isOwner = useCrewStore((s) => s.activeCrew?.owner === currentUserId);
   const [showForm, setShowForm] = useState(false);
+  const [editTarget, setEditTarget] = useState<RawExpense | null>(null);
   // Settle-up records a payment only after the user confirms they paid; the
   // payee's links show first. Records the exact netted plan amount.
   const [paidTarget, setPaidTarget] = useState<CrewSettlement | null>(null);
   const [removeTarget, setRemoveTarget] = useState<RawExpense | null>(null);
   const [undoTarget, setUndoTarget] = useState<RawExpense | null>(null);
 
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState<string>('other');
-  const [planned, setPlanned] = useState(false);
-  const [splitWith, setSplitWith] = useState<string[]>(() => members.map((m) => m.userId));
-  // Reset splitWith when crew changes (members prop identity changes with crewId).
-  useEffect(() => {
-    setSplitWith(members.map((m) => m.userId));
-  }, [crewId]); // eslint-disable-line react-hooks/exhaustive-deps -- reset on crew switch, members follows crewId
   // Planned-vs-actual filter for the list. 'actual' = the real ledger (what
   // feeds settle-up); 'planned' = the budget/forecast view; 'all' = both.
   const [view, setView] = useState<'all' | 'actual' | 'planned'>('actual');
-  // Settle-up view. 'simplified' = the netted greedy min-cash-flow plan (fewest
-  // transfers, never a stranger-to-pay); 'raw' = every member's gross net balance.
-  const [settleView, setSettleView] = useState<'simplified' | 'raw'>('simplified');
+  // Settle-up view. 'fewest' = the netted greedy min-cash-flow plan (fewest
+  // transfers, never a stranger-to-pay); 'everyone' = every member's gross net balance.
+  const [settleView, setSettleView] = useState<'fewest' | 'everyone'>('fewest');
   const filterTablistRef = useRef<HTMLDivElement>(null);
   const settleTablistRef = useRef<HTMLDivElement>(null);
   useRovingTabs(filterTablistRef);
@@ -120,21 +117,16 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     queryKey: ['settlement-plan', crewId],
     queryFn: async () => {
       const res = await api.get<CrewSettlementPlan>(`/crews/${crewId}/expenses/settlement-plan`);
-      return { balances: res?.balances ?? [], settlements: res?.settlements ?? [] };
+      return { balances: res?.balances ?? [], settlements: res?.settlements ?? [], currency: res?.currency };
     },
     enabled: !!crewId,
   });
   const balances: Balance[] = plan?.balances ?? [];
   const settlements: CrewSettlement[] = plan?.settlements ?? [];
+  const currency = plan?.currency ?? 'USD';
 
   const addExpense = useMutation({
-    mutationFn: (payload: {
-      description: string;
-      amount: number;
-      splitWith: string[];
-      category: string;
-      planned: boolean;
-    }) => api.post(`/crews/${crewId}/expenses`, payload),
+    mutationFn: (payload: CreateCrewExpenseRequest) => api.post(`/crews/${crewId}/expenses`, payload),
     onSuccess: (result, payload) => {
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {
@@ -144,13 +136,15 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         const placeholder: RawExpense = {
           id: (result as { id: string }).id,
           crew_id: crewId,
-          paid_by: currentUserId,
+          paid_by: payload.paidBy ?? currentUserId,
+          created_by: currentUserId,
+          split_amounts: payload.shares ? Object.fromEntries(payload.shares.map((sh) => [sh.userId, sh.cents])) : null,
           paid_by_name: '',
           description: payload.description,
           amount: payload.amount,
           split_with: payload.splitWith,
           category: payload.category,
-          planned: payload.planned,
+          planned: payload.planned === true,
           created_at: new Date().toISOString(),
           _optimistic: true,
         };
@@ -161,9 +155,86 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         qc.invalidateQueries({ queryKey: ['expense-balances', crewId] });
       }
       toast(writeOutcomeMessage(outcome, 'Expense added'), outcome === 'queued' ? 'info' : 'success');
-      reset();
+      setShowForm(false);
     },
     onError: (e) => toastError(e, "Couldn't add expense. Try again."),
+  });
+
+  const invalidateMoney = () => {
+    qc.invalidateQueries({ queryKey: ['expenses', crewId] });
+    qc.invalidateQueries({ queryKey: ['settlement-plan', crewId] });
+    qc.invalidateQueries({ queryKey: ['expense-balances', crewId] });
+  };
+
+  const editExpense = useMutation({
+    mutationFn: ({ id, request }: { id: string; request: CreateCrewExpenseRequest }) =>
+      updateExpense(crewId, id, request),
+    onSuccess: (outcome, { id, request }) => {
+      if (outcome === 'queued') {
+        qc.setQueryData<RawExpense[]>(['expenses', crewId], (old = []) =>
+          old.map((e) =>
+            e.id === id
+              ? {
+                  ...e,
+                  description: request.description,
+                  amount: request.amount,
+                  split_with: request.splitWith,
+                  category: request.category,
+                  planned: request.planned === true,
+                  ...(request.paidBy !== undefined ? { paid_by: request.paidBy } : {}),
+                  split_amounts: request.shares
+                    ? Object.fromEntries(request.shares.map((sh) => [sh.userId, sh.cents]))
+                    : null,
+                  _optimistic: true,
+                }
+              : e,
+          ),
+        );
+      } else {
+        invalidateMoney();
+      }
+      setEditTarget(null);
+      toast(writeOutcomeMessage(outcome, 'Expense updated'), outcome === 'queued' ? 'info' : 'success');
+    },
+    onError: (e) => toastError(e, "Couldn't save changes. Try again."),
+  });
+
+  const confirm = useMutation({
+    mutationFn: ({ id, received }: { id: string; received: boolean; payer: string }) =>
+      confirmPayment(crewId, id, received),
+    onSuccess: (outcome, { received, payer }) => {
+      if (outcome === 'sent') invalidateMoney();
+      toast(
+        writeOutcomeMessage(
+          outcome,
+          received ? `Thanks. ${payer} can see you got it.` : `${payer} has been told it hasn't arrived.`,
+        ),
+        outcome === 'queued' ? 'info' : 'success',
+      );
+    },
+    onError: (e) => toastError(e, "Couldn't update the payment. Try again."),
+  });
+
+  const remind = useMutation({
+    mutationFn: ({ userId }: { userId: string; name: string }) => remindPayment(crewId, userId),
+    onSuccess: (outcome, { name }) =>
+      toast(writeOutcomeMessage(outcome, `Reminder sent to ${name}.`), outcome === 'queued' ? 'info' : 'success'),
+    onError: (e) => toastError(e, "Couldn't send the reminder. Try again."),
+  });
+
+  const changeCurrency = useMutation({
+    mutationFn: (code: string) => setExpenseCurrency(crewId, code),
+    onSuccess: (outcome, code) => {
+      if (outcome === 'queued') {
+        qc.setQueryData<CrewSettlementPlan>(['settlement-plan', crewId], (old) =>
+          old ? { ...old, currency: code } : old,
+        );
+      } else {
+        invalidateMoney();
+      }
+      toast(writeOutcomeMessage(outcome, `Amounts now in ${code}`), outcome === 'queued' ? 'info' : 'success');
+    },
+    onError: (e) => toastError(e, "Couldn't change the currency. Try again."),
   });
 
   const removeExpense = useMutation({
@@ -202,32 +273,11 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     onError: (e) => toastError(e, "Couldn't settle up. Try again."),
   });
 
-  function reset() {
-    setDescription('');
-    setAmount('');
-    setCategory('other');
-    setPlanned(false);
-    setSplitWith(members.map((m) => m.userId));
-    setShowForm(false);
-  }
-
-  function toggleMember(uid: string) {
-    setSplitWith((prev) => (prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]));
-  }
-
-
   // My net position from the netted plan, one actionable line per crew member:
-  //   myPayments — "You owe {toName} ${amt}" (settle-able by me)
-  //   myReceipts — "{fromName} owes you ${amt}" (they settle; read-only here)
+  //   myPayments — "You owe {toName} {amt}" (settle-able by me)
+  //   myReceipts — "{fromName} owes you {amt}" (they settle; I can send a reminder)
   const myPayments = settlements.filter((s) => s.fromUserId === currentUserId);
   const myReceipts = settlements.filter((s) => s.toUserId === currentUserId);
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const amt = Number(amount);
-    if (!description.trim() || !Number.isFinite(amt) || amt <= 0) return;
-    addExpense.mutate({ description: description.trim(), amount: amt, splitWith, category, planned });
-  }
 
   const myBalance = balances.find((b) => b.userId === currentUserId)?.balance ?? 0;
   // Actual spend feeds the ledger; planned is the forecast/budget total. Keep
@@ -245,6 +295,8 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   const animatedTotalSpent = useAnimatedNumber(totalSpent, { decimals: 2 });
   const visibleExpenses = ledgerRows(expenses, view);
   const nonZeroBalances = balances.filter((b) => Math.abs(b.balance) > 0.01);
+  const toConfirm = paymentsToConfirm(expenses, currentUserId);
+  const memberIds = members.map((m) => m.userId);
 
   if (isLoading)
     return (
@@ -267,23 +319,50 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
 
   return (
     <div className="space-y-3 px-4">
+      {/* Currency label. A label only: changing it never converts amounts. */}
+      <div className="p-3 rounded-lg bg-bg-card border border-border space-y-1">
+        {isOwner ? (
+          <>
+            <label htmlFor="expense-currency" className="block text-xs text-text-muted uppercase tracking-wide">
+              Currency
+            </label>
+            <select
+              id="expense-currency"
+              value={currency}
+              disabled={changeCurrency.isPending}
+              onChange={(e) => changeCurrency.mutate(e.target.value)}
+              className={cn(inputBase, 'min-h-11')}
+            >
+              {CREW_CURRENCIES.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-text-secondary">Changing the currency does not convert amounts.</p>
+          </>
+        ) : (
+          <p className="text-sm text-text-secondary">Amounts in {currency}</p>
+        )}
+      </div>
+
       {/* Summary */}
       {expenses.length > 0 && (
         <div className="crew-stats-grid grid grid-cols-2 gap-2">
           <div className="p-3 rounded-lg bg-bg-card border border-border">
             <div className="text-xs text-text-muted uppercase tracking-wide">Total spent</div>
-            <div className="text-lg font-bold text-text-primary tabular-nums">${animatedTotalSpent}</div>
+            <div className="text-lg font-bold text-text-primary tabular-nums">{formatAmount(animatedTotalSpent, currency)}</div>
           </div>
           <div className="p-3 rounded-lg bg-bg-card border border-border">
             <div className="text-xs text-text-muted uppercase tracking-wide">Your balance</div>
             <div className={cn('text-lg font-bold tabular-nums', balanceColor(myBalance))}>
-              {formatBalance(myBalance)}
+              {formatBalance(myBalance, currency)}
             </div>
           </div>
           {totalPlanned > 0 && (
             <div className="p-3 rounded-lg bg-bg-card border border-border col-span-2">
               <div className="text-xs text-text-muted uppercase tracking-wide">Planned (budget)</div>
-              <div className="text-lg font-bold text-accent-aqua tabular-nums">{formatAmount(totalPlanned)}</div>
+              <div className="text-lg font-bold text-accent-aqua tabular-nums">{formatAmount(totalPlanned, currency)}</div>
             </div>
           )}
         </div>
@@ -317,10 +396,46 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         </div>
       )}
 
-      {/* Settle up — one card, toggle between the netted Simplified plan
-          (fewest transfers, never a stranger-to-pay) and the Raw per-member
-          balances. Simplified surfaces one actionable net line per crew member:
-          "You owe {name}" (settle-able) / "{name} owes you" (read-only). */}
+      {/* Payments the current user was paid, waiting on "Got it" / "Not received". */}
+      {toConfirm.length > 0 && (
+        <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+          <div className="text-xs text-text-muted uppercase tracking-wide">Payments to confirm</div>
+          {toConfirm.map((p) => {
+            const payer = nameOf(p.paid_by) ?? p.paid_by_name ?? 'A crewmate';
+            return (
+              <div key={p.id} className="space-y-2">
+                <div className="text-sm text-text-primary">
+                  {payer} marked {formatAmount(p.amount, currency)} paid to you.
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="primary"
+                    onClick={() => confirm.mutate({ id: p.id, received: true, payer })}
+                    disabled={confirm.isPending}
+                    className="!py-1 !px-3 text-xs min-h-11"
+                  >
+                    Got it
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => confirm.mutate({ id: p.id, received: false, payer })}
+                    disabled={confirm.isPending}
+                    className="!py-1 !px-3 text-xs min-h-11"
+                  >
+                    Not received
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Settle up — one card, toggle between the netted "Fewest payments" plan
+          (fewest transfers, never a stranger-to-pay) and "Everyone's balance"
+          (per-member balances). Fewest payments surfaces one actionable net line
+          per crew member: "You owe {name}" (settle-able) / "{name} owes you"
+          (with a reminder button). */}
       {(settlements.length > 0 || nonZeroBalances.length > 0) && (
         <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
           <div className="flex items-center justify-between gap-2">
@@ -331,7 +446,12 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
               aria-label="Settle-up view"
               className="flex gap-1 p-1 rounded-lg bg-bg-secondary border border-border"
             >
-              {(['simplified', 'raw'] as const).map((v) => (
+              {(
+                [
+                  ['fewest', 'Fewest payments'],
+                  ['everyone', "Everyone's balance"],
+                ] as const
+              ).map(([v, label]) => (
                 <button
                   key={v}
                   type="button"
@@ -340,20 +460,20 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
                   aria-controls="settle-view-panel"
                   onClick={() => setSettleView(v)}
                   className={cn(
-                    'min-h-11 px-2.5 py-1 rounded-md text-xs font-medium capitalize',
+                    'min-h-11 px-2.5 py-1 rounded-md text-xs font-medium',
                     settleView === v
                       ? 'bg-accent-aqua/15 text-accent-aqua'
                       : 'text-text-secondary hover:text-text-primary',
                   )}
                 >
-                  {v}
+                  {label}
                 </button>
               ))}
             </div>
           </div>
 
           <div id="settle-view-panel">
-          {settleView === 'simplified' ? (
+          {settleView === 'fewest' ? (
             myPayments.length === 0 && myReceipts.length === 0 ? (
               <div className="text-sm text-text-secondary">You're all settled up.</div>
             ) : (
@@ -362,15 +482,10 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
                 {myPayments.map((s) => {
                   // Step 1: the payee's payment links. Step 2 ("I've paid")
                   // records the settlement after a confirm.
-                  const options = payOptionsFor(s);
+                  const options = payOptionsFor(s, currency);
                   return (
                     <div key={`pay-${s.toUserId}`} className="space-y-2">
-                      <div className="text-sm text-text-primary">
-                        You owe <span className="font-medium">{s.toName}</span>{' '}
-                        <span className="text-[var(--color-text-danger)] font-semibold tabular-nums">
-                          {formatAmount(s.amount)}
-                        </span>
-                      </div>
+                      <div className="text-sm text-text-primary">{settlementSentence(s, currentUserId, currency)}</div>
                       {options.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {options.map((o) => (
@@ -401,13 +516,18 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
                     </div>
                   );
                 })}
-                {/* {name} owes you — read-only; the other person settles. */}
+                {/* {name} owes you — the other person settles; I can nudge them. */}
                 {myReceipts.map((s) => (
                   <div key={`get-${s.fromUserId}`} className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-text-primary">
-                      <span className="font-medium">{s.fromName}</span> owes you{' '}
-                      <span className="text-accent-aqua font-semibold tabular-nums">{formatAmount(s.amount)}</span>
-                    </span>
+                    <span className="text-sm text-text-primary">{settlementSentence(s, currentUserId, currency)}</span>
+                    <Button
+                      variant="outline"
+                      onClick={() => remind.mutate({ userId: s.fromUserId, name: s.fromName })}
+                      disabled={remind.isPending}
+                      className="!py-1 !px-3 text-xs min-h-11"
+                    >
+                      Remind {s.fromName}
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -416,16 +536,13 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
             <div className="space-y-2">
               {nonZeroBalances.map((b) => (
                 <div key={b.userId} className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-text-primary">
-                    {b.userId === currentUserId ? 'You' : b.username}{' '}
-                    <span
-                      className={cn(
-                        'tabular-nums',
-                        b.balance > 0 ? 'text-accent-aqua' : 'text-[var(--color-text-danger)]',
-                      )}
-                    >
-                      {formatBalance(b.balance)}
-                    </span>
+                  <span
+                    className={cn(
+                      'text-sm tabular-nums',
+                      b.balance > 0 ? 'text-accent-aqua' : 'text-[var(--color-text-danger)]',
+                    )}
+                  >
+                    {balanceSentence(b, currentUserId, currency)}
                   </span>
                 </div>
               ))}
@@ -437,121 +554,32 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         </div>
       )}
 
-      {/* Add form / toggle */}
-      {!showForm ? (
+      {/* Add / edit form, or the add button */}
+      {editTarget ? (
+        <ExpenseForm
+          key={editTarget.id}
+          members={members}
+          currentUserId={currentUserId}
+          currency={currency}
+          initial={editTarget}
+          busy={editExpense.isPending}
+          onSubmit={(request) => editExpense.mutate({ id: editTarget.id, request })}
+          onCancel={() => setEditTarget(null)}
+        />
+      ) : !showForm ? (
         <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
           <Plus className="w-4 h-4" aria-hidden="true" /> Add Expense
         </Button>
       ) : (
-        <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-text-primary">New Expense</h3>
-            <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />
-          </div>
-          <Input
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Dinner at the food truck"
-            required
-            maxLength={200}
-          />
-          <Input
-            label="Amount"
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-            required
-          />
-          <div>
-            <span id="expense-category-label" className="block text-sm font-medium text-text-primary mb-2">
-              Category
-            </span>
-            <div
-              className="crew-category-grid grid grid-cols-3 gap-2"
-              role="group"
-              aria-labelledby="expense-category-label"
-            >
-              {EXPENSE_CATEGORIES.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategory(c.id)}
-                  aria-pressed={category === c.id}
-                  className={cn(
-                    'min-h-11 px-2 py-2 rounded-lg border text-xs flex flex-col items-center gap-1',
-                    category === c.id
-                      ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
-                      : 'bg-bg-card border-border text-text-secondary hover:border-border-light',
-                  )}
-                >
-                  <ExpenseIcon icon={c.icon} className="w-5 h-5" />
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <span id="expense-split-label" className="block text-sm font-medium text-text-primary mb-2">
-              Split between
-            </span>
-            <div
-              className="flex flex-wrap gap-2 max-h-32 overflow-y-auto"
-              role="group"
-              aria-labelledby="expense-split-label"
-            >
-              {members.map((m) => {
-                const active = splitWith.includes(m.userId);
-                return (
-                  <button
-                    key={m.userId}
-                    type="button"
-                    onClick={() => toggleMember(m.userId)}
-                    aria-pressed={active}
-                    className={cn(
-                      'min-h-11 px-3 rounded-full border text-sm',
-                      active
-                        ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
-                        : 'bg-bg-card border-border text-text-secondary',
-                    )}
-                  >
-                    {m.name || m.username}
-                  </button>
-                );
-              })}
-            </div>
-            {splitWith.length > 0 && amount && (
-              <div className="text-xs text-text-muted mt-1 tabular-nums">
-                {formatAmount(Number(amount) / splitWith.length)}/person {'×'} {splitWith.length}
-              </div>
-            )}
-          </div>
-          {/* Planned = budget/forecast row. Excluded from balances + settle-up. */}
-          <label className="flex items-start gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={planned}
-              onChange={(e) => setPlanned(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-accent-aqua"
-            />
-            <span className="text-sm text-text-primary">
-              Planned expense <span className="text-text-muted">(budget only — won't affect who owes what)</span>
-            </span>
-          </label>
-          <Button
-            type="submit"
-            variant="primary"
-            isLoading={addExpense.isPending}
-            className="w-full min-h-11"
-            disabled={!description.trim() || !amount || Number(amount) <= 0}
-          >
-            Add
-          </Button>
-        </form>
+        <ExpenseForm
+          key={crewId}
+          members={members}
+          currentUserId={currentUserId}
+          currency={currency}
+          busy={addExpense.isPending}
+          onSubmit={(request) => addExpense.mutate(request)}
+          onCancel={() => setShowForm(false)}
+        />
       )}
 
       {/* Expense list (filtered by the planned-vs-actual view) */}
@@ -560,7 +588,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         <EmptyState
           illustration="emptyList"
           title="No expenses yet"
-          description="Add the first one, for example: Gas, $60, split 4 ways."
+          description={`Add the first one, for example: Gas, ${formatAmount(60, currency)}, split 4 ways.`}
           cta={{ label: 'Add expense', onClick: () => setShowForm(true) }}
         />
       ) : visibleExpenses.length === 0 ? (
@@ -577,6 +605,8 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         <div className="space-y-2">
           {visibleExpenses.map((e, i) => {
             const cat = expenseCategoryFor(e.category);
+            const shareCents = expenseShareCents(e, currentUserId, memberIds);
+            const mayRemove = e.paid_by === currentUserId || e.created_by === currentUserId || isOwner;
             return (
               <ExpenseItem
                 key={e.id}
@@ -590,6 +620,14 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
                 category={cat}
                 planned={e.planned}
                 optimistic={e._optimistic}
+                currency={currency}
+                shareLine={
+                  e.planned ? null : shareCents === null ? 'Not in your split' : `Your share ${formatCents(shareCents, currency)}`
+                }
+                trailLine={expenseTrailLine(e, members)}
+                canEdit={!e._optimistic}
+                onEdit={() => setEditTarget(e)}
+                canRemove={!e._optimistic && mayRemove}
                 onRemove={() => setRemoveTarget(e)}
                 isRemoving={removeExpense.isPending}
               />
@@ -610,7 +648,12 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
               key={p.id}
               className="p-3 rounded-lg bg-bg-card border border-glass-border flex items-center justify-between gap-3"
             >
-              <span className="text-sm text-text-primary">{describePayment(p, currentUserId, nameOf)}</span>
+              <div className="min-w-0">
+                <div className="text-sm text-text-primary">{describePayment(p, currentUserId, nameOf, currency)}</div>
+                {paymentStatusLine(p, members, currentUserId) && (
+                  <div className="text-xs text-text-secondary">{paymentStatusLine(p, members, currentUserId)}</div>
+                )}
+              </div>
               {p.paid_by === currentUserId && !p._optimistic && (
                 <Button
                   variant="ghost"
@@ -634,7 +677,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         title="Undo this payment?"
         description={
           undoTarget
-            ? `${describePayment(undoTarget, currentUserId, nameOf)}. Undo it only if it was recorded by mistake. Balances go back to what they were before.`
+            ? `${describePayment(undoTarget, currentUserId, nameOf, currency)}. Undo it only if it was recorded by mistake. Balances go back to what they were before.`
             : undefined
         }
         confirmLabel="Undo payment"
@@ -652,7 +695,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         title="Remove expense"
         description={
           removeTarget
-            ? `Remove "${removeTarget.description}" (${formatAmount(removeTarget.amount)})? Everyone's balance is recalculated without it.`
+            ? `Remove "${removeTarget.description}" (${formatAmount(removeTarget.amount, currency)})? Everyone's balance is recalculated without it.`
             : undefined
         }
         confirmLabel="Remove"
@@ -668,11 +711,11 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           if (!open) setPaidTarget(null);
         }}
         title="Record payment"
-        description={paidTarget ? confirmPaidMessage(paidTarget, formatAmount(paidTarget.amount)) : undefined}
+        description={paidTarget ? confirmPaidMessage(paidTarget, formatAmount(paidTarget.amount, currency)) : undefined}
         confirmLabel="Yes, I paid"
         busy={settle.isPending}
         onConfirm={() => {
-          if (paidTarget) createSettleUpFlow(paidTarget, (req) => settle.mutateAsync(req)).confirmPaid().catch(() => {});
+          if (paidTarget) createSettleUpFlow(paidTarget, (req) => settle.mutateAsync(req), currency).confirmPaid().catch(() => {});
         }}
       />
     </div>

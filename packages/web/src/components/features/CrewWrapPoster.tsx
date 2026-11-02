@@ -4,6 +4,7 @@ import type {
   CrewWrapMemberSummary,
   CrewWrapData,
 } from '@festie/shared/types';
+import { crewPosterContent } from '@festie/shared/utils';
 
 // Re-export the shared types so existing importers (e.g. routes/wrap.tsx) keep
 // importing `CrewWrapData` from this component module unchanged.
@@ -13,10 +14,8 @@ interface Props {
   crewName: string;
   festivalName: string;
   wrap: CrewWrapData;
+  showMoney: boolean;
 }
-
-const money = (n: number) =>
-  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
 
 /**
  * Poster palette — mirrors the theme tokens in styles/theme.css. Kept in sync
@@ -54,15 +53,9 @@ const POSTER_BG_IMAGE =
  * field degrades gracefully — an empty or single-member crew shows fallbacks
  * rather than blanks or NaN.
  */
-export default function CrewWrapPoster({ crewName, festivalName, wrap }: Props) {
+export default function CrewWrapPoster({ crewName, festivalName, wrap, showMoney }: Props) {
   const topOverlap = wrap.topOverlap;
-  const seenTogether = wrap.setsSeenTogether.slice(0, 5);
-
-  const stats: { label: string; value: string }[] = [
-    { label: 'Crew', value: String(wrap.memberCount) },
-    { label: 'Seen together', value: String(wrap.setsSeenTogether.length) },
-    { label: 'Split', value: money(wrap.totalSplit) },
-  ];
+  const { spotlight, stats, seenTogether } = crewPosterContent(wrap, { showMoney });
 
   return (
     <div
@@ -114,12 +107,7 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap }: Props) 
           }
         />
 
-        {/* Biggest spender */}
-        <Superlative
-          label="Biggest spender"
-          value={wrap.biggestSpender ? wrap.biggestSpender.name : 'No expenses yet'}
-          sub={wrap.biggestSpender ? `fronted ${money(wrap.biggestSpender.amount)}` : undefined}
-        />
+        <Superlative label={spotlight.label} value={spotlight.value} sub={spotlight.sub} />
 
         {/* Sets the crew saw together */}
         <div>

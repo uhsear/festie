@@ -72,6 +72,10 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   'expense-deleted': 'removed an expense',
   'expense-settled': 'settled up',
   expense_settled: 'settled up',
+  'expense-edited': 'edited an expense',
+  'payment-confirmed': 'confirmed a payment',
+  'payment-disputed': 'said a payment has not arrived',
+  'currency-changed': 'changed the crew currency',
   'settlement-undone': 'undid a payment',
   'home-base-updated': 'updated the home base',
   'meeting-point-added': 'dropped a meeting point',
@@ -80,6 +84,66 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   sos_raised: 'raised an SOS',
   sos_cleared: 'cleared an SOS',
 };
+
+// ── Crew money and packing ─────────────────────────────────────────────────
+
+/**
+ * Currencies a crew can use. All have 2 decimal places, so integer-cent math
+ * stays valid. Keep in sync with CREW_CURRENCIES in lib/schemas.ts (the backend
+ * cannot import shared).
+ */
+export const CREW_CURRENCIES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'CAD',
+  'AUD',
+  'NZD',
+  'MXN',
+  'CHF',
+  'SEK',
+  'NOK',
+  'DKK',
+  'PLN',
+  'CZK',
+  'BRL',
+] as const;
+
+/** Starter packing lists offered on an empty crew packing tab. */
+export const PACKING_TEMPLATES: readonly { id: 'camping' | 'day-trip'; label: string; items: readonly string[] }[] = [
+  {
+    id: 'camping',
+    label: 'Camping list',
+    items: [
+      'Tent',
+      'Sleeping bags',
+      'Camping chairs',
+      'Cooler',
+      'Headlamps',
+      'Sunscreen',
+      'Water jugs',
+      'Portable charger',
+      'Earplugs',
+      'Rain ponchos',
+      'First aid kit',
+      'Trash bags',
+    ],
+  },
+  {
+    id: 'day-trip',
+    label: 'Day trip list',
+    items: [
+      'Tickets',
+      'Portable charger',
+      'Sunscreen',
+      'Refillable water bottle',
+      'Earplugs',
+      'Small bag',
+      'Rain poncho',
+      'Cash and card',
+    ],
+  },
+];
 
 // ── Expense categories ─────────────────────────────────────────────────────
 

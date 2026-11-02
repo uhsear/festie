@@ -64,6 +64,8 @@ function makeRidesDeps(overrides: any = {}) {
       getById: mock.fn(async () => null),
       update: mock.fn(async () => ({ ...DEFAULT_OFFER })),
       delete: mock.fn(async () => {}),
+      takeSeat: mock.fn(async () => ({ ...DEFAULT_OFFER, passenger_ids: ['user-1'] })),
+      leaveSeat: mock.fn(async () => ({ ...DEFAULT_OFFER, passenger_ids: [] })),
     },
     activity: {
       log: mock.fn(async () => {}),
@@ -343,6 +345,7 @@ describe('routes/crew-rides.js — POST /:crewId/rides', () => {
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:ride-created');
     const payload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
+    assert.equal(payload.crewId, 'crew-1');
     assert.equal(payload.offer.id, 'ride-new');
     assert.equal(payload.offer.driver, 'Ada');
   });
@@ -579,7 +582,7 @@ describe('routes/crew-rides.js — PUT /:crewId/rides/:itemId', () => {
 
     assert.equal(res.status, 403);
     assert.equal(res.body.error.code, 'FORBIDDEN');
-    assert.equal(res.body.error.message, 'Only the person who offered this ride or the crew owner can edit it.');
+    assert.equal(res.body.error.message, 'Only the person who posted this ride or the crew owner can change it.');
     assert.equal(updateFn.mock.calls.length, 0);
   });
 
@@ -626,6 +629,7 @@ describe('routes/crew-rides.js — PUT /:crewId/rides/:itemId', () => {
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:ride-updated');
     const payload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
+    assert.equal(payload.crewId, 'crew-1');
     assert.equal(payload.offer.seats, 1);
   });
 
@@ -783,7 +787,7 @@ describe('routes/crew-rides.js — DELETE /:crewId/rides/:itemId', () => {
 
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:ride-deleted');
-    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { itemId: 'ride-1' });
+    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { crewId: 'crew-1', itemId: 'ride-1' });
   });
 
   // ── Permission: regular member cannot remove another's offer ──────
@@ -974,6 +978,165 @@ describe('routes/crew-rides.js — rate limiting', () => {
 
     const limit = rateLimitCalls.find((c: any) => c.key === 'crew-rides-delete');
     assert.ok(limit, 'crew-rides-delete rate limit should be applied');
+    assert.equal(limit.max, 30);
+  });
+});
+
+// =====================================================================
+//  T30: direction, departure time, seat floor and seats
+// =====================================================================
+describe('routes/crew-rides.js — T30 direction and departure time', () => {
+  test('POST passes direction and departTime to the store', async () => {
+    const createFn = mock.fn(async (data: any) => ({ id: 'ride-new', crew_id: data.crewId, driver: 'Ada' }));
+    const { app } = await buildRidesApp({
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) },
+        crewRides: { create: createFn },
+      },
+    });
+    await request(app)
+      .post('/crew-1/rides')
+      .send({ driver: 'Ada', direction: 'home', departTime: '2026-07-04T18:00:00.000Z' });
+    const passed = (createFn.mock.calls as any[])[0].arguments[0];
+    assert.equal(passed.direction, 'home');
+    assert.equal(passed.departTime, '2026-07-04T18:00:00.000Z');
+  });
+
+  test('POST defaults direction and departTime to null', async () => {
+    const createFn = mock.fn(async (data: any) => ({ id: 'ride-new', crew_id: data.crewId }));
+    const { app } = await buildRidesApp({
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) },
+        crewRides: { create: createFn },
+      },
+    });
+    await request(app).post('/crew-1/rides').send({});
+    const passed = (createFn.mock.calls as any[])[0].arguments[0];
+    assert.equal(passed.direction, null);
+    assert.equal(passed.departTime, null);
+  });
+});
+
+describe('routes/crew-rides.js — PUT seat floor', () => {
+  async function putSeats(seats: any, passengerIds: string[]) {
+    const updateFn = mock.fn(async () => ({ ...DEFAULT_OFFER, seats }));
+    const { app } = await buildRidesApp({
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) },
+        crewRides: {
+          getById: mock.fn(async () => ({ ...DEFAULT_OFFER, passenger_ids: passengerIds })),
+          update: updateFn,
+        },
+      },
+    });
+    const res = await request(app).put('/crew-1/rides/ride-1').send({ seats });
+    return { res, updateFn };
+  }
+
+  test('lowering seats below the passenger count returns 409', async () => {
+    const { res, updateFn } = await putSeats(1, ['user-2', 'user-3']);
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'CONFLICT');
+    assert.equal(res.body.error.message, '2 people already have a seat. Set at least 2 seats.');
+    assert.equal(updateFn.mock.calls.length, 0);
+  });
+
+  test('uses singular wording for one passenger', async () => {
+    const { res } = await putSeats(0, ['user-2']);
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.message, '1 person already has a seat. Set at least 1 seat.');
+  });
+
+  test('seats equal to the passenger count is allowed', async () => {
+    const { res } = await putSeats(2, ['user-2', 'user-3']);
+    assert.equal(res.status, 200);
+  });
+
+  test('clearing seats (no limit) is allowed with passengers', async () => {
+    const { res } = await putSeats(null, ['user-2', 'user-3']);
+    assert.equal(res.status, 200);
+  });
+});
+
+describe('routes/crew-rides.js — POST / DELETE /:crewId/rides/:itemId/seat', () => {
+  async function seat(method: 'post' | 'delete', opts: { offer?: any; take?: any; member?: any } = {}) {
+    const ioObj = makeIo();
+    const member = opts.member === undefined ? { userId: 'user-1', role: 'member' } : opts.member;
+    const { app, deps } = await buildRidesApp({
+      io: ioObj,
+      stores: {
+        crews: { getMember: mock.fn(async () => member) },
+        crewRides: {
+          getById: mock.fn(async () => (opts.offer === undefined ? { ...DEFAULT_OFFER, passenger_ids: [] } : opts.offer)),
+          ...(opts.take ? { takeSeat: opts.take } : {}),
+        },
+      },
+    });
+    const res = await request(app)[method]('/crew-1/rides/ride-1/seat');
+    return { res, deps, ioObj };
+  }
+
+  test('take a seat returns the offer and emits crew:ride-updated with crewId', async () => {
+    const { res, deps, ioObj } = await seat('post');
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.offer.passenger_ids, ['user-1']);
+    assert.deepEqual((deps.stores.crewRides.takeSeat as any).mock.calls[0].arguments, ['ride-1', 'user-1']);
+    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:ride-updated');
+    const payload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
+    assert.equal(payload.crewId, 'crew-1');
+    assert.deepEqual(payload.offer.passenger_ids, ['user-1']);
+  });
+
+  test('taking a seat in a full ride returns 409 and emits nothing', async () => {
+    const { res, ioObj } = await seat('post', { take: mock.fn(async () => 'full') });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'CONFLICT');
+    assert.equal(res.body.error.message, 'This ride is full.');
+    assert.equal(ioObj._emit.mock.calls.length, 0);
+  });
+
+  test('taking a seat you already hold returns 200', async () => {
+    const held = { ...DEFAULT_OFFER, seats: 1, passenger_ids: ['user-1'] };
+    const { res } = await seat('post', { offer: held, take: mock.fn(async () => held) });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.offer.passenger_ids, ['user-1']);
+  });
+
+  test('leave a seat returns the offer and emits crew:ride-updated', async () => {
+    const { res, deps, ioObj } = await seat('delete');
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.offer.passenger_ids, []);
+    assert.deepEqual((deps.stores.crewRides.leaveSeat as any).mock.calls[0].arguments, ['ride-1', 'user-1']);
+    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[1].crewId, 'crew-1');
+  });
+
+  test('returns 404 for a missing offer or one in another crew', async () => {
+    assert.equal((await seat('post', { offer: null })).res.status, 404);
+    assert.equal((await seat('delete', { offer: { ...DEFAULT_OFFER, crew_id: 'crew-other' } })).res.status, 404);
+  });
+
+  test('returns 403 when the caller is not a crew member', async () => {
+    const { res, deps } = await seat('post', { member: null });
+    assert.equal(res.status, 403);
+    assert.equal((deps.stores.crewRides.takeSeat as any).mock.calls.length, 0);
+  });
+
+  test('returns 500 when the store throws', async () => {
+    const { res } = await seat('post', { take: mock.fn(async () => { throw new Error('db down'); }) });
+    assert.equal(res.status, 500);
+    assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+  });
+
+  test('applies the crew-rides-seat rate limit of 30', async () => {
+    const calls: any[] = [];
+    await buildRidesApp({
+      rateLimit: (max: any, key: any) => {
+        calls.push({ max, key });
+        return (_req: any, _res: any, next: any) => next();
+      },
+    });
+    const limit = calls.find((c) => c.key === 'crew-rides-seat');
+    assert.ok(limit, 'crew-rides-seat rate limit should be applied');
     assert.equal(limit.max, 30);
   });
 });

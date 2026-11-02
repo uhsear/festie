@@ -56,7 +56,7 @@ export default function createCrewRidesRoutes(deps: any) {
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const { driver, seats, departFrom, departAt, note } = req.validatedBody;
+        const { driver, seats, departFrom, departAt, note, direction, departTime } = req.validatedBody;
         const userId = req.user.userId;
 
         const membership = await stores.crews.getMember(crewId, userId);
@@ -74,9 +74,11 @@ export default function createCrewRidesRoutes(deps: any) {
           departFrom: departFrom ?? null,
           departAt: departAt ?? null,
           note: note ?? null,
+          direction: direction ?? null,
+          departTime: departTime ?? null,
         });
 
-        io.to('crew:' + crewId).emit('crew:ride-created', { offer });
+        io.to('crew:' + crewId).emit('crew:ride-created', { crewId, offer });
         const activity = {
           crewId,
           userId,
@@ -119,13 +121,22 @@ export default function createCrewRidesRoutes(deps: any) {
           return sendError(
             res,
             403,
-            'Only the person who offered this ride or the crew owner can edit it.',
+            'Only the person who posted this ride or the crew owner can change it.',
             ErrorCodes.FORBIDDEN,
           );
         }
+        const riders = existing.passenger_ids?.length ?? 0;
+        const { seats } = req.validatedBody;
+        if (typeof seats === 'number' && seats < riders) {
+          const message =
+            riders === 1
+              ? '1 person already has a seat. Set at least 1 seat.'
+              : `${riders} people already have a seat. Set at least ${riders} seats.`;
+          return sendError(res, 409, message, ErrorCodes.CONFLICT);
+        }
 
         const offer = await stores.crewRides.update(itemId, req.validatedBody);
-        io.to('crew:' + crewId).emit('crew:ride-updated', { offer });
+        io.to('crew:' + crewId).emit('crew:ride-updated', { crewId, offer });
         return sendSuccess(res, { offer });
       } catch (err: any) {
         log.error('update ride offer error', { error: err.message });
@@ -158,7 +169,7 @@ export default function createCrewRidesRoutes(deps: any) {
         }
 
         await stores.crewRides.delete(itemId);
-        io.to('crew:' + crewId).emit('crew:ride-deleted', { itemId });
+        io.to('crew:' + crewId).emit('crew:ride-deleted', { crewId, itemId });
         return sendSuccess(res, { deleted: true });
       } catch (err: any) {
         log.error('delete ride offer error', { error: err.message });
@@ -166,6 +177,38 @@ export default function createCrewRidesRoutes(deps: any) {
       }
     },
   );
+
+  // ── POST / DELETE /:crewId/rides/:itemId/seat ──────────────────
+  // Take or give up a seat. The store locks the offer row, so two people
+  // racing for the last seat get one 200 and one 409.
+  const seatHandler = (take: boolean) => async (req: any, res: any) => {
+    try {
+      const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+      const itemId = sanitizeIdentifier(req.validatedParams.itemId);
+      const userId = req.user.userId;
+
+      const membership = await stores.crews.getMember(crewId, userId);
+      if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
+
+      const existing = await stores.crewRides.getById(itemId);
+      if (!existing || existing.crew_id !== crewId) {
+        return sendError(res, 404, 'Ride offer not found', ErrorCodes.NOT_FOUND);
+      }
+
+      const offer = take
+        ? await stores.crewRides.takeSeat(itemId, userId)
+        : await stores.crewRides.leaveSeat(itemId, userId);
+      if (offer === 'full') return sendError(res, 409, 'This ride is full.', ErrorCodes.CONFLICT);
+      io.to('crew:' + crewId).emit('crew:ride-updated', { crewId, offer });
+      return sendSuccess(res, { offer });
+    } catch (err: any) {
+      log.error('ride seat error', { error: err.message, take });
+      return sendError(res, 500, 'Failed to update your seat', ErrorCodes.INTERNAL_ERROR);
+    }
+  };
+  const seatGuards = [userAuth, rateLimit(30, 'crew-rides-seat'), validateParams(schemas.crewIdItemIdParams)];
+  router.post('/:crewId/rides/:itemId/seat', ...seatGuards, seatHandler(true));
+  router.delete('/:crewId/rides/:itemId/seat', ...seatGuards, seatHandler(false));
 
   return router;
 }

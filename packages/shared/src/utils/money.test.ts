@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { formatBalance, formatAmount, spendingExpenses, ledgerRows, describePayment } from './money';
+import {
+  formatBalance,
+  formatAmount,
+  formatCents,
+  toCents,
+  spendingExpenses,
+  ledgerRows,
+  describePayment,
+} from './money';
 
 describe('settlement helpers', () => {
   const rows = [
@@ -78,5 +86,23 @@ describe('formatAmount', () => {
 
   it('does not sign negative amounts (bare formatter)', () => {
     expect(formatAmount(-3.2)).toBe('$-3.20');
+  });
+});
+
+describe('currency formatting', () => {
+  it('formats amounts and signed balances in the crew currency', () => {
+    expect(formatAmount('12.4', 'EUR')).toBe('€12.40');
+    expect(formatAmount(12.4, 'GBP')).toBe('£12.40');
+    expect(formatBalance(12.4, 'EUR')).toBe('+€12.40');
+    expect(formatBalance(-12.4, 'EUR')).toBe('-€12.40');
+    expect(formatBalance(0.004, 'EUR')).toBe('€0.00');
+  });
+
+  it('formatCents and toCents work in integer cents', () => {
+    expect(formatCents(1240)).toBe('$12.40');
+    expect(formatCents(1240, 'EUR')).toBe('€12.40');
+    expect(toCents('12.345')).toBe(1235);
+    expect(toCents(12.4)).toBe(1240);
+    expect(toCents('abc')).toBe(0);
   });
 });
