@@ -438,13 +438,13 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     assert.deepEqual(afterUndo.body.data.imports.map((i: any) => i.canUndo), [false, true]);
   });
 
-  test('a commit writes exactly one lineup_import audit row', async () => {
+  test('a commit writes exactly one festival.lineup.imported audit row', async () => {
     if (!createFestivalPlanner) return;
     const { server, admin } = await adminServer();
     await postImport(server, admin, FEST_ID, { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true }).expect(200);
 
     const { rows } = await withPool((pool) => pool.query(
-      `SELECT actor_type FROM audit_log WHERE action = 'lineup_import' AND target_id = $1`, [FEST_ID]));
+      `SELECT actor_type FROM audit_log WHERE action = 'festival.lineup.imported' AND target_id = $1`, [FEST_ID]));
     assert.equal(rows.length, 1);
     assert.equal(rows[0].actor_type, 'admin');
   });

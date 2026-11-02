@@ -7,7 +7,7 @@
 // route on a single router. It was split into three focused modules:
 //
 //   ./health-core.js    — /health, /metrics/client, /ready, /info
-//   ./admin-status.js   — /admin/health, /admin/status, /admin/analytics(/view)
+//   ./admin-status.js   — /admin/health, /admin/status, /admin/analytics
 //   ./admin-metrics.js  — /metrics, /internal/metrics-json
 //
 // To keep `server.js` byte-identical (it still calls

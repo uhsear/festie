@@ -4,10 +4,11 @@
 /**
  * Crew notifier. Three paths, all best-effort (nothing here throws into a route):
  *   queue()   grouped: buffered per crew, one push per recipient per flush.
- *   now()     instant, to every member except the actor (meeting points).
+ *   now()     instant meeting-point push, type `crew_meeting_point`: to the given
+ *             userIds that are still members, else to every member; never the actor.
  *   toUsers() instant, to named users (removed member, deleted crew, poll reminder).
- * Title is the crew name; type is `crew_update` (quiet hours and the opt-out are
- * enforced again by notificationService.send).
+ * Title is the crew name. queue() and toUsers() send type `crew_update`. Quiet
+ * hours and the opt-out are enforced again by notificationService.send.
  */
 
 const MAX_BUFFERED = 20;
@@ -21,11 +22,10 @@ interface QueueItem {
   text: string;
 }
 
-// T6 splits the crew switch into finer keys; until it merges every kind uses crewUpdates.
 const PREF_KEYS: Record<Kind, string[]> = {
   member: ['crewUpdates'],
   poll: ['crewUpdates'],
-  'meeting-point': ['crewUpdates'],
+  'meeting-point': ['crewMeetingPoints'],
 };
 
 export function createCrewNotifier({ stores, notificationService, log, windowMs = 180_000, minGapMs = 300_000 }: any) {
@@ -133,6 +133,7 @@ export function createCrewNotifier({ stores, notificationService, log, windowMs 
     text: string;
     key: string;
     meetAt?: string | null;
+    userIds?: string[];
   }) {
     if (!enabled()) return;
     try {
@@ -148,13 +149,15 @@ export function createCrewNotifier({ stores, notificationService, log, windowMs 
       if (time) body += moved ? ` ${time}` : ` at ${time}`;
       else if (moved) body = item.text.slice(0, -3);
       const members = await stores.crews.getMembers(item.crewId);
+      const only = item.userIds ? new Set(item.userIds) : null;
       const recipients: string[] = [];
       for (const m of members) {
+        if (only && !only.has(m.userId)) continue;
         if (m.userId !== item.actorId && (await allows(m.userId, item.kind))) recipients.push(m.userId);
       }
       await sendAll(recipients, (userId) => ({
         userId,
-        type: 'crew_update',
+        type: 'crew_meeting_point',
         title: crew.name,
         body,
         data: dataFor(item.crewId),

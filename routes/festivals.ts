@@ -3,6 +3,7 @@
 
 import crypto from 'crypto';
 import { diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 
 export default function createFestivalsRoutes(deps: any) {
   const {
@@ -152,6 +153,21 @@ export default function createFestivalsRoutes(deps: any) {
   }
 
   const setsOf = (festival: any): any[] => (festival?.days || []).flatMap((d: any) => d.sets || []);
+
+  // Field-level before and after for the festival.updated audit row. Lists count only.
+  function festivalAuditChanges(before: any, after: any, daysSent: boolean) {
+    const changes: Record<string, [unknown, unknown]> = {};
+    const norm = (v: unknown) => (v === undefined || v === '' ? null : v);
+    for (const key of ['name', 'location', 'timeZone', 'b2bSeparator']) {
+      if (norm(before[key]) !== norm(after[key])) changes[key] = [norm(before[key]), norm(after[key])];
+    }
+    const counts: Array<[string, (f: any) => number]> = [['stages', (f) => (f.stages || []).length]];
+    if (daysSent) counts.push(['days', (f) => (f.days || []).length], ['sets', (f) => setsOf(f).length]);
+    for (const [key, count] of counts) {
+      if (count(before) !== count(after)) changes[key] = [count(before), count(after)];
+    }
+    return changes;
+  }
 
   // "1 day, 24 sets and 113 picks": the non-zero parts, in this order.
   function removalSummary(removal: { days: number; sets: number; picks: number; ratings: number }) {
@@ -380,7 +396,7 @@ export default function createFestivalsRoutes(deps: any) {
         invalidateFestivalCache();
         invalidateFestivalListCache();
         log.info('festival:created', { festivalId: festival.id, name: festival.name });
-        audit('festival:create', 'festival', festival.id, req, { name: festival.name });
+        audit(AUDIT_ACTIONS.FESTIVAL_CREATED, 'festival', festival.id, req, { name: festival.name });
         if (typeof festival.latitude !== 'number') void fillVenueCoords(festival.id, festival.location);
         res.status(201);
         return sendSuccess(res, { ...festival, publishedAt: null });
@@ -502,11 +518,14 @@ export default function createFestivalsRoutes(deps: any) {
         const notified = req.validatedBody.notify !== false && people > 0;
         const scheduleNotice = { changes: changes.length, people, notified };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
-        audit('festival:update', 'festival', festival.id, req, {
+        // The saved row lacks stages and days, so those come from the payload that was written.
+        const fieldChanges = festivalAuditChanges(existingFestival, { ...nextFestival, ...festival }, daysSent);
+        audit(AUDIT_ACTIONS.FESTIVAL_UPDATED, 'festival', festival.id, req, {
           name: festival.name,
           ...stats,
           scheduleChanges: changes.length,
           notifiedPeople: notified ? people : 0,
+          ...(Object.keys(fieldChanges).length > 0 ? { changes: fieldChanges } : {}),
         });
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
@@ -564,7 +583,7 @@ export default function createFestivalsRoutes(deps: any) {
         if (!row) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
         invalidateFestivalCache();
         invalidateFestivalListCache();
-        audit('festival:publish', 'festival', festival.id, req, {
+        audit(AUDIT_ACTIONS.FESTIVAL_PUBLISHED, 'festival', festival.id, req, {
           name: festival.name,
           warnings: checklist.filter((item: any) => item.status === 'warn').map((item: any) => item.key),
         });
@@ -594,7 +613,7 @@ export default function createFestivalsRoutes(deps: any) {
         invalidateFestivalListCache();
         const festival = await getFestivalById(id);
         const name = festival?.name ?? '';
-        audit('festival:restore', 'festival', id, req, { name });
+        audit(AUDIT_ACTIONS.FESTIVAL_RESTORED, 'festival', id, req, { name });
         log.info('festival:restored', { festivalId: id, name });
         const published = !!row.publishedAt;
         if (published) emitter.festivalCreated({ id, name });
@@ -641,7 +660,7 @@ export default function createFestivalsRoutes(deps: any) {
 
         removeFestivalSockets(festivalId, io);
         invalidateFestivalListCache();
-        audit(hardDelete ? 'festival:hard-delete' : 'festival:soft-delete', 'festival', festivalId, req, {
+        audit(hardDelete ? AUDIT_ACTIONS.FESTIVAL_PURGED : AUDIT_ACTIONS.FESTIVAL_DELETED, 'festival', festivalId, req, {
           name: festival.name,
         });
         log.warn('admin:delete-festival', {
@@ -705,7 +724,7 @@ export default function createFestivalsRoutes(deps: any) {
         await stores.pool.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
         invalidateFestivalCache();
 
-        audit('set:link-update', 'set', setId, req, { festivalId, artistIndex, linkUrl: cleanUrl });
+        audit(AUDIT_ACTIONS.SET_LINK_UPDATED, 'set', setId, req, { festivalId, artistIndex, linkUrl: cleanUrl });
         log.info('set link updated', {
           festivalId,
           setId,

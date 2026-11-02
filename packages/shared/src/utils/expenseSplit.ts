@@ -21,6 +21,39 @@ export function evenShares(totalCents: number, userIds: string[]): ExpenseShare[
   return userIds.map((userId, i) => ({ userId, cents: base + (i < remainder ? 1 : 0) }));
 }
 
+/**
+ * Shares in proportion to the days each person attends. Users with 0 days are
+ * returned in `removed` and get no share. Leftover cents go one each by largest
+ * remainder, ties in `userIds` order. Everyone at 0 days: no shares, all removed.
+ */
+export function sharesByDays(
+  totalCents: number,
+  userIds: string[],
+  daysFor: (userId: string) => number,
+): { shares: ExpenseShare[]; removed: string[] } {
+  const days = userIds.map((id) => Math.max(0, daysFor(id)));
+  const sumDays = days.reduce((a, b) => a + b, 0);
+  if (sumDays === 0) return { shares: [], removed: [...userIds] };
+  const rows = userIds
+    .map((userId, i) => {
+      const d = days[i] ?? 0;
+      return { userId, i, d, cents: Math.floor((totalCents * d) / sumDays) };
+    })
+    .filter((r) => r.d > 0);
+  let leftover = totalCents - rows.reduce((a, r) => a + r.cents, 0);
+  // Compare remainders as integers: (total * d) % sumDays.
+  const order = [...rows].sort((a, b) => ((totalCents * b.d) % sumDays) - ((totalCents * a.d) % sumDays) || a.i - b.i);
+  for (const r of order) {
+    if (leftover <= 0) break;
+    r.cents += 1;
+    leftover -= 1;
+  }
+  return {
+    shares: rows.map((r) => ({ userId: r.userId, cents: r.cents })),
+    removed: userIds.filter((_, i) => days[i] === 0),
+  };
+}
+
 /** Why a set of typed shares cannot be saved, or null when they add up. */
 export function sharesError(totalCents: number, shares: ExpenseShare[], currency = 'USD'): string | null {
   if (shares.some((s) => !Number.isInteger(s.cents) || s.cents <= 0)) {

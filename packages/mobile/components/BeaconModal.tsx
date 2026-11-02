@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Modal, StatusBar, TouchableOpacity } from 'react-native';
+import { View, Text, Modal, Platform, StatusBar, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { requireOptionalNativeModule } from 'expo';
+import type * as KeepAwakeModule from 'expo-keep-awake';
+import type * as BrightnessModule from 'expo-brightness';
 import { useAuthStore } from '@festie/shared/stores';
 import { BEACON_COPY } from '@festie/shared/constants';
 import { BEACON_FLASH_MS, beaconColors, displayInitials, identityLabel } from '@festie/shared/utils';
@@ -9,6 +12,51 @@ import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
 const INITIALS_SCALE = 2.5;
+
+// Binaries before 1.5.0 lack both native modules, and a static import throws at launch there.
+// Without them Beacon keeps T28's behavior: the footer asks the user to raise brightness.
+/* eslint-disable @typescript-eslint/no-require-imports */
+const screenControl =
+  requireOptionalNativeModule('ExpoKeepAwake') != null && requireOptionalNativeModule('ExpoBrightness') != null
+    ? {
+        useKeepAwake: (require('expo-keep-awake') as typeof KeepAwakeModule).useKeepAwake,
+        Brightness: require('expo-brightness') as typeof BrightnessModule,
+      }
+    : null;
+/* eslint-enable @typescript-eslint/no-require-imports */
+
+function warn(what: string, e: unknown) {
+  console.warn(`Beacon: ${what} failed`, e);
+}
+
+// Max app brightness while mounted. iOS keeps the level after the app leaves, so it needs the explicit restore.
+function ScreenAwakeAndBright({ useKeepAwake, Brightness }: NonNullable<typeof screenControl>) {
+  useKeepAwake('beacon');
+  useEffect(() => {
+    let cancelled = false;
+    let prev: number | null = null;
+    (async () => {
+      try {
+        prev = await Brightness.getBrightnessAsync();
+        if (cancelled) return;
+        await Brightness.setBrightnessAsync(1);
+      } catch (e) {
+        warn('raise brightness', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      const restore =
+        Platform.OS === 'android'
+          ? Brightness.restoreSystemBrightnessAsync()
+          : prev === null
+            ? Promise.resolve()
+            : Brightness.setBrightnessAsync(prev);
+      restore.catch((e) => warn('restore brightness', e));
+    };
+  }, [Brightness]);
+  return null;
+}
 
 function BeaconScreen({ onClose }: { onClose: () => void }) {
   const styles = useStyles();
@@ -27,12 +75,9 @@ function BeaconScreen({ onClose }: { onClose: () => void }) {
   const fg = phase ? primary : alternate;
 
   return (
-    <View
-      style={[styles.root, { backgroundColor: bg }]}
-      accessibilityViewIsModal
-      accessibilityLabel={BEACON_COPY.a11y}
-    >
+    <View style={[styles.root, { backgroundColor: bg }]} accessibilityViewIsModal accessibilityLabel={BEACON_COPY.a11y}>
       <StatusBar hidden />
+      {screenControl && <ScreenAwakeAndBright {...screenControl} />}
       <Text
         style={[styles.initials, { color: fg, transform: [{ scale: INITIALS_SCALE }] }]}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -41,7 +86,7 @@ function BeaconScreen({ onClose }: { onClose: () => void }) {
       </Text>
       <Text style={[styles.name, { color: fg }]}>{identityLabel(user)}</Text>
       <Text style={[styles.prompt, { color: fg }]}>{BEACON_COPY.prompt}</Text>
-      <Text style={[styles.footer, { color: fg }]}>{BEACON_COPY.footer}</Text>
+      {!screenControl && <Text style={[styles.footer, { color: fg }]}>{BEACON_COPY.footer}</Text>}
       <TouchableOpacity
         style={[styles.done, { borderColor: fg }]}
         onPress={onClose}
@@ -84,7 +129,6 @@ export function BeaconRow() {
           <Text style={styles.rowSub}>{BEACON_COPY.buttonHint}</Text>
         </View>
       </TouchableOpacity>
-      {/* shortcut: no max brightness or keep-awake, both need a native build (T41); the footer asks the user instead. */}
       <Modal
         visible={open}
         presentationStyle="fullScreen"

@@ -29,6 +29,7 @@ function resetStore() {
     crewOverlap: {},
     polls: [],
     meetingPoints: [],
+    crewDays: [],
     expenses: [],
     expenseBalances: [],
     packingItems: [],
@@ -484,6 +485,33 @@ describe('crewStore offline optimistic create + reconciliation (Phase 2)', () =>
       const outcome = await useCrewStore.getState().settleExpense('crew-1', { toUserId: 'u2', amount: 12.5 });
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(outcome).toBe('queued');
+    });
+  });
+
+  // ── T43: crew days and I'll be there queue and collapse ───────────────────
+  describe('T43 offline writes', () => {
+    it('setMyDays queues one write and a second change collapses onto the same clientId', async () => {
+      useUIStore.setState({ offlineMode: true });
+      const store = useCrewStore.getState();
+      expect(await store.setMyDays('crew-1', 'u1', { days: [{ dayIndex: 0, answer: 'going' }] })).toBe('queued');
+      await store.setMyDays('crew-1', 'u1', { days: [{ dayIndex: 0, answer: 'no' }] });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      const q = readQueue();
+      expect(q).toHaveLength(1);
+      expect(q[0]!.clientId).toBe('PUT:/crews/crew-1/days:days-crew-1-u1');
+      expect(useCrewStore.getState().crewDays).toEqual([{ userId: 'u1', dayIndex: 0, answer: 'no' }]);
+    });
+
+    it('setMeetingPointComing queues one write and collapses a second tap', async () => {
+      useUIStore.setState({ offlineMode: true });
+      useCrewStore.setState({ meetingPoints: [{ id: 'mp1', coming: [] } as never] });
+      const store = useCrewStore.getState();
+      expect(await store.setMeetingPointComing('crew-1', 'mp1', 'u1', true)).toBe('queued');
+      await store.setMeetingPointComing('crew-1', 'mp1', 'u1', false);
+      const q = readQueue();
+      expect(q).toHaveLength(1);
+      expect(q[0]!.clientId).toBe('PUT:/crews/crew-1/meeting-points/mp1/coming:coming-mp1-u1');
+      expect(useCrewStore.getState().meetingPoints[0]!.coming).toEqual([]);
     });
   });
 

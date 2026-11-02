@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { api, ApiClientError } from '../api';
-import { fetchAuditPage, fetchAdminUsers, fetchAdminUserDetail, withReauth, describeRemovals, formatImportCounts, removalFromError } from '../admin';
+import { fetchAuditPage, exportAuditCsv, fetchAdminUsers, fetchAdminUserDetail, withReauth, describeRemovals, formatImportCounts, removalFromError } from '../admin';
 
 const jsonResponse = (status: number, body: unknown) =>
   ({
@@ -25,6 +25,57 @@ describe('fetchAuditPage', () => {
     expect(url).toContain('scope=user');
     expect(url).toContain('actor=bob');
     expect(url).not.toContain('cursor');
+  });
+});
+
+describe('fetchAuditPage user filter', () => {
+  it('sends user', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(200, { data: [], error: null, meta: { total: 0 } }));
+    vi.stubGlobal('fetch', fetchSpy);
+    await fetchAuditPage({ user: 'sam' });
+    expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toContain('user=sam');
+  });
+});
+
+describe('exportAuditCsv', () => {
+  const entry = (id: string) => ({ id, action: 'user.deleted', createdAt: '2026-10-31T00:00:00.000Z', details: null });
+  const paged = (pages: Array<{ ids: string[]; next: string | null }>) => {
+    let i = 0;
+    return vi.fn(async () => {
+      const p = pages[i++];
+      return jsonResponse(200, { data: p.ids.map(entry), error: null, meta: { total: 9, nextCursor: p.next } });
+    });
+  };
+
+  it('follows nextCursor across pages', async () => {
+    const fetchSpy = paged([
+      { ids: ['1', '2'], next: 'c1' },
+      { ids: ['3', '4'], next: 'c2' },
+      { ids: ['5'], next: null },
+    ]);
+    vi.stubGlobal('fetch', fetchSpy);
+    const r = await exportAuditCsv({ actor: 'asir' });
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(r.rows).toBe(5);
+    expect(r.capped).toBe(false);
+    expect(r.csv.split(String.fromCharCode(13, 10))).toHaveLength(6);
+    const urls = fetchSpy.mock.calls.map((c) => String((c as unknown[])[0]));
+    expect(urls[0]).toContain('limit=200');
+    expect(urls[0]).toContain('actor=asir');
+    expect(urls[1]).toContain('cursor=c1');
+  });
+
+  it('stops at maxRows and reports capped', async () => {
+    const fetchSpy = paged([
+      { ids: ['1', '2'], next: 'c1' },
+      { ids: ['3', '4'], next: 'c2' },
+      { ids: ['5', '6'], next: 'c3' },
+    ]);
+    vi.stubGlobal('fetch', fetchSpy);
+    const r = await exportAuditCsv({}, { maxRows: 4 });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(r.rows).toBe(4);
+    expect(r.capped).toBe(true);
   });
 });
 

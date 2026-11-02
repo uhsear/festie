@@ -5,21 +5,22 @@
  * CrewLiveLocation — opt-in "Share my live location" control for the active crew.
  *
  * PRIVACY MODEL (see liveLocationStore header): OFF by default, explicit
- * per-session opt-in, scoped to ONE crew, fully ephemeral, foreground-only, and
- * aggressively auto-expiring.
+ * per-session opt-in, scoped to ONE crew, fully ephemeral, and aggressively
+ * auto-expiring. Foreground-only unless the sharer opts into keeping it going
+ * while the phone is locked.
  *
  * This component only renders. The session lives in the shared liveLocationStore
  * (`shareIntent`) and runs in the app-wide LiveSharePublisher, so a tab or screen
- * change never stops it. Enabling requests FOREGROUND location permission only,
- * then writes the intent with an absolute end time. A banner with Pause and Stop
+ * change never stops it. Enabling requests foreground location permission (plus background, after a
+ * disclosure, when the lock switch is on), then writes the intent with an absolute end time. A banner with Pause and Stop
  * stays visible while sharing, including while paused.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Switch, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, Switch, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useFestivalStore, useLiveLocationStore } from '@festie/shared/stores';
+import { useCrewStore, useFestivalStore, useLiveLocationStore } from '@festie/shared/stores';
 import { LIVE_SHARE_COPY } from '@festie/shared/constants';
 import { useShareExplainer } from '@festie/shared/hooks';
 import {
@@ -33,6 +34,7 @@ import {
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useNow } from '../hooks/useNow';
+import { BACKGROUND_SHARE_AVAILABLE } from '../lib/backgroundShare';
 
 interface CrewLiveLocationProps {
   crewId: string;
@@ -62,6 +64,8 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
   const explainer = useShareExplainer();
   // Battery is opt-in per session and never saved.
   const [shareBattery, setShareBattery] = useState(false);
+  // Background sharing is opt-in per session and never remembered.
+  const [keepLocked, setKeepLocked] = useState(false);
   const now = useNow(30_000);
 
   // Re-opt-in per crew: close the chooser when the crew changes (the store clears
@@ -70,6 +74,7 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- privacy-critical event-driven reset: close the chooser and clear the battery opt-in when the crew changes so nothing carries over.
     setChoosing(false);
     setShareBattery(false);
+    setKeepLocked(false);
   }, [crewId]);
 
   const { options, defaultId } = useMemo(
@@ -81,6 +86,35 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
   const startSharing = useCallback(
     async (option: LiveShareOption) => {
       if (busy) return;
+      // Fixed at tap time so a slow permission flow does not shorten the share.
+      const expiresAt = new Date(Date.now() + option.ms).toISOString();
+      const startForeground = () => {
+        beginShare(crewId, expiresAt, shareBattery, false);
+        setChoosing(false);
+        haptics.select();
+      };
+      const requestBackground = async () => {
+        try {
+          const bg = await Location.requestBackgroundPermissionsAsync();
+          if (bg.granted) {
+            beginShare(crewId, expiresAt, shareBattery, true);
+            setChoosing(false);
+            haptics.select();
+            return;
+          }
+          Alert.alert(
+            LIVE_SHARE_COPY.bgDeniedTitle,
+            Platform.OS === 'ios' ? LIVE_SHARE_COPY.bgDeniedBodyIos : LIVE_SHARE_COPY.bgDeniedBodyAndroid,
+            [
+              { text: LIVE_SHARE_COPY.cancel, style: 'cancel' },
+              { text: LIVE_SHARE_COPY.bgDeniedShareOpen, onPress: startForeground },
+              { text: LIVE_SHARE_COPY.openSettings, onPress: () => void Linking.openSettings() },
+            ],
+          );
+        } catch {
+          Alert.alert('Location unavailable', "Couldn't start location sharing. Try again.");
+        }
+      };
       setBusy(true);
       try {
         const perm = await Location.requestForegroundPermissionsAsync();
@@ -105,16 +139,26 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
           }
           return;
         }
-        beginShare(crewId, new Date(Date.now() + option.ms).toISOString(), shareBattery);
-        setChoosing(false);
-        haptics.select();
+        if (!keepLocked) {
+          startForeground();
+          return;
+        }
+        const crewName = useCrewStore.getState().activeCrew?.name ?? 'your crew';
+        Alert.alert(
+          LIVE_SHARE_COPY.bgDisclosureTitle,
+          LIVE_SHARE_COPY.bgDisclosureBody(crewName, fmtZonedClock(Date.parse(expiresAt), timeZone)),
+          [
+            { text: LIVE_SHARE_COPY.cancel, style: 'cancel' },
+            { text: LIVE_SHARE_COPY.bgDisclosureContinue, onPress: () => void requestBackground() },
+          ],
+        );
       } catch {
         Alert.alert('Location unavailable', "Couldn't start location sharing. Try again.");
       } finally {
         setBusy(false);
       }
     },
-    [busy, beginShare, crewId, shareBattery, haptics],
+    [busy, beginShare, crewId, shareBattery, keepLocked, timeZone, haptics],
   );
 
   const disableSharing = useCallback(() => {
@@ -128,6 +172,7 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
     (next: boolean) => {
       if (next) {
         clearShareEnded();
+        setKeepLocked(false);
         setChoosing(true);
         haptics.tap();
       } else {
@@ -149,6 +194,11 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
         formatCountdown(expiresMs - now),
         fmtZonedClock(expiresMs, timeZone),
       )
+    : null;
+  const lockedSub = sharing
+    ? shareIntent.background
+      ? LIVE_SHARE_COPY.lockedOnSub
+      : LIVE_SHARE_COPY.lockedOffSub
     : null;
   const notice =
     shareEndedReason === 'background' || shareEndedReason === 'low-power' ? liveShareEndedText(shareEndedReason) : null;
@@ -208,7 +258,10 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
                 activeOpacity={0.8}
                 accessibilityRole="button"
               >
-                <Text style={[styles.durationChipText, styles.durationChipTextDefault]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                <Text
+                  style={[styles.durationChipText, styles.durationChipTextDefault]}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                >
                   {LIVE_SHARE_COPY.explainerOk}
                 </Text>
               </TouchableOpacity>
@@ -231,6 +284,24 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
                   accessibilityState={{ checked: shareBattery }}
                 />
               </View>
+              {BACKGROUND_SHARE_AVAILABLE && (
+                <View style={styles.batteryRow}>
+                  <View style={styles.rowBody}>
+                    <Text style={styles.rowTitle}>{LIVE_SHARE_COPY.keepLocked}</Text>
+                    <Text style={styles.rowSub}>{LIVE_SHARE_COPY.keepLockedHint}</Text>
+                  </View>
+                  <Switch
+                    value={keepLocked}
+                    onValueChange={setKeepLocked}
+                    trackColor={{ false: t.colors.border.light, true: t.colors.aquaAlpha[30] }}
+                    ios_backgroundColor={t.colors.border.light}
+                    thumbColor={keepLocked ? t.colors.accent.aqua : t.colors.text.muted}
+                    accessibilityRole="switch"
+                    accessibilityLabel={LIVE_SHARE_COPY.keepLocked}
+                    accessibilityState={{ checked: keepLocked }}
+                  />
+                </View>
+              )}
               <View style={styles.chooserOptions}>
                 {options.map((d) => {
                   const isDefault = d.id === defaultId;
@@ -244,7 +315,12 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
                       accessibilityRole="button"
                       accessibilityLabel={`Share for ${d.label}`}
                     >
-                      <Text style={[styles.durationChipText, isDefault && styles.durationChipTextDefault]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{d.label}</Text>
+                      <Text
+                        style={[styles.durationChipText, isDefault && styles.durationChipTextDefault]}
+                        maxFontSizeMultiplier={MAX_FONT_SCALE}
+                      >
+                        {d.label}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -271,10 +347,15 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
               style={styles.bannerText}
               accessibilityRole="alert"
               accessibilityLabel={
-                sub ? `${paused ? LIVE_SHARE_COPY.pausedTitle : LIVE_SHARE_COPY.sharingTitle}. ${sub}` : undefined
+                sub
+                  ? `${paused ? LIVE_SHARE_COPY.pausedTitle : LIVE_SHARE_COPY.sharingTitle}. ${sub}. ${lockedSub}`
+                  : undefined
               }
-            >{paused ? LIVE_SHARE_COPY.pausedTitle : LIVE_SHARE_COPY.sharingTitle}</Text>
+            >
+              {paused ? LIVE_SHARE_COPY.pausedTitle : LIVE_SHARE_COPY.sharingTitle}
+            </Text>
             {sub ? <Text style={styles.bannerSub}>{sub}</Text> : null}
+            {lockedSub ? <Text style={styles.bannerSub}>{lockedSub}</Text> : null}
           </View>
           <TouchableOpacity
             onPress={togglePause}
@@ -383,6 +464,7 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'center',
   },
   batteryRow: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[3],

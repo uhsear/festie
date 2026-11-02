@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@festie/shared/services';
-import { useAuthStore } from '@festie/shared/stores';
-import { formatDateSpan } from '@festie/shared/utils';
+import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
+import { festivalPhase, formatDateSpan } from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
+import Button from './Button';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
@@ -59,6 +61,9 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
   const t = useTokens();
   const styles = useStyles();
   const reduceMotion = useReduceMotion();
+  const router = useRouter();
+  const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const festivalDays = useFestivalDataStore((s) => s.days);
   // Auth gate: /ratings/lifetime 401s for guests (section can be mounted
   // eagerly by NativeTabs even when the user never opens Account).
   const user = useAuthStore((s) => s.user);
@@ -155,6 +160,14 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
         </View>
         <Text style={styles.emptyTitle}>No history yet</Text>
         <Text style={styles.emptyText}>Rate sets at a festival and your year-over-year timeline builds here.</Text>
+        {currentFestival && ['live', 'post'].includes(festivalPhase(currentFestival, festivalDays) ?? '') ? (
+          <Button
+            label={`Rate sets from ${currentFestival.name}`}
+            variant="secondary"
+            size="sm"
+            onPress={() => router.push({ pathname: '/rate', params: { festival: currentFestival.id } })}
+          />
+        ) : null}
       </View>
     );
   }
@@ -182,7 +195,14 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
           {byFestival.map((f, i) => {
             const span = formatDateSpan(f.startDate, f.endDate);
             return (
-              <View key={f.festivalId} style={[styles.festRow, i === byFestival.length - 1 && styles.lastRow]}>
+              <TouchableOpacity
+                key={f.festivalId}
+                style={[styles.festRow, i === byFestival.length - 1 && styles.lastRow]}
+                onPress={() => router.push({ pathname: '/wrap', params: { festival: f.festivalId } })}
+                activeOpacity={0.8}
+                accessibilityRole="link"
+                accessibilityLabel={`Open your ${f.festivalName || f.festivalId} wrap`}
+              >
                 <View style={styles.festHead}>
                   <Text style={styles.festName} numberOfLines={1}>
                     {f.festivalName || f.festivalId}
@@ -196,7 +216,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
                   <MetaChip icon="sunny-outline" text={`${f.daysAttended} ${f.daysAttended === 1 ? 'day' : 'days'}`} />
                   <MetaChip icon="time-outline" text={`${(f.totalHours ?? 0).toFixed(1)}h`} />
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>

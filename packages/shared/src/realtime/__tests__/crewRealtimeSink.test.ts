@@ -51,6 +51,16 @@ describe('crewRealtimeSink: sos:cleared clears only the raiser it names', () => 
   });
 });
 
+describe('crewRealtimeSink: onDaysUpdated', () => {
+  it('reaches applyCrewDays', () => {
+    const applyCrewDays = vi.fn();
+    const api = { getState: () => ({ applyCrewDays }) } as never;
+    const payload = { crewId: 'c1', userId: 'u1', days: [{ userId: 'u1', dayIndex: 0, answer: 'no' as const }] };
+    createStoreSink(api).onDaysUpdated('c1', payload);
+    expect(applyCrewDays).toHaveBeenCalledWith(payload);
+  });
+});
+
 describe('crewRealtimeSink: onSosResync', () => {
   it('re-reads the active SOS list for the crew', () => {
     const loadActiveSos = vi.fn().mockResolvedValue(undefined);

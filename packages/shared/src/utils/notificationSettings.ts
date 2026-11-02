@@ -25,13 +25,13 @@ export const NOTIFICATION_TYPE_ROWS: readonly NotificationTypeRow[] = [
   { key: 'setReminders', label: 'Set reminders', hint: 'Before a set you asked to be reminded about.', onDevice: true, live: true },
   { key: 'scheduleChanges', label: 'Schedule changes', hint: 'When a set you picked moves or is removed, and announcements from Festie about your festival.', onDevice: false, live: true },
   { key: 'crewUpdates', label: 'Crew picks', hint: 'When someone in your crew changes their picks.', onDevice: false, live: true },
-  { key: 'crewMeetingPoints', label: 'Meeting points', hint: 'When your crew sets or moves a meeting point.', onDevice: false, live: false },
+  { key: 'crewMeetingPoints', label: 'Meeting points', hint: "When your crew sets a meeting point, or moves or cancels one you're coming to.", onDevice: false, live: true },
   { key: 'crewPolls', label: 'Polls', hint: 'When your crew starts or closes a poll.', onDevice: false, live: false },
   { key: 'crewMoney', label: 'Money', hint: 'Expenses and settle-up in your crew.', onDevice: false, live: false },
   { key: 'crewRides', label: 'Rides', hint: 'Ride offers and changes in your crew.', onDevice: false, live: false },
   { key: 'lineupDrops', label: 'New lineups and set times', hint: 'A festival you follow or went to before posts its lineup or set times. By push and email.', onDevice: false, live: true },
   { key: 'crewReformed', label: 'Crew re-forms', hint: 'A past crew reunites for a new festival. By push and email.', onDevice: false, live: true },
-  { key: 'wrapReady', label: 'Wrap-up ready', hint: 'Your festival recap is ready to view. By push and email.', onDevice: false, live: true },
+  { key: 'wrapReady', label: 'Wrap and rating nudges', hint: "A morning nudge to rate yesterday's sets, and your recap when it is ready", onDevice: false, live: true },
 ];
 
 export function visibleNotificationRows(): NotificationTypeRow[] {

@@ -98,6 +98,7 @@ export interface Stores {
       ): Promise<{ crew_id?: string; created_by?: string; active?: boolean; [k: string]: unknown } | null>;
       update(id: string, patch: unknown): Promise<unknown>;
       deactivate(id: string): Promise<unknown>;
+      setComing(mpId: string, crewId: string, userId: string, coming: boolean): Promise<unknown>;
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any;
@@ -175,6 +176,7 @@ export interface CrewNotify {
     text: string;
     key: string;
     meetAt?: string | null;
+    userIds?: string[];
   }): Promise<void>;
   toUsers(item: {
     crewId: string;

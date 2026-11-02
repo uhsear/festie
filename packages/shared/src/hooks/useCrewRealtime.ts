@@ -19,6 +19,7 @@
 import { useEffect } from 'react';
 import type { Socket } from '../services/socket';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
+import { useAuthStore } from '../stores/authStore';
 import {
   routeHomeBaseUpdated,
   routeMeetingPointUpsert,
@@ -40,6 +41,7 @@ import type {
   CrewHomeBaseUpdatedPayload,
   CrewMeetingPointPayload,
   CrewMeetingPointRemovedPayload,
+  CrewDaysUpdatedPayload,
   CrewPollCreatedPayload,
   CrewPollVotedPayload,
   CrewPollClosedPayload,
@@ -115,6 +117,11 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       if (intent) sink.onMeetingPointRemoved(intent.crewId, intent.mpId);
     };
 
+    const handleDaysUpdated = (data: CrewDaysUpdatedPayload) => {
+      if (data.crewId !== getActiveCrewId()) return;
+      sink.onDaysUpdated(data.crewId, data);
+    };
+
     const handlePollCreated = (data: CrewPollCreatedPayload) => {
       const intent = routePollCreated(data, getActiveCrewId());
       if (!intent) return;
@@ -177,7 +184,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     // ── Live Location + SOS handlers (applied IMMEDIATELY — full payloads, no
     // debounce; the 300ms debounce is only for reload-style intents above). ───
     const handleLocationPeerUpdate = (data: LocationPeerUpdatePayload) => {
-      const intent = routeLocationPeerUpdate(data, getActiveCrewId());
+      const intent = routeLocationPeerUpdate(data, getActiveCrewId(), useAuthStore.getState().user?.id ?? null);
       if (intent) sink.onLocationPeerUpdate(intent.crewId, intent.peer);
     };
 
@@ -207,6 +214,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     socket.on('crew:meeting-point-created', handleMeetingPointUpsert);
     socket.on('crew:meeting-point-updated', handleMeetingPointUpsert);
     socket.on('crew:meeting-point-removed', handleMeetingPointRemoved);
+    socket.on('crew:days-updated', handleDaysUpdated);
     socket.on('crew:poll-created', handlePollCreated);
     socket.on('crew:poll-voted', handlePollVoted);
     socket.on('crew:poll-closed', handlePollClosed);
@@ -249,6 +257,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       socket.off('crew:meeting-point-created', handleMeetingPointUpsert);
       socket.off('crew:meeting-point-updated', handleMeetingPointUpsert);
       socket.off('crew:meeting-point-removed', handleMeetingPointRemoved);
+      socket.off('crew:days-updated', handleDaysUpdated);
       socket.off('crew:poll-created', handlePollCreated);
       socket.off('crew:poll-voted', handlePollVoted);
       socket.off('crew:poll-closed', handlePollClosed);

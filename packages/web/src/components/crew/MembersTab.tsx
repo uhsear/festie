@@ -2,9 +2,13 @@ import React, { useState } from 'react';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
+import MyDaysCard from './MyDaysCard';
+import MemberDayChips from './MemberDayChips';
+import { useFestivalStore } from '@festie/shared/stores';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { Users, UserPlus, Crown, ChevronDown, Trash2, LogOut } from 'lucide-react';
 import { memberAvatarUrl, memberCountLabel } from '@festie/shared/utils';
-import type { CrewMember } from '@festie/shared/types';
+import type { CrewMember, FestivalDay } from '@festie/shared/types';
 
 export interface MembersTabProps {
   members: CrewMember[];
@@ -24,6 +28,8 @@ export interface MembersTabProps {
   maxMembers?: number;
 }
 
+const NO_DAYS: FestivalDay[] = [];
+
 export default function MembersTab({
   members,
   ownerId,
@@ -39,6 +45,9 @@ export default function MembersTab({
   maxMembers,
 }: MembersTabProps) {
   const [managingId, setManagingId] = useState<string | null>(null);
+  const crewFestivalId = useCrewStore((s) => s.activeCrew?.festivalId);
+  // Day answers are positional, so they only map onto the crew's own festival's days.
+  const festivalDays = useFestivalStore((s) => (s.currentFestival?.id === crewFestivalId ? s.days : NO_DAYS));
   return (
     <div className="space-y-1.5 px-4">
       {isAdmin && (
@@ -58,6 +67,7 @@ export default function MembersTab({
           <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Members</h3>
           <span className="text-xs text-text-secondary">{memberCountLabel(members.length, maxMembers)}</span>
         </div>
+        <MyDaysCard currentUserId={currentUserId} />
         <div className="space-y-0.5">
           {members.map((m, index) => {
             const memberIsOwner = m.role === 'owner' || ownerId === m.userId;
@@ -77,6 +87,7 @@ export default function MembersTab({
                     <div className="font-semibold text-text-primary truncate">
                       {m.userId === currentUserId ? `${displayName} (you)` : displayName}
                     </div>
+                    <MemberDayChips userId={m.userId} name={displayName} days={festivalDays} />
                     {memberIsOwner && (
                       <div className="text-xs text-text-secondary inline-flex items-center gap-1">
                         <Crown className="w-3 h-3" aria-hidden="true" /> Owner

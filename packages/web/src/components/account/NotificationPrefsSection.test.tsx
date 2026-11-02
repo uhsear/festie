@@ -255,9 +255,10 @@ describe('NotificationPrefsSection', () => {
 
   it('does not render the crew rows that have no sender yet', () => {
     render(<NotificationPrefsSection />);
-    for (const name of ['Meeting points', 'Polls', 'Money', 'Rides']) {
+    for (const name of ['Polls', 'Money', 'Rides']) {
       expect(screen.queryByRole('switch', { name })).toBeNull();
     }
+    expect(screen.getByRole('switch', { name: 'Meeting points' })).toBeInTheDocument();
   });
 
   it('saves the must-see lead time through updatePrefs', async () => {
@@ -267,8 +268,9 @@ describe('NotificationPrefsSection', () => {
     expect(mockUpdatePrefs).toHaveBeenCalledWith({ mustSeeReminderMinutes: 15 });
   });
 
-  it('says the lineup, reform and wrap-up toggles cover email as well as push', () => {
+  it('says the lineup and reform toggles cover email as well as push', () => {
     render(<NotificationPrefsSection />);
-    expect(screen.getAllByText(/By push and email\./)).toHaveLength(3);
+    expect(screen.getAllByText(/By push and email\./)).toHaveLength(2);
+    expect(screen.getByText('Wrap and rating nudges')).toBeInTheDocument();
   });
 });

@@ -1213,13 +1213,15 @@ describe('createRatingsStore', () => {
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 's1', 5, 'Great!']);
   });
 
-  it('upsert defaults note to empty string', async () => {
+  it('upsert without a note passes null so the stored note is kept (a first rating stores empty)', async () => {
     const pool = mockPool([{ rows: [{ id: 'r1' }] }]);
     const store = createRatingsStore(pool);
 
     await store.upsert('u1', 's1', 4);
 
-    assert.strictEqual(pool.queries[0].params[3], '');
+    assert.strictEqual(pool.queries[0].params[3], null);
+    assert.ok(pool.queries[0].sql.includes("COALESCE($4, '')"));
+    assert.ok(pool.queries[0].sql.includes('WHEN $4::text IS NULL THEN set_ratings.note'));
   });
 
   it('upsert returns undefined when no RETURNING row', async () => {

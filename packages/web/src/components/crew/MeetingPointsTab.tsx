@@ -16,6 +16,7 @@ import {
 } from '@festie/shared';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useFestivalStore } from '@festie/shared/stores';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useCurrentPosition } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useToast } from '../../lib/toastContext';
@@ -281,6 +282,15 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       setCoords({ lat: pos.lat, lng: pos.lng });
       toast('Location captured', 'success');
     }
+  }
+
+  function toggleComing(p: CrewMeetingPoint) {
+    const on = !(p.coming ?? []).includes(currentUserId);
+    useCrewStore
+      .getState()
+      .setMeetingPointComing(crewId, p.id, currentUserId, on)
+      .then(() => qc.invalidateQueries({ queryKey: ['meeting-points', crewId] }))
+      .catch((e) => toastError(e, "Couldn't update I'll be there. Try again."));
   }
 
   function openDirections(p: CrewMeetingPoint) {
@@ -617,6 +627,22 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
                               {meetingTimeDisplay(p.meet_at, false, festivalDays, new Date(), festivalTimeZone).label}
                             </div>
                           ))}
+                        {!isPending(p) && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <button
+                              type="button"
+                              aria-pressed={(p.coming ?? []).includes(currentUserId)}
+                              aria-label={`I'll be there: ${p.label}`}
+                              onClick={() => toggleComing(p)}
+                              className="min-h-11 px-3 rounded-full border border-accent-aqua text-sm font-semibold text-text-primary aria-pressed:bg-accent-aqua/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+                            >
+                              {(p.coming ?? []).includes(currentUserId) ? 'Coming' : "I'll be there"}
+                            </button>
+                            {(p.coming?.length ?? 0) > 0 && (
+                              <span className="text-xs text-text-secondary">{p.coming!.length} coming</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <IconButton

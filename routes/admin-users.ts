@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
-import { AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED } from '../lib/db/stores/audit.js';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user.js';
 
 /**
@@ -130,7 +130,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         await stores.auditLog.insert({
           actorType: 'admin',
           actorId: req.user?.userId || req.userId,
-          action: AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED,
+          action: AUDIT_ACTIONS.USER_PRIVATE_DATA_VIEWED,
           targetType: 'user',
           targetId: targetUserId,
           detailsJson: JSON.stringify({ targetUsername: user.username }),
@@ -256,23 +256,28 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         const actorId = req.user?.userId || req.userId;
         if (!actorId) return sendError(res, 401, 'Unauthorized', ErrorCodes.UNAUTHORIZED);
 
+        const rolesBefore = [...(await stores.roles.getUserRoles(targetUserId))].sort();
         await stores.roles.grantRole(targetUserId, roleName, actorId);
+        const updatedRoles = await stores.roles.getUserRoles(targetUserId);
 
         if (stores.auditLog) {
           await stores.auditLog.insert({
             actorType: 'admin',
             actorId,
-            action: 'role_grant',
+            action: AUDIT_ACTIONS.USER_ROLE_GRANTED,
             targetType: 'user',
             targetId: targetUserId,
-            detailsJson: JSON.stringify({ role: roleName, targetUsername: user.username }),
+            detailsJson: JSON.stringify({
+              role: roleName,
+              targetUsername: user.username,
+              changes: { roles: [rolesBefore, [...updatedRoles].sort()] },
+            }),
             ip: getRequestIp(req),
           });
           res.locals.auditWritten = true;
         }
 
         log.warn('admin:role-grant', { targetUserId, targetUsername: user.username, role: roleName, actorId });
-        const updatedRoles = await stores.roles.getUserRoles(targetUserId);
         return sendSuccess(res, { userId: targetUserId, username: user.username, roles: updatedRoles });
       } catch (error: any) {
         log.error('admin role grant failed', { error: error.message, targetUserId: req.validatedParams?.id });
@@ -308,23 +313,28 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
           return sendError(res, 400, 'Cannot revoke your own admin role', ErrorCodes.INVALID_INPUT);
         }
 
+        const rolesBefore = [...(await stores.roles.getUserRoles(targetUserId))].sort();
         await stores.roles.revokeRole(targetUserId, roleName);
+        const updatedRoles = await stores.roles.getUserRoles(targetUserId);
 
         if (stores.auditLog) {
           await stores.auditLog.insert({
             actorType: 'admin',
             actorId,
-            action: 'role_revoke',
+            action: AUDIT_ACTIONS.USER_ROLE_REVOKED,
             targetType: 'user',
             targetId: targetUserId,
-            detailsJson: JSON.stringify({ role: roleName, targetUsername: user.username }),
+            detailsJson: JSON.stringify({
+              role: roleName,
+              targetUsername: user.username,
+              changes: { roles: [rolesBefore, [...updatedRoles].sort()] },
+            }),
             ip: getRequestIp(req),
           });
           res.locals.auditWritten = true;
         }
 
         log.warn('admin:role-revoke', { targetUserId, targetUsername: user.username, role: roleName, actorId });
-        const updatedRoles = await stores.roles.getUserRoles(targetUserId);
         return sendSuccess(res, { userId: targetUserId, username: user.username, roles: updatedRoles });
       } catch (error: any) {
         log.error('admin role revoke failed', { error: error.message, targetUserId: req.validatedParams?.id });
@@ -376,7 +386,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
           ipAddress: getRequestIp(req),
         });
         log.warn('admin:reset-link', { ...auditLog });
-        await writeAudit(req, res, 'admin_reset_link', targetUserId, { targetUsername: user.username });
+        await writeAudit(req, res, AUDIT_ACTIONS.USER_RESET_LINK_CREATED, targetUserId, { targetUsername: user.username });
         return sendSuccess(res, { resetUrl, username: user.username, expiresAt: expiresAt.toISOString() });
       } catch (error: any) {
         log.error('admin reset-link failed', { error: error.message, targetUserId: req.validatedParams?.id });
@@ -424,7 +434,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
           ipAddress: getRequestIp(req),
         });
         log.warn('admin:reset-password', { ...auditLog });
-        await writeAudit(req, res, 'admin_reset_password', targetUserId, { targetUsername: username });
+        await writeAudit(req, res, AUDIT_ACTIONS.USER_PASSWORD_RESET, targetUserId, { targetUsername: username });
         return sendSuccess(res, { success: true, username });
       } catch (error: any) {
         log.error('admin reset-password failed', { error: error.message, targetUserId: req.validatedParams?.id });
@@ -471,7 +481,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
           ipAddress: getRequestIp(req),
         });
         log.warn('admin:delete-user', { ...auditLog });
-        await writeAudit(req, res, 'admin_delete_user', removedUser.id, {
+        await writeAudit(req, res, AUDIT_ACTIONS.USER_DELETED, removedUser.id, {
           targetUsername: removedUser.username,
           profilesRemoved: (removedProfiles || []).length,
         });

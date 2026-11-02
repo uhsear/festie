@@ -10,6 +10,7 @@ import type {
   crewPhotoAlbumSchema,
   meetingPointCreateSchema,
   meetingPointUpdateSchema,
+  meetingPointComingSchema,
 } from '../lib/schemas';
 import { MAX_MEETING_POINTS_PER_CREW } from '../lib/constants';
 import { logCrewActivity } from '../lib/db/stores/activity';
@@ -264,11 +265,25 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           (body.latitude !== undefined && body.latitude !== existing.latitude) ||
           (body.longitude !== undefined && body.longitude !== existing.longitude);
         if (moved) {
+          // The key carries the new time and place, so a second, different move inside
+          // the 2-minute dedupe window still alerts; the same move sent twice does not.
+          const effLocation = body.location !== undefined ? body.location : existing.location;
+          const effLat = body.latitude !== undefined ? body.latitude : existing.latitude;
+          const effLng = body.longitude !== undefined ? body.longitude : existing.longitude;
+          const coming = (existing.coming as string[] | undefined) ?? [];
           await crewNotify?.now({
             crewId,
             actorId: req.user.userId,
             kind: 'meeting-point',
-            key: 'mp:' + mpId,
+            key: [
+              'mp-move',
+              mpId,
+              effMeetAt ? new Date(effMeetAt).toISOString() : '',
+              effLocation ?? '',
+              effLat ?? '',
+              effLng ?? '',
+            ].join(':'),
+            ...(coming.length ? { userIds: coming } : {}),
             meetAt: body.meetAt ?? null,
             text: body.meetAt
               ? `${req.user.username} moved ${label} to`
@@ -315,10 +330,55 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           type: 'meeting-point-removed',
           detail: String(existing.label),
         });
+        // `existing` was read before deactivate, so it still holds the taps.
+        const coming = (existing.coming as string[] | undefined) ?? [];
+        if (coming.length) {
+          await crewNotify?.now({
+            crewId,
+            actorId: req.user.userId,
+            kind: 'meeting-point',
+            key: 'mp-cancel:' + mpId,
+            userIds: coming,
+            text: `${req.user.username} cancelled ${String(existing.label)}`,
+          });
+        }
         return sendSuccess(res, { removed: true });
       } catch (err) {
         log.error('delete meeting point failed', { error: (err as Error).message });
         return sendError(res, 500, 'Failed to remove meeting point', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // ── PUT /:crewId/meeting-points/:mpId/coming — "I'll be there" ──
+  // Sets only the caller's own tap. Idempotent both ways. No push, no feed row.
+  router.put(
+    '/:crewId/meeting-points/:mpId/coming',
+    userAuth,
+    rateLimit(30, 'crew-mp-coming'),
+    validateParams(schemas.crewIdMpIdParams),
+    validate(schemas.meetingPointComing),
+    async (req: Request, res: Response) => {
+      try {
+        const params = req.validatedParams as z.infer<typeof crewIdMpIdParams>;
+        const body = req.validatedBody as z.infer<typeof meetingPointComingSchema>;
+        const crewId = sanitizeIdentifier(params.crewId);
+        const mpId = sanitizeIdentifier(params.mpId);
+
+        const member = await stores.crews.getMember(crewId, req.user.userId);
+        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
+
+        const existing = await stores.crews.meetingPoints.getById(mpId);
+        if (!existing || existing.crew_id !== crewId || !existing.active) {
+          return sendError(res, 404, 'Meeting point not found', ErrorCodes.NOT_FOUND);
+        }
+
+        const point = await stores.crews.meetingPoints.setComing(mpId, crewId, req.user.userId, body.coming);
+        io.to('crew:' + crewId).emit('crew:meeting-point-updated', point);
+        return sendSuccess(res, { meetingPoint: point });
+      } catch (err) {
+        log.error('set meeting point coming failed', { error: (err as Error).message });
+        return sendError(res, 500, 'Failed to update meeting point', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );

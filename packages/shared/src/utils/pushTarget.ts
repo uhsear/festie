@@ -9,6 +9,7 @@ export type PushScreen =
   | 'map'
   | 'plan-share'
   | 'privacy'
+  | 'rate'
   | 'timeline';
 
 export type PushTarget =
@@ -16,7 +17,7 @@ export type PushTarget =
   | { kind: 'festival'; festivalId: string }
   | { kind: 'crew'; sosUserId?: string }
   | { kind: 'join'; code: string }
-  | { kind: 'screen'; screen: PushScreen };
+  | { kind: 'screen'; screen: PushScreen; festivalId?: string };
 
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const PREFIXES = ['festie://', 'rave://', 'https://festie.us'];
@@ -31,6 +32,7 @@ const SCREENS: readonly string[] = [
   'map',
   'plan-share',
   'privacy',
+  'rate',
   'timeline',
 ];
 
@@ -70,6 +72,10 @@ function fromLink(link: string): PushTarget | null {
     return code ? { kind: 'join', code } : null;
   }
   if (head === 'compare' || head === 'crew-compare') return { kind: 'screen', screen: 'compare' };
+  if (head === 'wrap' || head === 'rate') {
+    const festivalId = validId(query.get('festival'));
+    return festivalId ? { kind: 'screen', screen: head, festivalId } : { kind: 'screen', screen: head };
+  }
   if (SCREENS.includes(head)) return { kind: 'screen', screen: head as PushScreen };
   return null;
 }

@@ -78,6 +78,10 @@ describe('notifications/payload: ALLOWED_NOTIFICATION_TYPES', () => {
     assert.ok(ALLOWED_NOTIFICATION_TYPES.has('set_reminder'));
   });
 
+  it('includes rate_prompt', () => {
+    assert.ok(ALLOWED_NOTIFICATION_TYPES.has('rate_prompt'));
+  });
+
   it('does not include unknown types', () => {
     assert.ok(!ALLOWED_NOTIFICATION_TYPES.has('spam'));
     assert.ok(!ALLOWED_NOTIFICATION_TYPES.has(''));
@@ -210,6 +214,24 @@ describe('notifications/send: createSendService', () => {
     const result = await svc.send({ userId: 'u1', type: 'crew_update', title: 'hi', body: 'test' });
     assert.equal(result.sent, 0);
     assert.equal(result.reason, 'user_disabled');
+  });
+
+  it('send filters rate_prompt by the wrapReady pref', async () => {
+    const stores = makeStores({
+      notificationPrefs: { get: mock.fn(async () => ({ wrapReady: false })) },
+    });
+    const messaging = { send: mock.fn(async () => 'msg-id') };
+    const svc = createSendService({
+      stores,
+      config: fakeConfig,
+      log: fakeLog,
+      messaging,
+      retryQueue: { enqueue() {} },
+    });
+    const result = await svc.send({ userId: 'u1', type: 'rate_prompt', title: 'hi', body: 'test' });
+    assert.equal(result.sent, 0);
+    assert.equal(result.reason, 'user_disabled');
+    assert.equal(messaging.send.mock.callCount(), 0);
   });
 
   it('send returns no_tokens when user has no device tokens', async () => {

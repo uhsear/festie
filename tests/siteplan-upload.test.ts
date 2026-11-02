@@ -100,7 +100,7 @@ describe('POST /api/v1/admin/festivals/:id/siteplan-image', () => {
     const { imageUrl } = res.body.data;
     assert.match(imageUrl, /^https:\/\/festie\.test\/uploads\/siteplans\/[a-f0-9]{32}\.webp$/);
     assert.equal(res.headers['cache-control'], 'no-store');
-    assert.equal(auditRows.at(-1).action, 'festival:siteplan-upload');
+    assert.equal(auditRows.at(-1).action, 'festival.siteplan.uploaded');
     assert.equal(auditRows.at(-1).targetId, 'fest-1');
 
     const file = await request(app).get(new URL(imageUrl).pathname).buffer(true).parse((r, cb) => {

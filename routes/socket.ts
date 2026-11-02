@@ -39,7 +39,12 @@ import { z } from 'zod';
 import { generateTraceId, propagateTraceId } from '../lib/tracing.js';
 import { schemas } from '../lib/schemas.js';
 import { LOCATION_UPDATE_LIMIT, registerSharingSocket, unregisterSharingSocket } from '../lib/rate-limiting.js';
-import { writeLivePosition, dropLivePosition, readLiveSnapshot } from '../lib/live-location-cache.js';
+import {
+  writeLivePosition,
+  dropLivePosition,
+  readLiveSnapshot,
+  clampCapturedAt,
+} from '../lib/live-location-cache.js';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket Event Validation Schemas
@@ -129,33 +134,14 @@ function withAckTimeout(respond: any, log: any, connectionId: any, timeoutMs = 5
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Live-location membership re-check cache (M2) + capturedAt clamp (L4)
+// Live-location membership re-check cache (M2). The capturedAt clamp (L4)
+// lives in lib/live-location-cache.ts, shared with the HTTP relay.
 // ────────────────────────────────────────────────────────────────────────
 
 /** Re-verify crew membership on the streaming path at most this often per socket. */
 const MEMBERSHIP_RECHECK_INTERVAL_MS = 15_000;
 /** ...or every this-many updates, whichever comes first. */
 const MEMBERSHIP_RECHECK_EVERY_N = 20;
-/** capturedAt may not be more than this far in the past relative to server time. */
-const CAPTURED_AT_MAX_AGE_MS = 60_000;
-/** ...nor more than this far in the future (clock skew tolerance). */
-const CAPTURED_AT_MAX_SKEW_MS = 30_000;
-
-/**
- * Clamp a client-supplied `capturedAt` to a small window around server time
- * (L4): a client must not be able to appear perpetually "live · N ago" nor
- * stamp a future fix. Returns an ISO string clamped to [now-MAXAGE, now+SKEW].
- * Falls back to `serverNowIso` if the input is unparseable.
- */
-function clampCapturedAt(capturedAt: any, serverNow: number, serverNowIso: string): string {
-  const t = Date.parse(capturedAt);
-  if (!Number.isFinite(t)) return serverNowIso;
-  const lo = serverNow - CAPTURED_AT_MAX_AGE_MS;
-  const hi = serverNow + CAPTURED_AT_MAX_SKEW_MS;
-  if (t < lo) return new Date(lo).toISOString();
-  if (t > hi) return new Date(hi).toISOString();
-  return new Date(t).toISOString();
-}
 
 /**
  * Setup Socket.IO event handlers

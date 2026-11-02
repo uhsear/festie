@@ -50,7 +50,7 @@ describe('lineup-announce route', () => {
     assert.equal(res.status, 200);
     assert.deepEqual(res.body.data, { queued: true, recipients: 2 });
     assert.equal(calls.sendLineupDrop, 1);
-    assert.equal(calls.audit[0].action, 'lineup_announce');
+    assert.equal(calls.audit[0].action, 'festival.lineup.announced');
   });
 
   test('POST with zero recipients is 400 and sends nothing', async () => {

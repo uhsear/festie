@@ -468,7 +468,7 @@ describe('admin festival CRUD + cascade + audit', () => {
       for (let i = 0; i < 100 && rows.length === 0; i++) {
         if (i > 0) await new Promise((r) => setTimeout(r, 20));
         ({ rows } = await pool.query(
-          "SELECT * FROM audit_log WHERE action = 'festival:create' AND target_id = $1",
+          "SELECT * FROM audit_log WHERE action = 'festival.created' AND target_id = $1",
           [festId]
         ));
       }
