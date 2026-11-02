@@ -350,7 +350,7 @@ export const LIVE_SHARE_COPY = {
   explainerPoints: [
     'Only this crew sees where you are.',
     'Festie keeps no location history. It holds only your latest position, for 2 minutes at most.',
-    'It runs only while Festie is open.',
+    'If you allow background location, it keeps going while your phone is locked. On the web it runs only while Festie is open.',
     'It stops at the time you pick. You can pause or stop it at any time.',
   ],
   explainerOk: 'Got it',
