@@ -1,9 +1,11 @@
 import { NativeTabs, type MaterialIcon, type SFSymbolIcon } from 'expo-router/native-tabs';
 import { colors } from '@festie/shared/tokens';
-import { useUIStore, useAuthStore } from '@festie/shared/stores';
-import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
+import { useEffect } from 'react';
+import { useUIStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
+import { APP_SECTIONS, crewTabBadge, type AppSectionKey } from '@festie/shared/utils';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
+import { useInboxRefresh } from '../../hooks/useInboxRefresh';
 import { useTokens } from '../../hooks/useTokens';
 
 /**
@@ -59,6 +61,28 @@ export default function TabLayout() {
   // Connect Socket.IO when the user is on the main tabs (authenticated). Events
   // flow into the shared Zustand stores automatically. Must stay mounted here.
   useRealtimeSync();
+  useInboxRefresh();
+
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const crewBadgeSeen = useUIStore((s) => s.crewBadgeSeen);
+  const activeCrewId = useCrewStore((s) => s.activeCrew?.id);
+  const polls = useCrewStore((s) => s.polls);
+  const expenseBalances = useCrewStore((s) => s.expenseBalances);
+  const loadPolls = useCrewStore((s) => s.loadPolls);
+  const loadExpenses = useCrewStore((s) => s.loadExpenses);
+  const userId = user?.id;
+  // Both loaders write the shared crew `error` field; skipping offline avoids the common failure.
+  useEffect(() => {
+    if (!userId || !activeCrewId || offlineMode) return;
+    loadPolls(activeCrewId).catch((e) => console.warn('crew badge: load failed', e));
+    loadExpenses(activeCrewId).catch((e) => console.warn('crew badge: load failed', e));
+  }, [userId, activeCrewId, offlineMode, loadPolls, loadExpenses]);
+  const badge = crewTabBadge({
+    polls,
+    myBalance: expenseBalances.find((b) => b.userId === userId)?.balance,
+    userId,
+    seen: crewBadgeSeen[activeCrewId ?? ''],
+  });
 
   // All five tabs stay visible for guests: the More tab is the sign-in entry
   // (it routes a guest to /login), Map shows stages and amenities, and Picks/Crew advertise the features +
@@ -78,6 +102,9 @@ export default function TabLayout() {
           <NativeTabs.Trigger key={key} name={route.name}>
             <NativeTabs.Trigger.Icon sf={route.sf} md={route.md} />
             <NativeTabs.Trigger.Label>{key === 'more' && !user ? GUEST_PROMPT_COPY.signIn : label}</NativeTabs.Trigger.Label>
+            {key === 'crew' && (
+              <NativeTabs.Trigger.Badge hidden={badge.label === null}>{badge.label || undefined}</NativeTabs.Trigger.Badge>
+            )}
           </NativeTabs.Trigger>
         );
       })}

@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
-import { Check, Copy, QrCode, RefreshCw, Share2 } from 'lucide-react';
+import { Check, Copy, Lock, QrCode, RefreshCw, Share2 } from 'lucide-react';
 import { useCrewStore } from '@festie/shared/stores';
+import { COPY } from '@festie/shared/constants';
 import { buildJoinUrl, formatInviteExpiry, inviteShareMessage } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import Switch from '../ui/Switch';
 import { useToast } from '../../lib/toastContext';
 
 // Lazy: keeps qrcode.react out of the crew route chunk until someone opens the QR.
@@ -21,6 +23,9 @@ interface CrewInviteBarProps {
 export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, expiresAt }: CrewInviteBarProps) {
   const { toast, toastError } = useToast();
   const regenerateInvite = useCrewStore((s) => s.regenerateInvite);
+  const setCrewLocked = useCrewStore((s) => s.setCrewLocked);
+  const inviteLocked = useCrewStore((s) => s.activeCrew?.id === crewId && !!s.activeCrew.inviteLocked);
+  const [lockBusy, setLockBusy] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
@@ -73,8 +78,25 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
     }
   }, [crewId, regenBusy, regenerateInvite, toast, toastError]);
 
+  const handleLockChange = useCallback(
+    async (next: boolean) => {
+      if (lockBusy) return;
+      setLockBusy(true);
+      try {
+        await setCrewLocked(crewId, next);
+        toast(next ? COPY.crewLock.locked : COPY.crewLock.unlocked, 'success');
+      } catch (e) {
+        toastError(e, COPY.crewLock.failed);
+      } finally {
+        setLockBusy(false);
+      }
+    },
+    [crewId, lockBusy, setCrewLocked, toast, toastError],
+  );
+
   return (
-    <div className="py-1.5 px-2 rounded-lg bg-bg-card border border-border flex items-center gap-2">
+    <div className="py-1.5 px-2 rounded-lg bg-bg-card border border-border space-y-1.5">
+    <div className="flex items-center gap-2">
       <Copy className="w-3.5 h-3.5 text-text-muted flex-shrink-0" aria-hidden="true" />
       <span className="text-xs text-text-secondary truncate">
         Invite: <span className="text-text-primary font-mono">{inviteCode}</span>
@@ -117,6 +139,32 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
         >
           {copiedCode ? <><Check className="w-4 h-4" aria-hidden="true" /> Copied</> : 'Copy link'}
         </Button>
+      </div>
+    </div>
+      {isOwner && (
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-xs text-text-primary">
+              {COPY.crewLock.label}
+            </span>
+            <p className="text-xs text-text-muted">{COPY.crewLock.hint}</p>
+          </div>
+          <Switch
+            checked={inviteLocked}
+            onChange={handleLockChange}
+            label={COPY.crewLock.label}
+            disabled={lockBusy}
+            data-testid="crew-lock-switch"
+          />
+        </div>
+      )}
+      <div role="status">
+        {inviteLocked && (
+          <p className="text-xs text-text-secondary inline-flex items-center gap-1">
+            <Lock className="w-3 h-3" aria-hidden="true" />
+            {COPY.crewLock.lockedLine}
+          </p>
+        )}
       </div>
       {qrOpen && (
         <Suspense fallback={null}>

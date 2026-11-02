@@ -122,6 +122,7 @@ function QrSection() {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const currentProfile = useFestivalStore((s) => s.currentProfile);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  const activeCrew = useCrewStore((s) => s.activeCrew);
 
   const qr = useMemo(() => {
     if (!currentFestival || !currentProfile) return null;
@@ -129,11 +130,12 @@ function QrSection() {
       festival: { id: currentFestival.id, name: currentFestival.name },
       picks: currentProfile.picks as Record<string, Priority> | undefined,
       meetingPoints,
+      planB: activeCrew?.festivalId === currentFestival.id ? activeCrew.homeBasePlanB : null,
       nowMs: Date.now(),
     });
     const encoded = encodePlanSnapshot(input);
     return { encoded, tooLong: encoded.length > MAX_ENCODED_LENGTH };
-  }, [currentFestival, currentProfile, meetingPoints]);
+  }, [currentFestival, currentProfile, meetingPoints, activeCrew]);
 
   return (
     <section className="space-y-3" aria-labelledby="share-qr-heading">

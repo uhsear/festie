@@ -72,6 +72,18 @@ describe('loadInvitePreview', () => {
     assert.deepEqual(await loadInvitePreview(makeDeps().deps, 'NOPE99'), { status: 'invalid' });
   });
 
+  it('reports a locked crew as locked without reading its members', async () => {
+    const { deps, crews, getFestivalById } = makeDeps({ crew: { ...CREW, inviteLocked: true } });
+    assert.deepEqual(await loadInvitePreview(deps, 'ABC123'), { status: 'locked' });
+    assert.equal(crews.getMembers.mock.callCount(), 0);
+    assert.equal(getFestivalById.mock.callCount(), 0);
+  });
+
+  it('still says expired for an expired code of a locked crew', async () => {
+    const { deps } = makeDeps({ expired: { id: 'c1', inviteLocked: true } });
+    assert.deepEqual(await loadInvitePreview(deps, 'OLD123'), { status: 'expired' });
+  });
+
   it('gives null dates and festival name when the festival has no days or is missing', async () => {
     const noDays = await loadInvitePreview(makeDeps({ crew: CREW, festival: { id: 'fest-1', name: 'F', days: [] } }).deps, 'ABC123');
     assert.equal(noDays.status, 'ok');

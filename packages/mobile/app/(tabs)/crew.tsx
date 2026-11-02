@@ -20,7 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { setReturnTo } from '../../lib/returnTo';
-import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
+import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore, useUIStore } from '@festie/shared/stores';
 import { useCrew, useActiveCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { COPY, GUEST_PROMPT_COPY, LOW_POWER_COPY } from '@festie/shared/constants';
@@ -41,6 +41,8 @@ import {
   removeMemberConfirmMessage,
   DEFAULT_CREW_TAB,
   parseCrewTab,
+  openPollIds,
+  balanceCents,
 } from '@festie/shared/utils';
 import type { Crew, CrewMember, CrewOverlap, FestivalSet } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -62,6 +64,7 @@ import CrewPhotoLink from '../../components/CrewPhotoLink';
 import CrewPolls from '../../components/CrewPolls';
 import CrewMeetingPoints from '../../components/CrewMeetingPoints';
 import CrewMyDays from '../../components/CrewMyDays';
+import CrewLockRow from '../../components/CrewLockRow';
 import MemberDayChips from '../../components/MemberDayChips';
 import CrewStatus from '../../components/CrewStatus';
 import { festivalForCrew } from '../../lib/crewFestival';
@@ -624,6 +627,18 @@ export default function CrewScreen() {
     }
   };
 
+  // Opening Plan or Money marks the Crew tab badge as seen.
+  const markCrewBadgeSeen = useUIStore((s) => s.markCrewBadgeSeen);
+  useEffect(() => {
+    if (!activeCrew || !user) return;
+    if (crewTab === 'plan') markCrewBadgeSeen(activeCrew.id, { pollIds: openPollIds(polls) });
+    else if (crewTab === 'money') {
+      markCrewBadgeSeen(activeCrew.id, {
+        balanceCents: balanceCents(expenseBalances.find((b) => b.userId === user.id)?.balance),
+      });
+    }
+  }, [crewTab, activeCrew?.id, polls, expenseBalances, user?.id, markCrewBadgeSeen]);
+
   if (!user) {
     return (
       <View style={styles.screen} testID="crew-screen">
@@ -1077,6 +1092,7 @@ export default function CrewScreen() {
                       </TouchableOpacity>
                     ) : null}
                   </View>
+                  <CrewLockRow crewId={crew.id} isOwner={isOwner} />
                 </View>
               ) : null}
               {crewFestival ? (

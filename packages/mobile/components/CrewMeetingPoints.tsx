@@ -8,6 +8,7 @@ import { useCrewStore, useUIStore } from '@festie/shared/stores';
 import { COPY, MEETING_POINT_KINDS, meetingPointKind } from '@festie/shared/constants';
 import {
   meetingTimeDisplay,
+  meetingPointEditLine,
   meetAtForFestivalDay,
   festivalDayTimeOf,
   resolveFestivalTimeZone,
@@ -326,6 +327,7 @@ export default function CrewMeetingPoints({
     // 055: resolve the point's display time honoring daily recurrence.
     // Recurring → "daily 3:00 PM"; one-shot → "Sat 3:00 PM"; no meetAt → ''.
     const timeDisplay = meetingTimeDisplay(point.meet_at, point.recurs_daily, days, new Date(), timeZone);
+    const editLine = meetingPointEditLine(point, { timeZone, now: new Date() });
     return (
       <View
         key={point.id}
@@ -360,6 +362,11 @@ export default function CrewMeetingPoints({
                 {timeDisplay.label}
               </Text>
             </View>
+          ) : null}
+          {editLine ? (
+            <Text style={styles.pointEditLine} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {editLine}
+            </Text>
           ) : null}
           {!isPast && !isPending(point) ? (
             <View style={styles.comingRow}>
@@ -915,5 +922,9 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('micro'),
     color: t.colors.accent.aqua,
     flexShrink: 1,
+  },
+  pointEditLine: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
   },
 }));

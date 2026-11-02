@@ -67,6 +67,7 @@ export interface HomeBaseUpdatedIntent {
   crewId: string;
   location: string | null;
   time: string | null;
+  planB?: string | null;
 }
 
 export interface MeetingPointUpsertIntent {
@@ -212,6 +213,7 @@ export function routeHomeBaseUpdated(
     crewId: payload.crewId,
     location: payload.location,
     time: payload.time,
+    ...('planB' in payload ? { planB: payload.planB } : {}),
   };
 }
 

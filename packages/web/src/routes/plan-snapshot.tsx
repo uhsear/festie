@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { api } from '@festie/shared/services';
-import { PRIORITY_LABELS } from '@festie/shared/constants';
+import { PRIORITY_LABELS, planBLine } from '@festie/shared/constants';
 import type { Festival, FestivalDay, FestivalSet, Stage } from '@festie/shared/types';
 import { artistDisplayName, decodePlanSnapshot, formatTime, fromPickPriority } from '@festie/shared/utils';
 
@@ -91,6 +91,7 @@ export default function PlanSnapshotPage() {
 
   const count = snapshot.picks.length;
   const mp = snapshot.meetingPoint;
+  const planB = 'planB' in snapshot ? snapshot.planB : undefined;
 
   return (
     <div className="flex flex-col gap-4 px-6 py-8 max-w-[640px] mx-auto" data-testid="plan-snapshot">
@@ -113,6 +114,8 @@ export default function PlanSnapshotPage() {
           </a>
         </p>
       )}
+
+      {planB && <p className="text-[length:var(--font-size-14)] text-text-primary break-words">{planBLine(planB)}</p>}
 
       {state === 'offline' && (
         <p className="text-[length:var(--font-size-14)] text-text-secondary">

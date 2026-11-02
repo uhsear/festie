@@ -1,4 +1,4 @@
-import { CREW_ACTIVITY_LABELS } from '../constants/config';
+import { CREW_ACTIVITY_LABELS, FIND_FRIEND_COPY } from '../constants/config';
 import type { CrewMember } from '../types/domain';
 import { fmtZonedClock } from './dayOf';
 import { crewMemberName } from './polls';
@@ -35,6 +35,13 @@ export function describeCrewActivity(
       return member ? `${space}${crewMemberName(member)}` : whole;
     });
     return { verb: CREW_ACTIVITY_LABELS['expense-settled']!, detail: detail || null, action: null };
+  }
+  if (item.type === 'battery-low') {
+    // The row holds a percentage only; its time is when the low reading arrived.
+    const m = /^(\d{1,3})%$/.exec(item.detail ?? '');
+    if (!m) return { verb: CREW_ACTIVITY_LABELS['battery-low']!, detail: null, action: null };
+    const clock = fmtZonedClock(Date.parse(item.created_at), timeZone);
+    return { verb: FIND_FRIEND_COPY.batteryVerb(Number(m[1])), detail: FIND_FRIEND_COPY.batteryDetail(clock), action: null };
   }
   return { verb: CREW_ACTIVITY_LABELS[item.type] ?? item.type.replace(/[-_]/g, ' '), detail: item.detail, action: null };
 }

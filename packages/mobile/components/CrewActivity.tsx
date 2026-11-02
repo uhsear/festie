@@ -36,6 +36,7 @@ const ACTIVITY_VISUAL: Record<string, { icon: IconName; tint: Tint }> = {
   'member-left': { icon: 'exit-outline', tint: 'muted' },
   'member-kicked': { icon: 'person-remove', tint: 'coral' },
   'owner-changed': { icon: 'ribbon-outline', tint: 'amber' },
+  'battery-low': { icon: 'battery-dead-outline', tint: 'amber' },
   'poll-closed': { icon: 'checkmark-done', tint: 'green' },
   'meeting-point-updated': { icon: 'location', tint: 'aqua' },
   expense_settled: { icon: 'checkmark-done', tint: 'green' },

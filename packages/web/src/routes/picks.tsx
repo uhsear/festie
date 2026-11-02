@@ -1,5 +1,6 @@
-import { useMemo, useState, lazy, Suspense } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useLocation, useNavigate } from '@tanstack/react-router';
+import { useReducedMotion } from 'motion/react';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useFestivalStore, useAuthStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -61,6 +62,8 @@ const chipClass = (active: boolean) =>
 
 function PicksViewInner() {
   const navigate = useNavigate();
+  const hash = useLocation().hash;
+  const reducedMotion = useReducedMotion();
   const user = useAuthStore((state) => state.user);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
   const myPicks = useFestivalStore(selectMyPicks);
@@ -89,6 +92,19 @@ function PicksViewInner() {
     clashIds,
     rows,
   } = usePicksPlan();
+
+  // The clash chip on the schedule links here with #clashes. Show the clash cards, scroll to them, then drop the hash.
+  useEffect(() => {
+    if (hash.replace(/^#/, '') !== 'clashes') return;
+    setView('plan');
+    const id = window.requestAnimationFrame(() => {
+      const el = document.getElementById('clashes');
+      el?.scrollIntoView({ block: 'start', behavior: reducedMotion ? 'auto' : 'smooth' });
+      el?.focus({ preventScroll: true });
+      void navigate({ to: '/picks', hash: undefined, replace: true });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [hash, reducedMotion, navigate]);
 
   // True when the profile has any pick at all, which gates the calendar export
   // independently of the active filters.

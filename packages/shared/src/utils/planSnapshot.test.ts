@@ -5,6 +5,9 @@ import {
   PLAN_SNAPSHOT_VERSION,
   MAX_ENCODED_LENGTH,
   MAX_PICKS,
+  PLAN_SNAPSHOT_VERSION_PLAN_B,
+  PLAN_B_MAX,
+  buildHandoffSms,
   buildPlanSnapshotInput,
   type PlanSnapshotInput,
 } from './planSnapshot';
@@ -248,5 +251,92 @@ describe('buildPlanSnapshotInput', () => {
     const none = buildPlanSnapshotInput({ festival, picks: undefined, meetingPoints: undefined, nowMs: 0 });
     expect(none.meetingPoint).toBeNull();
     expect(none.input.meetingPoint).toBeUndefined();
+  });
+});
+
+describe('Plan B (snapshot v2)', () => {
+  const planBBase: PlanSnapshotInput = {
+    festivalId: 'f1',
+    festivalName: 'Fest',
+    picks: [{ setId: 's1', priority: 'must' }],
+  };
+  const enc = (o: unknown) => {
+    const bytes = new TextEncoder().encode(JSON.stringify(o));
+    return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+
+  it('v1 code without planB is byte-identical to the old envelope and decodes', () => {
+    const code = encodePlanSnapshot(planBBase);
+    expect(code).toBe(enc({ v: 1, festivalId: 'f1', festivalName: 'Fest', picks: planBBase.picks }));
+    const r = decodePlanSnapshot(code);
+    expect(r.ok && r.data.v).toBe(1);
+  });
+  it('v2 code with planB round-trips', () => {
+    const r = decodePlanSnapshot(encodePlanSnapshot({ ...planBBase, planB: 'Top of each hour' }));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.v).toBe(PLAN_SNAPSHOT_VERSION_PLAN_B);
+      expect((r.data as { planB?: string }).planB).toBe('Top of each hour');
+    }
+  });
+  it('rejects extra keys, long or empty planB, v3 and v1 with planB without throwing', () => {
+    const v2 = { v: 2, festivalId: 'f1', festivalName: 'Fest', picks: [] };
+    expect(decodePlanSnapshot(enc({ ...v2, planB: 'x', extra: 1 })).ok).toBe(false);
+    expect(decodePlanSnapshot(enc({ ...v2, planB: 'x'.repeat(PLAN_B_MAX + 1) })).ok).toBe(false);
+    expect(decodePlanSnapshot(enc({ ...v2, planB: '' })).ok).toBe(false);
+    expect(decodePlanSnapshot(enc({ ...v2, v: 3 }))).toEqual({ ok: false, error: 'unsupported snapshot version' });
+    expect(decodePlanSnapshot(enc({ ...v2, v: 1, planB: 'x' })).ok).toBe(false);
+  });
+  it('accepts planB of exactly the max length', () => {
+    const planB = 'x'.repeat(PLAN_B_MAX);
+    expect(decodePlanSnapshot(enc({ v: 2, festivalId: 'f1', festivalName: 'Fest', picks: [], planB })).ok).toBe(true);
+  });
+  it('buildPlanSnapshotInput trims, caps and drops an empty Plan B', () => {
+    const args = { festival: { id: 'f1', name: 'Fest' }, picks: undefined, meetingPoints: undefined, nowMs: 0 };
+    expect(buildPlanSnapshotInput({ ...args, planB: '  Gate 2  ' }).input.planB).toBe('Gate 2');
+    expect(buildPlanSnapshotInput({ ...args, planB: '   ' }).input.planB).toBeUndefined();
+    expect(buildPlanSnapshotInput({ ...args, planB: null }).input.planB).toBeUndefined();
+    expect(buildPlanSnapshotInput({ ...args, planB: 'y'.repeat(200) }).input.planB).toHaveLength(PLAN_B_MAX);
+  });
+});
+
+describe('buildHandoffSms', () => {
+  const mp = {
+    id: 'm1',
+    label: 'North gate',
+    latitude: 1.5,
+    longitude: 2.5,
+    meet_at: '2026-06-06T22:00:00.000Z',
+  } as unknown as CrewMeetingPoint;
+
+  it('meeting point only matches the old mobile text', () => {
+    const when = new Date(mp.meet_at as string).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    expect(buildHandoffSms({ meetingPoint: mp, festivalId: 'f1' })).toBe(
+      [
+        'Meet at: North gate',
+        'https://maps.google.com/?q=1.5,2.5',
+        `When: ${when}`,
+        'Open in Festie: https://festie.us/festival/f1',
+        '(Sent via Festie)',
+      ].join('\n'),
+    );
+  });
+  it('uses the festival time zone when given', () => {
+    expect(buildHandoffSms({ meetingPoint: mp, festivalId: null, timeZone: 'America/Los_Angeles' })).toContain('3:00 PM');
+  });
+  it('adds Plan B before the footer', () => {
+    const lines = buildHandoffSms({ meetingPoint: mp, planB: 'Top of the hour', festivalId: 'f1' }).split('\n');
+    const planLine = 'If we lose each other: Top of the hour';
+    expect(lines).toContain(planLine);
+    expect(lines.indexOf(planLine)).toBeLessThan(lines.indexOf('(Sent via Festie)'));
+  });
+  it('Plan B only gives the line, the link and the footer', () => {
+    expect(buildHandoffSms({ planB: 'Top of the hour', festivalId: 'f1' })).toBe(
+      'If we lose each other: Top of the hour\nOpen in Festie: https://festie.us/festival/f1\n(Sent via Festie)',
+    );
+  });
+  it('is empty with neither', () => {
+    expect(buildHandoffSms({ festivalId: 'f1' })).toBe('');
+    expect(buildHandoffSms({ meetingPoint: null, planB: '  ', festivalId: 'f1' })).toBe('');
   });
 });

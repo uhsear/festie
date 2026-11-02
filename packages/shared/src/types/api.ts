@@ -152,6 +152,7 @@ export interface UpdateCrewRequest {
   name?: string;
   totemName?: string;
   totemEmoji?: string;
+  inviteLocked?: boolean;
 }
 
 export interface TransferCrewRequest {

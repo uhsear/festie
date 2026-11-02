@@ -42,6 +42,7 @@ const loadGrid = () => import('./routes/grid');
 const loadFestivalMode = () => import('./routes/festival-mode');
 const loadWrap = () => import('./routes/wrap');
 const loadRate = () => import('./routes/rate');
+const loadCaught = () => import('./routes/caught');
 const loadAdmin = () => import('./routes/admin');
 const loadLogin = () => import('./routes/login');
 const loadRegister = () => import('./routes/register');
@@ -49,6 +50,7 @@ const loadFinishSignup = () => import('./routes/finish-signup');
 const loadForgot = () => import('./routes/forgot-password');
 const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
+const loadInbox = () => import('./routes/inbox');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
 const loadFriendPicks = () => import('./routes/friend-picks');
@@ -90,7 +92,9 @@ const GridView = withSkeleton(gridLazy, TimelineSkeleton);
 const FestivalModeView = withSkeleton(festivalModeLazy, FestivalModeSkeleton);
 const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
 const RateView = withSkeleton(lazyRouteComponent(loadRate), MinimalFallback);
+const CaughtView = withSkeleton(lazyRouteComponent(loadCaught), MinimalFallback);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
+const InboxView = withSkeleton(lazyRouteComponent(loadInbox), MinimalFallback);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
 const FriendPicksView = withSkeleton(lazyRouteComponent(loadFriendPicks), MinimalFallback);
 const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton);
@@ -124,7 +128,7 @@ const rootRoute = new RootRoute({
   component: AppShell,
 });
 
-// Shared by /wrap and /rate: a festival id from a push or history link, or nothing.
+// Shared by /wrap, /rate and /caught: a festival id from a push or history link, or nothing.
 const festivalSearch = (s: Record<string, unknown>): { festival?: string } => ({
   festival: typeof s.festival === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(s.festival) ? s.festival : undefined,
 });
@@ -184,6 +188,17 @@ const rateRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/rate',
   component: RateView,
+  validateSearch: festivalSearch,
+  beforeLoad: async ({ location }) => {
+    await authReady();
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
+  },
+});
+
+const caughtRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/caught',
+  component: CaughtView,
   validateSearch: festivalSearch,
   beforeLoad: async ({ location }) => {
     await authReady();
@@ -291,6 +306,16 @@ const accountRoute = new Route({
   },
 });
 
+const inboxRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/inbox',
+  component: InboxView,
+  beforeLoad: async ({ location }) => {
+    await authReady();
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
+  },
+});
+
 // /compare — side-by-side schedule compare with your crew.
 // Ported from the legacy `renderCrewSchedule` view in public/views/crew.js.
 const compareRoute = new Route({
@@ -370,7 +395,9 @@ const routeTree = rootRoute.addChildren([
   festivalModeRoute,
   wrapRoute,
   rateRoute,
+  caughtRoute,
   accountRoute,
+  inboxRoute,
   meRoute,
   compareRoute,
   setRoute,

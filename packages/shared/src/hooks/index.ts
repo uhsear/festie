@@ -38,3 +38,6 @@ export * from './useSignedInDevices';
 export * from './useAlsoPicked';
 export * from './useFestivalReady';
 export * from './useSetMove';
+export * from './useNudge';
+export * from './useAlsoPlays';
+export * from './useViewAs';

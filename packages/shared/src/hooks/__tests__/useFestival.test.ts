@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useFestival } from '../useFestival';
 import { useFestivalDataStore } from '../../stores/festivalDataStore';
 import { useFestivalUIStore } from '../../stores/festivalUIStore';
+import { useCrewStore } from '../../stores/crewStore';
 import { STAGE_COLOR_FALLBACK } from '../../utils/stageColor';
 
 vi.mock('../../services/api', () => ({
@@ -54,7 +55,9 @@ function resetStores() {
     activeStages: [],
     searchQuery: '',
     onlyMine: false,
+    viewAsProfileId: null,
   });
+  useCrewStore.setState({ crewMembers: [] });
 }
 
 describe('useFestival hook', () => {
@@ -219,6 +222,53 @@ describe('useFestival hook', () => {
       useFestivalUIStore.setState({ selectedDay: 0, activeStages: ['s1'], searchQuery: 'lane' });
       const { result } = renderHook(() => useFestival());
       expect(result.current.getFilteredSets()).toHaveLength(1);
+    });
+  });
+
+  describe('getFilteredSets with View as', () => {
+    const profile = (id: string, userId: string, name: string, picks: Record<string, 'must'>) => ({
+      id, userId, festivalId: 'f1', name, picks, notes: {}, updatedAt: '',
+    });
+    const me = profile('p1', 'u1', 'Me', { 'set-1': 'must' });
+    const ana = profile('p2', 'u2', 'Ana', { 'set-2': 'must' });
+    const empty = profile('p3', 'u3', 'Bo', {});
+    const stranger = profile('p4', 'u4', 'Cy', { 'set-2': 'must' });
+
+    beforeEach(() => {
+      useFestivalDataStore.setState({
+        sets: [set1, set2, set3],
+        days: [day1, day2],
+        stages: [stage1, stage2],
+        currentProfile: me,
+        allProfiles: [me, ana, empty, stranger],
+      });
+      useCrewStore.setState({ crewMembers: [{ userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' }] });
+    });
+
+    it.each([false, true])('shows only the crew mate picks for the day (onlyMine %s)', (onlyMine) => {
+      useFestivalUIStore.setState({ selectedDay: 0, onlyMine, viewAsProfileId: 'p2' });
+      const { result } = renderHook(() => useFestival());
+      expect(result.current.getFilteredSets().map((s) => s.id)).toEqual(['set-2']);
+    });
+
+    it('clearing View as restores the old list', () => {
+      useFestivalUIStore.setState({ selectedDay: 0, viewAsProfileId: 'p2' });
+      const { result } = renderHook(() => useFestival());
+      expect(result.current.getFilteredSets()).toHaveLength(1);
+      act(() => useFestivalUIStore.getState().setViewAs(null));
+      expect(result.current.getFilteredSets().map((s) => s.id)).toEqual(['set-1', 'set-2']);
+    });
+
+    it('a crew mate with no picks gives an empty day, not the whole lineup', () => {
+      useFestivalUIStore.setState({ selectedDay: 0, viewAsProfileId: 'p3' });
+      const { result } = renderHook(() => useFestival());
+      expect(result.current.getFilteredSets()).toEqual([]);
+    });
+
+    it('a forced id for someone outside the crew filters nothing', () => {
+      useFestivalUIStore.setState({ selectedDay: 0, viewAsProfileId: 'p4' });
+      const { result } = renderHook(() => useFestival());
+      expect(result.current.getFilteredSets()).toHaveLength(2);
     });
   });
 

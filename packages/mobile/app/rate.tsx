@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { api, markCaught } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
@@ -81,6 +81,19 @@ export default function RateScreen() {
 
   const header = <Stack.Screen options={{ title: 'Rate your night', headerShown: true }} />;
 
+  const fullListLink = festivalId ? (
+    <TouchableOpacity
+      onPress={() => router.push({ pathname: '/caught', params: { festival: festivalId } })}
+      style={styles.fullList}
+      accessibilityRole="link"
+      accessibilityLabel="See the full list"
+    >
+      <Text style={styles.fullListText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        See the full list
+      </Text>
+    </TouchableOpacity>
+  ) : null;
+
   if (!festivalId) {
     return (
       <View style={styles.screen}>
@@ -131,6 +144,7 @@ export default function RateScreen() {
           title="Nothing to rate right now"
           message="Sets you picked show up here after they end."
         />
+        {fullListLink}
       </View>
     );
   }
@@ -152,6 +166,7 @@ export default function RateScreen() {
                 : router.replace('/(tabs)/picks'),
           }}
         />
+        {fullListLink}
       </View>
     );
   }
@@ -161,6 +176,7 @@ export default function RateScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {header}
+      {fullListLink}
       <Text style={styles.progress} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {`${index + 1} of ${data.sets.length}`}
       </Text>
@@ -245,6 +261,16 @@ const useStyles = makeStyles((t) => ({
   },
   caughtButton: {
     flex: 1,
+  },
+  fullList: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullListText: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
+    textDecorationLine: 'underline',
   },
   rating: {
     marginVertical: t.spacing[3],

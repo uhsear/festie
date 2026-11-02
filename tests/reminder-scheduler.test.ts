@@ -230,6 +230,74 @@ describe('reminder-scheduler: processProfileReminders (via tick)', () => {
     assert.equal(notifyFn.mock.calls.length, 1, 'second tick must not notify again');
   });
 
+  it('treats a no_tokens reminder as delivered (the inbox row is written) and does not retry', async () => {
+    const now = Date.now();
+    const setStartMs = now + 15 * 60000 + 60000; // 16 min from now (fireAt ≈ now+60s, within 65s window even with HH:MM truncation)
+
+    const notifyFn = mock.fn(async () => ({ sent: 0, reason: 'no_tokens' }));
+    const prefsFn = mock.fn(async () => null);
+
+    // computeSetStartMs parses `${date}T${HH:MM}:00` as LOCAL time.
+    // Use local date and local hours/minutes consistently so the computed
+    // timestamp matches the expected setStartMs (within 1 minute due to
+    // HH:MM truncation).
+    // A start before 06:00 belongs to the previous logical day, so date the day row
+    // on that day; otherwise the scheduler rolls the start 24 hours forward.
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
+    const localDateStr = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
+    const localHours = startClock.getHours();
+    const localMinutes = startClock.getMinutes();
+
+    // Build a festival query chain
+    let callIndex = 0;
+    const queryFn = mock.fn(async (sql: string, params: any) => {
+      if (sql.includes('festivals')) {
+        return { rows: [{ id: 'fest-1', name: 'Test Fest' }] };
+      }
+      if (sql.includes('festival_days')) {
+        return { rows: [{ day_index: 0, label: 'Day 1', date: localDateStr }] };
+      }
+      if (sql.includes('festival_stages')) {
+        return { rows: [{ id: 'stage-1', name: 'Main Stage' }] };
+      }
+      if (sql.includes('festival_sets')) {
+        const startTime = `${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}`;
+        return {
+          rows: [{
+            id: 'set-1', day_index: 0, artist: 'DJ Alpha',
+            artists: null, stage_id: 'stage-1',
+            startTime, endTime: '23:00',
+          }],
+        };
+      }
+      if (sql.includes('festival_profiles')) {
+        return {
+          rows: [{
+            id: 'fp-1',
+            userId: 'user-1',
+            remindersJson: JSON.stringify({ 'set-1': 15 }),
+            picksJson: '{}',
+          }],
+        };
+      }
+      return { rows: [] };
+    });
+
+    const deps = makeDeps({
+      pool: { query: queryFn },
+      stores: {
+        notificationPrefs: { get: prefsFn },
+      },
+      notificationService: { send: notifyFn },
+    });
+
+    const scheduler = createReminderScheduler(deps);
+    await scheduler.tick();
+    await scheduler.tick();
+    assert.equal(notifyFn.mock.calls.length, 1, 'second tick must not notify again');
+  });
+
   it('skips reminders outside the fire window', async () => {
     const now = Date.now();
     const setStartMs = now + 2 * 60 * 60000; // 2 hours from now
@@ -317,7 +385,7 @@ describe('reminder-scheduler: processProfileReminders (via tick)', () => {
     const now = Date.now();
     const setStartMs = now + 15 * 60000 + 60000; // 16 min from now (fireAt ≈ now+60s, within 65s window)
 
-    const notifyFn = mock.fn(async () => ({ sent: 0, reason: 'no_tokens' }));
+    const notifyFn = mock.fn(async () => ({ sent: 0, localCovered: 0, staleRemoved: 0 }));
     const prefsFn = mock.fn(async () => null);
 
     // A start before 06:00 belongs to the previous logical day, so date the day row

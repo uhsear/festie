@@ -99,4 +99,41 @@ describe('HistorySection', () => {
     await screen.findByText('No festival history yet');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  describe('seen most', () => {
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ artist: `Artist ${i}`, festivals: 2 }));
+
+    it('renders rows with festival counts', async () => {
+      mocks.lifetime = { totals, byFestival: [], topArtists: [], seenMost: rows(2) };
+      renderSection();
+      expect(await screen.findByRole('heading', { name: "Artists you've seen most" })).toBeInTheDocument();
+      expect(screen.getByRole('listitem', { name: 'Artist 0, 2 festivals' })).toBeInTheDocument();
+      expect(screen.getAllByText('2 festivals')).toHaveLength(2);
+    });
+
+    it('caps at 5 rows', async () => {
+      mocks.lifetime = { totals, byFestival: [], topArtists: [], seenMost: rows(8) };
+      renderSection();
+      expect(await screen.findAllByRole('listitem')).toHaveLength(5);
+    });
+
+    it('is absent when empty or missing', async () => {
+      mocks.lifetime = { totals, byFestival: [], topArtists: [], seenMost: [] };
+      const { unmount } = renderSection();
+      await screen.findByText('Festivals');
+      expect(screen.queryByText("Artists you've seen most")).not.toBeInTheDocument();
+      unmount();
+      mocks.lifetime = { totals, byFestival: [], topArtists: [] };
+      renderSection();
+      await screen.findByText('Festivals');
+      expect(screen.queryByText("Artists you've seen most")).not.toBeInTheDocument();
+    });
+
+    it('shows under the empty state when nothing is rated', async () => {
+      mocks.lifetime = { totals: { ...totals, totalRated: 0 }, byFestival: [], topArtists: [], seenMost: rows(1) };
+      renderSection();
+      expect(await screen.findByText('No festival history yet')).toBeInTheDocument();
+      expect(screen.getByText('Artist 0')).toBeInTheDocument();
+    });
+  });
 });

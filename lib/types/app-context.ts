@@ -184,6 +184,7 @@ export interface CrewNotify {
     userIds: string[];
     text: string;
     kind: 'member' | 'poll';
+    type?: 'crew_update' | 'crew_nudge';
   }): Promise<void>;
   flushAll(): Promise<void>;
 }

@@ -14,6 +14,9 @@ import {
   toggleGenreFilter,
   toggleHiddenDay,
   toggleStageFilter,
+  viewAsButtonLabel,
+  viewAsPicksLabel,
+  viewAsTarget,
   visibleDayIndexes,
 } from './scheduleFilters';
 import type { FestivalSet, Stage } from '../types/domain';
@@ -55,6 +58,43 @@ describe('filterScheduleSets', () => {
     expect(filterScheduleSets(sets, { ...base, onlyMine: true, picks: undefined })).toHaveLength(4);
   });
   it('hasAnyPick ignores falsy values', () => expect(hasAnyPick({ x: null })).toBe(false));
+  it('View as keeps only the viewed picks and ignores My picks', () => {
+    const viewAsPicks = { '2': 'must' as const };
+    expect(ids(filterScheduleSets(sets, { ...base, viewAsPicks }))).toEqual(['2']);
+    expect(ids(filterScheduleSets(sets, { ...base, onlyMine: true, picks: { '4': 'must' }, viewAsPicks }))).toEqual([
+      '2',
+    ]);
+  });
+  it('View as with no picks shows nothing, not the whole day', () => {
+    expect(filterScheduleSets(sets, { ...base, viewAsPicks: {} })).toEqual([]);
+  });
+  it('View as still applies stage and search', () => {
+    const viewAsPicks = { '1': 'must' as const, '2': 'must' as const };
+    expect(ids(filterScheduleSets(sets, { ...base, activeStages: ['B'], viewAsPicks }))).toEqual(['2']);
+    expect(ids(filterScheduleSets(sets, { ...base, query: 'daft', viewAsPicks }))).toEqual(['1']);
+  });
+});
+
+describe('viewAsTarget', () => {
+  const profiles = [
+    { id: 'p1', userId: 'u1', name: ' Ana ', picks: { '1': 'must' as const } },
+    { id: 'p2', userId: 'u2', name: '  ', picks: undefined as unknown as Record<string, 'must'> },
+    { id: 'p3', userId: 'u3', name: 'Stranger', picks: {} },
+  ];
+  const crew = new Set(['u1', 'u2']);
+  it('returns the crew member with a trimmed name and picks', () =>
+    expect(viewAsTarget(profiles, 'p1', crew)).toEqual({ profileId: 'p1', name: 'Ana', picks: { '1': 'must' } }));
+  it('falls back to "Crew member" and empty picks', () =>
+    expect(viewAsTarget(profiles, 'p2', crew)).toEqual({ profileId: 'p2', name: 'Crew member', picks: {} }));
+  it('is null for no id, an unknown id, or someone outside the crew', () => {
+    expect(viewAsTarget(profiles, null, crew)).toBeNull();
+    expect(viewAsTarget(profiles, 'gone', crew)).toBeNull();
+    expect(viewAsTarget(profiles, 'p3', crew)).toBeNull();
+  });
+  it('labels', () => {
+    expect(viewAsButtonLabel('Ana')).toBe('View as Ana');
+    expect(viewAsPicksLabel('Ana')).toBe("Ana's picks");
+  });
 });
 
 describe('scheduleEmptyReason', () => {
@@ -67,6 +107,21 @@ describe('scheduleEmptyReason', () => {
     expect(scheduleEmptyReason({ ...f, stageFilterActive: true })).toBe('stages');
     expect(scheduleEmptyReason({ ...f, onlyMine: true })).toBe('day');
     expect(scheduleEmptyReason({ ...f, query: '  ' })).toBe('day');
+  });
+  it('puts View as right after search', () => {
+    const g = { ...f, stageFilterActive: true, viewAsName: 'Ana' };
+    expect(scheduleEmptyReason(g)).toBe('viewAs');
+    expect(scheduleEmptyReason({ ...g, onlyMine: true, hasAnyPick: true })).toBe('viewAs');
+    expect(scheduleEmptyReason({ ...g, query: 'x' })).toBe('search');
+  });
+  it('has View as copy', () => {
+    expect(scheduleEmptyCopy('viewAs', 'Saturday', 'Ana')).toEqual({
+      title: 'Ana has no picks on Saturday',
+      message: "Show everyone's sets, or pick another day.",
+      actionLabel: 'Show everyone',
+    });
+    expect(scheduleEmptyCopy('viewAs', 'Saturday').title).toBe('Crew member has no picks on Saturday');
+    expect(scheduleEmptyCopy('stages', 'Sunday', 'Ana').title).toBe('Nothing on these stages on Sunday');
   });
   it('has copy for each reason', () => {
     expect(scheduleEmptyCopy('stages', 'Sunday').title).toBe('Nothing on these stages on Sunday');
@@ -100,6 +155,11 @@ describe('scheduleResultsSummary', () => {
     expect(scheduleResultsSummary({ count: 2, onlyMine: false, activeStageCount: 1 })).toBe('2 sets · 1 stage');
     expect(scheduleResultsSummary({ count: 3, onlyMine: false, activeStageCount: 0, activeGenreCount: 2 })).toBe(
       '3 sets · 2 genres',
+    );
+  });
+  it('names the viewed crew mate instead of my picks', () => {
+    expect(scheduleResultsSummary({ count: 3, onlyMine: true, activeStageCount: 0, viewAsName: 'Ana' })).toBe(
+      "3 sets · Ana's picks",
     );
   });
 });

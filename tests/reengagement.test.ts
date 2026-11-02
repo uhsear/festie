@@ -764,3 +764,34 @@ describe('createReengagementTriggers.sendSetTimesOut', () => {
     assert.equal(await emailAttempts({ lineupDrops: true }), 1);
   });
 });
+
+// =====================================================================
+// T47 inbox rows carry data.eventKey, so existsForEvents (which matches any
+// notification_log row of the type) now counts a push held by quiet hours, or
+// one to a user with no device, as already sent. Before, such a user had no
+// row and was retried on the next run.
+// =====================================================================
+describe('re-engagement dedup sees the inbox row', () => {
+  it('a lineup_drop held by quiet hours still logs an inbox row with the eventKey', async () => {
+    const inserted: any[] = [];
+    const h = new Date().getUTCHours();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const stores = {
+      notificationPrefs: {
+        get: async () => ({ lineupDrops: 1, dndStart: `${pad((h + 23) % 24)}:00`, dndEnd: `${pad((h + 1) % 24)}:59`, dndTimeZone: 'UTC' }),
+      },
+      deviceTokens: { listByUser: async () => [{ token: 'a'.repeat(40), platform: 'android' }], unregister: async () => {} },
+      notificationCounts: { getByUser: async () => [], increment: async () => {} },
+      notificationLog: { insert: async (row: any) => void inserted.push(row) },
+    };
+    const messaging = { send: async () => 'msg-id', sendEach: async () => ({ responses: [] }) };
+    const svc = createSendService({ stores, config, log, messaging, retryQueue: { enqueue() {} } });
+
+    const r = await svc.send({ userId: 'u1', type: 'lineup_drop', title: 't', body: 'b', data: { eventKey: 'lineup:f2' } });
+
+    assert.equal(r.reason, 'dnd_active');
+    assert.equal(inserted.length, 1);
+    assert.equal(inserted[0].platform, 'inbox');
+    assert.equal(JSON.parse(inserted[0].dataJson).eventKey, 'lineup:f2');
+  });
+});

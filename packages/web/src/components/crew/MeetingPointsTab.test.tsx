@@ -278,6 +278,40 @@ describe('MeetingPointsTab', () => {
     expect(screen.queryByRole('button', { name: 'Edit meeting point' })).not.toBeInTheDocument();
   });
 
+  it('sends only the label on a rename-only edit', async () => {
+    const user = userEvent.setup();
+    const meetAt = '2026-06-01T15:00:00.000Z';
+    setQuery({ data: [{ ...POINT, meet_at: meetAt, latitude: 1, longitude: 2 }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" isOwner />);
+    await user.click(screen.getByRole('button', { name: 'Edit meeting point' }));
+    await user.clear(screen.getByLabelText('Label'));
+    await user.type(screen.getByLabelText('Label'), 'Renamed');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(updateMutate).toHaveBeenCalledWith({ id: 'mp1', payload: { label: 'Renamed' } });
+  });
+
+  it('sends nothing when an edit is saved untouched', async () => {
+    const user = userEvent.setup();
+    setQuery({ data: [{ ...POINT, meet_at: '2026-06-01T15:00:00.000Z' }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" isOwner />);
+    await user.click(screen.getByRole('button', { name: 'Edit meeting point' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(updateMutate).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Label')).not.toBeInTheDocument();
+  });
+
+  it('shows the edit line with and without an editor name', () => {
+    setQuery({
+      data: [
+        { ...POINT, id: 'a', edit_was: { location: 'North gate' }, editor_name: 'ana' },
+        { ...POINT, id: 'b', label: 'Other', edit_was: { location: 'South gate' }, editor_name: null },
+      ],
+    });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText('Edited by ana, was North gate')).toBeInTheDocument();
+    expect(screen.getByText('Edited, was South gate')).toBeInTheDocument();
+  });
+
   it('Directions opens the coordinate URL for a pinned point', async () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     setQuery({ data: [{ ...POINT, latitude: 28.5, longitude: -81.4 }] });

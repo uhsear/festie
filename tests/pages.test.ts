@@ -215,6 +215,124 @@ describe('pages: /join/:code', () => {
     createPageRoutes(inviteDeps({ rateCalls }));
     assert.ok(rateCalls.some((c) => c.key === 'crew-invite-page' && c.max === 30));
   });
+
+  it('returns 403 with the locked message for a locked crew', async () => {
+    const res = await get(inviteDeps({ crew: { ...CREW, inviteLocked: true } }), 'ABC123');
+    assert.equal(res._status, 403);
+    assert.ok(res._sent.includes("This invite doesn't work"));
+    assert.ok(res._sent.includes('This crew isn&#39;t taking new members.'));
+    assert.ok(!res._sent.includes('Bass Gang'));
+  });
+
+  it('links Save for later on a dated invite page', async () => {
+    const res = await get(inviteDeps({ crew: CREW }), 'abc123');
+    assert.ok(res._sent.includes('href="https://festie.us/join/ABC123/save.ics"'));
+  });
+});
+
+describe('pages: /join/:code/save.ics', () => {
+  const CREW = { id: 'c1', name: 'Bass, Gang', festivalId: 'fest-1', maxMembers: 8, inviteExpiresAt: null };
+  const MEMBERS = [
+    { userId: 'u-1', role: 'owner', username: 'ana', name: 'Ana Lopez' },
+    { userId: 'u-2', role: 'member', username: 'ben', name: 'Ben Ortiz' },
+  ];
+  const DATED = { id: 'fest-1', name: 'EDC Orlando', days: [{ date: '2026-11-08' }, { date: '2026-11-06' }] };
+
+  function icsDeps(opts: { crew?: any; festival?: any; throws?: boolean; rateCalls?: any[] } = {}) {
+    return buildDeps({
+      stores: {
+        crews: {
+          getByInviteCode: mock.fn(async () => {
+            if (opts.throws) throw new Error('db down');
+            return opts.crew ?? null;
+          }),
+          getExpiredByInviteCode: mock.fn(async () => null),
+          getMembers: mock.fn(async () => MEMBERS),
+        },
+      },
+      getFestivalById: mock.fn(async () => opts.festival ?? DATED),
+      rateLimit: (max: any, key: any) => {
+        opts.rateCalls?.push({ max, key });
+        return (_req: any, _res: any, next: any) => next();
+      },
+    });
+  }
+
+  async function get(deps: any, code: string) {
+    const handler = getHandler(createPageRoutes(deps), '/join/:code/save.ics');
+    const res = mockRes();
+    await handler(mockReq({ params: { code } }), res);
+    return res;
+  }
+
+  it('is registered after /join/:code and before the SPA catch-all', () => {
+    const paths = createPageRoutes(icsDeps())._routes.map((r: any) => r.path);
+    const ics = paths.indexOf('/join/:code/save.ics');
+    assert.ok(ics > paths.indexOf('/join/:code'));
+    assert.ok(ics < paths.indexOf('/{*splat}'));
+  });
+
+  it('returns the calendar with download headers', async () => {
+    const res = await get(icsDeps({ crew: CREW }), 'abc123');
+    assert.equal(res._status, 200);
+    assert.equal(res._redirectUrl, null);
+    assert.equal(res._headers['Content-Type'], 'text/calendar; charset=utf-8');
+    assert.equal(res._headers['Content-Disposition'], 'attachment; filename="festie-invite.ics"');
+    assert.equal(res._headers['Cache-Control'], 'no-store');
+    const ics = res._sent.replace(/\r\n /g, '');
+    assert.equal(ics.split('BEGIN:VEVENT').length - 1, 1);
+    assert.ok(ics.includes('DTSTART;VALUE=DATE:20261106'));
+    assert.ok(ics.includes('DTEND;VALUE=DATE:20261109'));
+    assert.ok(ics.includes('https://festie.us/join/ABC123'));
+    assert.ok(ics.includes('Bass\\, Gang'));
+  });
+
+  it('carries no owner name, member name or user id', async () => {
+    const res = await get(icsDeps({ crew: CREW }), 'ABC123');
+    const ics = res._sent.replace(/\r\n /g, '');
+    for (const leak of ['Ana Lopez', 'Ben Ortiz', 'ana', 'ben', 'u-1', 'u-2']) {
+      assert.ok(!ics.includes(leak), `ICS leaks ${leak}`);
+    }
+  });
+
+  it('redirects to the invite page for an invalid code', async () => {
+    const res = await get(icsDeps(), 'NOPE99');
+    assert.equal(res._status, 302);
+    assert.equal(res._redirectUrl, '/join/NOPE99');
+  });
+
+  it('redirects to / when nothing is left of the code', async () => {
+    const res = await get(icsDeps({ crew: CREW }), '<>');
+    assert.equal(res._status, 302);
+    assert.equal(res._redirectUrl, '/');
+  });
+
+  it('redirects for a locked crew', async () => {
+    const res = await get(icsDeps({ crew: { ...CREW, inviteLocked: true } }), 'ABC123');
+    assert.equal(res._status, 302);
+    assert.equal(res._redirectUrl, '/join/ABC123');
+    assert.equal(res._headers['Content-Type'], undefined);
+  });
+
+  it('redirects when the festival has no dated days', async () => {
+    const res = await get(icsDeps({ crew: CREW, festival: { id: 'fest-1', name: 'EDC Orlando', days: [] } }), 'ABC123');
+    assert.equal(res._status, 302);
+    assert.equal(res._redirectUrl, '/join/ABC123');
+  });
+
+  it('logs and redirects when the store throws', async () => {
+    const deps: any = icsDeps({ throws: true });
+    const res = await get(deps, 'ABC123');
+    assert.equal(res._status, 302);
+    assert.equal(res._redirectUrl, '/join/ABC123');
+    assert.equal((deps.log.error.mock.calls[0] as any).arguments[0], 'crew invite ics failed');
+  });
+
+  it('applies the crew-invite-page rate limit', () => {
+    const rateCalls: any[] = [];
+    createPageRoutes(icsDeps({ rateCalls }));
+    assert.equal(rateCalls.filter((c) => c.key === 'crew-invite-page' && c.max === 30).length, 2);
+  });
 });
 
 const EXPIRED = '/forgot-password?expired=1';

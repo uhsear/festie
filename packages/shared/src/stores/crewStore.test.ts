@@ -81,6 +81,29 @@ describe('crewStore', () => {
     });
   });
 
+  describe('crew lock and Plan B', () => {
+    it('setCrewLocked merges inviteLocked into activeCrew and crews', async () => {
+      useCrewStore.setState({ crews: [mockCrew], activeCrew: mockCrew });
+      vi.mocked(api.put).mockResolvedValueOnce({ ...mockCrew, inviteLocked: true });
+      const crew = await useCrewStore.getState().setCrewLocked('crew-1', true);
+      expect(api.put).toHaveBeenCalledWith('/crews/crew-1', { inviteLocked: true });
+      expect(crew.inviteLocked).toBe(true);
+      expect(useCrewStore.getState().activeCrew?.inviteLocked).toBe(true);
+      expect(useCrewStore.getState().crews[0]?.inviteLocked).toBe(true);
+    });
+
+    it('applyHomeBaseUpdate keeps Plan B without a planB key and clears it on null', () => {
+      const withPlanB = { ...mockCrew, homeBasePlanB: 'Top of the hour' };
+      useCrewStore.setState({ crews: [withPlanB], activeCrew: withPlanB });
+      useCrewStore.getState().applyHomeBaseUpdate('crew-1', { location: 'Gate', time: null });
+      expect(useCrewStore.getState().activeCrew?.homeBasePlanB).toBe('Top of the hour');
+      expect(useCrewStore.getState().crews[0]?.homeBasePlanB).toBe('Top of the hour');
+      useCrewStore.getState().applyHomeBaseUpdate('crew-1', { location: 'Gate', time: null, planB: null });
+      expect(useCrewStore.getState().activeCrew?.homeBasePlanB).toBeNull();
+      expect(useCrewStore.getState().crews[0]?.homeBasePlanB).toBeNull();
+    });
+  });
+
   describe('loadCrews', () => {
     it('sets crewLoading true then false on success', async () => {
       vi.mocked(api.get).mockResolvedValueOnce([mockCrew]);
