@@ -120,12 +120,78 @@ async function restorePicksBatch(client: any, pickRows: any[], newSetIds: Set<st
   );
 }
 
-/** Batch-restore ratings mapped to new set IDs by (artist, start_time). */
-async function restoreRatingsBatch(client: any, ratingRows: any[], setIdentityMap: Map<string, string>) {
+/** Read a festival's per-set notes and caught marks before its sets are deleted. */
+async function readSetNotesAndCaught(client: any, festivalId: string) {
+  const notes = await client.query(
+    `
+  SELECT
+    n.profile_id,
+    n.set_id,
+    n.text
+  FROM
+    festival_profile_notes n
+    JOIN festival_sets s ON s.id = n.set_id
+  WHERE
+    s.festival_id = $1
+`,
+    [festivalId],
+  );
+  const caught = await client.query(
+    `
+  SELECT
+    c.user_id,
+    c.set_id,
+    c.caught,
+    c.updated_at
+  FROM
+    set_caught c
+    JOIN festival_sets s ON s.id = c.set_id
+  WHERE
+    s.festival_id = $1
+`,
+    [festivalId],
+  );
+  return { notes: notes.rows, caught: caught.rows };
+}
+
+/** Batch-restore notes and caught marks whose set ID survives the save. */
+async function restoreNotesAndCaughtBatch(client: any, kept: { notes: any[]; caught: any[] }, newSetIds: Set<string>) {
+  const notes = kept.notes
+    .filter((n: any) => newSetIds.has(n.set_id))
+    .map((n: any) => [n.profile_id, n.set_id, n.text]);
+  if (notes.length > 0) {
+    const { clause, params } = buildMultiInsert(notes);
+    await client.query(
+      `INSERT INTO festival_profile_notes (profile_id, set_id, text) VALUES ${clause} ON CONFLICT DO NOTHING`,
+      params,
+    );
+  }
+  const caught = kept.caught
+    .filter((c: any) => newSetIds.has(c.set_id))
+    .map((c: any) => [c.user_id, c.set_id, c.caught, c.updated_at]);
+  if (caught.length > 0) {
+    const { clause, params } = buildMultiInsert(caught);
+    await client.query(
+      `INSERT INTO set_caught (user_id, set_id, caught, updated_at) VALUES ${clause} ON CONFLICT DO NOTHING`,
+      params,
+    );
+  }
+}
+
+/**
+ * Batch-restore ratings. A rating stays on its set ID when that ID survives, so a
+ * moved set keeps it; otherwise it maps to a new set by (artist, start_time).
+ */
+async function restoreRatingsBatch(
+  client: any,
+  ratingRows: any[],
+  newSetIds: Set<string>,
+  setIdentityMap: Map<string, string>,
+) {
   const mapped: any[][] = [];
   for (const r of ratingRows) {
     const key = `${r.artist}|${r.start_time}`;
-    const newSetId = setIdentityMap.get(key);
+    const newSetId = newSetIds.has(r.set_id) ? r.set_id : setIdentityMap.get(key);
     if (newSetId) {
       mapped.push([r.user_id, newSetId, r.rating, r.note, r.created_at, r.updated_at]);
     }
@@ -139,8 +205,8 @@ async function restoreRatingsBatch(client: any, ratingRows: any[], setIdentityMa
 }
 
 /**
- * Preserve picks and ratings, delete old child rows, batch-insert new
- * days/sets, then restore picks and ratings. Used by replaceAll and update.
+ * Preserve picks, ratings, notes, and caught marks, delete old child rows,
+ * batch-insert new days/sets, then restore them. Used by replaceAll and update.
  */
 async function replaceChildRows(client: any, festivalId: string, children: any) {
   const { dayRows, setRows, newSetIds, setIdentityMap } = children;
@@ -166,6 +232,7 @@ async function replaceChildRows(client: any, festivalId: string, children: any) 
     `
   SELECT
     r.user_id,
+    r.set_id,
     r.rating,
     r.note,
     r.created_at,
@@ -196,6 +263,13 @@ async function replaceChildRows(client: any, festivalId: string, children: any) 
 `,
     [festivalId],
   );
+  const keptNotesAndCaught = await readSetNotesAndCaught(client, festivalId);
+
+  // festival_profile_notes.set_id is ON DELETE NO ACTION, so notes must go before their sets.
+  await client.query(
+    'DELETE FROM festival_profile_notes WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
+    [festivalId],
+  );
   await client.query(
     `
   DELETE FROM festival_profile_picks
@@ -220,7 +294,8 @@ async function replaceChildRows(client: any, festivalId: string, children: any) 
 
   // Restore picks and ratings
   await restorePicksBatch(client, existingPicks.rows, newSetIds);
-  await restoreRatingsBatch(client, existingRatings.rows, setIdentityMap);
+  await restoreRatingsBatch(client, existingRatings.rows, newSetIds, setIdentityMap);
+  await restoreNotesAndCaughtBatch(client, keptNotesAndCaught, newSetIds);
 }
 
 export default function createFestivalsStore(pool: Pool, utils: any) {
