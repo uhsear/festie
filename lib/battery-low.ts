@@ -37,7 +37,7 @@ export async function noteBatteryLevel(
     const ok = await deps.redis.set(`loc:battlow:${fix.crewId}:${fix.userId}`, '1', 'PX', ttl, 'NX');
     if (ok !== 'OK') return false;
     await logCrewActivity(
-      { stores: deps.stores, emitter: deps.emitter },
+      { stores: deps.stores, emitter: deps.emitter, log: deps.log },
       { crewId: fix.crewId, userId: fix.userId, type: 'battery-low', detail: `${pct}%` },
     );
     return true;

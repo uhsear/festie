@@ -239,13 +239,18 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     // Join on connect AND immediately (the socket may already be connected when
     // this effect runs, in which case 'connect' won't fire again).
     const joinId = getActiveCrewId();
+    // A 'connect' on a socket that was connected before is a reconnect: crew
+    // events sent during the drop are lost, so the sink re-reads the lists.
+    let connectedBefore = socket.connected;
     const handleConnect = () => {
       if (!joinRoom) return;
       const id = getActiveCrewId();
       if (id) {
         socket.emit('join:crew', { _v: 1, crewId: id }, () => {});
         sink.onSosResync?.(id);
+        if (connectedBefore) sink.onReconnectResync?.(id);
       }
+      connectedBefore = true;
     };
     socket.on('connect', handleConnect);
     if (joinRoom && joinId && socket.connected) {

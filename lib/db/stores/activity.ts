@@ -1,15 +1,15 @@
 import { randomUUID } from 'crypto';
 import type { Pool } from 'pg';
 
-/** Write a feed row, then push it to the crew room. Never throws: a feed failure must not fail the request. */
+/** Write a feed row, then push it to the crew room. Never throws: a feed failure is logged and must not fail the request. */
 export function logCrewActivity(
-  { stores, emitter }: any,
+  { stores, emitter, log }: any,
   entry: { crewId: string; userId: string; type: string; detail?: string | null },
 ) {
   return Promise.resolve()
     .then(() => stores.activity.log(entry))
     .then((id: string) => emitter?.crewActivityLogged({ crewId: entry.crewId, item: { id, ...entry } }))
-    .catch(() => {});
+    .catch((err: any) => log?.warn('crew activity log failed', { crewId: entry.crewId, type: entry.type, error: err?.message }));
 }
 
 export function createActivityStore(pool: Pool) {

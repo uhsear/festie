@@ -571,3 +571,52 @@ describe('reminder-scheduler: must-see reminders and set links', () => {
     assert.equal(calls[0].data.deepLink, 'https://example.test/set/set-1');
   });
 });
+
+describe('reminder-scheduler: overlapping ticks', () => {
+  it('skips a tick while the previous one is still running, so a due reminder is sent once', async () => {
+    const now = Date.now();
+    const setStartMs = now + 16 * 60000;
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
+    const date = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
+    const startTime = `${String(startClock.getHours()).padStart(2, '0')}:${String(startClock.getMinutes()).padStart(2, '0')}`;
+    const queryFn = mock.fn(async (sql: string) => {
+      if (sql.includes('festival_days')) return { rows: [{ day_index: 0, label: 'Day 1', date }] };
+      if (sql.includes('festival_stages')) return { rows: [] };
+      if (sql.includes('festival_sets')) {
+        return { rows: [{ id: 'set-1', day_index: 0, artist: 'DJ Alpha', artists: null, stage_id: null, startTime }] };
+      }
+      if (sql.includes('festival_profiles')) {
+        return { rows: [{ id: 'fp-1', userId: 'user-1', remindersJson: { 'set-1': 15 }, picksJson: '{}' }] };
+      }
+      if (sql.includes('festivals')) return { rows: [{ id: 'fest-1', name: 'Test Fest' }] };
+      return { rows: [] };
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let entered!: () => void;
+    const notifyEntered = new Promise<void>((resolve) => { entered = resolve; });
+    const notifyFn = mock.fn(async () => { entered(); await gate; return { sent: 1 }; });
+    const warn = mock.fn();
+    const scheduler = createReminderScheduler(makeDeps({
+      pool: { query: queryFn },
+      notificationService: { send: notifyFn },
+      log: { info() {}, warn, error() {}, debug() {} },
+    }));
+
+    const first = scheduler.tick();
+    await notifyEntered;
+    await scheduler.tick();
+    release();
+    await first;
+
+    assert.equal(notifyFn.mock.calls.length, 1);
+    const skips = (warn.mock.calls as any[]).filter((c) => c.arguments[0] === 'reminder tick skipped: previous tick still running');
+    assert.equal(skips.length, 1);
+
+    // The guard is released afterwards: the next tick runs (the dedup cache then holds the send).
+    await scheduler.tick();
+    assert.equal((warn.mock.calls as any[]).length, 1);
+    assert.ok(queryFn.mock.calls.length > 5);
+  });
+});

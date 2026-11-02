@@ -122,12 +122,27 @@ function recordFailed(m: QueuedMutation, error: string): void {
     error,
     at: Date.now(),
   };
+  surfaceFailedSync(item);
+}
+
+/** Show a failed item in uiStore.failedSync and persist it so it survives a restart or reload. */
+export function surfaceFailedSync(item: FailedSyncItem): void {
   try {
     useUIStore.getState().addFailedSync(item);
   } catch {
     /* store not ready */
   }
   void persistFailedSync(item);
+}
+
+/** Dismiss a failed item from the store AND storage, so hydrate does not bring it back. Never throws. */
+export async function dismissFailed(clientId: string): Promise<void> {
+  try {
+    useUIStore.getState().dismissFailedSync(clientId);
+  } catch {
+    /* store not ready */
+  }
+  await removePersistedFailed(clientId);
 }
 
 async function persistFailedSync(item: FailedSyncItem): Promise<void> {
@@ -279,7 +294,7 @@ async function replay(m: QueuedMutation): Promise<unknown> {
 }
 
 /** Extract the real server id from a POST replay response (handles envelopes). */
-function extractRealId(serverResponse: unknown): string | null {
+export function extractRealId(serverResponse: unknown): string | null {
   const res = serverResponse as Record<string, unknown> | null | undefined;
   if (typeof res?.id === 'string') return res.id;
   if (res && typeof res === 'object') {
@@ -390,6 +405,9 @@ export async function retryFailed(item: FailedSyncItem): Promise<void> {
     body: item.body,
     label: item.label,
   });
+  // Drop the persisted copy so a synced retry does not come back as failed on the
+  // next hydrate; a retry that fails again is re-persisted by recordFailed.
+  await removePersistedFailed(item.clientId);
   try {
     useUIStore.getState().dismissFailedSync(item.clientId);
   } catch {

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink';
 
 /**
@@ -23,6 +24,7 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
  *   onPackingChanged / onRidesChanged -> crewStore.loadPacking / loadRides (store, not Query)
  *   onActivityLogged    -> ['crew-activity', crewId]
  *   onHomeBaseUpdated   -> crewStore.applyHomeBaseUpdate (store, not Query)
+ *   onReconnectResync   -> all of the above lists, skipped while writes are queued
  *   onDaysUpdated       -> crewStore.applyCrewDays (store; Compare and Members read it)
  *
  * The crewId passed to each method is the already-guarded active crew id
@@ -30,33 +32,26 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
  * invalidating ['<key>', crewId] always targets the open crew's data.
  */
 export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
-  return {
+  const reloadMeetingPoints = (crewId: string) => {
+    void queryClient.invalidateQueries({ queryKey: ['meeting-points', crewId] });
+    useCrewStore.getState().loadMeetingPoints(crewId).catch(() => {});
+  };
+  const reloadPolls = (crewId: string) => {
+    void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
+    useCrewStore.getState().loadPolls(crewId).catch(() => {});
+  };
+  const sink: CrewRealtimeSink = {
     onHomeBaseUpdated: (crewId, payload) => {
       useCrewStore.getState().applyHomeBaseUpdate(crewId, payload);
     },
     onDaysUpdated: (_crewId, payload) => {
       useCrewStore.getState().applyCrewDays(payload);
     },
-    onMeetingPointUpsert: (crewId) => {
-      void queryClient.invalidateQueries({ queryKey: ['meeting-points', crewId] });
-      useCrewStore.getState().loadMeetingPoints(crewId).catch(() => {});
-    },
-    onMeetingPointRemoved: (crewId) => {
-      void queryClient.invalidateQueries({ queryKey: ['meeting-points', crewId] });
-      useCrewStore.getState().loadMeetingPoints(crewId).catch(() => {});
-    },
-    onPollCreated: (crewId) => {
-      void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
-      useCrewStore.getState().loadPolls(crewId).catch(() => {});
-    },
-    onPollVoted: (crewId) => {
-      void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
-      useCrewStore.getState().loadPolls(crewId).catch(() => {});
-    },
-    onPollClosed: (crewId) => {
-      void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
-      useCrewStore.getState().loadPolls(crewId).catch(() => {});
-    },
+    onMeetingPointUpsert: reloadMeetingPoints,
+    onMeetingPointRemoved: reloadMeetingPoints,
+    onPollCreated: reloadPolls,
+    onPollVoted: reloadPolls,
+    onPollClosed: reloadPolls,
     onExpensesChanged: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['expenses', crewId] });
       void queryClient.invalidateQueries({ queryKey: ['expense-balances', crewId] });
@@ -101,7 +96,18 @@ export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
       // Only the named raiser — a bare clearSos() drops every SOS in the store.
       useLiveLocationStore.getState().clearSos(userId);
     },
+    onReconnectResync: (crewId) => {
+      // Mid-drain the queue refreshes these lists itself; a reload now could drop optimistic rows.
+      if (useUIStore.getState().pendingSync > 0) return;
+      reloadMeetingPoints(crewId);
+      reloadPolls(crewId);
+      sink.onExpensesChanged(crewId);
+      sink.onActivityLogged(crewId);
+      sink.onPackingChanged(crewId);
+      sink.onRidesChanged(crewId);
+    },
   };
+  return sink;
 }
 
 /** Hook wrapper: memoizes the sink against the queryClient identity. */

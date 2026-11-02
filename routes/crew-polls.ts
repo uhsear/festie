@@ -104,7 +104,7 @@ export default function createCrewPollRoutes(deps: any) {
         await stores.activity
           .log(activity)
           .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+          .catch((err: any) => log.warn('poll-created activity log failed', { crewId, error: err.message }));
         crewNotify?.queue({ crewId, actorId: userId, kind: 'poll', text: 'New poll: ' + poll.question.slice(0, 80) });
         return sendSuccess(res, { poll });
       } catch (err: any) {

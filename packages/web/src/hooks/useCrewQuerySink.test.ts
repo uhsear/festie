@@ -4,6 +4,7 @@ import { QueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { useCrewRealtime } from '@festie/shared/hooks/useCrewRealtime';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { buildCrewQuerySink } from './useCrewQuerySink';
 
 /**
@@ -244,5 +245,57 @@ describe('buildCrewQuerySink crew days', () => {
     const days = [{ userId: 'u2', dayIndex: 0, answer: 'no' as const }];
     buildCrewQuerySink(new QueryClient()).onDaysUpdated('c1', { crewId: 'c1', userId: 'u2', days });
     expect(useCrewStore.getState().crewDays).toEqual(days);
+  });
+});
+
+describe('buildCrewQuerySink reconnect resync', () => {
+  const real = useCrewStore.getState();
+  const loaders = () => ({
+    loadMeetingPoints: vi.fn().mockResolvedValue(undefined),
+    loadPolls: vi.fn().mockResolvedValue(undefined),
+    loadPacking: vi.fn().mockResolvedValue(undefined),
+    loadRides: vi.fn().mockResolvedValue(undefined),
+  });
+  afterEach(() => {
+    useUIStore.setState({ pendingSync: 0 });
+    useCrewStore.setState({
+      activeCrew: null,
+      loadMeetingPoints: real.loadMeetingPoints,
+      loadPolls: real.loadPolls,
+      loadPacking: real.loadPacking,
+      loadRides: real.loadRides,
+    });
+  });
+
+  it('invalidates every crew list key and reloads packing and rides', () => {
+    const l = loaders();
+    useCrewStore.setState({ activeCrew: { id: 'c1' } as never, ...l });
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    buildCrewQuerySink(queryClient).onReconnectResync?.('c1');
+
+    for (const key of ['meeting-points', 'polls', 'expenses', 'expense-balances', 'settlement-plan', 'crew-activity']) {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: [key, 'c1'] });
+    }
+    expect(invalidate).toHaveBeenCalledTimes(6);
+    expect(l.loadMeetingPoints).toHaveBeenCalledWith('c1');
+    expect(l.loadPolls).toHaveBeenCalledWith('c1');
+    expect(l.loadPacking).toHaveBeenCalledWith('c1');
+    expect(l.loadRides).toHaveBeenCalledWith('c1');
+  });
+
+  it('does nothing while offline writes are still queued', () => {
+    const l = loaders();
+    useCrewStore.setState({ activeCrew: { id: 'c1' } as never, ...l });
+    useUIStore.setState({ pendingSync: 2 });
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    buildCrewQuerySink(queryClient).onReconnectResync?.('c1');
+
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(l.loadPacking).not.toHaveBeenCalled();
+    expect(l.loadRides).not.toHaveBeenCalled();
   });
 });
