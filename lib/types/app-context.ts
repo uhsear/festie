@@ -91,6 +91,7 @@ export interface Stores {
     meetingPoints: {
       listByCrew(crewId: string): Promise<unknown[]>;
       countByCrew(crewId: string): Promise<number>;
+      listRecentlyExpired(crewId: string): Promise<unknown[]>;
       create(data: Record<string, unknown>): Promise<unknown>;
       getById(
         id: string,

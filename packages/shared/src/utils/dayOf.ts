@@ -19,6 +19,7 @@ import {
 import { nextMeetingOccurrence } from './meetingTime';
 import { isPeerStale } from './liveLocation';
 import { timeAgo } from './timeAgo';
+import { crewStatusLabel, isStatusFresh } from './crewStatus';
 
 /**
  * Day-of selectors for the "Now" surface and the app-wide SOS banner. Pure and
@@ -266,16 +267,10 @@ export function sosWhen(entries: ReadonlyArray<SosEntry>): string {
 
 // ── Crew whereabouts ─────────────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<NonNullable<CrewMemberStatus['status']>, string> = {
-  'on-my-way': 'On the way',
-  here: 'Here',
-  delayed: 'Running late',
-};
-
 export interface CrewWhereabout {
   userId: string;
   name: string;
-  /** `Here · Main Stage`, `On the way · ~5 min`, or null with no status. */
+  /** `I'm here · Main Stage`, `On my way · ~5 min`, or null with no status. */
   statusLabel: string | null;
   /** When the status last synced (epoch ms), or null. */
   statusAt: number | null;
@@ -326,16 +321,20 @@ export function selectCrewWhereabouts({
       const st = statusByUser.get(m.userId);
       const peer = peers[m.userId];
       let statusLabel: string | null = null;
-      if (st?.status) {
+      const base = st && isStatusFresh(st, nowMs) ? crewStatusLabel(st) : null;
+      if (st && base) {
         const target = st.target_meeting_point_id ? pointLabel.get(st.target_meeting_point_id) : undefined;
-        const detail = target ?? (st.status === 'on-my-way' && st.eta_minutes != null ? `~${st.eta_minutes} min` : null);
-        statusLabel = detail ? `${STATUS_LABEL[st.status]} · ${detail}` : STATUS_LABEL[st.status];
+        const detail =
+          st.status === 'at-stage'
+            ? null
+            : (target ?? (st.status === 'on-my-way' && st.eta_minutes != null ? `~${st.eta_minutes} min` : null));
+        statusLabel = detail ? `${base} · ${detail}` : base;
       }
       return {
         userId: m.userId,
         name: m.name || m.username || 'Crew member',
         statusLabel,
-        statusAt: st?.status ? toMs(st.updated_at) : null,
+        statusAt: statusLabel && st ? toMs(st.updated_at) : null,
         live: peer ? (isPeerStale(peer.serverAt, nowMs) ? 'stale' : 'live') : null,
         liveAt: peer ? toMs(peer.serverAt) : null,
         sos: sosUsers.has(m.userId),

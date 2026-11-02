@@ -120,6 +120,27 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     },
   );
 
+  // ── GET /:crewId/meeting-points/past — recently expired one-shot points ──
+  router.get(
+    '/:crewId/meeting-points/past',
+    userAuth,
+    rateLimit(60, 'crew-mp-past'),
+    validateParams(schemas.crewIdParams),
+    async (req: Request, res: Response) => {
+      try {
+        const params = req.validatedParams as z.infer<typeof crewIdParams>;
+        const crewId = sanitizeIdentifier(params.crewId);
+        const member = await stores.crews.getMember(crewId, req.user.userId);
+        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
+        const points = await stores.crews.meetingPoints.listRecentlyExpired(crewId);
+        return sendSuccess(res, { meetingPoints: points });
+      } catch (err) {
+        log.error('get past meeting points failed', { error: (err as Error).message });
+        return sendError(res, 500, 'Failed to load past meeting points', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
   // ── POST /:crewId/meeting-points ────────────────────────────────
   router.post(
     '/:crewId/meeting-points',

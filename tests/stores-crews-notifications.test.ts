@@ -551,6 +551,21 @@ describe('createCrewsStore — meetingPoints', () => {
     ]);
   });
 
+  it('listRecentlyExpired queries swept one-shot points from the last 12 hours', async () => {
+    const pool = mockPool([{ rows: [{ id: 'mp1' }] }]);
+    const { meetingPoints } = createCrewsStore(pool, mockUtils);
+
+    const result = await meetingPoints.listRecentlyExpired('c1');
+
+    assert.deepStrictEqual(result, [{ id: 'mp1' }]);
+    assert.deepStrictEqual(pool.queries[0].params, ['c1']);
+    const sql = norm(pool.queries[0].sql);
+    assert.ok(sql.includes('mp.active = FALSE'));
+    assert.ok(sql.includes('recurs_daily IS NOT TRUE'));
+    assert.ok(sql.includes("INTERVAL '12 hours'"));
+    assert.ok(sql.includes('mp.updated_at >= mp.expires_at'));
+  });
+
   it('create uses defaults for optional fields', async () => {
     const mp = { id: 'mp1', crewId: 'c1', createdBy: 'u1', label: 'X', location: 'Y' };
     const pool = mockPool([{ rows: [] }, { rows: [{ id: 'mp1' }] }]);

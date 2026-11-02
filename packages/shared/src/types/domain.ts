@@ -511,6 +511,9 @@ export interface UpdateCrewRideOfferRequest {
   note?: string | null;
 }
 
+/** Must match the `crewStatusSchema` enum in lib/schemas.ts. */
+export type CrewStatusKey = 'on-my-way' | 'here' | 'delayed' | 'at-camp' | 'at-stage' | 'break' | 'lost';
+
 /**
  * Crew member status (M5) as serialized by the backend (routes/crew-status.ts).
  * snake_case from Postgres.
@@ -520,7 +523,8 @@ export interface UpdateCrewRideOfferRequest {
  * render `updated_at` as honest staleness ("as of N ago" via formatStaleness) —
  * never imply real-time.
  *
- * - `status`: 'on-my-way' | 'here' | 'delayed' | null (null = cleared)
+ * - `status`: a `CrewStatusKey` or null (null = cleared). `at-stage` keeps the
+ *   stage name in `note`.
  * - `target_meeting_point_id`: free TEXT ref to a crew_meeting_points row (the
  *   ETA target); may dangle if the point was removed → renders without a target.
  * - `eta_minutes`: the member's own estimate (or geo-computed when the target
@@ -529,7 +533,7 @@ export interface UpdateCrewRideOfferRequest {
 export interface CrewMemberStatus {
   crew_id: string;
   user_id: string;
-  status: 'on-my-way' | 'here' | 'delayed' | null;
+  status: CrewStatusKey | null;
   target_meeting_point_id: string | null;
   eta_minutes: number | null;
   note: string | null;
@@ -558,7 +562,7 @@ export interface CrewMemberStatus {
  * fields optional; an empty `status` (null) clears it.
  */
 export interface UpdateCrewMemberStatusRequest {
-  status?: 'on-my-way' | 'here' | 'delayed' | null;
+  status?: CrewStatusKey | null;
   targetMeetingPointId?: string | null;
   etaMinutes?: number | null;
   note?: string | null;

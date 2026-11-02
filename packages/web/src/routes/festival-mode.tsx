@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
+import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
 import { festivalTimeLabel, fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
@@ -11,7 +11,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import NowHero from '../components/festival-mode/NowHero';
 import UpNextList from '../components/festival-mode/UpNextList';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
-import { CrewNowSection, CrewPrompt, MeetNowCard } from '../components/festival-mode/CrewNow';
+import { CrewNowSection, CrewPrompt, CrewWrapUpCard, MeetNowCard } from '../components/festival-mode/CrewNow';
 import { CalendarX } from 'lucide-react';
 
 export default function FestivalModeView() {
@@ -55,6 +55,14 @@ function FestivalModeViewInner() {
     [sets, days, picks, lineupMode, nowMs, timeZone],
   );
   const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
+  const after = selection.phase === 'after';
+  const crewId = crew?.id;
+  const expenseBalances = useCrewStore((s) => s.expenseBalances);
+  const balance = expenseBalances.find((b) => b.userId === user?.id)?.balance ?? 0;
+
+  useEffect(() => {
+    if (after && crewId) useCrewStore.getState().loadExpenses(crewId).catch(() => {});
+  }, [after, crewId]);
 
   if (!currentFestival) {
     return (
@@ -127,6 +135,14 @@ function FestivalModeViewInner() {
                 cta="Sign in"
                 onAction={() => navigate({ to: '/login', search: { next: '/festival-mode' } })}
               />
+            ) : crew && after ? (
+              <CrewWrapUpCard
+                crewName={crew.name}
+                balance={balance}
+                crewId={crew.id}
+                festivalId={currentFestival.id}
+                onSettle={() => navigate({ to: '/crew', search: { tab: 'money' } })}
+              />
             ) : crew ? (
               <CrewNowSection crewName={crew.name} rows={whereabouts} onOpenCrew={goCrew} />
             ) : (
@@ -138,7 +154,7 @@ function FestivalModeViewInner() {
               />
             )}
           </div>
-          {crew && (
+          {crew && !after && (
             <div className="order-3">
               <MeetNowCard meet={meet} nowMs={nowMs} timeZone={timeZone} onOpenMeet={goCrew} />
             </div>

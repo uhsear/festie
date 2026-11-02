@@ -3,12 +3,14 @@ import { ChevronRight, Home, MapPin, Users } from 'lucide-react';
 import {
   fmtStartsIn,
   fmtZonedClock,
+  settleUpLine,
   timeAgo,
   type ActiveMeet,
   type CrewWhereabout,
 } from '@festie/shared/utils';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
+import ReformCrewButton from '../crew/ReformCrewButton';
 import { cn } from '@/lib/utils';
 
 // The first screenful answers "where is my crew"; the full list is one tap away.
@@ -157,6 +159,35 @@ interface PromptProps {
   body: string;
   cta: string;
   onAction: () => void;
+}
+
+interface WrapUpProps {
+  crewName: string;
+  balance: number;
+  onSettle: () => void;
+  crewId: string;
+  festivalId?: string;
+}
+
+/** Replaces the crew list once the festival is over: settle up, or start again. */
+export function CrewWrapUpCard({ crewName, balance, onSettle, crewId, festivalId }: WrapUpProps) {
+  return (
+    <section aria-labelledby="fm-crew-wrapup" className="rounded-xl border border-border bg-bg-card p-4 flex flex-col gap-3" data-testid="fm-crew-wrapup">
+      <div className="flex items-start gap-3">
+        <Users className="w-6 h-6 shrink-0 text-accent-aqua mt-0.5" aria-hidden="true" />
+        <div className="min-w-0">
+          <h2 id="fm-crew-wrapup" className="type-title text-text-primary break-words">
+            Wrap up with {crewName}
+          </h2>
+          <p className="type-label text-text-secondary mt-1">{settleUpLine(balance)}</p>
+        </div>
+      </div>
+      <Button variant="primary" fullWidth onClick={onSettle}>
+        {Math.abs(balance) > 0.01 ? 'Settle up' : 'See expenses'}
+      </Button>
+      <ReformCrewButton crewId={crewId} sourceFestivalId={festivalId} crewName={crewName} />
+    </section>
+  );
 }
 
 /** Crew slot for a guest, or a user without a crew. */

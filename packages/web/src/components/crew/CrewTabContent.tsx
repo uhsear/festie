@@ -69,7 +69,7 @@ export default function CrewTabContent({
       )}
       {tab === 'find' && (
         <>
-          <MeetingPointsTab crewId={crewId} currentUserId={currentUserId} focusSosUserId={focusSosUserId} />
+          <MeetingPointsTab crewId={crewId} currentUserId={currentUserId} focusSosUserId={focusSosUserId} isOwner={isOwner} />
           <section aria-labelledby="crew-activity-heading" className="space-y-3 pt-4">
             <h3 id="crew-activity-heading" className={SECTION_HEADING}>
               Activity

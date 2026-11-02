@@ -43,12 +43,12 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
   }, [currentLocation, currentTime]);
 
   const save = useMutation({
-    mutationFn: (payload: { location: string; time: string | null }) => api.put(`/crews/${crewId}/home-base`, payload),
-    onSuccess: async (result) => {
+    mutationFn: (payload: { location: string | null; time: string | null }) => api.put(`/crews/${crewId}/home-base`, payload),
+    onSuccess: async (result, payload) => {
       qc.invalidateQueries({ queryKey: ['crews'] });
       qc.invalidateQueries({ queryKey: ['crew', crewId] });
       const outcome = writeOutcomeOf(result);
-      toast(writeOutcomeMessage(outcome, 'Home base updated'), outcome === 'queued' ? 'info' : 'success');
+      toast(writeOutcomeMessage(outcome, payload.location ? 'Home Base updated' : 'Home Base removed'), outcome === 'queued' ? 'info' : 'success');
       setEditing(false);
       try {
         await onSaved?.();
@@ -107,6 +107,16 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
         >
           Save
         </Button>
+        {hasHomeBase && (
+          <Button
+            variant="ghost"
+            isLoading={save.isPending}
+            onClick={() => save.mutate({ location: null, time: null })}
+            className="w-full min-h-11"
+          >
+            Remove Home Base
+          </Button>
+        )}
       </div>
     );
   }

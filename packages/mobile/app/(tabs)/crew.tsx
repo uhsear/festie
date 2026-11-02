@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Share,
   StyleSheet,
   useWindowDimensions,
+  type ScrollViewInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -37,6 +38,7 @@ import {
 import type { Crew, CrewMember, CrewOverlap, FestivalSet } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useHaptics } from '../../hooks/useHaptics';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import Button from '../../components/Button';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -169,18 +171,12 @@ export default function CrewScreen() {
 
   // DC2: a raise-SOS affordance on /find and /map deep-links here with
   // ?tab=find so the user lands on the Find pane where CrewSos lives.
-  // mpLat/mpLng: tap-to-create coords deep-linked from the map's long-press —
-  // forwarded to CrewMeetingPoints to prefill+open its create form.
-  const {
-    tab: tabParam,
-    mpLat: mpLatParam,
-    mpLng: mpLngParam,
-  } = useLocalSearchParams<{ tab?: string; mpLat?: string; mpLng?: string }>();
-  const prefillCoords = useMemo(() => {
-    const lat = mpLatParam != null ? Number(mpLatParam) : NaN;
-    const lng = mpLngParam != null ? Number(mpLngParam) : NaN;
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
-  }, [mpLatParam, mpLngParam]);
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+
+  // Plan index: each chip scrolls its section label to the top of the Plan pane.
+  const reduceMotion = useReduceMotion();
+  const planScrollRef = useRef<ScrollViewInstance>(null);
+  const planSectionY = useRef<{ polls?: number; packing?: number; rides?: number }>({});
 
   // Load the user's crews once on mount.
   useEffect(() => {
@@ -713,6 +709,16 @@ export default function CrewScreen() {
   const packingLeft = packingItems.filter((i) => !i.claimed).length;
   const packingDone = packingItems.length > 0 && packingLeft === 0;
   const rideCount = rideOffers.length;
+  const planIndex = [
+    { key: 'polls', testID: 'plan-index-polls', label: 'Polls', count: openPollCount },
+    { key: 'packing', testID: 'plan-index-packing', label: 'Packing', count: packingLeft },
+    { key: 'rides', testID: 'plan-index-rides', label: 'Rides', count: rideCount },
+  ] as const;
+  const jumpToPlanSection = (key: 'polls' | 'packing' | 'rides') =>
+    planScrollRef.current?.scrollTo({
+      y: Math.max(0, (planSectionY.current[key] ?? 0) - t.spacing[2]),
+      animated: !reduceMotion,
+    });
 
   // Shared pull-to-refresh control (only one tab renders at a time).
   const crewRefreshControl = (
@@ -1138,6 +1144,7 @@ export default function CrewScreen() {
         />
       ) : crewTab === 'plan' ? (
         <ScrollView
+          ref={planScrollRef}
           style={styles.flex1}
           contentContainerStyle={tabScrollStyle}
           contentInsetAdjustmentBehavior="automatic"
@@ -1146,6 +1153,27 @@ export default function CrewScreen() {
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
         >
+          <View style={styles.planIndexRow}>
+            {planIndex.map(({ key, testID, label, count }) => (
+              <TouchableOpacity
+                key={key}
+                testID={testID}
+                style={styles.planIndexChip}
+                onPress={() => jumpToPlanSection(key)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Jump to ${label}`}
+              >
+                <Text style={styles.overlapToggleText} numberOfLines={1}>{label}</Text>
+                {count > 0 ? (
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countBadgeText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{count}</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Everyday primary: the offline-native "what's my crew's plan"
               digest. Emphasized (aqua-tinted fill + border) so the most-used
               action carries more weight than the rest of the tab. Coral is
@@ -1261,7 +1289,7 @@ export default function CrewScreen() {
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
 
-          <View style={styles.sectionLabelRow}>
+          <View style={styles.sectionLabelRow} onLayout={(e) => { planSectionY.current.polls = e.nativeEvent.layout.y; }}>
             <SectionLabel>Polls</SectionLabel>
             {openPollCount > 0 ? (
               <View style={styles.countBadge}>
@@ -1274,7 +1302,7 @@ export default function CrewScreen() {
           {/* DC4: Packing + Rides are pre-festival planning, so they live in
               Plan (moved out of the mid-festival "Find" cluster). The count
               pills give an at-a-glance "what's outstanding" without expanding. */}
-          <View style={styles.sectionLabelRow}>
+          <View style={styles.sectionLabelRow} onLayout={(e) => { planSectionY.current.packing = e.nativeEvent.layout.y; }}>
             <SectionLabel>Packing</SectionLabel>
             {packingDone ? (
               <View style={styles.donePill} accessibilityLabel="All packing items claimed">
@@ -1292,7 +1320,7 @@ export default function CrewScreen() {
           </View>
           <CrewPacking crewId={crew.id} currentUserId={user.id} isOwner={isOwner} />
 
-          <View style={styles.sectionLabelRow}>
+          <View style={styles.sectionLabelRow} onLayout={(e) => { planSectionY.current.rides = e.nativeEvent.layout.y; }}>
             <SectionLabel>Rides</SectionLabel>
             {rideCount > 0 ? (
               <View
@@ -1332,9 +1360,18 @@ export default function CrewScreen() {
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
 
-          {/* Live location toggle sits below the SOS button. In low-power mode
-              the battery-hungry live-location share is paused (gated by the
-              shared festival low-power flag); a chip explains why. */}
+          <SectionLabel>Meeting points</SectionLabel>
+          <CrewHomeBase crewId={crew.id} location={crew.homeBaseLocation} time={crew.homeBaseTime} isOwner={isOwner} />
+          <CrewMeetingPoints
+            crewId={crew.id}
+            currentUserId={user.id}
+            isOwner={isOwner}
+            festival={crewFestival}
+            days={crewFestival ? festivalDays : undefined}
+          />
+
+          {/* In low-power mode the battery-hungry live-location share is paused
+              (gated by the shared festival low-power flag); a chip explains why. */}
           <CrewStatus crewId={crew.id} currentUserId={user.id} />
 
           <SectionLabel>Live location</SectionLabel>
@@ -1351,32 +1388,6 @@ export default function CrewScreen() {
               <CrewLiveLocation crewId={crew.id} />
             )}
           </View>
-
-          <SectionLabel>Meeting points</SectionLabel>
-          <CrewMeetingPoints
-            crewId={crew.id}
-            currentUserId={user.id}
-            isOwner={isOwner}
-            festival={crewFestival}
-            days={crewFestival ? festivalDays : undefined}
-            prefillCoords={prefillCoords}
-          />
-
-          <CrewHomeBase crewId={crew.id} location={crew.homeBaseLocation} time={crew.homeBaseTime} isOwner={isOwner} />
-
-          {/* M5 P2P plan handoff — QR / scan / SMS when signal is dead. */}
-          <TouchableOpacity
-            testID="crew-action-share-plan"
-            style={styles.overlapToggle}
-            onPress={() => router.push('/plan-share')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Share offline with a friend (QR or text)"
-          >
-            <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
-            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-          </TouchableOpacity>
 
           <CrewPhotoLink crewId={crew.id} photoAlbumUrl={crew.photoAlbumUrl} />
 
@@ -1669,6 +1680,23 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label', 700),
     color: t.colors.accent.aqua,
     flex: 1,
+  },
+  planIndexRow: {
+    flexDirection: 'row',
+    gap: t.spacing[2],
+  },
+  planIndexChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing[2],
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.secondary,
   },
   overlapEmpty: {
     ...typeStyle('caption'),
