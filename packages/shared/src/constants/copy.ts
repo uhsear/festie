@@ -57,6 +57,18 @@ export const COPY = {
     regionLabel: 'Schedule grid',
     gridLabel: 'Festival schedule grid: stages as columns, time as rows',
   },
+  alsoPlays: {
+    heading: 'Also plays',
+    row: (when: string) => `Also plays ${when}`,
+    pickToo: 'Pick this one too',
+    pickTooA11y: (artist: string, when: string) => `Pick ${artist} ${when} too`,
+    picked: 'In your picks',
+    catchInstead: (artist: string, day: string) => `Catch ${artist} on ${day} instead`,
+    catchInsteadA11y: (artist: string, when: string) =>
+      `Catch ${artist} ${when} instead, and remove this slot from your picks`,
+    caught: (artist: string, when: string) => `Catching ${artist} ${when} instead.`,
+    gone: 'That other slot is no longer free. Pick another fix.',
+  },
   status: { playing: 'Playing', playingA11y: 'Playing now', liveLocation: 'Live' },
 } as const;
 
@@ -68,7 +80,7 @@ export const signInTo = (what: string): string => `Sign in to ${what}.`;
 export const clashCount = (n: number): string => (n === 1 ? COPY.clash.one : `${n} schedule clashes`);
 export const clashChip = (n: number): string => (n === 1 ? '1 clash' : `${n} clashes`);
 export const clashChipA11y = (n: number): string =>
-  n === 1 ? 'You have 1 schedule clash. Show it.' : `You have ${n} schedule clashes. Show the first one.`;
+  n === 1 ? 'You have 1 schedule clash. Open it in Picks.' : `You have ${n} schedule clashes. Open them in Picks.`;
 export const clashesWith = (names: string[]): string => `Clashes with ${names.join(', ')}`;
 
 /** Inline clash prompt copy, shared by web and mobile ClashPrompt. */

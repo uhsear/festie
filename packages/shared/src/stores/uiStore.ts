@@ -2,6 +2,7 @@ import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { getStorage } from '../platform/storage';
 import { FestivalSet, OnlineUser } from '../types';
+import type { CrewBadgeSeen } from '../utils/crewBadge';
 
 /** 'stage' is the dark default; 'daylight' is the high-contrast light theme for direct sun. */
 export type ThemePreference = 'stage' | 'daylight';
@@ -77,6 +78,8 @@ export interface UIState {
   hapticsEnabled: boolean;
   /** Persisted device preference. Not reset on logout. Shows @handle on Wrap posters. */
   wrapShowHandle: boolean;
+  /** Persisted, per crew: what the Crew tab badge already showed. Account-scoped (reset on logout). */
+  crewBadgeSeen: Record<string, CrewBadgeSeen>;
   /** Mobile: asks AuthGate to replay the first-run intro. Not persisted. */
   introReplay: boolean;
 }
@@ -107,6 +110,8 @@ export interface UIActions {
   setHapticsEnabled: (enabled: boolean) => void;
   setWrapShowHandle: (v: boolean) => void;
   setIntroReplay: (v: boolean) => void;
+  /** Merge `patch` into the crew's seen entry; pollIds keeps the newest 100. */
+  markCrewBadgeSeen: (crewId: string, patch: Partial<CrewBadgeSeen>) => void;
 }
 
 export type UIStore = UIState & UIActions;
@@ -124,6 +129,7 @@ const uiStore: StateCreator<UIStore> = (set, get) => ({
   followSystemTheme: false,
   hapticsEnabled: true,
   wrapShowHandle: true,
+  crewBadgeSeen: {},
   introReplay: false,
 
   setDetailSet: (detailSet: FestivalSet | null) => {
@@ -222,6 +228,24 @@ const uiStore: StateCreator<UIStore> = (set, get) => ({
   setIntroReplay: (introReplay: boolean) => {
     set({ introReplay });
   },
+
+  markCrewBadgeSeen: (crewId: string, patch: Partial<CrewBadgeSeen>) => {
+    set((state) => {
+      const prev = state.crewBadgeSeen[crewId];
+      const next = { ...(prev ?? { pollIds: [], balanceCents: null }), ...patch };
+      next.pollIds = next.pollIds.slice(-100);
+      // Same entry: keep the state object so persist does not rewrite storage on every render.
+      if (
+        prev &&
+        next.balanceCents === prev.balanceCents &&
+        next.pollIds.length === prev.pollIds.length &&
+        next.pollIds.every((id, i) => id === prev.pollIds[i])
+      ) {
+        return state;
+      }
+      return { crewBadgeSeen: { ...state.crewBadgeSeen, [crewId]: next } };
+    });
+  },
 });
 
 /** localStorage key; packages/web/index.html reads it before first paint. */
@@ -236,6 +260,7 @@ export const useUIStore = create<UIStore>()(
       followSystemTheme: state.followSystemTheme,
       hapticsEnabled: state.hapticsEnabled,
       wrapShowHandle: state.wrapShowHandle,
+      crewBadgeSeen: state.crewBadgeSeen,
     }),
   }),
 );

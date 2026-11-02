@@ -3,20 +3,14 @@
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { MapPin as Pin } from '@festie/shared/utils';
-import {
-  popupContent,
-  subEl,
-  titleEl,
-  type GlMarker,
-  type GlRefObject,
-  type MapRefObject,
-  type MapStatus,
-} from './mapDom';
+import type { GlMarker, GlRefObject, MapRefObject, MapStatus } from './mapDom';
 
 /**
  * Meeting-point markers. Rebuilt when the pins' coords change (via `pinsKey`);
  * the live pin array is read through a ref so the effect's deps stay honest
- * (`[status, pinsKey]`) without an exhaustive-deps suppression.
+ * (`[status, pinsKey]`) without an exhaustive-deps suppression. A tap or
+ * Enter/Space calls `onSelectPlace`; without it (authoring) the marker adds no
+ * listener, so a tap still reaches the map click.
  */
 export function useMeetingPointMarkers(
   mapRef: MapRefObject,
@@ -25,9 +19,12 @@ export function useMeetingPointMarkers(
   pins: Pin[],
   pinsKey: string,
   markersRef: MutableRefObject<GlMarker[]>,
+  onSelectPlace?: (pin: Pin) => void,
 ): void {
   const pinsRef = useRef(pins);
   pinsRef.current = pins;
+  const selectRef = useRef(onSelectPlace);
+  selectRef.current = onSelectPlace;
 
   useEffect(() => {
     const map = mapRef.current;
@@ -45,18 +42,20 @@ export function useMeetingPointMarkers(
       el.setAttribute('aria-label', p.label + (p.sublabel ? ' - ' + p.sublabel : ''));
       el.setAttribute('role', 'button');
       el.setAttribute('tabindex', '0');
-      const popupEl = popupContent([titleEl(p.label), p.sublabel ? subEl(p.sublabel) : null]);
-      const marker = new gl.Marker({ element: el })
-        .setLngLat([p.longitude, p.latitude])
-        .setPopup(new gl.Popup({ offset: 16, closeButton: false }).setDOMContent(popupEl))
-        .addTo(map);
-      // Bridge Enter/Space → popup toggle (MapLibre only wires click).
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          marker.togglePopup();
-        }
-      });
+      const marker = new gl.Marker({ element: el }).setLngLat([p.longitude, p.latitude]).addTo(map);
+      if (selectRef.current) {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectRef.current?.(p);
+        });
+        // MapLibre only wires click; bridge Enter/Space for keyboard users.
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            selectRef.current?.(p);
+          }
+        });
+      }
       markersRef.current.push(marker);
     }
   }, [status, pinsKey, mapRef, glRef, markersRef]);

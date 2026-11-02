@@ -39,15 +39,31 @@ export default function createProfilesRoutes(deps: any) {
       const usersById = stores.users.getByIds
         ? await stores.users.getByIds(userIds)
         : await getUserMap();
-      const profiles = rawProfiles
-        .map((profile: any) => serializeProfileForViewer(profile, req.user.userId, usersById.get(profile.userId)));
+      // Other users' picks go only to people who share a crew with them on this
+      // festival. Everyone else gets the profile with empty picks, plus anonymous
+      // per-set counts (other attendees, no user ids) in meta.pickCounts.
+      const userCrews = await stores.crews.listByUserAndFestival(req.user.userId, festivalId);
+      const membersByCrew = await stores.crews.getMembersForCrews(userCrews.map((c: any) => c.id));
+      const crewUserIds = new Set<string>();
+      for (const members of membersByCrew.values()) {
+        for (const m of members) crewUserIds.add(m.userId);
+      }
+      const pickCounts: Record<string, number> = {};
+      for (const profile of rawProfiles) {
+        if (profile.userId === req.user.userId) continue;
+        for (const setId of Object.keys(profile.picks || {})) pickCounts[setId] = (pickCounts[setId] || 0) + 1;
+      }
+      const profiles = rawProfiles.map((profile: any) => {
+        const visible = profile.userId === req.user.userId || crewUserIds.has(profile.userId);
+        return serializeProfileForViewer(visible ? profile : { ...profile, picks: {} }, req.user.userId, usersById.get(profile.userId));
+      });
       // Support paginated response when params present
       if (req.query.cursor || req.query.limit) {
         const { limit, cursor } = req.validatedQuery;
         const { items, pagination } = paginateArray(profiles, { limit, cursor });
-        return sendSuccess(res, items, { pagination });
+        return sendSuccess(res, items, { pagination, pickCounts });
       }
-      return sendSuccess(res, profiles);
+      return sendSuccess(res, profiles, { pickCounts });
     } catch (error: any) {
       log.error('profile load failed', { error: error.message, festivalId: req.validatedParams?.festivalId });
       return sendError(res, 500, 'Failed to load profiles', ErrorCodes.INTERNAL_ERROR);

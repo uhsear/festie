@@ -48,7 +48,7 @@ interface CrewMeetingPointsProps {
    * pair arrives, the create form opens prefilled with these coords — the user
    * still fills the label and confirms "Add", so no write happens automatically.
    */
-  prefillCoords?: { lat: number; lng: number } | null;
+  prefillCoords?: { lat: number; lng: number; label?: string; location?: string; stageReference?: string } | null;
   /** Render only the create form (the map's meeting-point sheet): no toggle, list or Past group. */
   formOnly?: boolean;
   /** Called when the form closes (saved or cancelled) in `formOnly` mode. */
@@ -182,13 +182,13 @@ export default function CrewMeetingPoints({
   const lastPrefillRef = useRef<string | null>(null);
   useEffect(() => {
     if (!prefillCoords) return;
-    const key = `${prefillCoords.lat},${prefillCoords.lng}`;
+    const key = `${prefillCoords.lat},${prefillCoords.lng},${prefillCoords.label ?? ''}`;
     if (lastPrefillRef.current === key) return;
     lastPrefillRef.current = key;
     setEditingId(null);
-    setLabel('');
-    setLocation('');
-    setStageRef('');
+    setLabel(prefillCoords.label ?? '');
+    setLocation(prefillCoords.location ?? '');
+    setStageRef(prefillCoords.stageReference ?? '');
     setType(MEETING_POINT_KINDS[0].type);
     setRecursDaily(false);
     setDayIndex(null);

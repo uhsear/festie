@@ -14,6 +14,9 @@ vi.mock('../api', () => {
 });
 
 import { api } from '../api';
+import { useAuthStore } from '../../stores/authStore';
+import { useCrewStore } from '../../stores/crewStore';
+import { useLiveLocationStore } from '../../stores/liveLocationStore';
 import { ApiClientError } from '../api';
 import {
   fetchShareLink,
@@ -23,6 +26,7 @@ import {
   sharedPicksJsonUrl,
   fetchSharedPicks,
   fetchPrintableSchedule,
+  stopAllSharing,
 } from '../sharing';
 
 const post = vi.mocked(api.post);
@@ -103,5 +107,49 @@ describe('shared picks', () => {
     get.mockResolvedValue('<html/>');
     expect(await fetchPrintableSchedule('f1', 'p1')).toBe('<html/>');
     expect(get).toHaveBeenCalledWith('/export/f1/p1', { asText: true });
+  });
+});
+
+describe('stopAllSharing', () => {
+  const row = (user_id: string) => ({
+    crew_id: 'c1',
+    user_id,
+    status: 'here' as const,
+    target_meeting_point_id: null,
+    eta_minutes: null,
+    note: null,
+    latitude: 28.5,
+    longitude: -81.4,
+    location_captured_at: '2026-06-10T09:00:00Z',
+    updated_at: '2026-06-10T09:00:00Z',
+  });
+  let endShare: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    endShare = vi.fn();
+    useLiveLocationStore.setState({ endShare } as never);
+    useAuthStore.setState({ user: { id: 'u1', username: 'a', publicSchedule: true } as never });
+    useCrewStore.setState({ crewStatuses: [row('u1'), row('u2')] });
+  });
+
+  it('ends the share before the POST, merges the user and clears only my status location', async () => {
+    post.mockResolvedValue({ user: { id: 'u1', publicSchedule: false }, clearedStatusLocations: 2 });
+    const r = await stopAllSharing();
+    expect(r).toEqual({ clearedStatusLocations: 2 });
+    expect(post).toHaveBeenCalledWith('/account/stop-sharing', {});
+    expect(endShare).toHaveBeenCalledWith('user');
+    expect(endShare.mock.invocationCallOrder[0]).toBeLessThan(post.mock.invocationCallOrder[0]!);
+    expect(useAuthStore.getState().user?.publicSchedule).toBe(false);
+    expect(useAuthStore.getState().user?.username).toBe('a');
+    const [mine, theirs] = useCrewStore.getState().crewStatuses;
+    expect(mine).toMatchObject({ user_id: 'u1', latitude: null, longitude: null, location_captured_at: null });
+    expect(theirs).toMatchObject({ user_id: 'u2', latitude: 28.5 });
+  });
+
+  it('still ends the share when the POST rejects, and leaves the status location', async () => {
+    post.mockRejectedValue(new Error('nope'));
+    await expect(stopAllSharing()).rejects.toThrow('nope');
+    expect(endShare).toHaveBeenCalledWith('user');
+    expect(useCrewStore.getState().crewStatuses[0]!.latitude).toBe(28.5);
   });
 });

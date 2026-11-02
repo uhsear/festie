@@ -49,6 +49,7 @@ const loadFinishSignup = () => import('./routes/finish-signup');
 const loadForgot = () => import('./routes/forgot-password');
 const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
+const loadInbox = () => import('./routes/inbox');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
 const loadFriendPicks = () => import('./routes/friend-picks');
@@ -91,6 +92,7 @@ const FestivalModeView = withSkeleton(festivalModeLazy, FestivalModeSkeleton);
 const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
 const RateView = withSkeleton(lazyRouteComponent(loadRate), MinimalFallback);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
+const InboxView = withSkeleton(lazyRouteComponent(loadInbox), MinimalFallback);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
 const FriendPicksView = withSkeleton(lazyRouteComponent(loadFriendPicks), MinimalFallback);
 const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton);
@@ -264,6 +266,10 @@ const mapRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/map',
   component: MapView,
+  validateSearch: (s: Record<string, unknown>): { focusStage?: string } =>
+    typeof s.focusStage === 'string' && s.focusStage.length > 0 && s.focusStage.length <= 100
+      ? { focusStage: s.focusStage }
+      : {},
 });
 
 // /crew-plan — one-screen offline-native "what's my crew's plan" digest.
@@ -281,6 +287,16 @@ const accountRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/account',
   component: AccountPage,
+  beforeLoad: async ({ location }) => {
+    await authReady();
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
+  },
+});
+
+const inboxRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/inbox',
+  component: InboxView,
   beforeLoad: async ({ location }) => {
     await authReady();
     if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
@@ -367,6 +383,7 @@ const routeTree = rootRoute.addChildren([
   wrapRoute,
   rateRoute,
   accountRoute,
+  inboxRoute,
   meRoute,
   compareRoute,
   setRoute,

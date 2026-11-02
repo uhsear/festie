@@ -1,4 +1,4 @@
-import { getAvatarColor, getInitials } from '@festie/shared/utils';
+import { getAvatarColor, getInitials, viewAsButtonLabel } from '@festie/shared/utils';
 import { avatarInk } from '../../lib/avatarInk';
 
 interface OtherPick {
@@ -17,6 +17,8 @@ interface Props {
   title: string;
   others: OtherPick[];
   crewNotes: CrewNote[];
+  canViewAs?: (profileId: string) => boolean;
+  onViewAs?: (profileId: string) => void;
 }
 
 const priLabels: Record<string, string> = {
@@ -31,7 +33,7 @@ const priColors: Record<string, string> = {
   maybe: 'var(--color-priority-maybe)',
 };
 
-export default function DetailCrewSection({ title, others, crewNotes }: Props) {
+export default function DetailCrewSection({ title, others, crewNotes, canViewAs, onViewAs }: Props) {
   return (
     <div className="mb-6">
       <div className="text-xs font-bold text-text-secondary mb-2.5 uppercase tracking-[1px]">{title}</div>
@@ -45,6 +47,7 @@ export default function DetailCrewSection({ title, others, crewNotes }: Props) {
         {others.map((o) => {
           const ink = avatarInk(getAvatarColor(o.name));
           const initials = getInitials(o.name);
+          const viewable = !!onViewAs && !!canViewAs && canViewAs(o.profileId);
           return (
             <li
               key={o.profileId}
@@ -71,7 +74,16 @@ export default function DetailCrewSection({ title, others, crewNotes }: Props) {
                 </div>
               )}
               <span>{o.name}</span>
-              <span className="text-xs ml-auto font-semibold" style={{ color: priColors[o.priority] }}>
+              {viewable && (
+                <button
+                  type="button"
+                  className="ml-auto min-h-11 px-2 text-xs font-semibold text-accent-aqua cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+                  onClick={() => onViewAs?.(o.profileId)}
+                >
+                  {viewAsButtonLabel(o.name)}
+                </button>
+              )}
+              <span className={viewable ? 'text-xs font-semibold' : 'text-xs ml-auto font-semibold'} style={{ color: priColors[o.priority] }}>
                 {priLabels[o.priority]}
               </span>
             </li>

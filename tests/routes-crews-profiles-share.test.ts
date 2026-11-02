@@ -1353,6 +1353,10 @@ function makeProfileDeps(overrides: any = {}) {
       users: {
         getByIds: mock.fn(async () => new Map()),
       },
+      crews: {
+        listByUserAndFestival: mock.fn(async () => []),
+        getMembersForCrews: mock.fn(async () => new Map()),
+      },
     },
     ...overrides,
   };
@@ -1395,8 +1399,8 @@ describe('routes/profiles.js', () => {
 
     test('returns profiles successfully', async () => {
       const profiles = [
-        { id: 'p1', userId: 'user-1', festivalId: 'f1' },
-        { id: 'p2', userId: 'user-2', festivalId: 'f1' },
+        { id: 'p1', userId: 'user-1', festivalId: 'f1', picks: { s1: 'must' } },
+        { id: 'p2', userId: 'user-2', festivalId: 'f1', picks: { s1: 'maybe', s2: 'must' } },
       ];
       const { app } = await buildProfileApp({
         getUserFestivalProfile: mock.fn(async () => ({ id: 'p1' })),
@@ -1417,6 +1421,10 @@ describe('routes/profiles.js', () => {
       const res = await request(app).get('/profiles/f1');
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
+      // user-2 shares no crew with the caller: picks hidden, counted anonymously.
+      assert.deepEqual(res.body.data.find((p: any) => p.userId === 'user-2').picks, {});
+      assert.deepEqual(res.body.data.find((p: any) => p.userId === 'user-1').picks, { s1: 'must' });
+      assert.deepEqual(res.body.meta.pickCounts, { s1: 1, s2: 1 });
     });
 
     test('supports paginated response with cursor param', async () => {

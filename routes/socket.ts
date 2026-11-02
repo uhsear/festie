@@ -225,8 +225,11 @@ export default function setupSocketHandlers(deps: any) {
     const previousFestivalId = leaveFestivalRealtime(socket, io);
     if (previousFestivalId && previousFestivalId !== festivalId) emitPresence(previousFestivalId, io);
 
-    // Join new room and set socket state
+    // Join new room and set socket state. The user room carries the author's own
+    // profile:updated (the offline queue's post-drain re-sync) to every device.
+    if (socket.data.userId && socket.data.userId !== session.userId) socket.leave(`user:${socket.data.userId}`);
     socket.join(festivalId);
+    socket.join(`user:${session.userId}`);
     socket.data.userId = session.userId;
     socket.data.username = session.username;
     socket.data.festivalId = festivalId;

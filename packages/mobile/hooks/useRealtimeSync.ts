@@ -31,6 +31,7 @@ import type {
   PresenceUser,
   CrewUpdatedPayload,
   CrewMemberEventPayload,
+  CrewStatusUpdatedPayload,
 } from '@festie/shared/types/socket-events';
 import { setLiveSocket, useLiveSocket } from '../lib/liveSocket';
 
@@ -213,6 +214,15 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     const handleCrewMemberAdded = (data: CrewMemberEventPayload) => reloadCrews(data?.crewId);
     const handleCrewMemberRemoved = (data: CrewMemberEventPayload) => reloadCrews(data?.crewId);
 
+    // A crewmate's last-synced status changed. Apply it only for the open crew, as web does.
+    const handleCrewStatusUpdated = (data: CrewStatusUpdatedPayload) => {
+      const row = data?.status;
+      if (!row) return;
+      const activeId = useCrewStore.getState().activeCrew?.id ?? null;
+      if (!activeId || row.crew_id !== activeId) return;
+      useCrewStore.getState().applyStatusUpdate(row);
+    };
+
     // Festival / sets -> festivalDataStore full reload
     const handleFestivalUpdated = (_data: FestivalIdPayload) => reloadFestival();
     const handleSetAdded = (_data: FestivalIdPayload) => reloadFestival();
@@ -260,6 +270,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     socket.on('crew:updated', handleCrewUpdated);
     socket.on('crew:member-joined', handleCrewMemberAdded);
     socket.on('crew:member-left', handleCrewMemberRemoved);
+    socket.on('crew:status-updated', handleCrewStatusUpdated);
 
     socket.on('festival:updated', handleFestivalUpdated);
     socket.on('festival:set-added', handleSetAdded);
@@ -329,6 +340,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       socket.off('crew:updated', handleCrewUpdated);
       socket.off('crew:member-joined', handleCrewMemberAdded);
       socket.off('crew:member-left', handleCrewMemberRemoved);
+      socket.off('crew:status-updated', handleCrewStatusUpdated);
 
       socket.off('festival:updated', handleFestivalUpdated);
       socket.off('festival:set-added', handleSetAdded);

@@ -5,7 +5,13 @@ import { buildClashMarks, type ClashMark } from '../utils/scheduleGrid';
 import { buildPickConflicts, type ConflictGroup } from '../utils/pickConflicts';
 import { resolveFestivalTimeZone } from '../utils/festivalTime';
 
-export interface DayClashes { count: number; marks: Map<string, ClashMark>; groups: ConflictGroup[] }
+export interface DayClashes {
+  count: number;
+  marks: Map<string, ClashMark>;
+  groups: ConflictGroup[];
+  /** My picked sets on the selected day. 0 without a profile, like `count`. */
+  picked: number;
+}
 
 /**
  * Clash groups for the selected day plus a per-set mark (hatch segments and
@@ -28,6 +34,11 @@ export function useDayClashes(): DayClashes {
     [sets, days, selectedDay, currentProfileId, myPicks, timeZone],
   );
 
+  const picked = useMemo(
+    () => (currentProfileId && myPicks ? sets.filter((s) => s.dayIndex === selectedDay && myPicks[s.id]).length : 0),
+    [sets, selectedDay, currentProfileId, myPicks],
+  );
+
   return useMemo(() => {
     const stageNames = new Map(stages.map((st) => [st.id, st.name]));
     const marks = buildClashMarks(groups, (set) => {
@@ -35,6 +46,6 @@ export function useDayClashes(): DayClashes {
       const name = artistDisplayName(set, separator);
       return stage ? `${name} · ${stage}` : name;
     });
-    return { count: groups.length, marks, groups };
-  }, [groups, stages, separator]);
+    return { count: groups.length, marks, groups, picked };
+  }, [groups, stages, separator, picked]);
 }

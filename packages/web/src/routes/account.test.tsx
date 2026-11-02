@@ -43,6 +43,9 @@ vi.mock('../components/account/DangerZone', () => ({
 vi.mock('../components/account/PaymentHandlesSection', () => ({
   default: () => <div data-testid="payment-handles-section" />,
 }));
+vi.mock('../components/account/PrivacySection', () => ({
+  default: () => <div data-testid="privacy-section" />,
+}));
 vi.mock('../components/account/PublicScheduleSection', () => ({
   default: () => <div data-testid="public-schedule-section" />,
 }));
@@ -157,6 +160,13 @@ describe('AccountPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
+  });
+
+  it('renders the privacy section before the public schedule section', () => {
+    render(<AccountPage />);
+    const privacy = screen.getByTestId('privacy-section');
+    const pub = screen.getByTestId('public-schedule-section');
+    expect(privacy.compareDocumentPosition(pub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('links Festival Wrap to /wrap', () => {

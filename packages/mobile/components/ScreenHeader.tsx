@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import DisplayWords from './DisplayWords';
 import AppPressable from './AppPressable';
+import InboxBell from './InboxBell';
 
 /**
  * Signals whether a full-width chrome banner (OfflineBanner) is currently
@@ -38,7 +39,8 @@ interface ScreenHeaderProps {
 
 /**
  * Standard screen header: optional leading icon, a title with optional
- * subtitle, and an optional trailing slot. Purely presentational.
+ * subtitle, and an optional trailing slot. Not purely presentational: it
+ * reads the auth and inbox stores (via InboxBell) to show the notification bell.
  *
  * ## Adoption rule
  * Use ScreenHeader on **tab-root screens only** (Schedule, Picks, Crew,
@@ -126,7 +128,10 @@ export default function ScreenHeader({
           </Text>
         ) : null}
       </View>
-      {right ? <View style={styles.right}>{right}</View> : null}
+      <View style={styles.right}>
+        <InboxBell />
+        {right}
+      </View>
     </View>
   );
 }
@@ -169,5 +174,8 @@ const useStyles = makeStyles((t) => ({
   },
   right: {
     flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
   },
 }));

@@ -3,20 +3,14 @@
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { MapPin as Pin } from '@festie/shared/utils';
-import {
-  popupContent,
-  subEl,
-  titleEl,
-  type GlMarker,
-  type GlRefObject,
-  type MapRefObject,
-  type MapStatus,
-} from './mapDom';
+import type { GlMarker, GlRefObject, MapRefObject, MapStatus } from './mapDom';
 
 /**
  * Stage markers (festival-mapped; stage-colored, labelled). Rebuilt when a
  * stage's coord/color changes (via `stagesKey`); the pin array is read through a
- * ref so the deps stay honest (`[status, stagesKey]`).
+ * ref so the deps stay honest (`[status, stagesKey]`). A tap or Enter/Space calls
+ * `onSelectPlace`; without it (authoring) the marker adds no listener, so a tap
+ * still reaches the map click.
  */
 export function useStageMarkers(
   mapRef: MapRefObject,
@@ -25,9 +19,12 @@ export function useStageMarkers(
   stagePins: Pin[],
   stagesKey: string,
   markersRef: MutableRefObject<GlMarker[]>,
+  onSelectPlace?: (pin: Pin) => void,
 ): void {
   const stagePinsRef = useRef(stagePins);
   stagePinsRef.current = stagePins;
+  const selectRef = useRef(onSelectPlace);
+  selectRef.current = onSelectPlace;
 
   useEffect(() => {
     const map = mapRef.current;
@@ -52,17 +49,19 @@ export function useStageMarkers(
       tag.className = 'festie-stage-tag';
       tag.textContent = p.label;
       el.appendChild(tag);
-      const popupEl = popupContent([titleEl(p.label), subEl('Stage')]);
-      const marker = new gl.Marker({ element: el })
-        .setLngLat([p.longitude, p.latitude])
-        .setPopup(new gl.Popup({ offset: 14, closeButton: false }).setDOMContent(popupEl))
-        .addTo(map);
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          marker.togglePopup();
-        }
-      });
+      const marker = new gl.Marker({ element: el }).setLngLat([p.longitude, p.latitude]).addTo(map);
+      if (selectRef.current) {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectRef.current?.(p);
+        });
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            selectRef.current?.(p);
+          }
+        });
+      }
       markersRef.current.push(marker);
     }
   }, [status, stagesKey, mapRef, glRef, markersRef]);

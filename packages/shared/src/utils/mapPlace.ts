@@ -6,8 +6,8 @@
  * web CrewMap and the mobile OfflineMap, so both show the same copy and math.
  */
 
-import { buildPursuit, etaMinutes } from './geo';
-import type { Coord } from './geo';
+import { buildPursuit, etaMinutes, nearestPin } from './geo';
+import type { Coord, Pursuit } from './geo';
 import { humanizeAmenityType } from './mapAuthoring';
 import type { MapPin } from './mapPins';
 import type { AmenityType, Stage } from '../types/domain';
@@ -160,3 +160,65 @@ export function walkToStage(
 export function metersPerPixel(latitude: number, zoom: number): number {
   return (40075016.686 * Math.cos((latitude * Math.PI) / 180)) / (512 * 2 ** zoom);
 }
+
+/** What a Nearest tap should do next. */
+export type NearestStep =
+  | { kind: 'missing'; type: AmenityType }
+  | { kind: 'need-fix'; type: AmenityType }
+  | { kind: 'go'; type: AmenityType; pin: MapPin };
+
+export function nearestStep(type: AmenityType, amenityPins: readonly MapPin[], self: Coord | null): NearestStep {
+  if (!amenityPins.some((p) => p.amenityType === type)) return { kind: 'missing', type };
+  if (!self) return { kind: 'need-fix', type };
+  const hit = nearestPin(self, amenityPins, (p) => p.amenityType === type);
+  return hit ? { kind: 'go', type, pin: hit.pin } : { kind: 'need-fix', type };
+}
+
+/** Pursue target for a Nearest result. */
+export function nearestTarget(step: Extract<NearestStep, { kind: 'go' }>): { id: string; label: string; coord: Coord } {
+  const { pin, type } = step;
+  return {
+    id: `amenity:${pin.id}`,
+    label: pin.label || humanizeAmenityType(type),
+    coord: { latitude: pin.latitude, longitude: pin.longitude },
+  };
+}
+
+/** Pursue target for a place card's "Show the way". */
+export function placeTarget(place: MapPlace): { id: string; label: string; coord: Coord } {
+  return { id: placeTargetId(place), label: place.name, coord: place.coord };
+}
+
+/** Values to prefill the meeting-point form, clamped to meetingPointCreateSchema (label 100, location 200, stageReference 100). */
+export function meetingPointPrefill(place: MapPlace): { label: string; location: string; stageReference: string } {
+  return {
+    label: `Meet at ${place.name}`.slice(0, 100),
+    location: place.name.slice(0, 200),
+    stageReference: place.kind === 'stage' ? place.name.slice(0, 100) : '',
+  };
+}
+
+/** The pin behind a place-select or an open card, or null when it is no longer mapped. */
+export function findMapPin(kind: MapPlaceKind, id: string, pins: readonly MapPin[]): MapPin | null {
+  return pins.find((p) => p.kind === kind && p.id === id) ?? null;
+}
+
+/** Pursue bar line for a screen reader, with a fix. */
+export function showingWayLabel(label: string, p: Pursuit): string {
+  return `Showing the way to ${label}, ${p.distanceLabel}${p.compass ? ' ' + p.compass : ''}${p.etaLabel !== '—' ? ', about ' + p.etaLabel + ' walk' : ''}`;
+}
+
+export const MAP_COPY = {
+  showWay: 'Show the way',
+  setMeetingPoint: 'Set as meeting point',
+  share: 'Share',
+  copied: 'Copied',
+  close: 'Close',
+  stopShowingWay: 'Stop showing the way',
+  showMyLocation: 'Show my location',
+  nearest: 'Nearest',
+  call911: 'Call 911',
+  tryAgain: 'Try again',
+  showStageOnMap: 'Show stage on map',
+  pointMeThere: 'Point me there',
+} as const;

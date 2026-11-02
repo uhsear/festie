@@ -38,7 +38,11 @@ vi.mock('../features/FestivalModeToggle', () => ({
   default: () => <div data-testid="festival-mode-toggle" />,
 }));
 
+const mockBadge = vi.hoisted(() => ({ value: { count: 0, dot: false, label: null as string | null } }));
+vi.mock('../../hooks/useCrewAttention', () => ({ useCrewAttention: () => mockBadge.value }));
+
 import Header from './Header';
+import { useInboxStore } from '@festie/shared/stores/inboxStore';
 import { useUIStore as useRealUIStore } from '@festie/shared/stores/uiStore';
 import { useLocation } from '@tanstack/react-router';
 
@@ -48,7 +52,41 @@ describe('Header', () => {
     mockAuthStore.mockReturnValue(null);
     mockConnected = true;
     mockFestival.scheduleView = null;
+    mockBadge.value = { count: 0, dot: false, label: null };
+    useInboxStore.setState({ items: [], seenAt: null });
     document.documentElement.removeAttribute('data-theme');
+  });
+
+  function unreadItems(n: number) {
+    return Array.from({ length: n }, (_, i) => ({
+      id: `n${i}`,
+      type: 'x',
+      title: 't',
+      body: 'b',
+      createdAt: '2026-11-02T00:00:00.000Z',
+      data: {},
+    }));
+  }
+
+  it('shows the inbox bell only when signed in', () => {
+    render(<Header />);
+    expect(screen.queryByRole('link', { name: /^Notifications/ })).not.toBeInTheDocument();
+  });
+
+  it('labels the bell with the unread count', () => {
+    mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
+    useInboxStore.setState({ items: unreadItems(3), seenAt: '2026-11-01T00:00:00.000Z' });
+    render(<Header />);
+    const bell = screen.getByRole('link', { name: 'Notifications, 3 unread' });
+    expect(bell).toHaveAttribute('href', '/inbox');
+    expect(bell).toHaveTextContent('3');
+  });
+
+  it('caps the bell count at 9+', () => {
+    mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
+    useInboxStore.setState({ items: unreadItems(12), seenAt: '2026-11-01T00:00:00.000Z' });
+    render(<Header />);
+    expect(screen.getByRole('link', { name: 'Notifications, 12 unread' })).toHaveTextContent('9+');
   });
 
   it('renders the FESTIE logo', () => {

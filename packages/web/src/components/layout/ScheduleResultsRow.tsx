@@ -1,6 +1,6 @@
 import { useLocation } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
-import { useFestival } from '@festie/shared/hooks';
+import { useFestival, useViewAs } from '@festie/shared/hooks';
 import { hasAnyPick, isStageFilterActive, scheduleResultsSummary } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
 
@@ -18,10 +18,11 @@ export default function ScheduleResultsRow() {
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
   const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
   const { getFilteredSets } = useFestival();
+  const { target, clear } = useViewAs();
 
   const mineActive = onlyMine && hasAnyPick(picks);
   const stageActive = isStageFilterActive(activeStages, stages.length);
-  if (searchQuery.trim() === '' && !mineActive && !stageActive && activeGenres.length === 0) return null;
+  if (searchQuery.trim() === '' && !mineActive && !stageActive && activeGenres.length === 0 && !target) return null;
 
   const sets = getFilteredSets();
   const timedView = pathname === '/timeline' || pathname === '/grid';
@@ -32,6 +33,7 @@ export default function ScheduleResultsRow() {
     activeStageCount: stageActive ? activeStages.length : 0,
     activeGenreCount: activeGenres.length,
     tbaCount,
+    viewAsName: target?.name,
   });
 
   return (
@@ -45,6 +47,7 @@ export default function ScheduleResultsRow() {
           setOnlyMine(false);
           setActiveStages([]);
           setActiveGenres([]);
+          clear();
         }}
         className={cn(
           'min-h-[44px] px-2 cursor-pointer font-semibold text-accent-aqua',

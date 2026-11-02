@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
 import type { CrewMeetingPoint } from '@festie/shared/types';
@@ -26,6 +26,8 @@ export default function MapView() {
 }
 
 function MapViewInner() {
+  const { focusStage } = useSearch({ from: '/map' });
+  const navigate = useNavigate();
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const festivalStages = useFestivalStore((s) => s.stages);
   const mapFestival = useMemo(
@@ -94,6 +96,8 @@ function MapViewInner() {
           peers={peers}
           activeSosList={hasCrew ? sosList : []}
           festival={mapFestival}
+          focusPinId={focusStage ?? null}
+          onFocusHandled={() => navigate({ to: '/map', search: {}, replace: true })}
           canvasClassName="h-[calc(100dvh-var(--bottom-nav-h,0px)-11rem)] min-h-[320px]"
         />
       </Suspense>

@@ -3,16 +3,20 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import type { Coord } from '@festie/shared/utils';
+import { geoStateFromErrorCode, type Coord, type GeoState } from '@festie/shared/utils';
 
-export type GeoState = 'idle' | 'locating' | 'denied' | 'on';
+export type { GeoState };
 
 export interface GeolocationWatch {
   /** The user's own GPS fix, or null until they enable location / on failure. */
   selfCoord: Coord | null;
+  /** The fix's reported accuracy radius in metres, or null when unknown. */
+  accuracyM: number | null;
   geoState: GeoState;
   /** Start a continuous browser geolocation watch (idempotent while active). */
   enableLocation: () => void;
+  /** Stop any watch and start again (after a weak signal or a blocked prompt). */
+  retryLocation: () => void;
 }
 
 /**
@@ -24,6 +28,7 @@ export interface GeolocationWatch {
  */
 export function useGeolocationWatch(): GeolocationWatch {
   const [selfCoord, setSelfCoord] = useState<Coord | null>(null);
+  const [accuracyM, setAccuracyM] = useState<number | null>(null);
   const [geoState, setGeoState] = useState<GeoState>('idle');
   const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
   const watchIdRef = useRef<number | null>(null);
@@ -41,23 +46,29 @@ export function useGeolocationWatch(): GeolocationWatch {
   const startWatch = useCallback(() => {
     const geo = typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
     if (!geo) {
-      setGeoState('denied');
+      setGeoState('unavailable');
       return;
     }
     if (watchIdRef.current != null) return; // already watching
     setGeoState((s) => (s === 'on' ? s : 'locating'));
     watchIdRef.current = geo.watchPosition(
       (pos) => {
-        const { latitude, longitude } = pos.coords;
+        const { latitude, longitude, accuracy } = pos.coords;
         if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
           setSelfCoord({ latitude, longitude });
+          setAccuracyM(Number.isFinite(accuracy) ? accuracy : null);
           setGeoState('on');
         }
       },
-      () => {
-        setGeoState('denied');
-        wantedRef.current = false;
-        clearWatch();
+      (err) => {
+        if (geoStateFromErrorCode(err?.code) === 'denied') {
+          setGeoState('denied');
+          wantedRef.current = false;
+          clearWatch();
+          return;
+        }
+        // A timeout or lost signal is not a refusal: keep watching so a later fix wins.
+        setGeoState((s) => (s === 'on' ? s : 'unavailable'));
       },
       lowPowerRef.current
         ? { enableHighAccuracy: false, maximumAge: 30_000, timeout: 20_000 }
@@ -69,6 +80,11 @@ export function useGeolocationWatch(): GeolocationWatch {
     wantedRef.current = true;
     startWatch();
   }, [startWatch]);
+
+  const retryLocation = useCallback(() => {
+    clearWatch();
+    enableLocation();
+  }, [clearWatch, enableLocation]);
 
   // Restart with the new options when low-power mode flips mid-watch.
   const firstRunRef = useRef(true);
@@ -94,5 +110,5 @@ export function useGeolocationWatch(): GeolocationWatch {
     };
   }, [clearWatch, startWatch]);
 
-  return { selfCoord, geoState, enableLocation };
+  return { selfCoord, accuracyM, geoState, enableLocation, retryLocation };
 }
