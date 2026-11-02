@@ -113,11 +113,13 @@ vi.mock('./ClashPrompt', () => ({
   ),
 }));
 const mockClearPick = vi.fn();
+const moveMock = vi.hoisted(() => ({ value: null as null | { chip: string; line: string; a11y: string } }));
 vi.mock('@festie/shared/hooks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@festie/shared/hooks')>()),
   useSpotifyPreview: () => mockUseSpotifyPreview(),
   usePickClear: () => mockClearPick,
   useCanPick: () => true,
+  useSetMove: () => moveMock.value,
 }));
 vi.mock('../../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 vi.mock('./DetailPriorityPicker', () => ({
@@ -411,6 +413,20 @@ describe('DetailPanel', () => {
     await user.click(screen.getByRole('button', { name: /Reminder 30m/ }));
     await user.click(screen.getByRole('button', { name: 'Reminder 30m before, click to clear' }));
     expect(mockSaveReminder).toHaveBeenCalledWith('fest-1', 'set-1', null);
+  });
+
+  it('shows the old slot under the time when the set moved', () => {
+    moveMock.value = { chip: 'Moved', line: 'Moved from Sat 10:00 PM, Sahara', a11y: 'Moved from Saturday 10:00 PM, Sahara' };
+    render(<DetailPanel {...defaultProps} />);
+    const line = screen.getByTestId('set-moved');
+    expect(line).toHaveTextContent('Moved from Sat 10:00 PM, Sahara');
+    expect(line).toHaveAttribute('aria-label', 'Moved from Saturday 10:00 PM, Sahara');
+  });
+
+  it('shows no moved line when the set did not move', () => {
+    moveMock.value = null;
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByTestId('set-moved')).toBeNull();
   });
 
   it('shows an error toast and resets busy when saveReminder rejects', async () => {

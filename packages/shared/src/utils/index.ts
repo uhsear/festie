@@ -86,3 +86,4 @@ export * from './guestPicks';
 export * from './pickMenu';
 export * from './crewDays';
 export * from './privacySummary';
+export * from './setMoves';

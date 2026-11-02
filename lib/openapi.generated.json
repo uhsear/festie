@@ -267,6 +267,38 @@
           "linkUrl": {
             "nullable": true,
             "type": "string"
+          },
+          "movedAt": {
+            "type": "string"
+          },
+          "movedFrom": {
+            "type": "object",
+            "properties": {
+              "dayIndex": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "stageId": {
+                "nullable": true,
+                "type": "string"
+              },
+              "start": {
+                "nullable": true,
+                "type": "string"
+              },
+              "end": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "dayIndex",
+              "stageId",
+              "start",
+              "end"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -389,6 +421,38 @@
                       "endTime": {
                         "nullable": true,
                         "type": "string"
+                      },
+                      "movedAt": {
+                        "type": "string"
+                      },
+                      "movedFrom": {
+                        "type": "object",
+                        "properties": {
+                          "dayIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "stageId": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "start": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "end": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "dayIndex",
+                          "stageId",
+                          "start",
+                          "end"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -1351,6 +1415,38 @@
                       "linkUrl": {
                         "nullable": true,
                         "type": "string"
+                      },
+                      "movedAt": {
+                        "type": "string"
+                      },
+                      "movedFrom": {
+                        "type": "object",
+                        "properties": {
+                          "dayIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "stageId": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "start": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "end": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "dayIndex",
+                          "stageId",
+                          "start",
+                          "end"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [

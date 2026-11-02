@@ -109,6 +109,16 @@ export const festivalSetResponseSchema = z.object({
   startTime: z.string().nullable(),
   endTime: z.string().nullable(),
   linkUrl: z.string().nullable(),
+  // T46: present only for 48 hours after an admin moved the set (see lib/set-moves.ts).
+  movedAt: z.string().optional(),
+  movedFrom: z
+    .object({
+      dayIndex: z.number().int(),
+      stageId: z.string().nullable(),
+      start: z.string().nullable(),
+      end: z.string().nullable(),
+    })
+    .optional(),
 });
 export type FestivalSetResponse = z.infer<typeof festivalSetResponseSchema>;
 

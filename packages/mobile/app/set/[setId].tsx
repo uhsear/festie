@@ -28,6 +28,7 @@ import {
   usePickSync,
   usePickClear,
   useFestival,
+  useSetMove,
   useCrew,
   useDebouncedNote,
   useSpotifyPreview,
@@ -162,6 +163,7 @@ export default function SetDetailScreen() {
   const haptics = useHaptics();
 
   const set = useMemo(() => sets.find((x) => x.id === setId), [sets, setId]);
+  const move = useSetMove(set ?? null);
 
   // Cold deep-link (festie.us/set/<id> or festie://set/<id>): the set isn't in
   // the store yet because its festival isn't loaded. Resolve which festival the
@@ -498,6 +500,11 @@ export default function SetDetailScreen() {
           </View>
         </View>
         <Text style={styles.time}>{whenLine}</Text>
+        {move ? (
+          <Text style={styles.moved} accessibilityLabel={move.a11y}>
+            {move.line}
+          </Text>
+        ) : null}
 
         {/* Priority picker: guests pick on this device */}
         {canPick ? (
@@ -997,6 +1004,10 @@ const useStyles = makeStyles((t) => ({
   },
   time: {
     ...typeStyle('body'),
+    color: t.colors.text.secondary,
+  },
+  moved: {
+    ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
   chipRow: {

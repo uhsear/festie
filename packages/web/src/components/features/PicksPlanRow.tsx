@@ -1,8 +1,8 @@
 import { memo, useCallback } from 'react';
-import { Bell, FileText, TriangleAlert } from 'lucide-react';
+import { Bell, FileText, TriangleAlert, ArrowRightLeft } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { usePicks, useFestival, usePickClear } from '@festie/shared/hooks';
+import { usePicks, useFestival, usePickClear, useSetMove } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { COPY, PRIORITY_OPTIONS } from '@festie/shared/constants';
@@ -37,6 +37,7 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   const { toast } = useToast();
   const clearPick = usePickClear(useUndoNotifier());
+  const move = useSetMove(set);
 
   const b2bSeparator = currentFestival?.b2bSeparator;
   const artist = artistDisplayName(set, b2bSeparator);
@@ -68,7 +69,8 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
     `${artist}, ${time}, ${stageName}` +
     (hasNote ? ', has note' : '') +
     (hasReminder ? `, reminder ${reminderLeadA11y(reminder)} before` : '') +
-    (hasClash ? ', clash' : '');
+    (hasClash ? ', clash' : '') +
+    (move ? `, ${move.a11y}` : '');
 
   return (
     <div className="flex items-center gap-2 pl-4 pr-2 py-2 w-full bg-bg-card border border-border rounded-xl mb-2">
@@ -81,7 +83,7 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
         <div className="text-xs text-text-muted min-w-[56px] font-semibold tabular-nums">{time}</div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold overflow-hidden text-ellipsis whitespace-nowrap">{artist}</div>
-          {(hasNote || hasReminder || hasClash) && (
+          {(hasNote || hasReminder || hasClash || !!move) && (
             <div className="mt-0.5 flex items-center gap-2 text-xs text-text-muted">
               {hasNote && (
                 <span className="inline-flex items-center">
@@ -100,6 +102,12 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
                 <span className="inline-flex items-center gap-0.5 font-semibold text-[var(--color-text-danger)]">
                   <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />
                   {COPY.clash.badge}
+                </span>
+              )}
+              {move && (
+                <span data-testid="set-moved-chip" aria-hidden="true" className="inline-flex items-center gap-0.5 font-semibold">
+                  <ArrowRightLeft className="w-3.5 h-3.5" aria-hidden="true" />
+                  {move.chip}
                 </span>
               )}
             </div>

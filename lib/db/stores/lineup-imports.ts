@@ -12,6 +12,7 @@ import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
 import { buildMultiInsert, insertSetsBatch } from './festivals';
 import type { LineupImportPlan, LineupImportWrites, SetValues } from '../../lineup-import-plan';
+import { nextMoveMark, type SlotAt } from '../../set-moves';
 
 export type BuildPlan = (festival: any) => { plan: LineupImportPlan; writes: LineupImportWrites };
 
@@ -25,12 +26,21 @@ export interface UndoResult {
 
 const sameText = (a: any, b: any) => (a ?? '') === (b ?? '');
 
+type MarkContext = { published: boolean; now: Date };
+
+/** The locked festival row (truthy), or null when it does not exist. */
 async function lockFestival(client: any, festivalId: string) {
-  const { rows } = await client.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE', [
-    festivalId,
-  ]);
-  return rows.length > 0;
+  const { rows } = await client.query(
+    'SELECT id, published_at FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+    [festivalId],
+  );
+  return (rows[0] as { id: string; published_at: Date | null } | undefined) ?? null;
 }
+
+const markContext = (festival: { published_at: Date | null }): MarkContext => ({
+  published: festival.published_at != null,
+  now: new Date(),
+});
 
 async function insertNewStages(client: any, festivalId: string, stages: LineupImportWrites['newStages']) {
   if (stages.length === 0) return;
@@ -66,7 +76,29 @@ async function insertNewSets(client: any, festivalId: string, inserts: LineupImp
   await insertSetsBatch(client, setRows);
 }
 
-async function writeSetValues(client: any, festivalId: string, setId: string, v: SetValues) {
+/** The set's "moved" mark after the write. An import never changes the day, so the day key is its position. */
+async function nextImportMark(client: any, festivalId: string, setId: string, v: SetValues, ctx: MarkContext) {
+  if (!ctx.published) return null;
+  const { rows } = await client.query(
+    'SELECT day_index, stage_id, start_time, end_time, moved_at, moved_from FROM festival_sets WHERE id = $1 AND festival_id = $2',
+    [setId, festivalId],
+  );
+  const cur = rows[0];
+  if (!cur) return null;
+  const before: SlotAt = {
+    dayKey: `#${cur.day_index}`,
+    dayIndex: cur.day_index,
+    stageId: cur.stage_id,
+    start: cur.start_time,
+    end: cur.end_time,
+  };
+  const after: SlotAt = { ...before, stageId: v.stageId, start: v.startTime, end: v.endTime };
+  const prior = cur.moved_at && cur.moved_from ? { movedAt: new Date(cur.moved_at), movedFrom: cur.moved_from } : null;
+  return nextMoveMark(prior, before, after, ctx.now);
+}
+
+async function writeSetValues(client: any, festivalId: string, setId: string, v: SetValues, ctx: MarkContext) {
+  const mark = await nextImportMark(client, festivalId, setId, v, ctx);
   await client.query(
     `
   UPDATE festival_sets
@@ -76,12 +108,25 @@ async function writeSetValues(client: any, festivalId: string, setId: string, v:
     end_time = $3,
     artist = $4,
     artists = $5,
-    link_url = $6
+    link_url = $6,
+    moved_at = $9,
+    moved_from = $10
   WHERE
     id = $7
     AND festival_id = $8
 `,
-    [v.stageId, v.startTime, v.endTime, v.artist, JSON.stringify(v.artists), v.linkUrl, setId, festivalId],
+    [
+      v.stageId,
+      v.startTime,
+      v.endTime,
+      v.artist,
+      JSON.stringify(v.artists),
+      v.linkUrl,
+      setId,
+      festivalId,
+      mark ? mark.movedAt.toISOString() : null,
+      mark ? JSON.stringify(mark.movedFrom) : null,
+    ],
   );
 }
 
@@ -163,7 +208,13 @@ async function removeCreatedSets(client: any, festivalId: string, setIds: string
 }
 
 /** Puts back each changed set that nobody edited after the import. */
-async function restoreUpdatedSets(client: any, festivalId: string, updated: any[], result: UndoResult) {
+async function restoreUpdatedSets(
+  client: any,
+  festivalId: string,
+  updated: any[],
+  result: UndoResult,
+  ctx: MarkContext,
+) {
   for (const u of updated) {
     const { rows } = await client.query(
       'SELECT stage_id, start_time, end_time, artist, link_url FROM festival_sets WHERE id = $1 AND festival_id = $2',
@@ -181,7 +232,7 @@ async function restoreUpdatedSets(client: any, festivalId: string, updated: any[
       result.kept.push({ setId: u.id, artist: cur?.artist ?? u.after.artist, reason: 'edited' });
       continue;
     }
-    await writeSetValues(client, festivalId, u.id, u.before);
+    await writeSetValues(client, festivalId, u.id, u.before, ctx);
     result.restored++;
   }
 }
@@ -235,7 +286,9 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
      */
     async commit(festivalId: string, buildPlan: BuildPlan, meta: { createdBy: string | null }) {
       return withTransaction(pool, async (client) => {
-        if (!(await lockFestival(client, festivalId))) return { notFound: true as const };
+        const locked = await lockFestival(client, festivalId);
+        if (!locked) return { notFound: true as const };
+        const ctx = markContext(locked);
         const festival = await festivals.getById(festivalId, client);
         const { plan, writes } = buildPlan(festival);
         if (plan.counts.error > 0 || plan.problems.length > 0) return { committed: false as const, plan };
@@ -243,7 +296,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         await insertNewStages(client, festivalId, writes.newStages);
         await insertNewDays(client, festivalId, writes.newDays);
         await insertNewSets(client, festivalId, writes.inserts);
-        for (const u of writes.updates) await writeSetValues(client, festivalId, u.setId, u.after);
+        for (const u of writes.updates) await writeSetValues(client, festivalId, u.setId, u.after, ctx);
         await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
 
         const importId = `import-${crypto.randomBytes(8).toString('hex')}`;
@@ -331,7 +384,8 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
     /** Undoes the newest import that is not undone yet. */
     async undo(festivalId: string, importId: string) {
       return withTransaction(pool, async (client) => {
-        if (!(await lockFestival(client, festivalId))) return { notFound: true as const };
+        const locked = await lockFestival(client, festivalId);
+        if (!locked) return { notFound: true as const };
         const { rows } = await client.query(
           'SELECT * FROM lineup_imports WHERE id = $1 AND festival_id = $2 FOR UPDATE',
           [importId, festivalId],
@@ -344,7 +398,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
 
         const result: UndoResult = { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] };
         await removeCreatedSets(client, festivalId, record.created_set_ids, result);
-        await restoreUpdatedSets(client, festivalId, record.updated_sets || [], result);
+        await restoreUpdatedSets(client, festivalId, record.updated_sets || [], result, markContext(locked));
         await removeCreatedStagesAndDays(client, festivalId, record, result);
         await client.query('UPDATE lineup_imports SET undone_at = NOW(), undo_summary = $2 WHERE id = $1', [
           importId,

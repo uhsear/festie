@@ -85,10 +85,14 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return result.rows.map((row: any) => row.userId);
     },
 
-    /** User ids who picked each set, keyed by set id. Sets nobody picked are absent. */
+    /**
+     * User ids who picked each set or set a reminder on it, keyed by set id. Each user
+     * appears once per set. Sets nobody picked or set a reminder on are absent.
+     */
     async pickersBySet(festivalId: string, setIds: string[]): Promise<Map<string, string[]>> {
       const bySet = new Map<string, string[]>();
       if (setIds.length === 0) return bySet;
+      // UNION removes a user who both picked a set and set a reminder on it. The CASE guards a non-object reminders_json.
       const result = await pool.query(
         `
         SELECT
@@ -100,6 +104,23 @@ export default function createProfilesStore(pool: Pool, utils: any) {
         WHERE
           fp.festival_id = $1
           AND p.set_id = ANY ($2)
+          AND fp.deleted_at IS NULL
+          AND fp.user_id IS NOT NULL
+        UNION
+        SELECT
+          k AS "setId",
+          fp.user_id AS "userId"
+        FROM
+          festival_profiles fp,
+          jsonb_object_keys(
+            CASE
+              WHEN jsonb_typeof(fp.reminders_json) = 'object' THEN fp.reminders_json
+              ELSE '{}'::jsonb
+            END
+          ) AS k
+        WHERE
+          fp.festival_id = $1
+          AND k = ANY ($2)
           AND fp.deleted_at IS NULL
           AND fp.user_id IS NOT NULL
       `,
