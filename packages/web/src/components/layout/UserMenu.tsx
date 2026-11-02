@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useAuthStore } from '@festie/shared';
 import { PASSWORD_CHANGED_MESSAGE } from '@festie/shared/stores/authStore';
-import { api } from '@festie/shared/services/api';
+import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { useNavigate } from '@tanstack/react-router';
 import { useToast } from '../../lib/toastContext';
 import { identityLabel } from '@festie/shared/utils';
@@ -63,8 +63,8 @@ export default function UserMenu({ user }: UserMenuProps) {
   };
 
   const handleChangeEmailSubmit = async (email: string, password: string) => {
-    const res = await api.post<{ message?: string }>('/account/email', { email, password });
-    toast(res?.message || 'Check your new address for the verification link.', 'success');
+    await useAuthStore.getState().requestEmailChange(email, password);
+    toast(ACCOUNT_COPY.emailSent(email), 'success');
     setShowChangeEmail(false);
     await useAuthStore.getState().checkSession();
   };

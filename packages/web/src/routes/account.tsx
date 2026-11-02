@@ -8,13 +8,15 @@ import PasswordSection from '../components/account/PasswordSection';
 import NotificationSection from '../components/account/NotificationSection';
 import NotificationPrefsSection from '../components/account/NotificationPrefsSection';
 import PublicScheduleSection from '../components/account/PublicScheduleSection';
-import ReplayIntroRow from '../components/account/ReplayIntroRow';
+import DevicesSection from '../components/account/DevicesSection';
+import HelpSection from '../components/account/HelpSection';
 import DaylightSection from '../components/account/DaylightSection';
 import HapticsSection from '../components/account/HapticsSection';
 import HistorySection from '../components/account/HistorySection';
 import DangerZone from '../components/account/DangerZone';
 import Avatar from '../components/ui/Avatar';
 import { identityLabel } from '@festie/shared/utils';
+import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 
 export default function AccountPage() {
@@ -83,6 +85,7 @@ function AccountPageInner() {
         {/* Security */}
         <Section label="Security">
           <PasswordSection />
+          <DevicesSection />
         </Section>
 
         {/* Preferences */}
@@ -91,7 +94,6 @@ function AccountPageInner() {
           <HapticsSection />
           <NotificationSection />
           <NotificationPrefsSection />
-          <ReplayIntroRow />
         </Section>
 
         <Section label="Festival">
@@ -107,24 +109,9 @@ function AccountPageInner() {
           </Link>
         </Section>
 
-        {/* Legal */}
-        <Section label="Legal">
-          <a
-            href="/privacy.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-1 text-sm text-accent-aqua hover:underline"
-          >
-            Privacy Policy
-          </a>
-          <a
-            href="/third-party-notices.txt"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-1 text-sm text-accent-aqua hover:underline"
-          >
-            Third-party notices
-          </a>
+        {/* Help and legal */}
+        <Section label={ACCOUNT_COPY.helpTitle}>
+          <HelpSection />
         </Section>
 
         {/* Danger Zone */}

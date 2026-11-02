@@ -133,8 +133,8 @@ describe('openapi: generateOpenAPISpec', () => {
   it('derives the login request body from the Zod schema', () => {
     const spec = generateOpenAPISpec({});
     const schema = (spec.paths['/api/v1/auth/login'] as any).post.requestBody.content['application/json'].schema;
-    // loginSchema enforces username .max(40) — the derived spec reflects it.
-    assert.equal(schema.properties.username.maxLength, 40);
+    // loginSchema enforces username .max(254) (a username or an email) — the derived spec reflects it.
+    assert.equal(schema.properties.username.maxLength, 254);
     assert.deepEqual([...schema.required].sort(), ['password', 'username']);
   });
 

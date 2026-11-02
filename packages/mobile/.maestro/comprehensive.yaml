@@ -12,7 +12,8 @@ env:
     visible: "Sign in to your account"
     timeout: 90000
 - takeScreenshot: c01-login
-- tapOn: "Username"
+- tapOn:
+    id: "login-username-input"
 - inputText: "asir"
 - tapOn: "Password"
 - inputText: "${TEST_PASSWORD}"

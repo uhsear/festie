@@ -164,7 +164,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     Keyboard.dismiss();
     if (!username.trim() || !password.trim()) {
-      setError('Username and password are required');
+      setError('Enter your username or email and your password.');
       return;
     }
     setError(null);
@@ -228,19 +228,20 @@ export default function LoginScreen() {
           </Text>
         ) : null}
 
-        {/* Visible only: the input carries the same accessibilityLabel, so VoiceOver (and Maestro) see one "Username". */}
+        {/* Visible only: the input carries the same accessibilityLabel, so VoiceOver sees one "Username or email" (Maestro targets the testID). */}
         <Text style={styles.label} accessible={false} importantForAccessibility="no">
-          Username
+          {AUTH_COPY.loginIdentifierLabel}
         </Text>
         <TextInput
           testID="login-username-input"
           style={[styles.input, focusedField === 'username' && styles.inputFocused]}
-          placeholder="Username"
+          placeholder={AUTH_COPY.loginIdentifierLabel}
           placeholderTextColor={t.colors.text.placeholder}
-          accessibilityLabel="Username"
+          accessibilityLabel={AUTH_COPY.loginIdentifierLabel}
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
+          keyboardType="email-address"
           autoComplete="username"
           textContentType="username"
           returnKeyType="next"

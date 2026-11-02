@@ -15,7 +15,7 @@ import type {
   paymentHandlesSchema,
   updateEmailSchema,
 } from '../lib/schemas';
-import { sendEmailChangeNoticeEmail, sendVerificationEmail } from '../lib/email';
+import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from '../lib/email';
 
 /**
  * Collect all user data for GDPR export. Gathers profiles, device tokens,
@@ -501,7 +501,10 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // until GET /api/v1/auth/verify-email promotes it via `updateUserEmail`, so a
   // stolen session cannot move the login identity on request alone. The address
   // currently on file is notified that a change was requested, by a sender that
-  // opts out of the dedup guard so the alert cannot be suppressed.
+  // opts out of the dedup guard so the alert cannot be suppressed. When that
+  // address is verified, the notice carries a single-use password-reset link
+  // ("This wasn't me"): a reset cancels the pending change and signs out every
+  // device. An unverified address gets no link, so no recovery path widens.
   //
   // Two rate-limit tiers: `rateLimit(3, 'email-change')` caps how often one
   // account may ask; `emailChangeRecipientLimit` caps how much Festie-branded
@@ -538,7 +541,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
         const passwordValid = await verifyPassword(password, currentUser.passwordHash);
         if (!passwordValid) {
           await new Promise((resolve) => setTimeout(resolve, 100));
-          return sendError(res, 400, 'Incorrect password', ErrorCodes.PASSWORD_INCORRECT);
+          return sendError(res, 400, 'That password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
         }
 
         if (await stores.emailTokens.checkEmailExists(cleanEmail, req.user.userId)) {
@@ -563,7 +566,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
         );
 
         const verifyUrl = `${deps.config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
-        await sendVerificationEmail({
+        await sendEmailChangeConfirmEmail({
           to: cleanEmail,
           username: currentUser.username,
           verifyUrl,
@@ -573,8 +576,21 @@ export default function createAccountRoutes(deps: RouteDeps) {
 
         // Notify the address on file so a user whose session was stolen finds
         // out. The sender opts out of the idempotency guard — see lib/email.ts.
+        // The reset token lives as long as the change link. Other reset tokens
+        // are left alone: a forgot-password link in flight must keep working.
         if (currentUser.email) {
-          await sendEmailChangeNoticeEmail({ to: currentUser.email, config: deps.config, log });
+          let resetUrl: string | undefined;
+          if (currentUser.emailVerifiedAt) {
+            const resetToken = crypto.randomBytes(32).toString('hex');
+            const resetHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+            await stores.emailTokens.createResetToken(
+              req.user.userId,
+              resetHash,
+              deps.config.EMAIL_VERIFY_TOKEN_TTL_HOURS,
+            );
+            resetUrl = `${deps.config.PUBLIC_ORIGIN}/reset-password?token=${resetToken}`;
+          }
+          await sendEmailChangeNoticeEmail({ to: currentUser.email, resetUrl, config: deps.config, log });
         }
 
         log.info('account:email-change-requested', { userId: req.user.userId });
@@ -608,7 +624,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
         const passwordValid = await verifyPassword(password, currentUser.passwordHash);
         if (!passwordValid) {
           await new Promise((resolve) => setTimeout(resolve, 100));
-          return sendError(res, 403, 'Incorrect password', ErrorCodes.PASSWORD_INCORRECT);
+          return sendError(res, 403, 'That password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
         }
 
         // Soft-delete: set deleted_at and hide the profiles. Picks and notes stay

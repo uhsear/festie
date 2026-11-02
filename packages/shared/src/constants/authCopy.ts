@@ -1,3 +1,5 @@
+import { PASSWORD_RULES } from '../utils/passwordPolicy';
+
 const SUPPORT_EMAIL = 'support@festie.us';
 
 export const AUTH_COPY = {
@@ -12,7 +14,10 @@ export const AUTH_COPY = {
   emailLabel: 'Email',
   emailHint: 'We use it to reset your password and to confirm your account.',
   emailRequired: 'Email is required to reset your password later.',
-  passwordHint: 'At least 8 characters. Avoid common passwords and your name.',
+  passwordHint: PASSWORD_RULES,
+  loginIdentifierLabel: 'Username or email',
+  loginIdentifierRequired: 'Enter your username or email.',
+  forgotUsernameHint: 'Forgot your username? Enter your email. The reset email shows your username.',
   resetTitle: 'Reset your password',
   sendResetLink: 'Send reset link',
   forgotSent: (email: string) => `If an account uses ${email}, a reset link is on its way.`,

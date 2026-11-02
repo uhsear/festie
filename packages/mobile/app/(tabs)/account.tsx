@@ -1,14 +1,17 @@
 import { useCallback, useState } from 'react';
-import { View, Text, ScrollView, Image, ActivityIndicator, Alert, RefreshControl, Switch } from 'react-native';
+import { View, Text, ScrollView, Image, ActivityIndicator, Alert, RefreshControl, Switch, Modal, Linking, Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+import * as Updates from 'expo-updates';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useMobilePush } from '../../hooks/useMobilePush';
 import { useAuth } from '@festie/shared/hooks';
-import { displayInitials, identityLabel } from '@festie/shared/utils';
+import { buildSupportMailto, displayInitials, identityLabel } from '@festie/shared/utils';
+import { ACCOUNT_COPY, SUPPORT_EMAIL, SUPPORT_URL_TERMS } from '@festie/shared/constants';
 import { useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import ScreenHeader from '../../components/ScreenHeader';
 import AppPressable from '../../components/AppPressable';
@@ -19,6 +22,9 @@ import AccountPaymentHandlesSection from '../../components/AccountPaymentHandles
 import AccountPublicScheduleSection from '../../components/AccountPublicScheduleSection';
 import AccountPasswordSection from '../../components/AccountPasswordSection';
 import AccountEmailVerifySection from '../../components/AccountEmailVerifySection';
+import AccountEmailSection from '../../components/AccountEmailSection';
+import AccountDevicesSection from '../../components/AccountDevicesSection';
+import FirstRunIntro from '../../components/FirstRunIntro';
 import AccountNotificationsSection from '../../components/AccountNotificationsSection';
 import AccountNotificationPrefsSection from '../../components/AccountNotificationPrefsSection';
 import AccountHistorySection from '../../components/AccountHistorySection';
@@ -45,6 +51,13 @@ import { useHaptics } from '../../hooks/useHaptics';
  * Push notifications are wired via AccountNotificationsSection (FCM token →
  * POST /notifications/token). Requires a real build — Expo Go can't obtain an
  * FCM device token.
+ *
+ * Security holds the email (add or change), the verify nudge, the password
+ * form and the signed-in devices list.
+ *
+ * Help and legal replays the first-run intro in a modal, opens a support mail
+ * draft with the app version, update id and device, and links Terms, Privacy
+ * and the third-party notices. The footer shows the version and OTA update id.
  *
  * Theme / display is intentionally not built — it's not a web feature either.
  */
@@ -75,6 +88,7 @@ export default function AccountScreen() {
   const setHapticsEnabled = useUIStore((s) => s.setHapticsEnabled);
 
   const [loggingOut, setLoggingOut] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
   // Pull-to-refresh: a bump signal re-pulls the History card, and we reload
   // notification prefs in parallel so a swipe refreshes everything live.
   const [refreshing, setRefreshing] = useState(false);
@@ -85,6 +99,25 @@ export default function AccountScreen() {
   const emailVerified = !!user?.emailVerified;
   const hasEmail = !!user?.email;
   const appVersion = Constants.expoConfig?.version ?? null;
+  const versionText = appVersion
+    ? Updates.updateId && !Updates.isEmbeddedLaunch
+      ? `v${appVersion} · update ${Updates.updateId.slice(0, 8)}`
+      : `v${appVersion}`
+    : null;
+
+  const contactSupport = () => {
+    haptics.tap();
+    const device = [Device.manufacturer, Device.modelName, Platform.OS, Device.osVersion].filter(Boolean).join(' ');
+    const url = buildSupportMailto({
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      version: versionText ?? 'unknown',
+      device,
+      username: user?.username,
+    });
+    Linking.openURL(url).catch(() => {
+      Alert.alert(ACCOUNT_COPY.contactSupport, ACCOUNT_COPY.contactSupportNoMail(SUPPORT_EMAIL));
+    });
+  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -245,8 +278,10 @@ export default function AccountScreen() {
 
         {/* Security */}
         <SectionLabel>Security</SectionLabel>
+        <AccountEmailSection />
         <AccountEmailVerifySection />
         <AccountPasswordSection />
+        <AccountDevicesSection />
 
         {/* Preferences */}
         <SectionLabel>Preferences</SectionLabel>
@@ -331,12 +366,38 @@ export default function AccountScreen() {
         <SectionLabel>Data</SectionLabel>
         <AccountDataSection />
 
-        {/* Legal */}
-        <SectionLabel>Legal</SectionLabel>
+        {/* Help and legal */}
+        <SectionLabel>{ACCOUNT_COPY.helpTitle}</SectionLabel>
         <View style={styles.card}>
           <LinkRow
+            icon="play-circle-outline"
+            title={ACCOUNT_COPY.howFestieWorks}
+            hint={ACCOUNT_COPY.howFestieWorksHint}
+            onPress={() => {
+              haptics.tap();
+              setShowIntro(true);
+            }}
+            accessibilityLabel={ACCOUNT_COPY.howFestieWorks}
+          />
+          <LinkRow
+            icon="mail-outline"
+            title={ACCOUNT_COPY.contactSupport}
+            hint={SUPPORT_EMAIL}
+            onPress={contactSupport}
+            accessibilityLabel={ACCOUNT_COPY.contactSupport}
+          />
+          <LinkRow
+            icon="document-text-outline"
+            title={ACCOUNT_COPY.terms}
+            onPress={() => {
+              haptics.tap();
+              void Linking.openURL(SUPPORT_URL_TERMS);
+            }}
+            accessibilityLabel={ACCOUNT_COPY.terms}
+          />
+          <LinkRow
             icon="shield-checkmark-outline"
-            title="Privacy Policy"
+            title={ACCOUNT_COPY.privacy}
             hint="How we handle your data"
             onPress={() => go('/privacy')}
             accessibilityLabel="Open the privacy policy"
@@ -401,12 +462,17 @@ export default function AccountScreen() {
         <AccountDangerSection onDeleted={() => router.replace('/(auth)/login')} />
 
         {/* App version footer — a quiet build stamp for support/debugging. */}
-        {appVersion ? (
-          <Text style={styles.version} accessibilityLabel={`App version ${appVersion}`}>
-            Festie · v{appVersion}
+        {versionText ? (
+          <Text style={styles.version} accessibilityLabel={ACCOUNT_COPY.versionLine('app', versionText)}>
+            {ACCOUNT_COPY.versionLine('app', versionText)}
           </Text>
         ) : null}
       </ScrollView>
+
+      {/* Replays the intro only; the stored first-run flag stays as it is. */}
+      <Modal visible={showIntro} animationType="fade" onRequestClose={() => setShowIntro(false)}>
+        <FirstRunIntro onDone={() => setShowIntro(false)} />
+      </Modal>
     </View>
   );
 }
@@ -427,7 +493,7 @@ function LinkRow({
   icon: keyof typeof Ionicons.glyphMap;
   iconTint?: string;
   title: string;
-  hint: string;
+  hint?: string;
   onPress: () => void;
   accessibilityLabel: string;
 }) {
@@ -446,9 +512,11 @@ function LinkRow({
       </View>
       <View style={styles.rowBody}>
         <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowHint} numberOfLines={3}>
-          {hint}
-        </Text>
+        {hint ? (
+          <Text style={styles.rowHint} numberOfLines={3}>
+            {hint}
+          </Text>
+        ) : null}
       </View>
       <Ionicons name="chevron-forward" size={18} color={t.colors.text.placeholder} />
     </AppPressable>

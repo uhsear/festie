@@ -615,4 +615,21 @@ describe('authStore', () => {
       expect(useAuthStore.getState().error).toBeNull();
     });
   });
+
+  describe('requestEmailChange', () => {
+    it('posts the trimmed email and returns the server message', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ message: 'Sent' });
+      const msg = await useAuthStore.getState().requestEmailChange(' a@b.co ', 'x');
+      expect(api.post).toHaveBeenCalledWith('/account/email', { email: 'a@b.co', password: 'x' });
+      expect(msg).toBe('Sent');
+    });
+
+    it('rethrows and leaves error and user unchanged', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('nope'));
+      await expect(useAuthStore.getState().requestEmailChange('a@b.co', 'x')).rejects.toThrow('nope');
+      expect(useAuthStore.getState().error).toBeNull();
+      expect(useAuthStore.getState().user).toEqual(mockUser);
+    });
+  });
 });

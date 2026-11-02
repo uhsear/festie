@@ -2489,7 +2489,7 @@
                   "username": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 40
+                    "maxLength": 254
                   },
                   "password": {
                     "type": "string",

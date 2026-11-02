@@ -888,6 +888,23 @@ describe('routes/auth.js — createAuthRoutes', () => {
     });
   });
 
+  describe('GET /sessions device labels', () => {
+    test('returns each row device label, or null when it has none', async () => {
+      const deps = makeMockDeps();
+      deps.stores.sessions.listUserSessions = mock.fn(async () => [
+        { token: 'hash-1', createdAt: Date.now(), lastAccess: Date.now(), deviceLabel: 'Safari on iPhone' },
+        { token: 'hash-2', createdAt: Date.now(), lastAccess: Date.now() },
+      ]);
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app).get('/sessions');
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data[0].device, 'Safari on iPhone');
+      assert.equal(res.body.data[1].device, null);
+    });
+  });
+
   // ── DELETE /sessions (all) ────────────────────────────────────────
   describe('DELETE /sessions', () => {
     test('revokes all sessions except current', async () => {

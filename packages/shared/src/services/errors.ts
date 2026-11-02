@@ -66,3 +66,8 @@ export function mapErrorToUserMessage(err: unknown, fallback = 'Something went w
 export function isResetLinkExpired(err: unknown): boolean {
   return isApiClientError(err) && err.code === 'TOKEN_EXPIRED';
 }
+
+/** True when a call failed because the current password was wrong. */
+export function isPasswordIncorrect(err: unknown): boolean {
+  return isApiClientError(err) && err.code === 'PASSWORD_INCORRECT';
+}

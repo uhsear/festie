@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
+import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 
@@ -149,7 +150,7 @@ export default function UserMenuAccountSection({
               data-testid="resend-verification-button"
               onClick={handleResendVerification}
             >
-              {resending ? 'Sending…' : 'Resend verification'}
+              {resending ? 'Sending…' : ACCOUNT_COPY.verifyResendLink}
             </Button>
           )}
           <Button
