@@ -594,7 +594,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     validate(schemas.accountDelete),
     async (req: Request, res: Response) => {
       try {
-        const { password } = req.validatedBody as z.infer<typeof accountDeleteSchema>;
+        const { password, crewHandover } = req.validatedBody as z.infer<typeof accountDeleteSchema>;
 
         const { verifyPassword, invalidateUserSessions, disconnectUserSockets, getRequestIp } = deps;
         const currentUser = await getUserById(req.user.userId);
@@ -615,7 +615,13 @@ export default function createAccountRoutes(deps: RouteDeps) {
         // until the 30-day purge, so a sign-in before then restores them.
         // Sessions, refresh tokens and device tokens go now.
         // Retry once on deadlock (PG 40P01) — concurrent test cleanup can trigger this.
+        // Owned crews are handed over first, so a failure there deletes nothing,
+        // and a retry finds no owned crew with members left to hand over.
+        const handedOver: Array<{ crewId: string; newOwnerId: string }> = [];
         const performSoftDelete = async () => {
+          if (stores.crews) {
+            handedOver.push(...(await stores.crews.handOverOwnedCrews(req.user.userId, crewHandover ?? [])));
+          }
           await stores.users.update(req.user.userId, { deletedAt: new Date().toISOString() });
           invalidateUserCache();
           await invalidateUserSessions(req.user.userId);
@@ -640,6 +646,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           userId: req.user.userId,
           username: currentUser.username,
           ip: getRequestIp(req),
+          crewsHandedOver: handedOver.length,
         });
         deps.clearUserSessionCookie(res);
         const deletionDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -649,6 +656,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           success: true,
           message: `Your account will be deleted on ${deletionDay}. Sign in before then to keep it.`,
           deletionDate: deletionDate.toISOString(),
+          handedOver,
         });
       } catch (error) {
         log.error('account soft-delete failed', { error: (error as Error).message, userId: req.user.userId });

@@ -1,6 +1,9 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
 import { sanitizeString } from '../../helpers/sanitize.js';
+import { createLogger } from '../../logger.js';
+
+const log = createLogger('db:crews');
 
 /**
  * H3 (defense-in-depth, audit 2026-06-06): meeting-point label/location are user
@@ -484,6 +487,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     /**
      * Transfer crew ownership atomically: demote current owner, promote target.
      * Prevents inconsistent state where both or neither are owner.
+     * crews.created_by moves too: the API's `owner` field and the heir logic in
+     * users.hardDelete and retention_cleanup() read it. When the new owner already
+     * runs a reform of the same source in this festival, crews_reform_idem_uidx
+     * raises 23505 and the whole transfer rolls back.
      */
     async transferOwnership(crewId: string, fromUserId: string, toUserId: string) {
       return withTransaction(pool, async (client) => {
@@ -497,7 +504,60 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           crewId,
           toUserId,
         ]);
+        await client.query('UPDATE crews SET created_by = $1, updated_at = NOW() WHERE id = $2', [toUserId, crewId]);
       });
+    },
+
+    /**
+     * Before an account is soft-deleted, hand each crew it owns to another active
+     * member. A valid choice wins; otherwise the earliest-joined active member
+     * takes over. A candidate whose transfer clashes on crews_reform_idem_uidx
+     * (23505) is skipped. A crew with no usable candidate is left as it is: the
+     * 30-day purge deletes a sole-member crew.
+     */
+    async handOverOwnedCrews(userId: string, choices: Array<{ crewId: string; newOwnerId: string }> = []) {
+      const handedOver: Array<{ crewId: string; newOwnerId: string }> = [];
+      const owned = await pool.query("SELECT crew_id FROM crew_members WHERE user_id = $1 AND role = 'owner'", [
+        userId,
+      ]);
+      for (const { crew_id: crewId } of owned.rows) {
+        const result = await pool.query(
+          `
+          SELECT
+            cm.user_id
+          FROM
+            crew_members cm
+            JOIN users u ON u.id = cm.user_id
+            AND u.deleted_at IS NULL
+          WHERE
+            cm.crew_id = $1
+            AND cm.user_id <> $2
+          ORDER BY
+            cm.joined_at ASC,
+            cm.user_id ASC
+        `,
+          [crewId, userId],
+        );
+        const candidates: string[] = result.rows.map((r: any) => r.user_id);
+        const choice = choices.find((c) => c.crewId === crewId)?.newOwnerId;
+        if (choice && candidates.includes(choice)) {
+          candidates.splice(candidates.indexOf(choice), 1);
+          candidates.unshift(choice);
+        }
+        let newOwnerId: string | null = null;
+        for (const candidate of candidates) {
+          try {
+            await crews.transferOwnership(crewId, userId, candidate);
+            newOwnerId = candidate;
+            break;
+          } catch (err: any) {
+            if (err?.code !== '23505') throw err;
+          }
+        }
+        if (newOwnerId) handedOver.push({ crewId, newOwnerId });
+        else log.warn('crew:handover-skipped', { crewId, candidates: candidates.length });
+      }
+      return handedOver;
     },
 
     async getCrewPickOverlap(festivalId: string, crewId: string) {

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { MAX_MEETING_POINTS_PER_CREW } from '../lib/constants';
+import { MAX_MEETING_POINTS_PER_CREW, MAX_OPEN_POLLS_PER_CREW } from '../lib/constants';
 
 export default function createCrewPollRoutes(deps: any) {
   const {
@@ -59,7 +59,14 @@ export default function createCrewPollRoutes(deps: any) {
         if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const activePollCount = await stores.polls.countActiveByCrew(crewId);
-        if (activePollCount >= 3) return sendError(res, 409, 'Max 3 active polls per crew', ErrorCodes.CONFLICT);
+        if (activePollCount >= MAX_OPEN_POLLS_PER_CREW) {
+          return sendError(
+            res,
+            409,
+            `This crew already has ${MAX_OPEN_POLLS_PER_CREW} open polls. Close one to start another.`,
+            ErrorCodes.CONFLICT,
+          );
+        }
 
         const poll = await stores.polls.create({
           crewId,

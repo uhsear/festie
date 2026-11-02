@@ -173,6 +173,15 @@ describe('Crew System', { concurrency: 1 }, () => {
     const aliceRole = transferred.members.find((m: any) => m.userId === alice.user.id);
     assert.equal(bobRole.role, 'owner');
     assert.equal(aliceRole.role, 'member');
+    assert.equal(transferred.owner, bob.user.id, 'the transfer response names the new owner');
+
+    // The old owner's next read shows Bob as owner, so Alice loses owner controls.
+    const aliceView = await server.request
+      .get(`/api/v1/crews/${crew.id}`)
+      .set('x-user-token', alice.token)
+      .expect(200);
+    assert.equal(aliceView.body.data.owner, bob.user.id);
+    assert.equal(aliceView.body.data.role, 'member');
 
     // 7. Alice leaves the crew
     const leaveRes = await server.request
@@ -234,21 +243,20 @@ describe('Crew System', { concurrency: 1 }, () => {
       .expect(404);
   });
 
-  test('non-festival member cannot create crew', async () => {
+  test('creating a crew joins the festival for a user without a profile', async () => {
     const server = await startServer();
     servers.push(server);
 
     const user = await registerUser(server, 'nomember');
-    // User did not join the festival
+    // User did not join the festival; create makes the profile.
 
     const res = await server.request
       .post('/api/v1/crews')
       .set('x-user-token', user.token)
-      .send({ name: 'Invalid Crew', festivalId: 'fest-1' })
-      .expect(403);
+      .send({ name: 'First Crew', festivalId: 'fest-1' })
+      .expect(201);
 
-    assert.equal(res.body.error.code, 'FORBIDDEN');
-    assert.match(res.body.error.message, /Join the festival/i);
+    assert.equal(res.body.data.role, 'owner');
   });
 
   test('cannot join with invalid invite code', async () => {
