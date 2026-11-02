@@ -2,62 +2,66 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Square } from 'lucide-react';
+import { Pause, Play, Square } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
-import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { useLiveLocationPublisher, type GeoWatcher } from '@festie/shared/hooks';
-import { LIVE_LOCATION } from '@festie/shared/constants';
-import { formatShareWindow } from '@festie/shared/utils';
+import { useLiveShareSession, type GeoWatcher } from '@festie/shared/hooks';
+import { LIVE_SHARE_COPY } from '@festie/shared/constants';
+import { fmtZonedClock, formatCountdown, liveShareEndedText } from '@festie/shared/utils';
 import { useSharedSocket } from '../../lib/socketContext';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 
-const SESSION_MINUTES = Math.round(LIVE_LOCATION.MAX_SESSION_MS / 60_000);
+/** The Battery Status API is non-standard and absent in Safari, so it is typed locally. */
+interface BatteryManagerLike extends EventTarget {
+  level: number;
+}
+type NavigatorWithBattery = Navigator & { getBattery?: () => Promise<BatteryManagerLike> };
 
-function cancelSharing() {
-  useLiveLocationStore.getState().cancelSharing();
+function endShare() {
+  useLiveLocationStore.getState().endShare('user');
 }
 
 /**
- * LiveLocationSharing — the one owner of the web live-location publisher,
- * mounted once in AppShell so sharing keeps running across pages (e.g. the crew
- * Meet tab → /map). The Meet tab's switch only writes the opt-in
- * (liveLocationStore.shareIntentCrewId); this component turns it into a GPS
- * watch + socket emits and shows a non-dismissible indicator on every page.
- *
- * Sharing stops on: toggle off / Stop, the publisher's time-box auto-stop,
- * a geolocation error, a rejected share, low-power mode, a crew switch and
- * logout (both clear the intent in the store), a festival switch, the socket
- * going away, and this component unmounting.
+ * LiveLocationSharing — the one app-wide host of the web live-share session,
+ * mounted once in AppShell so sharing keeps running across tabs and pages. The
+ * Meet tab only writes the session (`shareIntent`) to liveLocationStore; this
+ * component runs it through useLiveShareSession and shows the "you are sharing"
+ * bar on every screen, including while paused.
  */
 export default function LiveLocationSharing() {
   const socket = useSharedSocket();
   const { toast } = useToast();
-  const shareIntentCrewId = useLiveLocationStore((s) => s.shareIntentCrewId);
-  const sharingCrewId = useLiveLocationStore((s) => s.sharingCrewId);
-  const sharingExpiresAt = useLiveLocationStore((s) => s.sharingExpiresAt);
-  const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
+  const intent = useLiveLocationStore((s) => s.shareIntent);
+  const endedReason = useLiveLocationStore((s) => s.shareEndedReason);
   const festivalId = useFestivalStore((s) => s.currentFestivalId);
+  const batteryRef = useRef<number | undefined>(undefined);
 
-  // These run before the publisher effect, so a stop never re-shares first.
   useEffect(() => {
-    if (lowPowerMode) cancelSharing();
-  }, [lowPowerMode]);
-  useEffect(() => {
-    if (!socket) cancelSharing();
-  }, [socket]);
-  const festivalRef = useRef(festivalId);
-  useEffect(() => {
-    if (festivalRef.current === festivalId) return;
-    festivalRef.current = festivalId;
-    cancelSharing();
-  }, [festivalId]);
-  useEffect(() => cancelSharing, []);
+    const nav = (typeof navigator !== 'undefined' ? navigator : undefined) as NavigatorWithBattery | undefined;
+    if (!nav?.getBattery) return;
+    let cancelled = false;
+    let battery: BatteryManagerLike | null = null;
+    const onLevel = () => {
+      if (battery) batteryRef.current = Math.round(battery.level * 100);
+    };
+    nav
+      .getBattery()
+      .then((b) => {
+        if (cancelled) return;
+        battery = b;
+        onLevel();
+        b.addEventListener('levelchange', onLevel);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      battery?.removeEventListener('levelchange', onLevel);
+    };
+  }, []);
 
-  // Adapter: navigator.geolocation.watchPosition → the publisher's GeoWatcher
-  // shape. Stable identity (the publisher assumes a stable watcher). Balanced
-  // accuracy (enableHighAccuracy:false) to spare battery at a festival.
+  // Stable identity (the publisher assumes a stable watcher). Balanced accuracy
+  // (enableHighAccuracy:false) to spare battery at a festival.
   const watchPosition = useMemo<GeoWatcher>(
     () => (onFix, onError) => {
       if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -72,11 +76,7 @@ export default function LiveLocationSharing() {
             accuracy: pos.coords.accuracy ?? undefined,
             heading: pos.coords.heading ?? undefined,
             speed: pos.coords.speed ?? undefined,
-            // TODO(battery): the Battery Status API (navigator.getBattery()) is
-            // non-standard and unavailable in Safari/iOS, so battery is left
-            // undefined here for parity with mobile (build-gated). The payload
-            // field + peer popup already exist; wire getBattery().level×100 when a
-            // cross-browser source is acceptable.
+            battery: batteryRef.current,
             capturedAt: new Date(pos.timestamp).toISOString(),
           }),
         (err) => onError?.(err),
@@ -87,46 +87,42 @@ export default function LiveLocationSharing() {
     [],
   );
 
-  useLiveLocationPublisher({
-    socket,
-    crewId: shareIntentCrewId,
-    enabled: shareIntentCrewId !== null,
-    watchPosition,
-    onAutoStop: () => {
-      cancelSharing();
-      toast(`Live location stopped automatically after ${SESSION_MINUTES} minutes.`, 'info');
-    },
-    onError: (err) => {
-      cancelSharing();
-      const denied =
-        typeof err === 'object' && err !== null && 'code' in err && (err as GeolocationPositionError).code === 1;
-      toast(
-        denied
-          ? 'Location permission denied — turn it on in your browser to share.'
-          : "Couldn't read your location — live sharing stopped.",
-        'error',
-      );
-    },
-    onShareRejected: () => {
-      cancelSharing();
-      toast("Couldn't start sharing your location. Try again.", 'error');
-    },
-  });
-
-  // Phase 4C: tick so the own-side "sharing ends in Nm" countdown stays
-  // current. Only runs while sharing (cleared otherwise).
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  // These run before the session effects, so a stop never re-shares first.
   useEffect(() => {
-    if (!sharingExpiresAt) return;
+    if (!socket) endShare();
+  }, [socket]);
+  const festivalRef = useRef(festivalId);
+  useEffect(() => {
+    if (festivalRef.current === festivalId) return;
+    festivalRef.current = festivalId;
+    endShare();
+  }, [festivalId]);
+  useEffect(() => endShare, []);
+
+  useLiveShareSession({ socket, watchPosition });
+
+  useEffect(() => {
+    if (!endedReason) return;
+    const text = liveShareEndedText(endedReason);
+    if (text) toast(text, endedReason === 'expired' ? 'info' : 'error');
+    useLiveLocationStore.getState().clearShareEnded();
+  }, [endedReason, toast]);
+
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const hasIntent = intent !== null;
+  useEffect(() => {
+    if (!hasIntent) return;
     setNowTick(Date.now());
     const id = setInterval(() => setNowTick(Date.now()), 30_000);
     return () => clearInterval(id);
-  }, [sharingExpiresAt]);
-  const shareCountdown = sharingExpiresAt ? formatShareWindow(sharingExpiresAt, nowTick) : null;
+  }, [hasIntent]);
 
-  // The publisher sets sharingCrewId before it starts the GPS watch and clears
-  // it when the watch stops, so this shows whenever geolocation is running.
-  if (!sharingCrewId) return null;
+  if (!intent) return null;
+
+  const expiresMs = Date.parse(intent.expiresAt);
+  const countdown = formatCountdown(expiresMs - nowTick);
+  const clock = fmtZonedClock(expiresMs);
+  const paused = intent.paused;
 
   return (
     <div
@@ -135,15 +131,30 @@ export default function LiveLocationSharing() {
       data-testid="sharing-indicator"
       className="shrink-0 flex items-center gap-3 border-b border-accent-aqua bg-accent-aqua/10 px-4 py-2"
     >
-      <span className="festie-live-dot" aria-hidden="true" />
+      {paused ? (
+        <span className="w-2 h-2 shrink-0 rounded-full border-2 border-accent-aqua" aria-hidden="true" />
+      ) : (
+        <span className="festie-live-dot" aria-hidden="true" />
+      )}
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-text-primary">You&apos;re sharing your live location</p>
+        <p className="text-sm font-semibold text-text-primary">
+          {paused ? LIVE_SHARE_COPY.pausedTitle : LIVE_SHARE_COPY.sharingTitle}
+        </p>
         <p className="text-xs text-text-muted">
-          Only this crew can see it. Stops automatically{shareCountdown ? ` — ${shareCountdown}` : ''}.
+          {paused ? LIVE_SHARE_COPY.pausedSub(countdown, clock) : LIVE_SHARE_COPY.sharingSub(countdown, clock)}
         </p>
       </div>
-      <Button variant="outline" size="sm" onClick={cancelSharing} aria-label="Stop sharing my live location">
-        <Square className="w-4 h-4" aria-hidden="true" /> Stop
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => useLiveLocationStore.getState().setSharePaused(!paused)}
+        aria-label={paused ? LIVE_SHARE_COPY.resumeA11y : LIVE_SHARE_COPY.pauseA11y}
+      >
+        {paused ? <Play className="w-4 h-4" aria-hidden="true" /> : <Pause className="w-4 h-4" aria-hidden="true" />}{' '}
+        {paused ? LIVE_SHARE_COPY.resume : LIVE_SHARE_COPY.pause}
+      </Button>
+      <Button variant="outline" size="sm" onClick={endShare} aria-label={LIVE_SHARE_COPY.stopA11y}>
+        <Square className="w-4 h-4" aria-hidden="true" /> {LIVE_SHARE_COPY.stop}
       </Button>
     </div>
   );

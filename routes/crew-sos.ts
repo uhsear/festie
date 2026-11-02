@@ -6,10 +6,18 @@ import type { Request, Response } from 'express';
 import type { z } from 'zod';
 
 import type { RouteDeps } from '../lib/types';
-import type { crewIdParams, sosClearSchema, sosRaiseSchema } from '../lib/schemas';
-import { SOS_RAISE_LIMIT, markSosActive, clearSosActive, listActiveSos } from '../lib/rate-limiting.js';
+import type { crewIdParams, sosClearSchema, sosRaiseSchema, sosSeenSchema } from '../lib/schemas';
+import {
+  SOS_RAISE_LIMIT,
+  clearSosActive,
+  listActiveSos,
+  isSosActive,
+  markSosSeen,
+  listSosSeen,
+  clearSosSeen,
+} from '../lib/rate-limiting.js';
 import { sanitizeString } from '../lib/helpers/sanitize.js';
-import { appLink } from '../lib/notifications/links.js';
+import { coarse, createSosRaiser } from '../lib/sos-raise.js';
 
 /**
  * Crew SOS (Live Location + SOS, safety-critical path).
@@ -25,11 +33,14 @@ import { appLink } from '../lib/notifications/links.js';
  * single coarse coordinate (≈4 decimals, ~11m) to the activity row + push so the
  * crew can actually find the person. This is the only location datum that becomes
  * durable; it is opt-in (the user pressed SOS), capped, and crew-scoped.
+ * A check-in timer (routes/crew-checkin.ts) also keeps one coarse position in
+ * Redis until the timer ends plus one hour, so a missed timer can raise an SOS.
  *
- * Three endpoints, mounted by routes/crews.ts alongside status/meeting-point:
- *   POST /:crewId/sos        — raise an SOS
+ * Four endpoints, mounted by routes/crews.ts alongside status/meeting-point:
+ *   POST /:crewId/sos        — raise an SOS (side effects in lib/sos-raise.ts)
  *   POST /:crewId/sos/clear  — clear one raiser's SOS ("I'm safe" or any crew member)
- *   GET  /:crewId/sos        — the active SOS entries, for clients that join late
+ *   POST /:crewId/sos/seen   — ack that the caller saw a raiser's SOS; broadcasts `sos:seen`
+ *   GET  /:crewId/sos        — the active SOS entries with `seenBy`, for clients that join late
  */
 export default function createCrewSosRoutes(deps: RouteDeps) {
   const {
@@ -46,17 +57,12 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
     validate,
     validateParams,
     io,
-    notificationService,
     redis,
     emitter,
   } = deps;
 
   const router = Router({ mergeParams: true });
-
-  /** Round a coordinate to ~4 decimals (~11m) — coarse enough for privacy, precise enough to find someone. */
-  function coarse(n: number): number {
-    return Math.round(n * 1e4) / 1e4;
-  }
+  const sosRaiser = createSosRaiser(deps);
 
   // ── POST /:crewId/sos — raise an SOS ─────────────────────────────
   router.post(
@@ -102,64 +108,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
             }
           : undefined;
 
-        // Durable side-effect #1: one crew_activity row. Detail = capped message
-        // + optional coarse coords (the single intentional durable location datum).
-        const detailParts: string[] = [];
-        if (message) detailParts.push(message.slice(0, 280));
-        if (position) detailParts.push(`@${position.lat},${position.lng}`);
-        const detail = detailParts.join(' ') || null;
-
-        let activityId: string | null = null;
-        try {
-          activityId = (await stores.activity.log({ crewId, userId, type: 'sos_raised', detail })) as string;
-        } catch (err: any) {
-          // The activity row is the durable record of the SOS — if it fails we
-          // still broadcast + push (best-effort), but log loudly.
-          log.error('sos activity log failed', { error: err?.message, crewId, userId });
-        }
-
-        const raisedAt = new Date().toISOString();
-        const payload = {
-          _v: 1,
-          crewId,
-          userId,
-          username,
-          message,
-          position,
-          activityId: activityId || '',
-          raisedAt,
-        };
-
-        // L3: mark this raiser's SOS active (cluster-wide, Redis-backed) so a
-        // subsequent /sos/clear is a real clear, clear-spam on an inactive SOS
-        // is a no-op/409, and late joiners can read it via GET /:crewId/sos.
-        // Best-effort; failure never blocks the raise.
-        await markSosActive(redis, crewId, payload);
-
-        // Durable side-effect #2: crew-wide socket broadcast (primary delivery).
-        if (io) io.to('crew:' + crewId).emit('sos:raised', payload);
-
-        // Activity-feed fan-out, only when the row landed. Strictly AFTER the
-        // primary broadcast: this is a feed nicety and must never preempt SOS.
-        if (activityId) {
-          try {
-            emitter.crewActivityLogged({ crewId, item: { id: activityId, crewId, userId, type: 'sos_raised', detail } });
-          } catch {
-            // Feed nicety only. The SOS broadcast above is the primary delivery
-            // and has already gone out; never fail the raise on a feed emit.
-          }
-        }
-
-        // Best-effort side-effect #3: push fan-out to the rest of the crew. MUST
-        // NOT block or fail the HTTP response — the socket broadcast + activity
-        // row are the primary delivery; push is the offline-reach layer.
-        if (notificationService?.send) {
-          fanoutSosPush({ crewId, raiserId: userId, username, message, position }).catch((err: any) =>
-            log.warn('sos push fan-out failed', { error: err?.message, crewId }),
-          );
-        }
-
-        log.info('crew:sos-raised', { crewId, userId, hasPosition: Boolean(position) });
+        const { activityId, raisedAt } = await sosRaiser.raise({ crewId, userId, username, message, position });
         return sendSuccess(res, { code: 'OK', activityId: activityId || null, raisedAt });
       } catch (err) {
         log.error('sos raise failed', { error: (err as Error).message, crewId: (req.validatedParams as any)?.crewId });
@@ -214,6 +163,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         if (cleared.wasActive === false) {
           return sendError(res, 409, 'No active SOS to clear', ErrorCodes.ALREADY_EXISTS);
         }
+        await clearSosSeen(redis, crewId, raiserId);
 
         // user_id = the clearer; detail = the raiser's username when someone
         // else cleared it, null for a self-clear.
@@ -258,6 +208,43 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
     },
   );
 
+  // ── POST /:crewId/sos/seen — "seen by" ack ───────────────────────
+  router.post(
+    '/:crewId/sos/seen',
+    userAuth,
+    rateLimit(60, 'crew-sos-seen'),
+    validateParams(schemas.crewIdParams),
+    validate(schemas.sosSeen),
+    async (req: Request, res: Response) => {
+      try {
+        const params = req.validatedParams as z.infer<typeof crewIdParams>;
+        const body = req.validatedBody as z.infer<typeof sosSeenSchema>;
+        const crewId = sanitizeIdentifier(params.crewId);
+        const userId = req.user.userId;
+        const username = req.user.username || 'A crew member';
+        const { raiserId } = body;
+
+        const membership = await stores.crews.getMember(crewId, userId);
+        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
+
+        // The raiser never counts as a viewer of their own SOS.
+        if (raiserId === userId) return sendSuccess(res, { seenBy: await listSosSeen(redis, crewId, raiserId) });
+
+        // `null` = Redis down: carry on so the raiser still hears the ack live.
+        if ((await isSosActive(redis, crewId, raiserId)) === false) {
+          return sendError(res, 404, 'That SOS is no longer active.', ErrorCodes.NOT_FOUND);
+        }
+
+        const seenBy = (await markSosSeen(redis, crewId, raiserId, { userId, username })) ?? [{ userId, username }];
+        if (io) io.to('crew:' + crewId).emit('sos:seen', { _v: 1, crewId, raiserId, seenBy });
+        return sendSuccess(res, { seenBy });
+      } catch (err) {
+        log.error('sos seen failed', { error: (err as Error).message, crewId: (req.validatedParams as any)?.crewId });
+        return sendError(res, 500, 'Failed to mark SOS seen', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
   // ── GET /:crewId/sos — active SOS entries (late-joiner read) ─────
   router.get(
     '/:crewId/sos',
@@ -276,44 +263,17 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         const membership = await stores.crews.getMember(crewId, userId);
         if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
-        return sendSuccess(res, { sos: await listActiveSos(redis, crewId, Date.now()) });
+        const entries = await listActiveSos(redis, crewId, Date.now());
+        const sos = await Promise.all(
+          entries.map(async (entry: any) => ({ ...entry, seenBy: await listSosSeen(redis, crewId, entry.userId) })),
+        );
+        return sendSuccess(res, { sos });
       } catch (err) {
         log.error('sos list failed', { error: (err as Error).message, crewId: (req.validatedParams as any)?.crewId });
         return sendError(res, 500, 'Failed to load SOS', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );
-
-  /**
-   * Per-member push fan-out for an SOS. Small N (a crew, not a festival), so a
-   * per-user send is fine and avoids the festival-wide sendToOfflineUsers path.
-   * 'crew_sos' is safety-critical (bypasses DND + per-type opt-out in send()).
-   */
-  async function fanoutSosPush({ crewId, raiserId, username, message, position }: any) {
-    const members = await stores.crews.getMembers(crewId);
-    const recipients = members.filter((m: any) => m.userId && m.userId !== raiserId);
-    const data: Record<string, any> = {
-      crewId,
-      userId: raiserId,
-      deepLink: appLink(config, '/crew?sos=' + encodeURIComponent(raiserId)),
-    };
-    if (position) {
-      data.lat = String(position.lat);
-      data.lng = String(position.lng);
-    }
-    await Promise.allSettled(
-      recipients.map((m: any) =>
-        notificationService.send({
-          userId: m.userId,
-          type: 'crew_sos',
-          title: `${username} raised an SOS`,
-          body: message || (position ? 'Tap to get directions to their last location.' : 'Tap to see their SOS.'),
-          data,
-          threadId: `sos-${crewId}`,
-        }),
-      ),
-    );
-  }
 
   return router;
 }

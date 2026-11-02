@@ -3,6 +3,8 @@ import { ChevronRight, Home, MapPin, Users } from 'lucide-react';
 import {
   fmtStartsIn,
   fmtZonedClock,
+  formatBatteryLabel,
+  lostContactLabel,
   timeAgo,
   type ActiveMeet,
   type CrewWhereabout,
@@ -19,10 +21,16 @@ function Freshness({ row }: { row: CrewWhereabout }) {
     return <span className="type-micro text-accent-coral font-bold shrink-0">SOS</span>;
   }
   if (row.live === 'live') {
+    const batteryLabel = formatBatteryLabel(row.battery);
     return (
       <span className="flex items-center gap-1.5 type-caption text-text-primary shrink-0">
         <span className="w-2 h-2 rounded-full bg-confidence-live" aria-hidden="true" />
         Live
+        {batteryLabel && (
+          <span className="type-caption text-text-muted" aria-label={`Battery ${batteryLabel}`}>
+            · {batteryLabel}
+          </span>
+        )}
       </span>
     );
   }
@@ -31,6 +39,13 @@ function Freshness({ row }: { row: CrewWhereabout }) {
       <span className="flex items-center gap-1.5 type-caption text-text-secondary shrink-0 tabular-nums">
         <span className="w-2 h-2 rounded-full border-2 border-confidence-aging" aria-hidden="true" />
         Seen {timeAgo(row.liveAt)}
+      </span>
+    );
+  }
+  if (row.lostAt) {
+    return (
+      <span className="type-caption text-text-secondary shrink-0 tabular-nums">
+        {lostContactLabel(row.lostAt)}
       </span>
     );
   }

@@ -82,6 +82,43 @@ export async function dropLivePosition(redis: any, crewId: string, userId: strin
   }
 }
 
+export interface LivePosition {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  capturedAt: string;
+}
+
+/**
+ * One sharer's cached position, or `null` when it is missing, malformed or
+ * older than POSITION_TTL_MS (by `serverAt`). Swallows Redis errors. Used by a
+ * missed check-in timer to attach the freshest known fix to its SOS.
+ */
+export async function readLivePosition(
+  redis: any,
+  crewId: string,
+  userId: string,
+  now: number = Date.now(),
+): Promise<LivePosition | null> {
+  if (!redis || !crewId || !userId) return null;
+  try {
+    const raw = await redis.hget(positionsKey(crewId), userId);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !isFiniteNumber(obj.lat) || !isFiniteNumber(obj.lng)) return null;
+    const serverMs = Date.parse(obj.serverAt);
+    if (!Number.isFinite(serverMs) || now - serverMs > POSITION_TTL_MS) return null;
+    return {
+      lat: obj.lat,
+      lng: obj.lng,
+      accuracy: optionalFiniteNumber(obj.accuracy),
+      capturedAt: typeof obj.capturedAt === 'string' ? obj.capturedAt : obj.serverAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** A raw cache entry as read back from the Redis hash (value is JSON text). */
 export interface SnapshotEntry {
   userId: string;

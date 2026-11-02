@@ -79,6 +79,13 @@ export function logicalDayIndexAt(days: ReadonlyArray<Pick<FestivalDay, 'date'>>
   return null;
 }
 
+/** End of the logical festival day containing `nowMs` (06:00 the next morning), or null outside a festival day. */
+export function logicalDayEndAt(days: ReadonlyArray<Pick<FestivalDay, 'date'>>, nowMs: number, timeZone?: string): number | null {
+  const index = logicalDayIndexAt(days, nowMs, timeZone);
+  const date = index == null ? undefined : days[index]?.date;
+  return date ? wallMs(date, FESTIVAL_DAY_START_HOUR + 24, timeZone) : null;
+}
+
 /**
  * Where "now" sits (0-100 %) inside the displayed festival day's time window,
  * or null when now is outside it. The window runs from `dayDate` 00:00 in the
@@ -283,6 +290,10 @@ export interface CrewWhereabout {
   live: 'live' | 'stale' | null;
   /** When the last live fix reached the server (epoch ms), or null. */
   liveAt: number | null;
+  /** The peer's battery % while they are live, else null. */
+  battery: number | null;
+  /** When a swept peer's last fix reached the server (epoch ms), while they are not sharing; else null. */
+  lostAt: number | null;
   sos: boolean;
 }
 
@@ -290,6 +301,8 @@ export interface SelectCrewWhereaboutsInput {
   members: ReadonlyArray<CrewMember>;
   statuses: ReadonlyArray<CrewMemberStatus>;
   peers: Readonly<Record<string, PeerLocation>>;
+  /** liveLocationStore.lostContact: userId to the ISO time of a swept peer's last fix. */
+  lostContact?: Readonly<Record<string, string>>;
   sos: ReadonlyArray<SosEntry>;
   meetingPoints: ReadonlyArray<Pick<CrewMeetingPoint, 'id' | 'label'>>;
   selfUserId?: string | null;
@@ -311,6 +324,7 @@ export function selectCrewWhereabouts({
   members,
   statuses,
   peers,
+  lostContact = {},
   sos,
   meetingPoints,
   selfUserId,
@@ -338,6 +352,8 @@ export function selectCrewWhereabouts({
         statusAt: st?.status ? toMs(st.updated_at) : null,
         live: peer ? (isPeerStale(peer.serverAt, nowMs) ? 'stale' : 'live') : null,
         liveAt: peer ? toMs(peer.serverAt) : null,
+        battery: peer && !isPeerStale(peer.serverAt, nowMs) ? (peer.battery ?? null) : null,
+        lostAt: peer ? null : toMs(lostContact[m.userId]),
         sos: sosUsers.has(m.userId),
       };
     });

@@ -7,6 +7,7 @@ import {
   type CrewMemberStatus,
 } from '@festie/shared';
 import { useCurrentPosition } from '@festie/shared/hooks';
+import { CREW_STATUS_HONESTY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
@@ -212,7 +213,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
 
       {/* Honesty banner: this is NEVER live. */}
       <p className="text-[length:var(--font-size-12)] text-text-muted leading-snug">
-        Statuses show where each crewmate was when they last synced. Sent when signal returns. Live location sharing is separate, below.
+        {CREW_STATUS_HONESTY}
       </p>
 
       {showForm && (

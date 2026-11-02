@@ -108,6 +108,8 @@ import { configureSocketIO } from './lib/socket-setup';
 import { createBackgroundTasks, createCloseHandler } from './lib/shutdown';
 import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
+import { createSosRaiser } from './lib/sos-raise';
+import { createCheckinScheduler } from './lib/checkin';
 import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
 import createPageRoutes from './routes/pages';
@@ -234,6 +236,16 @@ async function createFestieApp(overrides: any = {}) {
   });
   ctx.reminderScheduler = reminderScheduler;
   deps.emitter = emitter;
+  // Check-in timers: a missed timer raises an SOS through the same code as POST /sos.
+  const sosRaiser = createSosRaiser(deps);
+  ctx.checkinScheduler = createCheckinScheduler({
+    redis,
+    stores: ctx.stores,
+    raiser: sosRaiser,
+    notificationService,
+    log,
+    config,
+  });
   // Venue geocoding (OpenStreetMap Nominatim). Off under test so suites make no network calls.
   if (config.NODE_ENV !== 'test') deps.geocodeVenue = createVenueGeocoder({ log }).geocodeVenue;
 

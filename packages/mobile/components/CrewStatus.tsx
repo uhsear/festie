@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert, Linking } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useCrewStore } from '@festie/shared/stores';
+import { CREW_STATUS_HONESTY } from '@festie/shared/constants';
 import { etaMinutes, formatStaleness } from '@festie/shared/utils';
 import type { CrewMemberStatus } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -200,7 +201,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
       </View>
 
       {/* Honesty banner: this is NEVER live. */}
-      <Text style={styles.banner}>Not live: each status shows when that crewmate last had signal.</Text>
+      <Text style={styles.banner}>{CREW_STATUS_HONESTY}</Text>
 
       {showForm ? (
         <View style={styles.formBox}>

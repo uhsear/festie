@@ -45,7 +45,7 @@ describe('resetAllStores', () => {
       onlineUsers: [{ id: 'u1' } as any],
     });
     useLiveLocationStore.getState().startSharing('crew-1');
-    useLiveLocationStore.getState().requestSharing('crew-1');
+    useLiveLocationStore.getState().beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
     useFestivalModeStore.setState({ lowPowerMode: true });
     useOfflineReadinessStore.setState({
       byFestival: {
@@ -116,7 +116,7 @@ describe('resetAllStores', () => {
     resetAllStores();
     const state = useLiveLocationStore.getState();
     expect(state.sharingCrewId).toBeNull();
-    expect(state.shareIntentCrewId).toBeNull();
+    expect(state.shareIntent).toBeNull();
     expect(state.crewId).toBeNull();
     expect(state.peers).toEqual({});
     expect(state.sos).toBeNull();

@@ -30,7 +30,7 @@ describe('LowPowerToggle', () => {
     render(<LowPowerToggle />);
     const sw = screen.getByRole('switch');
     expect(sw).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText('Festival low-power mode')).toBeInTheDocument();
+    expect(screen.getByText('Low-power mode')).toBeInTheDocument();
   });
 
   it('reflects the on state from the store', () => {

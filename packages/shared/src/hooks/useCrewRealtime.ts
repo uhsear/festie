@@ -18,6 +18,7 @@
 
 import { useEffect } from 'react';
 import type { Socket } from '../services/socket';
+import { useLiveLocationStore } from '../stores/liveLocationStore';
 import {
   routeHomeBaseUpdated,
   routeMeetingPointUpsert,
@@ -47,6 +48,7 @@ import type {
   LocationPeerStoppedPayload,
   SosRaisedPayload,
   SosClearedPayload,
+  SosSeenPayload,
 } from '../types/socket-events';
 
 export interface UseCrewRealtimeOptions {
@@ -173,6 +175,12 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       if (intent) sink.onSosCleared(intent.crewId, intent.userId, intent.clearedBy);
     };
 
+    // Written straight to the store: no app sink needs to change for seen-by.
+    const handleSosSeen = (data: SosSeenPayload) => {
+      if (data.crewId !== getActiveCrewId()) return;
+      useLiveLocationStore.getState().applySosSeen(data.raiserId, data.seenBy);
+    };
+
     // ── Register listeners ──────────────────────────────────────────────────
     socket.on('crew:home-base-updated', handleHomeBaseUpdated);
     socket.on('crew:meeting-point-created', handleMeetingPointUpsert);
@@ -188,6 +196,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     socket.on('location:peer-stopped', handleLocationPeerStopped);
     socket.on('sos:raised', handleSosRaised);
     socket.on('sos:cleared', handleSosCleared);
+    socket.on('sos:seen', handleSosSeen);
 
     // ── Crew room lifecycle ─────────────────────────────────────────────────
     // Join on connect AND immediately (the socket may already be connected when
@@ -222,6 +231,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       socket.off('location:peer-stopped', handleLocationPeerStopped);
       socket.off('sos:raised', handleSosRaised);
       socket.off('sos:cleared', handleSosCleared);
+      socket.off('sos:seen', handleSosSeen);
       socket.off('connect', handleConnect);
 
       // Cancel pending debounced reloads.

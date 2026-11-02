@@ -1080,18 +1080,18 @@ export type LocationSyncInput = z.infer<typeof locationSyncSchema>;
 // SOS raise: a member presses SOS. `message` is a short capped note; `position`
 // is the SINGLE intentional exception to ephemerality — it may be attached to
 // the durable crew_activity row + push so the crew can actually find them.
+const sosPositionSchema = z
+  .object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    accuracy: z.number().min(0).max(100000).optional(),
+    capturedAt: z.string().datetime(),
+  })
+  .strip();
 export const sosRaiseSchema = z
   .object({
     message: z.string().trim().max(280).optional(),
-    position: z
-      .object({
-        lat: z.number().min(-90).max(90),
-        lng: z.number().min(-180).max(180),
-        accuracy: z.number().min(0).max(100000).optional(),
-        capturedAt: z.string().datetime(),
-      })
-      .strip()
-      .optional(),
+    position: sosPositionSchema.optional(),
   })
   .strip();
 export type SosRaiseInput = z.infer<typeof sosRaiseSchema>;
@@ -1101,6 +1101,20 @@ export type SosRaiseInput = z.infer<typeof sosRaiseSchema>;
 // clear and defaults to the caller.
 export const sosClearSchema = z.object({ raiserId: z.string().trim().min(1).max(64).optional() }).strip();
 export type SosClearInput = z.infer<typeof sosClearSchema>;
+
+// SOS seen: a member acks that they saw `raiserId`'s active SOS.
+export const sosSeenSchema = z.object({ raiserId: z.string().trim().min(1).max(64) }).strip();
+export type SosSeenInput = z.infer<typeof sosSeenSchema>;
+
+// Check-in timer: if the member does not tap "I'm OK" within `minutes`, the crew
+// gets an SOS. `position` is the same coarse one-shot fix an SOS may carry.
+export const checkinStartSchema = z
+  .object({
+    minutes: z.number().int().min(10).max(240),
+    position: sosPositionSchema.optional(),
+  })
+  .strip();
+export type CheckinStartInput = z.infer<typeof checkinStartSchema>;
 
 // ── Crew carpool / ride-board schemas (M2 logistics) ────────────────
 export const rideCreateSchema = z.object({
@@ -1340,6 +1354,8 @@ export const schemas = {
   locationSync: locationSyncSchema,
   sosRaise: sosRaiseSchema,
   sosClear: sosClearSchema,
+  sosSeen: sosSeenSchema,
+  checkinStart: checkinStartSchema,
   rideCreate: rideCreateSchema,
   rideUpdate: rideUpdateSchema,
   forgotPassword: forgotPasswordSchema,

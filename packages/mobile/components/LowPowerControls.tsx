@@ -1,10 +1,11 @@
 import { View, Text, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
+import { LOW_POWER_COPY } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, iconSize } from '../hooks/useTokens';
 
 /**
- * Festival low-power mode controls (mobile mirror of the web quick-win), wired
+ * Low-power mode controls (mobile mirror of the web quick-win), wired
  * to the SHARED `festivalModeStore.lowPowerMode` flag (persisted). Battery is a
  * paired constraint with no-signal at a festival, so when ON, consumers gate
  * expensive/battery-hungry features (live-location auto-share, aggressive
@@ -12,7 +13,8 @@ import { useTokens, makeStyles, typeStyle, iconSize } from '../hooks/useTokens';
  *
  * Two exports:
  *  - `LowPowerToggle` — the labelled Switch row (lives on the Now & Next /
- *    festival-mode screen, the festival-behavior surface).
+ *    festival-mode screen, the festival-behavior surface). Copy comes from
+ *    the shared LOW_POWER_COPY so web and mobile use one name.
  *  - `LowPowerIndicator` — a compact "Low power" chip rendered wherever a gated
  *    feature would otherwise run, so the user knows WHY it's quiet.
  */
@@ -27,8 +29,8 @@ export function LowPowerToggle() {
       <View style={styles.rowLead}>
         <Ionicons name="battery-half-outline" size={iconSize.md} color={t.colors.accent.amber} />
         <View style={styles.rowBody}>
-          <Text style={styles.rowTitle}>Low-power mode</Text>
-          <Text style={styles.rowHint}>Pauses live location & ambient polling to save battery</Text>
+          <Text style={styles.rowTitle}>{LOW_POWER_COPY.name}</Text>
+          <Text style={styles.rowHint}>{LOW_POWER_COPY.hint}</Text>
         </View>
       </View>
       <Switch
@@ -37,7 +39,7 @@ export function LowPowerToggle() {
         trackColor={{ false: t.colors.text.muted, true: t.colors.accent.amber }}
         ios_backgroundColor={t.colors.text.muted}
         thumbColor={t.colors.text.onAccent}
-        accessibilityLabel="Festival low-power mode"
+        accessibilityLabel={LOW_POWER_COPY.name}
       />
     </View>
   );

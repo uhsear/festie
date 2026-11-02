@@ -301,4 +301,62 @@ describe('useLiveLocationPublisher', () => {
     fire('connect');
     expect(emit.mock.calls.filter((c) => c[0] === 'location:share').length).toBe(2);
   });
+
+  describe('absolute end time and battery opt-in', () => {
+    const TEN_MIN = 10 * 60_000;
+
+    it('shares with the exact expiresAt and auto-stops at that time', () => {
+      const { socket, emit } = makeSocket();
+      const w = makeWatcher();
+      const onAutoStop = vi.fn();
+      const expiresAt = new Date(TEN_MIN).toISOString();
+      renderHook(() =>
+        useLiveLocationPublisher({ socket, crewId: 'crew-1', enabled: true, watchPosition: w.watchPosition, expiresAt, onAutoStop }),
+      );
+      expect(emit).toHaveBeenCalledWith('location:share', expect.objectContaining({ expiresAt }), expect.any(Function));
+      vi.advanceTimersByTime(TEN_MIN - 1);
+      expect(onAutoStop).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(onAutoStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('a past expiresAt calls onAutoStop and emits nothing', () => {
+      vi.setSystemTime(TEN_MIN);
+      const { socket, emit } = makeSocket();
+      const w = makeWatcher();
+      const onAutoStop = vi.fn();
+      renderHook(() =>
+        useLiveLocationPublisher({
+          socket,
+          crewId: 'crew-1',
+          enabled: true,
+          watchPosition: w.watchPosition,
+          expiresAt: new Date(TEN_MIN - 1).toISOString(),
+          onAutoStop,
+        }),
+      );
+      expect(onAutoStop).toHaveBeenCalledTimes(1);
+      expect(emit).not.toHaveBeenCalled();
+      expect(w.started).toBe(false);
+    });
+
+    it('shareBattery false strips battery and lowPower; undefined keeps them', () => {
+      const fix = { lat: 40, lng: -74, battery: 80, lowPower: true };
+      const run = (shareBattery: boolean | undefined) => {
+        const { socket, emit } = makeSocket();
+        const w = makeWatcher();
+        renderHook(() =>
+          useLiveLocationPublisher({ socket, crewId: 'crew-1', enabled: true, watchPosition: w.watchPosition, shareBattery }),
+        );
+        w.push(fix);
+        return emit.mock.calls.find((c) => c[0] === 'location:update')![1] as { battery?: number; lowPower?: boolean };
+      };
+      const off = run(false);
+      expect(off.battery).toBeUndefined();
+      expect(off.lowPower).toBeUndefined();
+      const unset = run(undefined);
+      expect(unset.battery).toBe(80);
+      expect(unset.lowPower).toBe(true);
+    });
+  });
 });

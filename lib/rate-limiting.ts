@@ -735,6 +735,72 @@ async function listActiveSos(redis: any, crewId: any, now: number) {
   }
 }
 
+/**
+ * Is this raiser's SOS active? `true` / `false`, or `null` when Redis is
+ * unavailable or throws (caller decides how to fail open).
+ */
+async function isSosActive(redis: any, crewId: any, raiserId: any): Promise<boolean | null> {
+  if (!redis || !crewId || !raiserId) return null;
+  try {
+    return (await redis.hexists(sosRaisersKey(crewId), raiserId)) === 1;
+  } catch {
+    return null;
+  }
+}
+
+// "Seen by": one hash per SOS, field = viewer userId, value = viewer username.
+const sosSeenKey = (crewId: any, raiserId: any) => `sos:seen:${crewId}:${raiserId}`;
+
+interface SosViewer {
+  userId: string;
+  username: string;
+}
+
+function toViewers(raw: Record<string, string> | null | undefined): SosViewer[] {
+  return Object.entries(raw || {})
+    .map(([userId, username]) => ({ userId, username: String(username) }))
+    .sort((a, b) => a.username.localeCompare(b.username));
+}
+
+/**
+ * Read who has seen one raiser's SOS, sorted by username. Returns `[]` when
+ * Redis is unavailable or throws.
+ */
+async function listSosSeen(redis: any, crewId: any, raiserId: any): Promise<SosViewer[]> {
+  if (!redis || !crewId || !raiserId) return [];
+  try {
+    return toViewers(await redis.hgetall(sosSeenKey(crewId, raiserId)));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Record that `viewer` saw one raiser's SOS and refresh the 1h expiry. Returns
+ * the full seen list, or `null` when Redis is unavailable or throws.
+ */
+async function markSosSeen(redis: any, crewId: any, raiserId: any, viewer: SosViewer): Promise<SosViewer[] | null> {
+  if (!redis || !crewId || !raiserId || !viewer?.userId) return null;
+  try {
+    const key = sosSeenKey(crewId, raiserId);
+    await redis.hset(key, viewer.userId, viewer.username);
+    await redis.pexpire(key, SOS_ACTIVE_TTL_MS);
+    return toViewers(await redis.hgetall(key));
+  } catch {
+    return null;
+  }
+}
+
+/** Drop one raiser's seen list (after a clear). Best-effort; the TTL reaps it anyway. */
+async function clearSosSeen(redis: any, crewId: any, raiserId: any): Promise<void> {
+  if (!redis || !crewId || !raiserId) return;
+  try {
+    await redis.del(sosSeenKey(crewId, raiserId));
+  } catch {
+    /* TTL will reap it */
+  }
+}
+
 export {
   createRateLimiters,
   createPasswordResetRateLimit,
@@ -753,4 +819,8 @@ export {
   markSosActive,
   clearSosActive,
   listActiveSos,
+  isSosActive,
+  markSosSeen,
+  listSosSeen,
+  clearSosSeen,
 };

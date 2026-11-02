@@ -5,6 +5,9 @@ import {
   headingToArrow,
   formatBatteryLabel,
   formatShareWindow,
+  formatCountdown,
+  liveShareOptions,
+  sosSeenLabel,
   LOW_BATTERY_THRESHOLD,
   type LatLng,
 } from './liveLocation';
@@ -149,18 +152,18 @@ describe('liveLocation.formatBatteryLabel', () => {
 
 describe('liveLocation.formatShareWindow', () => {
   it('counts down whole minutes, rounding up', () => {
-    expect(formatShareWindow(NOW + 4 * 60_000, NOW)).toBe('sharing ends in 4m');
-    expect(formatShareWindow(NOW + 3 * 60_000 + 1, NOW)).toBe('sharing ends in 4m');
+    expect(formatShareWindow(NOW + 4 * 60_000, NOW)).toBe('sharing ends in 4 min');
+    expect(formatShareWindow(NOW + 3 * 60_000 + 1, NOW)).toBe('sharing ends in 4 min');
   });
 
-  it('never shows 0m while still live (clamps to 1m)', () => {
-    expect(formatShareWindow(NOW + 1, NOW)).toBe('sharing ends in 1m');
-    expect(formatShareWindow(NOW + 30_000, NOW)).toBe('sharing ends in 1m');
+  it('never shows 0 min while still live (clamps to 1 min)', () => {
+    expect(formatShareWindow(NOW + 1, NOW)).toBe('sharing ends in 1 min');
+    expect(formatShareWindow(NOW + 30_000, NOW)).toBe('sharing ends in 1 min');
   });
 
   it('accepts ISO strings as well as epoch ms', () => {
     const iso = new Date(NOW + 10 * 60_000).toISOString();
-    expect(formatShareWindow(iso, NOW)).toBe('sharing ends in 10m');
+    expect(formatShareWindow(iso, NOW)).toBe('sharing ends in 10 min');
   });
 
   it('returns null once the window has elapsed or is absent/invalid', () => {
@@ -169,5 +172,69 @@ describe('liveLocation.formatShareWindow', () => {
     expect(formatShareWindow(null, NOW)).toBeNull();
     expect(formatShareWindow(undefined, NOW)).toBeNull();
     expect(formatShareWindow('not-a-date', NOW)).toBeNull();
+  });
+});
+
+describe('liveLocation.formatCountdown', () => {
+  it('formats minutes and hours', () => {
+    expect(formatCountdown(59_000)).toBe('1 min');
+    expect(formatCountdown(42 * 60_000)).toBe('42 min');
+    expect(formatCountdown(60 * 60_000)).toBe('1 h');
+    expect(formatCountdown(65 * 60_000)).toBe('1 h 5 min');
+  });
+});
+
+describe('liveLocation.liveShareOptions', () => {
+  const TZ = 'America/New_York';
+  const DAYS = [{ date: '2026-09-04' }, { date: '2026-09-05' }];
+  // 2026-09 is EDT (UTC-4).
+  const ny = (date: string, hhmm: string) => {
+    const [y, mo, d] = date.split('-').map(Number);
+    const [h, m] = hhmm.split(':').map(Number);
+    return Date.UTC(y!, mo! - 1, d!, h! + 4, m!);
+  };
+
+  it('offers rest of today as the default at 20:00 on a festival day', () => {
+    const { options, defaultId } = liveShareOptions({ days: DAYS, timeZone: TZ, nowMs: ny('2026-09-04', '20:00') });
+    const day = options.find((o) => o.id === 'day');
+    expect(day?.label).toBe('Rest of today (until 6:00 AM)');
+    expect(day?.ms).toBe(10 * 3_600_000);
+    expect(defaultId).toBe('day');
+  });
+
+  it('ends rest of today 1 hour after that day\'s last set', () => {
+    const sets = [
+      { startTime: '22:00', endTime: '23:30', dayIndex: 0 },
+      { startTime: '23:45', endTime: '01:00', dayIndex: 0 },
+      { startTime: '02:00', endTime: '04:00', dayIndex: 1 },
+    ];
+    const { options, defaultId } = liveShareOptions({ days: DAYS, sets, timeZone: TZ, nowMs: ny('2026-09-04', '20:00') });
+    const day = options.find((o) => o.id === 'day');
+    expect(day?.label).toBe('Rest of today (until 2:00 AM)');
+    expect(day?.ms).toBe(6 * 3_600_000);
+    expect(defaultId).toBe('day');
+  });
+
+  it('drops the day option with 30 minutes left and defaults to 2h', () => {
+    const { options, defaultId } = liveShareOptions({ days: DAYS, timeZone: TZ, nowMs: ny('2026-09-05', '05:30') });
+    expect(options.some((o) => o.id === 'day')).toBe(false);
+    expect(defaultId).toBe('2h');
+  });
+
+  it('defaults to 2h outside the festival', () => {
+    const { options, defaultId } = liveShareOptions({ days: DAYS, timeZone: TZ, nowMs: ny('2026-08-01', '12:00') });
+    expect(options.some((o) => o.id === 'day')).toBe(false);
+    expect(defaultId).toBe('2h');
+  });
+});
+
+describe('liveLocation.sosSeenLabel', () => {
+  const entry = (...names: string[]) => ({ seenBy: names.map((username) => ({ userId: username, username })) });
+  it('names up to two viewers and counts the rest', () => {
+    expect(sosSeenLabel(entry())).toBe('Not seen yet');
+    expect(sosSeenLabel({})).toBe('Not seen yet');
+    expect(sosSeenLabel(entry('Sam'))).toBe('Seen by Sam');
+    expect(sosSeenLabel(entry('Sam', 'Alex'))).toBe('Seen by Sam and Alex');
+    expect(sosSeenLabel(entry('Sam', 'Alex', 'Jo', 'Kim'))).toBe('Seen by Sam, Alex and 2 more');
   });
 });

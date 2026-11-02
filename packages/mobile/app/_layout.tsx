@@ -27,6 +27,7 @@ import { UIProvider } from '../contexts/UIContext';
 import OfflineBanner from '../components/OfflineBanner';
 import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
+import LiveSharePublisher from '../components/LiveSharePublisher';
 import FirstRunIntro from '../components/FirstRunIntro';
 import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -390,6 +391,7 @@ function AuthGate() {
       <StatusBar style={theme === 'daylight' ? 'dark' : 'light'} />
       {!loading && <OfflineBanner onActiveChange={setBannerActive} />}
       {!loading && <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />}
+      {!loading && <LiveSharePublisher />}
       <TopBannerContext.Provider value={bannerActive || sosActive}>
         <View style={styles.appShell}>
           {/* Use expo-router's global router singleton (not the local useRouter
