@@ -1254,6 +1254,18 @@ export const ratingCreateSchema = z.object({
 });
 export type RatingCreateInput = z.infer<typeof ratingCreateSchema>;
 
+// null clears the mark (back to unknown).
+export const caughtUpdateSchema = z.object({
+  caught: z.boolean().nullable(),
+});
+export type CaughtUpdateInput = z.infer<typeof caughtUpdateSchema>;
+
+// crewId picks which of the requester's crews the wrap reports on.
+export const wrapQuery = z.object({
+  crewId: identifier.optional(),
+});
+export type WrapQueryInput = z.infer<typeof wrapQuery>;
+
 // ── Expense schemas ─────────────────────────────────────────────
 // Keep in sync with CREW_CURRENCIES in packages/shared/src/constants/config.ts
 // (the backend cannot import @festie/shared, see lib/time-zone.ts). Every code
@@ -1556,6 +1568,8 @@ export const schemas = {
   updateEmail: updateEmailSchema,
   refreshToken: refreshTokenSchema,
   ratingCreate: ratingCreateSchema,
+  caughtUpdate: caughtUpdateSchema,
+  wrapQuery,
   expenseCreate: expenseCreateSchema,
   expenseUpdate: expenseUpdateSchema,
   expenseCurrency: expenseCurrencySchema,

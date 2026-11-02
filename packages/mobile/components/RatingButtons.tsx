@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text } from 'react-native';
+import { AccessibilityInfo, View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, mapErrorToUserMessage } from '@festie/shared/services';
 import { RATING_SCALE_DATA, ratingCaption } from '@festie/shared/constants';
@@ -39,7 +39,13 @@ interface RatingButtonsProps {
   setId: string;
   /** Festival id — used to fetch existing ratings on mount. */
   festivalId: string;
+  /** Called after a rating is saved (not after a clear). */
+  onRated?: (rating: number) => void;
+  /** Show the one-line memory field once a rating exists. Default true. */
+  showMemory?: boolean;
 }
+
+const MEMORY_MAX = 140;
 
 /**
  * Mobile rating primitive — 5 emoji buttons in a row. Mirrors the web
@@ -51,7 +57,7 @@ interface RatingButtonsProps {
  * the { ratings } object), POST /ratings/:setId { rating }, DELETE
  * /ratings/:setId.
  */
-export default function RatingButtons({ setId, festivalId }: RatingButtonsProps) {
+export default function RatingButtons({ setId, festivalId, onRated, showMemory = true }: RatingButtonsProps) {
   const styles = useStyles();
   const t = useTokens();
   const haptics = useHaptics();
@@ -66,6 +72,19 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
   // so we hold the controls at a slightly reduced opacity and show "Loading…"
   // rather than flashing the "Tap to rate" hint and then a filled state.
   const [loaded, setLoaded] = useState(false);
+  const [note, setNote] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [memorySaved, setMemorySaved] = useState(false);
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+
+  // The "Saved" line shows for 3 seconds.
+  useEffect(() => {
+    if (!memorySaved) return;
+    const id = setTimeout(() => setMemorySaved(false), 3000);
+    return () => clearTimeout(id);
+  }, [memorySaved]);
 
   // Fetch the current rating for this set on mount.
   useEffect(() => {
@@ -82,7 +101,10 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
         const res = await api.get<{ ratings: Rating[] } | Rating[]>(`/ratings/festival/${festivalId}`);
         const ratings = Array.isArray(res) ? res : res?.ratings || [];
         const found = ratings.find((r) => r.setId === setId);
-        if (!cancelled) setCurrent(found?.rating ?? null);
+        if (!cancelled) {
+          setCurrent(found?.rating ?? null);
+          setNote(found?.note ?? '');
+        }
       } catch {
         /* No ratings available */
       } finally {
@@ -105,7 +127,12 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
       const prev = current;
       const removing = current === n;
       // Optimistic local update.
+      const prevNote = note;
       setCurrent(removing ? null : n);
+      if (removing) {
+        setNote('');
+        setEditing(false);
+      }
       try {
         if (removing) {
           await api.delete(`/ratings/${setId}`);
@@ -114,6 +141,7 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
           // Success notification only when COMMITTING a rating (not clearing) —
           // a small "logged it" confirmation, distinct from the per-tap select.
           haptics.success();
+          onRated?.(n);
         }
       } catch (e) {
         // Roll back on failure + a warning buzz AND an explicit message — offline
@@ -121,13 +149,32 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
         // distinguishes "you appear to be offline" from server/other failures.
         haptics.warning();
         setCurrent(prev);
+        setNote(prevNote);
         setSaveError(mapErrorToUserMessage(e, "Couldn't save — try again."));
       } finally {
         setBusy(false);
       }
     },
-    [busy, current, setId, haptics],
+    [busy, current, note, setId, haptics, onRated],
   );
+
+  const saveMemory = useCallback(async () => {
+    if (current === null || memoryBusy) return;
+    const text = draft.trim();
+    setMemoryBusy(true);
+    setMemoryError(null);
+    try {
+      await api.post(`/ratings/${setId}`, { rating: current, note: text });
+      setNote(text);
+      setEditing(false);
+      setMemorySaved(true);
+      AccessibilityInfo.announceForAccessibility('Memory saved');
+    } catch (e) {
+      setMemoryError(mapErrorToUserMessage(e, "Couldn't save — try again."));
+    } finally {
+      setMemoryBusy(false);
+    }
+  }, [current, memoryBusy, draft, setId]);
 
   // The human-readable label for the current rating, used in the caption + the
   // group accessibility value so the chosen rating is spoken on focus.
@@ -193,6 +240,77 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
             ? saveError
             : ratingCaption(current)}
       </Text>
+      {showMemory && loaded && current !== null ? (
+        <View style={styles.memory}>
+          {editing ? (
+            <>
+              <TextInput
+                style={styles.memoryInput}
+                value={draft}
+                onChangeText={setDraft}
+                maxLength={MEMORY_MAX}
+                placeholder="What do you want to remember?"
+                placeholderTextColor={t.colors.text.muted}
+                accessibilityLabel="Memory"
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                returnKeyType="done"
+                onSubmitEditing={saveMemory}
+              />
+              <View style={styles.memoryActions}>
+                <TouchableOpacity
+                  onPress={saveMemory}
+                  disabled={memoryBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save"
+                  hitSlop={8}
+                >
+                  <Text style={styles.memoryLink} maxFontSizeMultiplier={MAX_FONT_SCALE}>Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditing(false);
+                    setMemoryError(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                  hitSlop={8}
+                >
+                  <Text style={styles.memoryCancel} maxFontSizeMultiplier={MAX_FONT_SCALE}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <View style={styles.memoryActions}>
+              {note ? (
+                <Text style={styles.memoryNote} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={3}>
+                  {`“${note}”`}
+                </Text>
+              ) : null}
+              <TouchableOpacity
+                onPress={() => {
+                  setDraft(note);
+                  setEditing(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={note ? 'Edit memory' : 'Add a memory'}
+                hitSlop={8}
+              >
+                <Text style={styles.memoryLink} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {note ? 'Edit' : 'Add a memory'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {memoryError ? (
+            <Text style={styles.captionError} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityLiveRegion="polite">
+              {memoryError}
+            </Text>
+          ) : null}
+          {memorySaved ? (
+            <Text style={styles.memorySaved} maxFontSizeMultiplier={MAX_FONT_SCALE}>Saved</Text>
+          ) : null}
+        </View>
+      ) : null}
       <SetRatingSummary setId={setId} festivalId={festivalId} />
     </View>
   );
@@ -212,6 +330,46 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.muted,
     marginTop: t.spacing[2],
     textAlign: 'center',
+  },
+  memory: {
+    marginTop: t.spacing[2],
+    gap: t.spacing[1],
+    alignItems: 'center',
+  },
+  memoryInput: {
+    ...typeStyle('body'),
+    alignSelf: 'stretch',
+    color: t.colors.text.primary,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    borderRadius: t.radii.default,
+    backgroundColor: t.colors.bg.card,
+    paddingHorizontal: t.spacing[3],
+    paddingVertical: t.spacing[2],
+  },
+  memoryActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing[3],
+  },
+  memoryNote: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+    flexShrink: 1,
+  },
+  memoryLink: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
+  },
+  memoryCancel: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
+  },
+  memorySaved: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.aqua,
   },
   captionActive: {
     color: t.colors.accent.amber,

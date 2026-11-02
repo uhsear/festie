@@ -15,6 +15,9 @@
 //                      INVITED prior members (handed in by the reform route).
 //   • wrap_ready     — a festival is over → notify its attendees that the recap
 //                      is ready (`sendWrapReady(festivalId)`).
+//   • rate_prompt    — the morning after a festival day (10:00-20:00 festival
+//                      time) → push people who picked that day's sets and left
+//                      some unrated (`sendRatePrompt(festivalId)`). Push only.
 //
 // HARD RULES (enforced here + in send.ts):
 //   - strictly event-gated (called from real events, never a cron sweep);
@@ -34,6 +37,7 @@ import { sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendSetTi
 import { PREF_MAP } from './send.js';
 import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
 import { appLink, appOrigin } from './links.js';
+import { MAX_TITLE_LENGTH } from './payload.js';
 
 /**
  * Backend mirror of `@festie/shared` `isFestivalOver`: true once the festival's
@@ -70,6 +74,35 @@ function isFestivalOver(days: Array<{ date?: string | null }> | null | undefined
     cutoffMs = Date.UTC(y, mo - 1, d + 1, FESTIVAL_DAY_START_HOUR, 0, 0);
   }
   return cutoffMs < Date.now();
+}
+
+/** Morning window (festival-local hours) in which the rate prompt for the previous day may fire. */
+const RATE_PROMPT_START_HOUR = 10;
+const RATE_PROMPT_END_HOUR = 20;
+
+/**
+ * Index of the festival day whose rate-prompt window holds `nowMs`: 10:00 to
+ * 20:00, festival time, on the calendar date after that day. A null or invalid
+ * zone falls back to UTC, like `isFestivalOver`. Returns -1 when no day is due.
+ */
+export function findRatePromptDay(
+  days: Array<{ date?: string | null }> | null | undefined,
+  timeZone: string | null | undefined,
+  nowMs: number,
+): number {
+  const at = (y: number, mo: number, d: number, h: number) => {
+    const ms = timeZone ? zonedWallTimeToMs(y, mo, d, h, 0, timeZone) : NaN;
+    return Number.isNaN(ms) ? Date.UTC(y, mo - 1, d, h, 0, 0) : ms;
+  };
+  const arr = days || [];
+  for (let i = 0; i < arr.length; i++) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(arr[i]?.date || ''));
+    if (!m) continue;
+    const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    // d + 1 rolls over month/year ends inside Date.UTC.
+    if (at(y, mo, d + 1, RATE_PROMPT_START_HOUR) <= nowMs && nowMs < at(y, mo, d + 1, RATE_PROMPT_END_HOUR)) return i;
+  }
+  return -1;
 }
 
 /**
@@ -172,6 +205,65 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
     log?.info?.('sendWrapReady: done', { festivalId, attendees: attendeeIds.length, pushSent, emailSent });
     return { sent: pushSent, emailSent, eventKey };
+  }
+
+  // ── rate_prompt ─────────────────────────────────────────────────────────
+  //
+  // Fires from the hourly leader-only sweep (lib/shutdown.ts). On the morning
+  // after a festival day, pushes each person who picked sets on that day and has
+  // not rated all of them. Deduped per user on eventKey `rate:<festivalId>:<day>`,
+  // so the hourly sweep sends once per day. Push only, gated by the wrapReady pref.
+  async function sendRatePrompt(festivalId: string, nowMs = Date.now()) {
+    if (!festivalId) return { sent: 0, reason: 'no_festival' };
+
+    let festival: any = null;
+    try {
+      festival = await stores?.festivals?.getById?.(festivalId);
+    } catch (err: any) {
+      log?.warn?.('sendRatePrompt: festival load failed', { festivalId, error: err?.message });
+    }
+    if (!festival) return { sent: 0, reason: 'festival_not_found' };
+
+    const dayIndex = findRatePromptDay(festival.days, festival.timeZone, nowMs);
+    if (dayIndex < 0) return { sent: 0, reason: 'not_due' };
+    if (!db) return { sent: 0, reason: 'no_db' };
+
+    let unratedByUser: Map<string, number>;
+    try {
+      const { rows } = await db.query(
+        `
+        SELECT p.user_id AS "userId", COUNT(*)::int AS "unrated"
+        FROM festival_profiles p
+        JOIN festival_profile_picks pp ON pp.profile_id = p.id
+        JOIN festival_sets s ON s.id = pp.set_id AND s.festival_id = $1 AND s.day_index = $2
+        WHERE p.festival_id = $1 AND p.deleted_at IS NULL AND p.user_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM set_ratings r WHERE r.user_id = p.user_id AND r.set_id = s.id)
+        GROUP BY p.user_id
+        `,
+        [festivalId, dayIndex],
+      );
+      unratedByUser = new Map(rows.filter((r: any) => r.userId && r.unrated > 0).map((r: any) => [r.userId, r.unrated]));
+    } catch (err: any) {
+      log?.warn?.('sendRatePrompt: recipient query failed', { festivalId, dayIndex, error: err?.message });
+      return { sent: 0, reason: 'query_failed' };
+    }
+
+    const eventKey = `rate:${festivalId}:${dayIndex}`;
+    const fresh = await filterFresh([...unratedByUser.keys()], 'rate_prompt', eventKey);
+
+    const festivalName = festival.name || 'your festival';
+    const dayLabel = festival.days[dayIndex]?.label || `Day ${dayIndex + 1}`;
+    const title = `How was ${dayLabel} at ${festivalName}?`.slice(0, MAX_TITLE_LENGTH);
+    const deepLink = `${appOrigin(config)}/rate?festival=${encodeURIComponent(festivalId)}`;
+    const sent = await pushFanout(fresh, (uid) => ({
+      type: 'rate_prompt',
+      title,
+      body: `Rate the ${unratedByUser.get(uid)} sets you picked while you still remember them.`,
+      data: { festivalId, eventKey, deepLink },
+    }));
+
+    log?.info?.('sendRatePrompt: done', { festivalId, dayIndex, recipients: unratedByUser.size, sent });
+    return { sent, eventKey, dayIndex };
   }
 
   // ── lineup_drop ─────────────────────────────────────────────────────────
@@ -491,5 +583,5 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return sent;
   }
 
-  return { sendWrapReady, sendLineupDrop, countLineupDrop, sendCrewReformed, sendSetTimesOut };
+  return { sendWrapReady, sendLineupDrop, countLineupDrop, sendCrewReformed, sendRatePrompt, sendSetTimesOut };
 }

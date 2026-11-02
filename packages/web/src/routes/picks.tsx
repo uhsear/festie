@@ -18,6 +18,7 @@ import OfflineReadinessCard from '../components/features/OfflineReadinessCard';
 import CrewSuggestionStrip from '../components/features/CrewSuggestionStrip';
 import GuestPicksBanner from '../components/features/GuestPicksBanner';
 import PickConflicts from '../components/features/PickConflicts';
+import RateNightBanner from '../components/features/RateNightBanner';
 import PicksPlanRow from '../components/features/PicksPlanRow';
 import ListenList from '../components/features/ListenList';
 import MyDayList from '../components/features/MyDayList';
@@ -345,6 +346,7 @@ function PicksViewInner() {
         </div>
 
         <PickConflicts groups={conflictGroups} />
+        <RateNightBanner />
         <PickBulkActions />
         <ListenList
           sets={pickedSets}

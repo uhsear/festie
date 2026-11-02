@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, AccessibilityInfo } from 'react-native';
 import * as Linking from 'expo-linking';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
@@ -9,6 +9,7 @@ import Button from './Button';
 interface CrewPhotoLinkProps {
   crewId: string;
   photoAlbumUrl: string | null | undefined;
+  onSaved?: () => void;
 }
 
 /**
@@ -18,7 +19,7 @@ interface CrewPhotoLinkProps {
  * everyone can open via expo-linking. Mirrors web CrewPhotosCard; writes via the
  * shared updatePhotoAlbum (member-gated PUT /crews/:id/photo-album).
  */
-export default function CrewPhotoLink({ crewId, photoAlbumUrl }: CrewPhotoLinkProps) {
+export default function CrewPhotoLink({ crewId, photoAlbumUrl, onSaved }: CrewPhotoLinkProps) {
   const t = useTokens();
   const styles = useStyles();
   const updatePhotoAlbum = useCrewStore((s) => s.updatePhotoAlbum);
@@ -27,6 +28,22 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl }: CrewPhotoLinkPr
   const [url, setUrl] = useState(photoAlbumUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  const showNotice = (message: string) => {
+    setNotice(message);
+    AccessibilityInfo.announceForAccessibility(message);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 3000);
+  };
 
   // Keep the form in sync when the crew's stored URL changes underneath us
   // (e.g. another member sets it and the crew:photo-album-updated event lands).
@@ -44,17 +61,35 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl }: CrewPhotoLinkPr
     if (photoAlbumUrl) Linking.openURL(photoAlbumUrl).catch(() => {});
   };
 
-  const handleSave = async () => {
-    if (!isValid || saving) return;
+  const write = async (next: string | null, message: string) => {
+    if (saving) return;
     setSaving(true);
     try {
-      await updatePhotoAlbum(crewId, { photoAlbumUrl: trimmed || null });
+      await updatePhotoAlbum(crewId, { photoAlbumUrl: next });
       setEditing(false);
+      showNotice(message);
+      onSaved?.();
     } catch {
       // Error is surfaced via the crew store.
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = () => {
+    if (!isValid) return;
+    return write(trimmed || null, trimmed ? 'Crew photos updated' : 'Crew album removed');
+  };
+
+  const handleRemove = () =>
+    Alert.alert('Remove the crew album?', 'Everyone in the crew loses this link. You can add it again later.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => void write(null, 'Crew album removed') },
+    ]);
+
+  const cancel = () => {
+    setUrl(photoAlbumUrl ?? '');
+    setEditing(false);
   };
 
   if (editing) {
@@ -64,7 +99,7 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl }: CrewPhotoLinkPr
           <Ionicons name="images" size={16} color={t.colors.accent.aqua} />
           <Text style={styles.editTitle}>Crew photos</Text>
           <TouchableOpacity
-            onPress={() => setEditing(false)}
+            onPress={cancel}
             style={styles.iconButton}
             activeOpacity={0.7}
             accessibilityRole="button"
@@ -91,63 +126,84 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl }: CrewPhotoLinkPr
           accessibilityLabel="Shared album URL"
         />
         {!isValid ? <Text style={styles.errorText}>Link must start with https://</Text> : null}
-        <Button
-          label="Save"
-          loading={saving}
-          loadingLabel="Saving…"
-          disabled={!isValid}
-          onPress={handleSave}
-          accessibilityLabel="Save crew photo album link"
-        />
+        <View style={styles.buttonRow}>
+          <View style={styles.buttonFlex}>
+            <Button
+              label="Save"
+              loading={saving}
+              loadingLabel="Saving…"
+              disabled={!isValid}
+              onPress={handleSave}
+              accessibilityLabel="Save crew photo album link"
+            />
+          </View>
+          {hasAlbum ? (
+            <Button
+              label="Remove"
+              variant="ghost"
+              disabled={saving}
+              onPress={handleRemove}
+              accessibilityLabel="Remove crew photo album"
+            />
+          ) : null}
+        </View>
       </View>
     );
   }
 
+  const noticeText = notice ? <Text style={styles.notice}>{notice}</Text> : null;
+
   if (!hasAlbum) {
     return (
-      <TouchableOpacity
-        style={[styles.card, styles.cardEmpty]}
-        onPress={() => setEditing(true)}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel="Add a shared photo album"
-      >
-        <Ionicons name="images" size={16} color={t.colors.text.muted} />
-        <View style={styles.cardInfo}>
-          <Text style={styles.cardPlaceholder}>Add a shared photo album</Text>
-        </View>
-      </TouchableOpacity>
+      <>
+        <TouchableOpacity
+          style={[styles.card, styles.cardEmpty]}
+          onPress={() => setEditing(true)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Add a shared photo album"
+        >
+          <Ionicons name="images" size={16} color={t.colors.text.muted} />
+          <View style={styles.cardInfo}>
+            <Text style={styles.cardPlaceholder}>Add a shared photo album</Text>
+          </View>
+        </TouchableOpacity>
+        {noticeText}
+      </>
     );
   }
 
   return (
-    <View style={[styles.card, styles.cardSet]}>
-      <Ionicons name="images" size={16} color={t.colors.accent.aqua} />
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardLabel} numberOfLines={1}>
-          Crew photos
-        </Text>
+    <>
+      <View style={[styles.card, styles.cardSet]}>
+        <Ionicons name="images" size={16} color={t.colors.accent.aqua} />
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardLabel} numberOfLines={1}>
+            Crew photos
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={open}
+          style={styles.actionButton}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Open crew photo album"
+        >
+          <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
+          <Text style={styles.actionText}>Open</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setEditing(true)}
+          style={styles.iconButton}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Edit crew photo album link"
+        >
+          <Ionicons name="pencil" size={t.iconSize.compact} color={t.colors.text.secondary} />
+        </TouchableOpacity>
       </View>
-      <TouchableOpacity
-        onPress={open}
-        style={styles.actionButton}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Open crew photo album"
-      >
-        <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
-        <Text style={styles.actionText}>Open</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        onPress={() => setEditing(true)}
-        style={styles.iconButton}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Edit crew photo album link"
-      >
-        <Ionicons name="pencil" size={t.iconSize.compact} color={t.colors.text.secondary} />
-      </TouchableOpacity>
-    </View>
+      {noticeText}
+    </>
   );
 }
 
@@ -239,6 +295,19 @@ const useStyles = makeStyles((t) => ({
   inputFocused: {
     borderColor: t.colors.accent.aqua,
     backgroundColor: t.colors.ring.aqua,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  buttonFlex: {
+    flex: 1,
+  },
+  notice: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+    marginTop: t.spacing[1],
   },
   errorText: {
     ...typeStyle('caption'),
