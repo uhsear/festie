@@ -2,22 +2,6 @@
  * Shared constants and utility functions for the timeline grid view.
  */
 
-/**
- * PX_PER_MIN adapts to viewport width: narrower mobile -> denser (1.6 px/min)
- * so a 7-hour day fits in <= 680 px and the user still sees most of the day at
- * once. On tablet/desktop we keep 2 px/min (120 px/hr) for readability.
- */
-export function getPxPerMin(viewportW: number): number {
-  if (viewportW <= 360) return 1.4;
-  if (viewportW <= 430) return 1.6;
-  return 2;
-}
-
-export function getGutterW(viewportW: number): number {
-  if (viewportW <= 430) return 38;
-  return 52;
-}
-
 export function fmtHour(totalMin: number): string {
   const h = Math.floor(totalMin / 60) % 24;
   return `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;

@@ -1,18 +1,42 @@
-import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
-import { useFestivalStore } from '@festie/shared/stores';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useReducedMotion } from 'motion/react';
+import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { usePicks, useFestival } from '@festie/shared/hooks';
-import { resolveStageColor, setMinuteRange, resolveFestivalTimeZone, createDateInLocalFrame, zonedWallTimeToMs } from '@festie/shared/utils';
+import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
+import { usePicks, useFestival, useDayClashes } from '@festie/shared/hooks';
+import { Priority } from '@festie/shared/types';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import {
+  selectNowNext,
+  resolveFestivalTimeZone,
+  artistDisplayName,
+  resolveStageColor,
+  GRID_ZOOM_LEVELS,
+  defaultZoomIndex,
+  pickClashTarget,
+} from '@festie/shared/utils';
+import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { getPxPerMin, getGutterW, fmtHour } from '../components/grid/gridUtils';
-import { useGridExport } from '../components/grid/useGridExport';
-import GridStageHeader from '../components/grid/GridStageHeader';
-import GridStageColumn from '../components/grid/GridStageColumn';
+import TimelineGrid from '../features/TimelineGrid';
 import EmptyState from '../components/ui/EmptyState';
-import { useScheduleFilters } from '../hooks/useScheduleFilters';
+import TBASection from '../components/timeline/TBASection';
+import TimelineLegend from '../components/timeline/TimelineLegend';
+import LastSyncedBadge from '../components/features/LastSyncedBadge';
+import LowPowerIndicator from '../components/features/LowPowerIndicator';
+import GridToolbar from '../components/grid/GridToolbar';
+import { useGridExport } from '../components/grid/useGridExport';
+import { useTimelineFilters } from '../hooks/useTimelineFilters';
+import { useTimelineViewport } from '../hooks/useTimelineViewport';
+import { useNowIndicator } from '../hooks/useNowIndicator';
+import { useScrollProgress } from '../hooks/useScrollProgress';
 import { useNow } from '../hooks/useSetStatus';
-import { CalendarX, Clock } from 'lucide-react';
+import { CalendarX, Music, Filter } from 'lucide-react';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { cn } from '../lib/utils';
+import { useToast } from '../lib/toastContext';
+
+const JumpToNowIcon = CONCEPT_ICON.jumpToNow;
 
 export default function GridView() {
   return (
@@ -26,236 +50,341 @@ export default function GridView() {
 }
 
 function GridViewInner() {
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const sets = useFestivalStore((s) => s.sets);
-  const stages = useFestivalStore((s) => s.stages);
-  const selectedDay = useFestivalStore((s) => s.selectedDay);
-  const days = useFestivalStore((s) => s.days);
-  const activeStages = useFestivalStore((s) => s.activeStages);
-  const setDetailSet = useUIStore((s) => s.setDetailSet);
-  const { getMyPick, getOtherPicks } = usePicks();
-  const { getStageColor: getStageColorRaw, getStageName } = useFestival();
+  const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const user = useAuthStore((state) => state.user);
+  const days = useFestivalStore((state) => state.days);
+  const allSets = useFestivalStore((state) => state.sets);
+  const setDetailSet = useUIStore((state) => state.setDetailSet);
+  // Low-power mode backs off the per-tick auto-scroll-to-now (an aggressive,
+  // battery-costing reflow loop). The manual "Now" button stays available.
+  const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
+  const { getMyPick, getOtherPicks, savePick } = usePicks();
+  const { toast } = useToast();
+  const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
     (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)'),
     [getStageColorRaw],
   );
 
-  // Compact crew-overlap indicator for grid cells: how many OTHER crew members
-  // picked a set. Reads persisted allProfiles (via getOtherPicks), so the
-  // count renders offline. The grid cell is the first surface to wire this.
-  const getOverlapCount = useCallback((setId: string) => getOtherPicks(setId).length, [getOtherPicks]);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const {
+    currentFestival,
+    stages,
+    selectedDay,
+    visibleStages,
+    allDaySets,
+    timedSets,
+    timelessSets,
+    conflictIds,
+    timeBounds,
+  } = useTimelineFilters();
 
-  // Track viewport width so PX_PER_MIN + GUTTER_W can adapt on rotate/resize.
-  // Throttled via rAF so rapid resize events don't re-render every column per frame.
-  const [vw, setVw] = useState(() => (typeof window === 'undefined' ? 1024 : window.innerWidth));
-  useEffect(() => {
-    let rafId: number | null = null;
-    const onResize = () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        setVw(window.innerWidth);
-        rafId = null;
-      });
-    };
-    window.addEventListener('resize', onResize);
-    return () => {
-      window.removeEventListener('resize', onResize);
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
-  }, []);
-  const PX_PER_MIN = getPxPerMin(vw);
-  const GUTTER_W = getGutterW(vw);
-  // Min column width — shared by the header grid and the body columns so they
-  // stay aligned; columns then flex to fill the remaining width on desktop.
-  const minColW = vw <= 430 ? '92px' : '110px';
-
+  const { vpW } = useTimelineViewport();
+  const { nowIndicator, gridRef, scrollToNow } = useNowIndicator(timeBounds, selectedDay);
+  const { count: clashCount, marks: clashMarks, groups: clashGroups } = useDayClashes();
+  const reducedMotion = useReducedMotion();
   const { exporting, exportGrid } = useGridExport(
     gridRef,
     selectedDay,
     days?.[selectedDay]?.label ?? `day-${selectedDay + 1}`,
   );
 
-  const visibleStages = useMemo(() => {
-    if (activeStages.length > 0 && activeStages.length < stages.length)
-      return stages.filter((st) => activeStages.includes(st.id));
-    return stages;
-  }, [stages, activeStages]);
+  // Same gutter rule as TimelineGrid, so snapped columns land beside the time labels.
+  const gutterW = vpW <= 430 ? 52 : 70;
+  const [zoom, setZoom] = useState(() => defaultZoomIndex(window.innerWidth));
+  const rowHeight = Math.round((GRID_ZOOM_LEVELS[zoom] ?? GRID_ZOOM_LEVELS[0]) * 15);
 
-  const { filterSets } = useScheduleFilters();
-  const timedSets = useMemo(
-    () => filterSets(sets.filter((s) => s.dayIndex === selectedDay && s.startTime && s.endTime)),
-    [sets, selectedDay, filterSets],
+  // R11: scroll-driven aqua beam in the left gutter. The hook updates a
+  // --scroll-progress custom property on the scroll container (fallback path);
+  // modern engines fill the beam natively via animation-timeline: scroll().
+  const { ref: scrollRef, handleScroll: handleBeamScroll } = useScrollProgress<HTMLDivElement>();
+
+  // --- Live mode -----------------------------------------------------------
+  // A 60s shared-clock tick drives the next-pick countdown and the auto-scroll.
+  // Fully offline-native: reads only cached sets + the local clock, never the
+  // network. Set-time math comes from the SHARED getSetTimeBounds (TZ-safe,
+  // post-midnight rollover) — never a local parseSetMs. Shares the single
+  // module-level clock (useNow) with every SetCard instead of a second interval.
+  const nowMs = useNow();
+
+  // Countdown to the next picked set (across all days, like festival-mode's
+  // "up next"), recomputed every tick from the shared clock in the festival zone.
+  const timeZone = resolveFestivalTimeZone(currentFestival);
+  const nextPick = useMemo(() => {
+    const picks = currentProfile?.picks;
+    // Without picks selectNowNext would read the whole lineup, so bail first.
+    if (!picks) return null;
+    const next = selectNowNext({ sets: allSets, days, picks, nowMs, timeZone, upcomingLimit: 1 }).upcoming[0];
+    return next ? { set: next.set, startMs: next.start } : null;
+  }, [currentProfile?.picks, allSets, days, nowMs, timeZone]);
+
+  const nextPickLabel = useMemo(() => {
+    if (!nextPick) return null;
+    const totalMin = Math.max(0, Math.round((nextPick.startMs - nowMs) / 60_000));
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    const eta = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+    return {
+      eta,
+      name: artistDisplayName(nextPick.set, currentFestival?.b2bSeparator),
+    };
+  }, [nextPick, nowMs, currentFestival?.b2bSeparator]);
+
+  // Track active user scrolling so the tick-driven auto-scroll never fights a
+  // user who is reading another part of the timeline. Any scroll on the
+  // container arms the flag for 8s; while armed, the tick won't yank the view.
+  const recentlyScrolledRef = useRef(false);
+  const scrollArmTimerRef = useRef<number | null>(null);
+
+  const handleUserScroll = useCallback(() => {
+    recentlyScrolledRef.current = true;
+    if (scrollArmTimerRef.current !== null) window.clearTimeout(scrollArmTimerRef.current);
+    scrollArmTimerRef.current = window.setTimeout(() => {
+      recentlyScrolledRef.current = false;
+    }, 8_000);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (scrollArmTimerRef.current !== null) window.clearTimeout(scrollArmTimerRef.current);
+    },
+    [],
   );
 
-  // Pre-compute stageId -> sets map once per render instead of filtering inside
-  // every column .map() iteration.
-  const setsByStage = useMemo(() => {
-    const m = new Map<string, typeof timedSets>();
-    for (const s of timedSets) {
-      const arr = m.get(s.stageId) || [];
-      arr.push(s);
-      m.set(s.stageId, arr);
+  // Keep the time in the middle of the view in place across a zoom change.
+  const zoomAnchorRef = useRef<number | null>(null);
+  const handleZoom = useCallback(
+    (next: number) => {
+      const el = scrollRef.current;
+      if (el && el.scrollHeight > 0) zoomAnchorRef.current = (el.scrollTop + el.clientHeight / 2) / el.scrollHeight;
+      setZoom(Math.max(0, Math.min(GRID_ZOOM_LEVELS.length - 1, next)));
+    },
+    [scrollRef],
+  );
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const frac = zoomAnchorRef.current;
+    zoomAnchorRef.current = null;
+    if (!el || frac === null) return;
+    el.scrollTop = frac * el.scrollHeight - el.clientHeight / 2;
+    handleUserScroll();
+  }, [rowHeight, scrollRef, handleUserScroll]);
+
+  const showFirstClash = useCallback(() => {
+    const target = pickClashTarget(clashGroups, new Set(visibleStages.map((s) => s.id)));
+    if (!target) return;
+    const cell = target.visible
+      ? gridRef.current?.querySelector<HTMLElement>(`[data-set-id="${CSS.escape(target.set.id)}"]`)
+      : null;
+    if (!cell) {
+      setDetailSet(target.set);
+      return;
     }
-    return m;
-  }, [timedSets]);
+    cell.scrollIntoView({ block: 'center', inline: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
+    cell.querySelector<HTMLElement>('[data-open]')?.focus({ preventScroll: true });
+    handleUserScroll();
+  }, [clashGroups, visibleStages, gridRef, setDetailSet, reducedMotion, handleUserScroll]);
 
-  const bounds = useMemo(() => {
-    if (!timedSets.length) return null;
-    let lo = Infinity,
-      hi = 0;
-    for (const s of timedSets) {
-      const range = setMinuteRange(s);
-      if (!range) continue;
-      lo = Math.min(lo, range.start);
-      hi = Math.max(hi, range.end);
-    }
-    lo = Math.floor(lo / 60) * 60;
-    hi = Math.ceil(hi / 60) * 60;
-    return { lo, hi, span: hi - lo };
-  }, [timedSets]);
-
-  const hours = useMemo(() => {
-    if (!bounds) return [];
-    const out: { m: number; px: number }[] = [];
-    for (let m = bounds.lo; m <= bounds.hi; m += 60) out.push({ m, px: (m - bounds.lo) * PX_PER_MIN });
-    return out;
-  }, [bounds, PX_PER_MIN]);
-
-  // Now-minute derived the same TZ-safe way timeline does (getSetTimeBounds'
-  // own primitives): minutes since local midnight of the SELECTED DAY, in the
-  // festival's zone when known. A raw `new Date().getHours()` read (the old
-  // approach) reads the DEVICE's wall clock, so a traveling user (device zone
-  // != festival zone) got a NOW bar offset by the zone delta.
-  const nowMs = useNow();
-  const timeZone = resolveFestivalTimeZone(currentFestival);
-  const selectedDayDate = days?.[selectedDay]?.date;
-  const nowMin = useMemo(() => {
-    if (!selectedDayDate) return null;
-    const dayStartMs = timeZone
-      ? zonedWallTimeToMs(selectedDayDate, 0, 0, timeZone)
-      : createDateInLocalFrame(selectedDayDate, 0, 0).getTime();
-    if (Number.isNaN(dayStartMs)) return null;
-    return Math.round((nowMs - dayStartMs) / 60_000);
-  }, [selectedDayDate, timeZone, nowMs]);
-
-  const nowPx = useMemo(() => {
-    if (!bounds || nowMin === null) return null;
-    if (nowMin < bounds.lo || nowMin > bounds.hi) return null;
-    return (nowMin - bounds.lo) * PX_PER_MIN;
-  }, [bounds, PX_PER_MIN, nowMin]);
-
-  // Auto-scroll to NOW on mount (only when NOW is within the day's bounds).
-  const didAutoScroll = useRef(false);
+  // Auto-scroll to now on each tick — but only when the user isn't actively
+  // scrolling and a now-line exists for the current day.
   useEffect(() => {
-    if (didAutoScroll.current || nowPx == null || !gridRef.current) return;
-    const body = gridRef.current.querySelector<HTMLElement>('[data-grid-body]');
-    if (!body) return;
-    const target = Math.max(0, nowPx - body.clientHeight / 2);
-    body.scrollTo({ top: target, behavior: 'auto' });
-    didAutoScroll.current = true;
-  }, [nowPx]);
+    if (lowPowerMode) return; // back off the auto-scroll loop to save battery
+    if (nowIndicator === null) return;
+    if (recentlyScrolledRef.current) return;
+    const id = window.requestAnimationFrame(() => {
+      if (!recentlyScrolledRef.current) scrollToNow();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [nowMs, nowIndicator, scrollToNow, lowPowerMode]);
 
-  if (!currentFestival)
+  const handleSavePick = useCallback(
+    async (setId: string, priority: string | null) => {
+      if (!currentFestival) return;
+      try {
+        await savePick(currentFestival.id, setId, priority as Priority | null);
+      } catch (err) {
+        // Grid and TBA cells show no failed chip, so a failed save (first-pick join included) toasts.
+        toast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), 'error');
+      }
+    },
+    [currentFestival, savePick, toast],
+  );
+
+  if (!currentFestival) {
     return (
       <EmptyState
-        icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
-        title="No festival selected"
-        description="Choose a festival from the top menu to view the schedule grid."
+        icon={<CalendarX className="w-12 h-12" aria-hidden="true" />}
+        title="No festival loaded"
+        description="Choose a festival from the top menu to see the schedule grid."
       />
     );
-  if (!timedSets.length || !bounds)
-    return (
-      <EmptyState
-        icon={<Clock className="w-9 h-9" aria-hidden="true" />}
-        title="No timed sets to display"
-        description="There are no sets with scheduled times for this day. Try switching days above."
-      />
-    );
+  }
 
-  const totalH = bounds.span * PX_PER_MIN;
+  // TBA-only fallback (no timed sets but there are timeless sets)
+  if (timedSets.length === 0 && timelessSets.length > 0) {
+    return (
+      <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
+        <div
+          className="relative overflow-auto h-full [-webkit-overflow-scrolling:touch] overscroll-contain"
+          role="region"
+          aria-label={COPY.grid.regionLabel}
+          data-scroll-sentinel
+        >
+          <TBASection
+            allTba
+            sets={timelessSets}
+            stages={stages}
+            getMyPick={getMyPick}
+            getOtherPicks={getOtherPicks}
+            conflictIds={conflictIds}
+            canPick={!!user}
+            currentFestival={currentFestival}
+            getStageColor={getStageColor}
+            onSavePick={handleSavePick}
+            onOpenDetail={setDetailSet}
+          />
+        </div>
+      </RefreshableView>
+    );
+  }
+
+  if (!allDaySets.length || !timeBounds || timeBounds.totalSlots <= 0 || timeBounds.totalSlots > 200) {
+    return (
+      <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
+        <EmptyState
+          icon={<Music className="w-9 h-9" aria-hidden="true" />}
+          title="No sets scheduled for this day"
+          description="Try switching days above to find scheduled sets."
+        />
+      </RefreshableView>
+    );
+  }
+
+  if (!visibleStages.length) {
+    return (
+      <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
+        <EmptyState
+          icon={<Filter className="w-9 h-9" aria-hidden="true" />}
+          title="All stages are filtered out"
+          description="Tap a stage above to show it on the grid."
+        />
+      </RefreshableView>
+    );
+  }
 
   return (
-    <div
-      className={cn('fk-grid flex flex-col h-full min-h-0 overflow-hidden bg-bg-primary max-w-[1600px] mx-auto w-full')}
-      ref={gridRef}
-      role="grid"
-      aria-label="Festival schedule grid — stages as columns, time as rows"
-    >
-      <GridStageHeader
-        visibleStages={visibleStages}
-        gutterW={GUTTER_W}
-        minColWidth={minColW}
-        exporting={exporting}
-        onExport={exportGrid}
-        getStageColor={getStageColor}
-        getStageName={getStageName}
-      />
-
-      {/* Scrollable body */}
+    <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
       <div
-        className="fk-grid__body flex flex-1 min-h-0 overflow-x-auto overflow-y-auto pt-2 overscroll-contain"
-        style={{ WebkitOverflowScrolling: 'touch' }}
-        role="rowgroup"
+        ref={scrollRef}
+        onScroll={() => {
+          handleUserScroll();
+          handleBeamScroll();
+        }}
+        className="timeline-scroll relative overflow-auto h-full [-webkit-overflow-scrolling:touch] overscroll-contain [scroll-snap-type:both_proximity]"
+        // shortcut: 96px approximates the sticky toolbar + stage header; measure it if snapped hours land under the header
+        style={{ scrollPaddingLeft: gutterW, scrollPaddingTop: 96 }}
+        role="region"
+        aria-label={COPY.grid.regionLabel}
         data-scroll-sentinel
-        data-grid-body
       >
-        {/* Time gutter */}
-        <div
-          className="relative shrink-0 border-r border-border-light bg-bg-primary sticky left-0 z-5"
-          role="presentation"
-          style={{ height: totalH, width: GUTTER_W }}
-          data-grid-gutter
-        >
-          {hours.map(({ m, px }) => (
-            <span
-              key={m}
-              className="absolute right-2 -translate-y-1/2 text-[length:var(--font-size-10)] text-text-muted whitespace-nowrap leading-[var(--line-height-tight)] pointer-events-none tabular-nums"
-              style={{ top: px }}
-            >
-              {fmtHour(m)}
-            </span>
-          ))}
-        </div>
-
-        {/* Columns wrapper */}
-        <div className="flex flex-1 min-w-0 relative" role="presentation" data-grid-cols>
-          {nowPx != null && (
-            <div
-              className="absolute left-0 right-0 flex items-center pointer-events-none z-[8] -translate-y-1/2"
-              style={{ top: nowPx }}
-            >
-              <span
-                className="text-[length:var(--font-size-10)] font-bold text-accent-coral tracking-[0.08em] px-1 whitespace-nowrap shrink-0 tabular-nums"
-                aria-hidden="true"
-              >
-                &#9654; NOW
-              </span>
-              <div className="flex-1 h-0.5 bg-accent-coral opacity-80 shadow-[0_0_6px_color-mix(in_srgb,var(--color-accent-coral)_70%,transparent)] animate-[fk-grid-now-pulse_2.4s_ease-in-out_infinite] motion-reduce:animate-none motion-reduce:opacity-85" />
+        {/* R11 — full-height content wrapper so the beam's % height resolves
+            against scroll content, not the viewport. The beam fills top→current
+            scroll position in the left gutter. */}
+        <div className="timeline-content relative min-h-full max-w-[1440px] mx-auto">
+          <div className="timeline-beam" aria-hidden="true" />
+          <div className="sticky top-0 z-20 bg-bg-sticky shadow-sticky [backdrop-filter:saturate(140%)_blur(8px)]">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <TimelineLegend />
+              <div className="flex items-center gap-1.5 flex-wrap pr-3 py-0.5">
+                <GridToolbar
+                  clashCount={clashCount}
+                  onShowClash={showFirstClash}
+                  zoom={zoom}
+                  onZoom={handleZoom}
+                  exporting={exporting}
+                  onExport={exportGrid}
+                />
+                <LowPowerIndicator />
+                <LastSyncedBadge surface="schedule" />
+              </div>
             </div>
+            {nextPickLabel && (
+              <div
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-text-secondary border-t border-border-default/40"
+                aria-live="polite"
+                data-testid="next-pick-countdown"
+              >
+                <Music aria-hidden="true" className="w-3.5 h-3.5 text-[var(--color-text-danger)]" />
+                <span>
+                  Up next in <span className="text-[var(--color-text-danger)]">{nextPickLabel.eta}</span>
+                  {' · '}
+                  <span className="text-text-primary">{nextPickLabel.name}</span>
+                </span>
+              </div>
+            )}
+          </div>
+          <TimelineGrid
+            visibleStages={visibleStages}
+            timedSets={timedSets}
+            timeBounds={timeBounds}
+            selectedDay={selectedDay}
+            rowHeight={rowHeight}
+            vpW={vpW}
+            nowIndicator={nowIndicator}
+            clashMarks={clashMarks}
+            canPick={!!user}
+            currentFestival={currentFestival}
+            gridRef={gridRef}
+            getMyPick={getMyPick}
+            getOtherPicks={getOtherPicks}
+            getStageColor={getStageColor}
+            onSetClick={setDetailSet}
+            onSavePick={handleSavePick}
+          />
+
+          {nowIndicator !== null && (
+            <button
+              type="button"
+              className={cn(
+                'fixed right-4',
+                'bottom-[calc(var(--bottom-nav-h,88px)+8px+env(safe-area-inset-bottom,0px))]',
+                'lg:bottom-6',
+                'inline-flex items-center gap-1.5',
+                'px-3.5 py-2.5 rounded-full',
+                'bg-accent-aqua',
+                'text-[var(--text-on-light-accent)]',
+                'border-none text-[length:var(--font-size-14)] font-bold tracking-[var(--letter-spacing-caps)]',
+                'cursor-pointer z-30 min-h-11',
+                'shadow-[var(--shadow-glow-aqua),0_1px_3px_rgba(0,0,0,0.25)]',
+                'transition-[transform,box-shadow] duration-150',
+                'ease-out',
+                'hover:shadow-[0_8px_24px_rgba(0,232,208,0.45),0_1px_4px_rgba(0,0,0,0.3)]',
+                'active:scale-[0.96]',
+              )}
+              aria-label={COPY.jumpToNow.a11y}
+              onClick={scrollToNow}
+            >
+              <JumpToNowIcon aria-hidden="true" className="w-4 h-4" />
+              <span>{COPY.jumpToNow.label}</span>
+            </button>
           )}
 
-          {visibleStages.map((st) => (
-            <GridStageColumn
-              key={st.id}
-              stageId={st.id}
-              stageSets={setsByStage.get(st.id) || []}
-              stageColor={getStageColor(st.id)}
-              stageName={getStageName(st.id)}
-              hours={hours}
-              bounds={bounds}
-              totalH={totalH}
-              pxPerMin={PX_PER_MIN}
-              minColWidth={minColW}
-              b2bSeparator={currentFestival.b2bSeparator}
+          {timelessSets.length > 0 && (
+            <TBASection
+              sets={timelessSets}
+              stages={stages}
               getMyPick={getMyPick}
-              getOverlapCount={getOverlapCount}
-              onSetClick={setDetailSet}
+              getOtherPicks={getOtherPicks}
+              conflictIds={conflictIds}
+              canPick={!!user}
+              currentFestival={currentFestival}
+              getStageColor={getStageColor}
+              onSavePick={handleSavePick}
+              onOpenDetail={setDetailSet}
             />
-          ))}
+          )}
         </div>
       </div>
-    </div>
+    </RefreshableView>
   );
 }

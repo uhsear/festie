@@ -4,6 +4,7 @@ import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { usePicks, usePickSync } from '@festie/shared/hooks';
 import { formatTime, artistDisplayName, artistSubtitle, festivalPhase, PRIORITY_RANK } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { api } from '@festie/shared/services/api';
 import { useSetStatus } from '@/hooks/useSetStatus';
@@ -388,12 +389,12 @@ function SetCard({
             className={cn(
               'inline-flex items-center gap-1',
               'text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight',
-              'bg-[var(--color-coral-ring)] text-accent-coral',
-              'border border-[var(--color-coral-a3)]',
+              'bg-[var(--color-clash-tint)] text-text-primary',
+              'border border-[var(--color-clash)]',
               'tracking-[0.5px] uppercase',
             )}
           >
-            <AlertTriangle className="w-3 h-3" aria-hidden="true" /> Conflict
+            <AlertTriangle className="w-3 h-3 text-[var(--color-clash)]" aria-hidden="true" /> {COPY.clash.badge}
           </span>
         )}
       </div>

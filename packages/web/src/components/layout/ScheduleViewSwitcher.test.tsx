@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import ScheduleViewSwitcher from './ScheduleViewSwitcher';
 
-const mockLocation = { pathname: '/timeline' };
+const mockLocation = { pathname: '/grid' };
 
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => mockLocation,
@@ -15,16 +15,14 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 describe('ScheduleViewSwitcher', () => {
-  it('renders three links and marks only the current view', () => {
-    mockLocation.pathname = '/timeline';
+  it('renders two links and marks only the current view', () => {
+    mockLocation.pathname = '/grid';
     render(<ScheduleViewSwitcher />);
-    expect(screen.getAllByRole('link')).toHaveLength(3);
+    expect(screen.getAllByRole('link')).toHaveLength(2);
     expect(screen.getByRole('link', { name: 'Cards' })).toHaveAttribute('href', '/cards');
-    expect(screen.getByRole('link', { name: 'Timeline' })).toHaveAttribute('href', '/timeline');
     expect(screen.getByRole('link', { name: 'Grid' })).toHaveAttribute('href', '/grid');
-    expect(screen.getByRole('link', { name: 'Timeline' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Grid' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Cards' })).not.toHaveAttribute('aria-current');
-    expect(screen.getByRole('link', { name: 'Grid' })).not.toHaveAttribute('aria-current');
   });
 
   it('treats / as the cards view', () => {

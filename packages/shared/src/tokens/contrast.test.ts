@@ -162,6 +162,12 @@ describe('design token contrast (WCAG AA)', () => {
 
   // A 12% amber wash is NOT a solid amber fill. Over bg.secondary it composites
   // to a near-black, so it takes amber TEXT, not the dark ink solid amber wants.
+  it('clash.mark reads as a non-text mark (3:1) on bg.primary and bg.card and aliases status.warning', () => {
+    expect(contrast(colors.clash.mark, colors.bg.primary)).toBeGreaterThanOrEqual(LARGE);
+    expect(contrast(colors.clash.mark, colors.bg.card)).toBeGreaterThanOrEqual(LARGE);
+    expect(colors.clash.mark).toBe(colors.status.warning);
+  });
+
   it('the amberAlpha[12] wash takes amber text, never dark ink', () => {
     const wash = over(colors.amberAlpha[12], colors.bg.secondary);
     expect(contrast(colors.accent.amber, wash)).toBeGreaterThanOrEqual(NORMAL);
@@ -205,6 +211,10 @@ describe('Daylight palette contrast', () => {
       });
     }
   }
+  it('clash.mark reads as a non-text mark (3:1) on both grounds and aliases status.warning', () => {
+    for (const [, bg] of grounds) expect(contrast(D.clash.mark, bg)).toBeGreaterThanOrEqual(LARGE);
+    expect(D.clash.mark).toBe(D.status.warning);
+  });
   it('placeholder text keeps 4.5:1 on inputs', () => {
     expect(contrast(D.text.placeholder, D.bg.input)).toBeGreaterThanOrEqual(NORMAL);
   });

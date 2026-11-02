@@ -105,6 +105,8 @@ function paletteGroups(c: Palette) {
   rest.push(['--color-status-unverified-bg', c.status.unverifiedBg]);
   rest.push(['--color-status-warning', c.status.warning]);
   rest.push(['--color-status-error', c.status.error]);
+  rest.push(['--color-clash', c.clash.mark]);
+  rest.push(['--color-clash-tint', c.clash.tint]);
   rest.push(['--color-spotify', c.spotify.brand]);
 
   // ── Overlay scale (white at increasing opacity) ────────────────────────────

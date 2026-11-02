@@ -262,7 +262,7 @@ function SetCardMobileImpl({
           ) : null}
           {hasConflict ? (
             <View style={styles.conflictBadge}>
-              <Ionicons name="warning" size={12} color={t.colors.accent.coral} />
+              <Ionicons name="warning" size={12} color={t.colors.clash.mark} />
               <Text style={styles.conflictText}>{COPY.clash.badge}</Text>
             </View>
           ) : null}
@@ -534,13 +534,13 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     borderRadius: t.radii.default,
-    backgroundColor: t.colors.ring.coral,
+    backgroundColor: t.colors.clash.tint,
     borderWidth: 1,
-    borderColor: t.colors.accent.coral,
+    borderColor: t.colors.clash.mark,
   },
   conflictText: {
     ...typeStyle('micro'),
-    color: t.colors.accent.coral,
+    color: t.colors.text.primary,
   },
   footer: {
     flexDirection: 'row',

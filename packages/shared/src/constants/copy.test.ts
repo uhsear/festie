@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  COPY, FESTIVAL_STATUS_LABEL, MEETING_POINT_KINDS, clashCount, clashPromptCopy, meetingPointKind,
+  COPY, FESTIVAL_STATUS_LABEL, MEETING_POINT_KINDS, clashChip, clashChipA11y, clashCount, clashPromptCopy, meetingPointKind,
 } from './copy';
 
 // Mirrors MEETING_POINT_TYPES in lib/constants.ts:21; shared cannot import backend code.
@@ -48,5 +48,19 @@ describe('status words', () => {
     const { liveLocation, ...rest } = COPY.status;
     expect(liveLocation).toBe('Live');
     for (const v of Object.values(rest)) expect(v).not.toBe('Live');
+  });
+});
+
+describe('grid clash copy', () => {
+  it('formats the chip', () => {
+    expect(clashChip(1)).toBe('1 clash');
+    expect(clashChip(3)).toBe('3 clashes');
+  });
+  it('formats the chip a11y label', () => {
+    expect(clashChipA11y(1)).toBe('You have 1 schedule clash. Show it.');
+    expect(clashChipA11y(3)).toBe(`You have 3 schedule clashes. Show the first one.`);
+  });
+  it('never says conflict in grid copy', () => {
+    for (const v of Object.values(COPY.grid)) expect(v.toLowerCase()).not.toContain('conflict');
   });
 });

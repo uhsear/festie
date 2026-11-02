@@ -1,9 +1,9 @@
 import { Link, useLocation } from '@tanstack/react-router';
-import { LayoutGrid, AlignLeft, Columns3 } from 'lucide-react';
+import { LayoutGrid, Columns3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /**
- * In-page switcher for the three schedule views (Cards / Timeline / Grid),
+ * In-page switcher for the schedule views (Cards / Grid),
  * mirroring the mobile SegmentedControl. Folds what used to be three separate
  * bottom-nav/header tabs into one "Schedule" destination — the nav now carries
  * a single Schedule tab and this control swaps the view in place.
@@ -13,7 +13,6 @@ import { cn } from '../../lib/utils';
  */
 const VIEWS = [
   { key: '/cards', label: 'Cards', Icon: LayoutGrid },
-  { key: '/timeline', label: 'Timeline', Icon: AlignLeft },
   { key: '/grid', label: 'Grid', Icon: Columns3 },
 ] as const;
 

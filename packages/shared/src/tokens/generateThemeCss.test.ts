@@ -36,6 +36,8 @@ describe('generateThemeCss — emits TS token literals', () => {
     expect(m.get('--color-stage-fallback')).toBe(colors.stage.fallback);
     expect(m.get('--color-day-tab-active')).toBe(colors.dayTab.active);
     expect(m.get('--shadow-glow-aqua')).toBe(colors.glow.aqua);
+    expect(m.get('--color-clash')).toBe(colors.clash.mark);
+    expect(m.get('--color-clash-tint')).toBe(colors.clash.tint);
   });
 
   it('px ramps convert to the expected rem values', () => {
@@ -126,6 +128,11 @@ describe('generateThemeCss — Daylight override block', () => {
     expect(day.get('--color-bg-primary')).not.toBe(colors.bg.primary);
     expect(day.get('--color-text-primary')).toBe(colorsDaylight.text.primary);
     expect(day.get('--shadow-glow-aqua')).toBe(colorsDaylight.glow.aqua);
+  });
+
+  it('emits the clash token from the daylight palette', () => {
+    expect(day.get('--color-clash')).toBe(colorsDaylight.clash.mark);
+    expect(day.get('--color-clash-tint')).toBe(colorsDaylight.clash.tint);
   });
 
   it('only redeclares names that the dark @theme block also declares', () => {

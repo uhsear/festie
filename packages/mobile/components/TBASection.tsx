@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback } from 'react';
 import { View, Text, Pressable, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet, Priority, Stage, Festival } from '@festie/shared/types';
-import { artistDisplayName, ensureWhiteContrast } from '@festie/shared/utils';
+import { artistDisplayName, groupUntimedByStage } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import Avatar from './Avatar';
 import { priorityColor } from '../lib/priorityColor';
@@ -25,6 +26,8 @@ export interface TBASectionProps {
   onOpenDetail: (set: FestivalSet) => void;
   /** Start expanded (e.g. when the day has no timed sets, so TBA is all there is). */
   defaultExpanded?: boolean;
+  /** The day has no timed sets: show the "times aren't out yet" heading above the stage groups. */
+  allTba?: boolean;
 }
 
 interface TBACardProps {
@@ -78,14 +81,6 @@ function TBACard({
         <Text style={styles.cardArtist} numberOfLines={2}>
           {name}
         </Text>
-        {stageName && stageColor ? (
-          // Darken the stage fill so the white badge text clears WCAG AA.
-          <View style={[styles.stageBadge, { backgroundColor: ensureWhiteContrast(stageColor) }]}>
-            <Text style={styles.stageBadgeText} numberOfLines={1}>
-              {stageName}
-            </Text>
-          </View>
-        ) : null}
       </TouchableOpacity>
 
       {showPicks ? (
@@ -147,17 +142,17 @@ export default function TBASection({
   onSavePick,
   onOpenDetail,
   defaultExpanded = false,
+  allTba = false,
 }: TBASectionProps) {
   const t = useTokens();
   const styles = useStyles();
   const { width } = useWindowDimensions();
   const [expanded, setExpanded] = useState(defaultExpanded);
 
-  const stageById = useMemo(() => {
-    const m = new Map<string, Stage>();
-    for (const s of stages) m.set(s.id, s);
-    return m;
-  }, [stages]);
+  const groups = useMemo(
+    () => groupUntimedByStage(sets, stages, currentFestival?.b2bSeparator),
+    [sets, stages, currentFestival?.b2bSeparator],
+  );
 
   // 3 columns on wider phones/tablets, 2 otherwise. The section has BOTH a
   // spacing[4] MARGIN and a spacing[4] PADDING on each side, so the usable inner
@@ -194,26 +189,54 @@ export default function TBASection({
       </Pressable>
 
       {expanded ? (
-        <View style={styles.grid}>
-          {sets.map((s) => {
-            const stage = stageById.get(s.stageId);
-            return (
-              <TBACard
-                key={s.id}
-                set={s}
-                width={cardWidth}
-                stageName={stage?.name}
-                stageColor={stage ? safeStageColor(getStageColor(stage.id), t.colors.text.muted) : undefined}
-                myPick={getMyPick(s.id)}
-                others={getOtherPicks(s.id)}
-                showPicks={canPick}
-                onSavePick={onSavePick}
-                onOpenDetail={onOpenDetail}
-                b2bSeparator={currentFestival?.b2bSeparator}
-              />
-            );
-          })}
-        </View>
+        <>
+          {allTba ? (
+            <>
+              <Text style={styles.allTbaTitle}>{COPY.grid.tbaTitle}</Text>
+              <Text style={styles.allTbaBody}>{COPY.grid.tbaBody}</Text>
+            </>
+          ) : null}
+          {groups.map(({ stage, sets: groupSets }) => (
+            <View key={stage?.id ?? 'unknown-stage'}>
+              <View style={styles.groupHeader}>
+                <View
+                  style={[
+                    styles.stageDot,
+                    {
+                      backgroundColor: stage
+                        ? safeStageColor(getStageColor(stage.id), t.colors.text.muted)
+                        : t.colors.text.muted,
+                    },
+                  ]}
+                />
+                <Text style={styles.groupName} numberOfLines={1}>
+                  {stage?.name ?? COPY.grid.stageUnknown}
+                </Text>
+                <Text style={styles.groupCount}>· {groupSets.length}</Text>
+              </View>
+              <View style={styles.grid}>
+                {groupSets.map((s) => {
+                  const stageName = stage?.name;
+                  return (
+                    <TBACard
+                      key={s.id}
+                      set={s}
+                      width={cardWidth}
+                      stageName={stageName}
+                      stageColor={stage ? safeStageColor(getStageColor(stage.id), t.colors.text.muted) : undefined}
+                      myPick={getMyPick(s.id)}
+                      others={getOtherPicks(s.id)}
+                      showPicks={canPick}
+                      onSavePick={onSavePick}
+                      onOpenDetail={onOpenDetail}
+                      b2bSeparator={currentFestival?.b2bSeparator}
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+        </>
       ) : null}
     </View>
   );
@@ -263,15 +286,35 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption', 600),
     color: t.colors.text.primary,
   },
-  stageBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: t.spacing[2],
-    paddingVertical: 1,
-    borderRadius: t.radii.default,
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    marginTop: t.spacing[3],
   },
-  stageBadgeText: {
-    ...typeStyle('micro'),
-    color: t.colors.text.onAccent,
+  stageDot: {
+    width: 8,
+    height: 8,
+    borderRadius: t.radii.pill,
+  },
+  groupName: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.primary,
+    flexShrink: 1,
+  },
+  groupCount: {
+    ...typeStyle('label'),
+    color: t.colors.text.muted,
+  },
+  allTbaTitle: {
+    ...typeStyle('heading'),
+    color: t.colors.text.primary,
+    marginTop: t.spacing[3],
+  },
+  allTbaBody: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+    marginTop: t.spacing[1],
   },
   pickRow: {
     flexDirection: 'row',
