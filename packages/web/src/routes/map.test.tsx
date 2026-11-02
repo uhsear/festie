@@ -8,6 +8,8 @@ const h = vi.hoisted(() => ({
   useQuery: vi.fn(),
   crewMapProps: vi.fn(),
   setActiveCrew: vi.fn(),
+  search: {} as { focusStage?: string },
+  navigate: vi.fn(),
 }));
 
 vi.mock('@festie/shared', () => ({ api: { get: vi.fn() } }));
@@ -36,6 +38,8 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 vi.mock('@tanstack/react-router', () => ({
+  useSearch: () => h.search,
+  useNavigate: () => h.navigate,
   Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
     <a href={to} {...rest}>
       {children}
@@ -44,7 +48,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 vi.mock('../components/crew/CrewMap', () => ({
-  default: (props: { meetingPoints: unknown[]; canvasClassName?: string }) => {
+  default: (props: { meetingPoints: unknown[]; canvasClassName?: string; focusPinId?: string | null; onFocusHandled?: () => void }) => {
     h.crewMapProps(props);
     return <div data-testid="crew-map" />;
   },
@@ -57,6 +61,7 @@ beforeEach(() => {
   h.festival = { id: 'f1', name: 'Fest' };
   h.user = null;
   h.crew = null;
+  h.search = {};
 });
 
 describe('MapView', () => {
@@ -92,5 +97,21 @@ describe('MapView', () => {
     );
     expect(h.crewMapProps.mock.calls[0]![0].meetingPoints).toHaveLength(1);
     expect(h.setActiveCrew).toHaveBeenCalledWith('c1');
+  });
+
+  it('passes focusStage to the map and clears the param when handled', async () => {
+    h.search = { focusStage: 's1' };
+    render(<MapView />);
+    await screen.findByTestId('crew-map');
+    const props = h.crewMapProps.mock.calls[0]![0];
+    expect(props.focusPinId).toBe('s1');
+    props.onFocusHandled();
+    expect(h.navigate).toHaveBeenCalledWith({ to: '/map', search: {}, replace: true });
+  });
+
+  it('passes a null focusPinId without a focusStage', async () => {
+    render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(h.crewMapProps.mock.calls[0]![0].focusPinId).toBeNull();
   });
 });

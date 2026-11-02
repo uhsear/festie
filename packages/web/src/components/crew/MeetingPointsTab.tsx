@@ -17,6 +17,7 @@ import {
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { meetingPointPrefill, type MapPlace } from '@festie/shared/utils';
 import { useCurrentPosition } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useToast } from '../../lib/toastContext';
@@ -251,6 +252,14 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       formRef.current?.scrollIntoView({ block: 'nearest' });
       labelInputRef.current?.focus();
     });
+  }
+
+  function handleSetMeetingPoint(place: MapPlace) {
+    startCreateAt(place.coord);
+    const prefill = meetingPointPrefill(place);
+    setLabel(prefill.label);
+    setLocation(prefill.location);
+    setStageRef(prefill.stageReference);
   }
 
   function startEdit(p: CrewMeetingPoint) {
@@ -561,6 +570,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         >
           <CrewMap meetingPoints={current} peers={peers} activeSosList={sosList} festival={mapFestival} focusSosUserId={focusSosUserId}
             onMapClick={placing ? startCreateAt : undefined}
+            onSetMeetingPoint={handleSetMeetingPoint}
             authoring={placing}
             draftPoints={showForm && !editingId && coords ? [{ latitude: coords.lat, longitude: coords.lng }] : undefined}
           />

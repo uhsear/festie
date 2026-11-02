@@ -21,7 +21,13 @@ export default function MeetingPointNewScreen() {
   const t = useTokens();
   const styles = useStyles();
   const router = useRouter();
-  const { lat, lng } = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  const { lat, lng, label, location, stageReference } = useLocalSearchParams<{
+    lat?: string;
+    lng?: string;
+    label?: string;
+    location?: string;
+    stageReference?: string;
+  }>();
   const user = useAuthStore((s) => s.user);
   const activeCrew = useCrewStore((s) => s.activeCrew);
   const festival = useFestivalDataStore((s) => s.currentFestival);
@@ -30,8 +36,16 @@ export default function MeetingPointNewScreen() {
   const coords = useMemo(() => {
     const la = finiteOrNull(lat);
     const lo = finiteOrNull(lng);
-    return la !== null && lo !== null ? { lat: la, lng: lo } : null;
-  }, [lat, lng]);
+    if (la === null || lo === null) return null;
+    // A deep link can carry any text: clamp to the meetingPointCreateSchema lengths.
+    return {
+      lat: la,
+      lng: lo,
+      label: label?.slice(0, 100),
+      location: location?.slice(0, 200),
+      stageReference: stageReference?.slice(0, 100),
+    };
+  }, [lat, lng, label, location, stageReference]);
 
   const missing = !user || !activeCrew;
   useEffect(() => {

@@ -74,9 +74,10 @@ vi.mock('@festie/shared/services/api', () => ({
   mapErrorToUserMessage: (_err: unknown, fallback: string) => fallback,
 }));
 
+const storeStages = vi.hoisted(() => ({ value: [] as Array<{ id: string; latitude: number | null; longitude: number | null }> }));
 vi.mock('@festie/shared/stores/festivalStore', () => ({
   useFestivalStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) => selector({ loadProfiles: vi.fn() }),
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ loadProfiles: vi.fn(), stages: storeStages.value }),
     { getState: vi.fn(() => ({ loadProfiles: vi.fn() })) },
   ),
 }));
@@ -215,6 +216,24 @@ describe('DetailPanel', () => {
     useFestivalDataStore.setState({ saveNote: mockSaveNote } as never);
     useNotificationPrefsStore.setState({ loadPrefs: vi.fn(async () => {}) } as never);
     useAuthStore.setState({ user: { id: 'u1', username: 'asir' } } as never);
+  });
+
+  it('offers Show stage on map for a mapped stage and navigates to it', async () => {
+    storeStages.value = [{ id: 'stage-1', latitude: 28.5, longitude: -81.4 }];
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<DetailPanel {...defaultProps} onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: 'Show stage on map' }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/map', search: { focusStage: 'stage-1' } });
+    storeStages.value = [];
+  });
+
+  it('shows no Show stage on map button for an unmapped stage', () => {
+    storeStages.value = [{ id: 'stage-1', latitude: null, longitude: null }];
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByRole('button', { name: 'Show stage on map' })).not.toBeInTheDocument();
+    storeStages.value = [];
   });
 
   it('renders the drawer with set detail aria-label', () => {

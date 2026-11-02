@@ -3,11 +3,20 @@ import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
-import { festivalTimeLabel, fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
+import {
+  festivalTimeLabel,
+  fmtZonedClock,
+  isFixRecent,
+  resolveFestivalTimeZone,
+  selectNowNext,
+  stageCoord,
+  walkToStage,
+} from '@festie/shared/utils';
 import LowPowerToggle from '../components/features/LowPowerToggle';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
 import EmptyState from '../components/ui/EmptyState';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
+import { useLastKnownFix } from '../hooks/useLastKnownFix';
 import NowHero from '../components/festival-mode/NowHero';
 import UpNextList from '../components/festival-mode/UpNextList';
 import WeatherStrip from '../components/festival-mode/WeatherStrip';
@@ -38,6 +47,7 @@ function FestivalModeViewInner() {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
+  const stages = useFestivalStore((s) => s.stages);
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { getStageName } = useFestival();
@@ -56,6 +66,12 @@ function FestivalModeViewInner() {
     () => selectNowNext({ sets, days, picks: lineupMode ? undefined : (picks ?? {}), nowMs, timeZone }),
     [sets, days, picks, lineupMode, nowMs, timeZone],
   );
+  const fix = useLastKnownFix();
+  const next = selection.upcoming[0];
+  const walk =
+    next && isFixRecent(fix.at, nowMs)
+      ? walkToStage(fix.coord, stageCoord(stages, next.set.stageId), next.start, nowMs)
+      : null;
   const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
   const after = selection.phase === 'after';
   const crewId = crew?.id;
@@ -117,6 +133,7 @@ function FestivalModeViewInner() {
               onOpenSet={setDetailSet}
               onBrowse={() => navigate({ to: '/cards' })}
               onWrap={user ? () => navigate({ to: '/wrap' }) : undefined}
+              walk={walk}
             />
           </div>
           <div className="order-1">

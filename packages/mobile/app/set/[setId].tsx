@@ -49,6 +49,8 @@ import {
   resolveFestivalTimeZone,
   reminderDeliveryProblem,
   QUEUED_WRITE_MESSAGE,
+  MAP_COPY,
+  stageCoord,
   type ReminderPermission,
 } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
@@ -70,6 +72,7 @@ import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
 import AlsoPickedSection from '../../components/AlsoPickedSection';
 import { undoNotifier } from '../../lib/undoNotifier';
+import { compassHref, stageMapHref } from '../../lib/dayOfRoutes';
 
 const REMINDER_ASK_DISMISSED_KEY = 'festie-reminder-ask-dismissed';
 
@@ -156,6 +159,7 @@ export default function SetDetailScreen() {
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const allProfiles = useFestivalDataStore((s) => s.allProfiles);
   const days = useFestivalDataStore((s) => s.days);
+  const stages = useFestivalDataStore((s) => s.stages);
 
   const { getMyPick, savePick, getOtherPicks, saveReminder, getMyReminder } = usePicks();
   const { getStageColor, getStageName } = useFestival();
@@ -218,6 +222,7 @@ export default function SetDetailScreen() {
   }, [set, artistName, currentFestival?.name, shareUrl]);
   const subtitle = set ? artistSubtitle(set, b2bSeparator) : '';
   const stageName = set ? getStageName(set.stageId) || 'Unknown' : 'Unknown';
+  const coord = set ? stageCoord(stages, set.stageId) : null;
   const stageColor = safeStageColor(set ? getStageColor(set.stageId) : undefined, t.colors.text.muted);
   // F26: server stage colors carry no AA guarantee as TEXT. Move the hue's
   // luminance away from the background until the label reaches ~4.6:1 (lighter on
@@ -497,6 +502,24 @@ export default function SetDetailScreen() {
           <Text style={styles.moved} accessibilityLabel={move.a11y}>
             {move.line}
           </Text>
+        ) : null}
+        {coord ? (
+          <View style={styles.stageActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="map-outline"
+              label={MAP_COPY.showStageOnMap}
+              onPress={() => router.navigate(stageMapHref(set.stageId))}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="compass-outline"
+              label={MAP_COPY.pointMeThere}
+              onPress={() => router.push(compassHref(stageName, coord))}
+            />
+          </View>
         ) : null}
 
         {/* Priority picker: guests pick on this device */}
@@ -1002,6 +1025,11 @@ const useStyles = makeStyles((t) => ({
   moved: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  stageActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
   },
   chipRow: {
     flexDirection: 'row',
