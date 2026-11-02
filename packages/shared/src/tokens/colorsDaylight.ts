@@ -49,6 +49,9 @@ export const colorsDaylight = {
     default: 'rgba(0, 0, 0, 0.12)',
     light: 'rgba(0, 0, 0, 0.3)',
   },
+  control: {
+    trackOff: '#767684',
+  },
   priority: {
     must: '#a8002a',
     want: '#00594f',

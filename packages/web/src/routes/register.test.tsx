@@ -97,7 +97,7 @@ describe('RegisterPage', () => {
         'Username is required',
         'Password is required',
         'Date of birth is required',
-        'You must accept the Terms of Service and Privacy Policy',
+        'Accept the Terms of Service and Privacy Policy to continue',
       ]),
     );
     const username = screen.getByLabelText('Username');
@@ -169,6 +169,7 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('Username'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.type(screen.getByLabelText('Confirm password'), 'password123');
+    await user.type(screen.getByLabelText('Email'), 'alice@example.com');
     fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
     await user.click(screen.getByRole('checkbox'));
     await user.click(screen.getByRole('button', { name: 'Create account' }));
@@ -211,6 +212,7 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('Username'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.type(screen.getByLabelText('Confirm password'), 'password123');
+    await user.type(screen.getByLabelText('Email'), 'alice@example.com');
     fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
     await user.click(screen.getByRole('checkbox'));
     await user.click(screen.getByRole('button', { name: 'Create account' }));
@@ -220,7 +222,7 @@ describe('RegisterPage', () => {
       confirmPassword: 'password123',
       dateOfBirth: '1995-01-01',
       tosAccepted: true,
-      email: undefined,
+      email: 'alice@example.com',
     });
   });
 
@@ -243,6 +245,7 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('Username'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.type(screen.getByLabelText('Confirm password'), 'password123');
+    await user.type(screen.getByLabelText('Email'), 'alice@example.com');
     fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
     await user.click(screen.getByRole('checkbox'));
     await user.click(screen.getByRole('button', { name: 'Create account' }));

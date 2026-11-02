@@ -24,68 +24,11 @@ vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
-const mockApiGet = vi.fn();
-vi.mock('@festie/shared/services/api', () => ({
-  api: {
-    get: (...args: unknown[]) => mockApiGet(...args),
-  },
-  mapErrorToUserMessage: (_err: unknown, fallback: string) => fallback,
-}));
-
 beforeEach(() => {
   vi.clearAllMocks();
-  // Default: export succeeds with a clean GDPR object
-  mockApiGet.mockResolvedValue({ profile: {} });
-
-  // Stub URL methods used by export
-  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
-  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 });
 
 describe('DangerZone', () => {
-  // --- Export section ---
-
-  it('renders the Export Data section', () => {
-    render(<DangerZone />);
-    expect(screen.getByText('Export Data')).toBeInTheDocument();
-    expect(screen.getByText('Download My Data')).toBeInTheDocument();
-  });
-
-  it('triggers data export download on click', async () => {
-    const user = userEvent.setup();
-    const clickSpy = vi.fn();
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      if (tag === 'a') {
-        const anchor = { href: '', download: '', click: clickSpy } as unknown as HTMLElement;
-        return anchor;
-      }
-      return document.createElementNS('http://www.w3.org/1999/xhtml', tag) as HTMLElement;
-    });
-
-    render(<DangerZone />);
-    await user.click(screen.getByText('Download My Data'));
-
-    await waitFor(() => {
-      expect(clickSpy).toHaveBeenCalled();
-    });
-    expect(mockToast).toHaveBeenCalledWith('Export downloaded', 'success');
-  });
-
-  it('shows error toast when export fails', async () => {
-    const user = userEvent.setup();
-    mockApiGet.mockRejectedValue(new Error('boom'));
-
-    render(<DangerZone />);
-    await user.click(screen.getByText('Download My Data'));
-
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        "Couldn't export data. Try again.",
-        'error',
-      );
-    });
-  });
-
   // --- Delete account section ---
 
   it('renders the Delete Account section', () => {

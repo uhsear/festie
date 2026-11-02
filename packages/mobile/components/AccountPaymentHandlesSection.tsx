@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@festie/shared/stores';
-import { api } from '@festie/shared/services';
-import type { User } from '@festie/shared/types';
+import { mapErrorToUserMessage } from '@festie/shared/services';
+import { PAYMENT_COPY, PAYMENT_FIELDS } from '@festie/shared/constants';
+import { paymentProfileUrl } from '@festie/shared/utils';
+import AppPressable from './AppPressable';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -19,7 +21,7 @@ export default function AccountPaymentHandlesSection() {
   const styles = useStyles();
   const haptics = useHaptics();
   const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
+  const updatePaymentHandles = useAuthStore((s) => s.updatePaymentHandles);
 
   const current = {
     venmo: user?.venmoHandle ?? '',
@@ -44,6 +46,19 @@ export default function AccountPaymentHandlesSection() {
       if (savedTimer.current) clearTimeout(savedTimer.current);
     };
   }, []);
+
+  const values = { venmo, cashapp, paypal };
+  const setters = { venmo: setVenmo, cashapp: setCashapp, paypal: setPaypal };
+
+  const openTest = async (method: 'venmo' | 'cashapp' | 'paypal', value: string) => {
+    const url = paymentProfileUrl(method, value);
+    if (!url) return;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setError("Couldn't open that link.");
+    }
+  };
 
   const dirty =
     venmo.trim() !== current.venmo || cashapp.trim() !== current.cashapp || paypal.trim() !== current.paypal;
@@ -76,22 +91,14 @@ export default function AccountPaymentHandlesSection() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await api.put<{ user: User }>('/account/payment-handles', {
-        venmoHandle: venmo.trim(),
-        cashappCashtag: cashapp.trim(),
-        paypalHandle: paypal.trim(),
+      const updated = await updatePaymentHandles({
+        venmoHandle: venmo,
+        cashappCashtag: cashapp,
+        paypalHandle: paypal,
       });
-      if (user) {
-        setUser({
-          ...user,
-          venmoHandle: res.user?.venmoHandle ?? null,
-          cashappCashtag: res.user?.cashappCashtag ?? null,
-          paypalHandle: res.user?.paypalHandle ?? null,
-        });
-      }
-      setVenmo(res.user?.venmoHandle ?? '');
-      setCashapp(res.user?.cashappCashtag ?? '');
-      setPaypal(res.user?.paypalHandle ?? '');
+      setVenmo(updated.venmoHandle ?? '');
+      setCashapp(updated.cashappCashtag ?? '');
+      setPaypal(updated.paypalHandle ?? '');
       haptics.success();
       // Keep the card open briefly to show the inline confirmation, then collapse.
       setSaved(true);
@@ -102,7 +109,7 @@ export default function AccountPaymentHandlesSection() {
       }, 1800);
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not update payment handles.');
+      setError(mapErrorToUserMessage(err, PAYMENT_COPY.saveFailed));
     } finally {
       setSubmitting(false);
     }
@@ -122,7 +129,7 @@ export default function AccountPaymentHandlesSection() {
           <Ionicons name="wallet-outline" size={20} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
-          <Text style={styles.rowTitle}>Payment handles</Text>
+          <Text style={styles.rowTitle}>{PAYMENT_COPY.title}</Text>
           <Text style={styles.rowHint} numberOfLines={3}>
             {summary}
           </Text>
@@ -137,37 +144,21 @@ export default function AccountPaymentHandlesSection() {
 
       {open ? (
         <View style={styles.form}>
-          <Text style={styles.formIntro}>
-            Used to prefill settle-up links when your crew pays you back. All optional.
-          </Text>
+          <Text style={styles.formIntro}>{PAYMENT_COPY.intro}</Text>
 
-          <PrefixField
-            label="Venmo username"
-            prefix="@"
-            value={venmo}
-            onChangeText={setVenmo}
-            placeholder="your-venmo"
-            editable={!submitting}
-            accessibilityLabel="Venmo username"
-          />
-          <PrefixField
-            label="Cash App $cashtag"
-            prefix="$"
-            value={cashapp}
-            onChangeText={setCashapp}
-            placeholder="yourcashtag"
-            editable={!submitting}
-            accessibilityLabel="Cash App cashtag"
-          />
-          <PrefixField
-            label="PayPal.me name"
-            prefix="paypal.me/"
-            value={paypal}
-            onChangeText={setPaypal}
-            placeholder="yourpaypal"
-            editable={!submitting}
-            accessibilityLabel="PayPal.me name"
-          />
+          {PAYMENT_FIELDS.map((field) => (
+            <PrefixField
+              key={field.key}
+              label={field.label}
+              prefix={field.prefix}
+              value={values[field.method]}
+              onChangeText={setters[field.method]}
+              placeholder={field.placeholder}
+              editable={!submitting}
+              accessibilityLabel={field.label}
+              onTest={() => void openTest(field.method, values[field.method])}
+            />
+          ))}
 
           {error ? (
             <Text style={styles.error} accessibilityLiveRegion="polite">
@@ -205,6 +196,7 @@ function PrefixField({
   placeholder,
   editable,
   accessibilityLabel,
+  onTest,
 }: {
   label: string;
   prefix: string;
@@ -213,6 +205,7 @@ function PrefixField({
   placeholder: string;
   editable: boolean;
   accessibilityLabel: string;
+  onTest: () => void;
 }) {
   const t = useTokens();
   const styles = useStyles();
@@ -248,6 +241,16 @@ function PrefixField({
           </TouchableOpacity>
         ) : null}
       </View>
+      {value.trim().length > 0 ? (
+        <AppPressable
+          onPress={onTest}
+          accessibilityRole="link"
+          accessibilityLabel={PAYMENT_COPY.testLabel(label)}
+          style={styles.testLink}
+        >
+          <Text style={styles.testText}>{PAYMENT_COPY.test}</Text>
+        </AppPressable>
+      ) : null}
     </View>
   );
 }
@@ -340,6 +343,14 @@ const useStyles = makeStyles((t) => ({
     flex: 1,
     color: t.colors.text.primary,
     paddingVertical: t.spacing[3],
+  },
+  testLink: {
+    alignSelf: 'flex-start',
+    paddingVertical: t.spacing[1],
+  },
+  testText: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.aqua,
   },
   clear: {
     padding: t.spacing[1],

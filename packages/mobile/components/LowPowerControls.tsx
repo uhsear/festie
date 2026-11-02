@@ -1,6 +1,7 @@
-import { View, Text, Switch } from 'react-native';
+import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
+import AppSwitch from './AppSwitch';
 import { useTokens, makeStyles, typeStyle, iconSize } from '../hooks/useTokens';
 
 /**
@@ -31,12 +32,10 @@ export function LowPowerToggle() {
           <Text style={styles.rowHint}>Pauses live location & ambient polling to save battery</Text>
         </View>
       </View>
-      <Switch
+      <AppSwitch
+        tone="amber"
         value={lowPowerMode}
         onValueChange={setLowPowerMode}
-        trackColor={{ false: t.colors.text.muted, true: t.colors.accent.amber }}
-        ios_backgroundColor={t.colors.text.muted}
-        thumbColor={t.colors.text.onAccent}
         accessibilityLabel="Festival low-power mode"
       />
     </View>
@@ -63,12 +62,9 @@ export function DaylightToggle() {
           <Text style={styles.rowHint}>High contrast for bright sun</Text>
         </View>
       </View>
-      <Switch
+      <AppSwitch
         value={daylight}
         onValueChange={(v) => setTheme(v ? 'daylight' : 'stage')}
-        trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-        ios_backgroundColor={t.colors.text.muted}
-        thumbColor={t.colors.text.onAccent}
         accessibilityLabel="Daylight mode"
       />
     </View>

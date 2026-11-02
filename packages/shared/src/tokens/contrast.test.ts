@@ -218,3 +218,12 @@ describe('Daylight palette contrast', () => {
     }
   });
 });
+
+describe('switch off-track', () => {
+  for (const [name, p] of [['Stage', colors], ['Daylight', colorsDaylight]] as const) {
+    it(`${name} control.trackOff reaches 3:1 on bg.secondary and against the white thumb`, () => {
+      expect(contrast(p.control.trackOff, p.bg.secondary)).toBeGreaterThanOrEqual(LARGE);
+      expect(contrast(p.control.trackOff, p.text.onAccent)).toBeGreaterThanOrEqual(LARGE);
+    });
+  }
+});

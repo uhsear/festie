@@ -84,3 +84,16 @@ export function payPalLink({ handle, amountCents }: PaymentLinkInput): PaymentLi
   const url = `https://www.paypal.com/paypalme/${encodeURIComponent(name)}/${amount}`;
   return { app: url, web: url };
 }
+
+/** Profile page for a handle, without an amount. Lets a user check the handle they typed. */
+export function paymentProfileUrl(
+  method: 'venmo' | 'cashapp' | 'paypal',
+  handle: string | null | undefined,
+): string | null {
+  const u = normalizeHandle(handle);
+  if (!u) return null;
+  const enc = encodeURIComponent(u);
+  if (method === 'venmo') return `https://venmo.com/${enc}`;
+  if (method === 'cashapp') return `https://cash.app/$${enc}`;
+  return `https://www.paypal.com/paypalme/${enc}`;
+}

@@ -1,5 +1,6 @@
-import { View, Text, Switch, Alert } from 'react-native';
+import { View, Text, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppSwitch from './AppSwitch';
 import { useMobilePush } from '../hooks/useMobilePush';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -53,13 +54,10 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
             </Text>
           </View>
         </View>
-        <Switch
+        <AppSwitch
           value={registered}
           onValueChange={(v) => void onToggle(v)}
           disabled={busy}
-          trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-          ios_backgroundColor={t.colors.text.muted}
-          thumbColor={t.colors.text.onAccent}
           accessibilityLabel="Push notifications"
           accessibilityState={{ disabled: busy, checked: registered }}
         />

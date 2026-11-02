@@ -5,7 +5,7 @@ import { timeZoneCity } from '@festie/shared/utils';
 import { api } from '@festie/shared/services';
 import { COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
-import { cn } from '../../lib/utils';
+import Switch from '../ui/Switch';
 
 const QUIET_START = '23:00';
 const QUIET_END = '08:00';
@@ -27,26 +27,7 @@ function Toggle({
         <div className="text-sm text-text-primary">{label}</div>
         {hint ? <div className="text-xs text-text-muted">{hint}</div> : null}
       </div>
-      <span className="inline-flex items-center justify-center min-h-11 min-w-11 shrink-0">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={checked}
-          aria-label={label}
-          onClick={() => onChange(!checked)}
-          className={cn(
-            'relative w-11 h-6 shrink-0 rounded-full transition-colors duration-200',
-            checked ? 'bg-accent-aqua' : 'bg-border',
-          )}
-        >
-          <span
-            className={cn(
-              'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200',
-              checked && 'translate-x-5',
-            )}
-          />
-        </button>
-      </span>
+      <Switch checked={checked} onChange={onChange} label={label} />
     </div>
   );
 }

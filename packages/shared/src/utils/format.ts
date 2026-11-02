@@ -20,6 +20,50 @@ export function formatFestivalDateRange(startDate?: string | null, endDate?: str
   return `${startStr} – ${endStr}`;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+/**
+ * Format an ISO-ish date string into a short, human label like "Jun 21, 2025".
+ *
+ * The server's festival dates arrive as 'YYYY-MM-DD' (or a full ISO timestamp);
+ * we parse the calendar parts by hand instead of `new Date(iso)` so a device in
+ * a negative UTC offset doesn't render the day before (the classic midnight-UTC
+ * off-by-one). Returns the raw input on any parse miss so we never blank a date.
+ */
+export function formatFestivalDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+  if (!m) return iso;
+  const year = Number(m[1]);
+  const monthIdx = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  const month = MONTHS[monthIdx];
+  if (!month || day < 1 || day > 31) return iso;
+  return `${month} ${day}, ${year}`;
+}
+
+/**
+ * Human date span for a festival row. Collapses a single-day festival to one
+ * date, drops the repeated year when both ends share it ("Jun 21 – 23, 2025"),
+ * and keeps both years when they differ.
+ */
+export function formatDateSpan(start: string | null | undefined, end: string | null | undefined): string | null {
+  const a = formatFestivalDate(start);
+  const b = formatFestivalDate(end);
+  if (!a && !b) return null;
+  if (a && b && a !== b) {
+    // Same year → "Jun 21, 2025 – Jun 23, 2025" reads as "Jun 21 – Jun 23, 2025".
+    const aYear = a.slice(a.lastIndexOf(',') + 1).trim();
+    const bYear = b.slice(b.lastIndexOf(',') + 1).trim();
+    if (aYear && aYear === bYear) {
+      const aNoYear = a.slice(0, a.lastIndexOf(',')).trim();
+      return `${aNoYear} – ${b}`;
+    }
+    return `${a} – ${b}`;
+  }
+  return a || b;
+}
+
 export function formatTime(t: string | undefined): string {
   if (!t) return '';
   const [hh = '0', mm = '00'] = t.split(':');

@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { View, Text, Switch } from 'react-native';
+import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@festie/shared/stores';
-import { api } from '@festie/shared/services';
 import { buildPublicScheduleUrl } from '@festie/shared/utils';
-import type { User } from '@festie/shared/types';
+import AppSwitch from './AppSwitch';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -17,7 +16,7 @@ export default function AccountPublicScheduleSection() {
   const styles = useStyles();
   const haptics = useHaptics();
   const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
+  const setPublicSchedule = useAuthStore((s) => s.setPublicSchedule);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,8 +28,7 @@ export default function AccountPublicScheduleSection() {
     setSaving(true);
     setError(null);
     try {
-      const res = await api.put<{ user: User }>('/account/public-schedule', { publicSchedule: next });
-      setUser({ ...user, publicSchedule: res.user?.publicSchedule ?? next });
+      await setPublicSchedule(next);
     } catch {
       setError("Couldn't update your public schedule page. Try again.");
     } finally {
@@ -48,13 +46,10 @@ export default function AccountPublicScheduleSection() {
           <Text style={styles.rowTitle}>Public schedule page</Text>
           <Text style={styles.rowHint}>Anyone with the link can see your picks. Turning it off hides this link; picks links you already shared keep working.</Text>
         </View>
-        <Switch
+        <AppSwitch
           value={on}
           disabled={saving}
           onValueChange={(v) => void onChange(v)}
-          trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-          ios_backgroundColor={t.colors.text.muted}
-          thumbColor={t.colors.text.onAccent}
           accessibilityLabel="Public schedule page"
           accessibilityState={{ checked: on }}
           testID="public-schedule-switch"

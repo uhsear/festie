@@ -1,8 +1,10 @@
 import { create, StateCreator } from 'zustand';
 import { persist, PersistStorage, StorageValue } from 'zustand/middleware';
-import { api, setAuthToken, clearAuthToken, getApiBase, getAuthToken } from '../services/api';
+import { api, ApiClientError, setAuthToken, clearAuthToken, getApiBase, getAuthToken } from '../services/api';
 import { mapErrorToUserMessage } from '../services/errors';
 import { TRUSTED_MUTATION_HEADER } from '../constants/config';
+import { AVATAR_COPY } from '../constants/accountSettings';
+import { validateAvatarFile, type AvatarUploadFile } from '../utils/avatarFile';
 import { getStorage, getSecureStorage, hasSecureStorage } from '../platform/storage';
 import { resetAllStores } from './resetStores';
 import {
@@ -39,8 +41,12 @@ export interface AuthActions {
   changePassword: (request: ChangePasswordRequest) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<{ deletionDate: string | null }>;
-  uploadAvatar: (file: File | Blob) => Promise<AvatarResponse>;
+  uploadAvatar: (file: AvatarUploadFile) => Promise<AvatarResponse>;
   removeAvatar: () => Promise<void>;
+  /** Like the other account actions below, these leave `isLoading` and `error` alone; the caller maps the thrown error. */
+  updatePaymentHandles: (h: { venmoHandle: string; cashappCashtag: string; paypalHandle: string }) => Promise<User>;
+  setPublicSchedule: (on: boolean) => Promise<void>;
+  changeEmail: (email: string, password: string) => Promise<string | undefined>;
   setError: (error: string | null) => void;
 }
 
@@ -393,14 +399,17 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     }
   },
 
-  uploadAvatar: async (file: File | Blob) => {
+  uploadAvatar: async (file: AvatarUploadFile) => {
+    const invalid = validateAvatarFile(file);
+    if (invalid) throw new Error(invalid);
     // Capture the previous avatarUrl up front so we can roll back on failure
     // and avoid leaving a stale/broken URL in the store.
     const previousAvatarUrl = get().user?.avatarUrl;
     set({ isLoading: true, error: null });
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      // The RN { uri, name, type } part is not a Blob; RN FormData accepts it.
+      formData.append('avatar', file as Blob);
       const headers: Record<string, string> = {
         [TRUSTED_MUTATION_HEADER]: '1',
       };
@@ -408,14 +417,32 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
       if (bearer) {
         headers['Authorization'] = `Bearer ${bearer}`;
       }
-      const response = await fetch(`${getApiBase()}/account/avatar`, {
-        method: 'POST',
-        credentials: bearer ? 'omit' : 'same-origin',
-        headers,
-        body: formData,
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${getApiBase()}/account/avatar`, {
+          method: 'POST',
+          credentials: bearer ? 'omit' : 'same-origin',
+          headers,
+          body: formData,
+        });
+      } catch {
+        throw new ApiClientError(
+          'You appear to be offline — check your connection and try again.',
+          0,
+          undefined,
+          null,
+          true,
+        );
+      }
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errBody = (await response.json().catch(() => null)) as {
+          error?: { message?: string; code?: string };
+        } | null;
+        throw new ApiClientError(
+          errBody?.error?.message ?? AVATAR_COPY.uploadFailed,
+          response.status,
+          errBody?.error?.code,
+        );
       }
       // This uses raw fetch (not the api client), so the server envelope
       // { data, error } is NOT auto-unwrapped -- pull the user out of data.
@@ -457,6 +484,39 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
       set({ error: message, isLoading: false });
       throw err;
     }
+  },
+
+  updatePaymentHandles: async (h) => {
+    const res = await api.put<{ user: User }>('/account/payment-handles', {
+      venmoHandle: h.venmoHandle.trim(),
+      cashappCashtag: h.cashappCashtag.trim(),
+      paypalHandle: h.paypalHandle.trim(),
+    });
+    set((s) => ({
+      user: s.user
+        ? {
+            ...s.user,
+            venmoHandle: res.user?.venmoHandle ?? null,
+            cashappCashtag: res.user?.cashappCashtag ?? null,
+            paypalHandle: res.user?.paypalHandle ?? null,
+          }
+        : null,
+    }));
+    return res.user;
+  },
+
+  setPublicSchedule: async (on: boolean) => {
+    const res = await api.put<{ user?: { publicSchedule?: boolean } }>('/account/public-schedule', {
+      publicSchedule: on,
+    });
+    set((s) => ({
+      user: s.user ? { ...s.user, publicSchedule: res.user?.publicSchedule ?? on } : null,
+    }));
+  },
+
+  changeEmail: async (email: string, password: string) => {
+    const res = await api.post<{ message?: string }>('/account/email', { email, password });
+    return res?.message;
   },
 
   setError: (error: string | null) => {

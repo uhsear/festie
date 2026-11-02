@@ -1,13 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { useAuthStore } from '@festie/shared';
-import { PASSWORD_CHANGED_MESSAGE } from '@festie/shared/stores/authStore';
-import { api } from '@festie/shared/services/api';
 import { useNavigate } from '@tanstack/react-router';
-import { useToast } from '../../lib/toastContext';
 import { identityLabel } from '@festie/shared/utils';
 import Avatar from '../ui/Avatar';
-import ChangeEmailModal from './ChangeEmailModal';
-import ChangePasswordModal from './ChangePasswordModal';
 import UserMenuPanel from './UserMenuPanel';
 import UserMenuProfileCard from './UserMenuProfileCard';
 import UserMenuAccountSection from './UserMenuAccountSection';
@@ -19,7 +14,6 @@ interface UserMenuProps {
     email?: string;
     emailVerified?: boolean;
     name?: string;
-    avatar?: string;
     avatarUrl?: string;
     isAdmin?: boolean;
   };
@@ -27,14 +21,9 @@ interface UserMenuProps {
 
 export default function UserMenu({ user }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showChangeEmail, setShowChangeEmail] = useState(false);
   const navigate = useNavigate();
-  const { toast, toastError } = useToast();
 
   const logout = useAuthStore((state) => state.logout);
-  const changePassword = useAuthStore((state) => state.changePassword);
-  const isLoading = useAuthStore((state) => state.isLoading);
 
   const close = useCallback(() => setIsOpen(false), []);
 
@@ -46,27 +35,6 @@ export default function UserMenu({ user }: UserMenuProps) {
       console.error('Logout failed:', e);
     }
     await navigate({ to: '/login' });
-  };
-
-  const handleChangePasswordSubmit = async (
-    currentPassword: string,
-    newPassword: string,
-    confirmPassword: string,
-  ) => {
-    try {
-      await changePassword({ currentPassword, newPassword, confirmPassword });
-      toast(PASSWORD_CHANGED_MESSAGE, 'success');
-      setShowChangePassword(false);
-    } catch (err) {
-      toastError(err, "Couldn't change your password. Try again.");
-    }
-  };
-
-  const handleChangeEmailSubmit = async (email: string, password: string) => {
-    const res = await api.post<{ message?: string }>('/account/email', { email, password });
-    toast(res?.message || 'Check your new address for the verification link.', 'success');
-    setShowChangeEmail(false);
-    await useAuthStore.getState().checkSession();
   };
 
   const avatarName = identityLabel(user);
@@ -90,30 +58,8 @@ export default function UserMenu({ user }: UserMenuProps) {
       {isOpen && (
         <UserMenuPanel ariaLabel="User menu" onClose={close}>
           <UserMenuProfileCard user={user} />
-          <UserMenuAccountSection
-            user={user}
-            isLoading={isLoading}
-            onClose={close}
-            onLogout={handleLogout}
-            onChangePassword={() => setShowChangePassword(true)}
-            onChangeEmail={() => setShowChangeEmail(true)}
-          />
+          <UserMenuAccountSection user={user} onClose={close} onLogout={handleLogout} />
         </UserMenuPanel>
-      )}
-
-      {showChangeEmail && (
-        <ChangeEmailModal
-          currentEmail={user.email}
-          onClose={() => setShowChangeEmail(false)}
-          onSubmit={handleChangeEmailSubmit}
-        />
-      )}
-
-      {showChangePassword && (
-        <ChangePasswordModal
-          onClose={() => setShowChangePassword(false)}
-          onSubmit={handleChangePasswordSubmit}
-        />
       )}
     </>
   );

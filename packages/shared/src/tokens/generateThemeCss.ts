@@ -75,6 +75,7 @@ function paletteGroups(c: Palette) {
   core.push(['--color-accent-green', c.accent.green]);
   core.push(['--color-border', c.border.default]);
   core.push(['--color-border-light', c.border.light]);
+  core.push(['--color-control-track-off', c.control.trackOff]);
   core.push(['--color-priority-must', c.priority.must]);
   core.push(['--color-priority-want', c.priority.want]);
   core.push(['--color-priority-maybe', c.priority.maybe]);

@@ -18,4 +18,28 @@ describe('Switch off-track colors', () => {
     });
     expect(missing).toEqual([]);
   });
+
+  it('account and low-power surfaces use AppSwitch, not Switch', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const root = path.join(__dirname, '..');
+    const files = [
+      ...fs
+        .readdirSync(path.join(root, 'components'))
+        .filter((f) => /^Account.*\.tsx$/.test(f) || f === 'LowPowerControls.tsx')
+        .map((f) => path.join(root, 'components', f)),
+      path.join(root, 'app', '(tabs)', 'account.tsx'),
+    ];
+    const raw = files.filter((f) => fs.readFileSync(f, 'utf8').includes('<Switch'));
+    expect(raw).toEqual([]);
+  });
+
+  it('AppSwitch takes its off track from control.trackOff', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'components', 'AppSwitch.tsx'), 'utf8');
+    expect(source).toContain('control.trackOff');
+    expect(source).not.toContain('text.muted, true');
+    expect(source).not.toMatch(/colors\.text\.muted/);
+  });
 });

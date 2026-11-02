@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatFestivalDate,
+  formatDateSpan,
   formatTime,
   timeToMinutes,
   minutesToTime,
@@ -299,5 +301,33 @@ describe('getSetHotness', () => {
       endTime: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
     });
     expect(getSetHotness(set)).toBe(1000);
+  });
+});
+
+describe('formatFestivalDate', () => {
+  it('formats a YYYY-MM-DD date without a timezone shift', () => {
+    expect(formatFestivalDate('2025-06-21')).toBe('Jun 21, 2025');
+  });
+  it('reads the calendar parts off a full ISO timestamp', () => {
+    expect(formatFestivalDate('2025-12-01T23:30:00.000Z')).toBe('Dec 1, 2025');
+  });
+  it('returns null for empty input and echoes an unparseable string', () => {
+    expect(formatFestivalDate(null)).toBeNull();
+    expect(formatFestivalDate('not-a-date')).toBe('not-a-date');
+  });
+});
+
+describe('formatDateSpan', () => {
+  it('collapses a single-day festival to one date', () => {
+    expect(formatDateSpan('2025-06-21', '2025-06-21')).toBe('Jun 21, 2025');
+  });
+  it('drops the repeated year inside a same-year span', () => {
+    expect(formatDateSpan('2025-06-21', '2025-06-23')).toBe('Jun 21 – Jun 23, 2025');
+  });
+  it('keeps both years when they differ', () => {
+    expect(formatDateSpan('2024-12-31', '2025-01-01')).toBe('Dec 31, 2024 – Jan 1, 2025');
+  });
+  it('returns null when both ends are missing', () => {
+    expect(formatDateSpan(null, null)).toBeNull();
   });
 });

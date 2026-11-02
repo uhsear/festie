@@ -47,10 +47,10 @@ export default function UserMenuProfileCard({ user }: UserMenuProfileCardProps) 
         <Avatar name={avatarName} image={user.avatarUrl} size="lg" />
         <div className="flex flex-col gap-[5px] min-w-0">
           <div className="text-base font-bold max-w-full overflow-hidden text-ellipsis whitespace-nowrap">
-            {user.username}
+            {avatarName}
           </div>
-          <div className="text-xs text-text-secondary max-w-full overflow-hidden text-ellipsis whitespace-nowrap">
-            Account identity across every festival
+          <div className="text-xs text-accent-aqua max-w-full overflow-hidden text-ellipsis whitespace-nowrap">
+            @{user.username}
           </div>
           <div className="flex flex-wrap gap-[var(--space-3)]">
             <span className="inline-flex items-center gap-[var(--space-2)] px-2 py-[3px] rounded-full bg-[var(--color-overlay-2)] border border-border-light text-[length:var(--font-size-12)] font-bold tracking-[.4px] uppercase text-text-secondary">

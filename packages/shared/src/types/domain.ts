@@ -166,7 +166,7 @@ export interface FestivalSet {
 
 // SINGLE-SOURCING NOTE (Phase 3): NOT aliased to api.gen.ts
 // `components['schemas']['User']` (the serializePublicUser projection). This
-// domain model is broader — adds `avatar`/`isAdmin`/`createdAt`/`updatedAt` and
+// domain model is broader — adds `isAdmin`/`createdAt`/`updatedAt` and
 // uses optional `email?`/`name?`/`emailVerified?` instead of the generated
 // `string | null` fields. Kept hand-written.
 export interface User {
@@ -175,7 +175,6 @@ export interface User {
   email?: string;
   emailVerified?: boolean;
   name?: string;
-  avatar?: string;
   avatarUrl?: string;
   isAdmin?: boolean;
   // Payment handles for settle-up deep links (serializePublicUser surfaces

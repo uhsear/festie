@@ -3,6 +3,12 @@ import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { COPY } from '@festie/shared/constants';
+import {
+  firstInvalidField,
+  validateRegister,
+  type RegisterErrors,
+  type RegisterField,
+} from '@festie/shared/utils';
 import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import Button from '../components/ui/Button';
@@ -10,12 +16,6 @@ import Input from '../components/ui/Input';
 import AuthTabs from '../components/ui/AuthTabs';
 import AuthBrand from '../components/auth/AuthBrand';
 import InviteBanner from '../components/auth/InviteBanner';
-import {
-  firstInvalidField,
-  validateRegister,
-  type RegisterErrors,
-  type RegisterField,
-} from '../components/auth/registerValidation';
 import { cn } from '../lib/utils';
 import { readSignupRef } from '../hooks/useFestivalLoader';
 
@@ -35,6 +35,9 @@ const FIELD_IDS: Record<RegisterField, string> = {
   email: 'register-email',
   tosAccepted: 'authTos',
 };
+
+// Screen order; the first invalid field in this order takes focus.
+const FIELD_ORDER: RegisterField[] = ['username', 'password', 'confirmPassword', 'dateOfBirth', 'email', 'tosAccepted'];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -60,7 +63,7 @@ function RegisterPageInner() {
     setFormError('');
     const found = validateRegister({ username, password, confirmPassword, email, dateOfBirth, tosAccepted });
     setErrors(found);
-    const first = firstInvalidField(found);
+    const first = firstInvalidField(found, FIELD_ORDER);
     if (first) {
       document.getElementById(FIELD_IDS[first])?.focus();
       return;
@@ -73,7 +76,7 @@ function RegisterPageInner() {
         confirmPassword,
         dateOfBirth,
         tosAccepted,
-        email: email || undefined,
+        email: email.trim(),
         ref: readSignupRef(),
       });
       toast('Account created', 'success');
@@ -182,7 +185,7 @@ function RegisterPageInner() {
         <div className="mb-3">
           <Input
             id={FIELD_IDS.email}
-            label="Email (optional)"
+            label="Email"
             type="email"
             helperText="For password recovery"
             autoComplete="email"

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Switch, Alert } from 'react-native';
+import { View, Text, Alert } from 'react-native';
+import AppSwitch from './AppSwitch';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useNotificationPrefsStore, useFestivalStore } from '@festie/shared/stores';
 import { api } from '@festie/shared/services';
@@ -121,12 +122,9 @@ function FestivalTopicsRows() {
             <Ionicons name={r.icon} size={18} color={t.colors.text.secondary} />
           </View>
           <Text style={styles.rowTitle}>{r.title}</Text>
-          <Switch
+          <AppSwitch
             value={subs[r.key]}
             onValueChange={(v) => setTopic(r.key, v)}
-            trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-            ios_backgroundColor={t.colors.text.muted}
-            thumbColor={t.colors.text.onAccent}
             accessibilityLabel={`${r.title} for ${currentFestival.name}`}
           />
         </View>
@@ -257,7 +255,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
           {pushOn ? null : (
             <Text style={styles.pushHint}>Turn on push notifications to get these.</Text>
           )}
-          <View style={pushOn ? undefined : { opacity: 0.5 }}>
+          <View>
           {rows.map((r) => (
             <View key={r.key} style={styles.row}>
               <View style={styles.rowIcon}>
@@ -271,12 +269,9 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
               ) : (
                 <Text style={styles.rowTitle}>{r.title}</Text>
               )}
-              <Switch
+              <AppSwitch
                 value={r.value}
                 onValueChange={r.onChange}
-                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-                ios_backgroundColor={t.colors.text.muted}
-                thumbColor={t.colors.text.onAccent}
                 accessibilityLabel={r.title}
                 accessibilityState={{ checked: r.value }}
               />
@@ -303,7 +298,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
                   : 'Mutes notifications during your chosen window, except SOS'}
               </Text>
             </View>
-            <Switch
+            <AppSwitch
               value={quietOn}
               onValueChange={(v) =>
                 set(
@@ -312,9 +307,6 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
                     : { dndStart: null, dndEnd: null },
                 )
               }
-              trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-              ios_backgroundColor={t.colors.text.muted}
-              thumbColor={t.colors.text.onAccent}
               accessibilityLabel="Quiet hours"
               accessibilityState={{ checked: quietOn }}
             />

@@ -2,8 +2,20 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAuthStore, accountDeletionNotice } from './authStore';
 import { api, setAuthToken, clearAuthToken, getAuthToken } from '../services/api';
 import type { User } from '../types/domain';
+import { AVATAR_COPY } from '../constants/accountSettings';
 
 vi.mock('../services/api', () => ({
+  ApiClientError: class ApiClientError extends Error {
+    status: number;
+    code?: string;
+    isNetworkError?: boolean;
+    constructor(message: string, status: number, code?: string, _retryAfter?: unknown, isNetworkError?: boolean) {
+      super(message);
+      this.status = status;
+      this.code = code;
+      this.isNetworkError = isNetworkError;
+    }
+  },
   api: {
     get: vi.fn(),
     post: vi.fn(),
@@ -463,9 +475,9 @@ describe('authStore', () => {
       };
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow('Upload failed');
+      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow(AVATAR_COPY.uploadFailed);
       expect(useAuthStore.getState().user!.avatarUrl).toBe('old-avatar.jpg');
-      expect(useAuthStore.getState().error).toBe('Upload failed');
+      expect(useAuthStore.getState().error).toBe(AVATAR_COPY.uploadFailed);
       expect(useAuthStore.getState().isLoading).toBe(false);
 
       vi.mocked(globalThis.fetch).mockRestore();
@@ -476,22 +488,57 @@ describe('authStore', () => {
       const mockBlob = new Blob(['img'], { type: 'image/png' });
       vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
 
-      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow('Network error');
+      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow('You appear to be offline');
       expect(useAuthStore.getState().user!.avatarUrl).toBeUndefined();
-      expect(useAuthStore.getState().error).toBe('Network error');
+      expect(useAuthStore.getState().error).toBe("You're offline. Check your connection and try again.");
 
       vi.mocked(globalThis.fetch).mockRestore();
     });
 
-    it('handles non-Error thrown values on failure', async () => {
+    it('sends the file under the avatar field', async () => {
       useAuthStore.setState({ user: mockUser });
       const mockBlob = new Blob(['img'], { type: 'image/png' });
-      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce('string error');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { user: { ...mockUser, avatarUrl: 'u' } }, error: null }),
+      } as unknown as Response);
 
-      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toBe('string error');
-      expect(useAuthStore.getState().error).toBe('Avatar upload failed');
+      await useAuthStore.getState().uploadAvatar(mockBlob);
 
-      vi.mocked(globalThis.fetch).mockRestore();
+      const body = fetchSpy.mock.calls[0]![1]!.body as FormData;
+      expect(body.has('avatar')).toBe(true);
+      expect(body.has('file')).toBe(false);
+      fetchSpy.mockRestore();
+    });
+
+    it('rejects with the server message and status on a 400', async () => {
+      useAuthStore.setState({ user: mockUser });
+      const mockBlob = new Blob(['img'], { type: 'image/png' });
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: 'Avatar must be 5MB or smaller', code: 'INVALID_INPUT' } }),
+      } as unknown as Response);
+
+      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toMatchObject({
+        message: 'Avatar must be 5MB or smaller',
+        status: 400,
+        code: 'INVALID_INPUT',
+      });
+      fetchSpy.mockRestore();
+    });
+
+    it('rejects an oversize file before any request', async () => {
+      useAuthStore.setState({ user: mockUser, error: null });
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      await expect(
+        useAuthStore.getState().uploadAvatar({ uri: 'file:///a.png', name: 'a.png', type: 'image/png', size: 6_000_000 }),
+      ).rejects.toThrow(AVATAR_COPY.tooBig);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(useAuthStore.getState().isLoading).toBe(false);
+      expect(useAuthStore.getState().error).toBeNull();
+      fetchSpy.mockRestore();
     });
 
     it('includes Authorization header when bearer token exists', async () => {
@@ -535,6 +582,50 @@ describe('authStore', () => {
       expect(useAuthStore.getState().user).toBeNull();
 
       vi.mocked(globalThis.fetch).mockRestore();
+    });
+  });
+
+  describe('account settings actions', () => {
+    it('updatePaymentHandles trims, PUTs and merges the three fields', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.put).mockResolvedValueOnce({
+        user: { venmoHandle: 'sam', cashappCashtag: null, paypalHandle: 'sp' },
+      });
+      const res = await useAuthStore
+        .getState()
+        .updatePaymentHandles({ venmoHandle: ' sam ', cashappCashtag: '', paypalHandle: 'sp ' });
+      expect(api.put).toHaveBeenCalledWith('/account/payment-handles', {
+        venmoHandle: 'sam',
+        cashappCashtag: '',
+        paypalHandle: 'sp',
+      });
+      expect(res.venmoHandle).toBe('sam');
+      expect(useAuthStore.getState().user).toMatchObject({ venmoHandle: 'sam', cashappCashtag: null, paypalHandle: 'sp' });
+    });
+
+    it('setPublicSchedule PUTs and sets the flag', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.put).mockResolvedValueOnce({ user: { publicSchedule: true } });
+      await useAuthStore.getState().setPublicSchedule(true);
+      expect(api.put).toHaveBeenCalledWith('/account/public-schedule', { publicSchedule: true });
+      expect(useAuthStore.getState().user!.publicSchedule).toBe(true);
+    });
+
+    it('changeEmail returns the server message', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ message: 'Check your inbox' });
+      await expect(useAuthStore.getState().changeEmail('new@test.com', 'pw')).resolves.toBe('Check your inbox');
+      expect(api.post).toHaveBeenCalledWith('/account/email', { email: 'new@test.com', password: 'pw' });
+    });
+
+    it('a rejected call leaves isLoading false and error null', async () => {
+      useAuthStore.setState({ user: mockUser, isLoading: false, error: null });
+      const boom = new Error('nope');
+      vi.mocked(api.put).mockRejectedValueOnce(boom);
+      vi.mocked(api.post).mockRejectedValueOnce(boom);
+      await expect(useAuthStore.getState().setPublicSchedule(true)).rejects.toBe(boom);
+      await expect(useAuthStore.getState().changeEmail('a@b.co', 'pw')).rejects.toBe(boom);
+      expect(useAuthStore.getState().isLoading).toBe(false);
+      expect(useAuthStore.getState().error).toBeNull();
     });
   });
 

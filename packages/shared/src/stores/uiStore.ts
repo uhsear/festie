@@ -6,6 +6,13 @@ import { FestivalSet, OnlineUser } from '../types';
 /** 'stage' is the dark default; 'daylight' is the high-contrast light theme for direct sun. */
 export type ThemePreference = 'stage' | 'daylight';
 
+/** What the user picked: a fixed theme, or follow the device. `theme` stays the one on screen. */
+export type ThemeMode = ThemePreference | 'system';
+
+export function themeModeOf(s: { theme: ThemePreference; followSystemTheme: boolean }): ThemeMode {
+  return s.followSystemTheme ? 'system' : s.theme;
+}
+
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
 export interface Toast {
@@ -64,6 +71,8 @@ export interface UIState {
   toasts: Toast[];
   /** Persisted device preference. Not reset on logout. */
   theme: ThemePreference;
+  /** Persisted device preference. Not reset on logout. When true, the app hook keeps `theme` in step with the OS. */
+  followSystemTheme: boolean;
   /** Persisted device preference. Not reset on logout. SOS (heavy) always vibrates. */
   hapticsEnabled: boolean;
 }
@@ -86,13 +95,17 @@ export interface UIActions {
   /** Queue a transient toast; returns its id. Replaces blocking Alert.alert for confirmations. */
   showToast: (message: string, options?: ToastOptions) => number;
   dismissToast: (id: number) => void;
+  /** Picks a fixed theme and leaves system mode. */
   setTheme: (theme: ThemePreference) => void;
+  setThemeMode: (mode: ThemeMode) => void;
+  /** Applies the OS colour scheme to `theme`; does nothing unless followSystemTheme is on. */
+  applySystemScheme: (scheme: 'light' | 'dark' | null | undefined) => void;
   setHapticsEnabled: (enabled: boolean) => void;
 }
 
 export type UIStore = UIState & UIActions;
 
-const uiStore: StateCreator<UIStore> = (set) => ({
+const uiStore: StateCreator<UIStore> = (set, get) => ({
   detailSet: null,
   detailAutoSpotify: false,
   connected: false,
@@ -102,6 +115,7 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   onlineUsers: [],
   toasts: [],
   theme: 'stage',
+  followSystemTheme: false,
   hapticsEnabled: true,
 
   setDetailSet: (detailSet: FestivalSet | null) => {
@@ -176,7 +190,17 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   },
 
   setTheme: (theme: ThemePreference) => {
-    set({ theme });
+    set({ theme, followSystemTheme: false });
+  },
+
+  setThemeMode: (mode: ThemeMode) => {
+    if (mode === 'system') set({ followSystemTheme: true });
+    else get().setTheme(mode);
+  },
+
+  applySystemScheme: (scheme) => {
+    if (!get().followSystemTheme) return;
+    set({ theme: scheme === 'light' ? 'daylight' : 'stage' });
   },
 
   setHapticsEnabled: (hapticsEnabled: boolean) => {
@@ -191,6 +215,10 @@ export const useUIStore = create<UIStore>()(
   persist(uiStore, {
     name: THEME_STORAGE_KEY,
     storage: createJSONStorage(() => getStorage()),
-    partialize: (state) => ({ theme: state.theme, hapticsEnabled: state.hapticsEnabled }),
+    partialize: (state) => ({
+      theme: state.theme,
+      followSystemTheme: state.followSystemTheme,
+      hapticsEnabled: state.hapticsEnabled,
+    }),
   }),
 );

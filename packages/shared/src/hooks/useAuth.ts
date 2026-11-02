@@ -6,6 +6,7 @@ import {
   ForgotPasswordRequest,
   AvatarResponse,
 } from '../types';
+import type { AvatarUploadFile } from '../utils/avatarFile';
 
 export interface UseAuthReturn {
   login: (request: LoginRequest) => Promise<{ reactivated: boolean }>;
@@ -13,7 +14,7 @@ export interface UseAuthReturn {
   logout: () => Promise<void>;
   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
   changePassword: (request: ChangePasswordRequest) => Promise<void>;
-  uploadAvatar: (file: File | Blob) => Promise<AvatarResponse>;
+  uploadAvatar: (file: AvatarUploadFile) => Promise<AvatarResponse>;
   removeAvatar: () => Promise<void>;
   isLoading: boolean;
   error: string | null;

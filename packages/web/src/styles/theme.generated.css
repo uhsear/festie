@@ -29,6 +29,7 @@
   --color-accent-green: #39ff14;
   --color-border: rgba(255, 255, 255, 0.06);
   --color-border-light: rgba(255, 255, 255, 0.1);
+  --color-control-track-off: #66666f;
   --color-priority-must: #ff3366;
   --color-priority-want: #00e8d0;
   --color-priority-maybe: #ffb020;
@@ -174,6 +175,7 @@
   --color-accent-green: #175800;
   --color-border: rgba(0, 0, 0, 0.12);
   --color-border-light: rgba(0, 0, 0, 0.3);
+  --color-control-track-off: #767684;
   --color-priority-must: #a8002a;
   --color-priority-want: #00594f;
   --color-priority-maybe: #6b4100;
