@@ -507,6 +507,18 @@ export const lineupImportRequestSchema = z
   .strict();
 export type LineupImportRequestInput = z.infer<typeof lineupImportRequestSchema>;
 
+// ── Festival announcements (admin) ──────────────────────────────────
+// Title 80 and body 200 keep the push inside payload.ts MAX_TITLE_LENGTH and MAX_BODY_LENGTH.
+export const festivalAnnouncementSchema = z
+  .object({
+    severity: z.enum(['info', 'urgent']),
+    title: z.string().trim().min(1).max(80),
+    body: z.string().trim().min(1).max(200),
+    screen: z.enum(['home', 'map', 'timeline', 'picks', 'festival-mode', 'crew']).default('home'),
+    sendAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+
 // ── Crew schemas ─────────────────────────────────────────────────────
 export const crewCreateSchema = z.object({
   name: z.string().trim().min(1, 'Crew name required').max(60),
@@ -1366,6 +1378,7 @@ export const schemas = {
   crewTransfer: crewTransferSchema,
   crewAddMember: crewAddMemberSchema,
   setLink: setLinkSchema,
+  festivalAnnouncement: festivalAnnouncementSchema,
   crewHomeBase: crewHomeBaseSchema,
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,

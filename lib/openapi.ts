@@ -32,6 +32,7 @@ import {
   adminBulkDeactivateSchema,
   festivalDepthQuery,
   lineupImportRequestSchema,
+  festivalAnnouncementSchema,
 } from './schemas';
 import { responseSchemas } from './responseSchemas';
 
@@ -328,6 +329,16 @@ export function generateOpenAPISpec(config: any) {
       '/api/v1/admin/festivals/{id}/lineup-announcement': {
         get: { tags: ['Admin'], summary: 'Count who a lineup announcement would reach', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, recipients }' }, 404: { description: 'Festival not found' } } },
         post: { tags: ['Admin'], summary: 'Send the lineup announcement push and email', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ queued: true, recipients }' }, 400: { description: 'No one to notify' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/announcements': {
+        get: { tags: ['Admin'], summary: 'List the announcements of a festival (newest 20) and its audience size', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, recipients, announcements }' }, 404: { description: 'Festival not found' } } },
+        post: { tags: ['Admin'], summary: 'Send or schedule an announcement to everyone who joined the festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(festivalAnnouncementSchema), responses: { 201: { description: '{ announcement, recipients }' }, 400: { description: 'Invalid body, or sendAt not in the next 14 days' }, 404: { description: 'Festival not found' }, 409: { description: 'The festival is a draft' }, 429: { description: 'The festival already has 3 announcements within an hour of that time' } } },
+      },
+      '/api/v1/admin/festivals/{id}/announcements/{announcementId}': {
+        delete: { tags: ['Admin'], summary: 'Cancel a scheduled announcement, or take down the banner of a sent one', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'announcementId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ announcement }' }, 404: { description: 'Announcement not found' } } },
+      },
+      '/api/v1/festivals/{id}/announcements': {
+        get: { tags: ['Festivals'], summary: 'Active announcements for the banner (sent in the last 24 hours, newest 3)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'FestivalAnnouncement[]; [] for a missing or draft festival' } } },
       },
       '/api/v1/admin/festivals': {
         get: { tags: ['Admin'], summary: 'List every non-deleted festival, drafts included', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Festival list items plus { published, updatedAt }' } } },
