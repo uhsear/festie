@@ -57,3 +57,4 @@ export * from './scheduleGrid';
 export * from './crewManage';
 export * from './onboarding';
 export * from './festivalReady';
+export * from './guestPicks';

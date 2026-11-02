@@ -303,7 +303,13 @@ export const FESTIVAL_READY_COPY = {
 export const GUEST_PROMPT_COPY = {
   createAccount: 'Create account',
   signIn: 'Sign in',
-  setSheet: 'Sign in to save picks, keep private notes and compare crew overlap.',
+  setSheet: 'Create a free account to keep private notes, set reminders and compare crew overlap.',
+  guestPicks: {
+    title: 'Your picks are saved on this device',
+    body: 'Create a free account to keep them on every device and plan with your crew.',
+    cta: 'Create free account',
+    signIn: 'I have an account',
+  },
   teasers: {
     picks: {
       title: 'Save your festival picks',

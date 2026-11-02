@@ -1,7 +1,7 @@
 import React, { Fragment, useCallback, useMemo, useState, useSyncExternalStore } from 'react';
-import { useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
+import { useFestivalStore, useAuthStore, useCrewStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { usePicks, useFestival, useFestivalReady } from '@festie/shared/hooks';
+import { usePicks, useFestival, useCanPick, useFestivalReady } from '@festie/shared/hooks';
 import {
   getHomeActions,
   resolveFestivalTimeZone,
@@ -58,7 +58,7 @@ function usePrefersReducedMotion(): boolean {
 function CardsViewInner() {
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const days = useFestivalStore((state) => state.days);
-  const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const myPicks = useFestivalStore(selectMyPicks);
   const user = useAuthStore((state) => state.user);
   const crews = useCrewStore((state) => state.crews);
   const sets = useFestivalStore((state) => state.sets);
@@ -74,6 +74,7 @@ function CardsViewInner() {
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const setDetailAutoSpotify = useUIStore((state) => state.setDetailAutoSpotify);
   const { getMyPick, getOtherPicks } = usePicks();
+  const canPick = useCanPick();
   const { getStageColor: getStageColorRaw, getStageName, getDays, getFilteredSets } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
@@ -164,7 +165,7 @@ function CardsViewInner() {
   const actions = getHomeActions({
     phase,
     signedIn: !!user,
-    pickCount: Object.keys(currentProfile?.picks ?? {}).length,
+    pickCount: Object.keys(myPicks ?? {}).length,
     hasCrew,
   });
 
@@ -303,7 +304,7 @@ function CardsViewInner() {
                       set={set}
                       onTap={() => setDetailSet(set)}
                       onPreview={() => handlePreview(set)}
-                      showPicks={!!user}
+                      showPicks={canPick}
                       stageName={sn}
                       stageColor={sc}
                       friendProfiles={others}

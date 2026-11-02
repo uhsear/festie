@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useBulkAddPicks } from '../useBulkAddPicks';
 import { useFestivalStore } from '../../stores/festivalStore';
+import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../services/api';
 import { UNDO_WINDOW_MS } from '../../utils/crewWrites';
 import type { Priority } from '../../types/domain';
@@ -67,6 +68,25 @@ describe('useBulkAddPicks', () => {
     expect(useFestivalStore.getState().currentProfile!.picks).toEqual({ s1: 'must' });
     expect(notify.info).toHaveBeenCalledWith('Undone. Your plan is back to how it was.');
     expect(result.current.busyKey).toBeNull();
+  });
+
+  it('lets a guest undo a bulk add on the device', async () => {
+    useAuthStore.setState({ user: null });
+    useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: null, guestPicks: { f1: { s1: 'must' } } });
+    const { notify, tapUndo } = makeNotify();
+    const { result } = renderHook(() => useBulkAddPicks(notify));
+
+    await act(async () => {
+      await result.current.add(GROUP, 'must');
+    });
+    expect(useFestivalStore.getState().guestPicks).toEqual({ f1: { s1: 'must', s2: 'must', s3: 'must' } });
+
+    tapUndo();
+    await flush();
+    expect(useFestivalStore.getState().guestPicks).toEqual({ f1: { s1: 'must' } });
+    expect(notify.info).toHaveBeenCalledWith('Undone. Your plan is back to how it was.');
+    expect(notify.error).not.toHaveBeenCalled();
+    expect(api.put).not.toHaveBeenCalled();
   });
 
   it('says nothing new when every set is already picked, and sends no PUT', async () => {
