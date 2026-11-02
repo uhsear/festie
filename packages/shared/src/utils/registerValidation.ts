@@ -39,7 +39,7 @@ export function validateRegister(f: RegisterFields, now: Date = new Date()): Reg
   const email = f.email.trim();
   if (!email) errors.email = AUTH_COPY.emailRequired;
   else if (!isValidEmail(email)) errors.email = REGISTER_COPY.emailInvalid;
-  Object.assign(errors, validateNewPassword(f.password, f.confirmPassword));
+  Object.assign(errors, validateNewPassword(f.password, f.confirmPassword, { username, email }));
   if (!f.dateOfBirth) errors.dateOfBirth = REGISTER_COPY.dobRequired;
   else if (!isAtLeast18(f.dateOfBirth, now)) errors.dateOfBirth = REGISTER_COPY.under18;
   if (!f.tosAccepted) errors.tosAccepted = REGISTER_COPY.tosRequired;

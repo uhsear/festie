@@ -159,6 +159,15 @@ export default function createUsersStore(pool: Pool, utils: any) {
       return normalizeRow(result.rows[0]);
     },
 
+    // Caller lower-cases the address; deleted accounts are excluded on purpose.
+    async getByEmail(email: string) {
+      const result = await pool.query(
+        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL LIMIT 1`,
+        [email],
+      );
+      return normalizeRow(result.rows[0]);
+    },
+
     // A soft-deleted account still inside its 30-day grace window. The bound
     // matches the copy even if the pg_cron purge runs late.
     async findDeletedByUsername(username: string) {

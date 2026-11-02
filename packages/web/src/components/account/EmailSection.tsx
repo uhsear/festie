@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Mail } from 'lucide-react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
@@ -12,6 +13,7 @@ export default function EmailSection() {
   const user = useAuthStore((s) => s.user);
   const resendVerification = useAuthStore((s) => s.resendVerification);
   const changeEmail = useAuthStore((s) => s.changeEmail);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const [resending, setResending] = useState(false);
   const [showChange, setShowChange] = useState(false);
 
@@ -21,7 +23,7 @@ export default function EmailSection() {
     setResending(true);
     try {
       await resendVerification();
-      toast(ACCOUNT_COPY.emailSent, 'success');
+      toast(ACCOUNT_COPY.verifySent, 'success');
     } catch (err) {
       toast(mapErrorToUserMessage(err, 'Could not resend verification email. Try again.'), 'error');
     } finally {
@@ -50,11 +52,11 @@ export default function EmailSection() {
       {user.pendingEmail ? <p className="text-xs text-text-muted">{ACCOUNT_COPY.emailPending(user.pendingEmail)}</p> : null}
       <div className="flex flex-wrap gap-2">
         {user.email && !user.emailVerified ? (
-          <Button variant="outline" size="sm" isLoading={resending} onClick={handleResend} className="min-h-[44px]">
+          <Button variant="outline" size="sm" isLoading={resending} disabled={offlineMode} onClick={handleResend} className="min-h-[44px]">
             {ACCOUNT_COPY.emailResend}
           </Button>
         ) : null}
-        <Button variant="outline" size="sm" onClick={() => setShowChange(true)} className="min-h-[44px]">
+        <Button variant="outline" size="sm" disabled={offlineMode} onClick={() => setShowChange(true)} className="min-h-[44px]">
           {user.email ? ACCOUNT_COPY.emailChange : ACCOUNT_COPY.emailAdd}
         </Button>
       </div>

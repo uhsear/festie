@@ -195,6 +195,28 @@ describe('createUsersStore', () => {
     });
   });
 
+  describe('getByEmail', () => {
+    it('matches LOWER(email) on active users only', async () => {
+      const pool = mockPool([{ rows: [fakeUserRow()], rowCount: 1 }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      const result = await users.getByEmail('alice@example.com');
+      assert.equal(result.username, 'alice');
+      assert.equal(pool.calls[0].params[0], 'alice@example.com');
+      const sql = norm(pool.calls[0].sql);
+      assert.ok(sql.includes('LOWER(email) = $1'));
+      assert.ok(sql.includes('deleted_at IS NULL'));
+      assert.ok(sql.includes('LIMIT 1'));
+    });
+
+    it('returns null when no user has that email', async () => {
+      const pool = mockPool([{ rows: [], rowCount: 0 }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      assert.equal(await users.getByEmail('nobody@example.com'), null);
+    });
+  });
+
   describe('findDeletedByUsername', () => {
     it('returns a soft-deleted user inside the 30-day window', async () => {
       const pool = mockPool([{ rows: [fakeUserRow({ deletedAt: '2026-10-20T00:00:00.000Z' })], rowCount: 1 }]);
@@ -645,6 +667,39 @@ describe('createSessionsStore', () => {
       assert.deepEqual(evicted, []);
     });
 
+    it('passes deviceLabel as the sixth INSERT parameter', async () => {
+      const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [{ token: 'tok1' }] }, { rows: [] }]);
+      const sessions = createSessionsStore(pool, mockUtils);
+
+      await sessions.createUserSession({
+        token: 'tok1',
+        userId: 'u1',
+        username: 'alice',
+        createdAt: new Date().toISOString(),
+        lastAccess: new Date().toISOString(),
+        maxPerUser: 5,
+        deviceLabel: 'Chrome on Windows',
+      });
+      const insert = pool.calls[1];
+      assert.ok(norm(insert.sql).includes('device_label'));
+      assert.equal(insert.params[5], 'Chrome on Windows');
+    });
+
+    it('stores a NULL device label when none is given', async () => {
+      const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [{ token: 'tok1' }] }, { rows: [] }]);
+      const sessions = createSessionsStore(pool, mockUtils);
+
+      await sessions.createUserSession({
+        token: 'tok1',
+        userId: 'u1',
+        username: 'alice',
+        createdAt: new Date().toISOString(),
+        lastAccess: new Date().toISOString(),
+        maxPerUser: 5,
+      });
+      assert.equal(pool.calls[1].params[5], null);
+    });
+
     it('evicts oldest sessions when over maxPerUser', async () => {
       // BEGIN, INSERT, SELECT FOR UPDATE (6 sessions, limit 5), DELETE evicted, COMMIT
       const sixSessions = Array.from({ length: 6 }, (_, i) => ({ token: `tok${i}` }));
@@ -785,6 +840,13 @@ describe('createSessionsStore', () => {
 
       const result = await sessions.listUserSessions('u1');
       assert.deepEqual(result, []);
+    });
+
+    it('selects the device label', async () => {
+      const pool = mockPool([{ rows: [], rowCount: 0 }]);
+      const sessions = createSessionsStore(pool, mockUtils);
+      await sessions.listUserSessions('u1');
+      assert.ok(norm(pool.calls[0].sql).includes('device_label AS "deviceLabel"'));
     });
 
     it('orders by last_access ASC', async () => {

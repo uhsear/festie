@@ -61,3 +61,5 @@ export * from './registerValidation';
 export * from './offlineSummary';
 export * from './weather';
 export * from './offlineReminder';
+export * from './passwordPolicy';
+export * from './supportMail';

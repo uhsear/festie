@@ -3,16 +3,23 @@ import { withTransaction } from '../connection';
 
 export default function createSessionsStore(pool: Pool, _utils: any) {
   const sessions: any = {
-    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser }: any) {
+    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser, deviceLabel }: any) {
       return withTransaction(pool, async (client) => {
         await client.query(
           `
           INSERT INTO
-            user_sessions (token, user_id, username, created_at, last_access)
+            user_sessions (
+              token,
+              user_id,
+              username,
+              created_at,
+              last_access,
+              device_label
+            )
           VALUES
-            ($1, $2, $3, $4, $5)
+            ($1, $2, $3, $4, $5, $6)
         `,
-          [token, userId, username, createdAt, lastAccess],
+          [token, userId, username, createdAt, lastAccess, deviceLabel ?? null],
         );
 
         // FOR UPDATE locks rows to prevent concurrent session creation from racing on eviction count
@@ -79,7 +86,8 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
           user_id AS "userId",
           username,
           created_at AS "createdAt",
-          last_access AS "lastAccess"
+          last_access AS "lastAccess",
+          device_label AS "deviceLabel"
         FROM
           user_sessions
         WHERE

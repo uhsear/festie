@@ -1,0 +1,68 @@
+import { Share, Plus } from 'lucide-react';
+import Sheet from '../ui/Sheet';
+
+export type IOSInstallCloseReason = 'close' | 'later' | 'got-it' | 'scrim' | 'escape';
+
+/** The iOS "Add to Home Screen" steps. The caller decides when it opens and what closing records. */
+export default function IOSInstallDrawer({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: (reason: IOSInstallCloseReason) => void;
+}) {
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => { if (!next) onClose('scrim'); }}
+      // Non-modal: no scrim and no pointer lock, so taps on the page behind the
+      // sheet (set cards, tabs) still land while it is open.
+      modal={false}
+      title="Add Festie to Home Screen"
+      description="Launch faster. Works offline. Full-screen."
+      icon={<img src="/icons/icon-192.png" width={48} height={48} alt=""
+        className="rounded-xl flex-shrink-0" aria-hidden="true" />}
+      onCloseClick={() => onClose('close')}
+      className="lg:bottom-auto lg:inset-x-auto lg:top-1/2 lg:left-1/2
+                 lg:-translate-x-1/2 lg:-translate-y-1/2
+                 lg:w-[min(420px,calc(100vw-2rem))]
+                 lg:rounded-2xl lg:border lg:border-border-light lg:border-t-0"
+    >
+      <ol className="space-y-2 text-sm text-text-primary">
+        <li className="flex items-center gap-3">
+          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-bg-card border border-border text-xs font-bold text-text-secondary flex-shrink-0">1</span>
+          <span className="flex-1">
+            Tap the <Share className="inline w-4 h-4 mx-0.5 align-text-top text-accent-aqua" aria-label="Share" /> Share button
+          </span>
+        </li>
+        <li className="flex items-center gap-3">
+          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-bg-card border border-border text-xs font-bold text-text-secondary flex-shrink-0">2</span>
+          <span className="flex-1">Scroll to <strong>Add to Home Screen</strong></span>
+        </li>
+        <li className="flex items-center gap-3">
+          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-bg-card border border-border text-xs font-bold text-text-secondary flex-shrink-0">3</span>
+          <span className="flex-1">
+            Tap <Plus className="inline w-4 h-4 mx-0.5 align-text-top text-accent-aqua" aria-label="Add" /> <strong>Add</strong>
+          </span>
+        </li>
+      </ol>
+
+      <div className="flex gap-2 pt-2">
+        <button
+          type="button"
+          onClick={() => onClose('later')}
+          className="flex-1 min-h-11 px-4 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-border-light text-sm font-medium"
+        >
+          Maybe later
+        </button>
+        <button
+          type="button"
+          onClick={() => onClose('got-it')}
+          className="flex-1 min-h-11 px-4 rounded-lg bg-accent-aqua text-bg-primary text-sm font-bold hover:bg-accent-aqua/90"
+        >
+          Got it
+        </button>
+      </div>
+    </Sheet>
+  );
+}

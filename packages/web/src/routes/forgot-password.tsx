@@ -90,6 +90,7 @@ function ForgotPasswordPageInner() {
               disabled={isLoading}
               helperText="We'll send you a link to reset your password"
             />
+            <p className="text-xs text-text-muted">{AUTH_COPY.forgotUsernameHint}</p>
 
             {serverError && !emailError && (
               <div role="alert" className="p-3 bg-accent-coral/10 border border-accent-coral/30 rounded-lg text-sm text-[var(--color-text-danger)]">

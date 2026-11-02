@@ -5,8 +5,23 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { FESTIE_RUNTIME_CACHING } from '@festie/shared/pwa';
 import path from 'path';
+import { execSync } from 'node:child_process';
+
+// Build id for the Account version line and the Sentry release. Vitest keeps 'dev'.
+function buildId(): string {
+  if (process.env.VITE_APP_VERSION) return process.env.VITE_APP_VERSION;
+  if (process.env.VITEST) return 'dev';
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || 'dev';
+  } catch {
+    return 'dev';
+  }
+}
 
 export default defineConfig({
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(buildId()),
+  },
   build: {
     chunkSizeWarningLimit: 1100,
     target: 'es2022',

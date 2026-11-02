@@ -3,7 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, type TextInputInstance } from 
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { PASSWORD_CHANGED_MESSAGE, useUIStore } from '@festie/shared/stores';
+import { PASSWORD_CHANGED_MESSAGE, useAuthStore, useUIStore } from '@festie/shared/stores';
+import { PASSWORD_RULES, passwordPolicyError } from '@festie/shared/utils';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -14,8 +15,9 @@ import { passwordStrength } from '../lib/accountFormat';
  *
  * Wired to the shared useAuth().changePassword → authStore.changePassword,
  * which POSTs /auth/change-password with { currentPassword, newPassword, confirmPassword }.
- * The shared method is fully platform-neutral, so this is just the UI: two
- * secure fields, an 8-char minimum check, in-flight spinner, and inline errors.
+ * The shared method is fully platform-neutral, so this is just the UI: three
+ * secure fields, the shared password policy (PASSWORD_RULES) checked before
+ * submit, in-flight spinner, and inline errors.
  */
 export default function AccountPasswordSection() {
   const t = useTokens();
@@ -23,6 +25,7 @@ export default function AccountPasswordSection() {
   const haptics = useHaptics();
   const { changePassword } = useAuth();
   const offlineMode = useUIStore((s) => s.offlineMode);
+  const user = useAuthStore((s) => s.user);
   // weak→strong. All four map exactly onto existing semantic tokens.
   const STRENGTH_COLORS = [t.colors.text.danger, t.colors.accent.amber, t.colors.accent.aqua, t.colors.accent.green];
 
@@ -67,9 +70,13 @@ export default function AccountPasswordSection() {
     });
   };
 
+  const policyError =
+    next.length >= 8 ? passwordPolicyError(next, { username: user?.username, email: user?.email }) : null;
+
   const validate = (): string | null => {
     if (!current) return 'Enter your current password.';
     if (next.length < 8) return 'New password must be at least 8 characters.';
+    if (policyError) return policyError;
     if (next !== confirm) return 'New passwords do not match.';
     if (next === current) return 'New password must differ from the current one.';
     return null;
@@ -126,7 +133,7 @@ export default function AccountPasswordSection() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Change Password</Text>
-          <Text style={styles.rowHint}>At least 8 characters</Text>
+          <Text style={styles.rowHint}>Change your password</Text>
         </View>
         <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
       </TouchableOpacity>
@@ -168,7 +175,14 @@ export default function AccountPasswordSection() {
             blurOnSubmit={false}
           />
 
-          {/* Strength meter — UX guidance only; the 8-char rule is authoritative. */}
+          <Text style={styles.rowHint}>{PASSWORD_RULES}</Text>
+          {policyError && policyError !== error ? (
+            <Text style={styles.error} accessibilityLiveRegion="polite">
+              {policyError}
+            </Text>
+          ) : null}
+
+          {/* Strength meter — UX guidance only; the shared policy is authoritative. */}
           {next.length > 0 ? (
             <View style={styles.meterWrap} accessibilityRole="text" accessibilityLabel={`Password strength: ${strength.label}`}>
               <View style={styles.meterTrack}>

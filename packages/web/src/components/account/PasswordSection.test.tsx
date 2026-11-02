@@ -9,7 +9,8 @@ import PasswordSection from './PasswordSection';
 
 const mockChangePassword = vi.fn();
 vi.mock('@festie/shared/stores/authStore', () => ({
-  useAuthStore: (selector: (s: Record<string, unknown>) => unknown) => selector({ changePassword: mockChangePassword }),
+  useAuthStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ changePassword: mockChangePassword, user: { username: 'alice', email: 'alice@example.com' } }),
   PASSWORD_CHANGED_MESSAGE: 'Password changed. Other devices were signed out.',
 }));
 
@@ -139,7 +140,9 @@ describe('PasswordSection', () => {
 
   it('shows error toast when changePassword fails', async () => {
     const user = userEvent.setup();
-    mockChangePassword.mockRejectedValue(new Error('bad'));
+    mockChangePassword.mockRejectedValue(
+      Object.assign(new Error('boom'), { name: 'ApiClientError', status: 500 }),
+    );
 
     render(<PasswordSection />);
     await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
@@ -148,7 +151,7 @@ describe('PasswordSection', () => {
     await user.click(screen.getByText('Update Password'));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith('bad', 'error');
+      expect(mockToast).toHaveBeenCalledWith('Something went wrong on our side. Try again in a minute.', 'error');
     });
   });
 
@@ -164,9 +167,8 @@ describe('PasswordSection', () => {
     await user.type(screen.getByPlaceholderText('Confirm new password'), 'newpass123');
     await user.click(screen.getByText('Update Password'));
 
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith('That password is not right. Try again.', 'error');
-    });
+    // T32 shows a wrong current password inline, so the server message lands under the field.
+    expect(await screen.findByText('That password is not right. Try again.')).toBeInTheDocument();
   });
 
   it('disables submit while offline', async () => {
@@ -204,5 +206,51 @@ describe('PasswordSection', () => {
     const submitBtn = screen.getByText('Update Password').closest('button')!;
     expect(submitBtn).toBeDisabled();
     expect(mockChangePassword).not.toHaveBeenCalled();
+  });
+
+  it('always shows the password rule line', () => {
+    render(<PasswordSection />);
+    expect(screen.getByText(/Use 8 to 100 characters/)).toBeInTheDocument();
+  });
+
+  it('flags a common password and keeps submit disabled', async () => {
+    const user = userEvent.setup();
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
+    await user.type(screen.getByPlaceholderText(/New password/), 'password123');
+    await user.type(screen.getByPlaceholderText('Confirm new password'), 'password123');
+    expect(screen.getByText(/That password is too common/)).toBeInTheDocument();
+    expect(screen.getByText(/Use 8 to 100 characters/)).toBeInTheDocument();
+    expect(screen.getByText('Update Password').closest('button')).toBeDisabled();
+  });
+
+  it('flags a password that contains the username', async () => {
+    const user = userEvent.setup();
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText(/New password/), 'alice-rocks-99');
+    expect(screen.getByText('Password must not contain your username')).toBeInTheDocument();
+  });
+
+  it('shows a wrong current password inline under Current password, not as a toast', async () => {
+    const user = userEvent.setup();
+    mockChangePassword.mockRejectedValue(
+      Object.assign(new Error('Your current password is not correct.'), {
+        name: 'ApiClientError',
+        status: 400,
+        code: 'PASSWORD_INCORRECT',
+      }),
+    );
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
+    await user.type(screen.getByPlaceholderText(/New password/), 'newpass123');
+    await user.type(screen.getByPlaceholderText('Confirm new password'), 'newpass123');
+    await user.click(screen.getByText('Update Password'));
+
+    const field = screen.getByPlaceholderText('Current password');
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0])).toHaveTextContent(
+      'Your current password is not correct.',
+    );
+    expect(mockToast).not.toHaveBeenCalledWith(expect.anything(), 'error');
   });
 });

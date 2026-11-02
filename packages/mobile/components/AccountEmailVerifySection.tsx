@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, AppState } from 'react
 import { Ionicons } from '@expo/vector-icons';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -11,7 +12,7 @@ import { useHaptics } from '../hooks/useHaptics';
  *
  * Renders only when the signed-in user has an email on file that is not yet
  * verified. Email is OPTIONAL at signup, so this is a soft status indicator —
- * there is no lockout. Wired to the shared authStore.resendVerification action,
+ * there is no lockout. Adding or changing the email lives in AccountEmailSection. Wired to the shared authStore.resendVerification action,
  * which POSTs /auth/resend-verification (authenticated). Mirrors web's
  * UserMenuAccountSection resend button.
  */
@@ -85,7 +86,7 @@ export default function AccountEmailVerifySection() {
   };
 
   const disabled = submitting || cooldown > 0 || offlineMode;
-  const buttonLabel = submitting ? '' : cooldown > 0 ? `${cooldown}s` : sent ? 'Resend' : 'Verify';
+  const buttonLabel = submitting ? '' : cooldown > 0 ? `${cooldown}s` : sent ? ACCOUNT_COPY.verifyResendLink : ACCOUNT_COPY.verifySendLink;
 
   return (
     <View style={styles.card}>
@@ -108,7 +109,7 @@ export default function AccountEmailVerifySection() {
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={
-              cooldown > 0 ? `Resend available in ${cooldown} seconds` : 'Resend verification email'
+              cooldown > 0 ? `Resend available in ${cooldown} seconds` : ACCOUNT_COPY.verifySendA11y
             }
             accessibilityState={{ disabled }}
           >

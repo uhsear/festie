@@ -40,6 +40,7 @@ export interface AuthActions {
   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
   resetPassword: (request: { token: string; newPassword: string; confirmPassword: string }) => Promise<void>;
   resendVerification: () => Promise<void>;
+  requestEmailChange: (email: string, password: string) => Promise<string>;
   changePassword: (request: ChangePasswordRequest) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
   deleteAccount: (password: string, crewHandover?: CrewHandoverChoice[]) => Promise<{ deletionDate: string | null }>;
@@ -364,6 +365,11 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
       set({ error: message, isLoading: false });
       throw err;
     }
+  },
+
+  requestEmailChange: async (email: string, password: string) => {
+    const res = await api.post<{ message?: string }>('/account/email', { email: email.trim(), password });
+    return res?.message ?? '';
   },
 
   changePassword: async (request: ChangePasswordRequest) => {

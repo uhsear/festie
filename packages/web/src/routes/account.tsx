@@ -13,7 +13,8 @@ import PasswordSection from '../components/account/PasswordSection';
 import NotificationSection from '../components/account/NotificationSection';
 import NotificationPrefsSection from '../components/account/NotificationPrefsSection';
 import PublicScheduleSection from '../components/account/PublicScheduleSection';
-import ReplayIntroRow from '../components/account/ReplayIntroRow';
+import DevicesSection from '../components/account/DevicesSection';
+import HelpSection from '../components/account/HelpSection';
 import ThemeSection from '../components/account/ThemeSection';
 import HapticsSection from '../components/account/HapticsSection';
 import HistorySection from '../components/account/HistorySection';
@@ -69,6 +70,7 @@ function AccountPageInner() {
         <ProfileSection user={user} />
         <EmailSection />
         <PasswordSection />
+        <DevicesSection />
         <PaymentHandlesSection />
       </>
     ),
@@ -107,27 +109,7 @@ function AccountPageInner() {
         <HistorySection />
       </>
     ),
-    help: (
-      <>
-        <a
-          href="/privacy.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 px-1 text-sm text-accent-aqua hover:underline"
-        >
-          {ACCOUNT_COPY.privacyTitle}
-        </a>
-        <a
-          href="/third-party-notices.txt"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 px-1 text-sm text-accent-aqua hover:underline"
-        >
-          Third-party notices
-        </a>
-        <ReplayIntroRow />
-      </>
-    ),
+    help: <HelpSection />,
     admin: (
       <Link
         to="/admin"

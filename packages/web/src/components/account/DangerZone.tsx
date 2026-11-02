@@ -9,6 +9,7 @@ import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { crewCopy, ownedCrewsForDeletion } from '@festie/shared/utils/crewManage';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -28,6 +29,7 @@ export default function DangerZone() {
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const deleteFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export default function DangerZone() {
       toast(accountDeletionNotice(deletionDate), 'info');
       navigate({ to: '/login' });
     } catch (err) {
-      toast(mapErrorToUserMessage(err, "Couldn't delete account. Try again."), 'error');
+      setDeleteError(mapErrorToUserMessage(err, ACCOUNT_COPY.deleteFailed));
     } finally {
       setDeleting(false);
     }
@@ -128,9 +130,13 @@ export default function DangerZone() {
               type="password"
               isPassword
               value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
+              onChange={(e) => {
+                setDeletePassword(e.target.value);
+                setDeleteError(null);
+              }}
               placeholder="Password"
               autoComplete="current-password"
+              error={deleteError ?? undefined}
             />
 
             <div className="flex gap-2">
@@ -140,6 +146,7 @@ export default function DangerZone() {
                 onClick={() => {
                   setShowDeleteConfirm(false);
                   setDeletePassword('');
+                  setDeleteError(null);
                 }}
                 className="flex-1 min-h-[44px]"
               >

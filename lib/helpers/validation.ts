@@ -47,7 +47,7 @@ export function validatePasswordStrength(value: any) {
  * focused, bundled top-list (no network dependency); a HIBP k-anonymity check
  * could be layered behind a flag later. Keep entries lowercase + trimmed.
  */
-const COMMON_PASSWORDS = new Set([
+export const COMMON_PASSWORDS = new Set([
   'password', 'password1', 'password123', 'passw0rd', 'p@ssw0rd', 'p@ssword',
   '12345678', '123456789', '1234567890', '123123123', '111111111', '000000000',
   'qwerty123', 'qwertyuiop', 'qwerty12345', '1q2w3e4r', '1qaz2wsx', 'zaq12wsx',

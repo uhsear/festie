@@ -72,7 +72,7 @@ describe('LoginPage', () => {
 
   it('renders username and password inputs', () => {
     render(<LoginPage />);
-    expect(screen.getByLabelText('Username')).toBeInTheDocument();
+    expect(screen.getByLabelText('Username or email')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
   });
 
@@ -86,17 +86,17 @@ describe('LoginPage', () => {
     expect(screen.getByText('Forgot password?')).toBeInTheDocument();
   });
 
-  it('shows "Username is required" when submitting with empty fields', async () => {
+  it('shows the identifier-required error when submitting with empty fields', async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Username is required');
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter your username or email.');
   });
 
   it('shows "Password is required" when username is filled but password is empty', async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
-    await user.type(screen.getByLabelText('Username'), 'testuser');
+    await user.type(screen.getByLabelText('Username or email'), 'testuser');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Password is required');
   });
@@ -133,7 +133,7 @@ describe('LoginPage', () => {
     });
     const user = userEvent.setup();
     render(<LoginPage />);
-    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Username or email'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'secret123');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(mockLogin).toHaveBeenCalledWith({ username: 'alice', password: 'secret123' });
@@ -153,7 +153,7 @@ describe('LoginPage', () => {
       error: null,
     });
     render(<LoginPage />);
-    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Username or email'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'secret123');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
   }
@@ -184,7 +184,7 @@ describe('LoginPage', () => {
     });
     const user = userEvent.setup();
     render(<LoginPage />);
-    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Username or email'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'wrong-pass');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
@@ -222,7 +222,7 @@ describe('LoginPage', () => {
     });
     const user = userEvent.setup();
     render(<LoginPage />);
-    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Username or email'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'secret123');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() =>

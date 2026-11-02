@@ -43,8 +43,11 @@ vi.mock('../components/account/PaymentHandlesSection', () => ({
 vi.mock('../components/account/PublicScheduleSection', () => ({
   default: () => <div data-testid="public-schedule-section" />,
 }));
-vi.mock('../components/account/ReplayIntroRow', () => ({
-  default: () => <div data-testid="replay-intro-row" />,
+vi.mock('../components/account/DevicesSection', () => ({
+  default: () => <div data-testid="devices-section" />,
+}));
+vi.mock('../components/account/HelpSection', () => ({
+  default: () => <div data-testid="help-section" />,
 }));
 vi.mock('../components/account/HistorySection', () => ({
   default: () => <div data-testid="history-section" />,
@@ -121,6 +124,9 @@ describe('AccountPage', () => {
     expect(screen.getByTestId('notification-section')).toBeInTheDocument();
     expect(screen.getByTestId('notification-prefs-section')).toBeInTheDocument();
     expect(screen.getByTestId('danger-zone')).toBeInTheDocument();
+    expect(screen.getByTestId('devices-section')).toBeInTheDocument();
+    expect(screen.getByText('Help and legal')).toBeInTheDocument();
+    expect(screen.getByTestId('help-section')).toBeInTheDocument();
   });
 
   const labels = ACCOUNT_SECTIONS.filter((sec) => sec.label !== '');

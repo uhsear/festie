@@ -12,8 +12,8 @@ const NOW = new Date(2026, 9, 28);
 const valid: RegisterFields = {
   username: 'alice',
   email: 'a@b.co',
-  password: 'password123',
-  confirmPassword: 'password123',
+  password: 'mosh-pit-2026',
+  confirmPassword: 'mosh-pit-2026',
   dateOfBirth: '1995-01-01',
   tosAccepted: true,
 };
