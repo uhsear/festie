@@ -2660,6 +2660,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            slug?: string | null;
             stages: {
                 color: string | null;
                 id: string;
@@ -2753,6 +2754,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            slug?: string | null;
             stages: {
                 color: string | null;
                 id: string;
@@ -2768,6 +2770,7 @@ export type components = {
             id: string;
             location: string;
             name: string;
+            slug?: string | null;
             stageCount: number;
             startDate: string | null;
         };

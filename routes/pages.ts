@@ -1,12 +1,21 @@
 /**
- * Static page routes — crew invite page, password reset redirects, static pages, SPA catch-all
+ * Static page routes — crew invite page, public festival page, password reset
+ * redirects, static pages, SPA catch-all
  */
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 
+import sharp from 'sharp';
+
+import { festivalDateRange, renderFestivalNotFoundPage, renderFestivalPage } from '../lib/festival-page.js';
+import { buildFestivalOgSvg } from '../lib/helpers/share-og-image.js';
 import { renderInviteJoinPage, renderInviteErrorPage, INVITE_ERROR_MESSAGES } from '../lib/invite-pages.js';
 import { loadInvitePreview } from '../lib/invite-preview.js';
+
+// Public festival page slug (migration 094). Checked before any query; upper case fails too.
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const isFestivalSlug = (slug: string) => slug.length <= 80 && SLUG_RE.test(slug);
 
 export default function createPageRoutes(deps: any) {
   const {
@@ -37,6 +46,61 @@ export default function createPageRoutes(deps: any) {
       log.error('crew invite page failed', { error: error.message });
       res.setHeader('Cache-Control', 'no-store');
       return res.status(500).send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES.failed));
+    }
+  });
+
+  // The festival behind a public slug: published and not archived, else null.
+  // Never look up by id first: getFestivalById alone also returns drafts.
+  async function loadPublicFestival(slug: string) {
+    if (!isFestivalSlug(slug)) return null;
+    const id = await stores.festivals.findPublicIdBySlug(slug);
+    return id ? getFestivalById(id) : null;
+  }
+
+  // Public festival page. Owner decision 2026-11-02: shareable by link but
+  // noindex, with no sitemap entry, until a legal check clears indexing.
+  router.get('/f/:slug', rateLimit(60, 'festival-page'), async (req: any, res: any) => {
+    const slug = String(req.params.slug || '');
+    const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    res.setHeader('X-Robots-Tag', 'noindex');
+    try {
+      const festival = await loadPublicFestival(slug);
+      if (!festival) {
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        return res.status(404).send(renderFestivalNotFoundPage(origin));
+      }
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      return res.status(200).send(renderFestivalPage({ festival, origin, slug }));
+    } catch (error: any) {
+      log.error('festival page failed', { error: error.message, slug });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(500).send(renderFestivalNotFoundPage(origin));
+    }
+  });
+
+  router.get('/f/:slug/og.png', rateLimit(30, 'festival-og'), async (req: any, res: any) => {
+    try {
+      const festival = await loadPublicFestival(String(req.params.slug || ''));
+      // Crawlers need no HTML error page.
+      if (!festival) return res.status(404).end();
+      const days = festival.days || [];
+      const svg = buildFestivalOgSvg({
+        festivalName: festival.name,
+        dateRange: festivalDateRange(festival),
+        location: festival.location || '',
+        setCount: days.reduce((sum: number, day: any) => sum + (day?.sets?.length || 0), 0),
+        stageCount: (festival.stages || []).length,
+      });
+      const png = await sharp(Buffer.from(svg)).png().toBuffer();
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.send(png);
+    } catch (error: any) {
+      log.error('festival og render failed', { error: error.message, slug: req.params.slug });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(500).end();
     }
   });
 

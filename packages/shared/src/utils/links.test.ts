@@ -7,6 +7,7 @@ import {
   buildPicksShareUrl,
   buildPublicScheduleUrl,
   buildHomeUrl,
+  buildFestivalPageUrl,
   buildAppDeepLink,
   primarySpotifyArtist,
   buildPlanQrUrl,
@@ -14,6 +15,7 @@ import {
   buildCalendarLinks,
   safeReturnPath,
 } from './links';
+import { FESTIVAL_SHARE_COPY } from '../constants/copy';
 import type { FestivalSet } from '../types/domain';
 import { encodePlanSnapshot, decodePlanSnapshot } from './planSnapshot';
 
@@ -176,5 +178,28 @@ describe('links — safeReturnPath', () => {
   it('accepts a path of exactly 512 characters', () => {
     const path = `/${'a'.repeat(511)}`;
     expect(safeReturnPath(path)).toBe(path);
+  });
+});
+
+describe('links — buildFestivalPageUrl', () => {
+  it('builds the production page link by default', () => {
+    expect(buildFestivalPageUrl('edc-orlando-2026')).toBe('https://festie.us/f/edc-orlando-2026');
+  });
+
+  it('uses an origin override and collapses its trailing slash', () => {
+    expect(buildFestivalPageUrl('edc-orlando-2026', 'http://localhost:5173/')).toBe(
+      'http://localhost:5173/f/edc-orlando-2026',
+    );
+  });
+
+  it('percent-encodes the slug', () => {
+    expect(buildFestivalPageUrl('a b')).toMatch(/\/f\/a%20b$/);
+  });
+});
+
+describe('FESTIVAL_SHARE_COPY', () => {
+  it('builds the share text and accessible name', () => {
+    expect(FESTIVAL_SHARE_COPY.text('X')).toBe('X lineup and set times on Festie');
+    expect(FESTIVAL_SHARE_COPY.a11y('X')).toBe('Share X');
   });
 });

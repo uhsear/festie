@@ -475,6 +475,10 @@
               "additionalProperties": false
             }
           },
+          "slug": {
+            "nullable": true,
+            "type": "string"
+          },
           "mapConfig": {
             "nullable": true,
             "type": "object",
@@ -1470,6 +1474,10 @@
               ],
               "additionalProperties": false
             }
+          },
+          "slug": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -1772,6 +1780,10 @@
             "type": "string"
           },
           "endDate": {
+            "nullable": true,
+            "type": "string"
+          },
+          "slug": {
             "nullable": true,
             "type": "string"
           }

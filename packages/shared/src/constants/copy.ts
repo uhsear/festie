@@ -92,6 +92,15 @@ export function meetingPointKind(type: string) {
   return type === 'emergency' ? MEETING_POINT_KINDS[1] : MEETING_POINT_KINDS[0];
 }
 
+/** Share a festival's public page (T50), shared by the web picker and the mobile festival card. */
+export const FESTIVAL_SHARE_COPY = {
+  button: 'Share',
+  a11y: (name: string) => `Share ${name}`,
+  text: (name: string) => `${name} lineup and set times on Festie`,
+  copied: 'Link copied',
+  failed: "Couldn't share this festival. Try again.",
+} as const;
+
 /** Discover the lineup (T42): co-picks, genre chips, the Discover row, follow and the set-times banner. */
 export const DISCOVER_COPY = {
   alsoPicked: { heading: 'People who picked this also picked' },
