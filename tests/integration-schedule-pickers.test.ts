@@ -59,8 +59,8 @@ describe('profiles.pickersBySet', { skip }, () => {
     for (const userId of USERS) {
       await pool.query(
         `INSERT INTO users (id, username, password_hash, created_at, tos_accepted_at, tos_version)
-         VALUES ($1, $1, 'x', NOW(), NOW(), 1)`,
-        [userId],
+         VALUES ($1, $2, 'x', NOW(), NOW(), 1)`,
+        [userId, userId],
       );
       await pool.query(
         `INSERT INTO festival_profiles (id, festival_id, user_id, name, reminders_json, deleted_at, created_at, updated_at)
