@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
@@ -23,24 +23,39 @@ import {
   formatShareWindow,
   getInitials,
   buildPursuit,
-  nearestPin,
   pickMapStyle,
   OPENFREEMAP_HOST,
   pmtilesHost,
   hasOfflineBasemap,
   pmtilesVectorStyle,
+  MAP_AMENITY_CATEGORIES,
+  NEAREST_AMENITY_TYPES,
+  MAP_COPY,
+  humanizeAmenityType,
+  nearestStep,
+  nearestTarget,
+  nearestMissingCopy,
+  placeFromPin,
+  placeTarget,
+  findMapPin,
+  showingWayLabel,
+  locationPromptCopy,
   type Coord,
+  type GeoState,
+  type MapPlace,
   type MapPin as Pin,
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
-import { useTokens, makeStyles, typeStyle, iconSize } from '../hooks/useTokens';
+import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
 import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '../lib/webviewBridge';
 import type { AuthoringMode } from '../lib/webviewBridge';
 import { ensureBasemapCached, basemapCacheDir } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
+import Button from './Button';
+import MapPlaceCard from './MapPlaceCard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
@@ -168,26 +183,9 @@ function makeShouldStartLoad(extraHost: string | string[] | null, allowFile: boo
 // and fall back to the list. Generous to tolerate a slow device.
 const LOAD_TIMEOUT_MS = 8000;
 
-// Amenity categories the filter chips can toggle, in display order (mirrors the
-// AmenityType union). Each renders a token chip carrying its shared glyph.
-const AMENITY_CATEGORIES: AmenityType[] = [
-  'water',
-  'medical',
-  'toilet',
-  'food',
-  'atm',
-  'entrance',
-  'exit',
-  'info',
-  'charging',
-];
-
-// The "nearest X" quick targets — the categories crew most need to reach fast.
-const NEAREST_TARGETS: { type: AmenityType; label: string }[] = [
-  { type: 'medical', label: 'medical' },
-  { type: 'water', label: 'water' },
-  { type: 'toilet', label: 'toilet' },
-];
+// With no GPS fix this long after the watch starts, say the signal is weak
+// (the watch stays alive, so a late fix still turns location on).
+const NO_FIX_TIMEOUT_MS = 15_000;
 
 interface OfflineMapProps {
   meetingPoints: CrewMeetingPoint[];
@@ -235,11 +233,17 @@ interface OfflineMapProps {
    */
   draftPoints?: { latitude: number; longitude: number }[];
   /**
-   * Extra lift for the floating controls (add meeting point, recenter, chip dock) when
+   * Extra lift for the floating controls (add meeting point, recenter) when
    * something the map cannot see overlays its bottom edge, such as the iOS
    * native tab bar. Keeps them stacked above the caller's own SOS FAB.
    */
   bottomInset?: number;
+  /** A stage pin id to fly to and open once the map is up (the Map tab's `focusStage`). */
+  focusPinId?: string | null;
+  /** Called once after `focusPinId` was handled, so the caller can clear its param. */
+  onFocusHandled?: () => void;
+  /** Shows "Set as meeting point" on the place card. Omit for guests and the admin editor. */
+  onSetMeetingPoint?: (place: MapPlace) => void;
 }
 
 export default function OfflineMap({
@@ -252,6 +256,9 @@ export default function OfflineMap({
   authoringMode = 'off',
   draftPoints,
   bottomInset = 0,
+  focusPinId = null,
+  onFocusHandled,
+  onSetMeetingPoint,
 }: OfflineMapProps) {
   const t = useTokens();
   const styles = useStyles();
@@ -276,12 +283,20 @@ export default function OfflineMap({
   // ── Pursue / filter / nearest state (Phase 2B) ─────────────────────────────
   // The user's own GPS fix (expo-location watch), powering pursuit + nearest-X.
   const [selfCoord, setSelfCoord] = useState<Coord | null>(null);
-  const [geoState, setGeoState] = useState<'idle' | 'locating' | 'denied' | 'on'>('idle');
+  const [geoState, setGeoState] = useState<GeoState>('idle');
   // The current pursue target id ('peer:<uid>' | 'sos:<uid>' | 'amenity:<id>')
   // plus a captured label/coord. Peer/SOS targets re-resolve to live coords below.
   const [pursue, setPursue] = useState<{ id: string; label: string; coord: Coord } | null>(null);
   // Amenity categories toggled off via the filter chips (local only).
   const [hiddenAmenities, setHiddenAmenities] = useState<Set<AmenityType>>(() => new Set());
+  // The open place card. It shares the top slot with the pursue bar: opening one clears the other.
+  const [place, setPlace] = useState<MapPlace | null>(null);
+  // A Nearest tap waiting for the first GPS fix, and the "none mapped" notice.
+  const [pendingNearest, setPendingNearest] = useState<AmenityType | null>(null);
+  const [nearestNotice, setNearestNotice] = useState<{ kind: 'missing'; type: AmenityType } | null>(null);
+  // Place cards and Nearest are crew-map only: never while authoring or placing,
+  // so a pin tap still reaches the placement click.
+  const interactive = authoringMode === 'off' && !placing;
 
   const pins = useMemo(() => extractMeetingPointPins(meetingPoints), [meetingPoints]);
   // Stage + amenity pins from the festival's map data (Phase A/B contract).
@@ -451,8 +466,19 @@ export default function OfflineMap({
   // Continuous GPS watch (expo-location) keeping `selfCoord` fresh as the user
   // moves so the arrow + ETA recompute live. Permission denial is non-destructive.
   const watchSubRef = useRef<Location.LocationSubscription | null>(null);
+  // Set while the permission prompt or watch start is in flight, so a second tap
+  // cannot start (and leak) a second watch.
+  const startingRef = useRef(false);
+  const noFixTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearNoFixTimer = useCallback(() => {
+    if (noFixTimerRef.current) clearTimeout(noFixTimerRef.current);
+    noFixTimerRef.current = null;
+  }, []);
+  // Weak signal, not refusal: keep the watch, and never override a fix that already arrived.
+  const markUnavailable = useCallback(() => setGeoState((s) => (s === 'on' ? s : 'unavailable')), []);
   const enableLocation = useCallback(async () => {
-    if (watchSubRef.current) return; // already watching
+    if (watchSubRef.current || startingRef.current) return; // already watching
+    startingRef.current = true;
     setGeoState('locating');
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -470,47 +496,104 @@ export default function OfflineMap({
         (pos) => {
           const { latitude, longitude } = pos.coords;
           if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            clearNoFixTimer();
             setSelfCoord({ latitude, longitude });
             setGeoState('on');
           }
         },
+        (reason) => {
+          console.warn('OfflineMap location watch', reason);
+          markUnavailable();
+        },
       );
-    } catch {
-      setGeoState('denied');
+      clearNoFixTimer();
+      noFixTimerRef.current = setTimeout(() => {
+        noFixTimerRef.current = null;
+        markUnavailable();
+      }, NO_FIX_TIMEOUT_MS);
+    } catch (err) {
+      console.warn('OfflineMap location start', err);
+      markUnavailable();
+    } finally {
+      startingRef.current = false;
     }
-  }, [lowPowerMode]);
+  }, [lowPowerMode, clearNoFixTimer, markUnavailable]);
+  const retryLocation = useCallback(() => {
+    watchSubRef.current?.remove();
+    watchSubRef.current = null;
+    clearNoFixTimer();
+    void enableLocation();
+  }, [clearNoFixTimer, enableLocation]);
+  // Every no-fix line's tap: retry after a refusal or weak signal, else start.
+  const locate = useCallback(() => {
+    if (geoState === 'unavailable' || geoState === 'denied') retryLocation();
+    else void enableLocation();
+  }, [geoState, retryLocation, enableLocation]);
   useEffect(() => {
     return () => {
       watchSubRef.current?.remove();
       watchSubRef.current = null;
+      clearNoFixTimer();
     };
+  }, [clearNoFixTimer]);
+
+  // Frame a point. `__festieFlyTo` only exists once the map is up; the `&&` guard
+  // no-ops otherwise, and webRef is null while the fallback list shows. Only
+  // numbers that passed Number.isFinite are spliced in.
+  const flyTo = useCallback((longitude: number, latitude: number, zoom: number) => {
+    if (!webRef.current || !Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+    webRef.current.injectJavaScript(
+      `window.__festieFlyTo && window.__festieFlyTo(${longitude}, ${latitude}, ${zoom}); true;`,
+    );
   }, []);
 
-  // "Nearest X": closest amenity of a category to self → pursue it. Searches the
-  // FULL amenity set (ignores chip visibility) so "nearest medical" always works.
-  const pursueNearest = useCallback(
+  // "Nearest X": searches the FULL amenity set (ignores chip visibility). With no
+  // fix it finds you first, and the effect below finishes the same tap.
+  const runNearest = useCallback(
     (type: AmenityType) => {
-      if (!selfCoord) {
-        void enableLocation();
+      const step = nearestStep(type, amenityPins, selfCoord);
+      if (step.kind === 'missing') {
+        setPendingNearest(null);
+        setNearestNotice({ kind: 'missing', type });
         return;
       }
-      const found = nearestPin(selfCoord, amenityPins, (p) => p.amenityType === type);
-      if (!found) return;
-      setPursue({
-        id: `amenity:${found.pin.id}`,
-        label: found.pin.label || type,
-        coord: { latitude: found.pin.latitude, longitude: found.pin.longitude },
-      });
-      // Frame the chosen pin. `__festieFlyTo` only exists once the map is up; the
-      // `&&` guard no-ops otherwise, and webRef is null while the fallback list shows.
-      if (webRef.current) {
-        webRef.current.injectJavaScript(
-          `window.__festieFlyTo && window.__festieFlyTo(${found.pin.longitude}, ${found.pin.latitude}, 16); true;`,
-        );
+      if (step.kind === 'need-fix') {
+        setNearestNotice(null);
+        setPendingNearest(type);
+        locate();
+        return;
       }
+      setPendingNearest(null);
+      setNearestNotice(null);
+      setPlace(null);
+      setPursue(nearestTarget(step));
+      flyTo(step.pin.longitude, step.pin.latitude, 16);
     },
-    [selfCoord, amenityPins, enableLocation],
+    [amenityPins, selfCoord, locate, flyTo],
   );
+  useEffect(() => {
+    if (!selfCoord || !pendingNearest) return;
+    runNearest(pendingNearest);
+  }, [selfCoord, pendingNearest, runNearest]);
+
+  const allPins = useMemo(() => [...pins, ...stagePins, ...amenityPins], [pins, stagePins, amenityPins]);
+  const selectPin = useCallback((pin: Pin) => {
+    setPlace(placeFromPin(pin));
+    setPursue(null);
+    setNearestNotice(null);
+  }, []);
+  // Close a card whose pin is no longer mapped (deleted, coords removed, crew or
+  // festival changed). An amenity hidden by its chip keeps its card: allPins ignores the filter.
+  useEffect(() => {
+    if (place && !findMapPin(place.kind, place.id, allPins)) setPlace(null);
+  }, [place, allPins]);
+  // Leaving the interactive map (authoring, placing) or switching festival drops the card and any Nearest.
+  const festivalId = festival?.id;
+  useEffect(() => {
+    setPlace(null);
+    setPendingNearest(null);
+    setNearestNotice(null);
+  }, [interactive, festivalId]);
 
   const clearPursue = useCallback(() => setPursue(null), []);
   const toggleAmenity = useCallback((type: AmenityType) => {
@@ -580,7 +663,7 @@ export default function OfflineMap({
     if (usingLocalBasemap && localBasemapUri) {
       // Local file:// archive — build the vector style directly off the local URI
       // via the SAME shared style builder (single source of truth).
-      return pmtilesVectorStyle(localBasemapUri, basemapAttribution);
+      return pmtilesVectorStyle(localBasemapUri, basemapAttribution, theme);
     }
     // Remote https basemap (Phase 3A), or the themed online OpenFreeMap style.
     return pickMapStyle(festival?.mapConfig, theme);
@@ -712,6 +795,7 @@ export default function OfflineMap({
         on?: boolean;
         id?: string;
         label?: string;
+        kind?: string;
       } = {};
       try {
         msg = JSON.parse(e.nativeEvent.data);
@@ -733,12 +817,21 @@ export default function OfflineMap({
           Number.isFinite(latitude) &&
           Number.isFinite(longitude)
         ) {
+          setPlace(null);
           setPursue((prev) =>
             prev && prev.id === id
               ? null
               : { id, label: label || 'Target', coord: { latitude, longitude } },
           );
         }
+      } else if (msg.type === 'place-select') {
+        // A stage, amenity or meeting-point tap. The message is untrusted: it only
+        // names a pin, and the card shows that pin's store data, never message text.
+        const { id, kind } = msg;
+        if (!interactive || typeof id !== 'string') return;
+        if (kind !== 'meeting-point' && kind !== 'stage' && kind !== 'amenity') return;
+        const pin = findMapPin(kind, id, allPins);
+        if (pin) selectPin(pin);
       } else if (msg.type === 'placement') {
         // The WebView confirms the true placement state (it auto-exits after a
         // drop) — mirror it so the toggle button reflects reality.
@@ -775,7 +868,7 @@ export default function OfflineMap({
           fallBack();
       }
     },
-    [fallBack, onMapPress],
+    [fallBack, onMapPress, interactive, allPins, selectPin],
   );
 
   // Arm a load timeout on load start: if the document never signals 'ready'
@@ -951,6 +1044,24 @@ export default function OfflineMap({
     }
   }, [phase, docGen, sosList]);
 
+  // Map focus (the Map tab's focusStage): fly to the stage and open its card once
+  // per id. Placed after the bounds fit and SOS framing so neither undoes it. An
+  // id with no stage pin does nothing; a cleared id re-arms the next focus.
+  const focusedPinRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusPinId) {
+      focusedPinRef.current = null;
+      return;
+    }
+    if (phase !== 'map' || !webRef.current || focusedPinRef.current === focusPinId) return;
+    const pin = stagePins.find((p) => p.id === focusPinId);
+    if (!pin) return;
+    focusedPinRef.current = focusPinId;
+    flyTo(pin.longitude, pin.latitude, 17);
+    selectPin(pin);
+    onFocusHandled?.();
+  }, [phase, docGen, focusPinId, stagePins, flyTo, selectPin, onFocusHandled]);
+
   // Toggle placement mode in the WebView. The next single map tap (while on)
   // drops a meeting point and auto-exits. We optimistically flip local state for
   // immediate button feedback; the WebView's 'placement' message reconciles it.
@@ -1119,6 +1230,11 @@ export default function OfflineMap({
   }
 
   // ── Map (WebView) ───────────────────────────────────────────────────────────
+  const showDock = hasAmenities && authoringMode === 'off';
+  const showCard = interactive && !!place;
+  const call911 = () => {
+    Linking.openURL('tel:911').catch((err: unknown) => console.warn('OfflineMap call 911', err));
+  };
   return (
     <View style={styles.screen}>
       <WebView<object>
@@ -1160,45 +1276,40 @@ export default function OfflineMap({
       {/* On-map controls (map phase only). "Find me" recenters to the device's
           GPS fix; the "Add meeting point" toggle puts the map into placement mode so the
           next single tap drops a meeting point (reliable on touch, unlike a
-          long-press). When armed, a hint tells the user to tap the map. */}
+          long-press). When armed, a hint in the top slot tells the user to tap the map. */}
       {phase === 'map' ? (
         <>
-          {/* Crew controls (drop-pin FAB, find-me, amenity dock) are gated OFF in
+          {/* Crew controls (drop-pin FAB, find-me, chip bar) are gated OFF in
               authoring mode — the admin editor drives placement via its own armed
-              toolbar, and these would collide with that flow. */}
-          {onMapPress && authoringMode === 'off' ? (
-            <>
-              {placing ? (
-                <View style={styles.mapHint} pointerEvents="none">
-                  <Ionicons name="locate-outline" size={iconSize.compact} color={t.colors.text.onAccent} />
-                  <Text style={styles.mapHintText} numberOfLines={1}>
-                    Tap the map where you want to meet
-                  </Text>
-                </View>
-              ) : null}
-              <TouchableOpacity
-                testID="map-drop-pin-toggle"
-                style={[
-                  styles.dropPinButton,
-                  { bottom: styles.dropPinButton.bottom + insets.bottom + bottomInset },
-                  placing ? styles.dropPinButtonActive : null,
-                ]}
-                onPress={togglePlacement}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={placing ? 'Cancel dropping a meeting point' : 'Add a meeting point on the map'}
-                accessibilityState={{ selected: placing }}
+              toolbar, and these would collide with that flow. The drop-pin FAB
+              also hides while a place card is open. */}
+          {onMapPress && authoringMode === 'off' && !showCard ? (
+            <TouchableOpacity
+              testID="map-drop-pin-toggle"
+              style={[
+                styles.dropPinButton,
+                { bottom: styles.dropPinButton.bottom + insets.bottom + bottomInset },
+                placing ? styles.dropPinButtonActive : null,
+              ]}
+              onPress={togglePlacement}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={placing ? 'Cancel dropping a meeting point' : 'Add a meeting point on the map'}
+              accessibilityState={{ selected: placing }}
+            >
+              <Ionicons
+                name={placing ? 'close' : 'add-circle-outline'}
+                size={16}
+                color={placing ? t.colors.text.onAccent : t.colors.accent.aqua}
+              />
+              <Text
+                style={[styles.dropPinText, placing ? styles.dropPinTextActive : null]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
               >
-                <Ionicons
-                  name={placing ? 'close' : 'add-circle-outline'}
-                  size={16}
-                  color={placing ? t.colors.text.onAccent : t.colors.accent.aqua}
-                />
-                <Text style={[styles.dropPinText, placing ? styles.dropPinTextActive : null]} numberOfLines={1}>
-                  {placing ? 'Cancel' : 'Add meeting point'}
-                </Text>
-              </TouchableOpacity>
-            </>
+                {placing ? 'Cancel' : 'Add meeting point'}
+              </Text>
+            </TouchableOpacity>
           ) : null}
           {authoringMode === 'off' ? (
             <TouchableOpacity
@@ -1219,91 +1330,41 @@ export default function OfflineMap({
             </TouchableOpacity>
           ) : null}
 
-          {/* Pursue overlay: directional arrow + "Alex · 210 m NE · ~3 min". */}
-          {liveTarget ? (
-            <View
-              style={[styles.pursueBar, pursueIsSos ? styles.pursueBarSos : null]}
-              accessibilityRole="text"
-              accessibilityLabel={
-                pursuit
-                  ? `Pursuing ${liveTarget.label}, ${pursuit.distanceLabel}${pursuit.compass ? ' ' + pursuit.compass : ''}${pursuit.etaLabel !== '—' ? ', about ' + pursuit.etaLabel : ''}`
-                  : `Enable location to pursue ${liveTarget.label}`
-              }
-            >
-              {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (
-                <Ionicons
-                  name="navigate"
-                  size={24}
-                  color={pursueIsSos ? t.colors.accent.coral : t.colors.accent.aqua}
-                  // The Ionicons "navigate" glyph points NE (45°) at rotation 0,
-                  // so subtract 45° from the compass bearing — a due-north target
-                  // (bearing 0) then points straight up.
-                  style={{ transform: [{ rotate: `${pursuit.bearingDeg - 45}deg` }] }}
-                />
-              ) : (
-                <Ionicons name="navigate-outline" size={24} color={t.colors.text.muted} />
-              )}
-              <View style={styles.pursueBody}>
-                {selfCoord && pursuit ? (
-                  <Text style={styles.pursueLabel} numberOfLines={1}>
-                    <Text style={styles.pursueName}>{liveTarget.label}</Text>
-                    {`  ${pursuit.distanceLabel}${pursuit.compass ? ' ' + pursuit.compass : ''}${pursuit.etaLabel !== '—' ? ' · ~' + pursuit.etaLabel : ''}`}
-                  </Text>
-                ) : (
-                  <TouchableOpacity onPress={() => void enableLocation()} accessibilityRole="button">
-                    <Text style={styles.pursueEnable} numberOfLines={2}>
-                      {geoState === 'denied'
-                        ? 'Location blocked — enable it to pursue'
-                        : geoState === 'locating'
-                          ? 'Locating you…'
-                          : `Enable location to pursue ${liveTarget.label}`}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <TouchableOpacity
-                onPress={clearPursue}
-                style={styles.pursueClose}
-                accessibilityRole="button"
-                accessibilityLabel="Stop pursuing"
-              >
-                <Ionicons name="close" size={16} color={t.colors.text.muted} />
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* Nearest-X + amenity filter chips, scrollable above the bottom FABs.
-              Gated OFF in authoring mode (crew-only affordance). */}
-          {hasAmenities && authoringMode === 'off' ? (
-            <View
-              style={[styles.chipDock, { bottom: styles.chipDock.bottom + insets.bottom + bottomInset }]}
-              pointerEvents="box-none"
-            >
+          {/* Nearest-X + amenity filter chips, one scrollable bar at the top of the map. */}
+          {showDock ? (
+            <View style={styles.chipDock} pointerEvents="box-none">
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.chipRow}
                 keyboardShouldPersistTaps="handled"
               >
-                {NEAREST_TARGETS.filter((nt) => amenityPins.some((p) => p.amenityType === nt.type)).map((nt) => {
-                  const { glyph } = amenityGlyph(nt.type);
+                {/* All three show whenever any amenity is mapped, so a miss can say so. */}
+                {NEAREST_AMENITY_TYPES.map((type) => {
+                  const { glyph } = amenityGlyph(type);
+                  const name = humanizeAmenityType(type).toLowerCase();
                   return (
                     <TouchableOpacity
-                      key={`near-${nt.type}`}
+                      key={`near-${type}`}
                       style={styles.nearestChip}
-                      onPress={() => pursueNearest(nt.type)}
+                      onPress={() => runNearest(type)}
                       activeOpacity={0.85}
                       accessibilityRole="button"
-                      accessibilityLabel={`Find and pursue the nearest ${nt.label}`}
+                      accessibilityLabel={`Show the way to the nearest ${name}`}
                     >
-                      <Text style={styles.chipGlyph}>{glyph}</Text>
-                      <Text style={styles.nearestChipText}>{`Nearest ${nt.label}`}</Text>
+                      <Text style={styles.chipGlyph} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        {glyph}
+                      </Text>
+                      <Text style={styles.nearestChipText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        {`${MAP_COPY.nearest} ${name}`}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
-                {AMENITY_CATEGORIES.filter((type) => amenityPins.some((p) => p.amenityType === type)).map((type) => {
+                {MAP_AMENITY_CATEGORIES.filter((type) => amenityPins.some((p) => p.amenityType === type)).map((type) => {
                   const { glyph } = amenityGlyph(type);
                   const on = !hiddenAmenities.has(type);
+                  const name = humanizeAmenityType(type);
                   return (
                     <TouchableOpacity
                       key={`filter-${type}`}
@@ -1312,16 +1373,133 @@ export default function OfflineMap({
                       activeOpacity={0.85}
                       accessibilityRole="button"
                       accessibilityState={{ selected: on }}
-                      accessibilityLabel={`${on ? 'Hide' : 'Show'} ${type} amenities`}
+                      accessibilityLabel={`${on ? 'Hide' : 'Show'} ${name}`}
                     >
-                      <Text style={[styles.chipGlyph, on ? null : styles.chipGlyphOff]}>{glyph}</Text>
-                      <Text style={[styles.filterChipText, on ? styles.filterChipTextOn : null]}>{type}</Text>
+                      <Text
+                        style={[styles.chipGlyph, on ? null : styles.chipGlyphOff]}
+                        maxFontSizeMultiplier={MAX_FONT_SCALE}
+                      >
+                        {glyph}
+                      </Text>
+                      <Text
+                        style={[styles.filterChipText, on ? styles.filterChipTextOn : null]}
+                        maxFontSizeMultiplier={MAX_FONT_SCALE}
+                      >
+                        {name}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
               </ScrollView>
             </View>
           ) : null}
+
+          {/* One top slot under the chip bar. Priority: pursue bar, place card,
+              Nearest notice, placement hint. */}
+          <View
+            style={[styles.topSlot, { top: showDock ? t.spacing[3] + 44 + t.spacing[2] : t.spacing[3] }]}
+            pointerEvents="box-none"
+          >
+            {liveTarget ? (
+              // Pursue overlay: directional arrow + "Alex · 210 m NE · ~3 min".
+              <View
+                style={[styles.pursueBar, pursueIsSos ? styles.pursueBarSos : null]}
+                accessibilityRole="text"
+                accessibilityLabel={
+                  pursuit ? showingWayLabel(liveTarget.label, pursuit) : locationPromptCopy(geoState, liveTarget.label)
+                }
+              >
+                {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (
+                  <Ionicons
+                    name="navigate"
+                    size={24}
+                    color={pursueIsSos ? t.colors.accent.coral : t.colors.accent.aqua}
+                    // The Ionicons "navigate" glyph points NE (45°) at rotation 0,
+                    // so subtract 45° from the compass bearing — a due-north target
+                    // (bearing 0) then points straight up.
+                    style={{ transform: [{ rotate: `${pursuit.bearingDeg - 45}deg` }] }}
+                  />
+                ) : (
+                  <Ionicons name="navigate-outline" size={24} color={t.colors.text.muted} />
+                )}
+                <View style={styles.pursueBody}>
+                  {selfCoord && pursuit ? (
+                    <Text style={styles.pursueLabel} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      <Text style={styles.pursueName}>{liveTarget.label}</Text>
+                      {`  ${pursuit.distanceLabel}${pursuit.compass ? ' ' + pursuit.compass : ''}${pursuit.etaLabel !== '—' ? ' · ~' + pursuit.etaLabel : ''}`}
+                    </Text>
+                  ) : (
+                    <TouchableOpacity onPress={locate} accessibilityRole="button">
+                      <Text style={styles.pursueEnable} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        {locationPromptCopy(geoState, liveTarget.label)}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={clearPursue}
+                  style={styles.pursueClose}
+                  accessibilityRole="button"
+                  accessibilityLabel={MAP_COPY.stopShowingWay}
+                >
+                  <Ionicons name="close" size={16} color={t.colors.text.muted} />
+                </TouchableOpacity>
+              </View>
+            ) : showCard && place ? (
+              <MapPlaceCard
+                place={place}
+                selfCoord={selfCoord}
+                geoState={geoState}
+                onShowWay={() => {
+                  setPursue(placeTarget(place));
+                  setPlace(null);
+                }}
+                onSetMeetingPoint={onSetMeetingPoint}
+                onLocate={locate}
+                onClose={() => setPlace(null)}
+              />
+            ) : interactive && (nearestNotice || pendingNearest) ? (
+              <View style={styles.notice}>
+                <Text
+                  style={styles.noticeText}
+                  accessibilityRole={nearestNotice ? 'alert' : 'text'}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                >
+                  {nearestNotice
+                    ? nearestMissingCopy(nearestNotice.type)
+                    : geoState === 'denied' || geoState === 'unavailable'
+                      ? locationPromptCopy(geoState)
+                      : locationPromptCopy('locating')}
+                </Text>
+                {nearestNotice?.type === 'medical' ? (
+                  <Button
+                    label={MAP_COPY.call911}
+                    size="sm"
+                    variant="secondary"
+                    icon="call-outline"
+                    onPress={call911}
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  />
+                ) : null}
+                {!nearestNotice && (geoState === 'denied' || geoState === 'unavailable') ? (
+                  <Button
+                    label={MAP_COPY.tryAgain}
+                    size="sm"
+                    variant="secondary"
+                    onPress={retryLocation}
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  />
+                ) : null}
+              </View>
+            ) : onMapPress && authoringMode === 'off' && placing ? (
+              <View style={styles.mapHint} pointerEvents="none">
+                <Ionicons name="locate-outline" size={iconSize.compact} color={t.colors.text.onAccent} />
+                <Text style={styles.mapHintText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  Tap the map where you want to meet
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </>
       ) : null}
     </View>
@@ -1373,12 +1551,32 @@ const useStyles = makeStyles((t) => ({
     shadowOffset: { width: 0, height: 2 },
     elevation: 6,
   },
-  // ── Pursue overlay (arrow + label), top of the map below the tap hint ──────
-  pursueBar: {
+  // ── Top slot under the chip bar: pursue bar, place card, Nearest notice or hint ──
+  topSlot: {
     position: 'absolute',
-    top: t.spacing[3],
     left: t.spacing[4],
     right: t.spacing[4],
+  },
+  notice: {
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[3],
+    paddingVertical: t.spacing[2],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.accent.aqua,
+    backgroundColor: t.colors.bg.elevated,
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 8,
+  },
+  noticeText: {
+    ...typeStyle('caption', 600),
+    color: t.colors.text.primary,
+  },
+  // ── Pursue overlay (arrow + label), first in the top slot ──────────────────
+  pursueBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[2],
@@ -1416,12 +1614,12 @@ const useStyles = makeStyles((t) => ({
   pursueClose: {
     padding: t.spacing[1],
   },
-  // ── Nearest-X + amenity filter chip dock, just above the bottom FABs ───────
+  // ── Nearest-X + amenity filter chip bar, top of the map ─────────────────────
   chipDock: {
     position: 'absolute',
+    top: t.spacing[3],
     left: 0,
     right: 0,
-    bottom: t.spacing[5] + 64 + 56 + 40 + t.spacing[2],
   },
   chipRow: {
     flexDirection: 'row',
@@ -1478,10 +1676,8 @@ const useStyles = makeStyles((t) => ({
   filterChipTextOn: {
     color: t.colors.text.primary,
   },
-  // Floating tap-to-create hint, top-centered, non-interactive.
+  // Tap-to-create hint, centred in the top slot, non-interactive.
   mapHint: {
-    position: 'absolute',
-    top: t.spacing[3],
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',

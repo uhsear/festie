@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist } from '@festie/shared/utils';
+import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist, stageCoord, MAP_COPY } from '@festie/shared/utils';
 import { useDebouncedNote, useSpotifyPreview, usePickClear, useCanPick, useSetMove } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { Drawer } from 'vaul';
 import { useNavigate } from '@tanstack/react-router';
@@ -24,7 +24,7 @@ import { useSetStatus } from '../../hooks/useSetStatus';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useToast } from '../../lib/toastContext';
 import { useUndoNotifier } from '../../lib/useUndoNotifier';
-import { Share2 } from 'lucide-react';
+import { MapPin, Share2 } from 'lucide-react';
 import Button from '../ui/Button';
 import { CHIP_TINT_ALPHA, inactiveChipTextColor } from '../ui/StageBadge';
 
@@ -40,6 +40,8 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   const user = useAuthStore((s) => s.user);
   const canPick = useCanPick();
   const navigate = useNavigate();
+  const stages = useFestivalStore((s) => s.stages);
+  const coord = stageCoord(stages, set.stageId);
   const {
     currentFestival,
     festivalDays,
@@ -182,6 +184,11 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     [onClose, navigate, set.id],
   );
 
+  const showStage = useCallback(() => {
+    onClose();
+    navigate({ to: '/map', search: { focusStage: set.stageId } });
+  }, [onClose, navigate, set.stageId]);
+
   return (
     <Drawer.Root
       open
@@ -268,6 +275,17 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 <div data-testid="set-moved" className="type-caption text-text-secondary" aria-label={move.a11y}>
                   {move.line}
                 </div>
+              )}
+              {coord && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-11 self-start mt-2"
+                  icon={<MapPin className="w-4 h-4" aria-hidden="true" />}
+                  onClick={showStage}
+                >
+                  {MAP_COPY.showStageOnMap}
+                </Button>
               )}
             </div>
 

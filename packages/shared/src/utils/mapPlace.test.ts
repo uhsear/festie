@@ -10,7 +10,16 @@ import {
   walkToStage,
   isFixRecent,
   metersPerPixel,
+  nearestStep,
+  nearestTarget,
+  placeTarget,
+  meetingPointPrefill,
+  findMapPin,
+  showingWayLabel,
+  MAP_COPY,
 } from './mapPlace';
+import { buildPursuit } from './geo';
+import type { MapPin } from './mapPins';
 
 describe('geoStateFromErrorCode', () => {
   it('maps 1 to denied and everything else to unavailable', () => {
@@ -112,5 +121,75 @@ describe('metersPerPixel', () => {
   it('is about 78271.5 at zoom 0 and halves per zoom step', () => {
     expect(metersPerPixel(0, 0)).toBeCloseTo(78271.5, 1);
     expect(metersPerPixel(0, 1)).toBeCloseTo(metersPerPixel(0, 0) / 2, 6);
+  });
+});
+
+describe('nearestStep and targets', () => {
+  const amen = (id: string, amenityType: MapPin['amenityType'], latitude: number, label = ''): MapPin => ({
+    id,
+    kind: 'amenity',
+    label,
+    amenityType,
+    latitude,
+    longitude: 0,
+  });
+  const pins = [amen('far', 'medical', 1), amen('near', 'medical', 0.001), amen('w', 'water', 0.0001)];
+  const self = { latitude: 0, longitude: 0 };
+
+  it('returns missing, need-fix, then go with the closer pin of the type', () => {
+    expect(nearestStep('toilet', pins, null)).toEqual({ kind: 'missing', type: 'toilet' });
+    expect(nearestStep('medical', pins, null)).toEqual({ kind: 'need-fix', type: 'medical' });
+    const step = nearestStep('medical', pins, self);
+    expect(step.kind === 'go' && step.pin.id).toBe('near');
+  });
+
+  it('builds the nearest target id and label fallback', () => {
+    const step = nearestStep('medical', pins, self);
+    if (step.kind !== 'go') throw new Error('expected go');
+    expect(nearestTarget(step)).toEqual({ id: 'amenity:near', label: 'Medical', coord: { latitude: 0.001, longitude: 0 } });
+  });
+
+  it('builds the place target id', () => {
+    const place = placeFromPin({ id: 's1', kind: 'stage', label: 'Main', latitude: 1, longitude: 2 });
+    expect(placeTarget(place).id).toBe('place:stage:s1');
+    expect(placeTarget(place).label).toBe('Main');
+  });
+});
+
+describe('meetingPointPrefill', () => {
+  const at = { latitude: 1, longitude: 2 };
+  it('prefills a stage and an amenity', () => {
+    const stage = placeFromPin({ id: 's', kind: 'stage', label: 'Main', ...at });
+    expect(meetingPointPrefill(stage)).toEqual({ label: 'Meet at Main', location: 'Main', stageReference: 'Main' });
+    const amenity = placeFromPin({ id: 'w', kind: 'amenity', label: 'Tap', amenityType: 'water', ...at });
+    expect(meetingPointPrefill(amenity).stageReference).toBe('');
+  });
+
+  it('clamps a 150-character stage name', () => {
+    const long = placeFromPin({ id: 's', kind: 'stage', label: 'x'.repeat(150), ...at });
+    const p = meetingPointPrefill(long);
+    expect(p.label).toHaveLength(100);
+    expect(p.stageReference).toHaveLength(100);
+  });
+});
+
+describe('findMapPin', () => {
+  it('matches kind and id', () => {
+    const pin: MapPin = { id: 'a', kind: 'stage', label: 'A', latitude: 1, longitude: 2 };
+    expect(findMapPin('stage', 'a', [pin])).toBe(pin);
+    expect(findMapPin('amenity', 'a', [pin])).toBeNull();
+  });
+});
+
+describe('showingWayLabel and MAP_COPY', () => {
+  it('drops the ETA clause when the ETA is a dash', () => {
+    const p = buildPursuit({ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 0.003 });
+    expect(showingWayLabel('Main', p)).toMatch(/^Showing the way to Main, .+, about .+ walk$/);
+    expect(showingWayLabel('Main', { ...p, etaLabel: '—' })).not.toContain('about');
+  });
+
+  it('exposes the copy table', () => {
+    expect(MAP_COPY.showWay).toBe('Show the way');
+    expect(MAP_COPY.call911).toBe('Call 911');
   });
 });

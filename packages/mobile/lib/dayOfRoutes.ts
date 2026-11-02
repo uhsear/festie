@@ -1,4 +1,4 @@
-import type { ActiveMeet } from '@festie/shared/utils';
+import { meetingPointPrefill, type ActiveMeet, type Coord, type MapPlace } from '@festie/shared/utils';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 
 type Href = string | { pathname: string; params: Record<string, string> };
@@ -21,6 +21,28 @@ export function meetHref(
   const mp = meetingPoints.find((p) => p.id === meet.id);
   const navigable = Number.isFinite(mp?.latitude ?? NaN) && Number.isFinite(mp?.longitude ?? NaN);
   return navigable ? { pathname: '/compass', params: { mpId: meet.id } } : CREW_MEET_HREF;
+}
+
+/** The Map tab, with the stage's place card open and the camera flown to it. */
+export function stageMapHref(stageId: string): Href {
+  return { pathname: '/(tabs)/map', params: { focusStage: stageId } };
+}
+
+/** The compass, pointed at a fixed coordinate. */
+export function compassHref(label: string, c: Coord): Href {
+  return { pathname: '/compass', params: { label, latitude: String(c.latitude), longitude: String(c.longitude) } };
+}
+
+/** The meeting-point create sheet, prefilled from a tapped map place. */
+export function meetingPointPrefillHref(place: MapPlace): Href {
+  return {
+    pathname: '/meeting-point-new',
+    params: {
+      lat: String(place.coord.latitude),
+      lng: String(place.coord.longitude),
+      ...meetingPointPrefill(place),
+    },
+  };
 }
 
 /** The crew id of an SOS push (type `crew_sos`, or a legacy deepLink at `/sos`), else null. */
