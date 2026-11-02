@@ -128,6 +128,8 @@ import {
 import express from 'express';
 import createAuthRoutes from './routes/auth';
 import createEmailAuthRoutes from './routes/email-auth';
+import createOAuthRoutes from './routes/oauth';
+import createIdentityRoutes from './routes/identities';
 import createAccountRoutes from './routes/account';
 import createAdminRoutes from './routes/admin';
 import createAdminSiteplanRoutes from './routes/admin-siteplan';
@@ -276,6 +278,8 @@ async function createFestieApp(overrides: any = {}) {
   // 5. Mount route modules
   const authRoutes = createAuthRoutes(deps);
   const emailAuthRoutes = createEmailAuthRoutes(deps);
+  const oauthRoutes = createOAuthRoutes(deps);
+  const identityRoutes = createIdentityRoutes(deps);
   const accountRoutes = createAccountRoutes(deps);
   const adminRoutes = createAdminRoutes(deps);
   const festivalRoutes = createFestivalRoutes(deps);
@@ -304,6 +308,8 @@ async function createFestieApp(overrides: any = {}) {
 
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1/auth', emailAuthRoutes);
+  app.use('/api/v1/auth', oauthRoutes);
+  app.use('/api/v1/auth', identityRoutes);
   app.use('/api/v1/account', accountRoutes);
   app.use('/api/v1/admin', adminRoutes);
   app.use('/api/v1/admin', createAdminSiteplanRoutes(deps));

@@ -16,6 +16,8 @@ import type {
   updateEmailSchema,
 } from '../lib/schemas';
 import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from '../lib/email';
+import { revokeAppleForUser } from '../lib/oauth/revoke-user';
+import type { Identity } from '../lib/db/stores/identities';
 
 /**
  * Collect all user data for GDPR export. Gathers profiles, device tokens,
@@ -181,6 +183,20 @@ async function collectGdprData(
     exportData.spotifyAccount = null;
   }
 
+  // Linked Google and Apple accounts (T45). Never the encrypted Apple token.
+  try {
+    const identities: Identity[] = await stores.identities.listByUser(userId);
+    exportData.identities = identities.map((i) => ({
+      provider: i.provider,
+      email: i.email,
+      createdAt: i.createdAt,
+      lastUsedAt: i.lastUsedAt,
+    }));
+  } catch (error) {
+    log.warn('gdpr-export:partial-failure', { section: 'identities', userId, error: (error as Error).message });
+    exportData.identities = [];
+  }
+
   // Get crew status snapshots the user has authored (M5 offline-sync snapshots).
   // Location breadcrumbs (latitude/longitude) are excluded — they are ephemeral
   // device-captured offsets, not stored personal location history.
@@ -299,6 +315,31 @@ export default function createAccountRoutes(deps: RouteDeps) {
     } catch (error) {
       log.warn('account:export-limit-release-failed', { userId, error: (error as Error).message });
     }
+  }
+
+  // Password users re-enter their password. A provider-only account has none, so
+  // it needs a recent re-auth (POST /auth/reauth with a provider token) instead.
+  // Returns true when it already sent the refusal.
+  async function refuseUnconfirmed(
+    req: Request,
+    res: Response,
+    passwordHash: string | null | undefined,
+    password: string | undefined,
+    wrongStatus: number,
+  ): Promise<boolean> {
+    if (!passwordHash) {
+      if (deps.hasRecentAuth(req)) return false;
+      sendError(res, 403, 'Confirm it is you to continue.', ErrorCodes.REAUTH_REQUIRED);
+      return true;
+    }
+    if (!password) {
+      sendError(res, 400, 'Password confirmation required', ErrorCodes.MISSING_FIELD);
+      return true;
+    }
+    if (await deps.verifyPassword(password, passwordHash)) return false;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    sendError(res, wrongStatus, 'That password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
+    return true;
   }
 
   // ── POST /avatar — upload avatar ──────────────────────────────────────
@@ -584,15 +625,10 @@ export default function createAccountRoutes(deps: RouteDeps) {
         // the token insert or the uniqueness check silently misses.
         const cleanEmail = email.trim().toLowerCase();
 
-        const { verifyPassword } = deps;
         const currentUser = await getUserById(req.user.userId);
         if (!currentUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
 
-        const passwordValid = await verifyPassword(password, currentUser.passwordHash);
-        if (!passwordValid) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          return sendError(res, 400, 'That password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
-        }
+        if (await refuseUnconfirmed(req, res, currentUser.passwordHash, password, 400)) return undefined;
 
         if (await stores.emailTokens.checkEmailExists(cleanEmail, req.user.userId)) {
           log.warn('account:email-change-rejected', { userId: req.user.userId, reason: 'address-unavailable' });
@@ -662,7 +698,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
       try {
         const { password, crewHandover } = req.validatedBody as z.infer<typeof accountDeleteSchema>;
 
-        const { verifyPassword, invalidateUserSessions, disconnectUserSockets, getRequestIp } = deps;
+        const { invalidateUserSessions, disconnectUserSockets, getRequestIp } = deps;
         const currentUser = await getUserById(req.user.userId);
         if (!currentUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
 
@@ -671,11 +707,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           return sendError(res, 400, 'Account is already scheduled for deletion', ErrorCodes.INVALID_INPUT);
         }
 
-        const passwordValid = await verifyPassword(password, currentUser.passwordHash);
-        if (!passwordValid) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          return sendError(res, 403, 'That password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
-        }
+        if (await refuseUnconfirmed(req, res, currentUser.passwordHash, password, 403)) return undefined;
 
         // Soft-delete: set deleted_at and hide the profiles. Picks and notes stay
         // until the 30-day purge, so a sign-in before then restores them.
@@ -697,6 +729,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
             await stores.profiles.deleteByUserId(req.user.userId, { reason: 'account-deleted', keepPicks: true });
           }
           disconnectUserSockets(req.user.userId, io);
+          // Apple requires the revoke on delete. Best effort, never throws. The identity
+          // rows stay, so a sign-in with Apple inside the 30 days restores the account.
+          await revokeAppleForUser(req.user.userId, deps);
         };
         try {
           await performSoftDelete();

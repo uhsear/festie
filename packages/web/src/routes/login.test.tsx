@@ -28,6 +28,8 @@ vi.mock('../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
+vi.mock('../components/auth/ProviderButtons', () => ({ default: () => null }));
+
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));

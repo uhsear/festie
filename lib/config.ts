@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 //
+import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 
@@ -193,6 +194,58 @@ function normalizeSameSite(value: any): 'strict' | 'lax' | 'none' {
 
 export type AppConfig = ReturnType<typeof loadConfig>;
 
+interface OAuthSettings {
+  GOOGLE_WEB_CLIENT_ID: string;
+  GOOGLE_IOS_CLIENT_ID: string;
+  GOOGLE_ANDROID_CLIENT_IDS: string[];
+  APPLE_TEAM_ID: string;
+  APPLE_SERVICES_ID: string;
+  APPLE_SIGNIN_KEY_ID: string;
+  APPLE_SIGNIN_KEY_PATH: string;
+  APPLE_WEB_REDIRECT_URI: string;
+  OAUTH_TOKEN_KEY: string;
+}
+
+function isReadableFile(filePath: string): boolean {
+  try {
+    fs.accessSync(filePath, fs.constants.R_OK);
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sign in with Google and Apple (T45): the settings are the switch, no flag.
+ * A half-configured provider stays off and reports the missing setting names
+ * (names only, never values); it never fails boot (2026-08-22 boot-path audit).
+ * APPLE_TEAM_ID alone does not count as half-configured: the AASA file uses it.
+ */
+function oauthProviderStatus(s: OAuthSettings) {
+  const google: string[] = [];
+  if (!s.GOOGLE_WEB_CLIENT_ID && (s.GOOGLE_IOS_CLIENT_ID || s.GOOGLE_ANDROID_CLIENT_IDS.length > 0)) {
+    google.push('GOOGLE_WEB_CLIENT_ID');
+  }
+
+  const apple = (['APPLE_TEAM_ID', 'APPLE_SIGNIN_KEY_ID', 'APPLE_SIGNIN_KEY_PATH', 'OAUTH_TOKEN_KEY'] as const).filter(
+    (name) => !s[name],
+  ) as string[];
+  if (s.APPLE_SIGNIN_KEY_PATH && !isReadableFile(s.APPLE_SIGNIN_KEY_PATH)) apple.push('APPLE_SIGNIN_KEY_PATH (unreadable)');
+  if (s.OAUTH_TOKEN_KEY && Buffer.from(s.OAUTH_TOKEN_KEY, 'base64').length !== 32) {
+    apple.push('OAUTH_TOKEN_KEY (not 32 bytes)');
+  }
+  const appleEnabled = apple.length === 0;
+  if (s.APPLE_SERVICES_ID && !s.APPLE_WEB_REDIRECT_URI) apple.push('APPLE_WEB_REDIRECT_URI');
+  const appleTouched = Boolean(s.APPLE_SIGNIN_KEY_ID || s.APPLE_SIGNIN_KEY_PATH || s.OAUTH_TOKEN_KEY || s.APPLE_SERVICES_ID);
+
+  return {
+    OAUTH_GOOGLE_ENABLED: Boolean(s.GOOGLE_WEB_CLIENT_ID),
+    OAUTH_APPLE_ENABLED: appleEnabled,
+    OAUTH_APPLE_WEB_ENABLED: appleEnabled && Boolean(s.APPLE_SERVICES_ID && s.APPLE_WEB_REDIRECT_URI),
+    OAUTH_CONFIG_MISSING: { google, apple: appleTouched ? apple : [] },
+  };
+}
+
 // Every real config key is SCREAMING_SNAKE_CASE. A camelCase override (e.g. "databaseUrl"
 // instead of "DATABASE_URL") is silently ignored by the `overrides.KEY ||` reads below and
 // falls back to process.env/defaults — in a test harness that can mean connecting to
@@ -290,6 +343,19 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   REDIS_PREFIX: string;
   APPLE_TEAM_ID: string;
   ANDROID_CERT_FINGERPRINTS: string;
+  GOOGLE_WEB_CLIENT_ID: string;
+  GOOGLE_IOS_CLIENT_ID: string;
+  GOOGLE_ANDROID_CLIENT_IDS: string[];
+  APPLE_BUNDLE_ID: string;
+  APPLE_SERVICES_ID: string;
+  APPLE_SIGNIN_KEY_ID: string;
+  APPLE_SIGNIN_KEY_PATH: string;
+  APPLE_WEB_REDIRECT_URI: string;
+  OAUTH_TOKEN_KEY: string;
+  OAUTH_GOOGLE_ENABLED: boolean;
+  OAUTH_APPLE_ENABLED: boolean;
+  OAUTH_APPLE_WEB_ENABLED: boolean;
+  OAUTH_CONFIG_MISSING: { google: string[]; apple: string[] };
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
   REFRESH_TOKEN_TTL: number;
@@ -381,6 +447,19 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   const sessionTtl = readInt(overrides.SESSION_TTL || process.env.SESSION_TTL, DEFAULTS.SESSION_TTL, 60000);
   const maxUsers = readInt(overrides.MAX_USERS || process.env.MAX_USERS, DEFAULTS.MAX_USERS, 1);
   const avatarSize = readInt(overrides.AVATAR_SIZE || process.env.AVATAR_SIZE, DEFAULTS.AVATAR_SIZE, 32, 1024);
+  // `??`, not `||`: an explicit '' override turns a provider off even when the env sets it.
+  const oauth: OAuthSettings = {
+    GOOGLE_WEB_CLIENT_ID: overrides.GOOGLE_WEB_CLIENT_ID ?? process.env.GOOGLE_WEB_CLIENT_ID ?? '',
+    GOOGLE_IOS_CLIENT_ID: overrides.GOOGLE_IOS_CLIENT_ID ?? process.env.GOOGLE_IOS_CLIENT_ID ?? '',
+    GOOGLE_ANDROID_CLIENT_IDS: readList(overrides.GOOGLE_ANDROID_CLIENT_IDS ?? process.env.GOOGLE_ANDROID_CLIENT_IDS),
+    APPLE_TEAM_ID: overrides.APPLE_TEAM_ID || process.env.APPLE_TEAM_ID || '',
+    APPLE_SERVICES_ID: overrides.APPLE_SERVICES_ID ?? process.env.APPLE_SERVICES_ID ?? '',
+    APPLE_SIGNIN_KEY_ID: overrides.APPLE_SIGNIN_KEY_ID ?? process.env.APPLE_SIGNIN_KEY_ID ?? '',
+    APPLE_SIGNIN_KEY_PATH: overrides.APPLE_SIGNIN_KEY_PATH ?? process.env.APPLE_SIGNIN_KEY_PATH ?? '',
+    APPLE_WEB_REDIRECT_URI:
+      overrides.APPLE_WEB_REDIRECT_URI ?? process.env.APPLE_WEB_REDIRECT_URI ?? (publicOrigin ? `${publicOrigin}/login` : ''),
+    OAUTH_TOKEN_KEY: overrides.OAUTH_TOKEN_KEY ?? process.env.OAUTH_TOKEN_KEY ?? '',
+  };
 
   const result = {
     NODE_ENV: nodeEnv,
@@ -600,8 +679,13 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     SOS_ENABLED: readBool(overrides.SOS_ENABLED ?? process.env.SOS_ENABLED, DEFAULTS.SOS_ENABLED),
 
     // Deep linking — populate when you have your Apple/Android signing credentials
-    APPLE_TEAM_ID: overrides.APPLE_TEAM_ID || process.env.APPLE_TEAM_ID || '',
+    // APPLE_TEAM_ID comes from `...oauth` below; the AASA file and Apple sign-in share it.
     ANDROID_CERT_FINGERPRINTS: overrides.ANDROID_CERT_FINGERPRINTS || process.env.ANDROID_CERT_FINGERPRINTS || '',
+
+    // Sign in with Google and Apple (T45; see oauthProviderStatus).
+    ...oauth,
+    APPLE_BUNDLE_ID: overrides.APPLE_BUNDLE_ID || process.env.APPLE_BUNDLE_ID || 'us.festie.app',
+    ...oauthProviderStatus(oauth),
 
     // Resend transactional email (optional — email features disabled when unset)
     // `??`, not `||`: an explicit '' override means "outbound email is off".

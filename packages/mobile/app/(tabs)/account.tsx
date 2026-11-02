@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Alert, RefreshControl, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
@@ -20,6 +20,8 @@ import {
   THEME_MODE_OPTIONS,
 } from '@festie/shared/constants';
 import type { AccountSectionId } from '@festie/shared/constants';
+import { listIdentities } from '@festie/shared/services';
+import type { IdentitySummary } from '@festie/shared/types';
 import { themeModeOf, useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import ScreenHeader from '../../components/ScreenHeader';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
@@ -32,6 +34,7 @@ import AccountDisplayNameSection from '../../components/AccountDisplayNameSectio
 import AccountPaymentHandlesSection from '../../components/AccountPaymentHandlesSection';
 import AccountPublicScheduleSection from '../../components/AccountPublicScheduleSection';
 import AccountPasswordSection from '../../components/AccountPasswordSection';
+import AccountSignInMethodsSection from '../../components/AccountSignInMethodsSection';
 import AccountEmailVerifySection from '../../components/AccountEmailVerifySection';
 import AccountEmailSection from '../../components/AccountEmailSection';
 import AccountDevicesSection from '../../components/AccountDevicesSection';
@@ -104,6 +107,23 @@ export default function AccountScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [historyReload, setHistoryReload] = useState(0);
 
+  // One copy of the sign-in methods for every section that reads hasPassword, so setting a
+  // password or linking a provider updates them all.
+  const [identities, setIdentities] = useState<IdentitySummary | null>(null);
+  const [identitiesLoaded, setIdentitiesLoaded] = useState(false);
+  const refreshIdentities = useCallback(
+    () =>
+      listIdentities()
+        .then(setIdentities, () => {
+          // A failed load hides Sign-in methods; the other sections keep the password flows, which the server checks.
+        })
+        .finally(() => setIdentitiesLoaded(true)),
+    [],
+  );
+  useEffect(() => {
+    void refreshIdentities();
+  }, [refreshIdentities]);
+
   const appVersion = Constants.expoConfig?.version ?? null;
   const versionText = appVersion
     ? Updates.updateId && !Updates.isEmbeddedLaunch
@@ -134,13 +154,14 @@ export default function AccountScreen() {
       await Promise.all([
         useAuthStore.getState().checkSession(),
         user ? useNotificationPrefsStore.getState().loadPrefs() : Promise.resolve(),
+        refreshIdentities(),
       ]);
     } catch {
       // best-effort refresh — the History card surfaces its own error/retry.
     } finally {
       setRefreshing(false);
     }
-  }, [haptics, user]);
+  }, [haptics, user, refreshIdentities]);
 
   const confirmLogout = () => {
     haptics.warning();
@@ -176,9 +197,13 @@ export default function AccountScreen() {
     account: (
       <>
         <AccountDisplayNameSection />
-        <AccountEmailSection />
+        <AccountEmailSection hasPassword={identities?.hasPassword ?? true} />
         <AccountEmailVerifySection />
-        <AccountPasswordSection />
+        <AccountPasswordSection
+          hasPassword={identitiesLoaded ? (identities?.hasPassword ?? true) : null}
+          onChanged={refreshIdentities}
+        />
+        <AccountSignInMethodsSection identities={identities} onChanged={refreshIdentities} />
         <AccountDevicesSection />
         <AccountPaymentHandlesSection />
       </>
@@ -353,7 +378,12 @@ export default function AccountScreen() {
         </AppPressable>
       </View>
     ),
-    danger: <AccountDangerSection onDeleted={() => router.replace('/(auth)/login')} />,
+    danger: (
+      <AccountDangerSection
+        hasPassword={identities?.hasPassword ?? true}
+        onDeleted={() => router.replace('/(auth)/login')}
+      />
+    ),
   };
 
   return (
