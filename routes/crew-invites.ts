@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { generateUniqueInviteCode, inviteExpiryFor } from '../lib/invite-code.js';
 import { ensureFestivalProfile } from '../lib/festival-profile.js';
+import { logCrewActivity } from '../lib/db/stores/activity.js';
 
 export default function createCrewInviteRoutes(deps: any) {
   const {
@@ -17,6 +18,7 @@ export default function createCrewInviteRoutes(deps: any) {
     validate,
     validateParams,
     io,
+    crewNotify,
   } = deps;
 
   const { resolveCrewOwnership, serializeCrewWithMembers, MAX_CREWS_PER_USER_PER_FESTIVAL } = deps._crewHelpers;
@@ -101,6 +103,14 @@ export default function createCrewInviteRoutes(deps: any) {
           username: req.user.username,
         });
       }
+
+      await logCrewActivity(deps, { crewId: crew.id, userId: req.user.userId, type: 'member-joined' });
+      crewNotify?.queue({
+        crewId: crew.id,
+        actorId: req.user.userId,
+        kind: 'member',
+        text: `${req.user.username} joined`,
+      });
 
       log.info('crew:joined', { crewId: crew.id, festivalId: crew.festivalId, userId: req.user.userId });
       return sendSuccess(res, serializeCrewWithMembers(crew, members, req.user.userId));

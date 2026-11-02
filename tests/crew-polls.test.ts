@@ -2,7 +2,8 @@
  * Mock-based route tests for routes/crew-polls.js
  *
  * Covers: GET /:crewId/polls, POST /:crewId/polls,
- *         POST /:crewId/polls/:pollId/vote, DELETE /:crewId/polls/:pollId
+ *         POST /:crewId/polls/:pollId/vote, DELETE /:crewId/polls/:pollId,
+ *         POST /:crewId/polls/:pollId/nudge
  * Mounts the route factory on a minimal Express app with fully stubbed deps.
  * No database required — all stores are mock.fn() stubs.
  */
@@ -63,6 +64,9 @@ function makePollDeps(overrides: any = {}) {
       })),
       getById: mock.fn(async () => null),
       vote: mock.fn(async () => {}),
+      removeVote: mock.fn(async () => {}),
+      nonVoterIds: mock.fn(async () => []),
+      markNudged: mock.fn(async () => true),
       close: mock.fn(async () => ({ ...DEFAULT_POLL, closed_at: new Date().toISOString() })),
     },
     activity: {
@@ -108,6 +112,8 @@ function makePollDeps(overrides: any = {}) {
     io: overrides.io !== undefined ? overrides.io : ioObj,
     emitter: { crewActivityLogged: mock.fn(() => {}) },
     stores,
+    ...(overrides.pollCloser ? { pollCloser: overrides.pollCloser } : {}),
+    ...(overrides.crewNotify ? { crewNotify: overrides.crewNotify } : {}),
   };
 
   return deps;
@@ -273,7 +279,7 @@ describe('routes/crew-polls.js — POST /:crewId/polls', () => {
       },
     });
 
-    const closesAt = '2026-06-01T12:00:00.000Z';
+    const closesAt = '2099-06-01T12:00:00.000Z';
     const res = await request(app)
       .post('/crew-1/polls')
       .send({ question: 'Meeting time?', options: ['10am', '2pm'], closesAt });
@@ -297,6 +303,44 @@ describe('routes/crew-polls.js — POST /:crewId/polls', () => {
     const setRefs = [{ setId: 's0', label: 'A', stageReference: null, meetAt: null }, null];
     await request(app).post('/crew-1/polls').send({ question: 'Q?', options: ['A', 'B'], setRefs });
     assert.deepEqual((createFn.mock.calls as any[])[0].arguments[0].setRefs, setRefs);
+  });
+
+  test('rejects a closesAt in the past with 400', async () => {
+    const createFn = mock.fn(async () => ({ id: 'poll-new' }));
+    const { app } = await buildPollApp({
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) },
+        polls: { countActiveByCrew: mock.fn(async () => 0), create: createFn },
+      },
+    });
+    const res = await request(app)
+      .post('/crew-1/polls')
+      .send({ question: 'Q?', options: ['A', 'B'], closesAt: '2020-01-01T00:00:00.000Z' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.equal(res.body.error.message, 'Pick an end time in the future.');
+    assert.equal(createFn.mock.calls.length, 0);
+  });
+
+  test('passes multiAnswer to create and queues a new-poll push', async () => {
+    const createFn = mock.fn(async (data: any) => ({ id: 'poll-new', question: data.question, options: data.options }));
+    const crewNotify = { queue: mock.fn(() => {}) };
+    const { app } = await buildPollApp({
+      crewNotify,
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) },
+        polls: { countActiveByCrew: mock.fn(async () => 0), create: createFn },
+      },
+    });
+    const res = await request(app).post('/crew-1/polls').send({ question: 'Dinner?', options: ['A', 'B'], multiAnswer: true });
+    assert.equal(res.status, 200);
+    assert.equal((createFn.mock.calls as any[])[0].arguments[0].multiAnswer, true);
+    assert.deepEqual((crewNotify.queue.mock.calls as any[])[0].arguments[0], {
+      crewId: 'crew-1',
+      actorId: 'user-1',
+      kind: 'poll',
+      text: 'New poll: Dinner?',
+    });
   });
 
   test('creates a poll with null closesAt when not provided', async () => {
@@ -547,7 +591,7 @@ describe('routes/crew-polls.js — POST /:crewId/polls/:pollId/vote', () => {
     assert.equal(voteFn.mock.calls.length, 1);
     assert.equal((voteFn.mock.calls as any[])[0].arguments[0], 'poll-1');
     assert.equal((voteFn.mock.calls as any[])[0].arguments[1], 'user-1');
-    assert.equal((voteFn.mock.calls as any[])[0].arguments[2], 1);
+    assert.deepEqual((voteFn.mock.calls as any[])[0].arguments[2], [1]);
   });
 
   // ── Socket.IO broadcast ───────────────────────────────────────────
@@ -576,11 +620,12 @@ describe('routes/crew-polls.js — POST /:crewId/polls/:pollId/vote', () => {
       pollId: 'poll-1',
       userId: 'user-1',
       optionIndex: 0,
+      optionIndexes: [0],
     });
   });
 
   // ── Activity logging ──────────────────────────────────────────────
-  test('logs poll-voted activity with option text', async () => {
+  test('writes no poll-voted activity row', async () => {
     const activityLog = mock.fn(async () => {});
     const { app } = await buildPollApp({
       stores: {
@@ -601,10 +646,64 @@ describe('routes/crew-polls.js — POST /:crewId/polls/:pollId/vote', () => {
       .post('/crew-1/polls/poll-1/vote')
       .send({ optionIndex: 2 });
 
-    assert.equal(activityLog.mock.calls.length, 1);
-    const logArgs = (activityLog.mock.calls as any[])[0].arguments[0];
-    assert.equal(logArgs.type, 'poll-voted');
-    assert.equal(logArgs.detail, 'East lot'); // options[2]
+    assert.equal(activityLog.mock.calls.length, 0);
+  });
+
+  // ── Multi-answer and taking a vote back ───────────────────────────
+  function voteApp(pollOver: any = {}) {
+    const ioObj = makeIo();
+    const voteFn = mock.fn(async () => {});
+    const removeFn = mock.fn(async () => {});
+    const built = buildPollApp({
+      io: ioObj,
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) },
+        polls: { getById: mock.fn(async () => ({ ...DEFAULT_POLL, ...pollOver })), vote: voteFn, removeVote: removeFn },
+      },
+    });
+    return { built, ioObj, voteFn, removeFn };
+  }
+
+  test('empty optionIndexes takes the vote back and emits optionIndex -1', async () => {
+    const { built, ioObj, voteFn, removeFn } = voteApp();
+    const { app } = await built;
+    const res = await request(app).post('/crew-1/polls/poll-1/vote').send({ optionIndexes: [] });
+    assert.equal(res.status, 200);
+    assert.equal(voteFn.mock.calls.length, 0);
+    assert.deepEqual((removeFn.mock.calls as any[])[0].arguments, ['poll-1', 'user-1']);
+    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], {
+      pollId: 'poll-1',
+      userId: 'user-1',
+      optionIndex: -1,
+      optionIndexes: [],
+    });
+  });
+
+  test('two indexes on a single-answer poll returns 400', async () => {
+    const { built, voteFn } = voteApp();
+    const { app } = await built;
+    const res = await request(app).post('/crew-1/polls/poll-1/vote').send({ optionIndexes: [0, 1] });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.equal(res.body.error.message, 'This poll takes one answer.');
+    assert.equal(voteFn.mock.calls.length, 0);
+  });
+
+  test('a multi-answer poll stores sorted, de-duplicated indexes', async () => {
+    const { built, ioObj, voteFn } = voteApp({ multi_answer: true });
+    const { app } = await built;
+    const res = await request(app).post('/crew-1/polls/poll-1/vote').send({ optionIndexes: [2, 0, 2] });
+    assert.equal(res.status, 200);
+    assert.deepEqual((voteFn.mock.calls as any[])[0].arguments[2], [0, 2]);
+    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[1].optionIndex, 0);
+  });
+
+  test('an out-of-range index inside optionIndexes returns 400', async () => {
+    const { built } = voteApp({ multi_answer: true });
+    const { app } = await built;
+    const res = await request(app).post('/crew-1/polls/poll-1/vote').send({ optionIndexes: [0, 3] });
+    assert.equal(res.status, 400);
+    assert.match(res.body.error.message, /Invalid option index/);
   });
 
   // ── Option index out of bounds ────────────────────────────────────
@@ -835,7 +934,8 @@ describe('routes/crew-polls.js — DELETE /:crewId/polls/:pollId', () => {
   async function closeWith(votes: number[], pollOver: any = {}, extra: any = {}) {
     const ioObj = makeIo();
     const createMp = mock.fn(async (d: any) => ({ id: d.id, label: d.label }));
-    const closeFn = extra.close ?? mock.fn(async () => ({ ...DEFAULT_POLL, closed: true }));
+    const closeFn =
+      extra.close ?? mock.fn(async () => ({ ...DEFAULT_POLL, set_refs: SET_REFS, ...pollOver, closed: true }));
     const { app } = await buildPollApp({
       io: ioObj,
       stores: {
@@ -856,7 +956,7 @@ describe('routes/crew-polls.js — DELETE /:crewId/polls/:pollId', () => {
   }
 
   test('close creates a meeting point from the winning set and broadcasts it', async () => {
-    const { res, createMp, events } = await closeWith([0, 2, 2]);
+    const { res, createMp, events } = await closeWith([0, 3, 2]);
     assert.equal(res.status, 200);
     assert.equal(createMp.mock.calls.length, 1);
     const arg = (createMp.mock.calls as any[])[0].arguments[0];
@@ -870,13 +970,37 @@ describe('routes/crew-polls.js — DELETE /:crewId/polls/:pollId', () => {
     assert.equal(res.body.data.meetingPoint.label, 'Act 1');
   });
 
-  test('close tie picks the lowest option index and sets expiry from meetAt', async () => {
-    const { res, createMp } = await closeWith([3, 1, 3]);
+  test('close with a single winner sets expiry from meetAt', async () => {
+    const { res, createMp } = await closeWith([3, 1, 2]);
     const arg = (createMp.mock.calls as any[])[0].arguments[0];
     assert.equal(arg.label, 'Act 0');
     assert.equal(arg.location, 'Main');
     assert.equal(arg.expiresAt, '2026-07-11T23:30:00.000Z');
     assert.equal(res.body.data.winningSetId, 's0');
+  });
+
+  test('close tie creates no meeting point and returns winningSetId null', async () => {
+    const { res, createMp } = await closeWith([3, 1, 3]);
+    assert.equal(createMp.mock.calls.length, 0);
+    assert.equal(res.body.data.meetingPoint, null);
+    assert.equal(res.body.data.winningSetId, null);
+  });
+
+  test('DELETE calls pollCloser.announce with the closed row and the caller', async () => {
+    const closedRow = { ...DEFAULT_POLL, closed: true };
+    const announce = mock.fn(async () => ({ meetingPoint: { id: 'mp-1' }, winningSetId: 's9' }));
+    const { app } = await buildPollApp({
+      pollCloser: { announce },
+      stores: {
+        crews: { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'owner' })) },
+        polls: { getById: mock.fn(async () => ({ ...DEFAULT_POLL })), close: mock.fn(async () => closedRow) },
+      },
+    });
+    const res = await request(app).delete('/crew-1/polls/poll-1');
+    assert.equal(res.status, 200);
+    assert.deepEqual((announce.mock.calls as any[])[0].arguments, [closedRow, 'user-1']);
+    assert.equal(res.body.data.winningSetId, 's9');
+    assert.deepEqual(res.body.data.meetingPoint, { id: 'mp-1' });
   });
 
   test('a 200-char set label is accepted on create and trimmed to 100 on the meeting point', async () => {
@@ -1019,6 +1143,78 @@ describe('routes/crew-polls.js — DELETE /:crewId/polls/:pollId', () => {
 
     assert.equal(res.status, 500);
     assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+  });
+});
+
+// =====================================================================
+//  POST /:crewId/polls/:pollId/nudge — one reminder to non-voters
+// =====================================================================
+describe('routes/crew-polls.js — POST /:crewId/polls/:pollId/nudge', () => {
+  async function nudge(opts: any = {}) {
+    const crewNotify = { queue: mock.fn(() => {}), toUsers: mock.fn(async () => {}) };
+    const markNudged = mock.fn(async () => opts.marked ?? true);
+    const { app } = await buildPollApp({
+      crewNotify,
+      stores: {
+        crews: { getMember: mock.fn(async () => (opts.member === undefined ? { userId: 'user-1', role: 'member' } : opts.member)) },
+        polls: {
+          getById: mock.fn(async () => (opts.poll === undefined ? { ...DEFAULT_POLL } : opts.poll)),
+          nonVoterIds: mock.fn(async () => opts.nonVoters ?? ['user-1', 'user-2', 'user-3']),
+          markNudged,
+        },
+      },
+    });
+    const res = await request(app).post('/crew-1/polls/poll-1/nudge');
+    return { res, crewNotify, markNudged };
+  }
+
+  test('sends one reminder to non-voters minus the caller', async () => {
+    const { res, crewNotify } = await nudge();
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.nudged, 2);
+    assert.deepEqual((crewNotify.toUsers.mock.calls as any[])[0].arguments[0], {
+      crewId: 'crew-1',
+      userIds: ['user-2', 'user-3'],
+      kind: 'poll',
+      text: 'testuser is waiting for your vote: Where should we camp?',
+    });
+  });
+
+  const cases: [string, any, number, string, string][] = [
+    ['not a member', { member: null }, 403, 'FORBIDDEN', 'Not a crew member'],
+    ['poll missing', { poll: null }, 404, 'NOT_FOUND', 'Poll not found'],
+    ['poll in another crew', { poll: { ...DEFAULT_POLL, crew_id: 'crew-other' } }, 404, 'NOT_FOUND', 'Poll not found'],
+    [
+      'not creator or owner',
+      { poll: { ...DEFAULT_POLL, created_by: 'other-user' } },
+      403,
+      'FORBIDDEN',
+      'Only the poll creator or crew owner can send a reminder.',
+    ],
+    ['poll ended', { poll: { ...DEFAULT_POLL, closed: true } }, 409, 'CONFLICT', 'This poll has ended.'],
+    [
+      'poll past its end time',
+      { poll: { ...DEFAULT_POLL, closes_at: '2020-01-01T00:00:00.000Z' } },
+      409,
+      'CONFLICT',
+      'This poll has ended.',
+    ],
+    ['nobody left to remind', { nonVoters: ['user-1'] }, 409, 'CONFLICT', 'Everyone has voted.'],
+    ['already sent', { marked: false }, 409, 'CONFLICT', 'A reminder was already sent for this poll.'],
+  ];
+  for (const [name, opts, status, code, message] of cases) {
+    test(`${name}: ${status} ${code}`, async () => {
+      const { res, crewNotify } = await nudge(opts);
+      assert.equal(res.status, status);
+      assert.equal(res.body.error.code, code);
+      assert.equal(res.body.error.message, message);
+      assert.equal(crewNotify.toUsers.mock.calls.length, 0);
+    });
+  }
+
+  test('owner can remind on a poll someone else created', async () => {
+    const { res } = await nudge({ member: { userId: 'user-1', role: 'owner' }, poll: { ...DEFAULT_POLL, created_by: 'other-user' } });
+    assert.equal(res.status, 200);
   });
 });
 

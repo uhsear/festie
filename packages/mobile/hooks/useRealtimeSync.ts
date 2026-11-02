@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
 import { createSocket } from '@festie/shared/services';
 // Import the Socket type from the shared barrel (which re-exports it) rather
@@ -89,6 +89,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
   useRevocationRealtime({
     socket: liveSocket,
     onSessionRevoked: () => router.replace('/(auth)/login'),
+    onCrewNotice: ({ title, message }) => Alert.alert(title, message),
   });
 
   // Debounce timers to coalesce bursty socket events into single store reloads.

@@ -7,6 +7,16 @@ import {
   useFestivalDataStore,
   writeOutcomeOf,
   writeOutcomeMessage,
+  splitPolls,
+  nextVoteIndexes,
+  tallyPoll,
+  POLL_END_CHOICES,
+  pollClosesAt,
+  meetWherePollOptions,
+  resolveFestivalTimeZone,
+  type CrewPoll,
+  type CrewMeetingPoint,
+  type PollEndChoice,
 } from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
 import { useHaptics } from '../../hooks/useHaptics';
@@ -18,29 +28,12 @@ import IconButton from '../ui/IconButton';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import PollItem from './PollItem';
 import SchedulePollComposer from './SchedulePollComposer';
-import { BarChart3, CalendarClock, Plus, X } from 'lucide-react';
+import { BarChart3, CalendarClock, MapPin, Plus, X } from 'lucide-react';
 import { inputBase } from '../../lib/styles';
 
 // Lead time (minutes) for the reminder seeded when a schedule poll closes —
 // mirrors the festival reminder defaults.
 const SCHEDULE_POLL_REMINDER_LEAD = 15;
-
-interface RawVote {
-  option: number;
-  user_id: string | null;
-}
-interface RawPoll {
-  id: string;
-  crew_id: string;
-  created_by: string;
-  question: string;
-  options: string[];
-  votes: RawVote[];
-  closes_at: string | null;
-  closed: boolean;
-  created_at: string;
-  _optimistic?: boolean;
-}
 
 interface Props {
   crewId: string;
@@ -57,22 +50,32 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
   const [confirmClosePollId, setConfirmClosePollId] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
+  const [endChoice, setEndChoice] = useState<PollEndChoice>('none');
+  const [multiAnswer, setMultiAnswer] = useState(false);
+  const [showDecided, setShowDecided] = useState(false);
+  const [meetHint, setMeetHint] = useState(false);
 
   // Close goes through the crewStore: the server picks the winner from the
   // poll's stored set_refs and creates the meeting point. saveReminder is
   // injected so crewStore stays decoupled from the festival store.
   const closePollStore = useCrewStore((s) => s.closePoll);
   const festivalId = useFestivalStore((s) => s.currentFestival?.id ?? null);
+  const timeZone = useFestivalStore((s) => resolveFestivalTimeZone(s.currentFestival));
+  const stages = useFestivalStore((s) => s.stages);
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const members = activeCrew?.members ?? [];
+  const picks = useFestivalDataStore((s) => s.currentProfile?.picks) ?? {};
+  const crewFestivalIsCurrent = !!festivalId && activeCrew?.festivalId === festivalId;
 
   const {
     data: polls = [],
     isLoading,
     isError,
     refetch,
-  } = useQuery<RawPoll[]>({
+  } = useQuery<CrewPoll[]>({
     queryKey: ['polls', crewId],
     queryFn: async () => {
-      const res = await api.get<{ polls: RawPoll[] } | RawPoll[]>(`/crews/${crewId}/polls`);
+      const res = await api.get<{ polls: CrewPoll[] } | CrewPoll[]>(`/crews/${crewId}/polls`);
       const list = Array.isArray(res) ? res : res?.polls || [];
       return list.map((p) => ({
         ...p,
@@ -83,19 +86,19 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
   });
 
   const createPoll = useMutation({
-    mutationFn: (payload: { question: string; options: string[] }) => api.post(`/crews/${crewId}/polls`, payload),
+    mutationFn: (payload: { question: string; options: string[]; closesAt?: string; multiAnswer: boolean }) => api.post(`/crews/${crewId}/polls`, payload),
     onSuccess: (result, payload) => {
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {
         // Queued offline: show the poll now, marked "Not sent yet".
-        const placeholder: RawPoll = {
-          ...(result as RawPoll),
+        const placeholder: CrewPoll = {
+          ...(result as CrewPoll),
           ...payload,
           created_by: currentUserId,
           votes: [],
           _optimistic: true,
         };
-        qc.setQueryData<RawPoll[]>(['polls', crewId], (old = []) => [placeholder, ...old]);
+        qc.setQueryData<CrewPoll[]>(['polls', crewId], (old = []) => [placeholder, ...old]);
       } else {
         qc.invalidateQueries({ queryKey: ['polls', crewId] });
       }
@@ -106,8 +109,8 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
   });
 
   const vote = useMutation({
-    mutationFn: ({ pollId, optionIndex }: { pollId: string; optionIndex: number }) =>
-      api.post(`/crews/${crewId}/polls/${pollId}/vote`, { optionIndex }),
+    mutationFn: ({ pollId, optionIndexes }: { pollId: string; optionIndexes: number[] }) =>
+      api.post(`/crews/${crewId}/polls/${pollId}/vote`, { optionIndexes }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['polls', crewId] }),
     onError: (e) => {
       warning();
@@ -137,14 +140,58 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     onSuccess: (meetingPoint) => {
       qc.invalidateQueries({ queryKey: ['polls', crewId] });
       qc.invalidateQueries({ queryKey: ['meeting-points', crewId] });
-      toast(meetingPoint ? `Poll closed. ${meetingPoint.label} is now a meeting point.` : 'Poll closed', 'success');
+      toast(meetingPoint ? `Poll ended. ${meetingPoint.label} is now a meeting point.` : 'Poll ended', 'success');
     },
-    onError: (e) => toastError(e, "Couldn't close poll. Try again."),
+    onError: (e) => toastError(e, "Couldn't end poll. Try again."),
   });
+
+  const nudge = useMutation({
+    mutationFn: (pollId: string) => useCrewStore.getState().nudgePoll(crewId, pollId),
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ['polls', crewId] });
+      toast(`Reminder sent to ${n} ${n === 1 ? 'person' : 'people'}.`, 'success');
+    },
+    onError: (e) => toastError(e, "Couldn't send the reminder. Try again."),
+  });
+
+  function addToPicks(setId: string) {
+    if (!festivalId) return;
+    useFestivalDataStore
+      .getState()
+      .savePick({ festivalId, setId, priority: 'want-to-see' })
+      .then(() => toast('Added to your picks', 'success'))
+      .catch((e) => toastError(e, "Couldn't add to your picks. Try again."));
+  }
+
+  async function startMeetWhere() {
+    const points = await qc
+      .fetchQuery({
+        queryKey: ['meeting-points', crewId],
+        queryFn: async () => {
+          const res = await api.get<CrewMeetingPoint[] | { meetingPoints: CrewMeetingPoint[] }>(
+            `/crews/${crewId}/meeting-points`,
+          );
+          return Array.isArray(res) ? res : res?.meetingPoints || [];
+        },
+      })
+      .catch(() => [] as CrewMeetingPoint[]);
+    const picked = meetWherePollOptions({
+      homeBase: activeCrew?.homeBaseLocation,
+      meetingPoints: points.map((m) => ({ label: m.label })),
+      stages,
+    });
+    setQuestion('Meet where?');
+    setOptions(picked.length >= 2 ? picked : [...picked, ...Array<string>(2 - picked.length).fill('')]);
+    setMeetHint(picked.length < 2);
+    setShowForm(true);
+  }
 
   function reset() {
     setQuestion('');
     setOptions(['', '']);
+    setEndChoice('none');
+    setMultiAnswer(false);
+    setMeetHint(false);
     setShowForm(false);
   }
   function addOpt() {
@@ -162,13 +209,18 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     const q = question.trim();
     const opts = options.map((o) => o.trim()).filter(Boolean);
     if (!q || opts.length < 2 || opts.length > 4) return;
-    createPoll.mutate({ question: q, options: opts });
+    createPoll.mutate({ question: q, options: opts, closesAt: pollClosesAt(endChoice, Date.now()), multiAnswer });
   }
 
   function handleVote(pollId: string, optionIndex: number) {
+    const poll = polls.find((p) => p.id === pollId);
+    if (!poll) return;
     select();
-    vote.mutate({ pollId, optionIndex });
+    const mine = tallyPoll(poll, currentUserId).myIndexes;
+    vote.mutate({ pollId, optionIndexes: nextVoteIndexes(poll, mine, optionIndex) });
   }
+
+  const { open: openPolls, decided } = splitPolls(polls);
 
   if (isLoading)
     return (
@@ -208,7 +260,10 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
             <Plus className="w-4 h-4" aria-hidden="true" /> Create Poll
           </Button>
           <Button variant="secondary" onClick={() => setShowSchedule(true)} className="w-full min-h-11">
-            <CalendarClock className="w-4 h-4" aria-hidden="true" /> Schedule poll (which set?)
+            <CalendarClock className="w-4 h-4" aria-hidden="true" /> Which set? (from the lineup)
+          </Button>
+          <Button variant="secondary" onClick={startMeetWhere} className="w-full min-h-11">
+            <MapPin className="w-4 h-4" aria-hidden="true" /> Meet where?
           </Button>
         </div>
       ) : (
@@ -259,7 +314,35 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
                 <Plus className="w-4 h-4" aria-hidden="true" /> Add option
               </button>
             )}
+            {meetHint && (
+              <p className="mt-1 text-xs text-text-muted">Add a meeting point or home base to fill this in.</p>
+            )}
           </div>
+          <div>
+            <span id="poll-ends-label" className="block text-sm font-medium text-text-primary mb-2">
+              Ends
+            </span>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="poll-ends-label">
+              {POLL_END_CHOICES.filter((c) => c.id !== 'setStart').map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={endChoice === c.id}
+                  onClick={() => setEndChoice(c.id)}
+                  className={`min-h-11 px-3 rounded-full border text-sm ${
+                    endChoice === c.id ? 'border-accent-aqua text-accent-aqua' : 'border-glass-border text-text-secondary'
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 min-h-11 text-sm text-text-primary">
+            <input type="checkbox" checked={multiAnswer} onChange={(e) => setMultiAnswer(e.target.checked)} />
+            Allow more than one answer
+          </label>
           <Button
             type="submit"
             variant="primary"
@@ -281,7 +364,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
         />
       ) : (
         <div className="space-y-3">
-          {polls.map((p, idx) => (
+          {openPolls.map((p, idx) => (
             <PollItem
               key={p.id}
               poll={p}
@@ -290,10 +373,44 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
               isOwner={isOwner}
               isVotePending={vote.isPending && vote.variables?.pollId === p.id}
               isClosePending={close.isPending && close.variables === p.id}
+              members={members}
+              timeZone={timeZone}
+              picks={picks}
               onVote={handleVote}
               onClose={setConfirmClosePollId}
+              onNudge={nudge.mutate}
+              onAddToPicks={crewFestivalIsCurrent ? addToPicks : undefined}
             />
           ))}
+          {decided.length > 0 && (
+            <button
+              type="button"
+              aria-expanded={showDecided}
+              onClick={() => setShowDecided((v) => !v)}
+              className="min-h-11 text-sm text-text-secondary hover:text-text-primary"
+            >
+              Decided ({decided.length})
+            </button>
+          )}
+          {showDecided &&
+            decided.map((p, idx) => (
+              <PollItem
+                key={p.id}
+                poll={p}
+                index={idx}
+                currentUserId={currentUserId}
+                isOwner={isOwner}
+                isVotePending={vote.isPending && vote.variables?.pollId === p.id}
+                isClosePending={close.isPending && close.variables === p.id}
+                members={members}
+                timeZone={timeZone}
+                picks={picks}
+                onVote={handleVote}
+                onClose={setConfirmClosePollId}
+                onNudge={nudge.mutate}
+                onAddToPicks={crewFestivalIsCurrent ? addToPicks : undefined}
+              />
+            ))}
         </div>
       )}
       <ConfirmDialog
@@ -301,9 +418,9 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
         onOpenChange={(open) => {
           if (!open) setConfirmClosePollId(null);
         }}
-        title="Close this poll?"
-        description="Votes lock and the leading option wins."
-        confirmLabel="Close poll"
+        title="End this poll?"
+        description="Voting stops and everyone sees the result."
+        confirmLabel="End poll"
         onConfirm={() => {
           if (confirmClosePollId) close.mutate(confirmClosePollId);
           setConfirmClosePollId(null);

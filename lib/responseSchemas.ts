@@ -331,9 +331,10 @@ export type ProfileResponse = z.infer<typeof profileResponseSchema>;
 
 /**
  * One vote inside a poll's `votes` array as emitted by `polls.listByCrew`
- * (`json_agg(json_build_object('option', v.option_index, 'user_id', v.user_id))`).
- * Because the underlying join is a LEFT JOIN, a poll with NO votes still emits a
- * single element with BOTH fields null — hence both are `.nullable()`.
+ * (one `{ option, user_id }` per chosen option, from `option_indexes` or the
+ * legacy `option_index`). A multi-answer voter has one entry per option, and
+ * `votes` is `[]` when nobody voted. Both fields stay `.nullable()` for clients
+ * that still read the old single null element.
  */
 export const crewPollVoteResponseSchema = z.object({
   option: z.number().nullable(),
@@ -361,6 +362,9 @@ export const crewPollResponseSchema = z.object({
   created_at: z.string(),
   vote_count: z.string().optional(),
   votes: z.array(crewPollVoteResponseSchema).optional(),
+  multi_answer: z.boolean().optional(),
+  closed_at: z.string().nullable().optional(),
+  nudged_at: z.string().nullable().optional(),
 });
 export type CrewPollResponse = z.infer<typeof crewPollResponseSchema>;
 

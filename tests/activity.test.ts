@@ -3,6 +3,7 @@ import { describe, it, mock } from 'node:test';
 
 import express from 'express';
 import createActivityRoutes from '../routes/activity';
+import { createActivityStore } from '../lib/db/stores/activity';
 
 function mockReq(overrides: any = {}): any {
   return {
@@ -243,5 +244,29 @@ describe('activity: GET /crews/:crewId/activity', () => {
     const router = createActivityRoutes(deps);
     const layer = router.stack.find((l: any) => l.route && l.route.path === '/crews/:crewId/activity');
     assert.ok(layer, 'Route should still be registered');
+  });
+});
+
+describe('activity store: getByCrew cursor', () => {
+  const rowAt = (id: string, iso: string) => ({ id, created_at: new Date(iso), username: 'u' });
+
+  it('returns a created_at|id cursor and passes it back as two params', async () => {
+    const query = mock.fn(async (_sql: string, _params: any[]) => ({
+      rows: [rowAt('b', '2026-06-01T10:00:00.000Z'), rowAt('a', '2026-06-01T09:00:00.000Z')],
+    }));
+    const store = createActivityStore({ query } as any);
+    const page = await store.getByCrew('crew-1', { limit: 1 });
+    assert.equal(page.nextCursor, '2026-06-01T10:00:00.000Z|b');
+
+    await store.getByCrew('crew-1', { cursor: page.nextCursor, limit: 1 });
+    const params = (query.mock.calls as any[])[1].arguments[1];
+    assert.deepEqual(params, ['crew-1', 2, '2026-06-01T10:00:00.000Z', 'b']);
+  });
+
+  it('runs the first-page query when the cursor has no |', async () => {
+    const query = mock.fn(async (_sql: string, _params: any[]) => ({ rows: [] }));
+    const store = createActivityStore({ query } as any);
+    await store.getByCrew('crew-1', { cursor: 'old-style-id', limit: 5 });
+    assert.deepEqual((query.mock.calls as any[])[0].arguments[1], ['crew-1', 6]);
   });
 });

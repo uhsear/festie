@@ -73,6 +73,7 @@ function makeInviteDeps(overrides: any = {}) {
     stores.crews = { ...storesBase.crews, ...overrides.stores.crews };
     stores.profiles = { ...storesBase.profiles, ...overrides.stores.profiles };
   }
+  stores.activity = overrides.activity || { log: mock.fn(async () => 'act-1') };
 
   // resolveCrewOwnership mock — returns { crew, membership } by default
   const resolveCrewOwnership = overrides.resolveCrewOwnership || mock.fn(async (_res: any, crewId: any) => {
@@ -131,6 +132,7 @@ function makeInviteDeps(overrides: any = {}) {
     validateParams: overrides.validateParams || (() => (req: any, _res: any, next: any) => { req.validatedParams = req.params; next(); }),
     schemas: { crewJoin: {}, crewIdParams: {} },
     io: overrides.io !== undefined ? overrides.io : ioObj,
+    crewNotify: overrides.crewNotify,
     stores,
     _crewHelpers: {
       resolveCrewOwnership,
@@ -815,5 +817,38 @@ describe('invite-code.js — generateUniqueInviteCode export', () => {
     );
 
     assert.equal(mockStores.crews.getByInviteCode.mock.calls.length, 10);
+  });
+});
+
+describe('routes/crew-invites.js -- feed row and push on join', () => {
+  test('join writes member-joined and queues a member item with the joiner as actor', async () => {
+    const activity = { log: mock.fn(async () => 'act-1') };
+    const crewNotify = { queue: mock.fn() };
+    const { app } = await buildInviteApp({
+      activity,
+      crewNotify,
+      stores: {
+        crews: {
+          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getMember: mock.fn(async () => null),
+          listByUserAndFestival: mock.fn(async () => []),
+          getMemberCount: mock.fn(async () => 1),
+          addMember: mock.fn(async () => {}),
+          getMembers: mock.fn(async () => DEFAULT_MEMBERS),
+        },
+      },
+    });
+
+    const res = await request(app).post('/join').send({ inviteCode: 'ABC123' });
+
+    assert.equal(res.status, 200);
+    const row = (activity.log.mock.calls as any[])[0].arguments[0];
+    assert.deepEqual(row, { crewId: 'crew-1', userId: 'user-1', type: 'member-joined' });
+    assert.deepEqual((crewNotify.queue.mock.calls as any[])[0].arguments[0], {
+      crewId: 'crew-1',
+      actorId: 'user-1',
+      kind: 'member',
+      text: 'testuser joined',
+    });
   });
 });

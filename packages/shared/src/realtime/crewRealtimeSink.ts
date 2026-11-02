@@ -28,7 +28,7 @@ export interface CrewStoreSinkApi {
     applyMeetingPointUpsert: (meetingPoint: CrewMeetingPoint) => void;
     applyMeetingPointRemoval: (mpId: string) => void;
     applyPollCreated: (poll: CrewPoll) => void;
-    applyPollVote: (pollId: string, userId: string, optionIndex: number) => void;
+    applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => void;
     applyPollClosed: (pollId: string) => void;
     loadPolls: (crewId: string) => Promise<void>;
     loadExpenses: (crewId: string) => Promise<void>;
@@ -70,7 +70,7 @@ export interface CrewRealtimeSink {
       createdBy: string;
     },
   ) => void;
-  onPollVoted: (crewId: string, pollId: string, userId: string, optionIndex: number) => void;
+  onPollVoted: (crewId: string, pollId: string, userId: string, optionIndexes: number[]) => void;
   onPollClosed: (crewId: string, pollId: string) => void;
   onExpensesChanged: (crewId: string) => void;
   onActivityLogged: (crewId: string) => void;
@@ -119,8 +119,8 @@ export function createStoreSink(
         .loadPolls(crewId)
         .catch(() => {});
     },
-    onPollVoted: (_crewId, pollId, userId, optionIndex) => {
-      crewStoreApi.getState().applyPollVote(pollId, userId, optionIndex);
+    onPollVoted: (_crewId, pollId, userId, optionIndexes) => {
+      crewStoreApi.getState().applyPollVote(pollId, userId, optionIndexes);
     },
     onPollClosed: (_crewId, pollId) => {
       crewStoreApi.getState().applyPollClosed(pollId);

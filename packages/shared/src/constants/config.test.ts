@@ -75,6 +75,13 @@ describe('CREW_ACTIVITY_LABELS', () => {
       'meeting-point-added',
       'meeting-point-removed',
       'crew-updated',
+      'owner-changed',
+      'poll-closed',
+      'meeting-point-updated',
+      'expense_settled',
+      'packing-created',
+      'ride-created',
+      'photo-album-updated',
     ];
     for (const key of required) {
       expect(CREW_ACTIVITY_LABELS[key], `missing key: ${key}`).toBeTruthy();

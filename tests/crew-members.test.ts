@@ -78,6 +78,7 @@ function makeDeps(overrides: any = {}) {
     stores.roles = { ...storesBase.roles, ...overrides.stores.roles };
     stores.users = { ...storesBase.users, ...overrides.stores.users };
   }
+  stores.activity = overrides.activity || { log: mock.fn(async () => 'act-1') };
 
   // resolveCrewOwnership mock — returns { crew, membership } by default
   const resolveCrewOwnership = overrides.resolveCrewOwnership || mock.fn(async (_res: any, crewId: any) => {
@@ -141,6 +142,7 @@ function makeDeps(overrides: any = {}) {
       crewAddMember: {},
     },
     io: overrides.io !== undefined ? overrides.io : ioObj,
+    crewNotify: overrides.crewNotify,
     stores,
     _crewHelpers: {
       resolveCrewOwnership,
@@ -1147,5 +1149,75 @@ describe('routes/crew-members.js — rate limiting', () => {
     const addMemberLimit = rateLimitCalls.find((c: any) => c.key === 'crew-add-member');
     assert.ok(addMemberLimit, 'crew-add-member rate limit should be applied');
     assert.equal(addMemberLimit.max, 10);
+  });
+});
+
+describe('routes/crew-members.js -- feed rows and pushes', () => {
+  const owner = () => mock.fn(async () => ({ crew: { ...DEFAULT_CREW }, membership: { role: 'owner' } }));
+
+  test('leave writes member-left', async () => {
+    const activity = { log: mock.fn(async () => 'act-1') };
+    const { app } = await buildApp({
+      activity,
+      stores: {
+        crews: {
+          getById: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+        },
+      },
+    });
+    const res = await request(app).delete('/crew-1/leave');
+    assert.equal(res.status, 200);
+    const row = (activity.log.mock.calls as any[])[0].arguments[0];
+    assert.equal(row.type, 'member-left');
+    assert.equal(row.userId, 'user-1');
+  });
+
+  test('kick writes member-kicked for the target and pushes only the target', async () => {
+    const activity = { log: mock.fn(async () => 'act-1') };
+    const crewNotify = { toUsers: mock.fn(async () => {}) };
+    const { app } = await buildApp({
+      activity,
+      crewNotify,
+      resolveCrewOwnership: owner(),
+      stores: {
+        crews: {
+          getById: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getMember: mock.fn(async () => ({ userId: 'user-2', role: 'member' })),
+        },
+      },
+    });
+    const res = await request(app).delete('/crew-1/members/user-2');
+    assert.equal(res.status, 200);
+    const row = (activity.log.mock.calls as any[])[0].arguments[0];
+    assert.equal(row.type, 'member-kicked');
+    assert.equal(row.userId, 'user-2');
+    const push = (crewNotify.toUsers.mock.calls as any[])[0].arguments[0];
+    assert.deepEqual(push.userIds, ['user-2']);
+    assert.equal(push.text, 'You were removed from Test Crew.');
+  });
+
+  test('transfer writes owner-changed with the new owner name', async () => {
+    const activity = { log: mock.fn(async () => 'act-1') };
+    const { app } = await buildApp({
+      activity,
+      resolveCrewOwnership: owner(),
+      stores: {
+        crews: {
+          getById: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getMember: mock.fn(async () => ({ userId: 'user-2', role: 'member' })),
+          getMembers: mock.fn(async () => [
+            { userId: 'user-1', username: 'testuser', role: 'member' },
+            { userId: 'user-2', username: 'member2', name: 'Maya', role: 'owner' },
+          ]),
+        },
+      },
+    });
+    const res = await request(app).put('/crew-1/transfer').send({ userId: 'user-2' });
+    assert.equal(res.status, 200);
+    const row = (activity.log.mock.calls as any[])[0].arguments[0];
+    assert.equal(row.type, 'owner-changed');
+    assert.equal(row.userId, 'user-1');
+    assert.equal(row.detail, 'Maya');
   });
 });

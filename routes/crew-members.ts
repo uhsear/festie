@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { parseJsonObject } from '../lib/db/connection';
+import { logCrewActivity } from '../lib/db/stores/activity';
 
 export default function createCrewMemberRoutes(deps: any) {
   const {
@@ -18,6 +19,7 @@ export default function createCrewMemberRoutes(deps: any) {
     validateQuery,
     validateParams,
     io,
+    crewNotify,
   } = deps;
 
   const { resolveCrewOwnership, serializeCrewWithMembers } = deps._crewHelpers;
@@ -164,6 +166,7 @@ export default function createCrewMemberRoutes(deps: any) {
             username: req.user.username,
           });
         }
+        await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'member-left' });
         // H1: force the leaver's still-connected socket(s) out of the crew room
         // so they stop receiving live location/SOS and can't keep injecting.
         await evictUserFromCrewRoom(crewId, req.user.userId);
@@ -191,6 +194,7 @@ export default function createCrewMemberRoutes(deps: any) {
 
         const resolved = await resolveCrewOwnership(res, crewId, req.user.userId, 'kick members');
         if (!resolved) return;
+        const { crew: kickCrew } = resolved;
 
         if (targetUserId === req.user.userId) {
           return sendError(res, 400, 'Cannot kick yourself', ErrorCodes.INVALID_INPUT);
@@ -207,6 +211,14 @@ export default function createCrewMemberRoutes(deps: any) {
             userId: targetUserId,
           });
         }
+        await logCrewActivity(deps, { crewId, userId: targetUserId, type: 'member-kicked' });
+        crewNotify?.toUsers({
+          crewId,
+          crewName: kickCrew.name,
+          userIds: [targetUserId],
+          kind: 'member',
+          text: `You were removed from ${kickCrew.name}.`,
+        });
         // H1: force the kicked member's still-connected socket(s) out of the
         // crew room so they stop receiving live location/SOS and can't inject.
         await evictUserFromCrewRoom(crewId, targetUserId);
@@ -258,6 +270,14 @@ export default function createCrewMemberRoutes(deps: any) {
           delete broadcastData.inviteCode;
           io.to(`crew:${crewId}`).emit('crew:updated', broadcastData);
         }
+
+        const newOwner = members.find((m: any) => m.userId === targetUserId);
+        await logCrewActivity(deps, {
+          crewId,
+          userId: req.user.userId,
+          type: 'owner-changed',
+          detail: newOwner?.name || newOwner?.username || null,
+        });
 
         log.info('crew:ownership-transferred', { crewId, from: req.user.userId, to: targetUserId });
         return sendSuccess(res, serializeCrewWithMembers(crew, members, req.user.userId));
