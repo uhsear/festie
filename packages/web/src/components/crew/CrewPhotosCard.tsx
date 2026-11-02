@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@festie/shared';
+import { useCrewStore } from '@festie/shared/stores';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import { Images, X, ExternalLink } from 'lucide-react';
 import IconButton from '../ui/IconButton';
 import { inputBase } from '../../lib/styles';
@@ -24,6 +25,8 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [url, setUrl] = useState(currentUrl || '');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const updatePhotoAlbum = useCrewStore((s) => s.updatePhotoAlbum);
 
   // Keep the form in sync if the parent-supplied value changes (e.g. another
   // member/tab saves an album link via socket).
@@ -32,11 +35,12 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
   }, [currentUrl]);
 
   const save = useMutation({
-    mutationFn: (payload: { photoAlbumUrl: string | null }) => api.put(`/crews/${crewId}/photo-album`, payload),
-    onSuccess: async () => {
+    mutationFn: (payload: { photoAlbumUrl: string | null }) => updatePhotoAlbum(crewId, payload),
+    onSuccess: async (_data, payload) => {
       qc.invalidateQueries({ queryKey: ['crews'] });
       qc.invalidateQueries({ queryKey: ['crew', crewId] });
-      toast('Crew photos updated', 'success');
+      toast(payload.photoAlbumUrl === null && currentUrl ? 'Crew album removed' : 'Crew photos updated', 'success');
+      setConfirmOpen(false);
       setEditing(false);
       try {
         await onSaved?.();
@@ -52,6 +56,11 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
   // button safe and avoid javascript:/data: schemes.
   const isValid = trimmed === '' || trimmed.startsWith('https://');
 
+  const cancel = () => {
+    setUrl(currentUrl || '');
+    setEditing(false);
+  };
+
   if (editing) {
     return (
       <div className="p-3 rounded-lg bg-bg-card border border-accent-aqua/40 space-y-3">
@@ -60,7 +69,7 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
             <Images className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
             Crew photos
           </h3>
-          <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={() => setEditing(false)} />
+          <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={cancel} />
         </div>
         <p className="text-xs text-text-secondary">
           Paste a shared album link (Google Photos, Apple shared album, etc.) so the crew can view and add photos.
@@ -90,16 +99,23 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
             <Button
               variant="ghost"
               isLoading={save.isPending}
-              onClick={() => {
-                setUrl('');
-                save.mutate({ photoAlbumUrl: null });
-              }}
+              onClick={() => setConfirmOpen(true)}
               className="min-h-11"
             >
               Remove
             </Button>
           )}
         </div>
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title="Remove the crew album?"
+          description="Everyone in the crew loses this link. You can add it again later."
+          confirmLabel="Remove"
+          destructive
+          busy={save.isPending}
+          onConfirm={() => save.mutate({ photoAlbumUrl: null })}
+        />
       </div>
     );
   }

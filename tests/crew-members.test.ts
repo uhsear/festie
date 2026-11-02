@@ -1005,7 +1005,7 @@ describe('routes/crew-members.js — POST /:crewId/members (admin force-add)', (
     assert.equal((addMember.mock.calls as any[])[0].arguments[0].role, 'member');
   });
 
-  test('admin add writes one crew_add_member audit row and marks it written', async () => {
+  test('admin add writes one crew.member.added audit row and marks it written', async () => {
     const insert = mock.fn(async () => 'audit-1');
     const deps = makeDeps({
       stores: {
@@ -1037,15 +1037,14 @@ describe('routes/crew-members.js — POST /:crewId/members (admin force-add)', (
 
     assert.equal(insert.mock.calls.length, 1);
     const entry = (insert.mock.calls as any[])[0].arguments[0];
-    assert.equal(entry.action, 'crew_add_member');
+    assert.equal(entry.action, 'crew.member.added');
     assert.equal(entry.actorType, 'admin');
     assert.equal(entry.actorId, 'user-1');
-    assert.equal(entry.targetType, 'crew_member');
-    assert.equal(entry.targetId, 'crew-1:user-3');
+    assert.equal(entry.targetType, 'user');
+    assert.equal(entry.targetId, 'user-3');
     assert.deepEqual(JSON.parse(entry.detailsJson), {
       crewId: 'crew-1',
       crewName: 'Test Crew',
-      userId: 'user-3',
       targetUsername: 'newbie',
     });
     assert.equal(auditWritten, true);

@@ -88,6 +88,8 @@ export const PREF_MAP: Record<string, string> = {
   set_times_out: 'lineupDrops',
   crew_reformed: 'crewReformed',
   wrap_ready: 'wrapReady',
+  // The Wrap toggle covers the morning rate prompt too (no own column).
+  rate_prompt: 'wrapReady',
   crew_meeting_point: 'crewMeetingPoints',
   crew_poll: 'crewPolls',
   crew_money: 'crewMoney',

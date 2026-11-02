@@ -21,22 +21,40 @@ export default function mountAdminAuditRoutes({ router, deps, ctx }: any): void 
   router.get('/audit', adminAuth, validateQuery(schemas.adminAuditQuery), async (req: any, res: any) => {
     try {
       setNoStore(res);
-      const { actor_id: actorId, action, resource_type: resourceType, cursor, limit, scope, actor } = req.validatedQuery;
+      const { actor_id: actorId, action, resource_type: resourceType, cursor, limit, scope, actor, user } = req.validatedQuery;
       const actorType = scope === 'all' ? null : scope;
       const from = req.validatedQuery.from ? new Date(req.validatedQuery.from).toISOString() : null;
       const to = req.validatedQuery.to ? new Date(req.validatedQuery.to).toISOString() : null;
 
-      // Resolve the username filter to an id; an unknown name matches nothing.
+      // Resolve username filters to ids; an unknown name matches nothing.
+      const users = actor || user ? await getUsers() : [];
+      const idForUsername = (name: string) => {
+        const wanted = name.toLowerCase();
+        return users.find((u: any) => String(u.username).toLowerCase() === wanted)?.id ?? null;
+      };
       let resolvedActorId = actorId || null;
       if (actor) {
-        const wanted = actor.toLowerCase();
-        const users = await getUsers();
-        const match = users.find((u: any) => String(u.username).toLowerCase() === wanted);
-        if (!match) return sendSuccess(res, [], { total: 0, limit, nextCursor: null });
-        resolvedActorId = match.id;
+        resolvedActorId = idForUsername(actor);
+        if (!resolvedActorId) return sendSuccess(res, [], { total: 0, limit, nextCursor: null });
+      }
+      let targetId = null;
+      if (user) {
+        targetId = idForUsername(user);
+        if (!targetId) return sendSuccess(res, [], { total: 0, limit, nextCursor: null });
       }
 
-      const filters = { actorId: resolvedActorId, actorType, action: action || null, resourceType: resourceType || null, from, to };
+      // `festival.*` matches every name that starts with `festival.`; without `.*` the name must match exactly.
+      const isPrefix = typeof action === 'string' && action.endsWith('.*');
+      const filters = {
+        actorId: resolvedActorId,
+        actorType,
+        action: isPrefix ? null : action || null,
+        actionPrefix: isPrefix ? action.slice(0, -1) : null,
+        targetId,
+        resourceType: resourceType || null,
+        from,
+        to,
+      };
       const [{ rows, nextCursor }, total] = await Promise.all([
         stores.auditLog.query({ ...filters, limit, cursor: cursor || null }),
         stores.auditLog.count(filters),

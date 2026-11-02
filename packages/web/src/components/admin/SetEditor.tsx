@@ -121,7 +121,7 @@ export default function SetEditor({
                         origin?.filter((_, j) => j !== i),
                       )
                     }
-                    className="px-2 rounded bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
+                    className="px-2 min-h-11 min-w-11 rounded bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
                     aria-label={`Remove ${name.trim() || 'artist'}`}
                   >
                     ×
@@ -183,7 +183,7 @@ export default function SetEditor({
       <button
         type="button"
         onClick={onRemove}
-        className="col-span-2 md:col-span-1 px-2 py-1.5 md:py-0 rounded bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
+        className="col-span-2 md:col-span-1 px-2 py-1.5 md:py-0 min-h-11 md:min-w-11 rounded bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
         aria-label={`Remove ${joinArtistNames(drafts, separator) || 'artist'}`}
       >
         <span className="md:hidden">Remove set</span>

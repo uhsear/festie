@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
+import { genericAuditAction } from './audit-actions.js';
+
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Telemetry beacons (web-vitals, /metrics/client, install ping) are not user actions.
 const SKIPPED_PATHS = /^\/api(?:\/v1)?\/(?:metrics|analytics)(?:\/|$)/;
@@ -91,22 +93,6 @@ export default function createAuditMiddleware(deps: any) {
     // Reuse extractTarget's resolved resource name instead of re-deriving it
     // from the path independently -- that duplicate logic used to skip the
     // ':'-prefix check entirely, producing garbage like 'create::crewid'.
-    const verb = getVerbForMethod(req.method);
-    return `${verb}:${target.type}`.toLowerCase();
-  }
-
-  function getVerbForMethod(method: any) {
-    switch (method) {
-      case 'POST':
-        return 'create';
-      case 'PUT':
-        return 'replace';
-      case 'PATCH':
-        return 'update';
-      case 'DELETE':
-        return 'delete';
-      default:
-        return method.toLowerCase();
-    }
+    return genericAuditAction(req.method, target.type);
   }
 }

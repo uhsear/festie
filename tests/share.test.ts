@@ -14,6 +14,7 @@ import { after, afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import { festivalTint } from '../lib/festival-tint';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -197,6 +198,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     assert.match(res.text, /Share Test Fest/);
     // The picked artist must appear in the rendered page.
     assert.match(res.text, /Aria/);
+    assert.ok(res.text.includes(`background: ${festivalTint('Share Test Fest').bg};`));
   });
 
   test('picks sort by festival time: a 01:00 set comes after 23:30', async () => {

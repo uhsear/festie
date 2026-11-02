@@ -4,6 +4,10 @@ import {
   ANALYTICS_DEFAULTS,
   formatDate,
   timeAgoFromIso,
+  pct,
+  analyticsQuestions,
+  analyticsScopeLine,
+  funnelSteps,
 } from './analyticsNormalize';
 
 // ---------------------------------------------------------------------------
@@ -66,6 +70,8 @@ describe('normalizeAnalytics', () => {
         mustCount: 7,
         wantCount: 5,
         maybeCount: 3,
+        festivalName: '',
+        dayLabel: null,
       });
     });
 
@@ -148,6 +154,7 @@ describe('normalizeAnalytics', () => {
         festivalId: 'f',
         memberCount: 8,
         createdAt: '2026-01-01',
+        festivalName: '',
       });
     });
 
@@ -184,7 +191,7 @@ describe('normalizeAnalytics', () => {
 
 describe('ANALYTICS_DEFAULTS', () => {
   it('has all empty arrays and null generatedAt', () => {
-    expect(ANALYTICS_DEFAULTS).toEqual({
+    expect(ANALYTICS_DEFAULTS).toMatchObject({
       topSets: [],
       activeUsers: [],
       crews: [],
@@ -260,5 +267,88 @@ describe('timeAgoFromIso', () => {
   it('returns days at/after 24h', () => {
     expect(timeAgoFromIso(freeze(24 * 60 * 60_000))).toBe('1d ago');
     expect(timeAgoFromIso(freeze(3 * 24 * 60 * 60_000))).toBe('3d ago');
+  });
+});
+
+describe('admin analytics copy', () => {
+  const raw = {
+    scope: { festivalId: null, festivalName: null },
+    totals: {
+      signedUp: '10',
+      usersWithPlan: '8',
+      plans: '9',
+      plansWithPicks: '4',
+      usersWithPick: '6',
+      picks: '10',
+      crews: '3',
+      crewMembers: '7',
+      usersInCrews: '4',
+      crewsWithTwoPlus: '2',
+    },
+    pickDistribution: { must: '1', want: '2', maybe: '3' },
+    install: { days: 30, shown: '5', accepted: '2', dismissed: '3' },
+    topSets: [{ artist: 'A', pickCount: '2', festivalName: 'F', dayLabel: 'Fri' }],
+    crews: [{ id: 'c', festivalName: 'F' }],
+    festivalStats: [{}, {}],
+  };
+
+  it('normalizes new fields from strings', () => {
+    const d = normalizeAnalytics(raw);
+    expect(d.totals.signedUp).toBe(10);
+    expect(d.pickDistribution).toEqual({ must: 1, want: 2, maybe: 3 });
+    expect(d.install).toEqual({ days: 30, shown: 5, accepted: 2, dismissed: 3 });
+    expect(d.topSets[0]).toMatchObject({ festivalName: 'F', dayLabel: 'Fri', pickCount: 2 });
+    expect(d.crews[0].festivalName).toBe('F');
+  });
+
+  it('turns missing objects into zeros', () => {
+    const d = normalizeAnalytics({});
+    expect(d.scope).toEqual({ festivalId: null, festivalName: null });
+    expect(d.totals.picks).toBe(0);
+    expect(d.install).toEqual({ days: 30, shown: 0, accepted: 0, dismissed: 0 });
+    expect(d).toEqual({ ...ANALYTICS_DEFAULTS });
+  });
+
+  it('pct rounds and handles zero', () => {
+    expect(pct(1, 3)).toBe('33%');
+    expect(pct(1, 0)).toBe('0%');
+  });
+
+  it('answers every question', () => {
+    const answers = Object.fromEntries(analyticsQuestions(normalizeAnalytics(raw)).map((q) => [q.id, q.answer]));
+    expect(answers).toEqual({
+      picked: '6 of 8 people with a plan (75%).',
+      crewed: '4 of 8 people with a plan (50%).',
+      crewSize: '2 of 3 crews. The average crew has 2.3 members.',
+      picksPerPlan: '2.5 on average, across 4 plans with at least one pick.',
+      install: 'In the last 30 days the install button was offered 5 times: 2 installed and 3 said no.',
+    });
+  });
+
+  it('gives the zero form of every answer', () => {
+    const answers = Object.fromEntries(analyticsQuestions(normalizeAnalytics({})).map((q) => [q.id, q.answer]));
+    expect(answers).toEqual({
+      picked: 'No one has a plan yet.',
+      crewed: 'No one has a plan yet.',
+      crewSize: 'No crews yet.',
+      picksPerPlan: 'No plan has a pick yet.',
+      install: 'The install button was not offered in the last 30 days.',
+    });
+  });
+
+  it('leaves out install in festival scope and words the scope line', () => {
+    const d = normalizeAnalytics({ ...raw, scope: { festivalId: 'f1', festivalName: 'Fest One' } });
+    expect(analyticsQuestions(d).map((q) => q.id)).not.toContain('install');
+    expect(analyticsScopeLine(d)).toBe('At Fest One: 8 people with a plan.');
+    expect(analyticsScopeLine(normalizeAnalytics(raw))).toBe('Across all 2 festivals and 10 accounts.');
+  });
+
+  it('builds funnel steps', () => {
+    expect(funnelSteps(normalizeAnalytics(raw))).toEqual([
+      { label: 'Signed up', count: 10, pctOfStart: '100%' },
+      { label: 'Joined a festival', count: 8, pctOfStart: '80%' },
+      { label: 'Picked a set', count: 6, pctOfStart: '60%' },
+      { label: 'Joined a crew', count: 4, pctOfStart: '40%' },
+    ]);
   });
 });

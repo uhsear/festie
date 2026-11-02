@@ -1,54 +1,36 @@
-import React, { useMemo, useRef, useState, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
-// html-to-image is dynamic-imported inside handleShare so it's not in the
-// initial /wrap chunk — only fetched when the user taps Share.
+import { useMemo, useRef, useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { api } from '@festie/shared/services';
-import { useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
-import { useFestival } from '@festie/shared/hooks';
+import { useFestivalStore, useAuthStore, useCrewStore, useUIStore } from '@festie/shared/stores';
 import { COPY } from '@festie/shared/constants';
+import type { WrapResponse } from '@festie/shared/types';
+import {
+  buildWrapCards,
+  formatAmount,
+  isWrapUnlocked,
+  selectSetsToRate,
+  summarizePlan,
+  wrapByline,
+} from '@festie/shared/utils';
 import GuestTeaser from '../components/features/GuestTeaser';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
 import Skeleton from '../components/ui/Skeleton';
 import WrapSkeleton from '../components/ui/skeletons/WrapSkeleton';
 import Button from '../components/ui/Button';
-import WrapPoster from '../components/features/WrapPoster';
 import CrewWrapPoster, { type CrewWrapData } from '../components/features/CrewWrapPoster';
+import CrewPhotosCard from '../components/crew/CrewPhotosCard';
 import { useToast } from '../lib/toastContext';
+import { sharePoster } from '../lib/sharePoster';
 import WrapHero from '../components/wrap/WrapHero';
 import PosterPreview from '../components/wrap/PosterPreview';
+import WrapCarousel from '../components/wrap/WrapCarousel';
 import { useRovingTabs } from '../hooks/useRovingTabs';
 import { RATING_META } from '../lib/ratingIcon';
-import { isFestivalOver, formatAmount } from '@festie/shared/utils';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { Sparkles, Trophy, Share2, Users } from 'lucide-react';
-
-// Server shape from GET /ratings/wrap/:festivalId:
-//   { stats: { totalRated, stagesVisited, daysAttended, totalHours },
-//     topSets:    [{ setId, rating, artist, stageId?, startTime?, ... }],
-//     allRatings: [...] }
-interface WrapStats {
-  totalRated: number;
-  stagesVisited: number;
-  daysAttended: number;
-  totalHours: number | null;
-  avgRating?: number | null;
-}
-interface TopSet {
-  setId: string;
-  rating: number;
-  artist?: string;
-  note?: string | null;
-  startTime?: string | null;
-  endTime?: string | null;
-  stageId?: string | null;
-  stageName?: string | null;
-}
-interface WrapResponse {
-  stats: WrapStats;
-  topSets: TopSet[];
-  allRatings: TopSet[];
-}
+import { cn } from '../lib/utils';
 
 export default function WrapPage() {
   return (
@@ -59,38 +41,35 @@ export default function WrapPage() {
 }
 
 function WrapPageInner() {
+  const search = useSearch({ from: '/wrap' });
   const user = useAuthStore((s) => s.user);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const days = useFestivalStore((s) => s.days);
   const activeCrew = useCrewStore((s) => s.activeCrew);
-  const { getStageName } = useFestival();
+  const selectCrew = useCrewStore((s) => s.selectCrew);
+  const showHandle = useUIStore((s) => s.wrapShowHandle);
+  const setShowHandle = useUIStore((s) => s.setWrapShowHandle);
+  const navigate = useNavigate();
+  const qc = useQueryClient();
   const { toast, toastError } = useToast();
-  const posterRef = useRef<HTMLDivElement>(null);
   const wrapTabsRef = useRef<HTMLDivElement>(null);
   useRovingTabs(wrapTabsRef);
   const [sharing, setSharing] = useState(false);
   const [tab, setTab] = useState<'me' | 'crew'>('me');
 
-  const over = isFestivalOver(currentFestival, days);
+  const festivalId = search.festival ?? currentFestival?.id;
+  // The active crew belongs to one festival; only send it for that festival's wrap.
+  const crewParam = activeCrew && activeCrew.festivalId === festivalId ? activeCrew.id : null;
 
   const { data, isLoading, isError, refetch } = useQuery<WrapResponse>({
-    queryKey: ['wrap', currentFestival?.id],
-    queryFn: async () => {
-      const res = await api.get<WrapResponse>(`/ratings/wrap/${currentFestival!.id}`);
-      return res as WrapResponse;
-    },
-    enabled: !!currentFestival?.id && !!user && over,
+    queryKey: ['wrap', festivalId, crewParam],
+    queryFn: () =>
+      api.get<WrapResponse>(`/ratings/wrap/${festivalId}${crewParam ? `?crewId=${encodeURIComponent(crewParam)}` : ''}`),
+    enabled: !!festivalId && !!user,
   });
 
-  // Crew overlap moment: reuses the crew-wrap query the Crew tab runs, so it costs no extra request there.
-  const crewId = activeCrew?.id ?? null;
-  const { data: crewData } = useQuery<CrewWrapResponse>({
-    queryKey: ['crew-wrap', crewId, currentFestival?.id],
-    queryFn: async () => api.get<CrewWrapResponse>(`/ratings/crew-wrap/${crewId}/${currentFestival!.id}`),
-    enabled: !!crewId && !!currentFestival?.id && !!user && over,
-  });
-  const crewMoment = crewData?.wrap.setsSeenTogether[0];
-
+  // Hooks above and below must run on every render, before the early returns.
+  const cards = useMemo(() => (data ? buildWrapCards(data) : []), [data]);
+  const toRate = useMemo(() => (data ? selectSetsToRate(data.planned, data.festival) : []), [data]);
   const allSorted = useMemo(
     () =>
       (data?.allRatings || [])
@@ -99,63 +78,26 @@ function WrapPageInner() {
     [data?.allRatings],
   );
 
-  // Memo for poster top-sets must live ABOVE early-return branches below —
-  // React would otherwise call fewer hooks on error/loading renders and throw
-  // "Rendered more hooks than during the previous render" (error #310).
-  const posterTopSets = useMemo(
-    () =>
-      (data?.topSets || []).slice(0, 5).map((s) => ({
-        rating: s.rating,
-        artist: s.artist || s.setId,
-        stageName: s.stageName || (s.stageId ? getStageName(s.stageId) : null),
-      })),
-    [data?.topSets, getStageName],
+  const handleShare = useCallback(
+    async (node: HTMLElement, index: number) => {
+      if (!data) return;
+      setSharing(true);
+      try {
+        await sharePoster(node, `festie-wrap-${data.festival.id}-${index + 1}.png`, `My ${COPY.wrap.name}`, toast);
+      } catch (e: unknown) {
+        // AbortError = user cancelled share sheet; suppress.
+        const isAbort = e instanceof DOMException && e.name === 'AbortError';
+        if (!isAbort) toastError(e, "Couldn't share your wrap. Try again.");
+      } finally {
+        setSharing(false);
+      }
+    },
+    [data, toast, toastError],
   );
-
-  // Share-as-PNG — captures the fixed 1080×1920 off-screen WrapPoster,
-  // passes to Web Share API if available, otherwise triggers a download.
-  // Await document.fonts.ready so custom fonts (Syncopate) finish loading
-  // before capture — avoids the iOS Safari font-race that renders fallback
-  // glyphs into the PNG.
-  const handleShare = useCallback(async () => {
-    if (!posterRef.current || !currentFestival) return;
-    setSharing(true);
-    try {
-      if (document.fonts?.ready) await document.fonts.ready;
-      await new Promise((r) => requestAnimationFrame(r));
-      const { toBlob } = await import('html-to-image');
-      const blob = await toBlob(posterRef.current, {
-        width: 1080,
-        height: 1920,
-        pixelRatio: 2,
-        backgroundColor: '#080810',
-        cacheBust: true,
-      });
-      if (!blob) throw new Error('Capture failed');
-      const file = new File([blob], `festie-wrap-${currentFestival.id}.png`, { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: `My ${COPY.wrap.name}` });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
-        a.click();
-        URL.revokeObjectURL(url);
-        toast('Saved to downloads', 'success');
-      }
-    } catch (e: unknown) {
-      // AbortError = user cancelled share sheet; suppress.
-      const isAbort = e instanceof DOMException && e.name === 'AbortError';
-      if (!isAbort) {
-        toastError(e, "Couldn't share your wrap. Try again.");
-      }
-    } finally {
-      setSharing(false);
-    }
-  }, [currentFestival, toast, toastError]);
 
   if (!user) return <GuestTeaser mode="wrap" />;
 
-  if (!currentFestival) {
+  if (!festivalId) {
     return (
       <div className="max-w-lg mx-auto">
         <Card padding="lg">
@@ -169,7 +111,25 @@ function WrapPageInner() {
     );
   }
 
-  if (!over) {
+  if (isLoading) {
+    return <WrapSkeleton />;
+  }
+  if (isError || !data) {
+    return (
+      <div className="max-w-lg mx-auto">
+        <Card padding="lg">
+          <EmptyState
+            icon={<Sparkles className="w-12 h-12" aria-hidden="true" />}
+            title={`Couldn't load your ${COPY.wrap.name}`}
+            description={`Something went wrong loading your ${COPY.wrap.name}.`}
+            cta={{ label: 'Retry', onClick: () => refetch() }}
+          />
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isWrapUnlocked(data.festival)) {
     return (
       <div className="max-w-lg mx-auto min-h-[calc(100dvh-200px)] flex items-center justify-center">
         <Card padding="lg">
@@ -183,9 +143,7 @@ function WrapPageInner() {
     );
   }
 
-  // Tab bar — Personal vs Crew wrap. Rendered above the personal-query
-  // loading/error branches so the crew view is reachable regardless of the
-  // personal wrap's fetch state.
+  // Tab bar — Personal vs Crew wrap.
   const tabBar = (
     <div className="max-w-lg mx-auto">
       <div
@@ -220,151 +178,122 @@ function WrapPageInner() {
     </div>
   );
 
+  const festivalName = data.festival.name;
+
   if (tab === 'crew') {
+    const crew = data.crew;
+    const sameAsActive = !!crew && activeCrew?.id === crew.id;
     return (
       <div>
         {tabBar}
         <div id="wrap-tab-panel">
           <CrewWrapTab
-            crewId={activeCrew?.id ?? null}
-            crewName={activeCrew?.name ?? 'Your crew'}
-            festivalId={currentFestival.id}
-            festivalName={currentFestival.name}
+            crewId={crew?.id ?? null}
+            crewName={crew?.name ?? 'Your crew'}
+            festivalId={festivalId}
+            festivalName={festivalName}
+            byline={wrapByline(data.festival, null, false)}
+            photoAlbumUrl={sameAsActive ? (activeCrew?.photoAlbumUrl ?? null) : (crew?.photoAlbumUrl ?? null)}
+            onPhotosSaved={async () => {
+              await qc.invalidateQueries({ queryKey: ['wrap', festivalId] });
+              if (crew && sameAsActive) await selectCrew(crew.id);
+            }}
           />
         </div>
       </div>
     );
   }
 
-  if (isLoading) {
-    return <WrapSkeleton />;
-  }
-  if (isError) {
+  if (cards.length === 0) {
     return (
-      <div className="max-w-lg mx-auto">
-        <Card padding="lg">
-          <EmptyState
-            icon={<Sparkles className="w-12 h-12" aria-hidden="true" />}
-            title={`Couldn't load your ${COPY.wrap.name}`}
-            description={`Something went wrong loading your ${COPY.wrap.name}.`}
-            cta={{ label: 'Retry', onClick: () => refetch() }}
-          />
-        </Card>
+      <div>
+        {tabBar}
+        <div id="wrap-tab-panel" className="max-w-lg mx-auto pt-4">
+          <Card padding="lg">
+            <EmptyState
+              icon={<Trophy className="w-12 h-12" aria-hidden="true" />}
+              title="Nothing to wrap yet"
+              description="Wraps are built from the sets you pick and rate. Rate any set you saw from its detail page."
+              cta={{ label: 'Open the lineup', onClick: () => navigate({ to: '/' }) }}
+            />
+          </Card>
+        </div>
       </div>
     );
   }
 
-  const stats = data?.stats || { totalRated: 0, stagesVisited: 0, daysAttended: 0, totalHours: 0 };
-  const topSets = data?.topSets || [];
-  const totalHours = stats.totalHours ?? 0;
-
+  const plan = summarizePlan(data.planned);
+  const hasPlan = plan.planned > 0;
+  const stats = data.stats;
+  const heroStages = hasPlan ? plan.stages : stats.stagesVisited;
+  const heroDays = hasPlan ? plan.days : stats.daysAttended;
+  const heroHours = hasPlan ? plan.hours : stats.totalHours;
   const detail = [
-    `${stats.stagesVisited} ${stats.stagesVisited === 1 ? 'stage' : 'stages'}`,
-    `${stats.daysAttended} ${stats.daysAttended === 1 ? 'day' : 'days'}`,
-    `${totalHours.toFixed(1)} hours of music`,
+    `${heroStages} ${heroStages === 1 ? 'stage' : 'stages'}`,
+    `${heroDays} ${heroDays === 1 ? 'day' : 'days'}`,
+    `${heroHours.toFixed(1)} hours of music`,
   ].join(' · ');
-  const [lead, ...rest] = topSets;
+  const byline = wrapByline(data.festival, user.username ?? null, showHandle);
 
   return (
     <div>
       {tabBar}
       <div id="wrap-tab-panel" className="max-w-lg mx-auto flex flex-col gap-6 pt-4 pb-6">
-        <header className="text-center space-y-1">
-          <h1 className="text-xl font-display font-bold text-text-primary leading-tight">{currentFestival.name}</h1>
-        </header>
-
-        {/* Poster preview: the exact image Share exports (also the html-to-image source). */}
-        {stats.totalRated > 0 && (
-          <section className="flex flex-col gap-3">
-            <PosterPreview ref={posterRef}>
-              <WrapPoster
-                festivalName={currentFestival.name}
-                topSets={posterTopSets}
-                stats={{
-                  totalRated: stats.totalRated,
-                  stagesVisited: stats.stagesVisited,
-                  daysAttended: stats.daysAttended,
-                  totalHours,
-                }}
-              />
-            </PosterPreview>
-            <Button variant="primary" fullWidth isLoading={sharing} onClick={handleShare} className="min-h-[44px]">
-              <Share2 className="w-4 h-4" aria-hidden="true" />
-              Share your wrap
-            </Button>
-          </section>
-        )}
-
-        {stats.totalRated > 0 && <WrapHero value={stats.totalRated} label="sets rated" detail={detail} />}
-
-        {/* Ranked top sets: the number one set leads, the rest follow in order. */}
-        {lead ? (
-          <section aria-labelledby="wrap-top-heading">
-            <h2
-              id="wrap-top-heading"
-              className="text-xs uppercase tracking-[var(--letter-spacing-caps)] text-text-secondary mb-3"
-            >
-              Your top sets
-            </h2>
-            <div className="rounded-xl bg-bg-card border border-border p-5">
-              <div className="text-xs text-text-muted">
-                #1 · {lead.stageName || (lead.stageId ? getStageName(lead.stageId) : 'Stage')}
-              </div>
-              <div className="mt-1 text-2xl font-display font-bold text-text-primary">{lead.artist || lead.setId}</div>
-              <RatingTag rating={lead.rating} />
-              {lead.note && <div className="text-sm text-text-secondary mt-2 italic">"{lead.note}"</div>}
-            </div>
-            {rest.length > 0 && (
-              <ol className="mt-2 flex flex-col gap-1 list-none p-0">
-                {rest.map((s, i) => (
-                  <li key={s.setId} className="flex items-center gap-3 px-2 py-2 border-b border-border last:border-b-0">
-                    <span className="w-6 text-right font-display font-bold text-text-muted" aria-hidden="true">
-                      {i + 2}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-text-primary truncate">{s.artist || s.setId}</div>
-                      <div className="text-xs text-text-muted truncate">
-                        {s.stageName || (s.stageId ? getStageName(s.stageId) : 'Stage')}
-                      </div>
-                    </div>
-                    <RatingTag rating={s.rating} compact />
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-        ) : (
-          <Card padding="lg">
-            <EmptyState
-              icon={<Trophy className="w-12 h-12" aria-hidden="true" />}
-              title="No 4/5 or 5/5 ratings yet"
-              description="Rate sets from the set detail panel to build your wrap."
-            />
-          </Card>
-        )}
-
-        {/* Crew overlap moment: the set the most of your crew loved. Hidden without crew data. */}
-        {crewMoment && crewData && (
-          <section className="rounded-xl border border-accent-aqua/40 bg-accent-aqua/10 p-5">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-[var(--letter-spacing-caps)] text-accent-aqua">
-              <Users className="w-4 h-4" aria-hidden="true" />
-              Your crew moment
-            </div>
-            <div className="mt-1 text-xl font-display font-bold text-text-primary">
-              {crewMoment.artist || crewMoment.setId}
-            </div>
-            <p className="text-sm text-text-secondary mt-0.5">
-              {crewMoment.count} of {crewData.wrap.memberCount} in {activeCrew?.name ?? 'your crew'} loved it
+        {user.username && (
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-bg-card p-3">
+            <p id="wrap-handle-title" className="min-w-0 flex-1 text-sm text-text-primary">
+              Show @{user.username} on cards
             </p>
             <button
               type="button"
-              onClick={() => setTab('crew')}
-              className="mt-3 min-h-11 text-sm font-medium text-accent-aqua underline underline-offset-2"
+              role="switch"
+              aria-checked={showHandle}
+              aria-labelledby="wrap-handle-title"
+              onClick={() => setShowHandle(!showHandle)}
+              className={cn(
+                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors',
+                showHandle ? 'bg-accent-aqua' : 'bg-bg-card',
+              )}
             >
-              Open the {COPY.wrap.crewName}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'inline-block h-4 w-4 rounded-full bg-white transition-transform',
+                  showHandle ? 'translate-x-6' : 'translate-x-1',
+                )}
+              />
             </button>
-          </section>
+          </div>
         )}
+
+        {toRate.length > 0 && (
+          <div className="flex items-center gap-3 rounded-xl border border-accent-aqua/40 bg-accent-aqua/10 p-4">
+            <p className="flex-1 text-sm font-medium text-text-primary">
+              {toRate.length} {toRate.length === 1 ? 'set' : 'sets'} still to rate
+            </p>
+            <Link
+              to="/rate"
+              search={{ festival: festivalId }}
+              className="inline-flex min-h-11 items-center rounded-full bg-accent-aqua px-5 text-sm font-semibold text-bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+            >
+              Rate your night
+            </Link>
+          </div>
+        )}
+
+        <WrapHero
+          value={hasPlan ? plan.planned : stats.totalRated}
+          label={hasPlan ? 'sets planned' : 'sets rated'}
+          detail={detail}
+        />
+
+        <WrapCarousel
+          cards={cards}
+          festivalName={festivalName}
+          byline={byline}
+          sharing={sharing}
+          onShare={handleShare}
+        />
 
         {/* Full list */}
         {allSorted.length > 0 && (
@@ -380,9 +309,7 @@ function WrapPageInner() {
                 >
                   <RatingTag rating={s.rating} compact />
                   <span className="flex-1 text-sm text-text-primary truncate">{s.artist || s.setId}</span>
-                  {(s.stageName || s.stageId) && (
-                    <span className="text-xs text-text-muted">{s.stageName || getStageName(s.stageId!)}</span>
-                  )}
+                  {s.stageName && <span className="text-xs text-text-muted">{s.stageName}</span>}
                 </div>
               ))}
             </div>
@@ -414,18 +341,23 @@ interface CrewWrapResponse {
 }
 
 // Crew wrap tab — fetches GET /ratings/crew-wrap/:crewId/:festivalId and renders
-// the shared recap, reusing the same off-screen-poster + html-to-image + Web
-// Share pipeline as the personal wrap (incl. the document.fonts.ready guard).
+// the shared recap, sharing the poster through the same sharePoster pipeline as the personal wrap.
 function CrewWrapTab({
   crewId,
   crewName,
   festivalId,
   festivalName,
+  byline,
+  photoAlbumUrl,
+  onPhotosSaved,
 }: {
   crewId: string | null;
   crewName: string;
   festivalId: string;
   festivalName: string;
+  byline: string | null;
+  photoAlbumUrl: string | null;
+  onPhotosSaved: () => void | Promise<void>;
 }) {
   const { toast, toastError } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);
@@ -444,27 +376,7 @@ function CrewWrapTab({
     if (!posterRef.current) return;
     setSharing(true);
     try {
-      if (document.fonts?.ready) await document.fonts.ready;
-      await new Promise((r) => requestAnimationFrame(r));
-      const { toBlob } = await import('html-to-image');
-      const blob = await toBlob(posterRef.current, {
-        width: 1080,
-        height: 1920,
-        pixelRatio: 2,
-        backgroundColor: '#080810',
-        cacheBust: true,
-      });
-      if (!blob) throw new Error('Capture failed');
-      const file = new File([blob], `festie-crew-wrap-${crewId}.png`, { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Our ${COPY.wrap.crewName}` });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
-        a.click();
-        URL.revokeObjectURL(url);
-        toast('Saved to downloads', 'success');
-      }
+      await sharePoster(posterRef.current, `festie-crew-wrap-${crewId}.png`, `Our ${COPY.wrap.crewName}`, toast);
     } catch (e: unknown) {
       const isAbort = e instanceof DOMException && e.name === 'AbortError';
       if (!isAbort) toastError(e, "Couldn't share your wrap. Try again.");
@@ -559,6 +471,8 @@ function CrewWrapTab({
         />
       </section>
 
+      <CrewPhotosCard crewId={crewId} currentUrl={photoAlbumUrl} onSaved={onPhotosSaved} />
+
       {/* Sets seen together */}
       {wrap.setsSeenTogether.length > 0 && (
         <section>
@@ -630,7 +544,7 @@ function CrewWrapTab({
             </span>
           </label>
           <PosterPreview ref={posterRef}>
-            <CrewWrapPoster crewName={crewName} festivalName={festivalName} wrap={wrap} showMoney={showMoney} />
+            <CrewWrapPoster crewName={crewName} festivalName={festivalName} wrap={wrap} showMoney={showMoney} byline={byline} />
           </PosterPreview>
           <Button variant="primary" fullWidth isLoading={sharing} onClick={handleShare} className="min-h-[44px]">
             <Share2 className="w-4 h-4" aria-hidden="true" />

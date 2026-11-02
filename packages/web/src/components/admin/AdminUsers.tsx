@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { api } from '@festie/shared/services/api';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { useAdminUserList } from '@festie/shared/hooks';
@@ -29,6 +29,7 @@ import { SearchX } from 'lucide-react';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import SelectionBar from './SelectionBar';
 import AdminUserDetail from './AdminUserDetail';
+import { useAdminSearch } from './useAdminSearch';
 
 interface ConfirmState {
   title: string;
@@ -42,10 +43,12 @@ interface ConfirmState {
  * User management: list, search, admin toggle, deactivate
  */
 export default function AdminUsers() {
-  const { user: detailUserId } = useSearch({ from: '/admin' });
+  const [{ user: detailUserId }] = useAdminSearch();
   if (detailUserId) return <AdminUserDetail userId={detailUserId} />;
   return <AdminUsersList />;
 }
+
+const SEARCH_URL_DELAY_MS = 300;
 
 const cellBase =
   'flex items-center justify-between gap-3 px-2 py-1.5 before:text-sm before:font-medium before:text-text-muted before:content-[attr(data-label)] lg:table-cell lg:px-4 lg:py-3 lg:before:content-none';
@@ -55,6 +58,9 @@ function AdminUsersList() {
   const selfId = useAuthStore((s) => s.user?.id);
   const { users, total, hasMore, loading, loadingMore, error, search, setSearch, loadMore, patchUser, removeUser } =
     useAdminUserList();
+  const [{ q }, setAdminSearch] = useAdminSearch();
+  // The box keeps what was typed (the URL value is trimmed); the URL follows after a pause.
+  const [text, setText] = useState(q ?? '');
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [linkToCopy, setLinkToCopy] = useState<string | null>(null);
@@ -168,6 +174,22 @@ function AdminUsersList() {
     });
   };
 
+  // An outside change to q (link, finder) moves the box and the list.
+  useEffect(() => {
+    if ((q ?? '') === search.trim()) return;
+    setText(q ?? '');
+    setSearch(q ?? '');
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps -- react to the URL only
+
+  useEffect(() => {
+    if (text.trim() === (q ?? '')) return;
+    const timer = setTimeout(
+      () => setAdminSearch({ tab: 'users', ...(text.trim() && { q: text.trim() }) }, { replace: true }),
+      SEARCH_URL_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [text, q, setAdminSearch]);
+
   const onToggleSelect = (id: string) => {
     const { next, limited } = toggleSelection(selected, id);
     setSelected(next);
@@ -188,8 +210,11 @@ function AdminUsersList() {
         type="text"
         placeholder="Search by username or email…"
         aria-label="Search users by username or email"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setSearch(e.target.value);
+        }}
         className="w-full px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
       />
 
@@ -277,9 +302,15 @@ function AdminUsersList() {
                       </td>
                       <td data-label="Verified" className={`${cellBase} lg:text-center`}>
                         {user.emailVerified ? (
-                          <span className="text-xs text-accent-green">Verified</span>
+                          <span className="inline-flex items-center gap-1.5 text-sm text-accent-green">
+                            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent-green" />
+                            Verified
+                          </span>
                         ) : (
-                          <span className="text-xs text-text-muted">Not verified</span>
+                          <span className="inline-flex items-center gap-1.5 text-sm text-text-muted">
+                            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-text-muted" />
+                            Not verified
+                          </span>
                         )}
                       </td>
                       <td data-label="Admin" className={`${cellBase} lg:text-center`}>

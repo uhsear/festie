@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const read = (f: string) => readFileSync(join(__dirname, '..', 'components', f), 'utf8');
 
 describe('T10 share posters ignore OS font size', () => {
-  for (const file of ['WrapPoster.tsx', 'CrewWrapPoster.tsx']) {
+  for (const file of ['wrap/PosterFrame.tsx', 'wrap/WrapCardPoster.tsx', 'CrewWrapPoster.tsx']) {
     it(`${file}: every <Text has allowFontScaling={false}`, () => {
       const src = read(file);
       const texts = (src.match(/<Text\b/g) ?? []).length;

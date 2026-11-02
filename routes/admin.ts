@@ -32,7 +32,8 @@ import mountAdminAuditRoutes from './admin-audit.js';
 import mountAdminBulkRoutes from './admin-bulk.js';
 import * as spotify from '../lib/spotify.js';
 import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
-import { AUDIT_ACTION_CREW_ADD_MEMBER, AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED } from '../lib/db/stores/audit.js';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { recentRequestTotals } from '../lib/recent-requests.js';
 import type { Router } from 'express';
 
 export default function createAdminRoutes(deps: any): Router {
@@ -66,43 +67,6 @@ export default function createAdminRoutes(deps: any): Router {
     redis: deps.redis,
   });
 
-  // Audit action name normalization map
-  const ACTION_FRIENDLY_MAP: Record<string, string> = {
-    admin_delete_user: 'Delete User',
-    admin_reset_link: 'Reset Password Link',
-    admin_reset_password: 'Reset Password',
-    role_grant: 'Grant Role',
-    role_revoke: 'Revoke Role',
-    bulk_deactivate: 'Bulk Deactivate',
-    force_logout: 'Force Logout',
-    bulk_archive: 'Bulk Archive Festivals',
-    'create:token': 'Create Token',
-    'create:verify': 'Verify Email',
-    register: 'User Registered',
-    login: 'User Logged In',
-    festival_create: 'Festival Created',
-    festival_update: 'Festival Updated',
-    festival_delete: 'Festival Deleted',
-    'festival:create': 'Festival Created',
-    'festival:update': 'Festival Updated',
-    'festival:soft-delete': 'Festival Deleted',
-    'festival:hard-delete': 'Festival Deleted Permanently',
-    'festival:publish': 'Festival Published',
-    'festival:restore': 'Festival Restored',
-    'set:link-update': 'Set Link Changed',
-    lineup_import: 'Lineup Imported',
-    festival_announcement_send: 'Send Announcement',
-    festival_announcement_cancel: 'Cancel Announcement',
-    spotify_backfill: 'Spotify Backfill',
-    'delete:users': 'Delete User',
-    [AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED]: 'View User Details',
-    [AUDIT_ACTION_CREW_ADD_MEMBER]: 'Add Crew Member',
-    crew_remove_member: 'Remove Crew Member',
-    crew_delete: 'Delete Crew',
-  };
-
-  const getFriendlyAction = (action: string) => ACTION_FRIENDLY_MAP[action] || action;
-
   // One place adds the display fields to audit rows, so the audit list and the
   // user detail page show the same actor names. An unknown actor falls back to its id.
   const enrichAuditEntries = async (rows: any[]) => {
@@ -110,7 +74,6 @@ export default function createAdminRoutes(deps: any): Router {
     const usernameById = new Map<string, string>(users.map((u: any) => [u.id, u.username]));
     return rows.map((row: any) => ({
       ...row,
-      friendlyAction: getFriendlyAction(row.action),
       actorUsername: usernameById.get(row.actorId) || row.actorId,
       targetLabel: row.details?.targetUsername || row.details?.name || `${row.targetType} ${row.targetId ?? ''}`.trim(),
     }));
@@ -175,11 +138,10 @@ export default function createAdminRoutes(deps: any): Router {
         totalPicks += Object.keys(profile.picks || {}).length;
       }
 
-      // Resolve actorId to username and add friendlyAction for each activity entry
+      // Resolve actorId to username for each activity entry
       const enrichedActivity = recentActivity.map((a: any) => ({
         id: a.id,
         action: a.action,
-        friendlyAction: getFriendlyAction(a.action),
         actorType: a.actorType,
         actorId: a.actorId,
         actorUsername: userMap.get(a.actorId) || a.actorId,
@@ -214,6 +176,7 @@ export default function createAdminRoutes(deps: any): Router {
           database: poolStats,
           connections: io.engine?.clientsCount || 0,
           onlineRooms: deps.state.onlineUsers.size,
+          recent: recentRequestTotals(deps.state?.metrics),
         },
         recentActivity: enrichedActivity,
         groupedActivity,
@@ -235,7 +198,6 @@ export default function createAdminRoutes(deps: any): Router {
     crypto,
     parsePageParams,
     paginateArray,
-    getFriendlyAction,
     enrichAuditEntries,
   };
   mountAdminUserRoutes({ router, deps, ctx }); // /users, /users/:id/*
@@ -427,7 +389,7 @@ export default function createAdminRoutes(deps: any): Router {
         await stores.auditLog.insert({
           actorType: 'admin',
           actorId: req.user?.userId,
-          action: 'spotify_backfill',
+          action: AUDIT_ACTIONS.SPOTIFY_BACKFILLED,
           targetType: 'festival',
           targetId: festivalId,
           detailsJson: JSON.stringify({
