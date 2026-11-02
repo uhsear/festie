@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -35,9 +36,17 @@ import { firstInvalidField, validateRegister, type RegisterErrors, type Register
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
-// No in-app Terms route exists yet; open the canonical web Terms of Service,
-// mirroring how the privacy screen links out to it.
+// Terms opens in an in-app browser sheet so sign-up never leaves the app.
 const TERMS_URL = 'https://festie.us/terms.html';
+
+const openTerms = async () => {
+  try {
+    await WebBrowser.openBrowserAsync(TERMS_URL);
+  } catch (err) {
+    console.warn('terms: in-app browser failed', err);
+    void Linking.openURL(TERMS_URL);
+  }
+};
 
 const useStyles = makeStyles((t) => ({
   container: {
@@ -619,9 +628,9 @@ export default function RegisterScreen() {
               I agree to the{' '}
             </Text>
             <TouchableOpacity
-              onPress={() => void Linking.openURL(TERMS_URL)}
+              onPress={() => void openTerms()}
               accessibilityRole="link"
-              accessibilityLabel="Read the Terms of Service, opens in browser"
+              accessibilityLabel="Read the Terms of Service"
             >
               <Text style={[styles.tosText, styles.linkTextAccent]}>Terms of Service</Text>
             </TouchableOpacity>

@@ -288,7 +288,7 @@ function makeDeps(overrides: any = {}) {
         getByUser: mock.fn(async () => [{ festivalId: 'f1', unreadUpdates: 3 }]),
       },
       notificationLog: {
-        listByUser: mock.fn(async () => [{ id: 'n1', title: 'Test', createdAt: '2026-01-01' }]),
+        listInbox: mock.fn(async () => [{ id: 'n1', title: 'Test', createdAt: '2026-01-01' }]),
       },
       topicSubscriptions: {
         getForUser: mock.fn(async () => ({ crew: true, schedule: false })),

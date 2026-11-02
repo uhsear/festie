@@ -191,13 +191,16 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     if (!stores.notificationLog) return null;
     try {
       const id = crypto.randomUUID();
+      // The log is keyed by recipient, so an SOS position stored here would outlive the
+      // crew and the raiser's account. The privacy policy promises it does not.
+      const { lat: _lat, lng: _lng, ...loggedData } = data || {};
       await stores.notificationLog.insert({
         id,
         userId,
         type,
         title: String(title || '').slice(0, MAX_TITLE_LENGTH),
         body: String(body || '').slice(0, MAX_BODY_LENGTH),
-        dataJson: data ? JSON.stringify(data) : null,
+        dataJson: data ? JSON.stringify(loggedData) : null,
         status: status || 'sent',
         platform: platform || null,
         errorMessage: errorMessage || null,
@@ -438,10 +441,11 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     // Safety-critical types (crew_sos) bypass the per-type opt-out and the DND
     // window — an emergency must reach people. prefKey is undefined for these
     // (omitted from PREF_MAP), but guard explicitly so intent is unmistakable.
-    if (!isCritical) {
-      if (prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
-      if (isInDndWindow(prefs)) return { sent: 0, reason: 'dnd_active' };
-    }
+    if (!isCritical && prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
+    // One inbox row per user per notification, before quiet hours and the device check,
+    // so a held or undeliverable push still shows in the in-app inbox.
+    await logNotification({ userId, type, title: safeTitle, body: safeBody, data: safeData, status: 'inbox', platform: 'inbox' });
+    if (!isCritical && isInDndWindow(prefs)) return { sent: 0, reason: 'dnd_active' };
 
     const tokens = await stores.deviceTokens.listByUser(userId);
     if (tokens.length === 0) return { sent: 0, reason: 'no_tokens' };
@@ -654,6 +658,7 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     for (const userId of batch) {
       const prefs = await stores.notificationPrefs.get(userId);
       if (prefs && prefKey && !prefs[prefKey]) continue;
+      await logNotification({ userId, type, title: safeTitle, body: safeBody, data: safeData, status: 'inbox', platform: 'inbox' });
       if (isInDndWindow(prefs)) continue;
 
       const tokens = await stores.deviceTokens.listByUser(userId);

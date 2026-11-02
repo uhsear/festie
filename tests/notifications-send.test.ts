@@ -838,7 +838,9 @@ describe('notifications/send: web push, channels and recipients', () => {
       tag: 'set_reminder',
     });
     assert.deepEqual(opts, { ttl: 3600, urgency: 'high' });
-    const logged = stores.notificationLog.insert.mock.calls[0]!.arguments[0];
+    const [inbox, logged] = stores.notificationLog.insert.mock.calls.map((c: any) => c.arguments[0]);
+    assert.equal(inbox.platform, 'inbox');
+    assert.equal(inbox.status, 'inbox');
     assert.equal(logged.platform, 'web');
     assert.equal(logged.status, 'sent');
   });

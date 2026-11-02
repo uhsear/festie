@@ -458,6 +458,10 @@ describe('account: GDPR export', { concurrency: 1, skip }, () => {
 
     const second = await server.request.get('/api/v1/account/export').set('x-user-token', user.token);
     assert.equal(second.status, 429);
+    const retryAfter = Number(second.headers['retry-after']);
+    assert.ok(Number.isInteger(retryAfter) && retryAfter > 0 && retryAfter < 86401, `Retry-After: ${retryAfter}`);
+    assert.equal(second.body.error.message, 'You can download your data once a day. Try again later.');
+    assert.equal(new Date(second.body.error.retryAt).toISOString(), second.body.error.retryAt);
   });
 });
 
@@ -503,8 +507,8 @@ function exportApp({ redis, notificationPrefsGet }: { redis: unknown; notificati
     setNoStore: () => {},
     getUserById: async (id: string) => ({ id, username: 'exporter' }),
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
-    sendError: (res: any, status: number, message: string, code: string) =>
-      res.status(status).json({ data: null, error: { message, code } }),
+    sendError: (res: any, status: number, message: string, code: string, details?: object) =>
+      res.status(status).json({ data: null, error: { message, code, ...details } }),
     ErrorCodes: { NOT_FOUND: 'NOT_FOUND', RATE_LIMITED: 'RATE_LIMITED', INTERNAL_ERROR: 'INTERNAL_ERROR' },
     stores: {
       profiles: { getByUserId: async () => [] },
@@ -526,7 +530,11 @@ describe('account: GDPR export limit (no database)', () => {
     assert.equal((await request(first).get('/export')).status, 200);
     const blocked = await request(second).get('/export');
     assert.equal(blocked.status, 429);
-    assert.match(blocked.body.error.message, /Next available: /);
+    assert.equal(blocked.body.error.message, 'You can download your data once a day. Try again later.');
+    const retryAfter = Number(blocked.headers['retry-after']);
+    assert.ok(Number.isInteger(retryAfter) && retryAfter > 86000 && retryAfter < 86401, `Retry-After: ${retryAfter}`);
+    const retryInMs = Date.parse(blocked.body.error.retryAt) - Date.now();
+    assert.ok(Math.abs(retryInMs - retryAfter * 1000) < 2000, 'retryAt matches Retry-After');
   });
 
   test('a failed export does not use up the day', async () => {

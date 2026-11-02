@@ -2,6 +2,7 @@ import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { getStorage } from '../platform/storage';
 import { FestivalSet, OnlineUser } from '../types';
+import type { CrewBadgeSeen } from '../utils/crewBadge';
 
 /** 'stage' is the dark default; 'daylight' is the high-contrast light theme for direct sun. */
 export type ThemePreference = 'stage' | 'daylight';
@@ -66,6 +67,8 @@ export interface UIState {
   theme: ThemePreference;
   /** Persisted device preference. Not reset on logout. SOS (heavy) always vibrates. */
   hapticsEnabled: boolean;
+  /** Persisted, per crew: what the Crew tab badge already showed. Account-scoped (reset on logout). */
+  crewBadgeSeen: Record<string, CrewBadgeSeen>;
 }
 
 export interface UIActions {
@@ -88,6 +91,8 @@ export interface UIActions {
   dismissToast: (id: number) => void;
   setTheme: (theme: ThemePreference) => void;
   setHapticsEnabled: (enabled: boolean) => void;
+  /** Merge `patch` into the crew's seen entry; pollIds keeps the newest 100. */
+  markCrewBadgeSeen: (crewId: string, patch: Partial<CrewBadgeSeen>) => void;
 }
 
 export type UIStore = UIState & UIActions;
@@ -103,6 +108,7 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   toasts: [],
   theme: 'stage',
   hapticsEnabled: true,
+  crewBadgeSeen: {},
 
   setDetailSet: (detailSet: FestivalSet | null) => {
     set({ detailSet });
@@ -182,6 +188,15 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   setHapticsEnabled: (hapticsEnabled: boolean) => {
     set({ hapticsEnabled });
   },
+
+  markCrewBadgeSeen: (crewId: string, patch: Partial<CrewBadgeSeen>) => {
+    set((state) => {
+      const prev = state.crewBadgeSeen[crewId] ?? { pollIds: [], balanceCents: null };
+      const next = { ...prev, ...patch };
+      next.pollIds = next.pollIds.slice(-100);
+      return { crewBadgeSeen: { ...state.crewBadgeSeen, [crewId]: next } };
+    });
+  },
 });
 
 /** localStorage key; packages/web/index.html reads it before first paint. */
@@ -191,6 +206,10 @@ export const useUIStore = create<UIStore>()(
   persist(uiStore, {
     name: THEME_STORAGE_KEY,
     storage: createJSONStorage(() => getStorage()),
-    partialize: (state) => ({ theme: state.theme, hapticsEnabled: state.hapticsEnabled }),
+    partialize: (state) => ({
+      theme: state.theme,
+      hapticsEnabled: state.hapticsEnabled,
+      crewBadgeSeen: state.crewBadgeSeen,
+    }),
   }),
 );

@@ -220,8 +220,26 @@ describe('uiStore', () => {
       useUIStore.getState().showToast('not persisted');
       expect(useUIStore.getState().theme).toBe('daylight');
       const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
-      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true });
+      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true, crewBadgeSeen: {} });
       useUIStore.getState().setTheme('stage');
+    });
+  });
+
+  describe('markCrewBadgeSeen', () => {
+    beforeEach(() => useUIStore.setState({ crewBadgeSeen: {} }));
+
+    it('merges patches into the crew entry', () => {
+      useUIStore.getState().markCrewBadgeSeen('c1', { pollIds: ['p1'] });
+      useUIStore.getState().markCrewBadgeSeen('c1', { balanceCents: 500 });
+      expect(useUIStore.getState().crewBadgeSeen.c1).toEqual({ pollIds: ['p1'], balanceCents: 500 });
+    });
+
+    it('keeps the newest 100 pollIds', () => {
+      const ids = Array.from({ length: 105 }, (_, i) => `p${i}`);
+      useUIStore.getState().markCrewBadgeSeen('c1', { pollIds: ids });
+      const kept = useUIStore.getState().crewBadgeSeen.c1.pollIds;
+      expect(kept).toHaveLength(100);
+      expect(kept[99]).toBe('p104');
     });
   });
 });

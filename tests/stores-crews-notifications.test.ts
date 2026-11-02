@@ -1091,21 +1091,22 @@ describe('createNotificationsStore — notificationLog', () => {
     assert.strictEqual(p[8], null);
   });
 
-  it('listByUser returns entries with default limit 50', async () => {
+  it('listInbox reads only inbox rows with default limit 50', async () => {
     const pool = mockPool([{ rows: [{ id: 'n1' }, { id: 'n2' }] }]);
     const { notificationLog } = createNotificationsStore(pool, mockUtils);
 
-    const result = await notificationLog.listByUser('u1');
+    const result = await notificationLog.listInbox('u1');
 
     assert.strictEqual(result.length, 2);
+    assert.ok(norm(pool.queries[0].sql).includes("platform = 'inbox'"));
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 50]);
   });
 
-  it('listByUser accepts custom limit', async () => {
+  it('listInbox accepts custom limit', async () => {
     const pool = mockPool([{ rows: [] }]);
     const { notificationLog } = createNotificationsStore(pool, mockUtils);
 
-    await notificationLog.listByUser('u1', 10);
+    await notificationLog.listInbox('u1', 10);
 
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 10]);
   });

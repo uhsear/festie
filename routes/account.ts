@@ -17,11 +17,193 @@ import type {
 } from '../lib/schemas';
 import { sendEmailChangeNoticeEmail, sendVerificationEmail } from '../lib/email';
 
+type ExportRow = Record<string, unknown>;
+
+const isoOrNull = (value: unknown) => (value ? new Date(value as string).toISOString() : null);
+
+// split_with is JSONB, but older rows can come back as a JSON string (see expenses.getByCrew).
+function parseSplitWith(value: unknown): string[] {
+  if (Array.isArray(value)) return value as string[];
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Records the user wrote in crews and on sets: ratings, expenses they paid or
+ * share, poll votes, and the packing items, ride offers and meeting points they
+ * created. Each section fails on its own and is then exported as [].
+ */
+async function collectAuthoredRecords(pool: RouteDeps['stores']['pool'], userId: string, log: RouteDeps['log']) {
+  const section = async (name: string, sql: string, mapRow: (r: ExportRow) => Record<string, unknown>) => {
+    try {
+      const { rows } = await pool.query(sql, [userId]);
+      return (rows as ExportRow[]).map(mapRow);
+    } catch (error) {
+      log.warn('gdpr-export:partial-failure', { section: name, userId, error: (error as Error).message });
+      return [];
+    }
+  };
+
+  const ratings = await section(
+    'ratings',
+    `
+  SELECT
+    r.set_id,
+    s.festival_id,
+    s.artist,
+    r.rating,
+    r.note,
+    r.created_at,
+    r.updated_at
+  FROM
+    set_ratings r
+    LEFT JOIN festival_sets s ON s.id = r.set_id
+  WHERE
+    r.user_id = $1
+  ORDER BY
+    r.created_at
+`,
+    (r) => ({
+      setId: r.set_id,
+      festivalId: r.festival_id ?? null,
+      artist: r.artist ?? null,
+      rating: r.rating,
+      note: r.note ?? null,
+      createdAt: isoOrNull(r.created_at),
+      updatedAt: isoOrNull(r.updated_at),
+    }),
+  );
+  const expenses = await section(
+    'expenses',
+    `
+  SELECT
+    id,
+    crew_id,
+    description,
+    amount,
+    category,
+    planned,
+    paid_by,
+    split_with,
+    created_at
+  FROM
+    crew_expenses
+  WHERE
+    paid_by = $1
+    OR split_with @> jsonb_build_array($1::text)
+  ORDER BY
+    created_at
+`,
+    (r) => ({
+      id: r.id,
+      crewId: r.crew_id,
+      description: r.description,
+      amount: Number(r.amount),
+      category: r.category ?? null,
+      planned: r.planned ?? false,
+      paidByYou: r.paid_by === userId,
+      splitWith: parseSplitWith(r.split_with),
+      createdAt: isoOrNull(r.created_at),
+    }),
+  );
+  const pollVotes = await section(
+    'pollVotes',
+    `
+  SELECT
+    v.poll_id,
+    p.crew_id,
+    p.question,
+    p.options ->> v.option_index AS option,
+    v.voted_at
+  FROM
+    crew_poll_votes v
+    JOIN crew_polls p ON p.id = v.poll_id
+  WHERE
+    v.user_id = $1
+  ORDER BY
+    v.voted_at
+`,
+    (r) => ({
+      pollId: r.poll_id,
+      crewId: r.crew_id,
+      question: r.question,
+      option: r.option ?? null,
+      votedAt: isoOrNull(r.voted_at),
+    }),
+  );
+  const packingItems = await section(
+    'packingItems',
+    'SELECT id, crew_id, label, claimed, brought_by, created_at FROM crew_packing_items WHERE created_by = $1',
+    (r) => ({
+      id: r.id,
+      crewId: r.crew_id,
+      label: r.label,
+      claimed: r.claimed ?? false,
+      broughtBy: r.brought_by ?? null,
+      createdAt: isoOrNull(r.created_at),
+    }),
+  );
+  const rides = await section(
+    'rides',
+    'SELECT id, crew_id, driver, seats, depart_from, depart_at, note, created_at FROM crew_ride_offers WHERE created_by = $1',
+    (r) => ({
+      id: r.id,
+      crewId: r.crew_id,
+      driver: r.driver ?? null,
+      seats: r.seats ?? null,
+      departFrom: r.depart_from ?? null,
+      // depart_at is free TEXT (migration 047), not a timestamp, so it is exported as stored.
+      departAt: r.depart_at ?? null,
+      note: r.note ?? null,
+      createdAt: isoOrNull(r.created_at),
+    }),
+  );
+  const meetingPoints = await section(
+    'meetingPoints',
+    `
+  SELECT
+    id,
+    crew_id,
+    label,
+    location,
+    latitude,
+    longitude,
+    type,
+    meet_at,
+    created_at
+  FROM
+    crew_meeting_points
+  WHERE
+    created_by = $1
+`,
+    (r) => ({
+      id: r.id,
+      crewId: r.crew_id,
+      label: r.label,
+      location: r.location ?? null,
+      latitude: r.latitude ?? null,
+      longitude: r.longitude ?? null,
+      type: r.type ?? null,
+      meetAt: isoOrNull(r.meet_at),
+      createdAt: isoOrNull(r.created_at),
+    }),
+  );
+
+  return { ratings, expenses, pollVotes, packingItems, rides, meetingPoints };
+}
+
 /**
  * Collect all user data for GDPR export. Gathers profiles, device tokens,
  * crews, sessions, notification preferences, topic subscriptions, Spotify
- * linkage, payment handles, email, display name, date of birth, and any
- * crew status/location snapshots the user has authored.
+ * linkage, payment handles, email, display name, date of birth, the crew
+ * statuses the user has posted (with their stored location), and the records
+ * the user wrote: set ratings, expenses, poll votes, packing items, ride
+ * offers and meeting points.
  */
 async function collectGdprData(
   userId: string,
@@ -46,7 +228,7 @@ async function collectGdprData(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const exportData: any = {
     exportDate: new Date().toISOString(),
-    exportVersion: '1.1',
+    exportVersion: '1.2',
     user: {
       id: currentUser.id,
       username: currentUser.username,
@@ -64,7 +246,6 @@ async function collectGdprData(
       updatedAt: currentUser.updatedAt,
     },
     profiles: [],
-    messages: [],
     deviceTokens: [],
   };
 
@@ -85,8 +266,6 @@ async function collectGdprData(
       updatedAt: profile.updatedAt,
     });
   }
-
-  // Chat feature removed (migration 013) — messages export skipped
 
   // Get device tokens
   if (stores?.deviceTokens?.listByUser) {
@@ -181,9 +360,8 @@ async function collectGdprData(
     exportData.spotifyAccount = null;
   }
 
-  // Get crew status snapshots the user has authored (M5 offline-sync snapshots).
-  // Location breadcrumbs (latitude/longitude) are excluded — they are ephemeral
-  // device-captured offsets, not stored personal location history.
+  // Get crew status snapshots the user has authored (M5 offline-sync snapshots),
+  // with the stored status location: it persists and crewmates can see it.
   if (stores?.crewStatus?.listByUser) {
     try {
       const statuses = await stores.crewStatus.listByUser(userId);
@@ -193,6 +371,9 @@ async function collectGdprData(
         targetMeetingPointId: s.target_meeting_point_id ?? null,
         etaMinutes: s.eta_minutes ?? null,
         note: s.note ?? null,
+        latitude: s.latitude ?? null,
+        longitude: s.longitude ?? null,
+        locationCapturedAt: isoOrNull(s.location_captured_at),
         updatedAt: s.updated_at ? new Date(s.updated_at as string).toISOString() : null,
       }));
     } catch (error) {
@@ -200,6 +381,8 @@ async function collectGdprData(
       exportData.crewStatuses = [];
     }
   }
+
+  Object.assign(exportData, await collectAuthoredRecords(stores.pool, userId, log));
 
   return exportData;
 }
@@ -491,6 +674,29 @@ export default function createAccountRoutes(deps: RouteDeps) {
   router.put('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
   router.patch('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
 
+  // ── POST /stop-sharing — turn off the public page and clear status locations
+  // Payment handles and picks links are left alone; the client stops live
+  // location itself. Each cleared status row is re-broadcast with the same
+  // payload as PUT /crews/:crewId/status so open crew screens drop the pin.
+  router.post('/stop-sharing', userAuth, rateLimit(10, 'stop-sharing'), async (req: Request, res: Response) => {
+    const userId = req.user.userId;
+    try {
+      setNoStore(res);
+      const user = await stores.users.update(userId, { publicSchedule: false });
+      if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+      invalidateUserCache();
+
+      const cleared: Array<{ crew_id: string }> = await stores.crewStatus.clearLocationsForUser(userId);
+      for (const row of cleared) io.to('crew:' + row.crew_id).emit('crew:status-updated', { status: row });
+
+      log.info('account:stop-sharing', { userId, clearedStatusLocations: cleared.length });
+      return sendSuccess(res, { user: serializePublicUser(user), clearedStatusLocations: cleared.length });
+    } catch (error) {
+      log.error('account stop-sharing failed', { error: (error as Error).message, userId });
+      return sendError(res, 500, "Couldn't stop sharing. Try again.", ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
   // ── POST /email — request a change of the account email address ────────
   // Shaped on POST /api/v1/auth/change-password (routes/auth.ts) and on
   // DELETE / below: current-password re-auth, scoped rate limit, Zod body.
@@ -670,11 +876,13 @@ export default function createAccountRoutes(deps: RouteDeps) {
       const retryMs = await reserveExport(userId);
       if (retryMs > 0) {
         const nextAvailable = new Date(Date.now() + retryMs);
+        res.setHeader('Retry-After', String(Math.max(1, Math.ceil(retryMs / 1000))));
         return sendError(
           res,
           429,
-          `Data export rate limited. Next available: ${nextAvailable.toISOString()}`,
+          'You can download your data once a day. Try again later.',
           ErrorCodes.RATE_LIMITED,
+          { retryAt: nextAvailable.toISOString() },
         );
       }
       reserved = true;

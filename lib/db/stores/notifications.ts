@@ -225,22 +225,30 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
       );
     },
 
-    async listByUser(userId: string, limit: number = 50) {
+    // shortcut: notification_log has no age-based cleanup; the inbox reads the newest 50. Add a retention rule if the table grows.
+    async listInbox(userId: string, limit: number = 50) {
+      // data holds only these four keys, so SOS coordinates in data_json are never returned.
       const result = await pool.query(
         `
         SELECT
           id,
-          user_id AS "userId",
           type,
           title,
           body,
-          status,
-          platform,
-          created_at AS "createdAt"
+          created_at AS "createdAt",
+          jsonb_strip_nulls(
+            jsonb_build_object(
+              'deepLink', data_json ->> 'deepLink',
+              'setId', data_json ->> 'setId',
+              'festivalId', data_json ->> 'festivalId',
+              'crewId', data_json ->> 'crewId'
+            )
+          ) AS data
         FROM
           notification_log
         WHERE
           user_id = $1
+          AND platform = 'inbox'
         ORDER BY
           created_at DESC
         LIMIT
