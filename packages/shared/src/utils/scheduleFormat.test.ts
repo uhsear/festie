@@ -3,6 +3,7 @@ import {
   fmtCountdown,
   byStartTime,
   setLabel,
+  fmtDurationMinutes,
   formatDayChip,
   formatSetWhen,
   splitCardsByNow,
@@ -283,5 +284,17 @@ describe('buildListenList / listenListText', () => {
         '- Second',
       ].join('\n'),
     );
+  });
+});
+
+describe('fmtDurationMinutes', () => {
+  it.each([
+    [0, '0 min'],
+    [-5, '0 min'],
+    [45, '45 min'],
+    [60, '1 h'],
+    [75, '1 h 15 min'],
+  ])('formats %i as %s', (minutes, label) => {
+    expect(fmtDurationMinutes(minutes)).toBe(label);
   });
 });

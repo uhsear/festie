@@ -18,24 +18,36 @@
  * Self-healing: `sweepStale` drops peers whose serverAt is older than the TTL
  * (defense in depth alongside the server's 120s Redis TTL + peer-stopped
  * broadcasts), so a force-quit peer's marker fades even with no clean stop event.
+ *
+ * Two notions of "sharing": `shareIntent` is what the USER asked for (crew, end
+ * time, paused, battery opt-in) and outlives any screen; `sharingCrewId` /
+ * `startSharing` / `stopSharing` only track what the publisher is sending right now.
  */
 
 import { create, StateCreator } from 'zustand';
-import type { PeerLocation, SosEntry } from '../types';
+import type { PeerLocation, SosEntry, SosViewer } from '../types';
 import { LIVE_LOCATION } from '../constants/config';
 import { api } from '../services/api';
+
+export type LiveShareEndReason = 'expired' | 'background' | 'low-power' | 'error' | 'denied' | 'rejected' | 'user';
+
+export interface LiveShareIntent {
+  crewId: string;
+  /** ISO time the session ends. It keeps running while paused. */
+  expiresAt: string;
+  paused: boolean;
+  shareBattery: boolean;
+}
 
 export interface LiveLocationState {
   /** The crew this store is scoped to (viewing/sharing), or null when inactive. */
   crewId: string | null;
   /** The crew we are actively publishing our own position to, or null. */
   sharingCrewId: string | null;
-  /**
-   * The crew the user opted in to share with, or null. This is the intent an
-   * app-level publisher reads, so sharing outlives the screen that turned it on.
-   * Cleared by cancelSharing, a crew switch (setActiveCrew) and reset (logout).
-   */
-  shareIntentCrewId: string | null;
+  /** The user's live-share session, or null. Cleared on a crew switch and on logout. */
+  shareIntent: LiveShareIntent | null;
+  /** Why the last session ended, for a one-time notice. Null while sharing or after clearShareEnded. */
+  shareEndedReason: LiveShareEndReason | null;
   /**
    * Phase 4C: ISO timestamp our own time-boxed share auto-stops, or null. Drives
    * the "sharing ends in Nm" countdown on our own sharing indicator (peers get
@@ -48,6 +60,12 @@ export interface LiveLocationState {
   lastSentCoord: { lat: number; lng: number } | null;
   /** Peers currently sharing to this crew, keyed by userId. */
   peers: Record<string, PeerLocation>;
+  /**
+   * When each swept peer last reached the server (ISO serverAt), keyed by userId,
+   * for "Lost contact 12 min ago". Only the time is kept, never the position.
+   * A new fix or a deliberate stop clears the entry.
+   */
+  lostContact: Record<string, string>;
   /**
    * All active SOS entries for this crew, keyed by the raiser's userId. Multiple
    * crew members can have an SOS up at once; each is its own keyed slot.
@@ -78,10 +96,15 @@ export interface LiveLocationActions {
   startSharing: (crewId: string, expiresAt?: string | null) => void;
   /** Stop publishing our own position; clears publisher bookkeeping. */
   stopSharing: () => void;
-  /** Opt in to sharing our position with `crewId` (sets shareIntentCrewId). */
-  requestSharing: (crewId: string) => void;
-  /** Withdraw the opt-in; the app-level publisher then stops. */
-  cancelSharing: () => void;
+  /** Start a time-boxed share session. Clears any earlier end reason. */
+  beginShare: (crewId: string, expiresAt: string, shareBattery: boolean) => void;
+  /** Pause hides our dot from the crew; the end time keeps running. No-op without a session. */
+  setSharePaused: (paused: boolean) => void;
+  /** End the session and record why. No-op without a session. */
+  endShare: (reason: LiveShareEndReason) => void;
+  clearShareEnded: () => void;
+  /** Merge viewers into one raiser's SOS (union by userId). Ignores an unknown raiser. */
+  applySosSeen: (raiserId: string, seenBy: SosViewer[]) => void;
   /** Record a just-published fix (used by the throttle in useLiveLocationPublisher). */
   recordSent: (coord: { lat: number; lng: number }, at: number) => void;
   /** Apply a peer's position. Ignored if it targets a different crew than active. */
@@ -111,11 +134,13 @@ export type LiveLocationStore = LiveLocationState & LiveLocationActions;
 const EMPTY: LiveLocationState = {
   crewId: null,
   sharingCrewId: null,
-  shareIntentCrewId: null,
+  shareIntent: null,
+  shareEndedReason: null,
   sharingExpiresAt: null,
   lastSentAt: null,
   lastSentCoord: null,
   peers: {},
+  lostContact: {},
   sosByUser: {},
   sos: null,
   activeSosList: [],
@@ -153,12 +178,30 @@ const liveLocationStore: StateCreator<LiveLocationStore> = (set, get) => ({
     set({ sharingCrewId: null, sharingExpiresAt: null, lastSentAt: null, lastSentCoord: null });
   },
 
-  requestSharing: (crewId) => {
-    set({ shareIntentCrewId: crewId });
+  beginShare: (crewId, expiresAt, shareBattery) => {
+    set({ shareIntent: { crewId, expiresAt, paused: false, shareBattery }, shareEndedReason: null });
   },
 
-  cancelSharing: () => {
-    set({ shareIntentCrewId: null });
+  setSharePaused: (paused) => {
+    set((state) => (state.shareIntent ? { shareIntent: { ...state.shareIntent, paused } } : state));
+  },
+
+  endShare: (reason) => {
+    set((state) => (state.shareIntent ? { shareIntent: null, shareEndedReason: reason } : state));
+  },
+
+  clearShareEnded: () => {
+    set({ shareEndedReason: null });
+  },
+
+  applySosSeen: (raiserId, seenBy) => {
+    set((state) => {
+      const entry = state.sosByUser[raiserId];
+      if (!entry) return state;
+      const merged = new Map((entry.seenBy ?? []).map((v) => [v.userId, v]));
+      for (const v of seenBy) merged.set(v.userId, v);
+      return deriveSos({ ...state.sosByUser, [raiserId]: { ...entry, seenBy: [...merged.values()] } });
+    });
   },
 
   recordSent: (coord, at) => {
@@ -170,15 +213,19 @@ const liveLocationStore: StateCreator<LiveLocationStore> = (set, get) => ({
     // Guard: only accept peers for the crew we're scoped to. The realtime hook
     // already guards via the router; this is defense in depth.
     if (crewId && peer.crewId !== crewId) return;
-    set((state) => ({ peers: { ...state.peers, [peer.userId]: peer } }));
+    set((state) => {
+      const { [peer.userId]: _found, ...lostContact } = state.lostContact;
+      return { peers: { ...state.peers, [peer.userId]: peer }, lostContact };
+    });
   },
 
   removePeer: (userId) => {
     set((state) => {
-      if (!(userId in state.peers)) return state;
+      if (!(userId in state.peers) && !(userId in state.lostContact)) return state;
       const next = { ...state.peers };
       delete next[userId];
-      return { peers: next };
+      const { [userId]: _stopped, ...lostContact } = state.lostContact;
+      return { peers: next, lostContact };
     });
   },
 
@@ -186,15 +233,17 @@ const liveLocationStore: StateCreator<LiveLocationStore> = (set, get) => ({
     set((state) => {
       let changed = false;
       const next: Record<string, PeerLocation> = {};
+      const lostContact = { ...state.lostContact };
       for (const [userId, peer] of Object.entries(state.peers)) {
         const serverMs = new Date(peer.serverAt).getTime();
         if (Number.isFinite(serverMs) && now - serverMs > ttlMs) {
           changed = true;
+          lostContact[userId] = peer.serverAt;
           continue;
         }
         next[userId] = peer;
       }
-      return changed ? { peers: next } : state;
+      return changed ? { peers: next, lostContact } : state;
     });
   },
 

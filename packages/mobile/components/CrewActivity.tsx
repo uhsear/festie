@@ -53,6 +53,8 @@ const ACTIVITY_VISUAL: Record<string, { icon: IconName; tint: Tint }> = {
   'crew-updated': { icon: 'create-outline', tint: 'amber' },
   sos_raised: { icon: 'alert-circle', tint: 'coral' },
   sos_cleared: { icon: 'shield-checkmark-outline', tint: 'green' },
+  'checkin-started': { icon: 'timer-outline', tint: 'amber' },
+  'checkin-done': { icon: 'checkmark-circle-outline', tint: 'green' },
 };
 
 const FALLBACK_VISUAL = { icon: 'ellipse-outline' as IconName, tint: 'muted' as Tint };

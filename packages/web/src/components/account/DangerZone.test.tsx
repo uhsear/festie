@@ -30,70 +30,18 @@ vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
-const mockApiGet = vi.fn();
 vi.mock('@festie/shared/services/api', () => ({
-  api: {
-    get: (...args: unknown[]) => mockApiGet(...args),
-  },
-  mapErrorToUserMessage: (_err: unknown, fallback: string) => fallback,
+  mapErrorToUserMessage: (err: unknown, fallback: string) =>
+    (err as { code?: string }).code ? (err as Error).message : fallback,
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockCrews = [];
   mockLoadCrews.mockResolvedValue(undefined);
-  // Default: export succeeds with a clean GDPR object
-  mockApiGet.mockResolvedValue({ profile: {} });
-
-  // Stub URL methods used by export
-  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
-  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 });
 
 describe('DangerZone', () => {
-  // --- Export section ---
-
-  it('renders the Export Data section', () => {
-    render(<DangerZone />);
-    expect(screen.getByText('Export Data')).toBeInTheDocument();
-    expect(screen.getByText('Download My Data')).toBeInTheDocument();
-  });
-
-  it('triggers data export download on click', async () => {
-    const user = userEvent.setup();
-    const clickSpy = vi.fn();
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      if (tag === 'a') {
-        const anchor = { href: '', download: '', click: clickSpy } as unknown as HTMLElement;
-        return anchor;
-      }
-      return document.createElementNS('http://www.w3.org/1999/xhtml', tag) as HTMLElement;
-    });
-
-    render(<DangerZone />);
-    await user.click(screen.getByText('Download My Data'));
-
-    await waitFor(() => {
-      expect(clickSpy).toHaveBeenCalled();
-    });
-    expect(mockToast).toHaveBeenCalledWith('Export downloaded', 'success');
-  });
-
-  it('shows error toast when export fails', async () => {
-    const user = userEvent.setup();
-    mockApiGet.mockRejectedValue(new Error('boom'));
-
-    render(<DangerZone />);
-    await user.click(screen.getByText('Download My Data'));
-
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        "Couldn't export data. Try again.",
-        'error',
-      );
-    });
-  });
-
   // --- Delete account section ---
 
   it('renders the Delete Account section', () => {
@@ -165,7 +113,30 @@ describe('DangerZone', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
   });
 
-  it('shows error toast when account deletion fails', async () => {
+  it('shows a wrong password inline under the field, not as a toast', async () => {
+    const user = userEvent.setup();
+    mockDeleteAccount.mockRejectedValue(
+      Object.assign(new Error('That password is not correct.'), {
+        name: 'ApiClientError',
+        status: 403,
+        code: 'PASSWORD_INCORRECT',
+      }),
+    );
+
+    render(<DangerZone />);
+    await user.click(screen.getByText('Delete My Account'));
+    await user.type(screen.getByPlaceholderText('Password'), 'mypassword');
+    await user.click(screen.getByText('Confirm Delete'));
+
+    const field = screen.getByPlaceholderText('Password');
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0])).toHaveTextContent(
+      'That password is not correct.',
+    );
+    expect(mockToast).not.toHaveBeenCalledWith(expect.anything(), 'error');
+  });
+
+  it('clears the inline delete error when the password changes', async () => {
     const user = userEvent.setup();
     mockDeleteAccount.mockRejectedValue(new Error('fail'));
 
@@ -173,13 +144,10 @@ describe('DangerZone', () => {
     await user.click(screen.getByText('Delete My Account'));
     await user.type(screen.getByPlaceholderText('Password'), 'mypassword');
     await user.click(screen.getByText('Confirm Delete'));
+    expect(await screen.findByText("Couldn't delete account. Try again.")).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        "Couldn't delete account. Try again.",
-        'error',
-      );
-    });
+    await user.type(screen.getByPlaceholderText('Password'), 'x');
+    expect(screen.queryByText("Couldn't delete account. Try again.")).not.toBeInTheDocument();
   });
 
   it('does not call handleDelete if password field is empty on submit', async () => {

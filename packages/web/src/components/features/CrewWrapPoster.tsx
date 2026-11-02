@@ -5,7 +5,7 @@ import type {
   CrewWrapData,
 } from '@festie/shared/types';
 import { POSTER } from '@festie/shared/tokens';
-import { festivalTint } from '@festie/shared/utils';
+import { crewPosterContent, festivalTint } from '@festie/shared/utils';
 import PosterFrame from '../wrap/PosterFrame';
 
 // Re-export the shared types so existing importers (e.g. routes/wrap.tsx) keep
@@ -16,11 +16,9 @@ interface Props {
   crewName: string;
   festivalName: string;
   wrap: CrewWrapData;
+  showMoney: boolean;
   byline?: string | null;
 }
-
-const money = (n: number) =>
-  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
 
 const { font, colors } = POSTER;
 
@@ -29,16 +27,10 @@ const { font, colors } = POSTER;
  * the same PosterFrame. Every field degrades gracefully — an empty or single-member crew
  * shows fallbacks rather than blanks or NaN.
  */
-export default function CrewWrapPoster({ crewName, festivalName, wrap, byline }: Props) {
+export default function CrewWrapPoster({ crewName, festivalName, wrap, showMoney, byline }: Props) {
   const tint = festivalTint(festivalName);
   const topOverlap = wrap.topOverlap;
-  const seenTogether = wrap.setsSeenTogether.slice(0, 5);
-
-  const stats: { label: string; value: string }[] = [
-    { label: 'Crew', value: String(wrap.memberCount) },
-    { label: 'Seen together', value: String(wrap.setsSeenTogether.length) },
-    { label: 'Split', value: money(wrap.totalSplit) },
-  ];
+  const { spotlight, stats, seenTogether } = crewPosterContent(wrap, { showMoney });
 
   return (
     <PosterFrame festivalName={festivalName} kicker="CREW WRAP" byline={byline}>
@@ -55,11 +47,7 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap, byline }:
               : undefined
           }
         />
-        <Superlative
-          label="Biggest spender"
-          value={wrap.biggestSpender ? wrap.biggestSpender.name : 'No expenses yet'}
-          sub={wrap.biggestSpender ? `fronted ${money(wrap.biggestSpender.amount)}` : undefined}
-        />
+        <Superlative label={spotlight.label} value={spotlight.value} sub={spotlight.sub} />
 
         <div>
           <div style={{ fontSize: font.statLabel, letterSpacing: 4, textTransform: 'uppercase', color: colors.secondary, marginBottom: 16 }}>

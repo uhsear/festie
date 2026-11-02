@@ -187,8 +187,9 @@ export function createRatingsRoutes({
         // The wrap derives totalSplit/biggestSpender from the expense rows, not
         // balances: settling up zeroes every balance.
         const expenses = await stores.expenses.getByCrew(crewId);
+        const currency = await stores.expenses.getCurrency(crewId);
         const wrap = await stores.ratings.getCrewWrap(crewId, festivalId, { expenses });
-        return sendSuccess(res, { wrap });
+        return sendSuccess(res, { wrap: { ...wrap, currency } });
       } catch (err: any) {
         log.error('get crew wrap failed', { error: err.message, crewId: req.validatedParams?.crewId });
         return sendError(res, 500, 'Internal server error', ErrorCodes.INTERNAL_ERROR);

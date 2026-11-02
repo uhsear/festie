@@ -32,7 +32,10 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (sel: (s: unknown) => unknown) =>
     sel({ currentFestival: { id: 'f9', name: 'Now Fest' }, days: [] }),
 }));
-vi.mock('@festie/shared/utils', () => ({ festivalPhase: () => mocks.phase }));
+vi.mock('@festie/shared/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/utils')>()),
+  festivalPhase: () => mocks.phase,
+}));
 vi.mock('../ui/EmptyState', () => ({
   default: ({ title, cta }: { title: string; cta?: { label: string; onClick: () => void } }) => (
     <div>

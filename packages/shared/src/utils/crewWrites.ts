@@ -115,13 +115,16 @@ export interface PayOption {
 }
 
 /** The payee's payment links for a settlement, in display order. */
-export function payOptionsFor(s: CrewSettlement): PayOption[] {
+export function payOptionsFor(s: CrewSettlement, currency = 'USD'): PayOption[] {
   const options: PayOption[] = [];
-  const venmo = venmoLink({ handle: s.payeeHandles.venmo, amountCents: s.amountCents, note: 'Festie settle-up' });
-  if (venmo) options.push({ label: 'Venmo', link: venmo });
-  const cashapp = cashAppLink({ handle: s.payeeHandles.cashapp, amountCents: s.amountCents });
-  if (cashapp) options.push({ label: 'Cash App', link: cashapp });
-  const paypal = payPalLink({ handle: s.payeeHandles.paypal, amountCents: s.amountCents });
+  // Venmo and Cash App only move US dollars.
+  if (currency === 'USD') {
+    const venmo = venmoLink({ handle: s.payeeHandles.venmo, amountCents: s.amountCents, note: 'Festie settle-up' });
+    if (venmo) options.push({ label: 'Venmo', link: venmo });
+    const cashapp = cashAppLink({ handle: s.payeeHandles.cashapp, amountCents: s.amountCents });
+    if (cashapp) options.push({ label: 'Cash App', link: cashapp });
+  }
+  const paypal = payPalLink({ handle: s.payeeHandles.paypal, amountCents: s.amountCents, currency });
   if (paypal) options.push({ label: 'PayPal', link: paypal });
   return options;
 }
@@ -145,9 +148,10 @@ export interface SettleUpFlow {
 export function createSettleUpFlow(
   s: CrewSettlement,
   record: (request: { toUserId: string; amount: number }) => Promise<WriteOutcome>,
+  currency = 'USD',
 ): SettleUpFlow {
   return {
-    options: payOptionsFor(s),
+    options: payOptionsFor(s, currency),
     confirmPaid: () => record({ toUserId: s.toUserId, amount: s.amount }),
   };
 }

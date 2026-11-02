@@ -29,7 +29,8 @@ import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady } fro
 import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
 import {
   artistDisplayName,
-  getConflictingSetIds,
+  detectConflicts,
+  clashBadgeBySetId,
   setMinuteRange,
   festivalPhase,
   splitCardsByNow,
@@ -75,6 +76,7 @@ import ScheduleResultsRow from '../../components/ScheduleResultsRow';
 import FestivalList from '../../components/FestivalList';
 import FreshnessChip from '../../components/FreshnessChip';
 import SaveStatusChip from '../../components/SaveStatusChip';
+import OfflineStatusChip from '../../components/OfflineStatusChip';
 import OtherDayMatches from '../../components/OtherDayMatches';
 import SetCardMobile from '../../components/SetCardMobile';
 import EmptyState from '../../components/EmptyState';
@@ -365,8 +367,13 @@ export default function TimelineScreen() {
       ? { label: 'Show another day', onPress: () => setSelectedDay(otherDayWithSets) }
       : undefined;
 
-  // Conflict set IDs — same util the web Cards view uses.
-  const conflictIds = useMemo(() => getConflictingSetIds(filteredSets, getMyPick), [filteredSets, getMyPick]);
+  // Each clashing set names its worst overlap; the ids feed TimelineView unchanged.
+  const conflicts = useMemo(() => detectConflicts(filteredSets, getMyPick), [filteredSets, getMyPick]);
+  const clashBadges = useMemo(
+    () => clashBadgeBySetId(conflicts, currentFestival?.b2bSeparator),
+    [conflicts, currentFestival?.b2bSeparator],
+  );
+  const conflictIds = useMemo(() => new Set(clashBadges.keys()), [clashBadges]);
 
   // Cards view: a header row per "Group by" section (Time, Stage or A-Z), then
   // its sets. Ended sets of today sit behind one "Earlier today (n)" row first.
@@ -533,6 +540,7 @@ export default function TimelineScreen() {
           myPick={getMyPick(set.id)}
           friendProfiles={getOtherPicks(set.id)}
           hasConflict={conflictIds.has(set.id)}
+          clashLabel={clashBadges.get(set.id)?.label}
           hasNote={!!getMyNote(set.id)}
           reminderMinutes={getMyReminder(set.id)}
           onPickChange={(priority) => handlePickChange(set.id, priority)}
@@ -549,6 +557,7 @@ export default function TimelineScreen() {
       getMyNote,
       getMyReminder,
       conflictIds,
+      clashBadges,
       handlePickChange,
       router,
       haptics,
@@ -839,6 +848,11 @@ export default function TimelineScreen() {
           </TouchableOpacity>
         ) : null}
       </View>
+      {user ? (
+        <View style={{ paddingHorizontal: hPad, paddingTop: t.spacing[2] }}>
+          <OfflineStatusChip remind />
+        </View>
+      ) : null}
 
       {/* DC1 — search and the stage / my-picks + phase-action setup chrome are
           folded behind the search/filter toggles in the control row above; only

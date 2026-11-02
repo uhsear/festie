@@ -1,10 +1,13 @@
-import { useMemo, lazy, Suspense } from 'react';
+import { useMemo, useState, lazy, Suspense } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useFestivalStore, useAuthStore, selectMyPicks } from '@festie/shared/stores';
+import { useUIStore } from '@festie/shared/stores/uiStore';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
+import { buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
 import EmptyState from '../components/ui/EmptyState';
@@ -18,12 +21,17 @@ import PickConflicts from '../components/features/PickConflicts';
 import RateNightBanner from '../components/features/RateNightBanner';
 import PicksPlanRow from '../components/features/PicksPlanRow';
 import ListenList from '../components/features/ListenList';
+import MyDayList from '../components/features/MyDayList';
+import PlanNotesList from '../components/features/PlanNotesList';
 // Lazy-loaded: SharePicksDialog pulls in qrcode.react, which has no business in the
 // picks bundle until the user actually opens the share modal.
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
 const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
 const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
 import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+type PicksViewMode = 'plan' | 'myday' | 'reminders' | 'notes';
 
 // Dot accent token and the matching tint-ring Badge variant per priority —
 // mirroring the mobile Picks tab where every tier shares one accent across its
@@ -59,6 +67,11 @@ function PicksViewInner() {
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const sets = useFestivalStore((state) => state.sets);
   const days = useFestivalStore((state) => state.days);
+  const stages = useFestivalStore((state) => state.stages);
+  const selectedDay = useFestivalStore((state) => state.selectedDay);
+  const setDetailSet = useUIStore((state) => state.setDetailSet);
+  const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  const [view, setView] = useState<PicksViewMode>('plan');
   const {
     groupMode,
     setGroupMode,
@@ -81,6 +94,31 @@ function PicksViewInner() {
   // independently of the active filters.
   const pickedSets = useMemo(() => sets.filter((s) => myPicks?.[s.id]), [sets, myPicks]);
   const hasAnyPicks = !!currentProfile && pickedSets.length > 0;
+
+  const timeZone = resolveFestivalTimeZone(currentFestival);
+  const planInput = useMemo(
+    () => ({ sets, days, timeZone, notes: currentProfile?.notes, reminders: currentProfile?.reminders, myPicks: myPicks ?? undefined }),
+    [sets, days, timeZone, currentProfile?.notes, currentProfile?.reminders, myPicks],
+  );
+  const reminderItems = useMemo(() => buildPlanList('reminders', planInput), [planInput]);
+  const noteItems = useMemo(() => buildPlanList('notes', planInput), [planInput]);
+
+  const myDay = useMemo(() => {
+    if (view !== 'myday') return null;
+    const picks = myPicks ?? {};
+    const dayGroups = buildPickConflicts({ sets, myPicks: picks, selectedDay, days, timeZone, stages });
+    return buildMyDay({
+      sets,
+      myPicks: picks,
+      dayIndex: selectedDay,
+      days,
+      timeZone,
+      stages,
+      meetingPoints,
+      conflictGroups: dayGroups,
+      b2bSeparator: currentFestival?.b2bSeparator,
+    });
+  }, [view, sets, myPicks, selectedDay, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator]);
 
   const actionButtons = hasAnyPicks ? (
     <Suspense fallback={null}>
@@ -117,6 +155,53 @@ function PicksViewInner() {
     );
   }
 
+  const viewTabs: Array<{ id: PicksViewMode; label: string }> = [
+    { id: 'plan', label: COPY.myDay.allPicks },
+    { id: 'myday', label: COPY.myDay.name },
+    { id: 'reminders', label: `${COPY.planLists.reminders} · ${reminderItems.length}` },
+    { id: 'notes', label: `${COPY.planLists.notes} · ${noteItems.length}` },
+  ];
+  const viewTabRow =
+    hasAnyPicks || reminderItems.length > 0 || noteItems.length > 0 ? (
+      <div role="tablist" aria-label="Picks views" className="flex gap-2 mb-3 overflow-x-auto">
+        {viewTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={view === tab.id}
+            className={cn(
+              'min-h-[44px] px-4 rounded-full border text-sm font-medium whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+              view === tab.id
+                ? 'bg-accent-aqua/20 border-accent-aqua text-text-primary'
+                : 'bg-bg-card border-border text-text-secondary hover:bg-bg-card-hover',
+            )}
+            onClick={() => setView(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    ) : null;
+
+  // Reminders and notes can exist without picks, so these lists skip the empty state.
+  if (view === 'reminders' || view === 'notes') {
+    return (
+      <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
+        <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
+          {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {viewTabRow}
+          <PlanNotesList
+            kind={view}
+            items={view === 'reminders' ? reminderItems : noteItems}
+            days={days}
+            onOpenSet={setDetailSet}
+          />
+        </div>
+      </RefreshableView>
+    );
+  }
+
   // Global empty state: zero picks → single friendly CTA pointing at /cards,
   // rather than stacked hint blocks which looked like broken/stuck UI on first visit.
   if (stats.total === 0) {
@@ -125,6 +210,7 @@ function PicksViewInner() {
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
           {guestBanner}
           {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {viewTabRow}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
           <PickBulkActions />
@@ -167,9 +253,14 @@ function PicksViewInner() {
       <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
         {guestBanner}
         {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+        {viewTabRow}
         <CrewSuggestionStrip />
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
 
+        {view === 'myday' && myDay && <MyDayList myDay={myDay} onOpenSet={setDetailSet} timeZone={timeZone} />}
+
+        {view === 'plan' && (
+          <>
         <div role="group" aria-label="Filter picks" className="flex flex-wrap gap-2 mb-3">
           {chips.map((c) => (
             <button
@@ -327,6 +418,8 @@ function PicksViewInner() {
             </button>
           );
         })}
+          </>
+        )}
       </div>
     </RefreshableView>
   );

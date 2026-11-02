@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { parseJsonObject } from '../lib/db/connection';
 import { logCrewActivity } from '../lib/db/stores/activity';
+import { AUDIT_ACTION_CREW_ADD_MEMBER } from '../lib/db/stores/audit.js';
 
 export default function createCrewMemberRoutes(deps: any) {
   const {
@@ -20,6 +21,7 @@ export default function createCrewMemberRoutes(deps: any) {
     validateParams,
     io,
     crewNotify,
+    getRequestIp,
   } = deps;
 
   const { resolveCrewOwnership, serializeCrewWithMembers } = deps._crewHelpers;
@@ -396,6 +398,34 @@ export default function createCrewMemberRoutes(deps: any) {
         );
         if (addResult === 'full') {
           return sendError(res, 400, 'Crew is full', ErrorCodes.MAX_LIMIT_REACHED);
+        }
+
+        // The member is already added, so a failed audit write is logged, not returned.
+        // auditWritten then stays unset and the generic middleware still records the request.
+        if (stores.auditLog) {
+          try {
+            await stores.auditLog.insert({
+              actorType: 'admin',
+              actorId: req.user.userId,
+              action: AUDIT_ACTION_CREW_ADD_MEMBER,
+              targetType: 'crew_member',
+              targetId: `${crew.id}:${targetUserId}`,
+              detailsJson: JSON.stringify({
+                crewId: crew.id,
+                crewName: crew.name,
+                userId: targetUserId,
+                targetUsername: targetUser.username,
+              }),
+              ip: getRequestIp(req),
+            });
+            res.locals.auditWritten = true;
+          } catch (err: any) {
+            log.warn('crew admin add member audit write failed', {
+              crewId: crew.id,
+              targetUserId,
+              error: err?.message,
+            });
+          }
         }
 
         const members = await stores.crews.getMembers(crew.id);

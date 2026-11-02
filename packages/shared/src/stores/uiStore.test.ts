@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useUIStore, THEME_STORAGE_KEY } from './uiStore';
+import { useUIStore, THEME_STORAGE_KEY, themeModeOf } from './uiStore';
 import type { OnlineUser } from '../types/domain';
 
 describe('uiStore', () => {
@@ -223,14 +223,42 @@ describe('uiStore', () => {
   });
 
   describe('theme preference', () => {
-    it('defaults to stage and persists only theme, hapticsEnabled and wrapShowHandle', () => {
+    it('defaults to stage and persists only theme, followSystemTheme, hapticsEnabled and wrapShowHandle', () => {
       useUIStore.getState().setTheme('stage');
       expect(useUIStore.getState().theme).toBe('stage');
       useUIStore.getState().setTheme('daylight');
       useUIStore.getState().showToast('not persisted');
       expect(useUIStore.getState().theme).toBe('daylight');
       const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
-      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true, wrapShowHandle: true });
+      expect(parsed.state).toEqual({ theme: 'daylight', followSystemTheme: false, hapticsEnabled: true, wrapShowHandle: true });
+      useUIStore.getState().setTheme('stage');
+    });
+
+    it('setThemeMode(system) follows the OS scheme and setTheme leaves system mode', () => {
+      useUIStore.getState().setThemeMode('system');
+      expect(useUIStore.getState().followSystemTheme).toBe(true);
+      expect(themeModeOf(useUIStore.getState())).toBe('system');
+      useUIStore.getState().applySystemScheme('light');
+      expect(useUIStore.getState().theme).toBe('daylight');
+      useUIStore.getState().applySystemScheme('dark');
+      expect(useUIStore.getState().theme).toBe('stage');
+      useUIStore.getState().applySystemScheme('light');
+      useUIStore.getState().setTheme('stage');
+      expect(useUIStore.getState().followSystemTheme).toBe(false);
+      expect(themeModeOf(useUIStore.getState())).toBe('stage');
+    });
+
+    it('applySystemScheme changes nothing while followSystemTheme is false', () => {
+      useUIStore.getState().setTheme('stage');
+      useUIStore.getState().applySystemScheme('light');
+      expect(useUIStore.getState().theme).toBe('stage');
+    });
+
+    it('setThemeMode with a fixed theme sets it and clears system mode', () => {
+      useUIStore.getState().setThemeMode('system');
+      useUIStore.getState().setThemeMode('daylight');
+      expect(useUIStore.getState().theme).toBe('daylight');
+      expect(useUIStore.getState().followSystemTheme).toBe(false);
       useUIStore.getState().setTheme('stage');
     });
   });
@@ -242,7 +270,7 @@ describe('uiStore', () => {
       expect(useUIStore.getState().introReplay).toBe(true);
       useUIStore.getState().setTheme('daylight');
       const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
-      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true, wrapShowHandle: true });
+      expect(parsed.state).toEqual({ theme: 'daylight', followSystemTheme: false, hapticsEnabled: true, wrapShowHandle: true });
       useUIStore.getState().setTheme('stage');
       useUIStore.getState().setIntroReplay(false);
     });

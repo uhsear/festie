@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { api, ApiClientError } from '../api';
-import { fetchAuditPage, withReauth, describeRemovals, formatImportCounts, removalFromError } from '../admin';
+import { fetchAuditPage, fetchAdminUsers, fetchAdminUserDetail, withReauth, describeRemovals, formatImportCounts, removalFromError } from '../admin';
 
 const jsonResponse = (status: number, body: unknown) =>
   ({
@@ -25,6 +25,33 @@ describe('fetchAuditPage', () => {
     expect(url).toContain('scope=user');
     expect(url).toContain('actor=bob');
     expect(url).not.toContain('cursor');
+  });
+});
+
+describe('fetchAdminUsers', () => {
+  it('reads meta.pagination and sends search and cursor', async () => {
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, {
+        data: [{ id: 'u1' }],
+        error: null,
+        meta: { pagination: { hasMore: true, nextCursor: 'c2', pageSize: 1, total: 4 } },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    const page = await fetchAdminUsers({ search: 'bob', cursor: 'c1', limit: 1 });
+    expect(page).toEqual({ users: [{ id: 'u1' }], nextCursor: 'c2', total: 4 });
+    const url = String((fetchSpy.mock.calls[0] as unknown[])[0]);
+    expect(url).toContain('search=bob');
+    expect(url).toContain('cursor=c1');
+  });
+});
+
+describe('fetchAdminUserDetail', () => {
+  it('encodes the id in the path', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(200, { data: { user: {} }, error: null }));
+    vi.stubGlobal('fetch', fetchSpy);
+    await fetchAdminUserDetail('a/b c');
+    expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toContain('/admin/users/a%2Fb%20c');
   });
 });
 

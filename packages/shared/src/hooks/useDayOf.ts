@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useCrewStore } from '../stores/crewStore';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
+import { useSosSeenAck } from './useSosSeenAck';
 import type { Crew, FestivalDay, SosEntry } from '../types';
 import {
   selectActiveMeet,
@@ -24,6 +25,7 @@ export function useLiveLocationCrewSync(): void {
     store.setActiveCrew(crewId);
     if (crewId) void store.loadActiveSos(crewId);
   }, [crewId]);
+  useSosSeenAck();
 }
 
 /** Active SOS entries for the open crew, newest first. Empty for guests. */
@@ -54,6 +56,7 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
   const statuses = useCrewStore((s) => s.crewStatuses);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
   const peers = useLiveLocationStore((s) => s.peers);
+  const lostContact = useLiveLocationStore((s) => s.lostContact);
   const sos = useActiveSos();
 
   const firstCrewId = crews[0]?.id;
@@ -79,6 +82,7 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
         members,
         statuses,
         peers,
+        lostContact,
         sos,
         meetingPoints,
         selfUserId: user.id,
@@ -86,5 +90,5 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
       }),
       meet: selectActiveMeet({ meetingPoints, crew, days, nowMs, timeZone }),
     };
-  }, [user, crew, crewMembers, statuses, peers, sos, meetingPoints, nowMs, days, timeZone]);
+  }, [user, crew, crewMembers, statuses, peers, lostContact, sos, meetingPoints, nowMs, days, timeZone]);
 }

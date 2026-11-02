@@ -8,7 +8,7 @@
  * provided so callers can omit the button entirely.
  *
  * Amounts are passed as cents to stay consistent with the integer-cent ledger;
- * they are formatted to a 2-dp dollar string here. Handles are normalized
+ * they are formatted to a 2-dp decimal string here. Handles are normalized
  * (leading @/$ stripped) and URL-encoded.
  */
 
@@ -19,6 +19,8 @@ export interface PaymentLinkInput {
   amountCents: number;
   /** Optional memo prefilled into the payment. */
   note?: string;
+  /** ISO 4217 code. Only PayPal uses it; Venmo and Cash App are USD-only. */
+  currency?: string;
 }
 
 export interface PaymentLink {
@@ -77,10 +79,23 @@ export function cashAppLink({ handle, amountCents }: PaymentLinkInput): PaymentL
  * PayPal.me. App: paypal://… is unreliable, so both point at paypal.me, which
  * deep-links into the app when installed. Amount + currency are path/query.
  */
-export function payPalLink({ handle, amountCents }: PaymentLinkInput): PaymentLink | null {
+export function payPalLink({ handle, amountCents, currency }: PaymentLinkInput): PaymentLink | null {
   const name = normalizeHandle(handle);
   if (!name) return null;
-  const amount = dollars(amountCents);
+  const amount = `${dollars(amountCents)}${currency && currency !== 'USD' ? currency : ''}`;
   const url = `https://www.paypal.com/paypalme/${encodeURIComponent(name)}/${amount}`;
   return { app: url, web: url };
+}
+
+/** Profile page for a handle, without an amount. Lets a user check the handle they typed. */
+export function paymentProfileUrl(
+  method: 'venmo' | 'cashapp' | 'paypal',
+  handle: string | null | undefined,
+): string | null {
+  const u = normalizeHandle(handle);
+  if (!u) return null;
+  const enc = encodeURIComponent(u);
+  if (method === 'venmo') return `https://venmo.com/${enc}`;
+  if (method === 'cashapp') return `https://cash.app/$${enc}`;
+  return `https://www.paypal.com/paypalme/${enc}`;
 }

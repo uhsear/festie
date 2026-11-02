@@ -37,8 +37,8 @@ import { useAuth } from '@festie/shared';
 
 async function fillValid(user: ReturnType<typeof userEvent.setup>, opts: { email?: string } = {}) {
   await user.type(screen.getByLabelText('Username'), 'alice');
-  await user.type(screen.getByLabelText('Password'), 'password123');
-  await user.type(screen.getByLabelText('Confirm password'), 'password123');
+  await user.type(screen.getByLabelText('Password'), 'mosh-pit-2026');
+  await user.type(screen.getByLabelText('Confirm password'), 'mosh-pit-2026');
   fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '1995-01-01' } });
   if (opts.email !== '') await user.type(screen.getByLabelText('Email'), opts.email ?? 'a@b.co');
   await user.click(screen.getByRole('checkbox'));
@@ -110,7 +110,7 @@ describe('RegisterPage', () => {
         'Username is required',
         'Password is required',
         'Date of birth is required',
-        'You must accept the Terms of Service and Privacy Policy',
+        'Accept the Terms of Service and Privacy Policy to continue',
       ]),
     );
     const username = screen.getByLabelText('Username');
@@ -140,7 +140,7 @@ describe('RegisterPage', () => {
   it('shows "Passwords do not match" next to the confirm field', async () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
-    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.type(screen.getByLabelText('Password'), 'mosh-pit-2026');
     await user.type(screen.getByLabelText('Confirm password'), 'different99');
     await user.click(screen.getByRole('button', { name: 'Create account' }));
     const confirm = screen.getByLabelText('Confirm password');
@@ -323,8 +323,8 @@ describe('RegisterPage', () => {
     await user.click(screen.getByRole('button', { name: 'Create account' }));
     expect(mockRegister).toHaveBeenCalledWith({
       username: 'alice',
-      password: 'password123',
-      confirmPassword: 'password123',
+      password: 'mosh-pit-2026',
+      confirmPassword: 'mosh-pit-2026',
       dateOfBirth: '1995-01-01',
       tosAccepted: true,
       email: 'a@b.co',

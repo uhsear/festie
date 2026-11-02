@@ -27,6 +27,7 @@ import { UIProvider } from '../contexts/UIContext';
 import OfflineBanner from '../components/OfflineBanner';
 import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
+import LiveSharePublisher from '../components/LiveSharePublisher';
 import AnnouncementBanner from '../components/AnnouncementBanner';
 import FirstRunIntro from '../components/FirstRunIntro';
 import { shouldSkipIntro } from '../lib/pendingInvite';
@@ -395,6 +396,7 @@ function AuthGate() {
       <StatusBar style={theme === 'daylight' ? 'dark' : 'light'} />
       {!loading && <OfflineBanner onActiveChange={setBannerActive} />}
       {!loading && <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />}
+      {!loading && <LiveSharePublisher />}
       {!loading && <AnnouncementBanner padTop={!bannerActive && !sosActive} onActiveChange={setAnnounceActive} />}
       <TopBannerContext.Provider value={bannerActive || sosActive || announceActive}>
         <View style={styles.appShell}>

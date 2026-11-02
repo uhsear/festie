@@ -47,4 +47,28 @@ describe('SosBanner', () => {
     render(<SosBanner />);
     expect(screen.getByRole('alert')).toHaveTextContent('Dani and 1 other need help');
   });
+
+  it('shows who has seen my own SOS', () => {
+    entries = [
+      {
+        crewId: 'c1',
+        userId: 'me',
+        username: 'Me',
+        raisedAt: '2026-06-12T21:00:00Z',
+        seenBy: [
+          { userId: 'a', username: 'A' },
+          { userId: 'b', username: 'B' },
+        ],
+      },
+    ];
+    render(<SosBanner />);
+    expect(screen.getByText(/Seen by A and B/)).toBeInTheDocument();
+    expect(screen.getByRole('button')).toHaveAccessibleName(/Seen by A and B/);
+  });
+
+  it("shows no seen text on someone else's SOS", () => {
+    entries = [{ crewId: 'c1', userId: 'dani', username: 'Dani', raisedAt: '2026-06-12T21:00:00Z' }];
+    render(<SosBanner />);
+    expect(screen.queryByText(/Seen by|Not seen yet/)).toBeNull();
+  });
 });

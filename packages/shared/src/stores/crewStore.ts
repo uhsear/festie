@@ -34,6 +34,7 @@ import {
   CrewExpense,
   CrewExpenseBalance,
   CreateCrewExpenseRequest,
+  UpdateCrewExpenseRequest,
   SettleCrewExpenseRequest,
   CrewSettlement,
   CrewSettlementPlan,
@@ -107,6 +108,9 @@ export interface CrewState {
   // Netted who-pays-whom plan (greedy min-cash-flow) + payee handles. Loaded
   // alongside balances from the settlement-plan endpoint.
   settlements: CrewSettlement[];
+  // ISO 4217 label from the settlement plan; the crew owner sets it. Persisted
+  // with `settlements` so offline amounts keep the right symbol.
+  expenseCurrency: string;
   activity: CrewActivityEntry[];
   // Cursor for the next older activity page; null when there is none. Not persisted.
   activityNextCursor: string | null;
@@ -180,11 +184,18 @@ export interface CrewActions {
     request: UpdateCrewPackingItemRequest,
   ) => Promise<CrewPackingItem>;
   deletePackingItem: (crewId: string, itemId: string) => Promise<WriteOutcome>;
+  // POST /crews/:crewId/packing/batch (template lists). Online prepends the
+  // returned items; offline inserts one placeholder per label.
+  addPackingItems: (crewId: string, labels: string[]) => Promise<WriteOutcome>;
   // Ride board (routes/crew-rides.ts). Offline-native like packing.
   loadRides: (crewId: string) => Promise<void>;
   createRideOffer: (crewId: string, request: CreateCrewRideOfferRequest) => Promise<CrewRideOffer>;
   updateRideOffer: (crewId: string, offerId: string, request: UpdateCrewRideOfferRequest) => Promise<CrewRideOffer>;
   deleteRideOffer: (crewId: string, offerId: string) => Promise<WriteOutcome>;
+  // POST / DELETE /crews/:crewId/rides/:offerId/seat. Optimistic add or remove of
+  // myUserId in passenger_ids; an online error rolls back and rethrows.
+  takeRideSeat: (crewId: string, offerId: string, myUserId: string) => Promise<WriteOutcome>;
+  leaveRideSeat: (crewId: string, offerId: string, myUserId: string) => Promise<WriteOutcome>;
   // Member status (routes/crew-status.ts). Offline-degraded like the crew
   // sub-resources: updateMyStatus queues offline (deterministic clientId
   // collapses toggles) and reconciles on a signal blip. NOT live GPS.
@@ -196,6 +207,15 @@ export interface CrewActions {
   // than acknowledged by the server, so callers never show "sent" copy for it.
   addExpense: (crewId: string, request: CreateCrewExpenseRequest) => Promise<WriteOutcome>;
   removeExpense: (crewId: string, expenseId: string) => Promise<WriteOutcome>;
+  // PUT is a full replacement (any member, not for payments). Offline merges the
+  // request onto the local row and queues it.
+  updateExpense: (crewId: string, expenseId: string, request: UpdateCrewExpenseRequest) => Promise<WriteOutcome>;
+  // Owner-only. Relabels the crew currency without converting amounts.
+  setExpenseCurrency: (crewId: string, currency: string) => Promise<WriteOutcome>;
+  // The payee says a marked payment arrived (true) or did not (false).
+  confirmPayment: (crewId: string, expenseId: string, received: boolean) => Promise<WriteOutcome>;
+  // The creditor nudges a debtor; the server allows one per day and answers 409.
+  remindPayment: (crewId: string, userId: string) => Promise<WriteOutcome>;
   settleExpense: (crewId: string, request: SettleCrewExpenseRequest) => Promise<WriteOutcome>;
   // Activity feed (routes/crew-activity.ts).
   loadActivity: (crewId: string) => Promise<void>;
@@ -238,7 +258,7 @@ async function loadBalances(set: CrewSet, crewId: string): Promise<void> {
   const res = await api.get<CrewSettlementPlan>(`/crews/${crewId}/expenses/settlement-plan`);
   const expenseBalances = res?.balances ?? [];
   const settlements = res?.settlements ?? [];
-  set({ expenseBalances, settlements });
+  set({ expenseBalances, settlements, expenseCurrency: res?.currency ?? 'USD' });
 }
 
 // ── Persisted read-cache size bounds ──────────────────────────────────────
@@ -276,6 +296,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   expenses: [],
   expenseBalances: [],
   settlements: [],
+  expenseCurrency: 'USD',
   activity: [],
   activityNextCursor: null,
   crewLoading: false,
@@ -318,6 +339,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
         expenses: sameCrew ? state.expenses : [],
         expenseBalances: sameCrew ? state.expenseBalances : [],
         settlements: sameCrew ? state.settlements : [],
+        expenseCurrency: sameCrew ? state.expenseCurrency : 'USD',
         activity: sameCrew ? state.activity : [],
         activityNextCursor: sameCrew ? state.activityNextCursor : null,
       };
@@ -1027,6 +1049,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
               ...(request.label !== undefined ? { label: request.label } : {}),
               ...(request.broughtBy !== undefined ? { brought_by: request.broughtBy } : {}),
               ...(request.claimed !== undefined ? { claimed: request.claimed } : {}),
+              ...(request.packed !== undefined ? { packed: request.packed } : {}),
             };
             return merged;
           }),
@@ -1076,6 +1099,48 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
     }
   },
 
+  // POST /crews/:crewId/packing/batch -> { items }. Offline queues the write and
+  // inserts one placeholder per label (`${clientId}-${i}`); the next loadPacking
+  // drops them through dropOptimistic and brings the real rows.
+  addPackingItems: async (crewId: string, labels: string[]) => {
+    set({ error: null });
+    try {
+      let clientId: string | null = null;
+      const res = await api.post<{ items: CrewPackingItem[] } | { id: string; _optimistic: true }>(
+        `/crews/${crewId}/packing/batch`,
+        { labels },
+        {
+          onOptimisticCreate: (result) => {
+            clientId = (result as { id: string }).id;
+          },
+        },
+      );
+      if (clientId !== null) {
+        const id: string = clientId;
+        const now = new Date().toISOString();
+        const placeholders: CrewPackingItem[] = labels.map((label, i) => ({
+          id: `${id}-${i}`,
+          crew_id: crewId,
+          created_by: '',
+          label,
+          brought_by: null,
+          claimed: false,
+          created_at: now,
+          _optimistic: true,
+        }));
+        set((state) => ({ packingItems: [...placeholders, ...state.packingItems] }));
+        return 'queued';
+      }
+      const { items } = res as { items: CrewPackingItem[] };
+      set((state) => ({ packingItems: [...(items ?? []), ...state.packingItems] }));
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to add packing items');
+      set({ error: message });
+      throw err;
+    }
+  },
+
   // ── Ride board (M2 logistics) ──────────────────────────────────
   // GET /crews/:crewId/rides -> { offers }. Drop any lingering optimistic
   // placeholders so a refetch can't duplicate an offline-created offer.
@@ -1113,6 +1178,9 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
             depart_from: request.departFrom ?? null,
             depart_at: request.departAt ?? null,
             note: request.note ?? null,
+            direction: request.direction ?? null,
+            depart_time: request.departTime ?? null,
+            passenger_ids: [],
             created_at: new Date().toISOString(),
             _optimistic: true,
           };
@@ -1159,6 +1227,8 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
               ...(request.departFrom !== undefined ? { depart_from: request.departFrom } : {}),
               ...(request.departAt !== undefined ? { depart_at: request.departAt } : {}),
               ...(request.note !== undefined ? { note: request.note } : {}),
+              ...(request.direction !== undefined ? { direction: request.direction } : {}),
+              ...(request.departTime !== undefined ? { depart_time: request.departTime } : {}),
             };
             return merged;
           }),
@@ -1173,6 +1243,8 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
             depart_from: request.departFrom ?? null,
             depart_at: request.departAt ?? null,
             note: request.note ?? null,
+            direction: request.direction ?? null,
+            depart_time: request.departTime ?? null,
             created_at: new Date().toISOString(),
             _optimistic: true,
           }
@@ -1205,6 +1277,58 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
       return writeOutcomeOf(res);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to remove ride offer');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  takeRideSeat: async (crewId: string, offerId: string, myUserId: string) => {
+    set({ error: null });
+    const setRiders = (change: (ids: string[]) => string[]) =>
+      set((state) => ({
+        rideOffers: state.rideOffers.map((o) =>
+          o.id === offerId ? { ...o, passenger_ids: change(o.passenger_ids ?? []) } : o,
+        ),
+      }));
+    setRiders((ids) => (ids.includes(myUserId) ? ids : [...ids, myUserId]));
+    try {
+      const res = await api.post<{ offer: CrewRideOffer } | { _optimistic: true }>(
+        `/crews/${crewId}/rides/${offerId}/seat`,
+      );
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const { offer } = res as { offer: CrewRideOffer };
+      set((state) => ({ rideOffers: state.rideOffers.map((o) => (o.id === offerId ? offer : o)) }));
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to take a seat');
+      // Undo only my change so a socket update that landed mid-flight survives.
+      setRiders((ids) => ids.filter((id) => id !== myUserId));
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  leaveRideSeat: async (crewId: string, offerId: string, myUserId: string) => {
+    set({ error: null });
+    const setRiders = (change: (ids: string[]) => string[]) =>
+      set((state) => ({
+        rideOffers: state.rideOffers.map((o) =>
+          o.id === offerId ? { ...o, passenger_ids: change(o.passenger_ids ?? []) } : o,
+        ),
+      }));
+    setRiders((ids) => ids.filter((id) => id !== myUserId));
+    try {
+      const res = await api.delete<{ offer: CrewRideOffer } | { _optimistic: true }>(
+        `/crews/${crewId}/rides/${offerId}/seat`,
+      );
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const { offer } = res as { offer: CrewRideOffer };
+      set((state) => ({ rideOffers: state.rideOffers.map((o) => (o.id === offerId ? offer : o)) }));
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to leave the ride');
+      // Undo only my change so a socket update that landed mid-flight survives.
+      setRiders((ids) => (ids.includes(myUserId) ? ids : [...ids, myUserId]));
       set({ error: message });
       throw err;
     }
@@ -1391,6 +1515,107 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
       return writeOutcomeOf(res);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to remove expense');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // PUT /crews/:crewId/expenses/:id (full replacement), then refetch. Offline,
+  // api.put queues it and returns the synthetic shape, so merge the request onto
+  // the local row (camelCase to snake_case) and flag it `_optimistic` ("Not sent
+  // yet"). The next online loadExpenses replaces it with the server row.
+  updateExpense: async (crewId: string, expenseId: string, request: UpdateCrewExpenseRequest) => {
+    set({ error: null });
+    try {
+      const res = await api.put(`/crews/${crewId}/expenses/${expenseId}`, request);
+      if (writeOutcomeOf(res) === 'queued') {
+        set((state) => ({
+          expenses: state.expenses.map((e) =>
+            e.id === expenseId
+              ? {
+                  ...e,
+                  description: request.description,
+                  amount: request.amount,
+                  split_with: request.splitWith,
+                  category: request.category,
+                  planned: request.planned === true,
+                  ...(request.paidBy !== undefined ? { paid_by: request.paidBy } : {}),
+                  split_amounts: request.shares
+                    ? Object.fromEntries(request.shares.map((sh) => [sh.userId, sh.cents]))
+                    : null,
+                  _optimistic: true,
+                }
+              : e,
+          ),
+        }));
+        return 'queued';
+      }
+      try {
+        await useCrewStore.getState().loadExpenses(crewId);
+      } catch {
+        /* refetch is best-effort; the write succeeded */
+      }
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to update expense');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // PUT /crews/:crewId/expenses/currency (owner only). Set at once, roll back to
+  // the prior label when the server refuses online.
+  setExpenseCurrency: async (crewId: string, currency: string) => {
+    set({ error: null });
+    const prev = useCrewStore.getState().expenseCurrency;
+    set({ expenseCurrency: currency });
+    try {
+      const res = await api.put(`/crews/${crewId}/expenses/currency`, { currency });
+      return writeOutcomeOf(res);
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to change currency');
+      set({ expenseCurrency: prev, error: message });
+      throw err;
+    }
+  },
+
+  // POST /crews/:crewId/expenses/:id/confirm. Flag the row locally, then refetch
+  // when the server acknowledged it. The ledger is unchanged either way.
+  confirmPayment: async (crewId: string, expenseId: string, received: boolean) => {
+    set({ error: null });
+    try {
+      const res = await api.post(`/crews/${crewId}/expenses/${expenseId}/confirm`, { received });
+      const at = new Date().toISOString();
+      set((state) => ({
+        expenses: state.expenses.map((e) =>
+          e.id === expenseId ? { ...e, ...(received ? { confirmed_at: at } : { disputed_at: at }) } : e,
+        ),
+      }));
+      const outcome = writeOutcomeOf(res);
+      if (outcome === 'sent') {
+        try {
+          await useCrewStore.getState().loadExpenses(crewId);
+        } catch {
+          /* refetch is best-effort; the write succeeded */
+        }
+      }
+      return outcome;
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to confirm payment');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // POST /crews/:crewId/expenses/remind. No local change. A second reminder the
+  // same day is a 409 whose message the caller shows, so rethrow.
+  remindPayment: async (crewId: string, userId: string) => {
+    set({ error: null });
+    try {
+      const res = await api.post(`/crews/${crewId}/expenses/remind`, { userId });
+      return writeOutcomeOf(res);
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to send reminder');
       set({ error: message });
       throw err;
     }
@@ -1618,6 +1843,7 @@ export const useCrewStore = create<CrewStore>()(
       expenses: state.expenses.slice(0, MAX_CACHED_EXPENSES),
       expenseBalances: state.expenseBalances,
       settlements: state.settlements,
+      expenseCurrency: state.expenseCurrency,
       activity: state.activity.slice(0, MAX_CACHED_ACTIVITY),
       _cachedAt: state._cachedAt,
       _cachedCrewId: state._cachedCrewId,

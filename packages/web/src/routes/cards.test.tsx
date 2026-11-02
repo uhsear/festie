@@ -33,6 +33,7 @@ vi.mock('../components/features/SetCard', () => ({
 }));
 vi.mock('../components/features/PhaseHomeActions', () => ({ default: () => <div data-testid="band" /> }));
 vi.mock('../components/features/OtherDayMatches', () => ({ default: () => null }));
+vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => null }));
 vi.mock('../components/features/ScheduleEmptyState', () => ({ default: () => <div data-testid="empty-state" /> }));
 vi.mock('../components/features/SetTimesBanner', () => ({ default: () => null }));
 vi.mock('../components/features/DiscoverRow', () => ({ default: () => null }));

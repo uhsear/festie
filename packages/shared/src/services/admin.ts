@@ -1,4 +1,5 @@
 import { api, ApiClientError } from './api';
+import { buildFestivalPreview, type FestivalPreviewInput } from '../utils/admin';
 
 export interface AuditEntry {
   id: string;
@@ -166,4 +167,149 @@ export function formatImportCounts(counts: LineupImportCounts): string {
     counts.error > 0 && `${counts.error} need fixing`,
   ].filter((p): p is string => typeof p === 'string');
   return parts.length ? parts.join(' · ') : '0 new';
+}
+
+export interface AdminUserRow {
+  id: string;
+  username: string;
+  email: string | null;
+  emailVerified: boolean;
+  avatarUrl?: string | null;
+  createdAt: string;
+  profileCount: number;
+  totalPicks: number;
+  roles: string[];
+}
+
+export interface AdminUserDetail {
+  user: {
+    id: string;
+    username: string;
+    displayName: string | null;
+    email: string | null;
+    emailVerified: boolean;
+    createdAt: string;
+    lastActiveAt: string | null;
+    roles: string[];
+    publicSchedule: boolean;
+  };
+  festivals: Array<{
+    festivalId: string;
+    festivalName: string | null;
+    profileName: string | null;
+    picks: number;
+    joinedAt: string;
+  }>;
+  crews: Array<{
+    id: string;
+    name: string;
+    festivalId: string;
+    festivalName: string | null;
+    role: string;
+    joinedAt: string;
+    memberCount: number;
+  }>;
+  activity: AuditEntry[];
+}
+
+export interface AdminCrewRow {
+  id: string;
+  name: string;
+  festivalId: string | null;
+  createdBy: string | null;
+  inviteCode: string | null;
+  maxMembers: number;
+  homeBaseLocation: string | null;
+  homeBaseTime: string | null;
+  createdAt: string;
+  festivalName: string | null;
+  creatorUsername: string | null;
+  memberCount: number;
+}
+
+export interface AdminCrewMember {
+  crewId: string;
+  userId: string;
+  role: 'owner' | 'member' | string;
+  joinedAt: string;
+  username: string;
+  name: string | null;
+}
+
+export interface BulkResult {
+  userId?: string;
+  festivalId?: string;
+  status: 'logged_out' | 'archived' | 'error';
+  message?: string;
+}
+
+const enc = encodeURIComponent;
+
+export async function fetchAdminUsers({
+  search,
+  cursor,
+  limit,
+}: { search?: string; cursor?: string | null; limit?: number } = {}): Promise<{
+  users: AdminUserRow[];
+  nextCursor: string | null;
+  total: number;
+}> {
+  const query = new URLSearchParams();
+  if (search) query.set('search', search);
+  if (cursor) query.set('cursor', cursor);
+  if (limit !== undefined) query.set('limit', String(limit));
+  const qs = query.toString();
+  const { data, meta } = await api.getEnvelope<AdminUserRow[]>(`/admin/users${qs ? `?${qs}` : ''}`);
+  const pagination = (meta.pagination ?? {}) as { nextCursor?: unknown; total?: unknown };
+  return {
+    users: Array.isArray(data) ? data : [],
+    nextCursor: typeof pagination.nextCursor === 'string' ? pagination.nextCursor : null,
+    total: typeof pagination.total === 'number' ? pagination.total : 0,
+  };
+}
+
+export function fetchAdminUserDetail(userId: string): Promise<AdminUserDetail> {
+  return api.get<AdminUserDetail>(`/admin/users/${enc(userId)}`);
+}
+
+export function createResetLink(userId: string): Promise<{ resetUrl: string; username: string; expiresAt: string }> {
+  return api.post(`/admin/users/${enc(userId)}/reset-link`);
+}
+
+export function setAdminRole(
+  userId: string,
+  grant: boolean,
+): Promise<{ userId: string; username: string; roles: string[] }> {
+  return grant
+    ? api.post(`/admin/users/${enc(userId)}/roles`, { role: 'admin' })
+    : api.delete(`/admin/users/${enc(userId)}/roles/admin`);
+}
+
+export function bulkForceLogout(userIds: string[]): Promise<{ results: BulkResult[] }> {
+  return api.post('/admin/bulk/deactivate', { userIds });
+}
+
+export function bulkArchiveFestivals(festivalIds: string[]): Promise<{ results: BulkResult[] }> {
+  return api.post('/admin/bulk/archive-festivals', { festivalIds });
+}
+
+export function fetchAdminCrews(): Promise<AdminCrewRow[]> {
+  return api.get<AdminCrewRow[]>('/admin/crews');
+}
+
+export function fetchCrewMembers(crewId: string): Promise<AdminCrewMember[]> {
+  return api.get<AdminCrewMember[]>(`/admin/crews/${enc(crewId)}/members`);
+}
+
+export function removeCrewMember(crewId: string, userId: string): Promise<unknown> {
+  return api.delete(`/admin/crews/${enc(crewId)}/members/${enc(userId)}`);
+}
+
+export function addCrewMember(crewId: string, userId: string): Promise<unknown> {
+  return api.post(`/crews/${enc(crewId)}/members`, { userId });
+}
+
+export async function fetchFestivalPreview(festivalId: string) {
+  const detail = await api.get<FestivalPreviewInput>(`/festivals/${enc(festivalId)}`);
+  return buildFestivalPreview(detail);
 }

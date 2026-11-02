@@ -882,3 +882,189 @@ describe('simplifyDebts()', () => {
     assert.deepStrictEqual(settlements, []);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 7. T30 money: uneven shares, edit trail, confirmation, currency, reminders.
+// The split fixtures match packages/shared/src/utils/expenseSplit.test.ts
+// (expenseShareCents), which mirrors computeBalanceCents on the client.
+// ---------------------------------------------------------------------------
+describe('expenses store — uneven shares (split_amounts)', () => {
+  const memberRows = (ids: string[]) => ids.map((id) => ({ user_id: id, username: id }));
+  const byId = (rows: BalanceCents[]) => Object.fromEntries(rows.map((r) => [r.userId, r.balanceCents]));
+  const total = (rows: BalanceCents[]) => rows.reduce((sum, r) => sum + r.balanceCents, 0);
+
+  it('charges each person their own share on a 40/60 split', async () => {
+    const expenses = [
+      { id: 'e1', paid_by: 'a', amount: '100.00', split_with: ['a', 'b'], split_amounts: { a: 4000, b: 6000 } },
+    ];
+    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b', 'c']) }]) as any);
+
+    assert.deepStrictEqual(byId(await store.getBalancesCents('crew-1')), { a: 6000, b: -6000, c: 0 });
+  });
+
+  it('spreads a removed member share over the rest and stays zero-sum', async () => {
+    const expenses = [
+      {
+        id: 'e1',
+        paid_by: 'a',
+        amount: '10.00',
+        split_with: ['a', 'b', 'gone'],
+        split_amounts: { a: 500, b: 300, gone: 200 },
+      },
+      // Odd pool: 101 cents over two people gives the extra cent to the first key.
+      {
+        id: 'e2',
+        paid_by: 'b',
+        amount: '3.01',
+        split_with: ['a', 'b', 'gone'],
+        split_amounts: { a: 100, b: 100, gone: 101 },
+      },
+    ];
+    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b']) }]) as any);
+
+    const rows = await store.getBalancesCents('crew-1');
+    // e1: a +1000 - 600, b -400. e2: b +301 - 150, a -151.
+    assert.deepStrictEqual(byId(rows), { a: 400 - 151, b: -400 + 151 });
+    assert.strictEqual(total(rows), 0);
+  });
+
+  it('skips an uneven expense when nobody in the map is still a member', async () => {
+    const expenses = [{ id: 'e1', paid_by: 'a', amount: '10.00', split_with: ['x'], split_amounts: { x: 1000 } }];
+    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b']) }]) as any);
+
+    assert.deepStrictEqual(byId(await store.getBalancesCents('crew-1')), { a: 0, b: 0 });
+  });
+
+  it('falls back to the equal split over the map keys when the map does not add up', async () => {
+    const expenses = [
+      { id: 'e1', paid_by: 'a', amount: '10.00', split_with: ['a', 'b'], split_amounts: '{"a":100,"b":100}' },
+    ];
+    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b', 'c']) }]) as any);
+
+    const rows = await store.getBalancesCents('crew-1');
+    assert.deepStrictEqual(byId(rows), { a: 500, b: -500, c: 0 });
+    assert.strictEqual(total(rows), 0);
+  });
+
+  it('getByCrew selects the new columns and parses split_amounts sent as a string', async () => {
+    const pool = makePool([{ rows: [{ id: 'e1', split_with: '["a"]', split_amounts: '{"a":1000}' }] }]);
+    const store = createExpensesStore(pool as any);
+
+    const [row] = await store.getByCrew('crew-1');
+    assert.deepStrictEqual(row.split_amounts, { a: 1000 });
+    const sql = norm((pool.query.mock.calls[0]!.arguments as any[])[0]);
+    assert.ok(sql.includes('e.split_amounts, e.created_by, e.updated_by, e.updated_at, e.confirmed_at, e.disputed_at'));
+  });
+});
+
+describe('expenses store — T30 writes', () => {
+  it('create stores created_by and the uneven shares as JSON', async () => {
+    const pool = makePool([{ rows: [{ id: 'e1' }] }]);
+    const store = createExpensesStore(pool as any);
+
+    await store.create({
+      crewId: 'crew-1',
+      paidBy: 'a',
+      description: 'Tent',
+      amount: 100,
+      splitWith: ['a', 'b'],
+      createdBy: 'c',
+      splitAmounts: { a: 4000, b: 6000 },
+    });
+
+    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    assert.ok(sql.includes('created_by, split_amounts'));
+    assert.ok(norm(sql).includes('RETURNING id, crew_id, paid_by'));
+    assert.ok(sql.includes('disputed_at'));
+    assert.strictEqual(params[8], 'c');
+    assert.strictEqual(params[9], '{"a":4000,"b":6000}');
+  });
+
+  it('create stores null shares and null created_by by default', async () => {
+    const pool = makePool([{ rows: [{ id: 'e1' }] }]);
+    const store = createExpensesStore(pool as any);
+
+    await store.create({ crewId: 'crew-1', paidBy: 'a', description: 'x', amount: 1, splitWith: ['a'] });
+
+    const params = (pool.query.mock.calls[0]!.arguments as any[])[1];
+    assert.strictEqual(params[8], null);
+    assert.strictEqual(params[9], null);
+  });
+
+  it('update replaces the fields and sets updated_by and updated_at', async () => {
+    const pool = makePool([{ rows: [{ id: 'e1', updated_by: 'b' }] }]);
+    const store = createExpensesStore(pool as any);
+
+    const row = await store.update('e1', {
+      paidBy: 'a',
+      description: 'Gas',
+      amount: 40,
+      splitWith: ['a', 'b'],
+      splitAmounts: null,
+      category: 'transport',
+      planned: false,
+      updatedBy: 'b',
+    });
+
+    assert.deepStrictEqual(row, { id: 'e1', updated_by: 'b' });
+    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const s = norm(sql);
+    assert.ok(s.startsWith('UPDATE crew_expenses'));
+    assert.ok(s.includes('updated_by = $9'));
+    assert.ok(s.includes('updated_at = NOW()'));
+    assert.ok(s.includes('WHERE id = $1'));
+    assert.deepStrictEqual(params, ['e1', 'a', 'Gas', 40, '["a","b"]', null, 'transport', false, 'b']);
+  });
+
+  it('update returns null when the row is gone', async () => {
+    const store = createExpensesStore(makePool([{ rows: [] }]) as any);
+    assert.strictEqual(await store.update('e1', { splitWith: [] }), null);
+  });
+
+  it('setConfirmation sets one timestamp and clears the other', async () => {
+    const pool = makePool([{ rows: [{ id: 'e1' }] }]);
+    const store = createExpensesStore(pool as any);
+
+    await store.setConfirmation('e1', false);
+
+    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const s = norm(sql);
+    assert.ok(s.includes('confirmed_at = CASE WHEN $2::boolean THEN NOW() ELSE NULL END'));
+    assert.ok(s.includes('disputed_at = CASE WHEN $2::boolean THEN NULL ELSE NOW() END'));
+    assert.deepStrictEqual(params, ['e1', false]);
+  });
+
+  it('getCurrency defaults to USD and returns the stored code', async () => {
+    const missing = createExpensesStore(makePool([{ rows: [] }]) as any);
+    assert.strictEqual(await missing.getCurrency('crew-1'), 'USD');
+
+    const pool = makePool([{ rows: [{ currency: 'EUR' }] }]);
+    const store = createExpensesStore(pool as any);
+    assert.strictEqual(await store.getCurrency('crew-1'), 'EUR');
+    assert.deepStrictEqual((pool.query.mock.calls[0]!.arguments as any[])[1], ['crew-1']);
+  });
+
+  it('setCurrency updates the crew row with parameters', async () => {
+    const pool = makePool([{ rows: [] }]);
+    await createExpensesStore(pool as any).setCurrency('crew-1', 'GBP');
+
+    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    assert.ok(sql.includes('UPDATE crews SET currency = $2 WHERE id = $1'));
+    assert.deepStrictEqual(params, ['crew-1', 'GBP']);
+  });
+
+  it('recordReminder is true for the first reminder of the UTC day and false after', async () => {
+    const pool = makePool([
+      { rows: [], rowCount: 1 },
+      { rows: [], rowCount: 0 },
+    ]);
+    const store = createExpensesStore(pool as any);
+
+    assert.strictEqual(await store.recordReminder('crew-1', 'a', 'b'), true);
+    assert.strictEqual(await store.recordReminder('crew-1', 'a', 'b'), false);
+    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    assert.ok(norm(sql).includes('ON CONFLICT DO NOTHING'));
+    assert.ok(sql.includes("AT TIME ZONE 'UTC'"));
+    assert.deepStrictEqual(params, ['crew-1', 'a', 'b']);
+  });
+});

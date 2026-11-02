@@ -10,6 +10,7 @@ import {
 } from '@festie/shared/utils';
 import type { FestivalIssue } from '@festie/shared/utils';
 import type { Artist } from '@festie/shared/types';
+import type { SetEngagementMap } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
 import DayEditor, { Day } from './DayEditor';
 import { Stage } from './SetEditor';
@@ -39,6 +40,9 @@ export interface FestivalEditFormProps {
   changes: { total: number; changedSetIds: Set<string>; newSetIds: Set<string> };
   issues: FestivalIssue[];
   saving: boolean;
+  /** Picks and reminders per set id; undefined until loaded. */
+  engagement?: SetEngagementMap;
+  engagementError?: boolean;
   onSave: () => void;
   /** Edit mode: reset to the loaded festival. */
   onDiscard: () => void;
@@ -66,6 +70,8 @@ export default function FestivalEditForm({
   changes,
   issues,
   saving,
+  engagement,
+  engagementError,
   onSave,
   onDiscard,
   onCancel,
@@ -424,6 +430,7 @@ export default function FestivalEditForm({
       {/* Days */}
       <div className="border-t border-glass-border pt-4">
         <h2 className="type-label text-text-primary mb-3">Days &amp; Artists</h2>
+        {engagementError && <p className="text-xs text-text-muted mb-3">Couldn't load pick counts.</p>}
         <input
           type="search"
           placeholder="Filter by artist or stage"
@@ -476,6 +483,7 @@ export default function FestivalEditForm({
                   day={day}
                   stages={formData.stages || []}
                   separator={formData.b2bSeparator}
+                  engagement={engagement}
                   issues={byKey.get(`day:${dayIndex}`) ?? []}
                   issueMap={byKey}
                   issueFields={fieldsBySet}

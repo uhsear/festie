@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { POSTER } from '@festie/shared/tokens';
-import { festivalTint } from '@festie/shared/utils';
+import { crewPosterContent, festivalTint } from '@festie/shared/utils';
 import type {
   CrewWrapOverlapPair,
   CrewWrapSeenTogether,
@@ -19,10 +19,8 @@ interface Props {
   crewName: string;
   festivalName: string;
   wrap: CrewWrapData;
+  showMoney: boolean;
 }
-
-const money = (n: number) =>
-  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
 
 /**
  * Fixed 1080x1920 (9:16) crew-recap poster on the shared PosterFrame, rendered
@@ -30,15 +28,11 @@ const money = (n: number) =>
  * sizes from POSTER; text ignores the OS font size (documented exception to the
  * typeStyle() rule). Degrades gracefully on empty crews.
  */
-export default function CrewWrapPoster({ crewName, festivalName, wrap }: Props) {
+export default function CrewWrapPoster({ crewName, festivalName, wrap, showMoney }: Props) {
   const tint = festivalTint(festivalName);
   const topOverlap = wrap.topOverlap;
-  const seenTogether = wrap.setsSeenTogether.slice(0, 5);
-  const statCells = [
-    { label: 'CREW', value: String(wrap.memberCount) },
-    { label: 'SEEN TOGETHER', value: String(wrap.setsSeenTogether.length) },
-    { label: 'SPLIT', value: money(wrap.totalSplit) },
-  ];
+  const { spotlight, stats, seenTogether } = crewPosterContent(wrap, { showMoney });
+  const statCells = stats.map((cell) => ({ label: cell.label.toUpperCase(), value: cell.value }));
 
   return (
     <PosterFrame festivalName={festivalName} kicker="CREW WRAP">
@@ -56,11 +50,11 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap }: Props) 
       </View>
 
       <View style={s.superlative}>
-        <Text allowFontScaling={false} style={s.superLabel}>BIGGEST SPENDER</Text>
+        <Text allowFontScaling={false} style={s.superLabel}>{spotlight.label.toUpperCase()}</Text>
         <Text allowFontScaling={false} style={s.superValue} numberOfLines={1}>
-          {wrap.biggestSpender ? wrap.biggestSpender.name : 'No expenses yet'}
+          {spotlight.value}
         </Text>
-        {wrap.biggestSpender ? <Text allowFontScaling={false} style={s.superSub}>fronted {money(wrap.biggestSpender.amount)}</Text> : null}
+        {spotlight.sub ? <Text allowFontScaling={false} style={s.superSub}>{spotlight.sub}</Text> : null}
       </View>
 
       <View>

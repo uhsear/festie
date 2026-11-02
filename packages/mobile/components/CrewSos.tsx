@@ -43,6 +43,7 @@ import { useLiveLocationStore } from '@festie/shared/stores';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useSosRaise } from '../hooks/useSosRaise';
+import { sosSeenLabel } from '@festie/shared/utils';
 import MeetingPointCompass, { type MeetingPointTarget } from './MeetingPointCompass';
 
 interface CrewSosProps {
@@ -185,6 +186,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
               ? 'Tap “Get directions” to walk toward their last location.'
               : 'No location was attached — reach them by phone or radio.'}
         </Text>
+        <Text style={styles.bannerSeen}>{sosSeenLabel(sos)}</Text>
         <View style={styles.bannerActions}>
           {target ? (
             <TouchableOpacity
@@ -310,6 +312,10 @@ const useStyles = makeStyles((t) => ({
     flex: 1,
   },
   bannerBody: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+  },
+  bannerSeen: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },

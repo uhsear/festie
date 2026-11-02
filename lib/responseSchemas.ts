@@ -144,6 +144,8 @@ export const festivalDepth1ResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
   location: z.string(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalDepth1DaySchema),
   mapConfig: festivalMapConfigSchema.nullable(),
@@ -163,6 +165,8 @@ export const festivalResponseSchema = z.object({
   location: z.string(),
   b2bSeparator: z.string(),
   timeZone: z.string().nullable(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
   mapConfig: festivalMapConfigSchema.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -392,6 +396,17 @@ export const crewExpenseResponseSchema = z.object({
   planned: z.boolean(),
   created_at: z.string(),
   paid_by_name: z.string().optional(),
+  // T30 money fields. Optional so rows and fixtures from before migration 079
+  // still parse. `split_amounts` is the uneven split in integer cents by user id
+  // (null = equal split); `created_by` is who added the row, which can differ
+  // from `paid_by`; `confirmed_at`/`disputed_at` are the payee's answer on a
+  // payment row.
+  split_amounts: z.record(z.string(), z.number()).nullable().optional(),
+  created_by: z.string().nullable().optional(),
+  updated_by: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  confirmed_at: z.string().nullable().optional(),
+  disputed_at: z.string().nullable().optional(),
 });
 export type CrewExpenseResponse = z.infer<typeof crewExpenseResponseSchema>;
 
@@ -434,6 +449,8 @@ export type CrewSettlementResponse = z.infer<typeof crewSettlementResponseSchema
 export const crewSettlementPlanResponseSchema = z.object({
   balances: z.array(crewBalanceResponseSchema),
   settlements: z.array(crewSettlementResponseSchema),
+  /** The crew's currency label (ISO 4217, default USD). Optional for old servers. */
+  currency: z.string().optional(),
 });
 export type CrewSettlementPlanResponse = z.infer<typeof crewSettlementPlanResponseSchema>;
 

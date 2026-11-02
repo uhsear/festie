@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
-import { festivalPhase } from '@festie/shared/utils';
+import { festivalPhase, formatDateSpan } from '@festie/shared/utils';
 import { Link, useNavigate } from '@tanstack/react-router';
 import EmptyState from '../ui/EmptyState';
 import Skeleton from '../ui/Skeleton';
@@ -43,14 +43,6 @@ interface LifetimeResponse {
   totals: LifetimeTotals;
   byFestival: FestivalRow[];
   topArtists: TopArtist[];
-}
-
-/** Render a festival date span from the (string) start/end dates, degrading
- *  gracefully when one or both are missing. */
-function dateSpan(start: string | null, end: string | null): string | null {
-  if (!start && !end) return null;
-  if (start && end && start !== end) return `${start} → ${end}`;
-  return start || end;
 }
 
 /**
@@ -149,7 +141,7 @@ export default function HistorySection() {
           </h3>
           <div className="space-y-3">
             {byFestival.map((f) => {
-              const span = dateSpan(f.startDate, f.endDate);
+              const span = formatDateSpan(f.startDate, f.endDate);
               return (
                 <Link
                   key={f.festivalId}

@@ -4,8 +4,8 @@ import { ledgerRows, spendingExpenses } from '@festie/shared/utils';
 /**
  * Mobile-local view logic for CrewExpenses — the small pure transforms the
  * component derives from store state on every render. Money formatting lives in
- * `@festie/shared/utils` (formatAmount/formatBalance) and is NOT duplicated
- * here; this module only owns the mobile screen's input-sanitisation, the
+ * `@festie/shared/utils` (formatAmount/formatBalance, currency-aware) and is NOT
+ * duplicated here; this module only owns the mobile screen's input-sanitisation, the
  * add-form gate, the planned/actual totals, the per-user settlement partition,
  * and the non-zero-balance filter. Kept pure + side-effect free so it can be
  * unit-tested without rendering the screen.

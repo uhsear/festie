@@ -20,6 +20,7 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
  *   onMeetingPointUpsert / onMeetingPointRemoved -> ['meeting-points', crewId]
  *   onPollCreated / onPollVoted / onPollClosed   -> ['polls', crewId]
  *   onExpensesChanged   -> ['expenses', crewId] + ['expense-balances', crewId]
+ *   onPackingChanged / onRidesChanged -> crewStore.loadPacking / loadRides (store, not Query)
  *   onActivityLogged    -> ['crew-activity', crewId]
  *   onHomeBaseUpdated   -> crewStore.applyHomeBaseUpdate (store, not Query)
  *
@@ -56,6 +57,20 @@ export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
       void queryClient.invalidateQueries({ queryKey: ['expenses', crewId] });
       void queryClient.invalidateQueries({ queryKey: ['expense-balances', crewId] });
       void queryClient.invalidateQueries({ queryKey: ['settlement-plan', crewId] });
+    },
+    onPackingChanged: (crewId) => {
+      if (useCrewStore.getState().activeCrew?.id !== crewId) return;
+      void useCrewStore
+        .getState()
+        .loadPacking(crewId)
+        .catch(() => {});
+    },
+    onRidesChanged: (crewId) => {
+      if (useCrewStore.getState().activeCrew?.id !== crewId) return;
+      void useCrewStore
+        .getState()
+        .loadRides(crewId)
+        .catch(() => {});
     },
     onActivityLogged: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['crew-activity', crewId] });

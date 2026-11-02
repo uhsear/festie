@@ -2283,14 +2283,22 @@ export type components = {
         CrewExpense: {
             amount: string;
             category: string;
+            confirmed_at?: string | null;
             created_at: string;
+            created_by?: string | null;
             crew_id: string;
             description: string;
+            disputed_at?: string | null;
             id: string;
             paid_by: string;
             paid_by_name?: string;
             planned: boolean;
+            split_amounts?: {
+                [key: string]: number;
+            } | null;
             split_with: string[];
+            updated_at?: string | null;
+            updated_by?: string | null;
         };
         CrewMember: {
             avatarKey: string | null;
@@ -2368,6 +2376,7 @@ export type components = {
                 userId: string;
                 username: string;
             }[];
+            currency?: string;
             settlements: {
                 amount: number;
                 amountCents: number;
@@ -2422,7 +2431,9 @@ export type components = {
                 }[];
             }[];
             id: string;
+            latitude?: number | null;
             location: string;
+            longitude?: number | null;
             mapConfig: {
                 amenities?: {
                     features: {
@@ -2506,7 +2517,9 @@ export type components = {
                 }[];
             }[];
             id: string;
+            latitude?: number | null;
             location: string;
+            longitude?: number | null;
             mapConfig: {
                 amenities?: {
                     features: {

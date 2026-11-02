@@ -21,7 +21,7 @@ export interface UseIOSInstallReturn {
   dismiss: (reason: 'close' | 'later' | 'got-it' | 'scrim' | 'escape') => void;
 }
 
-function isIOSSafari(): boolean {
+export function isIOSSafari(): boolean {
   if (typeof window === 'undefined') return false;
   const ua = window.navigator.userAgent;
   const isIOS =
@@ -37,7 +37,7 @@ function isIOSSafari(): boolean {
   return true;
 }
 
-function isStandalone(): boolean {
+export function isStandalone(): boolean {
   return (
     (typeof navigator !== 'undefined' && (navigator as unknown as { standalone?: boolean }).standalone === true) ||
     (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)').matches) ||

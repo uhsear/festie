@@ -7,6 +7,7 @@ import { COPY } from '@festie/shared/constants';
 import type { WrapResponse } from '@festie/shared/types';
 import {
   buildWrapCards,
+  formatAmount,
   isWrapUnlocked,
   selectSetsToRate,
   summarizePlan,
@@ -361,6 +362,7 @@ function CrewWrapTab({
   const { toast, toastError } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
+  const [showMoney, setShowMoney] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery<CrewWrapResponse>({
     queryKey: ['crew-wrap', crewId, festivalId],
@@ -439,7 +441,7 @@ function CrewWrapTab({
         detail={[
           `${wrap.memberCount} in the crew`,
           wrap.totalSplit > 0
-            ? `${wrap.totalSplit.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })} split`
+            ? `${formatAmount(wrap.totalSplit, wrap.currency)} split`
             : null,
         ]
           .filter(Boolean)
@@ -463,7 +465,7 @@ function CrewWrapTab({
           value={wrap.biggestSpender ? wrap.biggestSpender.name : 'No expenses yet'}
           sub={
             wrap.biggestSpender
-              ? `fronted ${wrap.biggestSpender.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`
+              ? `fronted ${formatAmount(wrap.biggestSpender.amount, wrap.currency)}`
               : undefined
           }
         />
@@ -527,8 +529,22 @@ function CrewWrapTab({
       {/* Poster preview + share — meaningful only with at least some crew data */}
       {hasData && (
         <section className="flex flex-col gap-3">
+          <label className="flex items-start gap-3 text-sm text-text-primary">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4"
+              checked={showMoney}
+              onChange={(e) => setShowMoney(e.target.checked)}
+            />
+            <span>
+              Show money on poster
+              <span className="block text-xs text-text-secondary">
+                Off by default. When on, the poster shows the crew's total and who fronted the most.
+              </span>
+            </span>
+          </label>
           <PosterPreview ref={posterRef}>
-            <CrewWrapPoster crewName={crewName} festivalName={festivalName} wrap={wrap} byline={byline} />
+            <CrewWrapPoster crewName={crewName} festivalName={festivalName} wrap={wrap} showMoney={showMoney} byline={byline} />
           </PosterPreview>
           <Button variant="primary" fullWidth isLoading={sharing} onClick={handleShare} className="min-h-[44px]">
             <Share2 className="w-4 h-4" aria-hidden="true" />

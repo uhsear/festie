@@ -92,7 +92,7 @@ export const registerSchema = z
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
-  username: z.string().min(1, 'Username required').max(40),
+  username: z.string().trim().min(1, 'Username or email required').max(254),
   password: z.string().min(1, 'Password required').max(200),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -458,6 +458,9 @@ export const festivalCreateSchema = z.object({
   timeZone: festivalTimeZone,
   stages: z.array(stageSchema).max(20).optional(),
   days: z.array(daySchema).max(10).optional(),
+  // Venue point the map and weather use. Sent only when the admin changes it.
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
   // Optional festival site-map. Nullable so an update can clear it; omitted on
   // legacy clients ⇒ map_config stays NULL and the festival renders unmapped.
   mapConfig: festivalMapConfigSchema.optional().nullable(),
@@ -547,7 +550,10 @@ export type CrewJoinInput = z.infer<typeof crewJoinSchema>;
 
 // Public join-preview path param: same alphanumeric 4-12 shape the invite page enforces.
 export const crewInviteCodeParams = z.object({
-  inviteCode: z.string().trim().regex(/^[a-zA-Z0-9]{4,12}$/, 'Invalid invite code'),
+  inviteCode: z
+    .string()
+    .trim()
+    .regex(/^[a-zA-Z0-9]{4,12}$/, 'Invalid invite code'),
 });
 export type CrewInviteCodeParams = z.infer<typeof crewInviteCodeParams>;
 
@@ -580,8 +586,34 @@ export const setLinkSchema = z.object({
     .nullable()
     .optional()
     .or(z.literal('')),
+  // Which artist of a B2B set the link belongs to (default 0).
+  artistIndex: z.number().int().min(0).max(3).optional(),
 });
 export type SetLinkInput = z.infer<typeof setLinkSchema>;
+
+// Spotify backfill body. All optional: old mobile bundles post no body.
+export const spotifyBackfillSchema = z
+  .object({
+    force: z.boolean().optional(),
+    skipSearch: z.boolean().optional(),
+    // Artist name -> verified link, preferred over search.
+    overrides: z
+      .record(
+        z.string().trim().min(1).max(200),
+        // url() alone accepts javascript: and data: links.
+        z
+          .string()
+          .url()
+          .max(500)
+          .refine((u) => u.startsWith('https://'), 'Must be an https URL'),
+      )
+      .refine((o) => Object.keys(o).length <= 500, 'At most 500 overrides')
+      .optional(),
+    // Limits the run to these sets.
+    setIds: z.array(identifier).max(500).optional(),
+  })
+  .default({});
+export type SpotifyBackfillInput = z.infer<typeof spotifyBackfillSchema>;
 
 // ── Meeting Point schemas (Phase 1B) ────────────────────────────
 
@@ -890,6 +922,11 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
   // An explicit null clears it; undefined keeps whatever the festival already had.
   const mapConfig =
     input.mapConfig !== undefined ? (input.mapConfig ?? null) : (existingFestival?.mapConfig ?? null);
+  // Venue: neither sent keeps the stored point; a valid pair replaces it; anything else clears both.
+  const venueSent = input.latitude !== undefined || input.longitude !== undefined;
+  const venueLat = venueSent ? coord(input.latitude, 90) : (existingFestival?.latitude ?? null);
+  const venueLng = venueSent ? coord(input.longitude, 180) : (existingFestival?.longitude ?? null);
+  const venueValid = venueLat !== null && venueLng !== null;
   const storedSets = new Map<string, any>();
   for (const day of existingFestival?.days || []) {
     for (const set of day?.sets || []) if (set?.id) storedSets.set(set.id, set);
@@ -930,6 +967,8 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
       }),
     })),
     mapConfig,
+    latitude: venueValid ? venueLat : null,
+    longitude: venueValid ? venueLng : null,
     createdAt: existingFestival?.createdAt || now,
     updatedAt: now,
   };
@@ -1011,11 +1050,17 @@ export const packingUpdateSchema = z
     label: z.string().trim().min(1).max(200).optional(),
     broughtBy: z.string().trim().max(100).optional().nullable(),
     claimed: z.boolean().optional(),
+    packed: z.boolean().optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
   });
 export type PackingUpdateInput = z.infer<typeof packingUpdateSchema>;
+
+export const packingBatchSchema = z.object({
+  labels: z.array(z.string().trim().min(1).max(200)).min(1).max(30),
+});
+export type PackingBatchInput = z.infer<typeof packingBatchSchema>;
 
 // ── Crew member status schema (M5: on-my-way / ETA) ─────────────────
 // A last-synced, degraded-sync snapshot the member set (often offline) — NOT
@@ -1133,18 +1178,18 @@ export type LocationSyncInput = z.infer<typeof locationSyncSchema>;
 // SOS raise: a member presses SOS. `message` is a short capped note; `position`
 // is the SINGLE intentional exception to ephemerality — it may be attached to
 // the durable crew_activity row + push so the crew can actually find them.
+const sosPositionSchema = z
+  .object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    accuracy: z.number().min(0).max(100000).optional(),
+    capturedAt: z.string().datetime(),
+  })
+  .strip();
 export const sosRaiseSchema = z
   .object({
     message: z.string().trim().max(280).optional(),
-    position: z
-      .object({
-        lat: z.number().min(-90).max(90),
-        lng: z.number().min(-180).max(180),
-        accuracy: z.number().min(0).max(100000).optional(),
-        capturedAt: z.string().datetime(),
-      })
-      .strip()
-      .optional(),
+    position: sosPositionSchema.optional(),
   })
   .strip();
 export type SosRaiseInput = z.infer<typeof sosRaiseSchema>;
@@ -1155,6 +1200,20 @@ export type SosRaiseInput = z.infer<typeof sosRaiseSchema>;
 export const sosClearSchema = z.object({ raiserId: z.string().trim().min(1).max(64).optional() }).strip();
 export type SosClearInput = z.infer<typeof sosClearSchema>;
 
+// SOS seen: a member acks that they saw `raiserId`'s active SOS.
+export const sosSeenSchema = z.object({ raiserId: z.string().trim().min(1).max(64) }).strip();
+export type SosSeenInput = z.infer<typeof sosSeenSchema>;
+
+// Check-in timer: if the member does not tap "I'm OK" within `minutes`, the crew
+// gets an SOS. `position` is the same coarse one-shot fix an SOS may carry.
+export const checkinStartSchema = z
+  .object({
+    minutes: z.number().int().min(10).max(240),
+    position: sosPositionSchema.optional(),
+  })
+  .strip();
+export type CheckinStartInput = z.infer<typeof checkinStartSchema>;
+
 // ── Crew carpool / ride-board schemas (M2 logistics) ────────────────
 export const rideCreateSchema = z.object({
   driver: z.string().trim().max(100).optional().nullable(),
@@ -1162,6 +1221,8 @@ export const rideCreateSchema = z.object({
   departFrom: z.string().trim().max(200).optional().nullable(),
   departAt: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
+  direction: z.enum(['to_festival', 'home']).optional().nullable(),
+  departTime: z.string().datetime().optional().nullable(),
 });
 export type RideCreateInput = z.infer<typeof rideCreateSchema>;
 
@@ -1172,6 +1233,8 @@ export const rideUpdateSchema = z
     departFrom: z.string().trim().max(200).optional().nullable(),
     departAt: z.string().trim().max(100).optional().nullable(),
     note: z.string().trim().max(500).optional().nullable(),
+    direction: z.enum(['to_festival', 'home']).optional().nullable(),
+    departTime: z.string().datetime().optional().nullable(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
@@ -1204,18 +1267,88 @@ export const wrapQuery = z.object({
 export type WrapQueryInput = z.infer<typeof wrapQuery>;
 
 // ── Expense schemas ─────────────────────────────────────────────
-export const expenseCreateSchema = z.object({
-  description: z.string().min(1).max(200),
-  amount: z.number().positive(),
-  // User IDs are TEXT (e.g. "user-<uuid>"), not integers — clients send strings.
-  // Typing these as numbers 400'd every real expense create/settle.
-  splitWith: z.array(z.string().min(1)).min(1),
-  category: z.string().max(50).optional(),
-  // Budget = planned expenses. A planned row is a forecast and is EXCLUDED from
-  // the balance ledger / settle-up (see getBalances). Defaults to actual (false).
-  planned: z.boolean().optional(),
+// Keep in sync with CREW_CURRENCIES in packages/shared/src/constants/config.ts
+// (the backend cannot import @festie/shared, see lib/time-zone.ts). Every code
+// has 2 decimal places, so integer-cent ledger math stays valid.
+export const CREW_CURRENCIES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'CAD',
+  'AUD',
+  'NZD',
+  'MXN',
+  'CHF',
+  'SEK',
+  'NOK',
+  'DKK',
+  'PLN',
+  'CZK',
+  'BRL',
+] as const;
+
+export const expenseShareSchema = z.object({
+  userId: z.string().min(1).max(100),
+  cents: z.number().int().positive().max(9_999_999_999),
 });
+export type ExpenseShareInput = z.infer<typeof expenseShareSchema>;
+
+export const expenseCreateSchema = z
+  .object({
+    description: z.string().min(1).max(200),
+    amount: z.number().positive(),
+    // User IDs are TEXT (e.g. "user-<uuid>"), not integers — clients send strings.
+    // Typing these as numbers 400'd every real expense create/settle.
+    splitWith: z.array(z.string().min(1)).min(1),
+    category: z.string().max(50).optional(),
+    // Budget = planned expenses. A planned row is a forecast and is EXCLUDED from
+    // the balance ledger / settle-up (see getBalances). Defaults to actual (false).
+    planned: z.boolean().optional(),
+    // The member who paid. Defaults to the caller on the server.
+    paidBy: z.string().min(1).max(100).optional(),
+    // Uneven split in integer cents. Absent = equal split across splitWith.
+    shares: z.array(expenseShareSchema).min(1).max(30).optional(),
+  })
+  .superRefine((d, ctx) => {
+    // Payments come only from POST /expenses/settle; this blocks forged "A paid B" rows and edits into a payment.
+    if (d.category === 'settlement') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['category'],
+        message: 'Record a payment with Settle up, not as an expense.',
+      });
+    }
+    if (!d.shares) return;
+    const shareIds = d.shares.map((s) => s.userId);
+    const shareSet = new Set(shareIds);
+    if (shareSet.size !== shareIds.length) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Each person can appear once in the shares.' });
+    }
+    const splitSet = new Set(d.splitWith);
+    if (shareSet.size !== splitSet.size || [...shareSet].some((id) => !splitSet.has(id))) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Shares must list the same people as the split.' });
+    }
+    const sum = d.shares.reduce((acc, s) => acc + s.cents, 0);
+    if (sum !== Math.round(d.amount * 100)) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Shares must add up to the total.' });
+    }
+  });
 export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
+
+// PUT is a full replacement: the edit form sends every field, so it reuses the
+// create schema (one validation path, last-write-wins offline replay).
+export const expenseUpdateSchema = expenseCreateSchema;
+export type ExpenseUpdateInput = z.infer<typeof expenseUpdateSchema>;
+
+export const expenseCurrencySchema = z.object({ currency: z.enum(CREW_CURRENCIES) });
+export type ExpenseCurrencyInput = z.infer<typeof expenseCurrencySchema>;
+
+export const expenseConfirmSchema = z.object({ received: z.boolean() });
+export type ExpenseConfirmInput = z.infer<typeof expenseConfirmSchema>;
+
+// `userId` is the member who owes the caller.
+export const expenseRemindSchema = z.object({ userId: z.string().min(1).max(100) });
+export type ExpenseRemindInput = z.infer<typeof expenseRemindSchema>;
 
 // ── Admin bulk schemas ──────────────────────────────────────────
 export const adminBulkDeactivateSchema = z.object({
@@ -1396,6 +1529,7 @@ export const schemas = {
   crewTransfer: crewTransferSchema,
   crewAddMember: crewAddMemberSchema,
   setLink: setLinkSchema,
+  spotifyBackfill: spotifyBackfillSchema,
   festivalAnnouncement: festivalAnnouncementSchema,
   crewHomeBase: crewHomeBaseSchema,
   crewPhotoAlbum: crewPhotoAlbumSchema,
@@ -1405,6 +1539,7 @@ export const schemas = {
   pollVote: pollVoteSchema,
   packingCreate: packingCreateSchema,
   packingUpdate: packingUpdateSchema,
+  packingBatch: packingBatchSchema,
   crewStatus: crewStatusSchema,
   locationShare: locationShareSchema,
   locationUpdate: locationUpdateSchema,
@@ -1412,6 +1547,8 @@ export const schemas = {
   locationSync: locationSyncSchema,
   sosRaise: sosRaiseSchema,
   sosClear: sosClearSchema,
+  sosSeen: sosSeenSchema,
+  checkinStart: checkinStartSchema,
   rideCreate: rideCreateSchema,
   rideUpdate: rideUpdateSchema,
   forgotPassword: forgotPasswordSchema,
@@ -1421,6 +1558,10 @@ export const schemas = {
   caughtUpdate: caughtUpdateSchema,
   wrapQuery,
   expenseCreate: expenseCreateSchema,
+  expenseUpdate: expenseUpdateSchema,
+  expenseCurrency: expenseCurrencySchema,
+  expenseConfirm: expenseConfirmSchema,
+  expenseRemind: expenseRemindSchema,
   adminBulkDeactivate: adminBulkDeactivateSchema,
   adminBulkArchive: adminBulkArchiveSchema,
   adminAddRole: adminAddRoleSchema,
