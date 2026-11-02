@@ -20,6 +20,11 @@ vi.mock('./resetStores', () => ({
   resetAllStores: vi.fn(),
 }));
 
+const mergeGuestPicks = vi.hoisted(() => vi.fn());
+vi.mock('./festivalDataStore', () => ({
+  useFestivalDataStore: { getState: () => ({ mergeGuestPicks }) },
+}));
+
 const mockUser: User = {
   id: 'user-1',
   username: 'alice',
@@ -46,6 +51,31 @@ describe('authStore', () => {
   beforeEach(() => {
     resetStore();
     vi.clearAllMocks();
+    mergeGuestPicks.mockResolvedValue(undefined);
+  });
+
+  describe('guest pick merge', () => {
+    it('runs once after login, register and checkSession', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, token: 't' });
+      await useAuthStore.getState().login({ username: 'alice', password: 'pass' });
+      expect(mergeGuestPicks).toHaveBeenCalledTimes(1);
+
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, token: 't' });
+      await useAuthStore
+        .getState()
+        .register({ username: 'alice', email: 'a@test.com', password: 'pass', confirmPassword: 'pass' } as never);
+      expect(mergeGuestPicks).toHaveBeenCalledTimes(2);
+
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser });
+      await useAuthStore.getState().checkSession();
+      expect(mergeGuestPicks).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not run after a failed login', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('Bad credentials'));
+      await expect(useAuthStore.getState().login({ username: 'alice', password: 'x' })).rejects.toThrow();
+      expect(mergeGuestPicks).not.toHaveBeenCalled();
+    });
   });
 
   describe('initial state', () => {

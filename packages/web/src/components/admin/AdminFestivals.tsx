@@ -20,6 +20,7 @@ import LineupImport from './LineupImport';
 import FestivalEditForm, { Festival as FormFestival } from './FestivalEditForm';
 import FestivalMapEditor from './FestivalMapEditor';
 import FestivalStatusPanel, { FestivalMeta } from './FestivalStatusPanel';
+import FestivalAnnouncements from './FestivalAnnouncements';
 import { cn } from '../../lib/utils';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -488,6 +489,9 @@ export default function AdminFestivals() {
               }
               onEditMap={() => confirmLeave(() => openMap(editingId))}
             />
+          )}
+          {editingId && (
+            <FestivalAnnouncements festivalId={editingId} festivalName={formData.name || 'this festival'} />
           )}
           <FestivalEditForm
             key={`${editingId ?? 'new'}-${discardCount}`}

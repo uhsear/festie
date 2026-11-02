@@ -58,15 +58,18 @@ vi.mock('../components/features/PickConflicts', () => ({
   default: ({ groups }: { groups?: unknown[] }) => <div data-testid="pick-conflicts">{groups?.length ?? 0}</div>,
 }));
 
-// Guests get the in-place teaser instead of a redirect; stub it so this suite
-// stays focused on the authed picks UI.
-vi.mock('../components/features/GuestTeaser', () => ({
-  default: ({ mode }: { mode: string }) => <div data-testid="guest-teaser">{mode}</div>,
+vi.mock('../components/features/GuestPicksBanner', () => ({
+  default: () => <div data-testid="guest-picks-banner" />,
 }));
 
 // SharePicksDialog has its own test (it needs router, crew store and QR mocks).
 vi.mock('../components/features/SharePicksDialog', () => ({
   default: () => <button type="button" aria-label="Share my picks">Share picks</button>,
+}));
+
+// ScheduleImageDialog has its own test (it needs the capture and export mocks).
+vi.mock('../components/features/ScheduleImageDialog', () => ({
+  default: () => <button type="button" aria-label="Save my picks as an image">Save image</button>,
 }));
 
 const mockToast = vi.fn();
@@ -134,10 +137,13 @@ describe('PicksView', () => {
     setStoreState();
   });
 
-  it('renders the guest teaser when no user', () => {
-    setStoreState({ user: null });
+  it('lists a guest pick under its priority with the banner, not a teaser', () => {
+    setStoreState({ user: null, profile: null, sets: [makeSet('s1', 'Daft Punk')] });
+    useFestivalStore.setState({ guestPicks: { f1: { s1: 'must' } } } as never);
     render(<PicksView />);
-    expect(screen.getByTestId('guest-teaser')).toHaveTextContent('picks');
+    expect(screen.getByTestId('guest-picks-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-row')).toHaveTextContent('Daft Punk');
+    expect(screen.queryByLabelText('Share my picks')).toBeNull();
   });
 
   it('shows "No festival selected" when no festival', () => {
@@ -289,7 +295,8 @@ describe('PicksView', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     render(<PicksView />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add picks to calendar' }));
+    // CalendarDialog is lazy and unmocked; its cold import can pass findByRole's 1s default.
+    fireEvent.click(await screen.findByRole('button', { name: 'Add picks to calendar' }, { timeout: 5000 }));
     fireEvent.click(await screen.findByRole('button', { name: 'Download once' }));
 
     expect(buildPicksIcsExport).toHaveBeenCalledTimes(1);
@@ -306,5 +313,11 @@ describe('PicksView', () => {
     setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
     render(<PicksView />);
     expect(await screen.findByRole('button', { name: 'Share my picks' })).toBeInTheDocument();
+  });
+
+  it('renders the Save image button when the profile has picks', async () => {
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    expect(await screen.findByRole('button', { name: 'Save my picks as an image' })).toBeInTheDocument();
   });
 });

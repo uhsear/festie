@@ -53,6 +53,7 @@ export default function JoinInviteScreen() {
   const user = useAuthStore((s) => s.user);
   const joinByInvite = useJoinCrewByInvite();
   const currentFestivalId = useFestivalStore((s) => s.currentFestival?.id);
+  const selectFestival = useFestivalStore((s) => s.selectFestival);
   const crewLoading = useCrewStore((s) => s.crewLoading);
   const error = useCrewStore((s) => s.error);
   const setError = useCrewStore((s) => s.setError);
@@ -179,6 +180,20 @@ export default function JoinInviteScreen() {
               onPress={() => router.push('/(auth)/login')}
               style={styles.secondary}
             />
+            {preview?.festivalId ? (
+              <Button
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                label="See the lineup first"
+                variant="ghost"
+                onPress={() => {
+                  // The pending invite stays so sign-up returns to this screen.
+                  selectFestival(preview.festivalId!)
+                    .catch(() => {})
+                    .finally(() => router.replace('/(tabs)'));
+                }}
+                style={styles.secondary}
+              />
+            ) : null}
           </>
         ) : null}
 

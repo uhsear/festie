@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useFestivalStore, useFestivalDataStore } from '../stores/festivalStore';
+import { useFestivalStore, useFestivalDataStore, selectMyPicks } from '../stores/festivalStore';
 import type { PickSyncEntry } from '../stores/festivalDataStore';
 import { Priority, SavePickRequest, SaveNoteRequest, SaveReminderRequest } from '../types';
 
@@ -16,7 +16,18 @@ export function usePickSync(setId: string): { sync: PickSyncEntry | undefined; r
   return { sync, retry };
 }
 
+/**
+ * True with a profile, or once a festival is chosen: a guest's pick stays on the
+ * device and a signed-in user's first pick joins the festival.
+ */
+export function useCanPick(): boolean {
+  const hasProfile = useFestivalDataStore((s) => !!s.currentProfile);
+  const hasFestival = useFestivalDataStore((s) => !!s.currentFestivalId);
+  return hasProfile || hasFestival;
+}
+
 export interface UsePicksReturn {
+  canPick: boolean;
   savePick: (festivalId: string, setId: string, priority: Priority | null) => Promise<void>;
   removePick: (festivalId: string, setId: string) => Promise<void>;
   saveNote: (festivalId: string, setId: string, note: string) => Promise<void>;
@@ -33,7 +44,8 @@ export function usePicks(): UsePicksReturn {
   // getMyReminder callbacks only get new identity when THEIR slice changes —
   // not on every write to an unrelated slice (e.g. saving a note doesn't
   // invalidate getMyPick, preventing needless React.memo busts on grid columns).
-  const myPicks = useFestivalStore((state) => state.currentProfile?.picks ?? null);
+  const canPick = useCanPick();
+  const myPicks = useFestivalStore(selectMyPicks);
   const myNotes = useFestivalStore((state) => state.currentProfile?.notes ?? null);
   const myReminders = useFestivalStore((state) => state.currentProfile?.reminders ?? null);
   const allProfiles = useFestivalStore((state) => state.allProfiles);
@@ -90,13 +102,10 @@ export function usePicks(): UsePicksReturn {
   // React.memo cache-busts on grid columns that only consume getMyPick.
   const getMyPick = useCallback(
     (setId: string): Priority | null | undefined => {
-      if (!currentProfile) return undefined;
-      const picks = myPicks || {};
-      const value = picks[setId];
-      return (value as Priority) || null;
+      if (!canPick) return undefined;
+      return myPicks?.[setId] ?? null;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentProfile?.id, myPicks],
+    [canPick, myPicks],
   );
 
   const getMyNote = useCallback(
@@ -138,6 +147,7 @@ export function usePicks(): UsePicksReturn {
   );
 
   return {
+    canPick,
     savePick: handleSavePick,
     removePick: handleRemovePick,
     saveNote: handleSaveNote,

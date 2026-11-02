@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist } from '@festie/shared/utils';
-import { useDebouncedNote, useSpotifyPreview, usePickClear } from '@festie/shared/hooks';
+import { useDebouncedNote, useSpotifyPreview, usePickClear, useCanPick } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useAuthStore } from '@festie/shared/stores';
@@ -38,6 +38,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   const theme = useUIStore((s) => s.theme);
   const isLg = useMediaQuery('(min-width: 1024px)');
   const user = useAuthStore((s) => s.user);
+  const canPick = useCanPick();
   const navigate = useNavigate();
   const {
     currentFestival,
@@ -264,26 +265,26 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               </div>
             </div>
 
+            {canPick && (
+              <DetailPriorityPicker
+                setId={set.id}
+                myPick={myPick || null}
+                priorityBusy={priorityBusy}
+                onPriorityClick={handlePriorityClick}
+              />
+            )}
             {user ? (
-              <>
-                <DetailPriorityPicker
-                  setId={set.id}
-                  myPick={myPick || null}
-                  priorityBusy={priorityBusy}
-                  onPriorityClick={handlePriorityClick}
-                />
-                <DetailReminderNotePanel
-                  myReminder={myReminder}
-                  reminderBusy={reminderBusy}
-                  onReminderClick={handleReminderClick}
-                  canRemind={canRemind}
-                  personalNote={personal.value}
-                  onPersonalChange={personal.setValue}
-                  personalStatus={personal.status}
-                  onRetryPersonal={personal.retry}
-                  onExpand={() => setSnap(1)}
-                />
-              </>
+              <DetailReminderNotePanel
+                myReminder={myReminder}
+                reminderBusy={reminderBusy}
+                onReminderClick={handleReminderClick}
+                canRemind={canRemind}
+                personalNote={personal.value}
+                onPersonalChange={personal.setValue}
+                personalStatus={personal.status}
+                onRetryPersonal={personal.retry}
+                onExpand={() => setSnap(1)}
+              />
             ) : (
               <div className="p-4 rounded-DEFAULT bg-[var(--color-overlay-2)] border border-glass-border">
                 <p className="text-[length:var(--font-size-14)] text-text-secondary leading-normal mb-3">

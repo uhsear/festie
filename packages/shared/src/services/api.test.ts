@@ -302,4 +302,17 @@ describe('api service', () => {
       expect(err.isNetworkError).toBe(false);
     });
   });
+  describe('asText', () => {
+    it('returns a 200 text body as a string and keeps asText out of fetch', async () => {
+      mockFetch.mockResolvedValue({ ...jsonResponse(null), text: async () => '<html>x</html>' });
+      const result = await api.get<string>('/export/f/p', { asText: true });
+      expect(result).toBe('<html>x</html>');
+      expect(mockFetch.mock.calls[0]![1]).not.toHaveProperty('asText');
+    });
+
+    it('still throws ApiClientError on a JSON error envelope', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ data: null, error: { message: 'Nope', code: 'NOT_FOUND' } }, 404));
+      await expect(api.get('/export/f/p', { asText: true })).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+    });
+  });
 });

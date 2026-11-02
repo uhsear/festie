@@ -10,7 +10,8 @@ export const COPY = {
   jumpToNow: { label: 'Jump to now', a11y: 'Scroll to the current time', icon: 'jumpToNow' },
   picks: {
     tab: 'Picks', title: 'My picks', filterA11y: 'Show only my picks',
-    share: 'Share picks', shareByQr: 'Share by QR', shareOffline: 'Share offline', icon: 'picks',
+    share: 'Share picks', shareByQr: 'Share by QR', shareOffline: 'Share offline',
+    saveImage: 'Save image', printable: 'Download printable page', icon: 'picks',
   },
   wrap: {
     tab: 'Wrap', name: 'Festival Wrap', crewName: 'Crew Wrap', open: 'See your Festival Wrap',

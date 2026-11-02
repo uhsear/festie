@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toastContext';
 import { useHaptics } from '../../hooks/useHaptics';
 import { RATING_META, RATING_SCALE } from '../../lib/ratingIcon';
 import { cn } from '../../lib/utils';
+import SetRatingSummary from './SetRatingSummary';
 
 const RATINGS = RATING_SCALE.map((n) => ({ n, ...RATING_META[n]! }));
 
@@ -170,6 +171,7 @@ export default function RatingButtons({ setId, festivalId, compact = false }: Pr
       >
         {ratingCaption(current)}
       </p>
+      {!compact && <SetRatingSummary setId={setId} festivalId={festivalId} />}
     </div>
   );
 }

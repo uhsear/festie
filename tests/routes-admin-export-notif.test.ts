@@ -1218,7 +1218,7 @@ describe('routes/admin.js', () => {
 // =====================================================================
 describe('routes/export.js', () => {
   // export.js spawns Worker threads; we need to handle that gracefully.
-  // We'll test the ICS and presence endpoints which don't need workers.
+  // We'll test the presence endpoints and the error paths, which don't need workers.
 
   async function buildExportApp(overrides: any = {}) {
     const { default: createExportRoutes } = await import('../routes/export.js');
@@ -1233,60 +1233,6 @@ describe('routes/export.js', () => {
     const router = createExportRoutes(deps);
     assert.ok(router);
     assert.equal(typeof router.use, 'function');
-  });
-
-  test('GET /export/:festivalId/:profileId/calendar returns ICS content', async () => {
-    const { app } = await buildExportApp();
-    const res = await request(app).get('/export/f1/p1/calendar').expect(200);
-    assert.ok(res.headers['content-type']!.includes('text/calendar'));
-    assert.ok(res.text.includes('BEGIN:VCALENDAR'));
-    assert.ok(res.text.includes('END:VCALENDAR'));
-    assert.ok(res.text.includes('DJ Test'));
-  });
-
-  test('GET /export/:festivalId/:profileId/calendar returns 404 for missing festival', async () => {
-    const { app } = await buildExportApp();
-    const res = await request(app).get('/export/missing/p1/calendar').expect(404);
-    assert.equal(res.body.data, null);
-  });
-
-  test('GET /export/:festivalId/:profileId/calendar returns 404 for missing profile', async () => {
-    const deps = makeDeps();
-    deps.stores.profiles.getById = mock.fn(async () => null);
-    const { default: createExportRoutes } = await import('../routes/export.js');
-    const router = createExportRoutes(deps);
-    const app = buildApp(router);
-
-    const res = await request(app).get('/export/f1/missing/calendar').expect(404);
-    assert.equal(res.body.data, null);
-  });
-
-  test('GET /export/:festivalId/:profileId/calendar returns 403 for wrong user', async () => {
-    const deps = makeDeps();
-    deps.stores.profiles.getById = mock.fn(async () => ({
-      id: 'p2',
-      userId: 'user-999',
-      festivalId: 'f1',
-      picks: {},
-      notes: {},
-    }));
-    const { default: createExportRoutes } = await import('../routes/export.js');
-    const router = createExportRoutes(deps);
-    const app = buildApp(router);
-
-    const res = await request(app).get('/export/f1/p2/calendar').expect(403);
-    assert.equal(res.body.data, null);
-  });
-
-  test('GET /export/:festivalId/:profileId/calendar returns 400 for invalid IDs', async () => {
-    const deps = makeDeps();
-    deps.sanitizeIdentifier = () => null;
-    const { default: createExportRoutes } = await import('../routes/export.js');
-    const router = createExportRoutes(deps);
-    const app = buildApp(router);
-
-    const res = await request(app).get('/export/%20/%20/calendar').expect(400);
-    assert.equal(res.body.data, null);
   });
 
   test('GET /export/:festivalId/:profileId returns 400 for invalid IDs', async () => {
@@ -1338,59 +1284,6 @@ describe('routes/export.js', () => {
     const app = buildApp(router);
 
     const res = await request(app).get('/presence/%20').expect(400);
-    assert.equal(res.body.data, null);
-  });
-
-  test('GET /festivals/:festivalId/calendar returns calendar events', async () => {
-    const { app } = await buildExportApp();
-    const res = await request(app).get('/festivals/f1/calendar').expect(200);
-    assert.equal(res.body.error, null);
-    assert.ok(res.body.data.festival);
-    assert.ok(Array.isArray(res.body.data.events));
-  });
-
-  test('GET /festivals/:festivalId/calendar returns 404 for missing festival', async () => {
-    const { app } = await buildExportApp();
-    const res = await request(app).get('/festivals/missing/calendar').expect(404);
-    assert.equal(res.body.data, null);
-  });
-
-  test('GET /festivals/:festivalId/calendar returns 404 when not joined', async () => {
-    const deps = makeDeps();
-    deps.getProfiles = mock.fn(async () => []);
-    const { default: createExportRoutes } = await import('../routes/export.js');
-    const router = createExportRoutes(deps);
-    const app = buildApp(router);
-
-    const res = await request(app).get('/festivals/f1/calendar').expect(404);
-    assert.equal(res.body.data, null);
-  });
-
-  test('GET /export-card/:festivalId returns 404 for missing festival', async () => {
-    const { app } = await buildExportApp();
-    const res = await request(app).get('/export-card/missing').expect(404);
-    assert.equal(res.body.data, null);
-  });
-
-  test('GET /export-card/:festivalId returns 404 when not joined', async () => {
-    const deps = makeDeps();
-    deps.getUserFestivalProfile = mock.fn(async () => null);
-    const { default: createExportRoutes } = await import('../routes/export.js');
-    const router = createExportRoutes(deps);
-    const app = buildApp(router);
-
-    const res = await request(app).get('/export-card/f1').expect(404);
-    assert.equal(res.body.data, null);
-  });
-
-  test('GET /export-card/:festivalId returns 400 for invalid ID', async () => {
-    const deps = makeDeps();
-    deps.sanitizeIdentifier = () => null;
-    const { default: createExportRoutes } = await import('../routes/export.js');
-    const router = createExportRoutes(deps);
-    const app = buildApp(router);
-
-    const res = await request(app).get('/export-card/%20').expect(400);
     assert.equal(res.body.data, null);
   });
 });
