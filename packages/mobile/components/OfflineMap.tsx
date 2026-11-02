@@ -34,6 +34,7 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
+import { COPY } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, iconSize } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
@@ -1002,7 +1003,7 @@ export default function OfflineMap({
               on the picks tab (there is nothing to fetch once you are offline). */}
           <Text style={styles.bannerText}>
             {remotePmtilesUrl
-              ? 'Download this festival from My Plan while you still have signal to use the map offline. Showing your saved meeting points.'
+              ? `Download this festival from ${COPY.picks.title} while you still have signal to use the map offline. Showing your saved meeting points.`
               : 'This festival has no offline map. Showing your saved meeting points.'}
           </Text>
         </View>

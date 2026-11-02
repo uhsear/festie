@@ -173,7 +173,7 @@ export default function MapScreen() {
         meetingPoints={crewLayers ? meetingPoints : []}
         peers={crewLayers ? peers : []}
         activeSosList={crewLayers ? crewSosList : []}
-        onMapPress={user && activeCrew ? handleMapPress : undefined}
+        onMapPress={crewLayers ? handleMapPress : undefined}
         festival={mapFestival}
         bottomInset={Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT : 0}
       />

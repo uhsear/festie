@@ -29,6 +29,6 @@ describe('five-tab navigation and the Map tab', () => {
   });
 
   it('find deep links open the map', () => {
-    expect(read('app/_layout.tsx')).toContain("find: '/map'");
+    expect(read('app/find.tsx')).toContain('href="/map"');
   });
 });

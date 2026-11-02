@@ -21,6 +21,8 @@ import {
 } from '@festie/shared/utils';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { safeStageColor } from '../lib/stageColor';
 import { useNowIndicator, type TimeBounds } from '../hooks/useNowIndicator';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -593,10 +595,10 @@ export default function TimelineView({
           onPress={scrollToNow}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel="Scroll to current time"
+          accessibilityLabel={COPY.jumpToNow.a11y}
         >
-          <Ionicons name="musical-notes" size={16} color={t.colors.text.onLightAccent} />
-          <Text style={styles.fabText}>Now</Text>
+          <Ionicons name={CONCEPT_IONICON.jumpToNow} size={16} color={t.colors.text.onLightAccent} />
+          <Text style={styles.fabText}>{COPY.jumpToNow.label}</Text>
         </TouchableOpacity>
       ) : null}
     </View>

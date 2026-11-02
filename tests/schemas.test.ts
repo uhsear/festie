@@ -219,6 +219,12 @@ describe('schemas: notificationPrefs', () => {
     assert.ok(!result.success);
   });
 
+  it('accepts crew type toggles and the allowed must-see lead times only', () => {
+    assert.ok(schemas.notificationPrefs.safeParse({ crewPolls: false, mustSeeReminderMinutes: 15 }).success);
+    assert.ok(schemas.notificationPrefs.safeParse({ mustSeeReminderMinutes: null }).success);
+    assert.ok(!schemas.notificationPrefs.safeParse({ mustSeeReminderMinutes: 20 }).success);
+  });
+
   it('rejects extra properties (strict mode)', () => {
     const result = schemas.notificationPrefs.safeParse({
       crewUpdates: true,
@@ -864,13 +870,14 @@ describe('responseSchemas: serialized payloads parse', () => {
 
   it('notificationPrefsResponseSchema parses the get() shape (0/1 ints, nullable DND)', () => {
     // Default (no-row) shape: every toggle is the integer 1, DND null.
-    const defaults = { userId: 'user-1', crewUpdates: 1, setReminders: 1, scheduleChanges: 1, lineupDrops: 1, crewReformed: 1, wrapReady: 1, dndStart: null, dndEnd: null, dndTimeZone: null };
+    const defaults = { userId: 'user-1', crewUpdates: 1, setReminders: 1, scheduleChanges: 1, lineupDrops: 1, crewReformed: 1, wrapReady: 1, crewMeetingPoints: 1, crewPolls: 1, crewMoney: 1, crewRides: 1, mustSeeReminderMinutes: null, dndStart: null, dndEnd: null, dndTimeZone: null };
     const parsed = notificationPrefsResponseSchema.parse(wire(defaults));
     assert.equal(parsed.crewUpdates, 1);
     assert.equal(parsed.dndStart, null);
     // Saved row with opt-outs (0) and a DND window.
-    const saved = { ...defaults, crewUpdates: 0, dndStart: '23:00', dndEnd: '08:00' };
+    const saved = { ...defaults, crewUpdates: 0, crewPolls: 0, mustSeeReminderMinutes: 15, dndStart: '23:00', dndEnd: '08:00' };
     assert.equal(notificationPrefsResponseSchema.parse(wire(saved)).dndStart, '23:00');
+    assert.equal(notificationPrefsResponseSchema.parse(wire(saved)).mustSeeReminderMinutes, 15);
   });
 
   it('authEnvelopeResponseSchema parses cookie (no tokens) + body-token envelopes', () => {

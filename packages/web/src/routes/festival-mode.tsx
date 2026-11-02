@@ -133,7 +133,7 @@ function FestivalModeViewInner() {
                 title="Find your crew here"
                 body="Sign in to see where your friends are and where you're meeting."
                 cta="Sign in"
-                onAction={() => navigate({ to: '/login' })}
+                onAction={() => navigate({ to: '/login', search: { next: '/festival-mode' } })}
               />
             ) : crew && after ? (
               <CrewWrapUpCard

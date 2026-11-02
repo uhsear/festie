@@ -22,7 +22,7 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }));
 
-vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }) }));
 
 import HomeBaseCard from './HomeBaseCard';
 
@@ -68,5 +68,17 @@ describe('HomeBaseCard', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: null });
+  });
+
+  it('renders a readable non-interactive card for members', () => {
+    render(<HomeBaseCard crewId="c1" currentLocation="Ferris wheel" currentTime="18:00" isOwner={false} />);
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('Home base:')).toBeInTheDocument();
+    expect(screen.getByText('Ferris wheel')).toBeInTheDocument();
+  });
+
+  it('renders an enabled button for owners', () => {
+    render(<HomeBaseCard crewId="c1" currentLocation="Ferris wheel" currentTime={null} isOwner />);
+    expect(screen.getByRole('button')).toBeEnabled();
   });
 });

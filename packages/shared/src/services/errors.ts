@@ -50,8 +50,19 @@ export function mapErrorToUserMessage(err: unknown, fallback = 'Something went w
       if (!secs) return 'Too many tries. Wait a moment and try again.';
       return `Too many tries. Wait ${secs} ${secs === 1 ? 'second' : 'seconds'} and try again.`;
     }
+    if (err.status === 423) {
+      const ms = parseRetryAfterMs(err.retryAfter);
+      if (ms == null) return 'This account is locked after too many failed sign-ins. Try again later, or reset your password.';
+      const n = Math.max(1, Math.ceil(ms / 60000));
+      return `This account is locked after too many failed sign-ins. Try again in ${n} minute${n === 1 ? '' : 's'}, or reset your password.`;
+    }
     if (err.status >= 500) return 'Something went wrong on our side. Try again in a minute.';
     return err.message || fallback;
   }
   return err instanceof Error ? err.message : fallback;
+}
+
+/** True when a reset-password call failed because the link expired or was already used. */
+export function isResetLinkExpired(err: unknown): boolean {
+  return isApiClientError(err) && err.code === 'TOKEN_EXPIRED';
 }

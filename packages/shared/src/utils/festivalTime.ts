@@ -119,6 +119,30 @@ export function festivalStatus(
 }
 
 /**
+ * Order festivals for a picker: live first, then upcoming (soonest first), then
+ * past (most recent first). A festival with no usable dates sorts with upcoming.
+ */
+export function sortFestivalsForPicker<T extends Festival>(festivals: readonly T[], now: Date = new Date()): T[] {
+  // Rank each festival once instead of re-deriving its status per comparison.
+  const ranked = festivals.map((f) => {
+    const s = festivalStatus(f, null, now);
+    const r = s === 'ongoing' ? 0 : s === 'past' ? 2 : 1;
+    return { f, r, start: f.startDate || '' };
+  });
+  ranked.sort((a, b) => {
+    if (a.r !== b.r) return a.r - b.r;
+    // ISO date strings sort lexicographically. Past = most recent first.
+    return a.r === 2 ? b.start.localeCompare(a.start) : a.start.localeCompare(b.start);
+  });
+  return ranked.map(({ f }) => f);
+}
+
+/** The festival a new visitor should open on, or undefined for an empty list. */
+export function pickDefaultFestival<T extends Festival>(festivals: readonly T[], now: Date = new Date()): T | undefined {
+  return sortFestivalsForPicker(festivals, now)[0];
+}
+
+/**
  * Lifecycle phase of a festival, used to re-prioritize the home/landing surface:
  *  - 'pre'  — before it starts (lean into picks / lineup / crew invites / Spotify)
  *  - 'live' — while it's running (lean into Now & Next / live map / SOS / meeting points)

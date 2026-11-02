@@ -89,7 +89,7 @@ describe('FestivalModeView (Now surface)', () => {
     expect(screen.getByTestId('fm-now-card')).toHaveTextContent('until 6:00 PM');
     expect(screen.getByTestId('fm-now-card')).toHaveTextContent('30m left');
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/login', search: { next: '/festival-mode' } });
     expect(screen.getByLabelText('Festival time')).toHaveTextContent('5:30 PM');
   });
 

@@ -3,7 +3,9 @@ import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
 import { formatTime } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { parseHomeBaseTime } from '../lib/homeBaseTime';
 import Button from './Button';
 
@@ -86,18 +88,19 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
     return (
       <View style={styles.editBox}>
         <View style={styles.editHeader}>
-          <Ionicons name="location" size={16} color={t.colors.accent.aqua} />
-          <Text style={styles.editTitle}>Set home base</Text>
+          <Ionicons name={CONCEPT_IONICON.homeBase} size={16} color={t.colors.accent.aqua} />
+          <Text style={styles.editTitle}>{COPY.homeBase.set}</Text>
           <TouchableOpacity
             onPress={() => setEditing(false)}
             style={styles.iconButton}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Cancel editing home base"
+            accessibilityLabel="Cancel editing Home Base"
           >
             <Ionicons name="close" size={18} color={t.colors.text.secondary} />
           </TouchableOpacity>
         </View>
+        <Text style={styles.hint}>{COPY.homeBase.hint}</Text>
         <TextInput
           style={[styles.input, focusedField === 'location' && styles.inputFocused]}
           placeholder="Where should the crew meet?"
@@ -107,7 +110,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
           maxLength={200}
           onFocus={() => setFocusedField('location')}
           onBlur={() => setFocusedField((f) => (f === 'location' ? null : f))}
-          accessibilityLabel="Home base location"
+          accessibilityLabel="Home Base location"
         />
         <TextInput
           style={[styles.input, focusedField === 'time' && styles.inputFocused]}
@@ -123,7 +126,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
           onSubmitEditing={handleSave}
           onFocus={() => setFocusedField('time')}
           onBlur={() => setFocusedField((f) => (f === 'time' ? null : f))}
-          accessibilityLabel="Home base time"
+          accessibilityLabel="Home Base time"
         />
         {timeError ? (
           <Text style={styles.errorText} accessibilityRole="alert">
@@ -136,7 +139,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
           loadingLabel="Saving…"
           disabled={!loc.trim()}
           onPress={handleSave}
-          accessibilityLabel="Save home base"
+          accessibilityLabel="Save Home Base"
         />
         {hasHomeBase ? (
           <Button variant="ghost" label="Remove Home Base" onPress={handleRemove} accessibilityLabel="Remove Home Base" />
@@ -145,17 +148,8 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
     );
   }
 
-  return (
-    <TouchableOpacity
-      style={[styles.card, hasHomeBase ? styles.cardSet : styles.cardEmpty]}
-      onPress={() => {
-        if (isOwner) setEditing(true);
-      }}
-      disabled={!isOwner}
-      activeOpacity={isOwner ? 0.8 : 1}
-      accessibilityRole={isOwner ? 'button' : 'text'}
-      accessibilityLabel={hasHomeBase ? `Home base ${location}${timeDisplay ? ` at ${timeDisplay}` : ''}` : 'Set crew home base'}
-    >
+  const body = (
+    <>
       <Ionicons name="location" size={16} color={hasHomeBase ? t.colors.accent.aqua : t.colors.text.muted} />
       <View style={styles.cardInfo}>
         {hasHomeBase ? (
@@ -166,10 +160,36 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
             {timeDisplay ? <Text style={styles.cardTime}>{timeDisplay}</Text> : null}
           </View>
         ) : (
-          <Text style={styles.cardPlaceholder}>Tap to set your crew's Home Base</Text>
+          <Text style={styles.cardPlaceholder}>{COPY.homeBase.empty}</Text>
         )}
+        {hasHomeBase ? <Text style={styles.hint}>{COPY.homeBase.hint}</Text> : null}
       </View>
       {isOwner ? <Ionicons name="pencil" size={t.iconSize.compact} color={t.colors.text.secondary} /> : null}
+    </>
+  );
+
+  if (!isOwner) {
+    return (
+      <View
+        style={[styles.card, styles.cardSet]}
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={`Home base ${location}${timeDisplay ? ` at ${timeDisplay}` : ''}`}
+      >
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      style={[styles.card, hasHomeBase ? styles.cardSet : styles.cardEmpty]}
+      onPress={() => setEditing(true)}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={hasHomeBase ? `Home base ${location}${timeDisplay ? ` at ${timeDisplay}` : ''}` : 'Set crew home base'}
+    >
+      {body}
     </TouchableOpacity>
   );
 }
@@ -212,6 +232,10 @@ const useStyles = makeStyles((t) => ({
   errorText: {
     ...typeStyle('caption'),
     color: t.colors.status.error,
+  },
+  hint: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
   },
   cardPlaceholder: {
     ...typeStyle('caption'),

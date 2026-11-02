@@ -3,7 +3,7 @@
 
 import { Redirect } from 'expo-router';
 
-// The "Find each other" hub moved into the Map tab; old festie://find links land there.
+// The Find hub moved into the Map tab; old festie://find links land there.
 export default function Find() {
   return <Redirect href="/map" />;
 }

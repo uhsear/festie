@@ -131,11 +131,11 @@ env:
     timeout: 6000
 - takeScreenshot: 07-cards-saturday
 
-# Switch the My Plan/Crew/Lineup NativeTabs by their label, exactly as the
+# Switch the Picks/Crew/Lineup NativeTabs by their label, exactly as the
 # passing Android smoke does. Each screenshot is taken BEFORE its assertion so a
 # failure still captures the real screen — the "Remove credential-bearing Maestro
 # metadata" CI step strips Maestro's own debug hierarchy from the artifact.
-- tapOn: "My Plan"
+- tapOn: "Picks"
 - takeScreenshot: 10-picks
 - extendedWaitUntil:
     visible:
@@ -219,7 +219,7 @@ env:
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 6000
-- assertNotVisible: "Find each other"
+- assertNotVisible: "Find your crew"
 - takeScreenshot: 16-map
 - openLink: "festie://compass"
 - extendedWaitUntil:
@@ -233,7 +233,7 @@ env:
 - takeScreenshot: 17-compass
 - openLink: "festie://plan-share"
 - extendedWaitUntil:
-    visible: "Share plan"
+    visible: "Share offline"
     timeout: 30000
 - tapOn: "Text crew"
 - assertVisible:
