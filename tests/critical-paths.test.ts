@@ -735,11 +735,11 @@ describe('audit logging', { concurrency: 1 }, () => {
       for (let i = 0; i < 100 && rows.length === 0; i++) {
         if (i > 0) await new Promise((resolve) => setTimeout(resolve, 20));
         ({ rows } = await pool.query(
-          "SELECT * FROM audit_log WHERE action = 'festival:create' AND target_id = $1",
+          "SELECT * FROM audit_log WHERE action = 'festival.created' AND target_id = $1",
           [festId]
         ));
       }
-      assert.ok(rows.length > 0, 'Audit log should contain festival:create entry');
+      assert.ok(rows.length > 0, 'Audit log should contain festival.created entry');
       assert.ok(['admin', 'user'].includes(rows[0].actor_type), 'actor_type should be admin or user');
       assert.equal(rows[0].target_type, 'festival');
     } finally {

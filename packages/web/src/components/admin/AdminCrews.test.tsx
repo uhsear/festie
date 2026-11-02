@@ -7,6 +7,7 @@ vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
 }));
 
+vi.mock('./useAdminSearch', () => ({ useAdminSearch: () => [{}, vi.fn()] }));
 vi.mock('./UserPickerDialog', () => ({ default: () => null }));
 
 const mockFetchCrews = vi.fn();
@@ -58,10 +59,10 @@ describe('AdminCrews', () => {
   it('finds a crew by invite code in lower case', async () => {
     render(<AdminCrews />);
     await screen.findByText('Sunset Squad');
-    await userEvent.type(screen.getByLabelText('Search crews'), 'k7xq2m');
+    await userEvent.type(screen.getByLabelText(/Search by crew name/), 'k7xq2m');
     expect(screen.getByText('Sunset Squad')).toBeInTheDocument();
-    await userEvent.clear(screen.getByLabelText('Search crews'));
-    await userEvent.type(screen.getByLabelText('Search crews'), 'nomatch');
+    await userEvent.clear(screen.getByLabelText(/Search by crew name/));
+    await userEvent.type(screen.getByLabelText(/Search by crew name/), 'nomatch');
     expect(screen.queryByText('Sunset Squad')).not.toBeInTheDocument();
   });
 

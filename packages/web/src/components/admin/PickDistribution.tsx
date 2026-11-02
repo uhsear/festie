@@ -4,17 +4,19 @@ export interface PickDistributionProps {
   must: number;
   want: number;
   maybe: number;
+  /** Server-side total pick count, used in the heading. */
+  total: number;
 }
 
-export default function PickDistribution({ must, want, maybe }: PickDistributionProps) {
-  const total = must + want + maybe;
-  const mustPercent = total > 0 ? (must / total) * 100 : 0;
-  const wantPercent = total > 0 ? (want / total) * 100 : 0;
-  const maybePercent = total > 0 ? (maybe / total) * 100 : 0;
+export default function PickDistribution({ must, want, maybe, total }: PickDistributionProps) {
+  const sum = must + want + maybe;
+  const mustPercent = sum > 0 ? (must / sum) * 100 : 0;
+  const wantPercent = sum > 0 ? (want / sum) * 100 : 0;
+  const maybePercent = sum > 0 ? (maybe / sum) * 100 : 0;
 
   return (
     <div>
-      <h2 className="type-heading text-text-primary mb-4">Pick Distribution</h2>
+      <h2 className="type-heading text-text-primary mb-4">Pick priority across all {total} picks</h2>
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
           <div>

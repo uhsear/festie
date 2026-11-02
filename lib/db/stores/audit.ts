@@ -1,10 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { Pool } from 'pg';
 
-// New audit action names live here so a later rename touches one place.
-export const AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED = 'user.private_data.viewed';
-export const AUDIT_ACTION_CREW_ADD_MEMBER = 'crew_add_member';
-
 const ROW_COLUMNS = `
   id,
   actor_type AS "actorType",
@@ -85,7 +81,8 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return id;
     },
 
-    async query({ actorId, actorType, action, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
+    // `action` matches exactly; `actionPrefix` matches the start of the name (`festival.`).
+    async query({ actorId, actorType, action, actionPrefix, targetId, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
       const maxLimit = 200;
       const finalLimit = Math.min(Math.max(1, limit || 50), maxLimit);
 
@@ -113,18 +110,22 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         cursorId,
         finalLimit,
         actorType || null,
+        actionPrefix || null,
+        targetId || null,
       ];
 
       const result = await pool.query(`
         SELECT ${ROW_COLUMNS}
         FROM audit_log
         WHERE ($1::TEXT IS NULL OR actor_id = $1::TEXT)
-          AND ($2::TEXT IS NULL OR starts_with(action, $2::TEXT))
+          AND ($2::TEXT IS NULL OR action = $2::TEXT)
           AND ($3::TEXT IS NULL OR target_type = $3::TEXT)
           AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4::TIMESTAMPTZ)
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
           AND ($6::TIMESTAMPTZ IS NULL OR (created_at, id) < ($6::TIMESTAMPTZ, $7::TEXT))
           AND ($9::TEXT IS NULL OR actor_type = $9::TEXT)
+          AND ($10::TEXT IS NULL OR starts_with(action, $10::TEXT))
+          AND ($11::TEXT IS NULL OR target_id = $11::TEXT)
         ORDER BY created_at DESC, id DESC
         LIMIT $8
       `, params);
@@ -138,7 +139,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return { rows, nextCursor };
     },
 
-    async count({ actorId, actorType, action, resourceType, from, to }: any = {}) {
+    async count({ actorId, actorType, action, actionPrefix, targetId, resourceType, from, to }: any = {}) {
       const params: any[] = [
         actorId || null,
         action || null,
@@ -146,17 +147,21 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         from || null,
         to || null,
         actorType || null,
+        actionPrefix || null,
+        targetId || null,
       ];
 
       const result = await pool.query(`
         SELECT COUNT(*) AS total
         FROM audit_log
         WHERE ($1::TEXT IS NULL OR actor_id = $1::TEXT)
-          AND ($2::TEXT IS NULL OR starts_with(action, $2::TEXT))
+          AND ($2::TEXT IS NULL OR action = $2::TEXT)
           AND ($3::TEXT IS NULL OR target_type = $3::TEXT)
           AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4::TIMESTAMPTZ)
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
           AND ($6::TEXT IS NULL OR actor_type = $6::TEXT)
+          AND ($7::TEXT IS NULL OR starts_with(action, $7::TEXT))
+          AND ($8::TEXT IS NULL OR target_id = $8::TEXT)
       `, params);
 
       return parseInt(result.rows[0]?.total || 0, 10);

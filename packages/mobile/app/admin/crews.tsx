@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, FlatList } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -76,7 +76,8 @@ export default function AdminCrewsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const [search, setSearch] = useState('');
+  const { q: initialSearch } = useLocalSearchParams<{ q?: string }>();
+  const [search, setSearch] = useState(initialSearch ?? '');
   const [searchFocused, setSearchFocused] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [membersByCrew, setMembersByCrew] = useState<Record<string, AdminCrewMember[]>>({});

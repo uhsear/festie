@@ -10,13 +10,14 @@ export interface AdminLayoutProps {
   onTabChange: (tab: string) => void;
   activeTab: string;
   tabs: Array<{ id: string; label: string; icon?: React.ReactNode }>;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 }
 
 /**
  * Admin panel layout with tabs and navigation
  */
-export default function AdminLayout({ title, description, onTabChange, activeTab, tabs, children }: AdminLayoutProps) {
+export default function AdminLayout({ title, description, onTabChange, activeTab, tabs, headerAction, children }: AdminLayoutProps) {
   const navigate = useNavigate();
   const [envLabel, setEnvLabel] = useState<string | null>(null);
 
@@ -50,29 +51,26 @@ export default function AdminLayout({ title, description, onTabChange, activeTab
               {description && <p className="text-xs text-text-muted mt-0.5">{description}</p>}
             </div>
           </div>
+          {headerAction}
         </div>
 
-        {/* Mobile tabs — horizontally scrollable tab strip. The previous
-            hamburger toggle set state that was never rendered; removed. */}
-        <div className="admin-mobile-only overflow-x-auto border-t border-glass-border">
-          <div className="flex gap-1 px-4 py-2">
+        {/* Phone section picker: a native select fits any width and names the current section. */}
+        <div className="admin-mobile-only border-t border-glass-border px-4 py-2">
+          <label htmlFor="admin-section" className="sr-only">
+            Admin section
+          </label>
+          <select
+            id="admin-section"
+            value={activeTab}
+            onChange={(e) => onTabChange(e.target.value)}
+            className="w-full min-h-11 rounded-md border border-glass-border bg-bg-primary px-3 text-sm text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+          >
             {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
-                aria-current={activeTab === tab.id ? 'page' : undefined}
-                className={cn(
-                  'px-3 py-1.5 min-h-11 rounded-md text-sm font-medium transition-colors whitespace-nowrap',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
-                  activeTab === tab.id
-                    ? 'bg-accent-aqua text-bg-primary'
-                    : 'text-text-secondary hover:text-text-primary',
-                )}
-              >
+              <option key={tab.id} value={tab.id}>
                 {tab.label}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
         </div>
       </div>
 

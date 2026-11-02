@@ -11,6 +11,7 @@
  * festival: the admin saves the URL into map_config with the map editor.
  */
 import crypto from 'crypto';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 
 import {
   createSiteplanUpload,
@@ -81,7 +82,7 @@ export default function createAdminSiteplanRoutes(deps: any) {
               id: crypto.randomUUID(),
               actorType: 'admin',
               actorId: req.user?.userId,
-              action: 'festival:siteplan-upload',
+              action: AUDIT_ACTIONS.FESTIVAL_SITEPLAN_UPLOADED,
               targetType: 'festival',
               targetId: festivalId,
               detailsJson: JSON.stringify({ key }),

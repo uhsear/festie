@@ -11,7 +11,10 @@ import { useToast } from '../../lib/toastContext';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import UserPickerDialog from './UserPickerDialog';
+import { useAdminSearch } from './useAdminSearch';
 import { SearchX } from 'lucide-react';
+
+const SEARCH_URL_DELAY_MS = 300;
 
 interface CrewMember {
   userId: string;
@@ -34,7 +37,9 @@ function memberAvatarUrl(m: CrewMember): string | null {
 export default function AdminCrews() {
   const [crews, setCrews] = useState<AdminCrewRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [{ q }, setAdminSearch] = useAdminSearch();
+  // The box keeps what was typed (the URL value is trimmed); the URL follows after a pause.
+  const [searchQuery, setSearchQuery] = useState(q ?? '');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [membersByCrew, setMembersByCrew] = useState<Record<string, CrewMember[]>>({});
   const [membersLoading, setMembersLoading] = useState<Record<string, boolean>>({});
@@ -48,6 +53,20 @@ export default function AdminCrews() {
   useEffect(() => {
     loadCrews();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load once on mount
+
+  // An outside change to q (link, finder) moves the box.
+  useEffect(() => {
+    setSearchQuery((t) => (t.trim() === (q ?? '') ? t : (q ?? '')));
+  }, [q]);
+
+  useEffect(() => {
+    if (searchQuery.trim() === (q ?? '')) return;
+    const timer = setTimeout(
+      () => setAdminSearch({ tab: 'crews', ...(searchQuery.trim() && { q: searchQuery.trim() }) }, { replace: true }),
+      SEARCH_URL_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [searchQuery, q, setAdminSearch]);
 
   const loadCrews = async () => {
     try {
@@ -174,8 +193,8 @@ export default function AdminCrews() {
 
       <input
         type="text"
-        aria-label="Search crews"
-        placeholder="Search by crew, creator, festival or invite code…"
+        aria-label="Search by crew name, creator or invite code…"
+        placeholder="Search by crew name, creator or invite code…"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         className="w-full px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
