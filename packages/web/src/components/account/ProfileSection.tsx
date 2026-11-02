@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
-import { api } from '@festie/shared/services/api';
+import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -22,6 +23,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
   const setUser = useAuthStore((s) => s.setUser);
   const uploadAvatar = useAuthStore((s) => s.uploadAvatar);
   const removeAvatar = useAuthStore((s) => s.removeAvatar);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState(user.name || '');
@@ -37,8 +39,8 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
     try {
       await uploadAvatar(file);
       toast('Avatar updated', 'success');
-    } catch {
-      toast("Couldn't upload avatar. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't upload avatar. Try again."), 'error');
     } finally {
       setUploadingAvatar(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -50,8 +52,8 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
     try {
       await removeAvatar();
       toast('Avatar removed', 'success');
-    } catch {
-      toast("Couldn't remove avatar. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't remove avatar. Try again."), 'error');
     } finally {
       setRemovingAvatar(false);
     }
@@ -69,8 +71,8 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
       });
       if (storeUser) setUser({ ...storeUser, name: res.user?.name ?? next });
       toast('Display name updated', 'success');
-    } catch {
-      toast("Couldn't change display name. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't change display name. Try again."), 'error');
     } finally {
       setSavingDisplayName(false);
     }
@@ -93,6 +95,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
               variant="outline"
               size="sm"
               isLoading={uploadingAvatar}
+              disabled={offlineMode}
               onClick={() => fileInputRef.current?.click()}
               className="min-h-[44px] min-w-[44px]"
             >
@@ -104,6 +107,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
                 variant="ghost"
                 size="sm"
                 isLoading={removingAvatar}
+                disabled={offlineMode}
                 onClick={handleAvatarRemove}
                 icon={<Trash2 className="w-4 h-4" aria-hidden="true" />}
                 aria-label="Remove avatar"
@@ -144,7 +148,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
             variant="primary"
             size="md"
             isLoading={savingDisplayName}
-            disabled={!displayName.trim() || displayName.trim() === (user.name ?? '')}
+            disabled={offlineMode || !displayName.trim() || displayName.trim() === (user.name ?? '')}
             className="min-h-[44px] min-w-[44px]"
           >
             Save

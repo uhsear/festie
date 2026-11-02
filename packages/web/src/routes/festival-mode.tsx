@@ -10,6 +10,8 @@ import EmptyState from '../components/ui/EmptyState';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import NowHero from '../components/festival-mode/NowHero';
 import UpNextList from '../components/festival-mode/UpNextList';
+import WeatherStrip from '../components/festival-mode/WeatherStrip';
+import OfflineStatusChip from '../components/features/OfflineStatusChip';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
 import { CrewNowSection, CrewPrompt, MeetNowCard } from '../components/festival-mode/CrewNow';
 import { CalendarX } from 'lucide-react';
@@ -90,6 +92,8 @@ function FestivalModeViewInner() {
         </div>
       </div>
 
+      {user ? <OfflineStatusChip className="mb-4" /> : null}
+
       {/* Phone: one column in priority order (order-*). Desktop: two columns;
           `contents` lets the children join the phone column directly. */}
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start">
@@ -106,6 +110,9 @@ function FestivalModeViewInner() {
               onBrowse={() => navigate({ to: '/cards' })}
               onWrap={user ? () => navigate({ to: '/wrap' }) : undefined}
             />
+          </div>
+          <div className="order-1">
+            <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
           </div>
           <div className="order-4">
             <UpNextList

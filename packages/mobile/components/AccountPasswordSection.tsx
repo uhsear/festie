@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, type TextInputInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@festie/shared/hooks';
-import { PASSWORD_CHANGED_MESSAGE } from '@festie/shared/stores';
+import { mapErrorToUserMessage } from '@festie/shared/services';
+import { PASSWORD_CHANGED_MESSAGE, useUIStore } from '@festie/shared/stores';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -21,6 +22,7 @@ export default function AccountPasswordSection() {
   const styles = useStyles();
   const haptics = useHaptics();
   const { changePassword } = useAuth();
+  const offlineMode = useUIStore((s) => s.offlineMode);
   // weak→strong. All four map exactly onto existing semantic tokens.
   const STRENGTH_COLORS = [t.colors.text.danger, t.colors.accent.amber, t.colors.accent.aqua, t.colors.accent.green];
 
@@ -96,7 +98,7 @@ export default function AccountPasswordSection() {
       }, 3000);
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not change password.');
+      setError(mapErrorToUserMessage(err, 'Could not change password.'));
     } finally {
       setSubmitting(false);
     }
@@ -252,7 +254,7 @@ export default function AccountPasswordSection() {
             label="Update Password"
             onPress={() => void submit()}
             loading={submitting}
-            disabled={!canSubmit}
+            disabled={!canSubmit || offlineMode}
             accessibilityLabel="Save new password"
           />
         </View>

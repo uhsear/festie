@@ -46,6 +46,7 @@ import PhaseHomeActions from '../../components/PhaseHomeActions';
 import FestivalList from '../../components/FestivalList';
 import FreshnessChip from '../../components/FreshnessChip';
 import SaveStatusChip from '../../components/SaveStatusChip';
+import OfflineStatusChip from '../../components/OfflineStatusChip';
 import OtherDayMatches from '../../components/OtherDayMatches';
 import SetCardMobile from '../../components/SetCardMobile';
 import EmptyState from '../../components/EmptyState';
@@ -710,6 +711,11 @@ export default function TimelineScreen() {
           </TouchableOpacity>
         ) : null}
       </View>
+      {user ? (
+        <View style={{ paddingHorizontal: hPad, paddingTop: t.spacing[2] }}>
+          <OfflineStatusChip remind />
+        </View>
+      ) : null}
 
       {/* DC1 — search and the stage / my-picks + phase-action setup chrome are
           folded behind the search/filter toggles in the control row above; only

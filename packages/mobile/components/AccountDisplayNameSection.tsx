@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '@festie/shared/stores';
+import { mapErrorToUserMessage } from '@festie/shared/services';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -23,6 +24,7 @@ export default function AccountDisplayNameSection() {
   const haptics = useHaptics();
   const user = useAuthStore((s) => s.user);
   const updateDisplayName = useAuthStore((s) => s.updateDisplayName);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const username = user?.username ?? '';
   const currentName = user?.name ?? '';
@@ -92,7 +94,7 @@ export default function AccountDisplayNameSection() {
       }, 1800);
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not change display name.');
+      setError(mapErrorToUserMessage(err, 'Could not change display name.'));
     } finally {
       setSubmitting(false);
     }
@@ -136,7 +138,7 @@ export default function AccountDisplayNameSection() {
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               returnKeyType="done"
-              onSubmitEditing={() => valid && void submit()}
+              onSubmitEditing={() => valid && !offlineMode && void submit()}
               accessibilityLabel="New display name"
             />
             {value.length > 0 && !submitting ? (
@@ -185,7 +187,7 @@ export default function AccountDisplayNameSection() {
             label="Save Display Name"
             onPress={() => void submit()}
             loading={submitting}
-            disabled={!valid}
+            disabled={!valid || offlineMode}
             accessibilityLabel="Save display name"
           />
         </View>

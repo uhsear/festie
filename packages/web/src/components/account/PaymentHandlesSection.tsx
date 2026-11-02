@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
-import { api } from '@festie/shared/services/api';
+import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { User } from '@festie/shared/types';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
@@ -16,6 +17,7 @@ export default function PaymentHandlesSection() {
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [venmo, setVenmo] = useState(user?.venmoHandle ?? '');
   const [cashapp, setCashapp] = useState(user?.cashappCashtag ?? '');
@@ -53,8 +55,8 @@ export default function PaymentHandlesSection() {
       setCashapp(res.user?.cashappCashtag ?? '');
       setPaypal(res.user?.paypalHandle ?? '');
       toast('Payment handles updated', 'success');
-    } catch {
-      toast("Couldn't update payment handles. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't update payment handles. Try again."), 'error');
     } finally {
       setSaving(false);
     }
@@ -95,7 +97,7 @@ export default function PaymentHandlesSection() {
           maxLength={64}
           autoComplete="off"
         />
-        <Button type="submit" variant="primary" size="md" isLoading={saving} disabled={!dirty} className="min-h-[44px]">
+        <Button type="submit" variant="primary" size="md" isLoading={saving} disabled={offlineMode || !dirty} className="min-h-[44px]">
           Save
         </Button>
       </form>

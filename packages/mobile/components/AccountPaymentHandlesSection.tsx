@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '@festie/shared/stores';
-import { api } from '@festie/shared/services';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { api, mapErrorToUserMessage } from '@festie/shared/services';
 import type { User } from '@festie/shared/types';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
@@ -20,6 +20,7 @@ export default function AccountPaymentHandlesSection() {
   const haptics = useHaptics();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const current = {
     venmo: user?.venmoHandle ?? '',
@@ -102,7 +103,7 @@ export default function AccountPaymentHandlesSection() {
       }, 1800);
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not update payment handles.');
+      setError(mapErrorToUserMessage(err, 'Could not update payment handles.'));
     } finally {
       setSubmitting(false);
     }
@@ -186,7 +187,7 @@ export default function AccountPaymentHandlesSection() {
             label="Save Payment Handles"
             onPress={() => void submit()}
             loading={submitting}
-            disabled={!dirty}
+            disabled={!dirty || offlineMode}
             accessibilityLabel="Save payment handles"
             style={styles.submit}
           />

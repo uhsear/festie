@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@festie/shared/hooks';
-import { useAuthStore } from '@festie/shared/stores';
+import { mapErrorToUserMessage } from '@festie/shared/services';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -63,6 +64,7 @@ export default function AccountAvatarSection() {
   const haptics = useHaptics();
   const { uploadAvatar, removeAvatar } = useAuth();
   const user = useAuthStore((s) => s.user);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [busy, setBusy] = useState<'upload' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +129,7 @@ export default function AccountAvatarSection() {
       flashSaved();
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not update avatar.');
+      setError(mapErrorToUserMessage(err, 'Could not update avatar.'));
     } finally {
       setBusy(null);
     }
@@ -153,12 +155,13 @@ export default function AccountAvatarSection() {
       flashSaved();
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not remove avatar.');
+      setError(mapErrorToUserMessage(err, 'Could not remove avatar.'));
     } finally {
       setBusy(null);
     }
   };
 
+  const locked = busy !== null || offlineMode;
   const hint = busy === 'upload' ? 'Uploading…' : busy === 'remove' ? 'Removing…' : 'JPG or PNG, square works best';
 
   return (
@@ -166,11 +169,11 @@ export default function AccountAvatarSection() {
       <View style={styles.row}>
         <TouchableOpacity
           onPress={() => void pickAndUpload()}
-          disabled={busy !== null}
+          disabled={locked}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel={avatarUrl ? 'Change profile photo' : 'Add a profile photo'}
-          accessibilityState={{ disabled: busy !== null }}
+          accessibilityState={{ disabled: locked }}
           style={styles.avatarTap}
         >
           {avatarUrl ? (
@@ -213,13 +216,13 @@ export default function AccountAvatarSection() {
 
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.btn, styles.btnPrimary, { flex: 1 }, busy ? styles.btnDisabled : null]}
+          style={[styles.btn, styles.btnPrimary, { flex: 1 }, locked ? styles.btnDisabled : null]}
           onPress={() => void pickAndUpload()}
-          disabled={busy !== null}
+          disabled={locked}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel={avatarUrl ? 'Change profile photo' : 'Upload profile photo'}
-          accessibilityState={{ disabled: busy !== null }}
+          accessibilityState={{ disabled: locked }}
         >
           <Ionicons name="cloud-upload-outline" size={18} color={t.colors.accent.aqua} style={styles.btnIcon} />
           <Text style={styles.btnPrimaryText}>{`${avatarUrl ? 'Change' : 'Upload'}\u00a0`}</Text>
@@ -227,13 +230,13 @@ export default function AccountAvatarSection() {
 
         {avatarUrl ? (
           <TouchableOpacity
-            style={[styles.btn, styles.btnGhost, busy ? styles.btnDisabled : null]}
+            style={[styles.btn, styles.btnGhost, locked ? styles.btnDisabled : null]}
             onPress={confirmRemove}
-            disabled={busy !== null}
+            disabled={locked}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Remove profile photo"
-            accessibilityState={{ disabled: busy !== null }}
+            accessibilityState={{ disabled: locked }}
           >
             <Ionicons name="trash-outline" size={18} color={t.colors.text.danger} style={styles.btnIcon} />
             <Text style={styles.btnGhostText}>{'Remove '}</Text>

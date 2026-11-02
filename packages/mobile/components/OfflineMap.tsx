@@ -998,11 +998,11 @@ export default function OfflineMap({
         <View style={styles.banner}>
           <Ionicons name="cloud-offline-outline" size={iconSize.action} color={t.colors.accent.amber} />
           {/* Say only what is true for THIS festival: a download helps only when
-              an archive exists to download, and the control that starts it lives
-              on the picks tab (there is nothing to fetch once you are offline). */}
+              an archive exists to download, and the control that starts it lives on
+              Schedule, Map and My Picks (there is nothing to fetch once you are offline). */}
           <Text style={styles.bannerText}>
             {remotePmtilesUrl
-              ? 'Download this festival from My Plan while you still have signal to use the map offline. Showing your saved meeting points.'
+              ? 'Download this festival from the Schedule or Map screen while you still have signal to use the map offline. Showing your saved meeting points.'
               : 'This festival has no offline map. Showing your saved meeting points.'}
           </Text>
         </View>

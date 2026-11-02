@@ -57,7 +57,9 @@ vi.mock('expo-file-system', () => {
   return { File, Directory, Paths: { cache: 'file:///cache' } };
 });
 
-const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached } = await import('./basemapCache');
+const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, subscribeBasemapCache } = await import(
+  './basemapCache'
+);
 
 const URL_A = 'https://festie.us/uploads/basemaps/nc-2026.pmtiles';
 const cachePath = (url: string) => `file:///cache/festie-basemaps/${basemapCacheKey(url)}`;
@@ -133,6 +135,18 @@ describe('ensureBasemapCached', () => {
     expect(await ensureBasemapCached(URL_A)).toBe(cachePath(URL_A));
     expect(fs.download).toHaveBeenCalledTimes(1);
     expect(fs.files.get(cachePath(URL_A))).toBe(1_513_213);
+  });
+});
+
+describe('subscribeBasemapCache', () => {
+  it('notifies subscribers once per settled attempt, and not after unsubscribe', async () => {
+    const cb = vi.fn();
+    const unsubscribe = subscribeBasemapCache(cb);
+    await Promise.all([ensureBasemapCached(URL_A), ensureBasemapCached(URL_A)]);
+    expect(cb).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    await ensureBasemapCached(URL_A);
+    expect(cb).toHaveBeenCalledTimes(1);
   });
 });
 

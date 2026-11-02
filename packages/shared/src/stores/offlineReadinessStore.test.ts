@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useOfflineReadinessStore, collectArtUrls, type DownloadDeps } from './offlineReadinessStore';
+import { useWeatherStore } from './weatherStore';
 import type { FestivalSet } from '../types';
 
 function set(id: string, artists?: { name: string; photo?: string }[]): FestivalSet {
@@ -81,6 +82,15 @@ describe('offlineReadinessStore', () => {
         expect(r[sec].syncedAt).toBeTypeOf('number');
       }
       expect(useOfflineReadinessStore.getState().downloadingFestivalId).toBeNull();
+    });
+
+    it('default fetchWeather loads into weatherStore', async () => {
+      const loadWeather = vi.fn().mockResolvedValue(undefined);
+      useWeatherStore.setState({ loadWeather });
+      const { fetchWeather: _skip, ...deps } = mockDeps();
+      await useOfflineReadinessStore.getState().downloadForOffline('fest-1', undefined, deps);
+      expect(loadWeather).toHaveBeenCalledWith('fest-1');
+      expect(useOfflineReadinessStore.getState().getReadiness('fest-1').weather.status).toBe('ready');
     });
 
     it('leaves crew idle and skips crew loaders when no crewId is given', async () => {
