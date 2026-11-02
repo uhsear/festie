@@ -7,7 +7,7 @@ import { withTransaction } from '../connection';
  * @param startIdx - Starting $N index (1-based)
  * @returns { clause, params }
  */
-function buildMultiInsert(rows: any[][], startIdx: number = 1): { clause: string; params: any[] } {
+export function buildMultiInsert(rows: any[][], startIdx: number = 1): { clause: string; params: any[] } {
   const params: any[] = [];
   let idx = startIdx;
   const tuples = rows.map((row) => {
@@ -99,7 +99,7 @@ async function insertDaysBatch(client: any, rows: any[][]) {
 }
 
 /** Batch-insert sets in a single multi-row query. */
-async function insertSetsBatch(client: any, rows: any[][]) {
+export async function insertSetsBatch(client: any, rows: any[][]) {
   if (rows.length === 0) return;
   const { clause, params } = buildMultiInsert(rows);
   await client.query(
@@ -296,8 +296,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       await pool.query('UPDATE festivals SET deleted_at = NULL WHERE id = $1', [festivalId]);
     },
 
-    async getById(festivalId: string) {
-      const result = await pool.query(
+    async getById(festivalId: string, db: { query: Pool['query'] } = pool) {
+      const result = await db.query(
         `
         SELECT
           f.id,
@@ -405,40 +405,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         await client.query('DELETE FROM calendar_tokens WHERE festival_id = $1', [festivalId]);
         await client.query('DELETE FROM notification_counts WHERE festival_id = $1', [festivalId]);
         await client.query('DELETE FROM notification_topic_subs WHERE festival_id = $1', [festivalId]);
+        await client.query('DELETE FROM lineup_imports WHERE festival_id = $1', [festivalId]);
         await client.query('DELETE FROM festivals WHERE id = $1', [festivalId]);
-      });
-    },
-
-    /**
-     * Apply a lineup import in one transaction: insert new sets, then update the stage and
-     * times of matched sets. Matched sets keep their ids, so picks and ratings survive.
-     */
-    async applyLineupImport(
-      festivalId: string,
-      inserts: any[],
-      updates: { id: string; stageId: string; startTime: string; endTime: string }[],
-    ) {
-      return withTransaction(pool, async (client) => {
-        const rows = inserts.map((set: any, sortOrder: number) => [
-          set.id,
-          festivalId,
-          set.dayIndex,
-          set.artist,
-          set.stageId,
-          set.startTime,
-          set.endTime,
-          set.sortOrder ?? sortOrder,
-          set.linkUrl || null,
-          JSON.stringify(set.artists || []),
-        ]);
-        await insertSetsBatch(client, rows);
-        for (const u of updates) {
-          await client.query(
-            'UPDATE festival_sets SET stage_id = $1, start_time = $2, end_time = $3 WHERE id = $4 AND festival_id = $5',
-            [u.stageId, u.startTime, u.endTime, u.id, festivalId],
-          );
-        }
-        await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
       });
     },
 

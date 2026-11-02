@@ -83,14 +83,14 @@ describe('Header', () => {
   });
 
   describe('desktop tabs for guest users', () => {
-    it('shows Lineup, My Plan, Crew and Map but no More button', () => {
+    it('shows Lineup, Picks, Crew and Map but no More button', () => {
       mockAuthStore.mockReturnValue(null);
       render(<Header />);
-      for (const name of ['Lineup', 'My Plan', 'Crew', 'Map']) {
-        expect(screen.getByRole('button', { name })).toBeInTheDocument();
+      for (const name of ['Lineup', 'Picks', 'Crew', 'Map']) {
+        expect(screen.getByRole('link', { name })).toBeInTheDocument();
       }
-      expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Timeline' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'More' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Timeline' })).not.toBeInTheDocument();
     });
   });
 
@@ -99,9 +99,9 @@ describe('Header', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
       const nav = screen.getByRole('navigation', { name: 'Main navigation' });
-      expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      expect(within(nav).getAllByRole('link').map((b) => b.textContent)).toEqual([
         'Lineup',
-        'My Plan',
+        'Picks',
         'Crew',
         'Map',
         'More',
@@ -111,50 +111,47 @@ describe('Header', () => {
     it('has no Wrap tab', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      expect(screen.queryByRole('button', { name: 'Wrap' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Wrap' })).not.toBeInTheDocument();
     });
   });
 
-  it('sends the Lineup tab to the remembered view', async () => {
+  it('sends the Lineup tab to the remembered view', () => {
     mockFestival.scheduleView = 'grid';
     render(<Header />);
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Lineup' }));
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/grid' });
+    expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('href', '/grid');
   });
 
   describe('active tab detection', () => {
     it('marks Lineup as active on /cards', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/cards' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
     });
 
     it('marks Lineup as active on /', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
     });
 
     it('keeps Lineup active on the timeline and grid views', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/timeline' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('aria-current', 'page');
     });
 
     it('keeps Crew active on /crew-plan', () => {
       vi.mocked(useLocation).mockReturnValue({ pathname: '/crew-plan' } as ReturnType<typeof useLocation>);
       render(<Header />);
-      expect(screen.getByRole('button', { name: 'Crew' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Crew' })).toHaveAttribute('aria-current', 'page');
     });
   });
 
   describe('tab navigation', () => {
-    it('navigates when a tab is clicked', async () => {
-      const user = userEvent.setup();
+    it('renders tabs as real links', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      await user.click(screen.getByRole('button', { name: 'Crew' }));
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew' });
+      expect(screen.getByRole('link', { name: 'Picks' })).toHaveAttribute('href', '/picks');
     });
   });
 

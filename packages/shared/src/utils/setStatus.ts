@@ -1,5 +1,6 @@
 import { FestivalSet, FestivalDay } from '../types/domain';
 import { formatTime } from './format';
+import { COPY } from '../constants/copy';
 
 // Sets that start before this hour belong to the previous festival day (CONTEXT.md "Day").
 export const FESTIVAL_DAY_START_HOUR = 6;
@@ -271,7 +272,7 @@ export function getSetStatus(
     const duration = setEndTime - setStartTime;
     const elapsed = nowMs - setStartTime;
     const progress = Math.max(0, Math.min(1, elapsed / duration));
-    return { status: 'live', label: 'LIVE', minutesUntil, progress };
+    return { status: 'live', label: COPY.status.playing, minutesUntil, progress };
   }
 
   if (msUntilEnd <= 0) {

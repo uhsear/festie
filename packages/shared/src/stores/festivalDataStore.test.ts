@@ -1243,6 +1243,101 @@ describe('festivalDataStore', () => {
     });
   });
 
+  describe('joinFestival and auto-join on first write', () => {
+    const joinedProfile: Profile = {
+      id: 'prof-new',
+      userId: 'user-1',
+      festivalId: 'fest-1',
+      picks: {},
+      notes: {},
+      updatedAt: '2026-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      useAuthStore.setState({
+        user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' },
+      });
+      useFestivalDataStore.setState({ currentFestivalId: 'fest-1', currentProfile: null });
+      vi.mocked(api.post).mockResolvedValue({});
+      vi.mocked(api.get).mockResolvedValue([joinedProfile]);
+      vi.mocked(api.put).mockResolvedValue(undefined);
+    });
+
+    it('joinFestival posts /profiles, then loads profiles and sets currentProfile', async () => {
+      await useFestivalDataStore.getState().joinFestival('fest-1');
+      expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'fest-1' });
+      expect(api.get).toHaveBeenCalledWith('/profiles/fest-1');
+      expect(useFestivalDataStore.getState().currentProfile).toEqual(joinedProfile);
+    });
+
+    it('savePick with no profile joins once, then writes the pick to the new profile', async () => {
+      await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' });
+      expect(api.post).toHaveBeenCalledTimes(1);
+      expect(api.put).toHaveBeenCalledWith('/profiles/prof-new', { picks: { 'set-2': 'must' } }, expect.anything());
+      expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-2': 'must' });
+    });
+
+    it('two concurrent savePick calls with no profile send exactly one POST', async () => {
+      const { savePick } = useFestivalDataStore.getState();
+      await Promise.all([
+        savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
+        savePick({ festivalId: 'fest-1', setId: 'set-3', priority: 'maybe' }),
+      ]);
+      expect(api.post).toHaveBeenCalledTimes(1);
+      expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-2': 'must', 'set-3': 'maybe' });
+    });
+
+    it('savePick with no profile and no user throws and sends no POST', async () => {
+      useAuthStore.setState({ user: null });
+      await expect(
+        useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
+      ).rejects.toThrow('No active profile');
+      expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('savePick for a festival other than the selected one throws and sends no POST', async () => {
+      await expect(
+        useFestivalDataStore.getState().savePick({ festivalId: 'fest-2', setId: 'set-2', priority: 'must' }),
+      ).rejects.toThrow('No active profile');
+      expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('saveReminder with no profile joins first', async () => {
+      await useFestivalDataStore.getState().saveReminder({ festivalId: 'fest-1', setId: 'set-2', minutes: 15 });
+      expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'fest-1' });
+      expect(api.put).toHaveBeenCalledWith('/profiles/prof-new', { reminders: { 'set-2': 15 } }, expect.anything());
+    });
+
+    it('bulkSavePicks with no profile joins the selected festival first', async () => {
+      await expect(useFestivalDataStore.getState().bulkSavePicks(['set-2'], 'maybe')).resolves.toBe(1);
+      expect(api.post).toHaveBeenCalledTimes(1);
+      expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-2': 'maybe' });
+    });
+
+    it('passes a join failure to the caller unchanged', async () => {
+      const err = new Error('Too many requests');
+      vi.mocked(api.post).mockRejectedValueOnce(err);
+      await expect(
+        useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
+      ).rejects.toBe(err);
+      expect(api.put).not.toHaveBeenCalled();
+    });
+
+    it('a failed join leaves a visible failed pick that Retry can save', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('Network down'));
+      await expect(
+        useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
+      ).rejects.toThrow('Network down');
+      const state = useFestivalDataStore.getState();
+      expect(state.pickSync['set-2']).toEqual({ state: 'failed', priority: 'must' });
+      expect(state.error).toBeTruthy();
+
+      await useFestivalDataStore.getState().retryPick('set-2');
+      expect(useFestivalDataStore.getState().pickSync['set-2']).toBeUndefined();
+      expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-2': 'must' });
+    });
+  });
+
   describe('setError', () => {
     it('sets error', () => {
       useFestivalDataStore.getState().setError('bad');

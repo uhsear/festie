@@ -19,9 +19,12 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 
 export default function CardsView() {
   return (
-    <RenderErrorBoundary name="cards">
-      <CardsViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Schedule</h1>
+      <RenderErrorBoundary name="cards">
+        <CardsViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 
@@ -47,7 +50,6 @@ function usePrefersReducedMotion(): boolean {
 }
 
 function CardsViewInner() {
-  const currentProfile = useFestivalStore((state) => state.currentProfile);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const days = useFestivalStore((state) => state.days);
   const user = useAuthStore((state) => state.user);
@@ -246,7 +248,7 @@ function CardsViewInner() {
                       set={set}
                       onTap={() => setDetailSet(set)}
                       onPreview={() => handlePreview(set)}
-                      showPicks={!!currentProfile}
+                      showPicks={!!user}
                       stageName={sn}
                       stageColor={sc}
                       friendProfiles={others}

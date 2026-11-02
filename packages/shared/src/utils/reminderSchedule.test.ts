@@ -5,6 +5,7 @@ import {
   reminderIdentifier,
   MAX_LOCAL_REMINDERS,
   DEFAULT_REMINDER_LEAD_MINUTES,
+  effectiveReminders,
 } from './reminderSchedule';
 import type { FestivalSet, FestivalDay, Priority } from '../types/domain';
 
@@ -143,6 +144,24 @@ describe('diffReminderPlan', () => {
     const { toSchedule, toCancel } = diffReminderPlan(plan, scheduled);
     expect(toSchedule).toBe(plan);
     expect(toCancel).toEqual(['festie-reminder-old']);
+  });
+});
+
+describe('effectiveReminders', () => {
+  const picks: Record<string, Priority> = { a: 'must', b: 'must', c: 'maybe' };
+
+  it('adds the default lead for a must pick and ignores maybe picks', () => {
+    expect(effectiveReminders({}, picks, 15)).toEqual({ a: 15, b: 15 });
+  });
+
+  it('keeps an explicit reminder', () => {
+    expect(effectiveReminders({ a: 5 }, picks, 15)).toEqual({ a: 5, b: 15 });
+  });
+
+  it('is a no-op with a null lead', () => {
+    const reminders = { c: 10 };
+    expect(effectiveReminders(reminders, picks, null)).toBe(reminders);
+    expect(effectiveReminders(undefined, picks, null)).toEqual({});
   });
 });
 

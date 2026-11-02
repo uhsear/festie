@@ -74,6 +74,17 @@ describe('SubHeader layout density', () => {
     expect(getNav()).toBeInTheDocument();
   });
 
+  it('labels an ongoing festival "Happening now"', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-29T18:00:00'));
+    try {
+      render(<SubHeader dayOnly={false} festivalOnly={false} />);
+      expect(screen.getByTestId('festival-status-pill')).toHaveTextContent('Happening now');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('applies compact horizontal rhythm on small widths and comfortable on desktop', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     const nav = getNav();

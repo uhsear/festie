@@ -4,7 +4,8 @@
  */
 export default function PicksSkeleton() {
   return (
-    <div className="pb-5" aria-busy="true" aria-label="Loading picks" role="region">
+    <div className="pb-5" aria-busy="true" aria-label="Loading picks" role="status" aria-live="polite">
+      <span className="sr-only">Loading picks…</span>
       {[
         { label: 'Must See', count: 3, dot: 'var(--color-priority-must)' },
         { label: 'Want to See', count: 2, dot: 'var(--color-priority-want)' },

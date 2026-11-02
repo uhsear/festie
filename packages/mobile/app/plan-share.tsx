@@ -5,13 +5,14 @@ import { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { COPY } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import PlanQRShare from '../components/PlanQRShare';
 import PlanQRScan from '../components/PlanQRScan';
 import SmsHandoff from '../components/SmsHandoff';
 
-// ── Plan share (M5 P2P) ────────────────────────────────────────────────────
+// ── Share offline (M5 P2P) ────────────────────────────────────────────────────
 // One screen, three offline-honest ways to get a friend onto the same plan when
 // signal is dead:
 //   • Show QR  — render your plan as a QR for a friend to scan (PlanQRShare)
@@ -43,7 +44,7 @@ export default function PlanShareScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Share plan', headerShown: true }} />
+      <Stack.Screen options={{ title: COPY.picks.shareOffline, headerShown: true }} />
 
       <View style={styles.tabBar}>
         {TABS.map((item) => {

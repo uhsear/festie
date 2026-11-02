@@ -16,9 +16,12 @@ import { cn } from '../lib/utils';
 
 export default function GridView() {
   return (
-    <RenderErrorBoundary name="grid">
-      <GridViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Grid</h1>
+      <RenderErrorBoundary name="grid">
+        <GridViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 

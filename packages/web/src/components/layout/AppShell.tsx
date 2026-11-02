@@ -9,6 +9,7 @@ import BottomNav from './BottomNav';
 import SubHeader from './SubHeader';
 import ScheduleViewSwitcher, { isSchedulePath } from './ScheduleViewSwitcher';
 import PageTransition from './PageTransition';
+import RouteAnnouncer from './RouteAnnouncer';
 import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
@@ -20,6 +21,7 @@ import Onboarding from '../features/Onboarding';
 import JoinCrewSheet from '../crew/JoinCrewSheet';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { usePushLanding } from '../../hooks/usePushLanding';
 import { useScrollReset } from '../../hooks/useScrollReset';
 import { useOfflineQueueBridge } from '../../hooks/useOfflineQueueBridge';
 import { useFestivalLoader } from '../../hooks/useFestivalLoader';
@@ -28,7 +30,7 @@ import { prefetchMainRoutes } from '../../router';
 import { cn } from '../../lib/utils';
 import { SocketContext } from '../../lib/socketContext';
 
-const authRoutes = ['/login', '/register', '/forgot-password'];
+const authRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
 
 // Centered branded loader for lazy-route chunk loads. Replaces the bare
 // "Loading..." text the Suspense boundaries used to fall back to.
@@ -82,6 +84,7 @@ export default function AppShell() {
   const socket = realtime?.socket ?? null;
   useOffline();
   usePushNotifications();
+  usePushLanding();
   useOfflineQueueBridge();
   const { pendingJoinCode, clearPendingJoin } = useFestivalLoader();
   const { showDayBanner } = useFestivalMode(location.pathname);
@@ -118,6 +121,7 @@ export default function AppShell() {
         )}
         aria-label="Authentication"
       >
+        <RouteAnnouncer />
         <Suspense fallback={<RouteFallback />}>
           <Outlet />
         </Suspense>
@@ -150,6 +154,7 @@ export default function AppShell() {
         </a>
 
         <OfflineBanner />
+        <RouteAnnouncer />
         <UpdatePrompt />
         <IOSInstallSheet />
         <Onboarding suspended={!!pendingJoinCode} />

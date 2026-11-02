@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Star, Users, Zap, Sparkles, Map as MapIcon, X, type LucideIcon } from 'lucide-react';
+import { Users, Map as MapIcon, X, type LucideIcon } from 'lucide-react';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import {
   PHASE_ACTION_LABELS,
   PHASE_ACTION_ORDER,
@@ -19,17 +20,17 @@ interface ActionDef {
 // Fixed destination set — phase only reorders + re-emphasizes, never hides.
 // Labels and per-phase order come from @festie/shared so mobile matches.
 const ACTIONS: Record<PhaseActionKey, ActionDef> = {
-  myPlan: { Icon: Star, to: '/picks', a11y: 'Go to my plan' },
+  myPlan: { Icon: CONCEPT_ICON.picks, to: '/picks', a11y: 'Go to my picks' },
   crew: { Icon: Users, to: '/crew', a11y: 'Go to crew' },
   map: { Icon: MapIcon, to: '/map', a11y: 'Open map' },
-  nownext: { Icon: Zap, to: '/festival-mode', a11y: 'Open Now and Next' },
-  wrap: { Icon: Sparkles, to: '/wrap', a11y: 'Open festival wrap-up' },
+  nownext: { Icon: CONCEPT_ICON.nowNext, to: '/festival-mode', a11y: 'Open Now and Next' },
+  wrap: { Icon: CONCEPT_ICON.wrap, to: '/wrap', a11y: 'Open your Festival Wrap' },
 };
 
 const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
   pre: { label: 'Before the festival', hint: 'Lock in your picks and rally your crew.' },
   live: { label: 'Happening now', hint: 'Find your crew, check Now & Next, stay safe.' },
-  post: { label: 'Festival wrap', hint: 'Relive it and settle up with your crew.' },
+  post: { label: 'After the festival', hint: 'Relive it and settle up with your crew.' },
 };
 
 interface PhaseHomeActionsProps {

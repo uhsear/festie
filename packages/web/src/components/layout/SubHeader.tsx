@@ -13,7 +13,6 @@ import {
   logicalDayIndexAt,
   resolveFestivalTimeZone,
   resolveStageColor,
-  type FestivalStatus,
 } from '@festie/shared/utils';
 import { getStageBadgeStyle } from '../ui/StageBadge';
 import type { FestivalDay } from '@festie/shared/types/domain';
@@ -22,18 +21,14 @@ import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useSetStatus';
 import { useScrollFade } from '../../hooks/useScrollFade';
 import { useToast } from '../../lib/toastContext';
-import { Filter, Search, Star, X } from 'lucide-react';
+import { Filter, Search, X } from 'lucide-react';
+import { FESTIVAL_STATUS_LABEL } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
 import SaveStatusChip from '../features/SaveStatusChip';
 import { isSchedulePath } from './ScheduleViewSwitcher';
 import ScheduleResultsRow from './ScheduleResultsRow';
-
-const STATUS_LABEL: Record<FestivalStatus, string> = {
-  upcoming: 'Upcoming',
-  ongoing: 'Live',
-  past: 'Past',
-};
 
 // Routes that carry the festival/day/stage controls. Anything else (admin, 404)
 // gets no schedule chrome; AppShell already hides it on account/crew/festival-mode.
@@ -45,6 +40,8 @@ interface SubHeaderProps {
   /** Show only festival selector (no day tabs, stage chips, or search). Used on /wrap. */
   festivalOnly: boolean;
 }
+
+const PicksIcon = CONCEPT_ICON.picks;
 
 export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const theme = useUIStore((s) => s.theme);
@@ -226,7 +223,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             )}
             data-testid="festival-status-pill"
           >
-            {STATUS_LABEL[currentStatus]}
+            {FESTIVAL_STATUS_LABEL[currentStatus]}
           </span>
         )}
 
@@ -393,11 +390,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   : 'cursor-pointer border-border text-text-secondary hover:text-text-primary',
             )}
           >
-            <Star
-              className="w-3.5 h-3.5"
-              fill={canFilterMine && onlyMine ? 'currentColor' : 'none'}
-              aria-hidden="true"
-            />
+            <PicksIcon className="w-3.5 h-3.5" aria-hidden="true" />
             {canFilterMine ? 'My picks' : 'Pick a set first'}
           </button>
         )}

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { X, Star, Users, ChevronRight } from 'lucide-react';
+import { X, Users, ChevronRight } from 'lucide-react';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { ONBOARDING_SLIDES_SHARED } from '@festie/shared';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
@@ -45,7 +45,7 @@ interface StepConfig {
 // set cards since onboarding can render before any festival lineup is loaded.
 const STEPS: StepConfig[] = [
   {
-    icon: <Star className="w-10 h-10 text-accent-aqua" />,
+    icon: <CONCEPT_ICON.picks className="w-10 h-10 text-accent-aqua" />,
     title: ONBOARDING_SLIDES_SHARED[0].title,
     description: ONBOARDING_SLIDES_SHARED[0].description,
   },
@@ -57,7 +57,6 @@ const STEPS: StepConfig[] = [
 ];
 
 export default function Onboarding({ suspended = false }: OnboardingProps) {
-  const navigate = useNavigate();
   const [pending, setPending] = useState(() => {
     if (isOnboardingCompleted()) return false;
     // Arriving through an invite link: the join prompt is the first run, so
@@ -101,11 +100,9 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
     if (step < STEPS.length - 1) {
       setStep((s) => s + 1);
     } else {
-      // Final step — complete onboarding and navigate to lineup
       dismiss();
-      navigate({ to: '/cards' });
     }
-  }, [step, dismiss, navigate]);
+  }, [step, dismiss]);
 
   if (!visible) return null;
 

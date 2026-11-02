@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { useAuthStore, useUIStore } from '@festie/shared';
 import { APP_SECTIONS } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { cn } from '@/lib/utils';
 import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
@@ -14,7 +15,6 @@ import { useLineupHref } from '../../hooks/useLineupHref';
 export default function Header() {
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
-  const navigate = useNavigate();
 
   // Desktop nav tabs: the five shared sections. Guests skip More because the
   // "Sign in" button in the right section already covers it.
@@ -201,21 +201,20 @@ export default function Header() {
             {desktopTabs.map((tab) => {
               const active = current === tab.key;
               return (
-                <button
+                <Link
                   key={tab.key}
-                  type="button"
+                  to={tab.key === 'lineup' ? lineupHref : SECTION_HREF[tab.key]}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'px-4 py-2 bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
+                    'px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
                     'transition-colors duration-[250ms] ease-standard tracking-[0.3px]',
                     'hover:text-text-primary',
                     'border border-transparent',
                     active && 'bg-aqua-a12 text-accent-aqua !border-aqua-a2 !rounded-lg',
                   )}
-                  onClick={() => navigate({ to: tab.key === 'lineup' ? lineupHref : SECTION_HREF[tab.key] })}
                 >
                   {tab.label}
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -244,6 +243,7 @@ export default function Header() {
         ) : (
           <Link
             to="/login"
+            search={{ next: location.href }}
             className={cn(
               'inline-flex items-center justify-center min-h-11 min-w-11 px-4 rounded-lg no-underline whitespace-nowrap',
               'text-accent-aqua text-[length:var(--font-size-14)] font-semibold tracking-[0.3px]',
@@ -252,7 +252,7 @@ export default function Header() {
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             )}
           >
-            Sign in
+            {COPY.auth.signIn}
           </Link>
         )}
       </div>

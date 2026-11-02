@@ -12,10 +12,10 @@ describe('PhaseHomeActions', () => {
     expect(screen.getAllByRole('button')).toHaveLength(5);
   });
 
-  it('leads with Festival wrap after the festival', async () => {
+  it('leads with Festival Wrap after the festival', async () => {
     render(<PhaseHomeActions phase="post" />);
     const first = screen.getAllByRole('button')[0]!;
-    expect(first).toHaveTextContent('Festival wrap');
+    expect(first).toHaveTextContent('Festival Wrap');
     first.click();
     expect(navigate).toHaveBeenCalledWith({ to: '/wrap' });
   });

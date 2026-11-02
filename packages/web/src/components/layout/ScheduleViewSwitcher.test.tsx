@@ -1,11 +1,17 @@
+import type React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import ScheduleViewSwitcher from './ScheduleViewSwitcher';
 
-let mockPathname = '/timeline';
+const mockLocation = { pathname: '/timeline' };
+
 vi.mock('@tanstack/react-router', () => ({
-  useLocation: () => ({ pathname: mockPathname }),
-  useNavigate: () => vi.fn(),
+  useLocation: () => mockLocation,
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 const setScheduleView = vi.fn();
@@ -18,20 +24,37 @@ describe('ScheduleViewSwitcher', () => {
     vi.clearAllMocks();
   });
 
+  it('renders three links and marks only the current view', () => {
+    mockLocation.pathname = '/timeline';
+    render(<ScheduleViewSwitcher />);
+    expect(screen.getAllByRole('link')).toHaveLength(3);
+    expect(screen.getByRole('link', { name: 'Cards' })).toHaveAttribute('href', '/cards');
+    expect(screen.getByRole('link', { name: 'Timeline' })).toHaveAttribute('href', '/timeline');
+    expect(screen.getByRole('link', { name: 'Grid' })).toHaveAttribute('href', '/grid');
+    expect(screen.getByRole('link', { name: 'Timeline' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Cards' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Grid' })).not.toHaveAttribute('aria-current');
+  });
+
   it('lists Cards, Timeline, Grid in order', () => {
     render(<ScheduleViewSwitcher />);
-    const labels = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
-    expect(labels).toEqual(['Cards view', 'Timeline view', 'Grid view']);
+    expect(screen.getAllByRole('link').map((l) => l.textContent)).toEqual(['Cards', 'Timeline', 'Grid']);
+  });
+
+  it('treats / as the cards view', () => {
+    mockLocation.pathname = '/';
+    render(<ScheduleViewSwitcher />);
+    expect(screen.getByRole('link', { name: 'Cards' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('records the view on a view route', () => {
-    mockPathname = '/timeline';
+    mockLocation.pathname = '/timeline';
     render(<ScheduleViewSwitcher />);
     expect(setScheduleView).toHaveBeenCalledWith('timeline');
   });
 
   it('does not record the / alias', () => {
-    mockPathname = '/';
+    mockLocation.pathname = '/';
     render(<ScheduleViewSwitcher />);
     expect(setScheduleView).not.toHaveBeenCalled();
   });

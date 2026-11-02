@@ -16,11 +16,11 @@ interface Props {
 // Icons and labels come from the shared PRIORITY_SYMBOLS set, so the same
 // concept renders identically across cards, grid, picks and this panel.
 // `X` is the Clear affordance.
-const priorityOptions: Array<{ value: Priority | null; Icon: LucideIcon; label: string }> = [
-  { value: 'must', Icon: priorityLucide('must'), label: PRIORITY_SYMBOLS.must.label },
-  { value: 'want-to-see', Icon: priorityLucide('want-to-see'), label: PRIORITY_SYMBOLS['want-to-see'].label },
-  { value: 'maybe', Icon: priorityLucide('maybe'), label: PRIORITY_SYMBOLS.maybe.label },
-  { value: null, Icon: X, label: 'Clear' },
+const priorityOptions: Array<{ value: Priority | null; Icon: LucideIcon; label: string; short: string }> = [
+  { value: 'must', Icon: priorityLucide('must'), label: PRIORITY_SYMBOLS.must.label, short: PRIORITY_SYMBOLS.must.short },
+  { value: 'want-to-see', Icon: priorityLucide('want-to-see'), label: PRIORITY_SYMBOLS['want-to-see'].label, short: PRIORITY_SYMBOLS['want-to-see'].short },
+  { value: 'maybe', Icon: priorityLucide('maybe'), label: PRIORITY_SYMBOLS.maybe.label, short: PRIORITY_SYMBOLS.maybe.short },
+  { value: null, Icon: X, label: 'Clear', short: 'Clear' },
 ];
 
 // Selected fill mirrors SetCard's active priority buttons (solid fill + glow,
@@ -43,7 +43,7 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
   return (
     <div className="mb-6">
     <div className="flex gap-4">
-      {priorityOptions.map(({ value: p, Icon, label }) => {
+      {priorityOptions.map(({ value: p, Icon, label, short }) => {
         const active = p !== null && myPick === p;
         const key: Priority | 'clear' = p ?? 'clear';
         const isThisBusy = priorityBusy === key;
@@ -54,7 +54,7 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
             className={cn(baseButtonClass, active && p !== null && activeStyles[p])}
             type="button"
             aria-pressed={p === null ? undefined : active ? 'true' : 'false'}
-            aria-label={label + (active ? ' (selected)' : '') + (active && pending ? pendingSuffix : '')}
+            aria-label={label + (active && pending ? pendingSuffix : '')}
             aria-busy={isThisBusy ? 'true' : 'false'}
             disabled={anyBusy || (p === null && !myPick)}
             onClick={async (e) => {
@@ -71,7 +71,7 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
               fill={active ? 'currentColor' : 'none'}
               aria-hidden="true"
             />
-            <div className="text-[length:var(--font-size-12)] font-bold mt-1 uppercase tracking-[0.5px]">{label}</div>
+            <div className="text-[length:var(--font-size-12)] font-bold mt-1 uppercase tracking-[0.5px]">{short}</div>
             {active && pending && <Clock className="w-3 h-3 mx-auto mt-1" aria-hidden="true" />}
           </button>
         );

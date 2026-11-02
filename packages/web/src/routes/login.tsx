@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from '@tanstack/react-router';
+import { useNavigate, useSearch, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { AUTH_COPY, COPY } from '@festie/shared/constants';
 import { ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores/authStore';
 import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -11,6 +12,13 @@ import AuthTabs from '../components/ui/AuthTabs';
 import AuthBrand from '../components/auth/AuthBrand';
 import InviteBanner from '../components/auth/InviteBanner';
 import { cn } from '../lib/utils';
+
+const authLinkClass = cn(
+  'text-[length:var(--font-size-14)] text-accent-aqua underline underline-offset-2',
+  'hover:text-[var(--color-accent-aqua-hover)]',
+  'inline-flex items-center min-h-11 px-0 py-2.5',
+  'rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
+);
 
 export default function LoginPage() {
   return (
@@ -22,6 +30,7 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const navigate = useNavigate();
+  const { next, reset } = useSearch({ from: '/login' });
   const { login, isLoading } = useAuth();
   const { toast } = useToast();
 
@@ -49,7 +58,7 @@ function LoginPageInner() {
     try {
       const result = await login({ username, password });
       if (result?.reactivated) toast(ACCOUNT_REACTIVATED_MESSAGE, 'success');
-      await navigate({ to: '/cards' });
+      await (next ? navigate({ href: next }) : navigate({ to: '/cards' }));
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the
       // render before the request failed, so it is still null here.
@@ -60,24 +69,22 @@ function LoginPageInner() {
   return (
     <>
       <AuthBrand />
-      <h1
-        className={cn(
-          'font-display text-[clamp(22px,5vw,36px)] font-bold tracking-[6px] uppercase',
-          'text-accent-coral mb-3 relative z-[1]',
-        )}
-      >
-        FESTIE
-      </h1>
-      <p className="text-text-secondary text-[length:var(--font-size-16)] mb-8 tracking-[0.5px] relative z-[1]">
-        Plan your sets. Sync with your crew.
-      </p>
 
       <InviteBanner />
 
       <AuthTabs active="login" variant="pill" />
 
+      {reset && (
+        <div
+          role="status"
+          className="w-full max-w-[360px] mb-4 p-3 rounded-lg border border-accent-green/30 bg-accent-green/10 text-sm text-text-primary relative z-[1]"
+        >
+          {AUTH_COPY.passwordChanged}
+        </div>
+      )}
+
       <form
-        className="w-full max-w-[360px] relative z-[1]"
+        className="w-full max-w-[360px] relative z-[1] text-left"
         onSubmit={handleSubmit}
         noValidate
         {...(isLoading ? { 'aria-busy': true } : {})}
@@ -117,20 +124,15 @@ function LoginPageInner() {
         </div>
 
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
-          {isLoading ? 'Signing in…' : 'Sign in'}
+          {isLoading ? COPY.auth.signingIn : AUTH_COPY.signIn}
         </Button>
 
-        <div className="mt-3 text-center">
-          <Link
-            to="/forgot-password"
-            className={cn(
-              'text-[length:var(--font-size-14)] text-accent-aqua underline underline-offset-2',
-              'hover:text-[var(--color-accent-aqua-hover)]',
-              'inline-flex items-center min-h-11 px-0 py-2.5',
-              'rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
-            )}
-          >
+        <div className="mt-3 flex flex-col items-center">
+          <Link to="/forgot-password" className={authLinkClass}>
             Forgot password?
+          </Link>
+          <Link to="/cards" className={authLinkClass}>
+            {AUTH_COPY.browseAsGuest}
           </Link>
         </div>
       </form>
