@@ -68,12 +68,17 @@ const SETS = [
   { id: 's3', artist: 'Bicep', stageId: 'main', dayIndex: 1, startTime: '21:00', endTime: '22:00' },
 ];
 
-function setup(opts: { festival?: unknown; picks?: Record<string, string> | null; user?: boolean } = {}) {
+function setup(opts: { festival?: unknown; picks?: Record<string, string> | null; user?: boolean; error?: string } = {}) {
   state = {
     currentFestival: opts.festival === undefined ? FESTIVAL : opts.festival,
     sets: SETS,
     days: DAYS,
     currentProfile: opts.picks === null ? null : { picks: opts.picks ?? {} },
+    festivals: [],
+    isLoading: false,
+    error: opts.error ?? null,
+    loadFestivals: vi.fn(),
+    selectFestival: vi.fn(),
   };
   authUser = opts.user ? { id: 'me' } : null;
 }
@@ -94,6 +99,15 @@ describe('FestivalModeView (Now surface)', () => {
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Choose a festival' }));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' });
+  });
+
+  it('shows the load error and a retry when the festival list failed', () => {
+    setup({ festival: null, error: 'Network down' });
+    render(<FestivalModeView />);
+    expect(screen.getByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByText('No festival selected')).toBeNull();
   });
 
   it('guest: shows what is live on the lineup and a sign-in prompt for crew', () => {

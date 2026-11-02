@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('lucide-react', () => {
@@ -82,5 +82,16 @@ describe('SosRaiseButton', () => {
 
     expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/^No signal/), 'error');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('returns focus to the opener on Escape', async () => {
+    const user = userEvent.setup();
+    render(<SosRaiseButton crewId="c1" />);
+    const opener = screen.getByRole('button', { name: 'Send an SOS to your crew' });
+    await user.click(opener);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });

@@ -91,6 +91,8 @@ describe('FriendPicksView', () => {
     authUser.value = null;
     renderView();
     await screen.findByText('Sign in to compare these picks with yours.');
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeTruthy();
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
 

@@ -4,12 +4,13 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const root = join(import.meta.dirname, '..');
-const dirs = ['packages/web/src', 'packages/mobile/app', 'packages/mobile/components', 'packages/mobile/lib'];
+const dirs = ['packages/web/src', 'packages/mobile/app', 'packages/mobile/components', 'packages/mobile/lib', 'packages/shared/src'];
 const skipDir = new Set(['node_modules', 'dist', '__tests__']);
 const banned = [
   'Logout', 'Sign Up Free', 'Create Account', 'Sign Out', 'Log in to', 'Time conflict',
   'You have a conflict', 'Enter Festival Mode', 'Find each other', 'My Picks', 'Share plan',
-  'Tap the diamond', 'Festival wrap', "'LIVE'",
+  'Tap the diamond', 'Festival wrap', "'LIVE'", 'Log in', 'Sign up', 'Login failed', 'See your Wrap', 'recap',
+  'No festival loaded',
 ];
 
 function* walk(dir: string): Generator<string> {
@@ -17,7 +18,7 @@ function* walk(dir: string): Generator<string> {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) {
       if (!skipDir.has(name)) yield* walk(full);
-    } else if (/\.tsx?$/.test(name) && !/\.(test|stories)\./.test(name)) {
+    } else if (/\.tsx?$/.test(name) && !/\.(test|stories|fixture)\./.test(name)) {
       yield full;
     }
   }

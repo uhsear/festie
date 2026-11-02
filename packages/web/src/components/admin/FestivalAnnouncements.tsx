@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { announcementsApi } from '@festie/shared/services/announcements';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { ANNOUNCEMENT_COPY as COPY } from '@festie/shared/constants/announcementCopy';
 import { ANNOUNCEMENT_SCREENS, announcementStatus } from '@festie/shared/utils/announcements';
 import type { AdminAnnouncement, AnnouncementScreen, AnnouncementSeverity } from '@festie/shared/types/announcement';
 import { useToast } from '../../lib/toastContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import EmptyState from '../ui/EmptyState';
 
 interface Props {
   festivalId: string;
@@ -24,6 +26,7 @@ const buttonClass =
 export default function FestivalAnnouncements({ festivalId, festivalName }: Props) {
   const [items, setItems] = useState<AdminAnnouncement[]>([]);
   const [recipients, setRecipients] = useState(0);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [severity, setSeverity] = useState<AnnouncementSeverity>('info');
@@ -37,10 +40,12 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
 
   const reload = useCallback(async () => {
     try {
+      setLoadError(null);
       const res = await announcementsApi.adminList(festivalId);
       setItems(res.announcements ?? []);
       setRecipients(res.recipients ?? 0);
     } catch (err: unknown) {
+      setLoadError(err);
       toastError(err, "Couldn't load announcements. Try again.");
     }
   }, [festivalId, toastError]);
@@ -50,7 +55,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
   }, [reload]);
 
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const canSubmit = !busy && title.trim() !== '' && message.trim() !== '' && (when === 'now' || sendAtLocal !== '');
+  const canSubmit = !busy && !loadError && title.trim() !== '' && message.trim() !== '' && (when === 'now' || sendAtLocal !== '');
 
   const create = async () => {
     setBusy(true);
@@ -198,7 +203,13 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
         </button>
       </form>
 
-      {items.length === 0 ? (
+      {loadError && items.length === 0 ? (
+        <EmptyState
+          title="Couldn't load announcements"
+          description={mapErrorToUserMessage(loadError, 'Check your connection, then try again.')}
+          cta={{ label: 'Retry', onClick: () => void reload() }}
+        />
+      ) : items.length === 0 ? (
         <p className="text-sm text-text-muted">{COPY.listEmpty}</p>
       ) : (
         <ul className="space-y-2">

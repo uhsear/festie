@@ -133,7 +133,7 @@ export default function BottomNav() {
                 'max-[480px]:[&_svg]:w-5 max-[480px]:[&_svg]:h-5',
                 'max-[375px]:min-h-11 max-[375px]:px-1 max-[375px]:py-[5px]',
                 'max-[359px]:justify-center max-[359px]:px-0 max-[359px]:py-1.5',
-                active && ['text-accent-aqua', '[&_svg]:drop-shadow-[0_0_6px_rgba(0,232,208,0.4)]'],
+                active && ['text-accent-aqua', '[&_svg]:drop-shadow-[0_0_6px_var(--color-aqua-a4)]'],
               )}
               onPointerEnter={() => prefetchers[href]?.().catch(() => {})}
               onPointerDown={() => prefetchers[href]?.().catch(() => {})}

@@ -66,7 +66,7 @@ export default function AdminFestivalPreview({ festivalId }: { festivalId: strin
       </div>
 
       {preview.warnings.length > 0 && (
-        <ul className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-400 list-disc list-inside">
+        <ul className="rounded-lg border border-accent-amber/40 bg-[var(--color-amber-a08)] p-3 text-sm text-accent-amber list-disc list-inside">
           {preview.warnings.map((w) => (
             <li key={w}>{w}</li>
           ))}

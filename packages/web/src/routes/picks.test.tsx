@@ -126,6 +126,7 @@ interface StateOpts {
   profile?: unknown;
   sets?: unknown[];
   selectedDay?: number;
+  error?: string | null;
 }
 
 function setStoreState(opts: StateOpts = {}) {
@@ -141,6 +142,9 @@ function setStoreState(opts: StateOpts = {}) {
     stages: STAGES as never,
     days: DAYS as never,
     selectedDay: opts.selectedDay ?? 0,
+    festivals: [],
+    isLoading: false,
+    error: opts.error ?? null,
   });
 }
 
@@ -176,6 +180,15 @@ describe('PicksView', () => {
     setStoreState({ festival: null });
     render(<PicksView />);
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
+  });
+
+  it('shows the load error and a retry when the festival list failed', () => {
+    setStoreState({ festival: null, error: 'Network down' });
+    render(<PicksView />);
+    expect(screen.getByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
+    expect(screen.queryByText('No festival selected')).toBeNull();
   });
 
   it('shows "No picks yet" when no profile', () => {

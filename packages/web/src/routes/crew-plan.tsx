@@ -5,7 +5,7 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useActiveCrew, useCrewFestival, useCrewHub, usePicks } from '@festie/shared/hooks';
 import { artistDisplayName, formatTime, formatSetTimeRange, memberSummary, timeAgo } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
-import { PRIORITY_LABEL } from '@festie/shared/constants';
+import { COPY, PRIORITY_LABEL } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
 import FreshnessChip from '../components/features/FreshnessChip';
 import EmptyState from '../components/ui/EmptyState';
@@ -228,7 +228,7 @@ function CrewPlanContent() {
               </ul>
             )}
             <Link to="/wrap" className={EMPTY_LINK}>
-              See your Wrap
+              {COPY.wrap.open}
             </Link>
           </Card.Body>
         </Card>

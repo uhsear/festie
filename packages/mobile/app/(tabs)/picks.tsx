@@ -1067,7 +1067,7 @@ export default function PicksScreen() {
       <EmptyState
         icon="checkmark-circle-outline"
         title={COPY.clash.none}
-        message="Nothing on your plan overlaps — you're all set."
+        message={COPY.clash.noneBody}
         action={{ label: 'Show all picks', onPress: clearFilters }}
       />
     ) : (

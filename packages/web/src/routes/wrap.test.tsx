@@ -118,4 +118,11 @@ describe('WrapPage', () => {
     );
     expect(mocks.summarizePlan).toHaveBeenCalledWith([{ setId: 'a' }], extra);
   });
+
+  it('labels the handle switch with its row text', async () => {
+    mocks.cards = [{ kind: 'plan', kicker: 'YOUR PLAN', headline: '2 sets planned' }];
+    renderPage();
+    const sw = await screen.findByRole('switch', { name: 'Show @asir on cards' });
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+  });
 });
