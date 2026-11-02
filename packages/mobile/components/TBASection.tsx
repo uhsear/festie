@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { View, Text, Pressable, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { FestivalSet, Priority, Stage, Festival, Profile } from '@festie/shared/types';
+import type { FestivalSet, Priority, Stage, Festival } from '@festie/shared/types';
 import { artistDisplayName, ensureWhiteContrast } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import Avatar from './Avatar';
@@ -16,7 +16,7 @@ type Crew = { profileId: string; priority: Priority; name?: string };
 export interface TBASectionProps {
   sets: FestivalSet[];
   stages: Stage[];
-  currentProfile: Profile | null;
+  canPick: boolean;
   currentFestival: Festival | null;
   getMyPick: (setId: string) => Priority | null | undefined;
   getOtherPicks: (setId: string) => Crew[];
@@ -105,7 +105,7 @@ function TBACard({
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={active ? `${option.label} (selected)` : option.label}
+                accessibilityLabel={option.label}
               >
                 <Ionicons
                   name={option.icon}
@@ -139,7 +139,7 @@ function TBACard({
 export default function TBASection({
   sets,
   stages,
-  currentProfile,
+  canPick,
   currentFestival,
   getMyPick,
   getOtherPicks,
@@ -206,7 +206,7 @@ export default function TBASection({
                 stageColor={stage ? safeStageColor(getStageColor(stage.id), t.colors.text.muted) : undefined}
                 myPick={getMyPick(s.id)}
                 others={getOtherPicks(s.id)}
-                showPicks={!!currentProfile}
+                showPicks={canPick}
                 onSavePick={onSavePick}
                 onOpenDetail={onOpenDetail}
                 b2bSeparator={currentFestival?.b2bSeparator}

@@ -9,6 +9,8 @@ const noChanges = { total: 0, changedSetIds: new Set<string>(), newSetIds: new S
 
 const baseProps = {
   editingId: 'f1',
+  notifyPickers: true,
+  onNotifyPickersChange: vi.fn(),
   changes: noChanges,
   issues: [],
   saving: false,
@@ -135,6 +137,13 @@ describe('FestivalEditForm lineup tools', () => {
     expect((screen.getByText('Save 2 changes') as HTMLButtonElement).disabled).toBe(false);
     rerender(<FestivalEditForm {...baseProps} formData={{ name: 'Fest' }} setFormData={vi.fn()} />);
     expect((screen.getByText('Save 0 changes') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('reports the notify checkbox', () => {
+    const onNotifyPickersChange = vi.fn();
+    renderForm({ onNotifyPickersChange });
+    fireEvent.click(screen.getByLabelText('Tell people whose picks changed'));
+    expect(onNotifyPickersChange).toHaveBeenCalledWith(false);
   });
 
   it('puts a new artist row first', () => {

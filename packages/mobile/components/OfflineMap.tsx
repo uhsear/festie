@@ -34,6 +34,7 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
+import { COPY } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, iconSize } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
@@ -234,6 +235,12 @@ interface OfflineMapProps {
    * dots drawn. Backward-compatible.
    */
   draftPoints?: { latitude: number; longitude: number }[];
+  /**
+   * Extra lift for the floating controls (drop pin, recenter, chip dock) when
+   * something the map cannot see overlays its bottom edge, such as the iOS
+   * native tab bar. Keeps them stacked above the caller's own SOS FAB.
+   */
+  bottomInset?: number;
 }
 
 export default function OfflineMap({
@@ -245,6 +252,7 @@ export default function OfflineMap({
   festival = null,
   authoringMode = 'off',
   draftPoints,
+  bottomInset = 0,
 }: OfflineMapProps) {
   const t = useTokens();
   const styles = useStyles();
@@ -995,7 +1003,7 @@ export default function OfflineMap({
               on the picks tab (there is nothing to fetch once you are offline). */}
           <Text style={styles.bannerText}>
             {remotePmtilesUrl
-              ? 'Download this festival from My Picks while you still have signal to use the map offline. Showing your saved meeting points.'
+              ? `Download this festival from ${COPY.picks.title} while you still have signal to use the map offline. Showing your saved meeting points.`
               : 'This festival has no offline map. Showing your saved meeting points.'}
           </Text>
         </View>
@@ -1173,7 +1181,7 @@ export default function OfflineMap({
                 testID="map-drop-pin-toggle"
                 style={[
                   styles.dropPinButton,
-                  { bottom: styles.dropPinButton.bottom + insets.bottom },
+                  { bottom: styles.dropPinButton.bottom + insets.bottom + bottomInset },
                   placing ? styles.dropPinButtonActive : null,
                 ]}
                 onPress={togglePlacement}
@@ -1196,7 +1204,7 @@ export default function OfflineMap({
           {authoringMode === 'off' ? (
             <TouchableOpacity
               testID="map-recenter-fab"
-              style={[styles.recenterFab, { bottom: styles.recenterFab.bottom + insets.bottom }]}
+              style={[styles.recenterFab, { bottom: styles.recenterFab.bottom + insets.bottom + bottomInset }]}
               onPress={recenterToMe}
               disabled={locating}
               activeOpacity={0.85}
@@ -1269,7 +1277,7 @@ export default function OfflineMap({
               Gated OFF in authoring mode (crew-only affordance). */}
           {hasAmenities && authoringMode === 'off' ? (
             <View
-              style={[styles.chipDock, { bottom: styles.chipDock.bottom + insets.bottom }]}
+              style={[styles.chipDock, { bottom: styles.chipDock.bottom + insets.bottom + bottomInset }]}
               pointerEvents="box-none"
             >
               <ScrollView

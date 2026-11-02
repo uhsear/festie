@@ -63,6 +63,7 @@ describe('liveLocationStore', () => {
       const s = useLiveLocationStore.getState();
       expect(s.crewId).toBeNull();
       expect(s.sharingCrewId).toBeNull();
+      expect(s.shareIntentCrewId).toBeNull();
       expect(s.lastSentAt).toBeNull();
       expect(s.lastSentCoord).toBeNull();
       expect(s.peers).toEqual({});
@@ -168,6 +169,39 @@ describe('liveLocationStore', () => {
       expect(s.sharingCrewId).toBeNull();
       expect(s.lastSentAt).toBeNull();
       expect(s.lastSentCoord).toBeNull();
+    });
+  });
+
+  describe('requestSharing / cancelSharing (opt-in intent)', () => {
+    it('records the opt-in and withdraws it on cancel', () => {
+      const store = useLiveLocationStore.getState();
+      store.requestSharing('crew-1');
+      expect(useLiveLocationStore.getState().shareIntentCrewId).toBe('crew-1');
+      store.cancelSharing();
+      expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
+    });
+
+    it('survives stopSharing, so a screen teardown cannot end an opted-in share', () => {
+      const store = useLiveLocationStore.getState();
+      store.requestSharing('crew-1');
+      store.startSharing('crew-1');
+      store.stopSharing();
+      expect(useLiveLocationStore.getState().shareIntentCrewId).toBe('crew-1');
+    });
+
+    it('a crew switch withdraws the opt-in — no silent re-share in the new crew', () => {
+      const store = useLiveLocationStore.getState();
+      store.setActiveCrew('crew-1');
+      store.requestSharing('crew-1');
+      store.setActiveCrew('crew-2');
+      expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
+    });
+
+    it('reset (logout) withdraws the opt-in', () => {
+      const store = useLiveLocationStore.getState();
+      store.requestSharing('crew-1');
+      store.reset();
+      expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
     });
   });
 

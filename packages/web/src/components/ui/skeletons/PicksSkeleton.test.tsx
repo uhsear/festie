@@ -3,14 +3,15 @@ import { render, screen } from '@testing-library/react';
 import PicksSkeleton from './PicksSkeleton';
 
 describe('PicksSkeleton', () => {
+  it('announces loading as a status with sr-only text', () => {
+    render(<PicksSkeleton />);
+    expect(screen.getByRole('status', { name: 'Loading picks' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading picks…')).toBeInTheDocument();
+  });
+
   it('renders with aria-busy for loading state', () => {
     render(<PicksSkeleton />);
     expect(screen.getByLabelText('Loading picks')).toHaveAttribute('aria-busy', 'true');
-  });
-
-  it('has role=region for accessibility landmark', () => {
-    render(<PicksSkeleton />);
-    expect(screen.getByRole('region')).toBeInTheDocument();
   });
 
   it('renders three priority sections', () => {

@@ -4,7 +4,7 @@ import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { artistDisplayName, formatTime, pickActiveMeetingPoint, buildSlots, CREW_PLAN_SLOTS, resolveFestivalTimeZone } from '@festie/shared/utils';
-import { PRIORITY_LABEL } from '@festie/shared/constants';
+import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { FestivalDay, FestivalSet, Profile } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { priorityIconName } from '../lib/prioritySymbol';
@@ -55,7 +55,7 @@ export default function CrewPlanScreen() {
     return (
       <View style={styles.screen}>
         <Stack.Screen options={{ title: 'Crew plan', headerShown: true }} />
-        <EmptyState icon="lock-closed" title="Sign in required" message="Log in to see your crew's plan." />
+        <EmptyState icon="lock-closed" title={COPY.auth.signInRequired} message={signInTo("see your crew's plan")} />
       </View>
     );
   }
@@ -110,7 +110,7 @@ export default function CrewPlanScreen() {
                 label="Add meeting point"
                 variant="ghost"
                 size="sm"
-                onPress={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } })}
+                onPress={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'find' } })}
               />
             </>
           )}
@@ -136,7 +136,7 @@ export default function CrewPlanScreen() {
                 label="Set home base"
                 variant="ghost"
                 size="sm"
-                onPress={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'logistics' } })}
+                onPress={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'find' } })}
               />
             </>
           )}

@@ -868,12 +868,12 @@ describe('lib/sentry.js — additional coverage', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. lib/reset-pages.js — full coverage
+// 5. lib/helpers/sanitize.js — escapeHtml
 // ---------------------------------------------------------------------------
-describe('lib/reset-pages.js', async () => {
-  const { renderResetFormPage, renderResetErrorPage, escapeHtml } = await import('../lib/reset-pages.js');
+describe('lib/helpers/sanitize.js', async () => {
+  const { escapeHtml } = await import('../lib/helpers/sanitize.js');
 
-  describe('escapeHtml (re-exported from sanitize)', () => {
+  describe('escapeHtml', () => {
     it('escapes ampersands', () => {
       assert.equal(escapeHtml('a&b'), 'a&amp;b');
     });
@@ -912,92 +912,6 @@ describe('lib/reset-pages.js', async () => {
 
     it('handles non-string input by converting to string', () => {
       assert.equal(escapeHtml(123), '123');
-    });
-  });
-
-  describe('renderResetFormPage', () => {
-    it('returns HTML string with DOCTYPE', () => {
-      const html = renderResetFormPage('tok123', 'https://festie.us', 'nonce');
-      assert.ok(html.startsWith('<!DOCTYPE html>'));
-    });
-
-    it('includes the token in a script tag', () => {
-      const html = renderResetFormPage('my-token', 'https://festie.us', 'nonce');
-      assert.ok(html.includes('"my-token"'));
-    });
-
-    it('includes the origin in a script tag', () => {
-      const html = renderResetFormPage('tok', 'https://festie.us', 'nonce');
-      assert.ok(html.includes('"https://festie.us"'));
-    });
-
-    it('escapes origin in the HTML link', () => {
-      const html = renderResetFormPage('tok', 'https://festie.us?a=1&b=2', 'nonce');
-      // The href should have escaped ampersand
-      assert.ok(html.includes('https://festie.us?a=1&amp;b=2'));
-    });
-
-    it('includes password form elements', () => {
-      const html = renderResetFormPage('tok', 'https://festie.us', 'nonce');
-      assert.ok(html.includes('id="password"'));
-      assert.ok(html.includes('id="confirmPassword"'));
-      assert.ok(html.includes('id="submitBtn"'));
-      assert.ok(html.includes('id="resetForm"'));
-    });
-
-    it('includes the title "Reset Password"', () => {
-      const html = renderResetFormPage('tok', 'https://festie.us', 'nonce');
-      assert.ok(html.includes('<title>Reset Password</title>'));
-    });
-
-    it('includes CSS styles', () => {
-      const html = renderResetFormPage('tok', 'https://festie.us', 'nonce');
-      assert.ok(html.includes('<style'));
-      assert.ok(html.includes('.reset-container'));
-    });
-
-    it('includes handleSubmit function', () => {
-      const html = renderResetFormPage('tok', 'https://festie.us', 'nonce');
-      assert.ok(html.includes('handleSubmit'));
-    });
-
-    it('includes API endpoint for reset-password', () => {
-      const html = renderResetFormPage('tok', 'https://festie.us', 'nonce');
-      assert.ok(html.includes('/api/v1/auth/reset-password'));
-    });
-  });
-
-  describe('renderResetErrorPage', () => {
-    it('returns HTML string with DOCTYPE', () => {
-      const html = renderResetErrorPage('Link expired', 'nonce');
-      assert.ok(html.startsWith('<!DOCTYPE html>'));
-    });
-
-    it('includes the error message (escaped)', () => {
-      const html = renderResetErrorPage('Token <expired> & invalid', 'nonce');
-      assert.ok(html.includes('Token &lt;expired&gt; &amp; invalid'));
-    });
-
-    it('includes title "Reset link invalid or expired"', () => {
-      const html = renderResetErrorPage('msg', 'nonce');
-      assert.ok(html.includes('Reset link invalid or expired'));
-    });
-
-    it('includes a return link', () => {
-      const html = renderResetErrorPage('msg', 'nonce');
-      assert.ok(html.includes('Return to Festie'));
-      assert.ok(html.includes('href="/"'));
-    });
-
-    it('includes error icon', () => {
-      const html = renderResetErrorPage('msg', 'nonce');
-      assert.ok(html.includes('error-icon'));
-    });
-
-    it('includes CSS styles', () => {
-      const html = renderResetErrorPage('msg', 'nonce');
-      assert.ok(html.includes('.error-container'));
-      assert.ok(html.includes('.error-card'));
     });
   });
 });

@@ -1,41 +1,36 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Star, Users, Zap, Sparkles, type LucideIcon } from 'lucide-react';
-import type { FestivalPhase } from '@festie/shared/utils';
+import { Users, Map as MapIcon, type LucideIcon } from 'lucide-react';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
+import {
+  PHASE_ACTION_LABELS,
+  PHASE_ACTION_ORDER,
+  type FestivalPhase,
+  type PhaseActionKey,
+} from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
 
-type ActionKey = 'picks' | 'crew' | 'nownext' | 'wrap';
-type RoutePath = '/picks' | '/crew' | '/festival-mode' | '/wrap';
+type RoutePath = '/picks' | '/crew' | '/map' | '/festival-mode' | '/wrap';
 
 interface ActionDef {
-  key: ActionKey;
-  label: string;
   Icon: LucideIcon;
   to: RoutePath;
   a11y: string;
 }
 
-// Fixed destination set — phase only reorders + re-emphasizes, never hides. The
-// live map / SOS / meeting points live inside /crew on web, so Crew stays high
-// in the live ordering rather than being buried under planning shortcuts.
-const ACTIONS: Record<ActionKey, ActionDef> = {
-  picks: { key: 'picks', label: 'My picks', Icon: Star, to: '/picks', a11y: 'Go to my picks' },
-  crew: { key: 'crew', label: 'Crew', Icon: Users, to: '/crew', a11y: 'Go to crew' },
-  nownext: { key: 'nownext', label: 'Now & Next', Icon: Zap, to: '/festival-mode', a11y: 'Open Now and Next' },
-  wrap: { key: 'wrap', label: 'Festival wrap', Icon: Sparkles, to: '/wrap', a11y: 'Open festival wrap-up' },
-};
-
-// Per-phase ordering — the first entry is the emphasized (primary) action
-// (Coachella phased-content model: re-prioritize per phase, never hide).
-const PHASE_ORDER: Record<FestivalPhase, ActionKey[]> = {
-  pre: ['picks', 'crew', 'nownext', 'wrap'],
-  live: ['nownext', 'crew', 'picks', 'wrap'],
-  post: ['wrap', 'crew', 'picks', 'nownext'],
+// Fixed destination set — phase only reorders + re-emphasizes, never hides.
+// Labels and per-phase order come from @festie/shared so mobile matches.
+const ACTIONS: Record<PhaseActionKey, ActionDef> = {
+  myPlan: { Icon: CONCEPT_ICON.picks, to: '/picks', a11y: 'Go to my picks' },
+  crew: { Icon: Users, to: '/crew', a11y: 'Go to crew' },
+  map: { Icon: MapIcon, to: '/map', a11y: 'Open map' },
+  nownext: { Icon: CONCEPT_ICON.nowNext, to: '/festival-mode', a11y: 'Open Now and Next' },
+  wrap: { Icon: CONCEPT_ICON.wrap, to: '/wrap', a11y: 'Open your Festival Wrap' },
 };
 
 const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
   pre: { label: 'Before the festival', hint: 'Lock in your picks and rally your crew.' },
-  live: { label: 'Happening now', hint: 'Check Now & Next, find your crew, stay safe.' },
-  post: { label: 'Festival wrap', hint: 'Relive it and settle up with your crew.' },
+  live: { label: 'Happening now', hint: 'Find your crew, check Now & Next, stay safe.' },
+  post: { label: 'After the festival', hint: 'Relive it and settle up with your crew.' },
 };
 
 interface PhaseHomeActionsProps {
@@ -52,7 +47,7 @@ interface PhaseHomeActionsProps {
  */
 export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
   const navigate = useNavigate();
-  const order = PHASE_ORDER[phase];
+  const order = PHASE_ACTION_ORDER[phase];
   const heading = PHASE_HEADING[phase];
 
   return (
@@ -86,7 +81,7 @@ export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
               )}
             >
               <Icon className="w-4 h-4" aria-hidden="true" />
-              {a.label}
+              {PHASE_ACTION_LABELS[key]}
             </button>
           );
         })}

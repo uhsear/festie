@@ -2,6 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import crypto from 'crypto';
+import { diffPickedSchedule } from '../lib/schedule-diff.js';
 
 export default function createFestivalsRoutes(deps: any) {
   const {
@@ -456,6 +457,13 @@ export default function createFestivalsRoutes(deps: any) {
           return sendError(res, 403, 'Confirm your password to continue.', ErrorCodes.REAUTH_REQUIRED);
         }
 
+        // Only a moved or removed set alerts anyone, and only the people who picked it.
+        const changes = daysSent ? diffPickedSchedule(existingFestival, nextFestival) : [];
+        // Read pickers before the update: it deletes picks on removed sets.
+        const pickersBySet: Map<string, string[]> = changes.length
+          ? await stores.profiles.pickersBySet(existingFestival.id, changes.map((change) => change.setId))
+          : new Map();
+
         const festival = await stores.festivals.update(req.validatedParams.id, {
           name: nextFestival.name,
           location: nextFestival.location,
@@ -469,15 +477,24 @@ export default function createFestivalsRoutes(deps: any) {
         invalidateFestivalCache();
 
         invalidateFestivalListCache();
+        const people = new Set([...pickersBySet.values()].flat()).size;
+        const notified = req.validatedBody.notify !== false && people > 0;
+        const scheduleNotice = { changes: changes.length, people, notified };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
-        audit('festival:update', 'festival', festival.id, req, { name: festival.name, ...stats });
+        audit('festival:update', 'festival', festival.id, req, {
+          name: festival.name,
+          ...stats,
+          scheduleChanges: changes.length,
+          notifiedPeople: notified ? people : 0,
+        });
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
+        if (notified) void emitter.scheduleChanged({ festival, changes, pickersBySet });
         const venueMissing = typeof existingFestival.latitude !== 'number';
         if (venueMissing || nextFestival.location !== existingFestival.location) {
           void fillVenueCoords(festival.id, nextFestival.location);
         }
-        return sendSuccess(res, festival);
+        return sendSuccess(res, { ...festival, scheduleNotice });
       } catch (error: any) {
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);

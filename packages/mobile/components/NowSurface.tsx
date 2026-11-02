@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet } from '@festie/shared/types';
@@ -14,6 +14,8 @@ import {
   type CrewWhereabout,
   type NowNextSelection,
 } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import AppPressable from './AppPressable';
 import Avatar from './Avatar';
@@ -137,10 +139,10 @@ export function NowHero({
   } else if (phase === 'after') {
     body = (
       <Quiet
-        icon="sparkles-outline"
+        icon={CONCEPT_IONICON.wrap}
         title="That's a wrap"
         body="The festival is over."
-        action={onWrap ? <Button label="See your Wrap" variant="secondary" onPress={onWrap} /> : undefined}
+        action={onWrap ? <Button label={COPY.wrap.open} variant="secondary" onPress={onWrap} /> : undefined}
       />
     );
   } else if (!lineupMode && todayCount === 0) {
@@ -230,8 +232,10 @@ function Freshness({ row }: { row: CrewWhereabout }) {
 
 export function CrewNow({ crewName, rows, onOpenCrew }: { crewName: string; rows: CrewWhereabout[]; onOpenCrew: () => void }) {
   const s = useStyles();
-  const shown = rows.slice(0, MAX_CREW_ROWS);
-  const more = rows.length - shown.length;
+  const t = useTokens();
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? rows : rows.slice(0, MAX_CREW_ROWS);
+  const more = rows.length - MAX_CREW_ROWS;
   return (
     <View style={s.section}>
       <SectionLabel style={s.flushLabel}>{crewName}</SectionLabel>
@@ -254,7 +258,16 @@ export function CrewNow({ crewName, rows, onOpenCrew }: { crewName: string; rows
             </View>
           ))
         )}
-        {more > 0 ? <Text style={[s.rowMeta, s.listPad]}>+{more} more</Text> : null}
+        {more > 0 ? (
+          <AppPressable
+            onPress={() => setExpanded((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: t.spacing[4] }}
+          >
+            <Text style={[s.rowMeta, { color: t.colors.accent.aqua }]}>{expanded ? 'Show fewer' : `Show ${more} more`}</Text>
+          </AppPressable>
+        ) : null}
       </View>
       <Button label="Find your crew" icon="people" onPress={onOpenCrew} />
     </View>

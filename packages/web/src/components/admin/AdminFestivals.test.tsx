@@ -4,8 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { ApiClientError } from '@festie/shared/services/api';
 import AdminFestivals from './AdminFestivals';
 
+const toast = vi.fn();
 vi.mock('../../lib/toastContext', () => ({
-  useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
+  useToast: () => ({ toast, toastError: vi.fn() }),
 }));
 vi.mock('./LineupImport', () => ({ default: () => null }));
 vi.mock('./FestivalMapEditor', () => ({ default: () => null }));
@@ -19,15 +20,25 @@ vi.mock('./FestivalEditForm', () => ({
     onDiscard,
     formData,
     setFormData,
+    notifyPickers,
+    onNotifyPickersChange,
   }: {
     onSave: () => void;
     onDiscard: () => void;
+    notifyPickers: boolean;
+    onNotifyPickersChange: (v: boolean) => void;
     formData: { name?: string; days?: { id: string; label: string }[] };
     setFormData: (f: unknown) => void;
   }) => (
     <div>
       <button onClick={onSave}>save form</button>
       <button onClick={onDiscard}>discard form</button>
+      <input
+        type="checkbox"
+        aria-label="Tell people whose picks changed"
+        checked={notifyPickers}
+        onChange={(e) => onNotifyPickersChange(e.target.checked)}
+      />
       {/* Seeded once at mount, like SetEditor's artist-name drafts. */}
       <input aria-label="local draft" defaultValue={formData.name} />
       <button onClick={() => setFormData({ name: 'New Fest', location: 'There', timeZone: 'UTC' })}>fill form</button>
@@ -112,6 +123,31 @@ describe('AdminFestivals', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remove and save' }));
     await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
     expect(mockPut.mock.calls[1][1]).toMatchObject({ confirmRemovals: true, expectedUpdatedAt: FULL.updatedAt });
+  });
+
+  it('sends notify: false when the box is unchecked', async () => {
+    mockPut.mockResolvedValueOnce({ ...FULL });
+    render(<AdminFestivals />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const box = await screen.findByRole('checkbox', { name: 'Tell people whose picks changed' });
+    expect(box).toBeChecked();
+    await userEvent.click(box);
+    await userEvent.click(screen.getByRole('button', { name: 'save form' }));
+    await waitFor(() => expect(mockPut).toHaveBeenCalled());
+    expect(mockPut.mock.calls[0][1]).toMatchObject({ notify: false });
+  });
+
+  it('toasts the schedule notice, else the saved-changes line', async () => {
+    mockPut.mockResolvedValueOnce({ ...FULL, scheduleNotice: { changes: 2, people: 0, notified: false } });
+    render(<AdminFestivals />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('Saved. No one had picked the changed sets, so no alerts were sent.', 'success'),
+    );
+    mockPut.mockResolvedValueOnce({ ...FULL });
+    await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('Saved 0 changes.', 'success'));
   });
 
   it('opens the editor on the new id after create', async () => {

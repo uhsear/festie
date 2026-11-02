@@ -96,12 +96,40 @@ jobs:
         run: npm run knip
         continue-on-error: true
 
-  test:
+  web-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/pnpm-setup
+        with:
+          node-version: 22
+          node-cache: 'npm'
+      - name: Install web workspace deps
+        working-directory: packages
+        run: pnpm install --frozen-lockfile
+      - name: Build frontend
+        working-directory: packages
+        run: pnpm --filter @festie/web build
+        env:
+          # The web build fetches the licensed fonts (optional: fork PRs have no secret).
+          FESTIE_FONTS_SSH_KEY: ${{ secrets.FESTIE_FONTS_SSH_KEY }}
+      - name: Upload web build (shared by lighthouse + bundle-size)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-dist
+          path: packages/web/dist
+          retention-days: 1
+
+  # The backend suite runs files one at a time against one database, so it is
+  # split across parallel runners, each with its own Postgres and Redis.
+  test-shard:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [22]
+        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: postgres:16-alpine
@@ -129,39 +157,63 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/pnpm-setup
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22
           node-cache: 'npm'
       - run: npm ci
-      - name: Install web workspace deps
+      # Parity tests import @festie/shared source, which needs its own deps (e.g. papaparse).
+      - name: Install workspace deps
         working-directory: packages
         run: pnpm install --frozen-lockfile
-      - name: Build frontend
-        working-directory: packages
-        run: pnpm --filter @festie/web build
-        env:
-          # The web build fetches the licensed fonts (optional: fork PRs have no secret).
-          FESTIE_FONTS_SSH_KEY: ${{ secrets.FESTIE_FONTS_SSH_KEY }}
-      - name: Upload web build (shared by lighthouse + bundle-size)
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: web-dist
-          path: packages/web/dist
-          retention-days: 1
       - name: Set up database
-        env:
-          TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/festie_test
         run: |
           for migration in migrations/*.sql; do
-            PGPASSWORD=test_password psql -h localhost -U test_user -d festie_test -f "$migration"
+            PGPASSWORD=test_password psql -v ON_ERROR_STOP=1 -h localhost -U test_user -d festie_test -f "$migration"
           done
-      - name: Run tests with coverage
+      - name: Run test shard ${{ matrix.shard }} of 4 with coverage
         env:
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/festie_test
           TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/festie_test
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
           MAX_USERS: '10000'
-        run: npm run test:coverage
+        run: node scripts/ci/test-shard.mjs ${{ matrix.shard }} 4
+      - name: Upload raw coverage
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-raw-${{ matrix.shard }}
+          path: coverage/tmp/
+          retention-days: 1
+
+  # Keeps the required check name "test (22)". Passes only when every shard
+  # passed, then enforces the .c8rc.json floors on the merged coverage.
+  test:
+    if: always()
+    needs: [test-shard, web-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node-version: [22]
+    steps:
+      - name: Fail unless every shard and the web build passed
+        if: needs.test-shard.result != 'success' || needs.web-build.result != 'success'
+        run: |
+          echo "test-shard: ${{ needs.test-shard.result }}, web-build: ${{ needs.web-build.result }}"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - run: npm ci
+      - name: Download raw coverage from every shard
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: coverage-raw-*
+          path: coverage/tmp
+          merge-multiple: true
+      - name: Check merged coverage against the floors
+        run: npx c8 report
       - name: Upload coverage
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
+import { Link } from '@tanstack/react-router';
+import { COPY } from '@festie/shared/constants';
 import { useHaptics } from '../../hooks/useHaptics';
 
 /**
- * FestivalDayBanner — nudges the user into Festival Mode on festival days
- * when the mode is off. Ported from legacy renderFestivalModeDayBanner in
+ * FestivalDayBanner — offers the Now & Next page on festival days. Ported from legacy renderFestivalModeDayBanner in
  * public/app.js. The parent (AppShell) decides whether to render this at
  * all; once mounted it handles its own dismiss state for the current
  * session via sessionStorage (survives tab navigation, not reloads — that's
@@ -21,8 +20,6 @@ export default function FestivalDayBanner() {
       return false;
     }
   });
-  const setFestivalMode = useFestivalModeStore((s) => s.setFestivalMode);
-  const navigate = useNavigate();
   const { select } = useHaptics();
 
   if (dismissed) return null;
@@ -38,9 +35,7 @@ export default function FestivalDayBanner() {
 
   const enter = () => {
     select();
-    setFestivalMode(true);
     dismiss();
-    navigate({ to: '/festival-mode' });
   };
 
   return (
@@ -50,16 +45,16 @@ export default function FestivalDayBanner() {
       data-testid="festival-day-banner"
     >
       <span className="flex-1">
-        It&apos;s festival day!
+        It&apos;s a festival day.
       </span>
-      <button
-        type="button"
-        className="shrink-0 bg-accent-aqua text-bg-primary border-none rounded-lg py-2 px-3.5 text-[length:var(--font-size-14)] font-semibold cursor-pointer min-h-11 hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:active:transform-none transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+      <Link
+        to="/festival-mode"
+        className="shrink-0 flex items-center bg-accent-aqua text-bg-primary border-none rounded-lg py-2 px-3.5 text-[length:var(--font-size-14)] font-semibold cursor-pointer min-h-11 hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:active:transform-none transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
         onClick={enter}
         data-testid="festival-day-banner-enter"
       >
-        Enter Festival Mode
-      </button>
+        {COPY.nowNext.open}
+      </Link>
       <button
         type="button"
         className="shrink-0 bg-transparent border-none text-text-secondary cursor-pointer text-xl p-0 px-1 leading-none min-h-11 min-w-11 hover:text-text-primary active:scale-[0.97] transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)]"

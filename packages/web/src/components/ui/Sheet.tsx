@@ -49,7 +49,7 @@ export default function Sheet({
           )}
         >
           {/* Drag handle: visual affordance, vaul does the physics. Hidden on desktop. */}
-          <div className="mx-auto -mt-2 mb-2 h-1.5 w-12 rounded-full bg-text-muted/30 flex-shrink-0 lg:hidden" />
+          <div aria-hidden="true" className="mx-auto -mt-2 mb-2 h-1.5 w-12 rounded-full bg-text-muted/30 flex-shrink-0 lg:hidden" />
 
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">

@@ -18,7 +18,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFestivalDataStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import type { ConflictGroup } from '@festie/shared/utils';
@@ -34,13 +34,16 @@ import {
   buildPicksShareUrl,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
+import { COPY, GUEST_PROMPT_COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
 import { duration as motionDuration } from '@festie/shared/tokens';
+import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
 import { priorityIconName } from '../../lib/prioritySymbol';
+import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import ScreenHeader from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
 import { Skeleton } from '../../components/Skeleton';
@@ -54,15 +57,15 @@ import OfflineReadinessCard from '../../components/OfflineReadinessCard';
  * order, and finally sorted by start time (then artist name) within a bucket.
  */
 const PRIORITY_SECTIONS: readonly { value: Priority; label: string }[] = [
-  { value: 'must', label: 'Must See' },
-  { value: 'want-to-see', label: 'Want to See' },
-  { value: 'maybe', label: 'Maybe' },
+  { value: 'must', label: PRIORITY_SYMBOLS.must.label },
+  { value: 'want-to-see', label: PRIORITY_SYMBOLS['want-to-see'].label },
+  { value: 'maybe', label: PRIORITY_SYMBOLS.maybe.label },
 ];
 
 const PRIORITY_CHOICES: readonly { value: Priority; label: string }[] = [
-  { value: 'must', label: 'Must' },
-  { value: 'want-to-see', label: 'Want' },
-  { value: 'maybe', label: 'Maybe' },
+  { value: 'must', label: PRIORITY_SYMBOLS.must.short },
+  { value: 'want-to-see', label: PRIORITY_SYMBOLS['want-to-see'].short },
+  { value: 'maybe', label: PRIORITY_SYMBOLS.maybe.short },
 ];
 
 /** How the picks plan is organized: by festival day, or by priority tier. */
@@ -101,6 +104,7 @@ export default function PicksScreen() {
   );
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const user = useAuthStore((s) => s.user);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const sets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
@@ -475,8 +479,7 @@ export default function PicksScreen() {
       bulkSavePicks(setIds, bulkPriority)
         .then(() => {
           haptics.success();
-          const pLabel =
-            bulkPriority === 'must' ? 'Must See' : bulkPriority === 'want-to-see' ? 'Want to See' : 'Maybe';
+          const pLabel = PRIORITY_SYMBOLS[bulkPriority].label;
           Alert.alert(
             'Picks added',
             `Added ${setIds.length} set${setIds.length === 1 ? '' : 's'} from ${label} to ${pLabel}.`,
@@ -706,7 +709,7 @@ export default function PicksScreen() {
         ) : null}
         {stats.clashes > 0 ? (
           <StatChip
-            label="Clashes"
+            label={COPY.clash.filter}
             count={stats.clashes}
             icon="warning"
             color={t.colors.accent.coral}
@@ -811,7 +814,7 @@ export default function PicksScreen() {
         accessibilityState={{ expanded: bulkOpen }}
         accessibilityLabel="Bulk add picks"
       >
-        <Ionicons name="sparkles-outline" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="add-circle-outline" size={16} color={t.colors.accent.aqua} />
         <Text style={styles.bulkHeaderText}>Bulk add picks</Text>
         <Ionicons
           name={bulkOpen ? 'chevron-up' : 'chevron-down'}
@@ -906,7 +909,7 @@ export default function PicksScreen() {
         >
           <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
           <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-            Share picks
+            {COPY.picks.share}
           </Text>
         </TouchableOpacity>
       </View>
@@ -960,7 +963,7 @@ export default function PicksScreen() {
       // search/filter empty state below rather than falsely claiming all-clear.
       <EmptyState
         icon="checkmark-circle-outline"
-        title="No clashes"
+        title={COPY.clash.none}
         message="Nothing on your plan overlaps — you're all set."
         action={{ label: 'Show all picks', onPress: clearFilters }}
       />
@@ -972,6 +975,33 @@ export default function PicksScreen() {
         action={filtersActive ? { label: 'Clear filters', onPress: clearFilters } : undefined}
       />
     );
+
+  if (!user) {
+    return (
+      <View style={styles.container} testID="picks-screen">
+        <ScreenHeader title="Picks" icon="star" />
+        <EmptyState
+          icon="star-outline"
+          title={GUEST_PROMPT_COPY.teasers.picks.title}
+          message={GUEST_PROMPT_COPY.teasers.picks.message}
+          action={{
+            label: GUEST_PROMPT_COPY.createAccount,
+            onPress: () => {
+              setReturnTo('/(tabs)/picks');
+              router.push('/(auth)/register');
+            },
+          }}
+          secondaryAction={{
+            label: GUEST_PROMPT_COPY.signIn,
+            onPress: () => {
+              setReturnTo('/(tabs)/picks');
+              router.push('/(auth)/login');
+            },
+          }}
+        />
+      </View>
+    );
+  }
 
   let body: React.ReactNode;
   if (!currentFestival) {
@@ -986,8 +1016,8 @@ export default function PicksScreen() {
     body = (
       <EmptyState
         icon="musical-note-outline"
-        title="Join this festival first"
-        message="Open the Schedule tab and join the festival to start saving picks."
+        title="No picks yet"
+        message="Tap Must See, Want to See or Maybe on any set to start your plan. Your first pick joins the festival."
         action={{ label: 'Go to Schedule', onPress: () => router.navigate('/(tabs)/') }}
       />
     );
@@ -1025,7 +1055,7 @@ export default function PicksScreen() {
 
   return (
     <View style={styles.container} testID="picks-screen">
-      <ScreenHeader title="My Picks" icon="star" />
+      <ScreenHeader title={COPY.picks.title} icon={CONCEPT_IONICON.picks} />
       <View style={styles.body}>{body}</View>
       {showScrollTop ? (
         <Animated.View
@@ -1198,7 +1228,7 @@ function ClashBannerInline({
       <View style={styles.clashHeading}>
         <Ionicons name="warning-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
         <Text style={styles.clashHeadingText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {groups.length === 1 ? 'Schedule clash' : `${groups.length} schedule clashes`}
+          {clashCount(groups.length)}
         </Text>
       </View>
       {groups.map((group) => (

@@ -6,7 +6,7 @@ describe('LiveBadge', () => {
   it('renders LIVE status with coralStrong styling', () => {
     render(<LiveBadge status="live" label="LIVE" />);
     expect(screen.getByText('LIVE')).toBeInTheDocument();
-    const wrapper = screen.getByLabelText('Live');
+    const wrapper = screen.getByLabelText('Playing now');
     // R6: live uses the coralStrong fill token (not plain coral)
     expect(wrapper.className).toContain('bg-accent-coral-strong');
   });
@@ -41,7 +41,7 @@ describe('LiveBadge', () => {
 
   it('applies custom className', () => {
     render(<LiveBadge status="live" label="LIVE" className="my-class" />);
-    const wrapper = screen.getByLabelText('Live');
+    const wrapper = screen.getByLabelText('Playing now');
     expect(wrapper.className).toContain('my-class');
   });
 

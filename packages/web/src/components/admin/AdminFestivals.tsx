@@ -12,6 +12,7 @@ import {
 import type { AdminFestivalSummary, ArchivedFestival } from '@festie/shared/services/festivalAdmin';
 import { countFestivalChanges, describeDeleteImpact, sortLineup, timeAgo } from '@festie/shared/utils';
 import type { EditableFestival, FestivalIssue } from '@festie/shared/utils';
+import { describeScheduleNotice, type ScheduleNotice } from '@festie/shared/utils';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import { useToast } from '../../lib/toastContext';
 import { useUnsavedChangesGuard } from '../../lib/useUnsavedChangesGuard';
@@ -45,6 +46,7 @@ export default function AdminFestivals() {
   const [tab, setTab] = useState<Tab>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editorLoading, setEditorLoading] = useState(false);
+  const [notifyPickers, setNotifyPickers] = useState(true);
   const [formData, setFormData] = useState<Partial<FormFestival>>({});
   const [original, setOriginal] = useState<Partial<FormFestival> | null>(null);
   const [meta, setMeta] = useState<FestivalMeta>({});
@@ -103,6 +105,7 @@ export default function AdminFestivals() {
 
   const clearEditor = () => {
     setEditingId(null);
+    setNotifyPickers(true);
     setFormData({});
     setOriginal(null);
     setMeta({});
@@ -114,6 +117,7 @@ export default function AdminFestivals() {
   // endpoint omits them) and each day's sets sort by stage, then start time.
   const openEditor = async (id: string) => {
     setEditingId(id);
+    setNotifyPickers(true);
     setTab('create');
     setEditorLoading(true);
     try {
@@ -140,10 +144,10 @@ export default function AdminFestivals() {
     }
   };
 
-  const afterEditSave = async (id: string) => {
+  const afterEditSave = async (id: string, notice?: ScheduleNotice) => {
     const n = changes.total;
     await openEditor(id);
-    toast(`Saved ${plural(n, 'change')}.`, 'success');
+    toast(notice ? describeScheduleNotice(notice) : `Saved ${plural(n, 'change')}.`, 'success');
     await loadFestivals();
   };
 
@@ -160,8 +164,12 @@ export default function AdminFestivals() {
     setSaving(true);
     try {
       if (editingId) {
-        await api.put<void>(`/admin/festivals/${editingId}`, { ...formData, expectedUpdatedAt: formData.updatedAt });
-        await afterEditSave(editingId);
+        const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
+          ...formData,
+          expectedUpdatedAt: formData.updatedAt,
+          notify: notifyPickers,
+        });
+        await afterEditSave(editingId, res?.scheduleNotice);
       } else {
         const created = await api.post<{ id?: string }>('/admin/festivals', formData);
         toast('Festival created as a draft. Only admins can see it.', 'success');
@@ -194,18 +202,19 @@ export default function AdminFestivals() {
     try {
       const done = await withReauth(
         async () => {
-          await api.put<void>(`/admin/festivals/${editingId}`, {
+          const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${editingId}`, {
             ...formData,
             expectedUpdatedAt: formData.updatedAt,
             confirmRemovals: true,
+            notify: notifyPickers,
           });
-          return true;
+          return { notice: res?.scheduleNotice };
         },
         askPassword,
       );
       if (done === null) return;
       setPendingRemoval(null);
-      await afterEditSave(editingId);
+      await afterEditSave(editingId, done.notice);
     } catch (err: unknown) {
       setPendingRemoval(null);
       toastError(err, "Couldn't save festival. Try again.");
@@ -485,6 +494,8 @@ export default function AdminFestivals() {
             formData={formData}
             setFormData={setFormData}
             editingId={editingId}
+            notifyPickers={notifyPickers}
+            onNotifyPickersChange={setNotifyPickers}
             initialExpandedDays={initialExpandedDays}
             changes={changes}
             issues={issues}

@@ -158,3 +158,21 @@ export function diffReminderPlan(plan: ReminderPlanEntry[], scheduledIds: string
   const toCancel = scheduledIds.filter((id) => id.startsWith('festie-reminder-') && !planIds.has(id));
   return { toSchedule: plan, toCancel };
 }
+
+/**
+ * Merge the must-see default lead into the explicit reminders map. Every `must`
+ * pick without an explicit reminder gets `mustSeeLead`; explicit reminders win.
+ * With a null lead the map is returned unchanged.
+ */
+export function effectiveReminders(
+  reminders: Record<string, number> | undefined | null,
+  picks: Record<string, Priority> | undefined | null,
+  mustSeeLead: number | null | undefined,
+): Record<string, number> {
+  if (mustSeeLead == null) return reminders ?? {};
+  const merged: Record<string, number> = { ...(reminders ?? {}) };
+  for (const [setId, priority] of Object.entries(picks ?? {})) {
+    if (priority === 'must' && merged[setId] === undefined) merged[setId] = mustSeeLead;
+  }
+  return merged;
+}
