@@ -210,6 +210,20 @@ export default function createExpenseRoutes(deps: any) {
         if (!members) return;
 
         const { description, amount, splitWith, category, planned, paidBy, shares } = req.validatedBody;
+        // Any member may edit, but moving the debt onto someone else needs the payer, the adder or the owner.
+        const changesPayer = paidBy !== undefined && paidBy !== existing.paid_by;
+        if (
+          changesPayer &&
+          ![existing.paid_by, existing.created_by].includes(req.user.userId) &&
+          member.role !== 'owner'
+        ) {
+          return sendError(
+            res,
+            403,
+            'Only the payer, the person who added this, or the crew owner can change who paid.',
+            ErrorCodes.FORBIDDEN,
+          );
+        }
         const currency = await stores.expenses.getCurrency(crewId);
         const expense = await stores.expenses.update(expenseId, {
           paidBy: paidBy ?? existing.paid_by,

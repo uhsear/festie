@@ -562,6 +562,9 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           currentUserId={currentUserId}
           currency={currency}
           initial={editTarget}
+          canChangePayer={
+            editTarget.paid_by === currentUserId || editTarget.created_by === currentUserId || isOwner
+          }
           busy={editExpense.isPending}
           onSubmit={(request) => editExpense.mutate({ id: editTarget.id, request })}
           onCancel={() => setEditTarget(null)}

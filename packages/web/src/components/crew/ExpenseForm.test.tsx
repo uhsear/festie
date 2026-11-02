@@ -121,4 +121,25 @@ describe('ExpenseForm', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ paidBy: 'me', splitWith: ['me', 'sam'] }));
   });
+
+  it('locks "Paid by" and leaves the payer out when this user may not change it', async () => {
+    const initial: CrewExpense = {
+      id: 'e3',
+      crew_id: 'c1',
+      paid_by: 'sam',
+      paid_by_name: 'Sam',
+      description: 'Ice',
+      amount: 30,
+      split_with: ['me', 'sam'],
+      category: 'food',
+      created_at: '2026-07-01T00:00:00.000Z',
+    };
+    const { user, onSubmit } = setup({ initial, canChangePayer: false });
+    expect(screen.getByLabelText('Paid by')).toBeDisabled();
+    expect(
+      screen.getByText('Only the payer, the person who added this, or the crew owner can change who paid.'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('paidBy');
+  });
 });

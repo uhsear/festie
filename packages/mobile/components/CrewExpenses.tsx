@@ -89,6 +89,9 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   const [splitWith, setSplitWith] = useState<string[]>(() => members.map((m) => m.userId));
   const [editing, setEditing] = useState<CrewExpense | null>(null);
   const [paidBy, setPaidBy] = useState(currentUserId);
+  // Editing someone else's row: only the payer, the adder or the owner may move who paid.
+  const payerLocked =
+    !!editing && editing.paid_by !== currentUserId && editing.created_by !== currentUserId && !isOwner;
   const [uneven, setUneven] = useState(false);
   const [shareText, setShareText] = useState<Record<string, string>>({});
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -184,7 +187,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
         splitWith,
         category,
         planned,
-        paidBy,
+        ...(payerLocked ? {} : { paidBy }),
         ...(uneven ? { shares } : {}),
       };
       const outcome = editing ? await updateExpense(crewId, editing.id, request) : await addExpense(crewId, request);
@@ -653,9 +656,10 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                   key={m.userId}
                   style={[styles.chip, active && styles.chipActive]}
                   onPress={() => setPaidBy(m.userId)}
+                  disabled={payerLocked}
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
+                  accessibilityState={{ selected: active, disabled: payerLocked }}
                   accessibilityLabel={`Paid by ${m.userId === currentUserId ? 'you' : m.name || 'member'}`}
                 >
                   <Text style={[styles.chipText, active && styles.chipTextActive]}>
@@ -665,6 +669,11 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
               );
             })}
           </View>
+          {payerLocked ? (
+            <Text style={styles.splitHint}>
+              Only the payer, the person who added this, or the crew owner can change who paid.
+            </Text>
+          ) : null}
           <Text style={styles.splitLabel}>Split between</Text>
           <View style={styles.chipGrid}>
             {members.map((m) => {

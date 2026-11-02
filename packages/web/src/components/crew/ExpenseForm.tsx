@@ -22,6 +22,8 @@ interface Props {
   currency: string;
   /** Present when editing: every field is prefilled from this row. */
   initial?: CrewExpense;
+  /** False when editing a row this user may not reassign (not the payer, the adder or the owner). */
+  canChangePayer?: boolean;
   busy: boolean;
   onSubmit: (request: CreateCrewExpenseRequest) => void;
   onCancel: () => void;
@@ -29,7 +31,16 @@ interface Props {
 
 const centsToText = (cents: number) => (cents / 100).toFixed(2);
 
-export default function ExpenseForm({ members, currentUserId, currency, initial, busy, onSubmit, onCancel }: Props) {
+export default function ExpenseForm({
+  members,
+  currentUserId,
+  currency,
+  initial,
+  canChangePayer = true,
+  busy,
+  onSubmit,
+  onCancel,
+}: Props) {
   const [description, setDescription] = useState(initial?.description ?? '');
   const [amount, setAmount] = useState(initial ? String(initial.amount) : '');
   const [category, setCategory] = useState<string>(initial?.category ?? 'other');
@@ -47,6 +58,7 @@ export default function ExpenseForm({ members, currentUserId, currency, initial,
   );
 
   const editing = !!initial;
+  const payerLocked = editing && !canChangePayer;
   const nameOf = (m: FormMember) => m.name || m.username || 'Crewmate';
   const totalCents = toCents(amount);
   const shares = splitWith.map((userId) => ({ userId, cents: toCents(shareText[userId] ?? '') }));
@@ -73,7 +85,7 @@ export default function ExpenseForm({ members, currentUserId, currency, initial,
       splitWith,
       category,
       planned,
-      paidBy,
+      ...(payerLocked ? {} : { paidBy }),
       ...(uneven ? { shares } : {}),
     });
   }
@@ -116,6 +128,8 @@ export default function ExpenseForm({ members, currentUserId, currency, initial,
           id="expense-paid-by"
           value={paidBy}
           onChange={(e) => setPaidBy(e.target.value)}
+          disabled={payerLocked}
+          aria-describedby={payerLocked ? 'expense-paid-by-hint' : undefined}
           className={cn(inputBase, 'min-h-11')}
         >
           <option value={currentUserId}>You</option>
@@ -127,6 +141,11 @@ export default function ExpenseForm({ members, currentUserId, currency, initial,
               </option>
             ))}
         </select>
+        {payerLocked && (
+          <p id="expense-paid-by-hint" className="mt-1 text-xs text-text-muted">
+            Only the payer, the person who added this, or the crew owner can change who paid.
+          </p>
+        )}
       </div>
       <div>
         <span id="expense-category-label" className="block text-sm font-medium text-text-primary mb-2">

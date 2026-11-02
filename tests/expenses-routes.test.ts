@@ -266,6 +266,33 @@ describe('PUT /crews/:crewId/expenses/:expenseId', () => {
 
     assert.equal(res.body.error.message, 'splitWith includes users who are not crew members');
   });
+
+  test('a member who neither paid nor added it cannot change who paid', async () => {
+    const deps = buildDeps({ expense: FOOD });
+    const app = await mount(deps);
+
+    const res = await request(app)
+      .put('/crews/crew-1/expenses/exp-1')
+      .set('x-user', 'user-c')
+      .send({ ...edit, paidBy: 'user-b' })
+      .expect(403);
+
+    assert.equal(res.body.error.code, 'FORBIDDEN');
+    assert.equal(
+      res.body.error.message,
+      'Only the payer, the person who added this, or the crew owner can change who paid.',
+    );
+    assert.equal(deps.stores.expenses.update.mock.callCount(), 0);
+  });
+
+  test('the crew owner can change who paid', async () => {
+    const deps = buildDeps({ expense: { ...FOOD, paid_by: 'user-b', created_by: 'user-b' } });
+    const app = await mount(deps);
+
+    await request(app).put('/crews/crew-1/expenses/exp-1').set('x-user', 'user-a').send({ ...edit, paidBy: 'user-c' }).expect(200);
+
+    assert.equal(calls(deps.stores.expenses.update)[0][1].paidBy, 'user-c');
+  });
 });
 
 describe('DELETE /crews/:crewId/expenses/:expenseId — who may remove', () => {
