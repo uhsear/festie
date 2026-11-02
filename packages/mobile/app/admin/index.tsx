@@ -3,9 +3,15 @@ import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '@festie/shared/services';
+import {
+  api,
+  fetchAdminFestivals,
+  fetchAdminEnv,
+  fetchArchivedFestivals,
+  restoreFestival,
+} from '@festie/shared/services';
+import type { AdminFestivalSummary, ArchivedFestival } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
-import type { Festival } from '@festie/shared/types';
 import { timeAgoFromIso, formatUptime } from '@festie/shared/utils';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
@@ -17,7 +23,7 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  * (packages/web/src/components/admin). Surfaces dashboard stats, a System
  * Health card (uptime / memory / connections / DB pool, straight from the
  * dashboard.health object), the recent activity feed, the audit log, and the
- * festival list. This screen itself stays read-only; every destructive write
+ * festival list (GET /admin/festivals, drafts included, with an Archived view). This screen itself stays read-only; every destructive write
  * lives behind a dedicated, ConfirmDialog-gated sub-screen reached from the
  * "Admin actions" section or the per-festival row actions below.
  *
@@ -34,7 +40,9 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  * Pull-to-refresh re-runs the three GETs. Endpoints resolve under /api/v1:
  *   GET /admin/dashboard → { stats, health, recentActivity (enriched) }
  *   GET /admin/audit     → recent audit entries (array; wrapper strips meta)
- *   GET /festivals       → Festival[]
+ *   GET /admin/festivals → AdminFestivalSummary[] (drafts included)
+ *   GET /admin/env       → { label } (staging band; a failure hides the band)
+ *   GET /admin/festivals/archived → deleted festivals, each with Restore
  */
 
 interface DashboardStats {
@@ -81,7 +89,12 @@ export default function AdminScreen() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
-  const [festivals, setFestivals] = useState<Festival[]>([]);
+  const [festivals, setFestivals] = useState<AdminFestivalSummary[]>([]);
+  const [envLabel, setEnvLabel] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [archived, setArchived] = useState<ArchivedFestival[]>([]);
+  const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
@@ -89,11 +102,13 @@ export default function AdminScreen() {
   const load = useCallback(async () => {
     setError(false);
     try {
-      const [dashboard, auditRows, festivalList] = await Promise.all([
+      const [dashboard, auditRows, festivalList, env] = await Promise.all([
         api.get<DashboardResponse>('/admin/dashboard'),
         api.get<AuditEntry[]>('/admin/audit'),
-        api.get<Festival[]>('/festivals'),
+        fetchAdminFestivals(),
+        fetchAdminEnv().catch(() => null),
       ]);
+      setEnvLabel(env?.label ?? null);
       setStats(dashboard?.stats ?? null);
       setHealth(dashboard?.health ?? null);
       setActivity(Array.isArray(dashboard?.recentActivity) ? dashboard.recentActivity : []);
@@ -103,6 +118,37 @@ export default function AdminScreen() {
       setError(true);
     }
   }, []);
+
+  const loadArchived = useCallback(async () => {
+    try {
+      const rows = await fetchArchivedFestivals();
+      setArchived(Array.isArray(rows) ? rows : []);
+    } catch {
+      setRestoreStatus("Couldn't load archived festivals. Pull to refresh and try again.");
+    }
+  }, []);
+
+  const toggleArchived = useCallback(() => {
+    const next = !showArchived;
+    setShowArchived(next);
+    if (next) void loadArchived();
+  }, [showArchived, loadArchived]);
+
+  const onRestore = useCallback(
+    async (f: ArchivedFestival) => {
+      setRestoringId(f.id);
+      try {
+        await restoreFestival(f.id);
+        setRestoreStatus(`Restored ${f.name}. It is back in the festival list.`);
+        await Promise.all([load(), loadArchived()]);
+      } catch {
+        setRestoreStatus(`Couldn't restore ${f.name}. Try again.`);
+      } finally {
+        setRestoringId(null);
+      }
+    },
+    [load, loadArchived],
+  );
 
   useEffect(() => {
     if (!isAdmin) {
@@ -205,6 +251,14 @@ export default function AdminScreen() {
             />
           }
         >
+          {envLabel ? (
+            <View style={styles.envBand} accessibilityRole="text">
+              <Text style={styles.envBandText}>
+                {envLabel} environment. Changes here do not reach festie.us.
+              </Text>
+            </View>
+          ) : null}
+
           {/* Dashboard stats */}
           <SectionLabel>Dashboard</SectionLabel>
           <View style={styles.card}>
@@ -358,6 +412,7 @@ export default function AdminScreen() {
                     <Text style={styles.rowTitle} numberOfLines={1}>
                       {f.name}
                     </Text>
+                    {!f.published ? <Text style={styles.draftCaption}>Draft</Text> : null}
                   </View>
                   <View style={styles.rowActions}>
                     <TouchableOpacity
@@ -386,7 +441,59 @@ export default function AdminScreen() {
                 <Text style={styles.rowHint}>No festivals</Text>
               </View>
             )}
+            <TouchableOpacity
+              style={[styles.row, styles.rowTopDivider]}
+              activeOpacity={0.7}
+              onPress={toggleArchived}
+              accessibilityRole="button"
+              accessibilityLabel={showArchived ? 'Hide archived' : 'Show archived'}
+            >
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>{showArchived ? 'Hide archived' : 'Show archived'}</Text>
+              </View>
+            </TouchableOpacity>
           </View>
+
+          {restoreStatus ? (
+            <Text style={styles.rowHint} accessibilityRole="text" accessibilityLiveRegion="polite">
+              {restoreStatus}
+            </Text>
+          ) : null}
+
+          {showArchived ? (
+            <View style={styles.card}>
+              {archived.length > 0 ? (
+                archived.map((f, i) => (
+                  <View
+                    key={f.id}
+                    style={[styles.row, i < archived.length - 1 && styles.rowDivider]}
+                    accessibilityLabel={`Archived festival: ${f.name}`}
+                  >
+                    <View style={styles.rowBody}>
+                      <Text style={styles.rowTitle} numberOfLines={1}>
+                        {f.name}
+                      </Text>
+                      <Text style={styles.rowHint}>Deleted {timeAgoFromIso(f.deletedAt)}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.restoreBtn}
+                      activeOpacity={0.7}
+                      disabled={restoringId === f.id}
+                      onPress={() => void onRestore(f)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Restore ${f.name}`}
+                    >
+                      <Text style={styles.restoreText}>Restore</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.row}>
+                  <Text style={styles.rowHint}>No archived festivals.</Text>
+                </View>
+              )}
+            </View>
+          ) : null}
         </ScrollView>
       )}
 
@@ -463,6 +570,40 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border.default,
     minWidth: 48,
     alignItems: 'center',
+  },
+  rowTopDivider: {
+    borderTopWidth: 1,
+    borderTopColor: t.colors.border.default,
+  },
+  draftCaption: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.amber,
+  },
+  envBand: {
+    backgroundColor: t.colors.amberAlpha[12],
+    borderWidth: 1,
+    borderColor: t.colors.amberAlpha[30],
+    borderRadius: t.radii.default,
+    paddingHorizontal: t.spacing[4],
+    paddingVertical: t.spacing[3],
+  },
+  envBandText: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.amber,
+  },
+  restoreBtn: {
+    minHeight: 40,
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.default,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.colors.bg.primary,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+  },
+  restoreText: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.aqua,
   },
   statusText: {
     ...typeStyle('caption'),

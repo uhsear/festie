@@ -59,3 +59,12 @@ describe('crewRealtimeSink: onSosResync', () => {
     expect(loadActiveSos).toHaveBeenCalledWith('c1');
   });
 });
+
+describe('crewRealtimeSink: onPollVoted', () => {
+  it('passes every chosen option index to applyPollVote', () => {
+    const applyPollVote = vi.fn();
+    const crewApi = { getState: () => ({ ...useCrewStore.getState(), applyPollVote }) };
+    createStoreSink(crewApi).onPollVoted('c1', 'poll-1', 'user-1', [0, 2]);
+    expect(applyPollVote).toHaveBeenCalledWith('poll-1', 'user-1', [0, 2]);
+  });
+});

@@ -176,7 +176,16 @@ describe('crewEventRouter — pure routers', () => {
         pollId: 'poll-1',
         userId: 'user-2',
         optionIndex: 1,
+        optionIndexes: [1],
       });
+    });
+
+    it('routePollVoted derives optionIndexes from an old-server payload', () => {
+      expect(routePollVoted({ ...pollVotedPayload, optionIndex: 2 }, ACTIVE)?.optionIndexes).toEqual([2]);
+      expect(routePollVoted({ ...pollVotedPayload, optionIndex: -1 }, ACTIVE)?.optionIndexes).toEqual([]);
+      expect(
+        routePollVoted({ ...pollVotedPayload, optionIndex: 0, optionIndexes: [0, 2] }, ACTIVE)?.optionIndexes,
+      ).toEqual([0, 2]);
     });
 
     it('routePollClosed passes through with active crewId', () => {
@@ -307,12 +316,12 @@ describe('crewEventRouter + createStoreSink integration', () => {
     };
     useCrewStore.setState({ polls: [poll] });
     const intent = routePollVoted(pollVotedPayload, ACTIVE)!;
-    sink().onPollVoted(intent.crewId, intent.pollId, intent.userId, intent.optionIndex);
+    sink().onPollVoted(intent.crewId, intent.pollId, intent.userId, intent.optionIndexes);
     const votes = useCrewStore.getState().polls[0]!.votes;
     expect(votes).toEqual([{ option: 1, user_id: 'user-2' }]);
   });
 
-  it('poll-closed intent drops the poll', () => {
+  it('poll-closed intent marks the poll closed and keeps it', () => {
     const poll: CrewPoll = {
       id: 'poll-1',
       crew_id: ACTIVE,
@@ -327,7 +336,8 @@ describe('crewEventRouter + createStoreSink integration', () => {
     useCrewStore.setState({ polls: [poll] });
     const intent = routePollClosed(pollClosedPayload, ACTIVE)!;
     sink().onPollClosed(intent.crewId, intent.pollId);
-    expect(useCrewStore.getState().polls).toHaveLength(0);
+    expect(useCrewStore.getState().polls).toHaveLength(1);
+    expect(useCrewStore.getState().polls[0]!.closed).toBe(true);
   });
 
   it('poll-created intent reloads the authoritative poll list', async () => {

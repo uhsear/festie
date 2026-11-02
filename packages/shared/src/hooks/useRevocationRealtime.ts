@@ -7,7 +7,7 @@
  *
  * The server emits `session:revoked` from routes/auth.ts, and both
  * `crew:access-revoked` and `crew:member-kicked` from routes/crew-members.ts
- * and routes/admin-bulk.ts. Without these listeners a kicked member keeps a
+ * and routes/admin-bulk.ts, and `crew:deleted` from routes/crews.ts. Without these listeners a kicked member keeps a
  * phantom crew on screen and a revoked session keeps looking live until a
  * manual refresh — it reads as a security failure.
  *
@@ -22,20 +22,30 @@
 
 import { useEffect, useRef } from 'react';
 import type { Socket } from '../services/socket';
-import { applyCrewAccessRevoked, applyCrewMemberKicked, applySessionRevoked } from '../realtime/revocationHandlers';
+import {
+  applyCrewAccessRevoked,
+  applyCrewDeleted,
+  applyCrewMemberKicked,
+  applySessionRevoked,
+} from '../realtime/revocationHandlers';
+import { crewNoticeText } from '../utils/crewActivity';
 
 export interface UseRevocationRealtimeOptions {
   /** The shared socket. Null while disconnected — the hook then does nothing. */
   socket: Socket | null;
   /** Platform navigation to the auth surface, run after local state is purged. */
   onSessionRevoked?: () => void;
+  /** Shows a notice when I was removed from a crew or the crew was deleted. */
+  onCrewNotice?: (notice: { title: string; message: string }) => void;
 }
 
-export function useRevocationRealtime({ socket, onSessionRevoked }: UseRevocationRealtimeOptions): void {
+export function useRevocationRealtime({ socket, onSessionRevoked, onCrewNotice }: UseRevocationRealtimeOptions): void {
   // Held in a ref so an inline callback from the caller does not re-register
   // listeners on every render.
   const onSessionRevokedRef = useRef(onSessionRevoked);
   onSessionRevokedRef.current = onSessionRevoked;
+  const onCrewNoticeRef = useRef(onCrewNotice);
+  onCrewNoticeRef.current = onCrewNotice;
 
   useEffect(() => {
     if (!socket) return;
@@ -51,17 +61,25 @@ export function useRevocationRealtime({ socket, onSessionRevoked }: UseRevocatio
     };
 
     const handleCrewMemberKicked = (data: { crewId: string; userId: string }) => {
-      applyCrewMemberKicked(data?.crewId, data?.userId);
+      const result = applyCrewMemberKicked(data?.crewId, data?.userId);
+      if (result) onCrewNoticeRef.current?.(crewNoticeText('removed', result.crewName));
+    };
+
+    const handleCrewDeleted = (data: { crewId: string; deletedBy?: string }) => {
+      const result = applyCrewDeleted(data?.crewId, data?.deletedBy);
+      if (result) onCrewNoticeRef.current?.(crewNoticeText('deleted', result.crewName));
     };
 
     socket.on('session:revoked', handleSessionRevoked);
     socket.on('crew:access-revoked', handleCrewAccessRevoked);
     socket.on('crew:member-kicked', handleCrewMemberKicked);
+    socket.on('crew:deleted', handleCrewDeleted);
 
     return () => {
       socket.off('session:revoked', handleSessionRevoked);
       socket.off('crew:access-revoked', handleCrewAccessRevoked);
       socket.off('crew:member-kicked', handleCrewMemberKicked);
+      socket.off('crew:deleted', handleCrewDeleted);
     };
   }, [socket]);
 }

@@ -80,6 +80,8 @@ export interface Festival {
   endDate: string;
   location?: string;
   b2bSeparator?: string;
+  /** null = draft, visible to admins only. */
+  publishedAt?: string | null;
   /**
    * Optional IANA time-zone id (e.g. `America/New_York`). When present, set
    * reminders are anchored in the festival's zone so they fire at the right
@@ -360,12 +362,19 @@ export interface CrewPoll {
    * when the poll closes. Omitted or null for plain polls.
    */
   set_refs?: (PollSetRef | null)[] | null;
+  /** One voter may pick several options. Absent on old rows (single-answer). */
+  multi_answer?: boolean;
+  /** When the poll ended (manual or timed). Null while open. */
+  closed_at?: string | null;
+  /** When the one allowed reminder was sent. Null if none yet. */
+  nudged_at?: string | null;
 }
 
 export interface CreateCrewPollRequest {
   question: string;
   options: string[];
   closesAt?: string;
+  multiAnswer?: boolean;
 }
 
 /**

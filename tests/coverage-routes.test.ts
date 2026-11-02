@@ -789,12 +789,17 @@ describe('misc route edges', () => {
       .set('x-user-token', adminToken)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({
-        id: 'stale-fest', name: 'Stale Test', location: 'Test',
+        id: 'stale-fest', name: 'Stale Test', location: 'Test', timeZone: 'America/New_York',
         stages: [{ id: 'main', name: 'Main', color: '#ff3366' }],
         days: [{ label: 'Fri', date: '2026-06-05', sets: [
           { id: 'set-s1', artist: 'Artist', stageId: 'main', startTime: '10:00', endTime: '11:00' },
         ]}],
       });
+    // A new festival is a draft; attendees can join it once it is published.
+    await server.request.post('/api/v1/festivals/stale-fest/publish')
+      .set('x-user-token', adminToken)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .expect(200);
 
     const join = await server.request.post('/api/v1/profiles')
       .set('x-user-token', user.token)
@@ -910,7 +915,9 @@ describe('Crew Polls', () => {
       .get(`/api/v1/crews/${crew.id}/polls`)
       .set('x-user-token', alice.token)
       .expect(200);
-    assert.equal(listAfter.body.data.polls.length, 0);
+    // Closed polls stay listed as decided (open polls plus the last 10 decided).
+    assert.equal(listAfter.body.data.polls.length, 1);
+    assert.equal(listAfter.body.data.polls[0].closed, true);
   });
 
   test('rejects poll creation with invalid data', async () => {

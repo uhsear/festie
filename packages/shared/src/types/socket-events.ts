@@ -87,6 +87,8 @@ export interface CrewUpdatedPayload {
 export interface CrewDeletedPayload {
   crewId: string;
   festivalId?: string;
+  /** Set when the owner deleted the crew; absent for admin deletes. */
+  deletedBy?: string;
 }
 
 export interface CrewHomeBaseUpdatedPayload {
@@ -116,7 +118,9 @@ export interface CrewPollCreatedPayload {
 export interface CrewPollVotedPayload {
   pollId: string;
   userId: string;
+  /** First choice, or -1 when the vote was taken back. */
   optionIndex: number;
+  optionIndexes?: number[];
 }
 
 export interface CrewPollClosedPayload {

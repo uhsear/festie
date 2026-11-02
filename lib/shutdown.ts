@@ -194,6 +194,20 @@ function createBackgroundTasks(ctx: any, { io }: any) {
   _meetingPointExpiryTimer.unref();
   state.timers.push(_meetingPointExpiryTimer);
 
+  // Poll expiry sweep: end polls whose closes_at has passed (announce + push, like a manual end).
+  if (ctx.pollCloser) {
+    const _pollExpiryTimer = setInterval(async () => {
+      try {
+        const count = await ctx.pollCloser.sweepExpired();
+        if (count > 0) log.debug('ended expired polls', { count });
+      } catch (err: any) {
+        log.warn('poll expiry sweep failed', { error: err.message });
+      }
+    }, 60 * 1000);
+    _pollExpiryTimer.unref();
+    state.timers.push(_pollExpiryTimer);
+  }
+
   // M3 wrap_ready sweep — there is no in-request "festival became over" event, so
   // a leader-only periodic sweep is the clearest available trigger (see roadmap
   // M3: "wire it where a festival transitions to over OR expose it for a
@@ -249,6 +263,7 @@ function createCloseHandler({
   redis,
   cacheBus,
   emitter,
+  crewNotify,
   clearPresenceTimers,
   avatarPool,
   inFlightRequests,
@@ -276,6 +291,11 @@ function createCloseHandler({
 
     // Flush any pending batched events before disconnecting sockets
     if (emitter?.flushAll) emitter.flushAll();
+    try {
+      await crewNotify?.flushAll();
+    } catch (err: any) {
+      log.warn('crew digest flush on shutdown failed', { error: err.message });
+    }
 
     // Stop accepting new HTTP connections
     if (server.listening) {

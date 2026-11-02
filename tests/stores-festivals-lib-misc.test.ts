@@ -126,11 +126,11 @@ describe('lib/db/stores/festivals.js', () => {
       const pool = makePool();
       const utils = { buildFestivalRecords: mock.fn() };
       const store = createFestivalsStore(pool, utils);
-      await store.restore('fest-99');
+      await store.restore('fest-99', 'u1');
       assert.equal(pool.query.mock.calls.length, 1);
       const call = pool.query.mock.calls[0]! as any;
       assert.ok(call.arguments[0].includes('deleted_at = NULL'));
-      assert.deepEqual(call.arguments[1], ['fest-99']);
+      assert.deepEqual(call.arguments[1], ['fest-99', 'u1']);
     });
   });
 

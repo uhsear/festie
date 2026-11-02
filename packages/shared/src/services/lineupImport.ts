@@ -29,7 +29,7 @@ export const lineupImportApi = {
     api.get<{ festivalName: string; recipients: number }>(`${base(festivalId)}/lineup-announcement`),
   announce: (festivalId: string) =>
     api.post<{ queued: true; recipients: number }>(`${base(festivalId)}/lineup-announcement`),
-  /** The lineup as CSV (set_id, day, stage, artist, start, end) that imports again unchanged. */
+  /** The lineup as CSV (set_id, day, stage, artist, start, end) that imports again unchanged. Reads the admin path so drafts export too. */
   exportCsv: async (festivalId: string) =>
-    buildLineupCsv(await api.get<LineupExportFestival>(`/festivals/${encodeURIComponent(festivalId)}`)),
+    buildLineupCsv(await api.get<LineupExportFestival>(base(festivalId))),
 };
