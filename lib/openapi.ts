@@ -255,6 +255,16 @@ export function generateOpenAPISpec(config: any) {
           responses: { 200: { description: 'Festival data (full depth=2 document; depth=1 returns the FestivalDepth1 shape)', ...jsonResponseRef('Festival') } },
         },
       },
+      '/api/v1/festivals/follows': {
+        get: { tags: ['Festivals'], summary: 'Festivals I follow (published, not deleted), newest first', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Followed festivals', ...jsonResponseWrapper({ festivalIds: { type: 'array', items: { type: 'string' } } }) }, 401: { description: 'Not signed in' } } },
+      },
+      '/api/v1/festivals/{id}/follow': {
+        put: { tags: ['Festivals'], summary: 'Follow a festival (idempotent)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Following', ...jsonResponseWrapper({ festivalId: { type: 'string' }, following: { type: 'boolean' } }) }, 404: { description: 'Festival not found (missing, deleted or draft)' } } },
+        delete: { tags: ['Festivals'], summary: 'Stop following a festival (idempotent)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Not following', ...jsonResponseWrapper({ festivalId: { type: 'string' }, following: { type: 'boolean' } }) } } },
+      },
+      '/api/v1/festivals/{festivalId}/sets/{setId}/also-picked': {
+        get: { tags: ['Festivals'], summary: 'Sets that people who picked this set also picked (anonymous, 20-user floor, max 8)', parameters: [{ name: 'festivalId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'setId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Set ids, best first. Never counts or users.', ...jsonResponseWrapper({ setIds: { type: 'array', items: { type: 'string' } } }) }, 404: { description: 'Set not found' } } },
+      },
       '/api/v1/profiles/{festivalId}': {
         get: { tags: ['Profiles'], summary: 'List profiles for festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'festivalId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Profile list', ...jsonResponseArrayRef('Profile') } } },
       },

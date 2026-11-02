@@ -265,6 +265,10 @@ export const GUEST_PROMPT_COPY = {
   createAccount: 'Create account',
   signIn: 'Sign in',
   setSheet: 'Sign in to save picks, keep private notes and compare crew overlap.',
+  follow: {
+    title: (festivalName: string): string => `Follow ${festivalName}`,
+    message: 'Create a free account to hear when the lineup and set times are out.',
+  },
   teasers: {
     picks: {
       title: 'Save your festival picks',

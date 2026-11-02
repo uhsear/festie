@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from '@tanstack/react-router';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -6,8 +6,10 @@ import { useFestival } from '@festie/shared/hooks';
 import {
   festivalStatus,
   hasAnyPick,
+  toggleGenreFilter,
   toggleHiddenDay,
   toggleStageFilter,
+  festivalGenres,
   visibleDayIndexes,
   festivalTimeLabel,
   formatDayChip,
@@ -22,7 +24,7 @@ import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useSetStatus';
 import { useScrollFade } from '../../hooks/useScrollFade';
 import { Filter, Search, X } from 'lucide-react';
-import { FESTIVAL_STATUS_LABEL } from '@festie/shared/constants';
+import { DISCOVER_COPY, FESTIVAL_STATUS_LABEL, genreChipLabel } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
@@ -43,6 +45,7 @@ interface SubHeaderProps {
 }
 
 const PicksIcon = CONCEPT_ICON.picks;
+const NO_GENRES: string[] = [];
 
 export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const theme = useUIStore((s) => s.theme);
@@ -54,6 +57,9 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const searchQuery = useFestivalStore((s) => s.searchQuery);
   const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
+  const sets = useFestivalStore((s) => s.sets);
+  const activeGenres = useFestivalStore((s) => s.activeGenres) ?? NO_GENRES;
+  const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const hiddenDays = useFestivalStore((s) => s.hiddenDays);
   const setHiddenDays = useFestivalStore((s) => s.setHiddenDays);
@@ -141,8 +147,10 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   // Pass the store's days array — the currentFestival payload carries neither
   // startDate/endDate nor embedded days, so without it festivalStatus returns
   // null and the pill never renders.
+  const genreChips = useMemo(() => festivalGenres(sets ?? []), [sets]);
+  const showGenreFilter = !!showStageFilter && genreChips.length > 0;
   const showFold = showSearch || !!showStageFilter;
-  const filterCount = Number(activeStages.length > 0) + Number(onlyMine) + Number(searchQuery !== '');
+  const filterCount = Number(activeStages.length > 0) + Number(activeGenres.length > 0) + Number(onlyMine) + Number(searchQuery !== '');
   const currentStatus = currentFestival ? festivalStatus(currentFestival, days) : null;
 
   if (!SUB_HEADER_PATHS.includes(pathname)) return null;
@@ -425,6 +433,59 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                                         onClick={() => handleStageToggle(stage.id)}
                   >
                     {stage.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {showGenreFilter && (
+          <div className="genre-filter-scroll relative min-w-0 w-full">
+            <div
+              className="filter-genre hover-scroll flex gap-[var(--space-3)] flex-nowrap overflow-x-auto scrollbar-hide"
+              role="group"
+              aria-label={DISCOVER_COPY.genres.groupA11y}
+            >
+              <button
+                type="button"
+                aria-pressed={activeGenres.length === 0}
+                onClick={() => {
+                  selectHaptic();
+                  setActiveGenres([]);
+                }}
+                className={cn(
+                  'inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                  'min-h-[44px] min-w-[44px] cursor-pointer border-2 transition-[border-color,background-color,color] duration-200',
+                  'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                  activeGenres.length === 0
+                    ? 'border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua'
+                    : 'border-border text-text-secondary hover:text-text-primary',
+                )}
+              >
+                {DISCOVER_COPY.genres.clear}
+              </button>
+              {genreChips.map((genre) => {
+                const isActive = activeGenres.some((g) => g.toLocaleLowerCase() === genre.toLocaleLowerCase());
+                return (
+                  <button
+                    key={genre}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => {
+                      selectHaptic();
+                      setActiveGenres(toggleGenreFilter(activeGenres, genre));
+                    }}
+                    className={cn(
+                      'inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold whitespace-nowrap',
+                      'min-h-[44px] min-w-[44px] cursor-pointer border-2 transition-[border-color,background-color,color] duration-200',
+                      'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                      isActive
+                        ? 'border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua'
+                        : 'border-border text-text-secondary hover:text-text-primary',
+                    )}
+                  >
+                    {genreChipLabel(genre)}
                   </button>
                 );
               })}

@@ -3,6 +3,7 @@ import type { FestivalPhase } from './festivalTime';
 import { setMatchesSearch } from './setSearch';
 import { byStartTime } from './scheduleFormat';
 import { artistDisplayName, formatTime } from './format';
+import { setGenres } from './discover';
 
 export type ScheduleView = 'cards' | 'timeline' | 'grid';
 
@@ -139,7 +140,15 @@ export function toggleStageFilter(
   return ordered;
 }
 
-/** Stage, then "My picks" (only when a pick exists), then search. Does not filter by day. */
+/** Adds or removes one genre from the active genre filter. */
+export function toggleGenreFilter(active: readonly string[], genre: string): string[] {
+  const key = genre.toLocaleLowerCase();
+  return active.some((g) => g.toLocaleLowerCase() === key)
+    ? active.filter((g) => g.toLocaleLowerCase() !== key)
+    : [...active, genre];
+}
+
+/** Stage, genre, then "My picks" (only when a pick exists), then search. Does not filter by day. */
 export function filterScheduleSets(
   sets: readonly FestivalSet[],
   o: {
@@ -148,28 +157,34 @@ export function filterScheduleSets(
     onlyMine: boolean;
     picks: Picks;
     query: string;
+    /** Empty or missing means off. */
+    genres?: readonly string[];
   },
 ): FestivalSet[] {
+  const wantedGenres = new Set((o.genres ?? []).map((g) => g.toLocaleLowerCase()));
   const stageOn = isStageFilterActive(o.activeStages, o.stages.length);
   const mineOn = o.onlyMine && hasAnyPick(o.picks);
   return sets.filter((set) => {
     if (stageOn && !o.activeStages.includes(set.stageId)) return false;
+    if (wantedGenres.size > 0 && !setGenres(set).some((g) => wantedGenres.has(g.toLocaleLowerCase()))) return false;
     if (mineOn && !o.picks?.[set.id]) return false;
     return setMatchesSearch(set, o.query, o.stages as Stage[]);
   });
 }
 
-export type ScheduleEmptyReason = 'search' | 'picks' | 'stages' | 'day';
+export type ScheduleEmptyReason = 'search' | 'picks' | 'stages' | 'genres' | 'day';
 
 export function scheduleEmptyReason(o: {
   query: string;
   onlyMine: boolean;
   hasAnyPick: boolean;
   stageFilterActive: boolean;
+  genreFilterActive: boolean;
 }): ScheduleEmptyReason {
   if (o.query.trim() !== '') return 'search';
   if (o.onlyMine && o.hasAnyPick) return 'picks';
   if (o.stageFilterActive) return 'stages';
+  if (o.genreFilterActive) return 'genres';
   return 'day';
 }
 
@@ -189,6 +204,12 @@ export function scheduleEmptyCopy(
         title: `Nothing on these stages on ${dayLabel}`,
         message: 'Your stage filter hides every set on this day.',
         actionLabel: 'All stages',
+      };
+    case 'genres':
+      return {
+        title: `Nothing in these genres on ${dayLabel}`,
+        message: 'Your genre filter hides every set on this day.',
+        actionLabel: 'All genres',
       };
     default:
       return {
@@ -237,11 +258,13 @@ export function scheduleResultsSummary(o: {
   count: number;
   onlyMine: boolean;
   activeStageCount: number;
+  activeGenreCount?: number;
   tbaCount?: number;
 }): string {
   let text = `${o.count} ${o.count === 1 ? 'set' : 'sets'}`;
   if (o.onlyMine) text += ' · my picks';
   if (o.activeStageCount > 0) text += ` · ${o.activeStageCount} ${o.activeStageCount === 1 ? 'stage' : 'stages'}`;
+  if (o.activeGenreCount) text += ` · ${o.activeGenreCount} ${o.activeGenreCount === 1 ? 'genre' : 'genres'}`;
   if (o.tbaCount && o.tbaCount > 0) text += ` · ${o.tbaCount} TBA`;
   return text;
 }

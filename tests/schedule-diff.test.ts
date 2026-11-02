@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { buildSchedulePushes, diffPickedSchedule } from '../lib/schedule-diff';
+import { buildSchedulePushes, diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff';
 
 function festival(sets: any[], extraDay: any[] = []) {
   return {
@@ -176,5 +176,31 @@ describe('buildSchedulePushes', () => {
       ['b', ['u1']],
     ]));
     assert.ok(push!.body.length <= 200);
+  });
+});
+
+describe('isTbaToTime', () => {
+  const tba = { ...peggy, startTime: null, endTime: null };
+  const only = (before: any[], after: any[], afterExtra: any[] = []) =>
+    diffPickedSchedule(festival(before), festival(after, afterExtra))[0]!;
+
+  it('is true when a TBA set gets its first time on the same day and stage', () => {
+    assert.equal(isTbaToTime(only([tba], [peggy])), true);
+  });
+
+  it('is false when a timed set changes time', () => {
+    assert.equal(isTbaToTime(only([peggy], [{ ...peggy, startTime: '23:30', endTime: '00:30' }])), false);
+  });
+
+  it('is false when the stage changes too', () => {
+    assert.equal(isTbaToTime(only([tba], [{ ...peggy, stageId: 'mojave' }])), false);
+  });
+
+  it('is false when the day changes too', () => {
+    assert.equal(isTbaToTime(only([tba], [], [peggy])), false);
+  });
+
+  it('is false for a removed set', () => {
+    assert.equal(isTbaToTime({ kind: 'removed', setId: 'set-1', artist: 'Peggy Gou' }), false);
   });
 });

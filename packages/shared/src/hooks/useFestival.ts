@@ -18,6 +18,7 @@ export function useFestival(): UseFestivalReturn {
   const stages = useFestivalStore((state) => state.stages);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
   const activeStages = useFestivalStore((state) => state.activeStages);
+  const activeGenres = useFestivalStore((state) => state.activeGenres);
   const searchQuery = useFestivalStore((state) => state.searchQuery);
   const onlyMine = useFestivalStore((state) => state.onlyMine);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
@@ -40,12 +41,13 @@ export function useFestival(): UseFestivalReturn {
     () =>
       filterScheduleSets(getCurrentDaySets(), {
         activeStages,
+        genres: activeGenres,
         stages,
         onlyMine,
         picks: currentProfile?.picks,
         query: searchQuery,
       }),
-    [getCurrentDaySets, activeStages, searchQuery, stages, onlyMine, currentProfile],
+    [getCurrentDaySets, activeStages, activeGenres, searchQuery, stages, onlyMine, currentProfile],
   );
 
   // Use actual stage.color from API response. When a stage has no color we

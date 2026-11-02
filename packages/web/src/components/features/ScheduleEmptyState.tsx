@@ -29,12 +29,15 @@ export default function ScheduleEmptyState({ dayLabel, otherDayMatches, dayFallb
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
+  const activeGenres = useFestivalStore((s) => s.activeGenres);
+  const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
 
   const reason = scheduleEmptyReason({
     query: searchQuery,
     onlyMine,
     hasAnyPick: hasAnyPick(picks),
     stageFilterActive: isStageFilterActive(activeStages, stages.length),
+    genreFilterActive: (activeGenres?.length ?? 0) > 0,
   });
 
   if (reason === 'search') {
@@ -44,6 +47,7 @@ export default function ScheduleEmptyState({ dayLabel, otherDayMatches, dayFallb
     const clearFilters = () => {
       setOnlyMine(false);
       setActiveStages([]);
+      setActiveGenres([]);
     };
     return (
       <>
@@ -81,7 +85,11 @@ export default function ScheduleEmptyState({ dayLabel, otherDayMatches, dayFallb
       description={copy.message}
       cta={{
         label: copy.actionLabel ?? '',
-        onClick: () => (picksReason ? setOnlyMine(false) : setActiveStages([])),
+        onClick: () => {
+          if (picksReason) setOnlyMine(false);
+          else if (reason === 'genres') setActiveGenres([]);
+          else setActiveStages([]);
+        },
       }}
     />
   );

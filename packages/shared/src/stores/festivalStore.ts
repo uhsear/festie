@@ -130,6 +130,7 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
   const uiKeys = new Set<string>([
     'selectedDay',
     'activeStages',
+    'activeGenres',
     'searchQuery',
     'onlyMine',
     'scheduleView',
@@ -141,6 +142,7 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     'byFestival',
     'setSelectedDay',
     'setActiveStages',
+    'setActiveGenres',
     'setSearchQuery',
     'setOnlyMine',
     'setScheduleView',

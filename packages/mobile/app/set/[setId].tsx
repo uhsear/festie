@@ -66,6 +66,7 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
+import AlsoPickedSection from '../../components/AlsoPickedSection';
 import { undoNotifier } from '../../lib/undoNotifier';
 
 const REMINDER_ASK_DISMISSED_KEY = 'festie-reminder-ask-dismissed';
@@ -814,6 +815,8 @@ export default function SetDetailScreen() {
             </View>
           ))}
         </View>
+
+        <AlsoPickedSection setId={set.id} />
 
         {/* Crew note */}
         {currentProfile ? (

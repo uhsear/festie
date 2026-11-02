@@ -19,6 +19,8 @@ export interface FestivalUIState {
   selectedDay: number;
   activeStages: string[];
   searchQuery: string;
+  /** Genre chips. Not persisted and not part of the saved prefs. */
+  activeGenres: string[];
   /** When true, the schedule shows only sets the user has picked. */
   onlyMine: boolean;
   /** null = use defaultScheduleView. */
@@ -38,6 +40,7 @@ export interface FestivalUIState {
 export interface FestivalUIActions {
   setSelectedDay: (dayIndex: number) => void;
   setActiveStages: (stageIds: string[]) => void;
+  setActiveGenres: (genres: string[]) => void;
   setSearchQuery: (query: string) => void;
   setOnlyMine: (onlyMine: boolean) => void;
   setScheduleView: (view: ScheduleView | null) => void;
@@ -143,6 +146,7 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
       return {
         selectedDay: 0,
         activeStages: [],
+        activeGenres: [],
         searchQuery: '',
         onlyMine: false,
         scheduleView: null,
@@ -160,6 +164,8 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
         setOnlyMine: (onlyMine: boolean) => update({ onlyMine }),
 
         setActiveStages: (stageIds: string[]) => update({ activeStages: stageIds }),
+
+        setActiveGenres: (genres: string[]) => set({ activeGenres: genres }),
 
         setSearchQuery: (query: string) => update({ searchQuery: query }),
 
@@ -194,7 +200,7 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
             inRange(todayIdx) && !prefs.hiddenDays.includes(todayIdx)
               ? todayIdx
               : firstVisibleDay(scope.dayCount, prefs.hiddenDays);
-          set({ ...fromPrefs(prefs), prefsFestivalId: festivalId, prefsScope: scope, selectedDay });
+          set({ ...fromPrefs(prefs), activeGenres: [], prefsFestivalId: festivalId, prefsScope: scope, selectedDay });
         },
       };
     },

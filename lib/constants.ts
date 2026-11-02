@@ -26,3 +26,7 @@ export const MAX_MEETING_POINTS_PER_CREW = 20;
 export const MAX_CREWS_PER_FESTIVAL = 3;
 export const MAX_OPEN_POLLS_PER_CREW = 3;
 export const DEFAULT_CREW_MAX_MEMBERS = 30;
+
+// Co-pick privacy floor: a "people who picked this also picked" pair is shown
+// only when at least this many distinct, non-deleted users picked both sets.
+export const CO_PICK_MIN_USERS = 20;
