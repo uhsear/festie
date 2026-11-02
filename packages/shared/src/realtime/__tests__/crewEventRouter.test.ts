@@ -301,6 +301,19 @@ describe('crewEventRouter + createStoreSink integration', () => {
     expect((active as unknown as { homeBaseTime: string }).homeBaseTime).toBe('20:00');
   });
 
+  it('home-base planB passes through the router and the sink, and is absent without the key', () => {
+    expect(routeHomeBaseUpdated({ ...homeBasePayload, planB: 'Top of the hour' }, ACTIVE)).toMatchObject({
+      planB: 'Top of the hour',
+    });
+    expect(routeHomeBaseUpdated({ ...homeBasePayload, planB: null }, ACTIVE)).toMatchObject({ planB: null });
+    expect(routeHomeBaseUpdated(homeBasePayload, ACTIVE)).not.toHaveProperty('planB');
+
+    sink().onHomeBaseUpdated(ACTIVE, { location: 'Main Gate', time: '20:00', planB: 'Top of the hour' });
+    expect(useCrewStore.getState().activeCrew!.homeBasePlanB).toBe('Top of the hour');
+    sink().onHomeBaseUpdated(ACTIVE, { location: 'Main Gate', time: '20:00' });
+    expect(useCrewStore.getState().activeCrew!.homeBasePlanB).toBe('Top of the hour');
+  });
+
   it('meeting-point upsert inserts then replaces in place', () => {
     const intent = routeMeetingPointUpsert(mpRowSnake, ACTIVE)!;
     sink().onMeetingPointUpsert(intent.crewId, intent.meetingPoint);

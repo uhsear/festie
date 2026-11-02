@@ -10,7 +10,7 @@ import sharp from 'sharp';
 
 import { festivalDateRange, renderFestivalNotFoundPage, renderFestivalPage } from '../lib/festival-page.js';
 import { buildFestivalOgSvg } from '../lib/helpers/share-og-image.js';
-import { renderInviteJoinPage, renderInviteErrorPage, INVITE_ERROR_MESSAGES } from '../lib/invite-pages.js';
+import { renderInviteJoinPage, renderInviteErrorPage, renderInviteIcs, INVITE_ERROR_MESSAGES } from '../lib/invite-pages.js';
 import { loadInvitePreview } from '../lib/invite-preview.js';
 
 // Public festival page slug (migration 094). Checked before any query; upper case fails too.
@@ -25,12 +25,17 @@ export default function createPageRoutes(deps: any) {
 
   const router = express.Router();
 
+  const INVITE_ERROR_STATUS = { expired: 410, invalid: 404, locked: 403 } as const;
+  const cleanInviteCode = (raw: unknown) =>
+    String(raw || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase();
+  const requestOrigin = (req: any) => config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
+
   // Crew invite page — server-rendered so link scrapers get crew-specific OG
   // tags. No auto-redirect: some scrapers follow a meta refresh and would lose
   // the tags. The Join button opens the app with ?joinCrew=CODE.
   router.get('/join/:code', rateLimit(30, 'crew-invite-page'), async (req: any, res: any) => {
-    const code = String(req.params.code || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase();
-    const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
+    const code = cleanInviteCode(req.params.code);
+    const origin = requestOrigin(req);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=60');
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
@@ -40,12 +45,38 @@ export default function createPageRoutes(deps: any) {
         return res.status(200).send(renderInviteJoinPage({ ...result.preview, inviteCode: code, origin }));
       }
       return res
-        .status(result.status === 'expired' ? 410 : 404)
+        .status(INVITE_ERROR_STATUS[result.status])
         .send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES[result.status]));
     } catch (error: any) {
       log.error('crew invite page failed', { error: error.message });
       res.setHeader('Cache-Control', 'no-store');
       return res.status(500).send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES.failed));
+    }
+  });
+
+  // "Save for later": one all-day calendar event for the festival dates. Express
+  // 5 params never match '/', so /join/:code above cannot shadow this route.
+  // no-store, so a lock or a new code applies at once. Anything but a usable,
+  // dated invite goes back to the invite page, which explains why.
+  router.get('/join/:code/save.ics', rateLimit(30, 'crew-invite-page'), async (req: any, res: any) => {
+    const code = cleanInviteCode(req.params.code);
+    const origin = requestOrigin(req);
+    const fallback = code ? `/join/${encodeURIComponent(code)}` : '/';
+    try {
+      const result = await loadInvitePreview({ stores, getFestivalById }, code);
+      if (result.status !== 'ok' || !result.preview.startDate || !result.preview.endDate) {
+        return res.redirect(302, fallback);
+      }
+      const { festivalName, crewName, startDate, endDate } = result.preview;
+      res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="festie-invite.ics"');
+      res.setHeader('Cache-Control', 'no-store');
+      return res
+        .status(200)
+        .send(renderInviteIcs({ festivalName, crewName, startDate, endDate, inviteCode: code, origin }));
+    } catch (error: any) {
+      log.error('crew invite ics failed', { error: error.message });
+      return res.redirect(302, fallback);
     }
   });
 

@@ -24,7 +24,7 @@ import type { CrewMemberDay, CrewMeetingPoint, CrewPoll, PeerLocation, SosEntry 
 export interface CrewStoreSinkApi {
   getState: () => {
     activeCrew: { id: string } | null;
-    applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null }) => void;
+    applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => void;
     applyMeetingPointUpsert: (meetingPoint: CrewMeetingPoint) => void;
     applyMeetingPointRemoval: (mpId: string) => void;
     applyCrewDays: (payload: { crewId: string; userId: string; days: CrewMemberDay[] }) => void;
@@ -56,7 +56,7 @@ export interface LiveLocationStoreSinkApi {
 }
 
 export interface CrewRealtimeSink {
-  onHomeBaseUpdated: (crewId: string, payload: { location: string | null; time: string | null }) => void;
+  onHomeBaseUpdated: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => void;
   onMeetingPointUpsert: (crewId: string, meetingPoint: CrewMeetingPoint) => void;
   onMeetingPointRemoved: (crewId: string, mpId: string) => void;
   onDaysUpdated: (crewId: string, payload: { crewId: string; userId: string; days: CrewMemberDay[] }) => void;

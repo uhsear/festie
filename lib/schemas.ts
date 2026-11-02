@@ -583,6 +583,7 @@ export const crewUpdateSchema = z
     maxMembers: z.number().int().min(2).max(30).optional(),
     totemName: z.string().trim().max(40).optional(),
     totemEmoji: z.string().trim().max(16).optional(),
+    inviteLocked: z.boolean().optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
@@ -1046,6 +1047,8 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
 export const crewHomeBaseSchema = z.object({
   location: z.string().trim().max(200).optional().nullable(),
   time: z.string().trim().max(100).optional().nullable(),
+  // T54: undefined keeps the stored Plan B; null or '' clears it.
+  planB: z.string().trim().max(140).optional().nullable(),
 });
 export type CrewHomeBaseInput = z.infer<typeof crewHomeBaseSchema>;
 

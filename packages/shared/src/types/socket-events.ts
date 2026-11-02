@@ -95,6 +95,7 @@ export interface CrewHomeBaseUpdatedPayload {
   crewId: string;
   location: string | null;
   time: string | null;
+  planB?: string | null;
 }
 
 export interface CrewMeetingPointPayload {

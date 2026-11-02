@@ -12,7 +12,7 @@ import {
   buildPlanQrUrl,
   MAX_ENCODED_LENGTH,
 } from '@festie/shared/utils';
-import { COPY } from '@festie/shared/constants';
+import { COPY, planBLine } from '@festie/shared/constants';
 import type { CrewMeetingPoint, Priority } from '@festie/shared/types';
 import { makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -39,6 +39,9 @@ export default function PlanQRShare() {
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  // A crew from another festival never leaks its Plan B into this festival's code.
+  const planB = activeCrew && activeCrew.festivalId === currentFestival?.id ? activeCrew.homeBasePlanB ?? null : null;
   // Ticks so the "active now" share meeting point stays current without an
   // impure Date.now() in the memo factory (react-hooks/purity).
   const now = useNow();
@@ -58,6 +61,7 @@ export default function PlanQRShare() {
       picks: currentProfile.picks as Record<string, Priority> | undefined,
       meetingPoints,
       nowMs: now,
+      planB,
     });
 
     const enc = encodePlanSnapshot(input);
@@ -67,7 +71,7 @@ export default function PlanQRShare() {
       meetingPoint: mp,
       tooLong: enc.length > MAX_ENCODED_LENGTH,
     };
-  }, [currentFestival, currentProfile, meetingPoints, now]);
+  }, [currentFestival, currentProfile, meetingPoints, now, planB]);
 
   if (!currentFestival || !currentProfile) {
     return (
@@ -109,6 +113,7 @@ export default function PlanQRShare() {
         {picksCount} pick{picksCount === 1 ? '' : 's'}
         {meetingPoint ? ` · meet at ${meetingPoint.label}` : ''}
       </Text>
+      {planB ? <Text style={styles.sub}>{planBLine(planB)}</Text> : null}
 
       <View
         style={styles.qrCard}

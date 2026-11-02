@@ -233,6 +233,9 @@ export const crewResponseSchema = z.object({
   photoAlbumUrl: z.string().nullable(),
   totem_name: z.string().nullable(),
   totem_emoji: z.string().nullable(),
+  // T54: owner lock and the Home Base Plan B line.
+  inviteLocked: z.boolean(),
+  homeBasePlanB: z.string().nullable(),
   // Membership-conditional (present when the requester is a member):
   role: z.enum(['owner', 'member']).optional(),
   joinedAt: z.string().optional(),
@@ -276,6 +279,14 @@ export const meetingPointResponseSchema = z.object({
   creator_name: z.string().optional(),
   // 090: user ids who tapped "I'll be there", oldest first. Absent on the `/past` list.
   coming: z.array(z.string()).optional(),
+  // T54: last time or place edit. Absent on the `/past` list.
+  edited_by: z.string().nullable().optional(),
+  edited_at: z.string().nullable().optional(),
+  edit_was: z
+    .object({ location: z.string().optional(), meetAt: z.string().nullable().optional() })
+    .nullable()
+    .optional(),
+  editor_name: z.string().nullable().optional(),
 });
 export type MeetingPointResponse = z.infer<typeof meetingPointResponseSchema>;
 

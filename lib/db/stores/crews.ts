@@ -35,6 +35,13 @@ function ridePassengerIds(offer: string) {
  */
 const MP_COMING = `COALESCE((SELECT array_agg(c.user_id ORDER BY c.created_at) FROM crew_meeting_point_coming c JOIN users u ON u.id = c.user_id AND u.deleted_at IS NULL WHERE c.meeting_point_id = mp.id), '{}') AS coming`;
 
+/**
+ * 096: username of the member who made the last time or place edit of
+ * meeting point `mp`. Null when the editor is soft-deleted or gone. A fixed
+ * SQL fragment, no input.
+ */
+const MP_EDITOR = '(SELECT e.username FROM users e WHERE e.id = mp.edited_by AND e.deleted_at IS NULL) AS editor_name';
+
 export default function createCrewsStore(pool: Pool, _utils: any) {
   // #29: Topic subscription store
   const topicSubscriptions = {
@@ -107,7 +114,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
   };
 
   const CREW_COLUMNS =
-    'id, festival_id AS "festivalId", name, created_by AS "createdBy", invite_code AS "inviteCode", invite_expires_at AS "inviteExpiresAt", max_members AS "maxMembers", reformed_from AS "reformedFrom", home_base_location AS "homeBaseLocation", home_base_time AS "homeBaseTime", home_base_updated_at AS "homeBaseUpdatedAt", photo_album_url AS "photoAlbumUrl", totem_name AS "totemName", totem_emoji AS "totemEmoji", created_at AS "createdAt", updated_at AS "updatedAt"';
+    'id, festival_id AS "festivalId", name, created_by AS "createdBy", invite_code AS "inviteCode", invite_expires_at AS "inviteExpiresAt", max_members AS "maxMembers", reformed_from AS "reformedFrom", home_base_location AS "homeBaseLocation", home_base_time AS "homeBaseTime", home_base_updated_at AS "homeBaseUpdatedAt", photo_album_url AS "photoAlbumUrl", totem_name AS "totemName", totem_emoji AS "totemEmoji", invite_locked AS "inviteLocked", home_base_plan_b AS "homeBasePlanB", created_at AS "createdAt", updated_at AS "updatedAt"';
 
   // Phase 7: Crew system store
   const crews: any = {
@@ -245,6 +252,11 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
         vals.push(data.totemEmoji);
         idx++;
       }
+      if (data.inviteLocked !== undefined) {
+        sets.push('invite_locked = $' + idx);
+        vals.push(data.inviteLocked);
+        idx++;
+      }
       sets.push('updated_at = NOW()');
       vals.push(data.id);
       await pool.query('UPDATE crews SET ' + sets.join(', ') + ' WHERE id = $' + idx, vals);
@@ -312,6 +324,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           c.photo_album_url AS "photoAlbumUrl",
           c.totem_name AS "totemName",
           c.totem_emoji AS "totemEmoji",
+          c.invite_locked AS "inviteLocked",
+          c.home_base_plan_b AS "homeBasePlanB",
           c.created_at AS "createdAt",
           c.updated_at AS "updatedAt",
           cm.role,
@@ -347,6 +361,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           c.photo_album_url AS "photoAlbumUrl",
           c.totem_name AS "totemName",
           c.totem_emoji AS "totemEmoji",
+          c.invite_locked AS "inviteLocked",
+          c.home_base_plan_b AS "homeBasePlanB",
           c.created_at AS "createdAt",
           c.updated_at AS "updatedAt",
           cm.role,
@@ -380,13 +396,23 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
      * the count is re-read under the lock, and the insert is skipped if the crew
      * is full — closing the count-then-insert race in the join/admin-add routes.
      * Returns 'full' if the cap was reached (no insert), otherwise 'added'.
+     * With `opts.inviteJoin` (the invite-code join) a locked crew returns
+     * 'locked' (no insert), read under the same row lock so a lock flip cannot
+     * race the join. Admin force-add and reform pass no opts and ignore the lock.
      * Without a cap (owner creation, reform) it's a plain insert.
      */
-    async addMember(data: any, maxMembers?: number): Promise<'added' | 'full'> {
+    async addMember(
+      data: any,
+      maxMembers?: number,
+      opts?: { inviteJoin?: boolean },
+    ): Promise<'added' | 'full' | 'locked'> {
       if (typeof maxMembers === 'number') {
         return withTransaction(pool, async (client) => {
           // Lock the crew row; all capped joiners for this crew serialize here.
-          await client.query('SELECT 1 FROM crews WHERE id = $1 FOR UPDATE', [data.crewId]);
+          const lockRes = await client.query('SELECT invite_locked FROM crews WHERE id = $1 FOR UPDATE', [
+            data.crewId,
+          ]);
+          if (opts?.inviteJoin && lockRes.rows[0]?.invite_locked) return 'locked';
           const countRes = await client.query('SELECT COUNT(*)::int AS count FROM crew_members WHERE crew_id = $1', [
             data.crewId,
           ]);
@@ -599,11 +625,24 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       return result.rows;
     },
 
-    async updateHomeBase(crewId: string, { location, time }: { location?: string; time?: string }) {
-      await pool.query(
-        'UPDATE crews SET home_base_location = $1, home_base_time = $2, home_base_updated_at = NOW(), updated_at = NOW() WHERE id = $3',
-        [location || null, time || null, crewId],
-      );
+    // 096: `planB` undefined keeps the stored Plan B; null or '' clears it. A
+    // Home Base with no location always clears it, so old clients that remove
+    // Home Base with { location: null, time: null } leave no hidden Plan B.
+    async updateHomeBase(
+      crewId: string,
+      { location, time, planB }: { location?: string | null; time?: string | null; planB?: string | null },
+    ) {
+      if (location && planB === undefined) {
+        await pool.query(
+          'UPDATE crews SET home_base_location = $1, home_base_time = $2, home_base_updated_at = NOW(), updated_at = NOW() WHERE id = $3',
+          [location, time || null, crewId],
+        );
+      } else {
+        await pool.query(
+          'UPDATE crews SET home_base_location = $1, home_base_time = $2, home_base_plan_b = $3, home_base_updated_at = NOW(), updated_at = NOW() WHERE id = $4',
+          [location || null, time || null, location ? planB || null : null, crewId],
+        );
+      }
       const result = await pool.query(`SELECT ${CREW_COLUMNS} FROM crews WHERE id = $1`, [crewId]);
       return result.rows[0] || null;
     },
@@ -701,7 +740,11 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           active,
           created_at,
           updated_at,
-          ${MP_COMING}
+          edited_by,
+          edited_at,
+          edit_was,
+          ${MP_COMING},
+          ${MP_EDITOR}
         FROM
           crew_meeting_points mp
         WHERE
@@ -731,8 +774,12 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           mp.active,
           mp.created_at,
           mp.updated_at,
+          mp.edited_by,
+          mp.edited_at,
+          mp.edit_was,
           u.username AS creator_name,
-          ${MP_COMING}
+          ${MP_COMING},
+          ${MP_EDITOR}
         FROM
           crew_meeting_points mp
           JOIN users u ON u.id = mp.created_by
@@ -773,6 +820,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
             latitude: 'latitude',
             longitude: 'longitude',
             recursDaily: 'recurs_daily',
+            // 096: written only by the PUT route from req.user, never from a client body.
+            editedBy: 'edited_by',
+            editedAt: 'edited_at',
+            editWas: 'edit_was',
           } as Record<string, string>
         )[key];
         if (col) {
@@ -780,6 +831,12 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           let outVal = val;
           if (key === 'label') outVal = sanitizeMeetingPointText(val, 100);
           else if (key === 'location') outVal = sanitizeMeetingPointText(val, 200);
+          if (key === 'editWas') {
+            sets.push(col + ' = $' + idx + '::jsonb');
+            vals.push(val == null ? null : JSON.stringify(val));
+            idx++;
+            continue;
+          }
           sets.push(col + ' = $' + idx);
           vals.push(outVal);
           idx++;
@@ -807,7 +864,11 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           active,
           created_at,
           updated_at,
-          ${MP_COMING}
+          edited_by,
+          edited_at,
+          edit_was,
+          ${MP_COMING},
+          ${MP_EDITOR}
         FROM
           crew_meeting_points mp
         WHERE
@@ -841,7 +902,11 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           active,
           created_at,
           updated_at,
-          ${MP_COMING}
+          edited_by,
+          edited_at,
+          edit_was,
+          ${MP_COMING},
+          ${MP_EDITOR}
         FROM
           crew_meeting_points mp
         WHERE
