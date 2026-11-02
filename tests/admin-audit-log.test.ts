@@ -163,11 +163,15 @@ describe('admin audit log', { skip, concurrency: 1 }, () => {
       // 6. A prefix filter matches up to the dot, and `_` in it is not a wildcard.
       const decoyId = `aud-${RUN_ID}-decoy`;
       const realId = `aud-${RUN_ID}-real`;
+      const resetId = `aud-${RUN_ID}-reset`;
+      const pluralId = `aud-${RUN_ID}-plural`;
       await withPool(async (pool) => {
         const insert = "INSERT INTO audit_log (id, actor_type, actor_id, action, target_type, details_json, status) VALUES ($1, 'admin', $2, $3, 'user', $4, 'success')";
         const details = JSON.stringify({ run: RUN_ID });
         await pool.query(insert, [decoyId, adminId, 'user.passwordXresetXlink.created', details]);
         await pool.query(insert, [realId, adminId, 'user.password_reset_link.created', details]);
+        await pool.query(insert, [resetId, adminId, 'user.password.reset', details]);
+        await pool.query(insert, [pluralId, adminId, 'festivals.created', details]);
       });
       const prefixed = await authed(api.get('/api/v1/admin/audit?action=user.password_reset_link.*&limit=200')).expect(200);
       const prefixedIds = prefixed.body.data.map((e: any) => e.id);
@@ -177,6 +181,21 @@ describe('admin audit log', { skip, concurrency: 1 }, () => {
       const userPrefix = await authed(api.get('/api/v1/admin/audit?action=user.*&limit=200')).expect(200);
       assert.ok(userPrefix.body.data.every((e: any) => e.action.startsWith('user.')));
       await authed(api.get('/api/v1/admin/audit?action=bad%20value')).expect(400);
+
+      // 6b. The Passwords chip's comma list matches both password families, and no decoy.
+      const runIds = new Set([decoyId, realId, resetId, pluralId]);
+      const runRows = (body: any) => body.data.filter((e: any) => runIds.has(e.id)).map((e: any) => e.id).sort();
+      const passwordsList = encodeURIComponent('user.password.*,user.password_reset_link.*');
+      const passwords = await authed(api.get(`/api/v1/admin/audit?action=${passwordsList}&limit=200`)).expect(200);
+      assert.deepEqual(runRows(passwords.body), [realId, resetId].sort());
+      const passwordsMine = await authed(
+        api.get(`/api/v1/admin/audit?action=${passwordsList}&actor=${encodeURIComponent(ADMIN)}&limit=200`),
+      ).expect(200);
+      assert.equal(passwordsMine.body.meta.total, 2);
+      const passwordOnly = await authed(api.get('/api/v1/admin/audit?action=user.password.*&limit=200')).expect(200);
+      assert.deepEqual(runRows(passwordOnly.body), [resetId]);
+      const festivalPrefix = await authed(api.get('/api/v1/admin/audit?action=festival.*&limit=200')).expect(200);
+      assert.ok(!runRows(festivalPrefix.body).includes(pluralId));
 
       // 7. Renaming a festival writes one festival.updated row with the old and new names.
       const fest = await authed(api.post('/api/v1/admin/festivals'))

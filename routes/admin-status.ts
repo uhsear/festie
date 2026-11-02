@@ -5,12 +5,14 @@
 //   GET /admin/health              — JSON system status (admin-auth)
 //   GET /admin/status              — HTML dashboard (admin-auth, strict nonce CSP)
 //   GET /admin/analytics           — aggregated festival analytics JSON (admin-auth)
+//   GET /admin/analytics/festivals/:festivalId/picks — per-set pick counts and clashing pairs (admin-auth)
 //
 // The strict nonce CSP helper lives here because the HTML status route in
 // this file needs it. If another file ever needs the same policy, promote it
 // to lib/csp-helpers.js.
-import { adminAnalyticsQuery, validateQuery } from '../lib/schemas.js';
+import { adminAnalyticsQuery, festivalIdParams, validateParams, validateQuery } from '../lib/schemas.js';
 import { renderStatusPage } from '../lib/helpers/status-template.js';
+import { overlappingClashes } from '../lib/helpers/pick-clashes.js';
 import type { Router } from 'express';
 
 // "In scope": festival not deleted, plan not deleted, user not deleted, and the
@@ -82,6 +84,41 @@ const TOP_SETS_SQL = `
   ORDER BY "pickCount" DESC
   LIMIT 20
 `;
+
+// Per-set pick counts for one festival ($1), same scope as TOP_SETS_SQL.
+const SET_PICK_COUNTS_SQL = `
+  SELECT
+    fpp.set_id AS "setId",
+    COUNT(*)::int AS picks,
+    (COUNT(*) FILTER (WHERE fpp.priority = 'must'))::int AS must,
+    (COUNT(*) FILTER (WHERE fpp.priority = 'want-to-see'))::int AS want,
+    (COUNT(*) FILTER (WHERE fpp.priority = 'maybe'))::int AS maybe
+  FROM festival_profile_picks fpp
+    JOIN festival_profiles fp ON fp.id = fpp.profile_id AND fp.festival_id = $1 AND fp.deleted_at IS NULL
+    JOIN users u ON u.id = fp.user_id AND u.deleted_at IS NULL
+  GROUP BY fpp.set_id
+`;
+
+// Same-day set pairs that $2 or more distinct users picked. The floor is applied
+// here so no client ever receives a smaller pair; overlap is checked in the route.
+const CO_PICKED_PAIRS_SQL = `
+  WITH pk AS (
+    SELECT DISTINCT fp.user_id, fs.id AS set_id, fs.day_index
+    FROM festival_profile_picks fpp
+      JOIN festival_profiles fp ON fp.id = fpp.profile_id AND fp.festival_id = $1 AND fp.deleted_at IS NULL
+      JOIN users u ON u.id = fp.user_id AND u.deleted_at IS NULL
+      JOIN festival_sets fs ON fs.id = fpp.set_id AND fs.festival_id = $1
+    WHERE fs.start_time IS NOT NULL AND fs.end_time IS NOT NULL
+  )
+  SELECT a.set_id AS "aId", b.set_id AS "bId", COUNT(*)::int AS people
+  FROM pk a
+    JOIN pk b ON b.user_id = a.user_id AND b.day_index = a.day_index AND b.set_id > a.set_id
+  GROUP BY a.set_id, b.set_id
+  HAVING COUNT(*) >= $2
+`;
+
+// Admin-only floor for clash pairs (T36 addendum); the public also-picked floor is stricter.
+const CLASH_PAIR_MIN_PEOPLE = 5;
 
 const ACTIVE_USERS_SQL = `
   SELECT
@@ -343,6 +380,66 @@ export default function createAdminStatusRoutes(deps: any): { router: Router } {
       return sendError(res, 500, 'Failed to load analytics', ErrorCodes.INTERNAL_ERROR);
     }
   });
+
+  // Pick insight for one festival: every set with its pick counts, and the
+  // overlapping set pairs that at least CLASH_PAIR_MIN_PEOPLE people picked.
+  // Counts only; no user, username or profile id leaves this route.
+  router.get(
+    '/admin/analytics/festivals/:festivalId/picks',
+    adminAuth,
+    validateParams(festivalIdParams),
+    async (req: any, res: any) => {
+      try {
+        setNoStore(res);
+
+        const insightPool = deps.pool || stores?.pool;
+        if (!insightPool) return sendError(res, 503, 'Database not available', ErrorCodes.SERVICE_UNAVAILABLE);
+
+        const { festivalId } = req.validatedParams;
+        const festival = await stores.festivals.getById(festivalId);
+        if (!festival) return sendError(res, 404, 'Festival not found.', ErrorCodes.NOT_FOUND);
+
+        const [countsResult, pairsResult] = await Promise.all([
+          insightPool.query(SET_PICK_COUNTS_SQL, [festivalId]),
+          insightPool.query(CO_PICKED_PAIRS_SQL, [festivalId, CLASH_PAIR_MIN_PEOPLE]),
+        ]);
+
+        const counts = new Map<string, any>(countsResult.rows.map((r: any) => [r.setId, r]));
+        const stageNames = new Map<string, string>((festival.stages ?? []).map((s: any) => [s.id, s.name]));
+        const sets = (festival.days ?? []).flatMap((day: any, position: number) =>
+          (day.sets ?? []).map((set: any) => {
+            const c = counts.get(set.id);
+            return {
+              setId: set.id,
+              dayIndex: day.dayIndex,
+              dayLabel: day.label || `Day ${position + 1}`,
+              date: day.date ?? '',
+              stageName: stageNames.get(set.stageId) ?? '',
+              artist: set.artist ?? '',
+              startTime: set.startTime || null,
+              endTime: set.endTime || null,
+              picks: c?.picks ?? 0,
+              must: c?.must ?? 0,
+              want: c?.want ?? 0,
+              maybe: c?.maybe ?? 0,
+            };
+          }),
+        );
+
+        return sendSuccess(res, {
+          festivalId: festival.id,
+          festivalName: festival.name,
+          minPairPeople: CLASH_PAIR_MIN_PEOPLE,
+          sets,
+          clashes: overlappingClashes(festival, pairsResult.rows),
+          generatedAt: new Date().toISOString(),
+        });
+      } catch (error: any) {
+        log.error('pick insight query failed', { error: error.message });
+        return sendError(res, 500, 'Failed to load pick insight', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
 
   // Satisfy lint — express is destructured for parity with siblings but only
   // express.Router() is consumed directly above.

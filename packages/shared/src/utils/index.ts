@@ -88,6 +88,7 @@ export * from './crewDays';
 export * from './crewBadge';
 export * from './privacySummary';
 export * from './setMoves';
+export * from './pickInsight';
 export * from './caught';
 export * from './meetingPointEdit';
 export * from './findFriends';

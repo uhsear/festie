@@ -81,8 +81,9 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return id;
     },
 
-    // `action` matches exactly; `actionPrefix` matches the start of the name (`festival.`).
-    async query({ actorId, actorType, action, actionPrefix, targetId, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
+    // A row matches when its action equals any of `actions` or starts with any of
+    // `actionPrefixes` (`festival.`). Both null or empty means no action filter.
+    async query({ actorId, actorType, actions, actionPrefixes, targetId, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
       const maxLimit = 200;
       const finalLimit = Math.min(Math.max(1, limit || 50), maxLimit);
 
@@ -102,7 +103,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
 
       const params: any[] = [
         actorId || null,
-        action || null,
+        actions?.length ? actions : null,
         resourceType || null,
         from || null,
         to || null,
@@ -110,7 +111,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         cursorId,
         finalLimit,
         actorType || null,
-        actionPrefix || null,
+        actionPrefixes?.length ? actionPrefixes : null,
         targetId || null,
       ];
 
@@ -118,13 +119,16 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         SELECT ${ROW_COLUMNS}
         FROM audit_log
         WHERE ($1::TEXT IS NULL OR actor_id = $1::TEXT)
-          AND ($2::TEXT IS NULL OR action = $2::TEXT)
+          AND (
+            ($2::TEXT[] IS NULL AND $10::TEXT[] IS NULL)
+            OR action = ANY(COALESCE($2::TEXT[], '{}'))
+            OR EXISTS (SELECT 1 FROM unnest(COALESCE($10::TEXT[], '{}')) AS p(prefix) WHERE starts_with(action, p.prefix))
+          )
           AND ($3::TEXT IS NULL OR target_type = $3::TEXT)
           AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4::TIMESTAMPTZ)
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
           AND ($6::TIMESTAMPTZ IS NULL OR (created_at, id) < ($6::TIMESTAMPTZ, $7::TEXT))
           AND ($9::TEXT IS NULL OR actor_type = $9::TEXT)
-          AND ($10::TEXT IS NULL OR starts_with(action, $10::TEXT))
           AND ($11::TEXT IS NULL OR target_id = $11::TEXT)
         ORDER BY created_at DESC, id DESC
         LIMIT $8
@@ -139,15 +143,15 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return { rows, nextCursor };
     },
 
-    async count({ actorId, actorType, action, actionPrefix, targetId, resourceType, from, to }: any = {}) {
+    async count({ actorId, actorType, actions, actionPrefixes, targetId, resourceType, from, to }: any = {}) {
       const params: any[] = [
         actorId || null,
-        action || null,
+        actions?.length ? actions : null,
         resourceType || null,
         from || null,
         to || null,
         actorType || null,
-        actionPrefix || null,
+        actionPrefixes?.length ? actionPrefixes : null,
         targetId || null,
       ];
 
@@ -155,12 +159,15 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         SELECT COUNT(*) AS total
         FROM audit_log
         WHERE ($1::TEXT IS NULL OR actor_id = $1::TEXT)
-          AND ($2::TEXT IS NULL OR action = $2::TEXT)
+          AND (
+            ($2::TEXT[] IS NULL AND $7::TEXT[] IS NULL)
+            OR action = ANY(COALESCE($2::TEXT[], '{}'))
+            OR EXISTS (SELECT 1 FROM unnest(COALESCE($7::TEXT[], '{}')) AS p(prefix) WHERE starts_with(action, p.prefix))
+          )
           AND ($3::TEXT IS NULL OR target_type = $3::TEXT)
           AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4::TIMESTAMPTZ)
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
           AND ($6::TEXT IS NULL OR actor_type = $6::TEXT)
-          AND ($7::TEXT IS NULL OR starts_with(action, $7::TEXT))
           AND ($8::TEXT IS NULL OR target_id = $8::TEXT)
       `, params);
 

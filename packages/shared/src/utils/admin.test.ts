@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  AUDIT_ACTION_FILTERS,
   maskEmail,
   summarizeBulkResults,
   toggleSelection,
@@ -132,5 +133,13 @@ describe('buildFestivalPreview', () => {
     const p = buildFestivalPreview(detail);
     expect(p.stages.map((s) => s.pinned)).toEqual([true, false]);
     expect(p.warnings).toEqual(['1 stage has no map pin: Tent.', '1 set has no start time.', 'Sat has no sets.']);
+  });
+});
+
+describe('AUDIT_ACTION_FILTERS', () => {
+  it('Passwords matches reset links too; Reset links stays narrow', () => {
+    const by = (l: string) => AUDIT_ACTION_FILTERS.find((f) => f.label === l)?.prefix;
+    expect(by('Passwords')).toBe('user.password.*,user.password_reset_link.*');
+    expect(by('Reset links')).toBe('user.password_reset_link.*');
   });
 });

@@ -43,13 +43,16 @@ export default function mountAdminAuditRoutes({ router, deps, ctx }: any): void 
         if (!targetId) return sendSuccess(res, [], { total: 0, limit, nextCursor: null });
       }
 
-      // `festival.*` matches every name that starts with `festival.`; without `.*` the name must match exactly.
-      const isPrefix = typeof action === 'string' && action.endsWith('.*');
+      // A comma list matches any item. `festival.*` matches every name that starts with `festival.`;
+      // without `.*` the name must match exactly.
+      const items = typeof action === 'string' && action ? action.split(',') : [];
+      const actions = items.filter((a: string) => !a.endsWith('.*'));
+      const actionPrefixes = items.filter((a: string) => a.endsWith('.*')).map((a: string) => a.slice(0, -1));
       const filters = {
         actorId: resolvedActorId,
         actorType,
-        action: isPrefix ? null : action || null,
-        actionPrefix: isPrefix ? action.slice(0, -1) : null,
+        actions: actions.length ? actions : null,
+        actionPrefixes: actionPrefixes.length ? actionPrefixes : null,
         targetId,
         resourceType: resourceType || null,
         from,
