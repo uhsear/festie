@@ -2592,6 +2592,13 @@ export type components = {
                     endTime: string | null;
                     id: string;
                     linkUrl: string | null;
+                    movedAt?: string;
+                    movedFrom?: {
+                        dayIndex: number;
+                        end: string | null;
+                        stageId: string | null;
+                        start: string | null;
+                    };
                     stageId: string | null;
                     startTime: string | null;
                 }[];
@@ -2678,6 +2685,13 @@ export type components = {
                     }[];
                     endTime: string | null;
                     id: string;
+                    movedAt?: string;
+                    movedFrom?: {
+                        dayIndex: number;
+                        end: string | null;
+                        stageId: string | null;
+                        start: string | null;
+                    };
                     stageId: string | null;
                     startTime: string | null;
                 }[];
@@ -2768,6 +2782,13 @@ export type components = {
             endTime: string | null;
             id: string;
             linkUrl: string | null;
+            movedAt?: string;
+            movedFrom?: {
+                dayIndex: number;
+                end: string | null;
+                stageId: string | null;
+                start: string | null;
+            };
             stageId: string | null;
             startTime: string | null;
         };

@@ -23,11 +23,11 @@ describe('notificationSettings', () => {
 
   it('describes the schedule notice', () => {
     expect(describeScheduleNotice({ changes: 1, people: 1, notified: true })).toBe(
-      'Saved. 1 person picked the changed sets and will get an alert, unless they turned schedule alerts off.',
+      'Saved. 1 person picked or set a reminder on the changed sets and will get an alert, unless they turned schedule alerts off.',
     );
     expect(describeScheduleNotice({ changes: 2, people: 3, notified: true })).toContain('3 people picked');
     expect(describeScheduleNotice({ changes: 1, people: 0, notified: false })).toBe(
-      'Saved. No one had picked the changed sets, so no alerts were sent.',
+      'Saved. No one had picked or set a reminder on the changed sets, so no alerts were sent.',
     );
     expect(describeScheduleNotice({ changes: 1, people: 2, notified: false })).toBe('Saved without alerts.');
     expect(describeScheduleNotice({ changes: 0, people: 0, notified: false })).toBe('Festival updated');

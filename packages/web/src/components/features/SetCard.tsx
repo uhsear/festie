@@ -1,8 +1,8 @@
 import React, { memo, useRef, useState, useMemo } from 'react';
-import { Play, AlertTriangle, StickyNote, Clock } from 'lucide-react';
+import { Play, AlertTriangle, StickyNote, Clock, ArrowRightLeft } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
-import { usePicks, usePickSync, usePickClear } from '@festie/shared/hooks';
+import { usePicks, usePickSync, usePickClear, useSetMove } from '@festie/shared/hooks';
 import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { useSetStatus } from '@/hooks/useSetStatus';
@@ -65,6 +65,7 @@ function SetCard({
   const { tap, select, warning } = useHaptics();
   const [saving, setSaving] = useState(false);
   const setStatus = useSetStatus(set);
+  const move = useSetMove(set);
   const days = useFestivalStore((state) => state.days);
   // Dim ended sets only while the festival is running; before/after, every set reads the same.
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
@@ -206,7 +207,7 @@ function SetCard({
         )}
         aria-label={`${artistName} — ${stageName}, ${
           set.startTime && set.endTime ? `${formatTime(set.startTime)} to ${formatTime(set.endTime)}` : 'time TBA'
-        }`}
+        }${move ? `, ${move.a11y}` : ''}`}
         onClick={() => {
           tap();
           onTap();
@@ -312,6 +313,17 @@ function SetCard({
           >
             <AlertTriangle className="w-3 h-3 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
             <span className="max-w-full truncate">{clashLabel}</span>
+          </span>
+        )}
+        {move && (
+          <span
+            data-testid="set-moved-chip"
+            aria-hidden="true"
+            title={move.line}
+            className="inline-flex items-center gap-1 text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight border border-border text-text-secondary"
+          >
+            <ArrowRightLeft className="w-3 h-3 shrink-0" aria-hidden="true" />
+            {move.chip}
           </span>
         )}
       </div>
@@ -458,6 +470,7 @@ function setCardPropsAreEqual(prev: Readonly<SetCardProps>, next: Readonly<SetCa
   if (prev.set.updatedAt !== next.set.updatedAt) return false;
   if (prev.set.startTime !== next.set.startTime) return false;
   if (prev.set.endTime !== next.set.endTime) return false;
+  if (prev.set.movedAt !== next.set.movedAt) return false;
 
   // Visual props
   if (prev.stageColor !== next.stageColor) return false;
