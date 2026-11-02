@@ -9,11 +9,13 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (sel: (s: Record<string, unknown>) => unknown) => sel(festivalState),
   useAuthStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ user: null }),
   useCrewStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ crews: [] }),
+  selectMyPicks: () => null,
 }));
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ setDetailSet: vi.fn(), setDetailAutoSpotify: vi.fn() }),
 }));
 vi.mock('@festie/shared/hooks', () => ({
+  useCanPick: () => true,
   usePicks: () => ({ getMyPick: () => null, getOtherPicks: () => [] }),
   useFestival: () => ({
     getStageColor: () => '#ccc',

@@ -102,6 +102,7 @@ export function buildAmenityFeature(
 /** Title-case the enum value for a default label ('water' → 'Water'). */
 export function humanizeAmenityType(amenityType: AmenityType | string): string {
   const s = String(amenityType || '');
+  if (s === 'atm') return 'ATM';
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Amenity';
 }
 

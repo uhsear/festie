@@ -24,6 +24,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFestivalDataStore, useAuthStore, useUIStore, useNotificationPrefsStore } from '@festie/shared/stores';
 import {
   usePicks,
+  useCanPick,
   usePickSync,
   usePickClear,
   useFestival,
@@ -298,11 +299,7 @@ export default function SetDetailScreen() {
     Notifications.getPermissionsAsync()
       .then((p) =>
         setPermission(
-          p.status === 'granted'
-            ? 'granted'
-            : p.status === 'denied' && !p.canAskAgain
-              ? 'denied'
-              : 'default',
+          p.status === 'granted' ? 'granted' : p.status === 'denied' && !p.canAskAgain ? 'denied' : 'default',
         ),
       )
       .catch(() => {});
@@ -356,7 +353,9 @@ export default function SetDetailScreen() {
       }
       savePick(currentFestival.id, set.id, priority).catch((err) => {
         haptics.warning();
-        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), { kind: 'error' });
+        useUIStore
+          .getState()
+          .showToast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), { kind: 'error' });
       });
     },
     [set, currentFestival, savePick, haptics, clearPick, b2bSeparator],
@@ -373,7 +372,9 @@ export default function SetDetailScreen() {
       saveReminder(currentFestival.id, set.id, minutes).catch((err) => {
         haptics.warning();
         setReminderFailed({ minutes });
-        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your reminder. Try again."), { kind: 'error' });
+        useUIStore
+          .getState()
+          .showToast(mapErrorToUserMessage(err, "Couldn't save your reminder. Try again."), { kind: 'error' });
       });
     },
     [set, currentFestival, saveReminder, haptics, artistName],
@@ -390,6 +391,7 @@ export default function SetDetailScreen() {
   );
 
   const user = useAuthStore((s) => s.user);
+  const canPick = useCanPick();
   const goToAuth = useCallback(
     (route: '/(auth)/register' | '/(auth)/login') => {
       if (set) setReturnTo(`/set/${set.id}`);
@@ -489,62 +491,66 @@ export default function SetDetailScreen() {
         </View>
         <Text style={styles.time}>{whenLine}</Text>
 
-        {/* Priority picker / guest sign-in prompt */}
+        {/* Priority picker: guests pick on this device */}
+        {canPick ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Your pick</Text>
+            <View style={styles.priorityRow}>
+              {PRIORITY_BUTTONS.map((option) => {
+                const active = myPick === option.value;
+                const accent = priorityColor(t, option.value);
+                const pending = pickSync?.state === 'saving' || pickSync?.state === 'queued';
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.priorityButton, active && { backgroundColor: accent, borderColor: accent }]}
+                    onPress={() => handlePriority(active ? null : option.value)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={
+                      active && pending
+                        ? `${option.label}, ${pickSync?.state === 'queued' ? 'waiting to sync' : 'saving'}`
+                        : option.label
+                    }
+                  >
+                    <Ionicons
+                      name={option.icon}
+                      size={16}
+                      color={active ? t.colors.text.onLightAccent : t.colors.text.muted}
+                    />
+                    {active && pending ? (
+                      <Ionicons name="time-outline" size={14} color={t.colors.text.onLightAccent} />
+                    ) : null}
+                    <Text
+                      style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
+                      maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    >
+                      {option.short}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {pickSync?.state === 'failed' ? (
+              <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                <Text style={styles.statusWarn}>Pick not saved.</Text>
+                <TouchableOpacity
+                  style={styles.statusAction}
+                  onPress={() => retryPick().catch(() => {})}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry saving pick"
+                >
+                  <Text style={styles.statusActionText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Reminder and note / guest sign-in prompt */}
         {user ? (
           <>
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Your pick</Text>
-              <View style={styles.priorityRow}>
-                {PRIORITY_BUTTONS.map((option) => {
-                  const active = myPick === option.value;
-                  const accent = priorityColor(t, option.value);
-                  const pending = pickSync?.state === 'saving' || pickSync?.state === 'queued';
-                  return (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[styles.priorityButton, active && { backgroundColor: accent, borderColor: accent }]}
-                      onPress={() => handlePriority(active ? null : option.value)}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      accessibilityLabel={
-                        active && pending
-                          ? `${option.label}, ${pickSync?.state === 'queued' ? 'waiting to sync' : 'saving'}`
-                          : option.label
-                      }
-                    >
-                      <Ionicons
-                        name={option.icon}
-                        size={16}
-                        color={active ? t.colors.text.onLightAccent : t.colors.text.muted}
-                      />
-                      {active && pending ? (
-                        <Ionicons name="time-outline" size={14} color={t.colors.text.onLightAccent} />
-                      ) : null}
-                      <Text
-                        style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
-                        maxFontSizeMultiplier={MAX_FONT_SCALE}
-                      >
-                        {option.short}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {pickSync?.state === 'failed' ? (
-                <View style={styles.statusRow} accessibilityLiveRegion="polite">
-                  <Text style={styles.statusWarn}>Pick not saved.</Text>
-                  <TouchableOpacity
-                    style={styles.statusAction}
-                    onPress={() => retryPick().catch(() => {})}
-                    accessibilityRole="button"
-                    accessibilityLabel="Retry saving pick"
-                  >
-                    <Text style={styles.statusActionText}>Retry</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-            </View>
             <View style={styles.section}>
               <TouchableOpacity
                 style={styles.panelButton}
@@ -564,78 +570,86 @@ export default function SetDetailScreen() {
                 <>
                   {canRemind ? (
                     <>
-              <View style={styles.reminderRow}>
-                {REMINDER_OPTIONS.map((opt) => {
-                  const active = myReminder === opt.value;
-                  return (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={[
-                        styles.reminderChip,
-                        active && {
-                          backgroundColor: t.colors.accent.aqua,
-                          borderColor: t.colors.accent.aqua,
-                        },
-                      ]}
-                      onPress={() => handleReminder(active ? null : opt.value)}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      accessibilityLabel={
-                        active ? `Reminder set ${opt.label} before, tap to clear` : `Remind me ${opt.label} before`
-                      }
-                    >
-                      <Text
-                        style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
-                        maxFontSizeMultiplier={MAX_FONT_SCALE}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {reminderFailed ? (
-                <View style={styles.statusRow} accessibilityLiveRegion="polite">
-                  <Text style={styles.statusWarn}>Reminder not saved.</Text>
-                  <TouchableOpacity
-                    style={styles.statusAction}
-                    onPress={() => handleReminder(reminderFailed.minutes)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Retry saving reminder"
-                  >
-                    <Text style={styles.statusActionText}>Retry</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              {deliveryProblem === 'not-enabled' ? (
-                <View style={styles.statusRow} accessibilityLiveRegion="polite">
-                  <Text style={styles.statusWarn}>Notifications are off, so this reminder can't reach you.</Text>
-                  <TouchableOpacity style={styles.statusAction} onPress={turnOnNotifications} accessibilityRole="button">
-                    <Text style={styles.statusActionText}>Turn on</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              {deliveryProblem === 'denied' || deliveryProblem === 'pref-off' ? (
-                <View style={styles.statusRow} accessibilityLiveRegion="polite">
-                  <Text style={styles.statusWarn}>
-                    {deliveryProblem === 'denied'
-                      ? "Notifications are off for Festie, so this reminder can't reach you."
-                      : 'Set reminders are turned off in Account.'}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.statusAction}
-                    onPress={() =>
-                      deliveryProblem === 'denied' ? Linking.openSettings() : router.push('/(tabs)/account')
-                    }
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.statusActionText}>
-                      {deliveryProblem === 'denied' ? 'Open settings' : 'Open Account'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
+                      <View style={styles.reminderRow}>
+                        {REMINDER_OPTIONS.map((opt) => {
+                          const active = myReminder === opt.value;
+                          return (
+                            <TouchableOpacity
+                              key={opt.value}
+                              style={[
+                                styles.reminderChip,
+                                active && {
+                                  backgroundColor: t.colors.accent.aqua,
+                                  borderColor: t.colors.accent.aqua,
+                                },
+                              ]}
+                              onPress={() => handleReminder(active ? null : opt.value)}
+                              activeOpacity={0.7}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: active }}
+                              accessibilityLabel={
+                                active
+                                  ? `Reminder set ${opt.label} before, tap to clear`
+                                  : `Remind me ${opt.label} before`
+                              }
+                            >
+                              <Text
+                                style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
+                                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                              >
+                                {opt.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      {reminderFailed ? (
+                        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                          <Text style={styles.statusWarn}>Reminder not saved.</Text>
+                          <TouchableOpacity
+                            style={styles.statusAction}
+                            onPress={() => handleReminder(reminderFailed.minutes)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Retry saving reminder"
+                          >
+                            <Text style={styles.statusActionText}>Retry</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
+                      {deliveryProblem === 'not-enabled' ? (
+                        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                          <Text style={styles.statusWarn}>
+                            Notifications are off, so this reminder can't reach you.
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.statusAction}
+                            onPress={turnOnNotifications}
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.statusActionText}>Turn on</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
+                      {deliveryProblem === 'denied' || deliveryProblem === 'pref-off' ? (
+                        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                          <Text style={styles.statusWarn}>
+                            {deliveryProblem === 'denied'
+                              ? "Notifications are off for Festie, so this reminder can't reach you."
+                              : 'Set reminders are turned off in Account.'}
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.statusAction}
+                            onPress={() =>
+                              deliveryProblem === 'denied' ? Linking.openSettings() : router.push('/(tabs)/account')
+                            }
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.statusActionText}>
+                              {deliveryProblem === 'denied' ? 'Open settings' : 'Open Account'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
                     </>
                   ) : null}
                   <Text style={styles.sectionLabel}>Your note</Text>
@@ -672,14 +686,20 @@ export default function SetDetailScreen() {
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityState={{ expanded: spotifyOpen, disabled: spotifyStatus === 'loading' }}
-                accessibilityLabel={spotifyOpen ? 'Hide player' : `Listen to ${preview?.artistName ?? spotifyArtist.name}`}
+                accessibilityLabel={
+                  spotifyOpen ? 'Hide player' : `Listen to ${preview?.artistName ?? spotifyArtist.name}`
+                }
               >
                 <Ionicons name="musical-note" size={16} color={t.colors.accent.aqua} />
                 <Text style={styles.spotifyText} numberOfLines={1}>
                   Listen
                   {preview?.trackName ? <Text style={styles.spotifyTrack}>{`  ${preview.trackName}`}</Text> : null}
                 </Text>
-                <Ionicons name={spotifyOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+                <Ionicons
+                  name={spotifyOpen ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={t.colors.text.secondary}
+                />
               </TouchableOpacity>
             ) : null}
             {spotifyStatus === 'offline' ? <Text style={styles.statusText}>Listening needs signal.</Text> : null}
@@ -772,18 +792,18 @@ export default function SetDetailScreen() {
               Object.entries(entry.links)
                 .filter(([key, url]) => !(key === 'spotify' && url === spotifyArtist?.url))
                 .map(([key, url]) => (
-                <TouchableOpacity
-                  key={`${entry.name}-${key}`}
-                  style={styles.linkButton}
-                  onPress={() => openLink(url)}
-                  activeOpacity={0.7}
-                  accessibilityRole="link"
-                  accessibilityLabel={`Open ${entry.name} on ${key}`}
-                >
-                  <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
-                  <Text style={styles.linkText}>{key}</Text>
-                </TouchableOpacity>
-              )),
+                  <TouchableOpacity
+                    key={`${entry.name}-${key}`}
+                    style={styles.linkButton}
+                    onPress={() => openLink(url)}
+                    activeOpacity={0.7}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Open ${entry.name} on ${key}`}
+                  >
+                    <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
+                    <Text style={styles.linkText}>{key}</Text>
+                  </TouchableOpacity>
+                )),
             )}
           </View>
         ) : null}

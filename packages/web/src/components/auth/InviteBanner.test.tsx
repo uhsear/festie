@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+const h = vi.hoisted(() => ({ navigate: vi.fn(), selectFestival: vi.fn() }));
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => h.navigate }));
+vi.mock('@festie/shared/stores', () => ({
+  useFestivalStore: { getState: () => ({ selectFestival: h.selectFestival }) },
+}));
 
 const mockGet = vi.fn();
 vi.mock('@festie/shared/services/api', () => ({ api: { get: (...a: unknown[]) => mockGet(...a) } }));
@@ -20,6 +26,8 @@ const preview = (over: { crewName: string; ownerName: string | null; memberCount
 describe('InviteBanner', () => {
   beforeEach(() => {
     mockGet.mockReset();
+    h.navigate.mockReset();
+    h.selectFestival.mockReset().mockResolvedValue(undefined);
     sessionStorage.clear();
     window.history.replaceState({}, '', '/');
   });
@@ -62,5 +70,23 @@ describe('InviteBanner', () => {
     render(<InviteBanner />);
     expect(await screen.findByText(/Can't check this invite right now/)).toBeInTheDocument();
     expect(screen.queryByText(/expired/)).not.toBeInTheDocument();
+  });
+
+  it('lets a guest look at the lineup first, keeping the staged code', async () => {
+    sessionStorage.setItem('fk.pendingJoinCrew', 'ABC123');
+    mockGet.mockResolvedValue(preview({ crewName: 'Bass Gang', ownerName: 'DJ Dana', memberCount: 4 }));
+    render(<InviteBanner />);
+    fireEvent.click(await screen.findByRole('button', { name: 'See the lineup first' }));
+    await waitFor(() => expect(h.navigate).toHaveBeenCalledWith({ to: '/cards' }));
+    expect(h.selectFestival).toHaveBeenCalledWith('f1');
+    expect(sessionStorage.getItem('fk.pendingJoinCrew')).toBe('ABC123');
+  });
+
+  it('has no lineup button when the crew has no festival', async () => {
+    sessionStorage.setItem('fk.pendingJoinCrew', 'ABC123');
+    mockGet.mockResolvedValue({ ...preview({ crewName: 'Bass Gang', ownerName: null, memberCount: 4 }), festivalId: null });
+    render(<InviteBanner />);
+    await screen.findByText('Bass Gang');
+    expect(screen.queryByRole('button', { name: 'See the lineup first' })).not.toBeInTheDocument();
   });
 });
