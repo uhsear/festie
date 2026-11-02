@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
-import { MapPin, Sparkles, Star, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { MapPin, Sparkles, Star, Users, Wallet, X, type LucideIcon } from 'lucide-react';
 import type { HomeAction, HomeActionKey } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
 
@@ -14,6 +14,7 @@ const LINKS: Partial<Record<HomeActionKey, { Icon: LucideIcon; to: RoutePath }>>
 
 interface PhaseHomeActionsProps {
   actions: HomeAction[];
+  onDismiss?: () => void;
 }
 
 /**
@@ -22,7 +23,7 @@ interface PhaseHomeActionsProps {
  * it, wrap and settle-up after). A `link` is a button that navigates; a `hint`
  * is plain text. The caller renders nothing when the list is empty.
  */
-export default function PhaseHomeActions({ actions }: PhaseHomeActionsProps) {
+export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeActionsProps) {
   const navigate = useNavigate();
 
   return (
@@ -62,6 +63,16 @@ export default function PhaseHomeActions({ actions }: PhaseHomeActionsProps) {
             </button>
           );
         })}
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Hide these shortcuts"
+            className="inline-flex h-[44px] w-[44px] shrink-0 items-center justify-center ml-auto cursor-pointer text-text-muted hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
     </section>
   );

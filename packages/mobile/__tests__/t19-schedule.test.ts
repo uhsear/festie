@@ -14,7 +14,8 @@ describe('T19 mobile schedule guards', () => {
   it('Schedule orders by time, shows day dates and the shared band', () => {
     const src = read('app/(tabs)/index.tsx');
     expect(src).toContain('splitCardsByNow(');
-    expect(src).toContain('formatDayChip(');
+    // T17 moved the day chips into ScheduleDayChips.
+    expect(read('components/ScheduleDayChips.tsx')).toContain('formatDayChip(');
     expect(src).toContain('getHomeActions(');
     expect(src).not.toContain('getSetHotness');
   });

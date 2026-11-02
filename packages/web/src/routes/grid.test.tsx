@@ -36,25 +36,56 @@ vi.mock('../components/features/LowPowerIndicator', () => ({
 
 const noClashes = { count: 0, marks: new Map(), groups: [] as ConflictGroup[] };
 
-vi.mock('@festie/shared/hooks', () => ({
-  usePickClear: () => vi.fn(),
-  usePicks: vi.fn(() => ({
-    getMyPick: vi.fn(() => null),
-    getOtherPicks: vi.fn(() => []),
-    savePick: vi.fn(),
-  })),
-  useFestival: vi.fn(() => ({
-    getStageColor: vi.fn(() => '#ccc'),
-    getStageName: vi.fn(() => 'Main Stage'),
-  })),
-  useDayClashes: vi.fn(() => noClashes),
-}));
+// getFilteredSets runs the real shared filter against the store fixture.
+vi.mock('@festie/shared/hooks', async () => {
+  const { filterScheduleSets } = await import('@festie/shared/utils');
+  return {
+    usePickClear: () => vi.fn(),
+    usePicks: vi.fn(() => ({
+      getMyPick: vi.fn(() => null),
+      getOtherPicks: vi.fn(() => []),
+      savePick: vi.fn(),
+    })),
+    useFestival: vi.fn(() => ({
+      getStageColor: vi.fn(() => '#ccc'),
+      getStageName: vi.fn(() => 'Main Stage'),
+      getFilteredSets: () => {
+        const st = storeState as {
+          sets: { dayIndex: number }[];
+          stages: never[];
+          selectedDay: number;
+          activeStages: string[];
+          onlyMine?: boolean;
+          searchQuery?: string;
+          currentProfile?: { picks?: Record<string, string> };
+        };
+        return filterScheduleSets(st.sets.filter((x) => x.dayIndex === st.selectedDay) as never[], {
+          activeStages: st.activeStages,
+          stages: st.stages,
+          onlyMine: !!st.onlyMine,
+          picks: st.currentProfile?.picks,
+          query: st.searchQuery ?? '',
+        });
+      },
+    })),
+    useDayClashes: vi.fn(() => noClashes),
+  };
+});
 
 vi.mock('../components/ui/EmptyState', () => ({
-  default: ({ title, description }: { title: string; description?: string }) => (
+  default: ({
+    title,
+    description,
+    cta,
+  }: {
+    title: string;
+    description?: string;
+    cta?: { label: string; onClick: () => void };
+  }) => (
     <div data-testid="empty-state">
       <h3>{title}</h3>
       {description && <p>{description}</p>}
+      {cta && <button onClick={cta.onClick}>{cta.label}</button>}
     </div>
   ),
 }));
@@ -154,6 +185,18 @@ const timedDay = {
 describe('GridView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.keys(storeState).forEach((k) => delete storeState[k]);
+    Object.assign(storeState, {
+      stages: [{ id: 'st1', name: 'Main Stage' }],
+      days: [{ index: 0, label: 'Friday', date: '2026-06-12' }],
+      activeStages: [],
+      searchQuery: '',
+      onlyMine: false,
+      currentProfile: null,
+      setSearchQuery: vi.fn(),
+      setOnlyMine: vi.fn(),
+      setActiveStages: vi.fn(),
+    });
     setFilters();
     vi.mocked(useDayClashes).mockReturnValue(noClashes);
     vi.mocked(useNowIndicator).mockReturnValue({
@@ -199,6 +242,14 @@ describe('GridView', () => {
     expect(screen.getByText('No sets scheduled for this day')).toBeInTheDocument();
   });
 
+  it('blames My picks when it empties the day', () => {
+    Object.assign(storeState, { sets: [], onlyMine: true, currentProfile: { picks: { other: 'must' } } });
+    setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+    render(<GridView />);
+    expect(screen.getByText('No picks for this day yet')).toBeInTheDocument();
+    expect(screen.getByText('Show all sets')).toBeInTheDocument();
+  });
+
   it('shows "No sets scheduled" when timeBounds is null', () => {
     setFilters({
       allDaySets: [{ id: 's1', artist: 'Test', stageId: 'st1', dayIndex: 0 }],
@@ -228,6 +279,8 @@ describe('GridView', () => {
       selectedDay: 0,
       activeStages: [],
       onlyMine: false,
+      // A pick elsewhere: the shared filter ignores My picks while there are no picks at all.
+      currentProfile: { picks: { other: 'must' } },
     });
     try {
       // Control: without the filter the real hook places the set on the grid.
@@ -236,11 +289,11 @@ describe('GridView', () => {
       unmount();
       storeState.onlyMine = true;
       render(<GridView />);
-      // getMyPick is mocked to return null, so nothing is picked and nothing shows.
-      expect(screen.getByText('No sets scheduled for this day')).toBeInTheDocument();
+      // The only pick is on another set, so nothing on this day shows.
+      expect(screen.getByText('No picks for this day yet')).toBeInTheDocument();
       expect(screen.queryByTestId('timeline-grid')).not.toBeInTheDocument();
     } finally {
-      for (const k of ['currentFestival', 'sets', 'stages', 'selectedDay', 'activeStages', 'onlyMine']) delete storeState[k];
+      for (const k of ['currentFestival', 'sets', 'stages', 'selectedDay', 'activeStages', 'onlyMine', 'currentProfile']) delete storeState[k];
     }
   });
 

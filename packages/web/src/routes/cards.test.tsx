@@ -19,18 +19,18 @@ vi.mock('@festie/shared/hooks', () => ({
     getStageColor: () => '#ccc',
     getStageName: () => 'Main',
     getDays: () => (festivalState.days as unknown[]) ?? [],
+    // No filter is active in this fixture, so the selected day's sets pass through.
+    getFilteredSets: () =>
+      (festivalState.sets as { dayIndex: number }[]).filter((s) => s.dayIndex === festivalState.selectedDay),
   }),
 }));
 vi.mock('../hooks/useSetStatus', () => ({ useNow: () => nowMs }));
-vi.mock('../hooks/useScheduleFilters', () => ({
-  useScheduleFilters: () => ({ filterSets: (s: unknown[]) => [...s] }),
-}));
 vi.mock('../components/features/SetCard', () => ({
   default: ({ set }: { set: { id: string } }) => <div data-testid="set-card" data-id={set.id} />,
 }));
 vi.mock('../components/features/PhaseHomeActions', () => ({ default: () => <div data-testid="band" /> }));
 vi.mock('../components/features/OtherDayMatches', () => ({ default: () => null }));
-vi.mock('../components/ui/EmptyState', () => ({ default: () => <div data-testid="empty-state" /> }));
+vi.mock('../components/features/ScheduleEmptyState', () => ({ default: () => <div data-testid="empty-state" /> }));
 vi.mock('../components/ui/skeletons/CardsSkeleton', () => ({ default: () => <div /> }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,

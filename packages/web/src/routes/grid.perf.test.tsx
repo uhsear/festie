@@ -53,7 +53,12 @@ vi.mock('@festie/shared/hooks', () => {
       getOtherPicks: () => [],
       savePick: vi.fn(),
     }),
-    useFestival: () => ({ getStageColor: () => '#00e8d0', getStageName: () => 'Stage' }),
+    useFestival: () => ({
+      getStageColor: () => '#00e8d0',
+      getStageName: () => 'Stage',
+      // No filter is active in this fixture, so the day's sets pass through.
+      getFilteredSets: () => (storeState.sets as FestivalSet[]).filter((s) => s.dayIndex === storeState.selectedDay),
+    }),
     useDayClashes: () => {
       const groups = buildPickConflicts({
         sets: storeState.sets as FestivalSet[],

@@ -29,6 +29,13 @@ import {
   fmtShort,
   artistDisplayName,
   resolveFestivalTimeZone,
+  hasAnyPick,
+  isStageFilterActive,
+  scheduleEmptyCopy,
+  scheduleEmptyReason,
+  scheduleResultsSummary,
+  searchEmptyCopy,
+  searchHiddenByFilters,
   type GridBounds,
   type HourMark,
 } from '@festie/shared/utils';
@@ -43,6 +50,8 @@ import EmptyState from '../components/EmptyState';
 import ClashHatch from '../components/ClashHatch';
 import ClashChip from '../components/ClashChip';
 import TBASection from '../components/TBASection';
+import ScheduleDayChips from '../components/ScheduleDayChips';
+import ScheduleResultsRow from '../components/ScheduleResultsRow';
 
 // Vertical scale comes from the shared GRID_ZOOM_LEVELS (px per minute, three
 // steps). The screen opens at defaultZoomIndex(windowW), the middle level on a
@@ -93,13 +102,20 @@ export default function GridScreen() {
   const { holdToPick, setPick } = useQuickPick();
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
-  const allSets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
   const user = useAuthStore((s) => s.user);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const activeStages = useFestivalStore((s) => s.activeStages);
+  const onlyMine = useFestivalStore((s) => s.onlyMine);
+  const searchQuery = useFestivalStore((s) => s.searchQuery);
+  const setActiveStages = useFestivalStore((s) => s.setActiveStages);
+  const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
+  const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
+  const picks = useFestivalDataStore((s) => s.currentProfile)?.picks;
   const { getMyPick, getOtherPicks } = usePicks();
-  const { getStageColor, getStageName, getDays } = useFestival();
+  const { getStageColor, getStageName, getDays, getFilteredSets, getCurrentDaySets } = useFestival();
+  const dayLabel = getDays()[selectedDay]?.label ?? 'Grid';
+  const screenTitle = `${dayLabel} · Grid`;
 
   // Compact crew-overlap count for a cell — how many OTHER crew members picked
   // a set. Same shared accessor the web grid uses (getOtherPicks reads the
@@ -122,37 +138,21 @@ export default function GridScreen() {
     return stages;
   }, [stages, activeStages]);
 
-  // Timed sets for the selected day, respecting the active-stage filter — the
-  // same predicate as the web grid's timedSets memo.
+  // Timed sets for the selected day, through the same shared filter (stages,
+  // My picks, search) as the Schedule tab.
   const timedSets = useMemo(
-    () =>
-      allSets.filter(
-        (s) =>
-          s.dayIndex === selectedDay &&
-          s.startTime &&
-          s.endTime &&
-          (activeStages.length === 0 ||
-            activeStages.length === stages.length ||
-            activeStages.includes(s.stageId)),
-      ),
-    [allSets, selectedDay, activeStages, stages],
+    () => getFilteredSets().filter((s) => s.startTime && s.endTime),
+    [getFilteredSets],
   );
 
-  // Same day and stage filter, but without a start or end time: the TBA list
+  // Same shared filter, but without a start or end time: the TBA list
   // shown when the day has nothing to place on the grid yet.
   const untimedSets = useMemo(() => {
     const sep = currentFestival?.b2bSeparator;
-    return allSets
-      .filter(
-        (s) =>
-          s.dayIndex === selectedDay &&
-          (!s.startTime || !s.endTime) &&
-          (activeStages.length === 0 ||
-            activeStages.length === stages.length ||
-            activeStages.includes(s.stageId)),
-      )
+    return getFilteredSets()
+      .filter((s) => !s.startTime || !s.endTime)
       .sort((a, b) => artistDisplayName(a, sep).localeCompare(artistDisplayName(b, sep)));
-  }, [allSets, selectedDay, activeStages, stages, currentFestival?.b2bSeparator]);
+  }, [getFilteredSets, currentFestival?.b2bSeparator]);
 
   // Pre-compute stageId -> sets once per render instead of filtering inside each
   // column (web grid's setsByStage).
@@ -313,7 +313,7 @@ export default function GridScreen() {
   if (!currentFestival) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen options={{ title: 'Schedule grid', headerShown: true }} />
+        <Stack.Screen options={{ title: screenTitle, headerShown: true }} />
         <EmptyState
           icon="calendar-outline"
           title="No festival selected"
@@ -322,11 +322,31 @@ export default function GridScreen() {
       </View>
     );
   }
+  const stageFilterActive = isStageFilterActive(activeStages, stages.length);
+  const filterNarrows = searchQuery.trim() !== '' || (onlyMine && hasAnyPick(picks)) || stageFilterActive;
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setOnlyMine(false);
+    setActiveStages([]);
+  };
+  const resultsRow = filterNarrows ? (
+    <ScheduleResultsRow
+      summary={scheduleResultsSummary({
+        count: timedSets.length,
+        onlyMine: onlyMine && hasAnyPick(picks),
+        activeStageCount: stageFilterActive ? activeStages.length : 0,
+      })}
+      onClearAll={clearAllFilters}
+      hPad={t.spacing[4]}
+    />
+  ) : null;
   if (!timedSets.length || !bounds) {
     if (untimedSets.length > 0) {
       return (
         <View style={styles.screen}>
-          <Stack.Screen options={{ title: 'Schedule grid', headerShown: true }} />
+          <Stack.Screen options={{ title: screenTitle, headerShown: true }} />
+          <ScheduleDayChips hPad={t.spacing[4]} />
+          {resultsRow}
           <ScrollView>
             <TBASection
               sets={untimedSets}
@@ -345,13 +365,44 @@ export default function GridScreen() {
         </View>
       );
     }
+    const reason = scheduleEmptyReason({
+      query: searchQuery,
+      onlyMine,
+      hasAnyPick: hasAnyPick(picks),
+      stageFilterActive,
+    });
+    let empty: { title: string; message: string; actionLabel?: string; onAction?: () => void };
+    if (reason === 'search') {
+      const daySets = getCurrentDaySets().filter((s) => s.startTime && s.endTime);
+      const hidden = searchHiddenByFilters(daySets, searchQuery, stages);
+      const clearFilters = () => {
+        setOnlyMine(false);
+        setActiveStages([]);
+      };
+      empty = {
+        ...searchEmptyCopy(searchQuery, dayLabel, false, hidden),
+        onAction: hidden ? clearFilters : () => setSearchQuery(''),
+      };
+    } else if (reason === 'picks') {
+      empty = { ...scheduleEmptyCopy('picks', dayLabel), onAction: () => setOnlyMine(false) };
+    } else if (reason === 'stages') {
+      empty = { ...scheduleEmptyCopy('stages', dayLabel), onAction: () => setActiveStages([]) };
+    } else {
+      empty = {
+        title: 'No timed sets to display',
+        message: 'There are no sets with scheduled times for this day. Try another day above.',
+      };
+    }
     return (
       <View style={styles.screen}>
-        <Stack.Screen options={{ title: 'Schedule grid', headerShown: true }} />
+        <Stack.Screen options={{ title: screenTitle, headerShown: true }} />
+        <ScheduleDayChips hPad={t.spacing[4]} />
+        {resultsRow}
         <EmptyState
           icon="time-outline"
-          title="No timed sets to display"
-          message="There are no sets with scheduled times for this day. Try switching days on the schedule tab."
+          title={empty.title}
+          message={empty.message}
+          action={empty.actionLabel && empty.onAction ? { label: empty.actionLabel, onPress: empty.onAction } : undefined}
         />
       </View>
     );
@@ -452,7 +503,7 @@ export default function GridScreen() {
     <View style={styles.screen}>
       <Stack.Screen
         options={{
-          title: 'Schedule grid',
+          title: screenTitle,
           headerShown: true,
           headerRight: () => (
             <TouchableOpacity
@@ -504,6 +555,8 @@ export default function GridScreen() {
       {/* Sticky chrome: the stage header row and the time gutter are separate,
           non-interactive ScrollViews whose offsets follow the body below, so
           stage names and hour labels stay on screen on both axes. */}
+      <ScheduleDayChips hPad={t.spacing[4]} />
+      {resultsRow}
       <View style={styles.headerBar}>
         <View style={styles.corner} />
         <ScrollView
