@@ -53,6 +53,7 @@ function resetStores() {
     pickSync: {},
     savesInFlight: 0,
     lastSavedAt: null,
+    guestPicks: {},
   });
   useFestivalUIStore.setState({
     selectedDay: 0,
@@ -529,7 +530,8 @@ describe('festivalDataStore', () => {
       expect(profile.picks['set-1']).toBe('must'); // existing pick preserved
     });
 
-    it('throws when no current profile', async () => {
+    it('throws when signed in with no current profile and no festival', async () => {
+      useAuthStore.setState({ user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' } });
       useFestivalDataStore.setState({ currentProfile: null });
       await expect(
         useFestivalDataStore.getState().savePick({
@@ -654,7 +656,8 @@ describe('festivalDataStore', () => {
       expect(useFestivalDataStore.getState().currentProfile!.picks['set-2']).toBe('must');
     });
 
-    it('throws when no current profile', async () => {
+    it('throws when signed in with no current profile and no festival', async () => {
+      useAuthStore.setState({ user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' } });
       useFestivalDataStore.setState({ currentProfile: null });
       await expect(useFestivalDataStore.getState().bulkSavePicks(['set-1'], 'must')).rejects.toThrow(
         'No active profile',
@@ -692,7 +695,8 @@ describe('festivalDataStore', () => {
       expect(profile.picks['set-1']).toBeUndefined();
     });
 
-    it('throws when no current profile', async () => {
+    it('throws when signed in with no current profile', async () => {
+      useAuthStore.setState({ user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' } });
       useFestivalDataStore.setState({ currentProfile: null });
       await expect(useFestivalDataStore.getState().removePick('fest-1', 'set-1')).rejects.toThrow('No active profile');
     });
@@ -978,6 +982,7 @@ describe('festivalDataStore', () => {
     });
 
     it('does not mark a pick failed when there is no profile', async () => {
+      useAuthStore.setState({ user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' } });
       await expect(
         useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
       ).rejects.toThrow('No active profile');
@@ -1287,11 +1292,10 @@ describe('festivalDataStore', () => {
       expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-2': 'must', 'set-3': 'maybe' });
     });
 
-    it('savePick with no profile and no user throws and sends no POST', async () => {
+    it('savePick with no profile and no user saves a guest pick and sends no POST', async () => {
       useAuthStore.setState({ user: null });
-      await expect(
-        useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
-      ).rejects.toThrow('No active profile');
+      await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' });
+      expect(useFestivalDataStore.getState().guestPicks).toEqual({ 'fest-1': { 'set-2': 'must' } });
       expect(api.post).not.toHaveBeenCalled();
     });
 

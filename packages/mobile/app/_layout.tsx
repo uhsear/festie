@@ -271,8 +271,10 @@ function AuthGate() {
       .catch(() => setIntroSeen(true)); // on error, don't block with the intro
   }, []);
 
+  const introReplay = useUIStore((s) => s.introReplay);
   const dismissIntro = () => {
     setIntroSeen(true);
+    useUIStore.getState().setIntroReplay(false);
     AsyncStorage.setItem(INTRO_KEY, 'true').catch(() => {});
   };
 
@@ -495,7 +497,7 @@ function AuthGate() {
           <ActivityIndicator size="large" color={colors.accent.aqua} />
         </View>
       )}
-      {!loading && introSeen === false && !skipIntro && <FirstRunIntro onDone={dismissIntro} />}
+      {!loading && (introReplay || (introSeen === false && !skipIntro)) && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );
 }

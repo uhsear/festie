@@ -18,12 +18,14 @@ const crew = { id: 'c1', name: 'Tent 9', owner: 'u1', members: [], festivalId: '
 const joinByCode = vi.fn();
 const selectCrew = vi.fn();
 const selectFestival = vi.fn();
+const mergeGuestPicks = vi.fn();
 
 function setup(currentFestivalId: string | null) {
   useCrewStore.setState({ joinByCode, selectCrew } as never);
   useFestivalDataStore.setState({
     currentFestival: currentFestivalId ? ({ id: currentFestivalId } as never) : null,
     selectFestival,
+    mergeGuestPicks,
   } as never);
   return renderHook(() => useJoinCrewByInvite()).result.current;
 }
@@ -33,6 +35,7 @@ describe('useJoinCrewByInvite', () => {
     joinByCode.mockReset();
     selectCrew.mockReset().mockResolvedValue(undefined);
     selectFestival.mockReset().mockResolvedValue(undefined);
+    mergeGuestPicks.mockReset().mockResolvedValue(undefined);
   });
 
   it('switches festival when it differs', async () => {
@@ -81,5 +84,25 @@ describe('useJoinCrewByInvite', () => {
     joinByCode.mockRejectedValue(new Error('Crew is full'));
     const join = setup('f1');
     await expect(join('ABC123')).rejects.toThrow('Crew is full');
+  });
+
+  it('waits for the guest-pick merge before joining', async () => {
+    const order: string[] = [];
+    mergeGuestPicks.mockImplementation(async () => {
+      await Promise.resolve();
+      order.push('merge');
+    });
+    joinByCode.mockImplementation(async () => {
+      order.push('join');
+      return crew;
+    });
+    await setup('f2')('ABC123');
+    expect(order).toEqual(['merge', 'join']);
+  });
+
+  it('still joins when the merge rejects', async () => {
+    mergeGuestPicks.mockRejectedValue(new Error('merge failed'));
+    joinByCode.mockResolvedValue(crew);
+    expect((await setup('f2')('ABC123')).kind).toBe('joined');
   });
 });

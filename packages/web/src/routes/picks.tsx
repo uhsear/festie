@@ -1,7 +1,7 @@
 import { useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import { useFestivalStore, useAuthStore, selectMyPicks } from '@festie/shared/stores';
 import { usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
@@ -13,7 +13,7 @@ import RefreshableView from '../components/layout/RefreshableView';
 import PickBulkActions from '../components/PickBulkActions';
 import OfflineReadinessCard from '../components/features/OfflineReadinessCard';
 import CrewSuggestionStrip from '../components/features/CrewSuggestionStrip';
-import GuestTeaser from '../components/features/GuestTeaser';
+import GuestPicksBanner from '../components/features/GuestPicksBanner';
 import PickConflicts from '../components/features/PickConflicts';
 import PicksPlanRow from '../components/features/PicksPlanRow';
 import ListenList from '../components/features/ListenList';
@@ -53,6 +53,7 @@ function PicksViewInner() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const myPicks = useFestivalStore(selectMyPicks);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const sets = useFestivalStore((state) => state.sets);
   const days = useFestivalStore((state) => state.days);
@@ -76,8 +77,8 @@ function PicksViewInner() {
 
   // True when the profile has any pick at all, which gates the calendar export
   // independently of the active filters.
-  const pickedSets = useMemo(() => sets.filter((s) => currentProfile?.picks?.[s.id]), [sets, currentProfile]);
-  const hasAnyPicks = pickedSets.length > 0;
+  const pickedSets = useMemo(() => sets.filter((s) => myPicks?.[s.id]), [sets, myPicks]);
+  const hasAnyPicks = !!currentProfile && pickedSets.length > 0;
 
   const actionButtons = hasAnyPicks ? (
     <Suspense fallback={null}>
@@ -86,9 +87,7 @@ function PicksViewInner() {
     </Suspense>
   ) : null;
 
-  // Guests get the in-place sign-up teaser (parity with the always-visible nav
-  // tabs) instead of a redirect to /login.
-  if (!user) return <GuestTeaser mode="picks" />;
+  const guestBanner = user ? null : <GuestPicksBanner />;
 
   if (!currentFestival) {
     return (
@@ -102,7 +101,7 @@ function PicksViewInner() {
     );
   }
 
-  if (!currentProfile) {
+  if (user && !currentProfile) {
     return (
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
         <EmptyState
@@ -121,6 +120,7 @@ function PicksViewInner() {
     return (
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
+          {guestBanner}
           {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
@@ -162,6 +162,7 @@ function PicksViewInner() {
   return (
     <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
       <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
+        {guestBanner}
         {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
         <CrewSuggestionStrip />
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />

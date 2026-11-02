@@ -66,6 +66,8 @@ export interface UIState {
   theme: ThemePreference;
   /** Persisted device preference. Not reset on logout. SOS (heavy) always vibrates. */
   hapticsEnabled: boolean;
+  /** Mobile: asks AuthGate to replay the first-run intro. Not persisted. */
+  introReplay: boolean;
 }
 
 export interface UIActions {
@@ -88,6 +90,7 @@ export interface UIActions {
   dismissToast: (id: number) => void;
   setTheme: (theme: ThemePreference) => void;
   setHapticsEnabled: (enabled: boolean) => void;
+  setIntroReplay: (v: boolean) => void;
 }
 
 export type UIStore = UIState & UIActions;
@@ -103,6 +106,7 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   toasts: [],
   theme: 'stage',
   hapticsEnabled: true,
+  introReplay: false,
 
   setDetailSet: (detailSet: FestivalSet | null) => {
     set({ detailSet });
@@ -181,6 +185,10 @@ const uiStore: StateCreator<UIStore> = (set) => ({
 
   setHapticsEnabled: (hapticsEnabled: boolean) => {
     set({ hapticsEnabled });
+  },
+
+  setIntroReplay: (introReplay: boolean) => {
+    set({ introReplay });
   },
 });
 
