@@ -6,6 +6,7 @@
 // chat apps show a rich preview, and one Join button into the app. Every value
 // is escaped here, inside the renderer, so no caller can forget.
 
+import { festivalTint } from './festival-tint.js';
 import { escapeHtml } from './helpers/sanitize.js';
 import { formatInviteDateRange, type InvitePreview } from './invite-preview.js';
 
@@ -94,6 +95,11 @@ export function renderInviteJoinPage({
   const pageUrl = escapeHtml(`${origin}/join/${code}`);
   const joinUrl = escapeHtml(`${origin}/?joinCrew=${code}`);
   const imageUrl = escapeHtml(`${origin}/og-image.png`);
+  const tint = festivalTint(festivalName);
+  // Hex values come from a fixed function, so they need no escaping.
+  const tintStyle = `
+    body { background: ${tint.bg}; }
+    .invite-card { background: ${tint.pale}; border-color: ${tint.faint}; border-top: 4px solid ${tint.active}; }`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -111,7 +117,7 @@ export function renderInviteJoinPage({
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <style>${PAGE_STYLE}
+  <style>${PAGE_STYLE}${tintStyle}
   </style>
 </head>
 <body>

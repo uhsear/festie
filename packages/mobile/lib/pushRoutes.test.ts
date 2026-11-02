@@ -11,5 +11,17 @@ describe('pushTargetHref', () => {
     expect(pushTargetHref({ kind: 'screen', screen: 'picks' })).toBe('/(tabs)/picks');
     expect(pushTargetHref({ kind: 'screen', screen: 'wrap' })).toBe('/wrap');
     expect(pushTargetHref({ kind: 'screen', screen: 'crew-plan' })).toBe('/crew-plan');
+    expect(pushTargetHref({ kind: 'screen', screen: 'rate' })).toBe('/rate');
+  });
+
+  it('passes the festival to wrap and rate', () => {
+    expect(pushTargetHref({ kind: 'screen', screen: 'wrap', festivalId: 'f1' })).toEqual({
+      pathname: '/wrap',
+      params: { festival: 'f1' },
+    });
+    expect(pushTargetHref({ kind: 'screen', screen: 'rate', festivalId: 'f1' })).toEqual({
+      pathname: '/rate',
+      params: { festival: 'f1' },
+    });
   });
 });

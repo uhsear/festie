@@ -267,8 +267,9 @@ describe('NotificationPrefsSection', () => {
     expect(mockUpdatePrefs).toHaveBeenCalledWith({ mustSeeReminderMinutes: 15 });
   });
 
-  it('says the lineup, reform and wrap-up toggles cover email as well as push', () => {
+  it('says the lineup and reform toggles cover email as well as push', () => {
     render(<NotificationPrefsSection />);
-    expect(screen.getAllByText(/By push and email\./)).toHaveLength(3);
+    expect(screen.getAllByText(/By push and email\./)).toHaveLength(2);
+    expect(screen.getByText('Wrap and rating nudges')).toBeInTheDocument();
   });
 });

@@ -40,6 +40,7 @@ const loadCrewPlan = () => import('./routes/crew-plan');
 const loadGrid = () => import('./routes/grid');
 const loadFestivalMode = () => import('./routes/festival-mode');
 const loadWrap = () => import('./routes/wrap');
+const loadRate = () => import('./routes/rate');
 const loadAdmin = () => import('./routes/admin');
 const loadLogin = () => import('./routes/login');
 const loadRegister = () => import('./routes/register');
@@ -86,6 +87,7 @@ const CrewPlanView = withSkeleton(lazyRouteComponent(loadCrewPlan), CrewPlanSkel
 const GridView = withSkeleton(gridLazy, TimelineSkeleton);
 const FestivalModeView = withSkeleton(festivalModeLazy, FestivalModeSkeleton);
 const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
+const RateView = withSkeleton(lazyRouteComponent(loadRate), MinimalFallback);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
 const FriendPicksView = withSkeleton(lazyRouteComponent(loadFriendPicks), MinimalFallback);
@@ -117,6 +119,11 @@ export function prefetchMainRoutes() {
 // Root route with AppShell layout
 const rootRoute = new RootRoute({
   component: AppShell,
+});
+
+// Shared by /wrap and /rate: a festival id from a push or history link, or nothing.
+const festivalSearch = (s: Record<string, unknown>): { festival?: string } => ({
+  festival: typeof s.festival === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(s.festival) ? s.festival : undefined,
 });
 
 // ── Public routes (guests can browse the schedule) ──────────────────
@@ -165,8 +172,20 @@ const wrapRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/wrap',
   component: WrapView,
+  validateSearch: festivalSearch,
   // No guest guard: /wrap renders <GuestTeaser mode="wrap"/> in place for
   // unauthenticated visitors. The wrap queries wait for a user, so a guest sends no request.
+});
+
+const rateRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/rate',
+  component: RateView,
+  validateSearch: festivalSearch,
+  beforeLoad: async ({ location }) => {
+    await authReady();
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
+  },
 });
 
 // ── Auth routes ─────────────────────────────────────────────────────
@@ -342,6 +361,7 @@ const routeTree = rootRoute.addChildren([
   gridRoute,
   festivalModeRoute,
   wrapRoute,
+  rateRoute,
   accountRoute,
   meRoute,
   compareRoute,

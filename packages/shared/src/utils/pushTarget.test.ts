@@ -28,7 +28,19 @@ describe('resolvePushTarget', () => {
     expect(link('https://festie.us/compare')).toEqual({ kind: 'screen', screen: 'compare' });
     expect(link('rave://crew-compare')).toEqual({ kind: 'screen', screen: 'compare' });
     expect(link('https://festie.us/picks')).toEqual({ kind: 'screen', screen: 'picks' });
-    expect(link('https://festie.us/wrap?festival=f1')).toEqual({ kind: 'screen', screen: 'wrap' });
+    expect(link('https://festie.us/timeline')).toEqual({ kind: 'screen', screen: 'timeline' });
+  });
+
+  it('keeps a valid festival for wrap and rate', () => {
+    expect(link('https://festie.us/wrap?festival=f1')).toEqual({ kind: 'screen', screen: 'wrap', festivalId: 'f1' });
+    expect(link('festie://rate?festival=edc_2026#x')).toEqual({ kind: 'screen', screen: 'rate', festivalId: 'edc_2026' });
+    expect(link('rave://rate')).toEqual({ kind: 'screen', screen: 'rate' });
+  });
+
+  it('drops a bad festival for wrap and rate', () => {
+    expect(link('https://festie.us/wrap?festival=a/b')).toEqual({ kind: 'screen', screen: 'wrap' });
+    expect(link('https://festie.us/rate?festival=' + 'a'.repeat(129))).toEqual({ kind: 'screen', screen: 'rate' });
+    expect(link('https://festie.us/rate?festival=')).toEqual({ kind: 'screen', screen: 'rate' });
   });
 
   it('falls back to setId, then festivalId, then null', () => {
@@ -40,6 +52,7 @@ describe('resolvePushTarget', () => {
 
   it('ignores a link from another origin', () => {
     expect(link('https://evil.example/set/s1')).toBeNull();
+    expect(link('https://evil.example/rate?festival=f1')).toBeNull();
   });
 
   it('rejects unsafe ids', () => {

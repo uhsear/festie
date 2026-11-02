@@ -48,6 +48,11 @@ describe('invite-pages: renderInviteJoinPage', () => {
     origin: 'https://festie.us',
   };
 
+  it('tints the page with the festival colour', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, festivalName: 'Coachella' });
+    assert.ok(html.includes('body { background: #08160c; }'));
+  });
+
   it('returns valid HTML document', () => {
     const html = renderInviteJoinPage(defaultArgs);
     assert.ok(html.startsWith('<!DOCTYPE html>'));
