@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Share2 } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
-import { formatFestivalDateRange, groupFestivalsByStatus } from '@festie/shared/utils';
+import { buildFestivalPageUrl, formatFestivalDateRange, groupFestivalsByStatus } from '@festie/shared/utils';
+import { FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
 import Dialog from '../ui/Dialog';
 import FollowButton from '../features/FollowButton';
@@ -21,7 +22,7 @@ export default function FestivalPicker() {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const selectFestival = useFestivalStore((s) => s.selectFestival);
   const isLoading = useFestivalStore((s) => s.isLoading);
-  const { toastError } = useToast();
+  const { toast, toastError } = useToast();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -54,12 +55,31 @@ export default function FestivalPicker() {
     }
   };
 
+  // Same pattern as DetailPanel's set share: native sheet first, clipboard as the fallback.
+  const handleShare = async (f: Festival & { slug: string }) => {
+    const url = buildFestivalPageUrl(f.slug, window.location.origin);
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (typeof nav.share === 'function') {
+      try {
+        await nav.share({ title: f.name, text: FESTIVAL_SHARE_COPY.text(f.name), url });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast(FESTIVAL_SHARE_COPY.copied, 'success');
+    } catch {
+      toast(FESTIVAL_SHARE_COPY.failed, 'error');
+    }
+  };
+
   const renderRow = (f: Festival, followable: boolean) => {
     const detail = [formatFestivalDateRange(f.startDate, f.endDate), f.location].filter(Boolean).join(' · ');
     const isCurrent = f.id === currentFestival?.id;
     const button = (
       <button
-        key={f.id}
         type="button"
         data-testid={`festival-option-${f.id}`}
         aria-current={isCurrent ? 'true' : undefined}
@@ -76,11 +96,25 @@ export default function FestivalPicker() {
         {isCurrent && <Check className="w-4 h-4 shrink-0 text-accent-aqua" aria-hidden="true" />}
       </button>
     );
-    if (!followable) return button;
+    const slug = f.slug;
     return (
       <div key={f.id} className="flex items-center gap-2">
         {button}
-        <FollowButton festivalId={f.id} festivalName={f.name} size="sm" />
+        {slug && (
+          <button
+            type="button"
+            aria-label={FESTIVAL_SHARE_COPY.a11y(f.name)}
+            onClick={() => void handleShare({ ...f, slug })}
+            data-testid={`festival-share-${f.id}`}
+            className={cn(
+              'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-secondary cursor-pointer',
+              'hover:bg-bg-input hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+            )}
+          >
+            <Share2 className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
+        {followable && <FollowButton festivalId={f.id} festivalName={f.name} size="sm" />}
       </div>
     );
   };

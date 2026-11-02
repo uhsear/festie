@@ -165,13 +165,14 @@ describe('lib/db/stores/festivals.js', () => {
         createdAt: '2026-01-01',
         updatedAt: '2026-01-02',
       };
-      // Transaction calls: BEGIN, INSERT festival, INSERT stages, INSERT days, INSERT sets, SELECT, COMMIT
+      // Transaction calls: BEGIN, INSERT festival, INSERT stages, INSERT days, INSERT sets, UPDATE slug, SELECT, COMMIT
       const { pool, client } = makeTransactionPool([
         { rows: [] }, // BEGIN
         { rows: [] }, // INSERT festival
         { rows: [] }, // INSERT stages
         { rows: [] }, // INSERT days
         { rows: [] }, // INSERT sets
+        { rows: [] }, // UPDATE slug
         { rows: [festRow] }, // SELECT result
         { rows: [] }, // COMMIT
       ]);
@@ -190,6 +191,7 @@ describe('lib/db/stores/festivals.js', () => {
         { rows: [] }, // BEGIN
         { rows: [] }, // INSERT festival
         // No stages/days/sets inserts (empty arrays skip)
+        { rows: [] }, // UPDATE slug
         { rows: [festRow] }, // SELECT
         { rows: [] }, // COMMIT
       ]);

@@ -5,6 +5,9 @@ import { renderHook, act } from '@testing-library/react';
 const h = vi.hoisted(() => ({
   checkSession: vi.fn(async () => {}),
   joinByCode: vi.fn(async () => {}),
+  loadFestivals: vi.fn(async () => {}),
+  selectFestival: vi.fn(async (_id: string) => {}),
+  festivals: [] as { id: string }[],
   state: {
     user: null as unknown,
     hydrated: true,
@@ -34,8 +37,8 @@ vi.mock('@festie/shared', () => {
 
 vi.mock('@festie/shared/stores', () => {
   const slice = {
-    loadFestivals: vi.fn(async () => {}),
-    selectFestival: vi.fn(async () => {}),
+    loadFestivals: h.loadFestivals,
+    selectFestival: h.selectFestival,
     get currentFestival() {
       return h.state.currentFestival;
     },
@@ -45,7 +48,7 @@ vi.mock('@festie/shared/stores', () => {
     loadProfiles: vi.fn(async () => {}),
   };
   const useFestivalStore = Object.assign((sel: (s: typeof slice) => unknown) => sel(slice), {
-    getState: () => ({ festivals: [] as unknown[], currentFestival: null }),
+    getState: () => ({ festivals: h.festivals as unknown[], currentFestival: null }),
   });
   return { useFestivalStore };
 });
@@ -175,5 +178,43 @@ describe('useFestivalLoader ?ref capture', () => {
     window.history.pushState({}, '', '/?ref=bad%20ref!');
     renderHook(() => useFestivalLoader());
     expect(sessionStorage.getItem('festie-ref')).toBeNull();
+  });
+});
+
+describe('useFestivalLoader ?festival deep link', () => {
+  beforeEach(() => {
+    h.state.user = null;
+    h.festivals = [{ id: 'f1' }, { id: 'f2' }];
+    h.selectFestival.mockClear();
+  });
+
+  afterEach(() => {
+    h.festivals = [];
+    window.history.pushState({}, '', '/');
+  });
+
+  it('selects the linked festival, strips festival= and keeps ref=', async () => {
+    window.history.pushState({}, '', '/?festival=f2&ref=festival-page#x');
+    renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(h.selectFestival).toHaveBeenCalledWith('f2');
+    expect(window.location.search).toBe('?ref=festival-page');
+    expect(window.location.hash).toBe('#x');
+  });
+
+  it('falls back to the default pick for an unknown id and still strips the param', async () => {
+    window.history.pushState({}, '', '/?festival=nope');
+    renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(h.selectFestival).not.toHaveBeenCalledWith('nope');
+    expect(h.selectFestival).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe('');
+  });
+
+  it('leaves other paths alone', async () => {
+    window.history.pushState({}, '', '/wrap?festival=f2');
+    renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(window.location.search).toBe('?festival=f2');
   });
 });

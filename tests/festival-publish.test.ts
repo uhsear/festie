@@ -109,7 +109,7 @@ describe('set times are out: PUT and publish', () => {
         festivals: {
           update: mock.fn(async (id: string, data: any) => ({ ...existing, id, ...data })),
           getSetTimesOutAt: mock.fn(async () => setTimesOutAt),
-          publish: mock.fn(async () => ({ publishedAt: '2026-11-01T00:00:00.000Z' })),
+          publish: mock.fn(async () => ({ publishedAt: '2026-11-01T00:00:00.000Z', slug: 'fest-2026' })),
         },
         profiles: { pickersBySet },
         pool: { query: async () => ({ rows: [{ count: '0' }] }) },
@@ -180,6 +180,12 @@ describe('set times are out: PUT and publish', () => {
       sendSetTimesOut.mock.calls.map((c: any) => c.arguments),
       [['f-1']],
     );
+  });
+
+  test('publish answers { publishedAt, checklist } and leaves the store slug out', async () => {
+    const { app } = build({ existing: tbaFestival(null) });
+    const res = await request(app).post('/f-1/publish').expect(200);
+    assert.deepEqual(res.body.data, { publishedAt: '2026-11-01T00:00:00.000Z', checklist: [] });
   });
 });
 
