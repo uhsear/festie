@@ -109,9 +109,10 @@ const CRITICAL_TYPES = new Set(['crew_sos']);
 export const PUSH_BUDGET_PER_HOUR = 6;
 /**
  * Never held by the budget and never counted: an emergency, reminders the user asked
- * for, and meeting points (owner decision 2026-11-02).
+ * for, meeting points (owner decision 2026-11-02), and set-time changes, so crew chatter
+ * cannot use up a person's budget and hold back news that one of their sets moved.
  */
-export const PUSH_BUDGET_EXEMPT = new Set(['crew_sos', 'set_reminder', 'crew_meeting_point']);
+export const PUSH_BUDGET_EXEMPT = new Set(['crew_sos', 'set_reminder', 'crew_meeting_point', 'schedule_change']);
 
 /** Per-type push channel/category overrides for critical alerts. */
 const CRITICAL_CHANNEL: Record<string, { channelId: string; category: string }> = {

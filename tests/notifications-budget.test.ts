@@ -45,15 +45,15 @@ function build(stores: any, log = makeLog()) {
 const rows = (stores: any) => stores.notificationLog.insert.mock.calls.map((c: any) => c.arguments[0]);
 const inboxRows = (stores: any) => rows(stores).filter((r: any) => r.platform === 'inbox');
 
-const change = { userId: 'u1', type: 'schedule_change', title: 'Set moved', body: '10 PM now', data: { festivalId: 'f1', setId: 's1' } };
+const change = { userId: 'u1', type: 'crew_update', title: 'Crew update', body: 'New poll', data: { crewId: 'c1' } };
 
 describe('push budget', () => {
   it('allows 6 pushes an hour', () => {
     assert.equal(PUSH_BUDGET_PER_HOUR, 6);
   });
 
-  it('exempts SOS, set reminders and meeting points', () => {
-    assert.deepEqual([...PUSH_BUDGET_EXEMPT].sort(), ['crew_meeting_point', 'crew_sos', 'set_reminder']);
+  it('exempts SOS, set reminders, meeting points and set-time changes', () => {
+    assert.deepEqual([...PUSH_BUDGET_EXEMPT].sort(), ['crew_meeting_point', 'crew_sos', 'schedule_change', 'set_reminder']);
   });
 
   it('a user with 6 counted pushes gets a held inbox row and no transport call', async () => {
@@ -81,7 +81,7 @@ describe('push budget', () => {
     assert.equal(messaging.send.mock.calls.length, 1);
   });
 
-  for (const type of ['crew_sos', 'set_reminder', 'crew_meeting_point']) {
+  for (const type of ['crew_sos', 'set_reminder', 'crew_meeting_point', 'schedule_change']) {
     it(`${type} reaches the device at the cap and is never counted`, async () => {
       const stores = makeStores({ counts: { u1: 20 } });
       const { svc, messaging } = build(stores);
@@ -99,7 +99,7 @@ describe('push budget', () => {
     const result = await svc.sendToOfflineUsers({
       festivalId: 'f1',
       userIds: ['u1', 'u2', 'u3'],
-      type: 'schedule_change',
+      type: 'crew_update',
       title: 't',
       body: 'b',
     });
