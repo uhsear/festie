@@ -3,6 +3,12 @@ import { render, screen } from '@testing-library/react';
 import CardsSkeleton from './CardsSkeleton';
 
 describe('CardsSkeleton', () => {
+  it('announces loading as a status with sr-only text', () => {
+    render(<CardsSkeleton />);
+    expect(screen.getByRole('status', { name: 'Loading sets' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading sets…')).toBeInTheDocument();
+  });
+
   it('renders with aria-busy for loading state', () => {
     render(<CardsSkeleton />);
     expect(screen.getByLabelText('Loading sets')).toHaveAttribute('aria-busy', 'true');
@@ -12,11 +18,6 @@ describe('CardsSkeleton', () => {
     const { container } = render(<CardsSkeleton />);
     const cards = container.querySelectorAll('.card-enter');
     expect(cards.length).toBe(8);
-  });
-
-  it('has role=region for accessibility landmark', () => {
-    render(<CardsSkeleton />);
-    expect(screen.getByRole('region')).toBeInTheDocument();
   });
 
   it('applies staggered animation delays', () => {

@@ -4,9 +4,11 @@ import userEvent from '@testing-library/user-event';
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
+let mockSearch: { next?: string } = {};
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
-  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
+  useSearch: () => mockSearch,
+  Link: ({ to, children, search: _search, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
     <a href={to} {...rest}>
       {children}
     </a>
@@ -45,6 +47,7 @@ async function fillValid(user: ReturnType<typeof userEvent.setup>, opts: { email
 describe('RegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearch = {};
     vi.mocked(useAuth).mockReturnValue({
       login: vi.fn(),
       register: vi.fn(),
@@ -70,7 +73,7 @@ describe('RegisterPage', () => {
 
   it('renders Login and Create account tabs', () => {
     render(<RegisterPage />);
-    // Both auth-method segments are nav links now; "Create Account" also appears
+    // Both auth-method segments are nav links now; "Create account" also appears
     // on the submit button, so scope to the link role.
     expect(screen.getByRole('link', { name: 'Create account' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
@@ -270,6 +273,35 @@ describe('RegisterPage', () => {
     expect(screen.getByText('Creating account…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Creating account…' })).toBeDisabled();
     expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+
+  async function submitRegister() {
+    const user = userEvent.setup();
+    vi.mocked(useAuth).mockReturnValue({
+      login: vi.fn(),
+      register: vi.fn().mockResolvedValue({ emailVerificationSent: false }),
+      logout: vi.fn(),
+      forgotPassword: vi.fn(),
+      changePassword: vi.fn(),
+      uploadAvatar: vi.fn(),
+      removeAvatar: vi.fn(),
+      isLoading: false,
+      error: null,
+    });
+    render(<RegisterPage />);
+    await fillValid(user);
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+  }
+
+  it('returns to the next path after sign-up', async () => {
+    mockSearch = { next: '/set/abc' };
+    await submitRegister();
+    expect(mockNavigate).toHaveBeenCalledWith({ href: '/set/abc' });
+  });
+
+  it('goes to /cards after sign-up without a next path', async () => {
+    await submitRegister();
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' });
   });
 
   it('calls register on valid submit', async () => {

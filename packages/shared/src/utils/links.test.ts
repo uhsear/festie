@@ -9,6 +9,7 @@ import {
   buildHomeUrl,
   buildAppDeepLink,
   primarySpotifyArtist,
+  safeReturnPath,
 } from './links';
 import type { FestivalSet } from '../types/domain';
 
@@ -99,5 +100,34 @@ describe('links — primarySpotifyArtist', () => {
   it('returns null when no artist qualifies', () => {
     expect(primarySpotifyArtist(set([{ name: 'A' }, { name: 'B', links: { instagram: 'x' } }]))).toBeNull();
     expect(primarySpotifyArtist({ ...set([]), artists: undefined })).toBeNull();
+  });
+});
+
+describe('links — safeReturnPath', () => {
+  it.each(['/set/abc', '/picks?day=2', '/(tabs)/picks'])('accepts the in-app path %s', (path) => {
+    expect(safeReturnPath(path)).toBe(path);
+  });
+
+  it.each([
+    '//evil.com',
+    '/\\evil.com',
+    'https://evil.com',
+    'javascript:alert(1)',
+    '',
+    42,
+    undefined,
+    '/login',
+    '/register?next=/x',
+    '/forgot-password',
+    '/(auth)/login',
+    '/set/a\nb',
+    `/${'a'.repeat(512)}`,
+  ])('rejects %j', (raw) => {
+    expect(safeReturnPath(raw)).toBeNull();
+  });
+
+  it('accepts a path of exactly 512 characters', () => {
+    const path = `/${'a'.repeat(511)}`;
+    expect(safeReturnPath(path)).toBe(path);
   });
 });

@@ -3,11 +3,6 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { getStorage } from '../platform/storage';
 
 export interface FestivalModeState {
-  isFestivalMode: boolean;
-  festivalStarted: boolean;
-  showPastSets: boolean;
-  autoScrollToNow: boolean;
-  manuallyDisabled: boolean;
   /**
    * Festival low-power mode (PERSISTED). Battery is a paired constraint with
    * no-signal at a festival: the phone has to last the whole day. When ON,
@@ -20,19 +15,14 @@ export interface FestivalModeState {
    *   - aggressive polling (poll/status     - last-known breadcrumbs
    *     refetch intervals → back off)       - manual one-shot location share
    *
-   * This is a USER-CONTROLLED preference (independent of `isFestivalMode`), so
-   * it persists across launches. Consumers read it as `useFestivalModeStore(s =>
-   * s.lowPowerMode)` and branch their effects on it.
+   * This is a USER-CONTROLLED preference, so it persists across launches.
+   * Consumers read it as `useFestivalModeStore(s => s.lowPowerMode)` and
+   * branch their effects on it.
    */
   lowPowerMode: boolean;
 }
 
 export interface FestivalModeActions {
-  toggleFestivalMode: () => void;
-  setFestivalMode: (on: boolean) => void;
-  setFestivalStarted: (started: boolean) => void;
-  toggleShowPastSets: () => void;
-  toggleAutoScrollToNow: () => void;
   /** Toggle festival low-power mode (persisted). See `lowPowerMode` docs. */
   setLowPowerMode: (on: boolean) => void;
   toggleLowPowerMode: () => void;
@@ -41,42 +31,7 @@ export interface FestivalModeActions {
 export type FestivalModeStore = FestivalModeState & FestivalModeActions;
 
 const festivalModeStore: StateCreator<FestivalModeStore> = (set) => ({
-  isFestivalMode: false,
-  festivalStarted: false,
-  showPastSets: true,
-  autoScrollToNow: false,
-  manuallyDisabled: false,
   lowPowerMode: false,
-
-  toggleFestivalMode: () => {
-    set((state) => {
-      const next = !state.isFestivalMode;
-      return next
-        ? { isFestivalMode: true, showPastSets: false, autoScrollToNow: true, manuallyDisabled: false }
-        : { isFestivalMode: false, showPastSets: true, autoScrollToNow: false, manuallyDisabled: true };
-    });
-  },
-
-  setFestivalMode: (on: boolean) => {
-    set((state) => {
-      if (state.isFestivalMode === on) return state;
-      return on
-        ? { isFestivalMode: true, showPastSets: false, autoScrollToNow: true, manuallyDisabled: false }
-        : { isFestivalMode: false, showPastSets: true, autoScrollToNow: false };
-    });
-  },
-
-  setFestivalStarted: (started: boolean) => {
-    set({ festivalStarted: started });
-  },
-
-  toggleShowPastSets: () => {
-    set((state) => ({ showPastSets: !state.showPastSets }));
-  },
-
-  toggleAutoScrollToNow: () => {
-    set((state) => ({ autoScrollToNow: !state.autoScrollToNow }));
-  },
 
   setLowPowerMode: (on: boolean) => {
     set((state) => (state.lowPowerMode === on ? state : { lowPowerMode: on }));
@@ -92,8 +47,6 @@ export const useFestivalModeStore = create<FestivalModeStore>()(
     name: 'festie-festival-mode-v2',
     storage: createJSONStorage(() => getStorage()),
     partialize: (state) => ({
-      isFestivalMode: state.isFestivalMode,
-      manuallyDisabled: state.manuallyDisabled,
       lowPowerMode: state.lowPowerMode,
     }),
   }),

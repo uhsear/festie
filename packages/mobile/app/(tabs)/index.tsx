@@ -35,6 +35,7 @@ import {
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
+import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import { safeStageColor } from '../../lib/stageColor';
 import { useUI, type ViewMode } from '../../contexts/UIContext';
 import type { TimeBounds } from '../../hooks/useNowIndicator';
@@ -123,7 +124,6 @@ export default function TimelineScreen() {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const loadProfiles = useFestivalDataStore((s) => s.loadProfiles);
   const user = useAuthStore((s) => s.user);
-  const activeCrew = useCrewStore((s) => s.activeCrew);
   const crews = useCrewStore((s) => s.crews);
   const isLoading = useFestivalDataStore((s) => s.isLoading);
   const error = useFestivalDataStore((s) => s.error);
@@ -406,14 +406,14 @@ export default function TimelineScreen() {
   const handlePickChange = useCallback(
     (setId: string, priority: Priority | null) => {
       if (!currentFestival) return;
-      if (!currentProfile) {
-        router.push(user ? `/set/${setId}` : '/(auth)/login');
+      if (!user) {
+        router.push(`/set/${setId}`);
         return;
       }
       // The card shows the Retry chip on failure.
       savePick(currentFestival.id, setId, priority).catch(() => haptics.warning());
     },
-    [currentFestival, currentProfile, user, router, savePick, haptics],
+    [currentFestival, user, router, savePick, haptics],
   );
 
   // One-tap reset for every active schedule filter (search text, my-picks, stage
@@ -535,7 +535,7 @@ export default function TimelineScreen() {
       <TBASection
         sets={timelessSets}
         stages={stages}
-        currentProfile={currentProfile}
+        canPick={!!user}
         currentFestival={currentFestival}
         getMyPick={getMyPick}
         getOtherPicks={getOtherPicks}
@@ -868,7 +868,7 @@ export default function TimelineScreen() {
                 accessibilityState={{ selected: onlyMine }}
                 accessibilityLabel="Show only my picks"
               >
-                <Ionicons name="star" size={12} color={onlyMine ? t.colors.accent.aqua : t.colors.text.muted} />
+                <Ionicons name={CONCEPT_IONICON.picks} size={12} color={onlyMine ? t.colors.accent.aqua : t.colors.text.muted} />
                 <Text
                   style={[styles.filterChipText, onlyMine && styles.filterChipTextTinted]}
                   maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -941,9 +941,7 @@ export default function TimelineScreen() {
     </>
   );
 
-  // DC1 (Option C) — the Switch + Now&Next actions move into the header's
-  // trailing slot, collapsing the former standalone live row. The pulsing
-  // LiveDot stays in the control row below as the now indicator.
+  // The Switch + Now & Next actions live in the header's trailing slot.
   const headerActions = (
     <View style={styles.headerActions}>
       {/* Manual refresh for ALL views — the RefreshControls only cover the Cards
@@ -968,19 +966,7 @@ export default function TimelineScreen() {
         </TouchableOpacity>
       ) : null}
       <TouchableOpacity
-        style={[styles.headerIconButton, styles.headerSwitchButton]}
-        onPress={() => setPickingFestival(true)}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Switch festival"
-      >
-        <Ionicons name="swap-horizontal" size={20} color={t.colors.text.secondary} />
-        <Text style={styles.headerSwitchText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          Switch
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.headerIconButton}
+        style={styles.headerNowPill}
         onPress={() => router.push('/festival-mode')}
         activeOpacity={0.7}
         accessibilityRole="button"
@@ -988,20 +974,10 @@ export default function TimelineScreen() {
       >
         {/* "Live" is reserved for location (P1-2); flash = Now & Next. */}
         <Ionicons name="flash" size={20} color={t.colors.accent.aqua} />
+        <Text style={styles.headerNowText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          Now
+        </Text>
       </TouchableOpacity>
-      {activeCrew ? (
-        <TouchableOpacity
-          style={styles.headerIconButton}
-          onPress={() => router.push('/find')}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Find your crew"
-        >
-          {/* Secondary header icon — coral is reserved for danger/SOS, and the
-              SOS affordance itself lives inside /find, not on this trigger. */}
-          <Ionicons name="navigate-circle-outline" size={20} color={t.colors.text.secondary} />
-        </TouchableOpacity>
-      ) : null}
     </View>
   );
 
@@ -1010,7 +986,13 @@ export default function TimelineScreen() {
     // native Tabs nav header is hidden (see (tabs)/_layout.tsx), so this is the
     // single top of the screen, sitting above the consolidated control row.
     <View style={styles.container} testID="schedule-screen">
-      <ScreenHeader title={currentFestival.name} icon="calendar-outline" right={headerActions} />
+      <ScreenHeader
+        title={currentFestival.name}
+        icon="calendar-outline"
+        right={headerActions}
+        onTitlePress={() => setPickingFestival(true)}
+        titleAccessibilityLabel={`${currentFestival.name}. Switch festival`}
+      />
       {/* Next-step band from shared getHomeActions (picks and crew before the
           festival, find the crew during it, wrap and settle-up after). It is
           empty, and so hidden, when there is nothing left to do, so it no
@@ -1252,14 +1234,19 @@ const useStyles = makeStyles((t) => ({
     minWidth: 44,
     minHeight: 44,
   },
-  headerSwitchButton: {
+  headerNowPill: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: t.spacing[1],
-    paddingHorizontal: t.spacing[1],
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    borderRadius: 22,
   },
-  headerSwitchText: {
-    ...typeStyle('label'),
-    color: t.colors.text.secondary,
+  headerNowText: {
+    ...typeStyle('label', 700),
+    color: t.colors.accent.aqua,
   },
   pickerOffline: {
     ...typeStyle('label'),

@@ -11,10 +11,10 @@ describe('PhaseHomeActions', () => {
   it('renders a link as a button that navigates', async () => {
     render(
       <PhaseHomeActions
-        actions={[{ key: 'wrap', kind: 'link', label: 'See your festival wrap', a11y: 'Open your festival wrap' }]}
+        actions={[{ key: 'wrap', kind: 'link', label: 'See your Festival Wrap', a11y: 'Open your Festival Wrap' }]}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Open your festival wrap' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open your Festival Wrap' }));
     expect(navigate).toHaveBeenCalledWith({ to: '/wrap' });
   });
 

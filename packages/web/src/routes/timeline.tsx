@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useFestivalStore } from '@festie/shared/stores';
+import { useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { resolveStageColor } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -19,23 +20,32 @@ import { useNowIndicator } from '../hooks/useNowIndicator';
 import { useScrollProgress } from '../hooks/useScrollProgress';
 import { useNow } from '../hooks/useSetStatus';
 import { CalendarX, Music, Filter } from 'lucide-react';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { cn } from '../lib/utils';
+import { useToast } from '../lib/toastContext';
+
+const JumpToNowIcon = CONCEPT_ICON.jumpToNow;
 
 export default function TimelineView() {
   return (
-    <RenderErrorBoundary name="timeline">
-      <TimelineViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Timeline</h1>
+      <RenderErrorBoundary name="timeline">
+        <TimelineViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 
 function TimelineViewInner() {
-  const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const user = useAuthStore((state) => state.user);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   // Low-power mode backs off the per-tick auto-scroll-to-now (an aggressive,
   // battery-costing reflow loop). The manual "Now" button stays available.
   const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
   const { getMyPick, getOtherPicks, savePick } = usePicks();
+  const { toast } = useToast();
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
@@ -106,11 +116,15 @@ function TimelineViewInner() {
 
   const handleSavePick = useCallback(
     async (setId: string, priority: string | null) => {
-      if (currentFestival) {
+      if (!currentFestival) return;
+      try {
         await savePick(currentFestival.id, setId, priority as Priority | null);
+      } catch (err) {
+        // Grid and TBA cells show no failed chip, so a failed save (first-pick join included) toasts.
+        toast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), 'error');
       }
     },
-    [currentFestival, savePick],
+    [currentFestival, savePick, toast],
   );
 
   if (!currentFestival) {
@@ -139,7 +153,7 @@ function TimelineViewInner() {
             getMyPick={getMyPick}
             getOtherPicks={getOtherPicks}
             conflictIds={conflictIds}
-            currentProfile={currentProfile}
+            canPick={!!user}
             currentFestival={currentFestival}
             getStageColor={getStageColor}
             onSavePick={handleSavePick}
@@ -210,7 +224,7 @@ function TimelineViewInner() {
             vpW={vpW}
             nowIndicator={nowIndicator}
             conflictIds={conflictIds}
-            currentProfile={currentProfile}
+            canPick={!!user}
             currentFestival={currentFestival}
             gridRef={gridRef}
             getMyPick={getMyPick}
@@ -239,11 +253,11 @@ function TimelineViewInner() {
                 'hover:shadow-[0_8px_24px_rgba(0,232,208,0.45),0_1px_4px_rgba(0,0,0,0.3)]',
                 'active:scale-[0.96]',
               )}
-              aria-label="Scroll to current time"
+              aria-label={COPY.jumpToNow.a11y}
               onClick={scrollToNow}
             >
-              <Music aria-hidden="true" className="w-4 h-4" />
-              <span>Now</span>
+              <JumpToNowIcon aria-hidden="true" className="w-4 h-4" />
+              <span>{COPY.jumpToNow.label}</span>
             </button>
           )}
 
@@ -254,7 +268,7 @@ function TimelineViewInner() {
               getMyPick={getMyPick}
               getOtherPicks={getOtherPicks}
               conflictIds={conflictIds}
-              currentProfile={currentProfile}
+              canPick={!!user}
               currentFestival={currentFestival}
               getStageColor={getStageColor}
               onSavePick={handleSavePick}

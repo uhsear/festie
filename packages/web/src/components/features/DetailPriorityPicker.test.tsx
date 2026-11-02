@@ -52,7 +52,7 @@ describe('DetailPriorityPicker', () => {
 
   it('marks active priority as pressed', () => {
     render(<DetailPriorityPicker {...defaultProps} myPick="must" />);
-    expect(screen.getByLabelText('Must See (selected)')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Must See')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByLabelText('Want to See')).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -68,7 +68,7 @@ describe('DetailPriorityPicker', () => {
     const user = userEvent.setup();
     const onPriorityClick = vi.fn().mockResolvedValue(undefined);
     render(<DetailPriorityPicker {...defaultProps} myPick="must" onPriorityClick={onPriorityClick} />);
-    await user.click(screen.getByLabelText('Must See (selected)'));
+    await user.click(screen.getByLabelText('Must See'));
     expect(onPriorityClick).toHaveBeenCalledWith(null);
   });
 
@@ -100,9 +100,16 @@ describe('DetailPriorityPicker', () => {
     }
   });
 
+  it('shows the short label visibly and keeps the long label for screen readers', () => {
+    render(<DetailPriorityPicker {...defaultProps} />);
+    const must = screen.getByLabelText('Must See');
+    expect(must).toHaveTextContent('Must');
+    expect(must).not.toHaveTextContent('Must See');
+  });
+
   it('adds active styling when priority is selected', () => {
     render(<DetailPriorityPicker {...defaultProps} myPick="want-to-see" />);
-    const btn = screen.getByLabelText('Want to See (selected)');
+    const btn = screen.getByLabelText('Want to See');
     expect(btn.className).toContain('border-priority-want');
   });
 

@@ -14,7 +14,7 @@ env:
       visible: 'Skip'
     commands:
       - tapOn: 'Skip'
-# Reach login via the Account tab gate
+# Reach login via the More tab gate
 - tapOn:
     id: 'tab-account'
     optional: true
@@ -22,7 +22,7 @@ env:
     when:
       notVisible: 'Sign in to your account'
     commands:
-      - tapOn: 'Account'
+      - tapOn: 'More'
 - assertVisible: 'Sign in to your account'
 - tapOn: 'Username'
 - inputText: ${TEST_USERNAME}
@@ -34,7 +34,7 @@ env:
 - extendedWaitUntil:
     notVisible: 'Sign in to your account'
     timeout: 20000
-- tapOn: 'Account'
+- tapOn: 'More'
 - extendedWaitUntil:
     visible: 'Settings & preferences'
     timeout: 20000

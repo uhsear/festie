@@ -12,7 +12,7 @@ describe('ios round 2 crew-safety source guards', () => {
     expect(read('components/CrewLiveLocation.tsx')).not.toContain('styles.chooser} accessible');
   });
   it('crew.tsx hides the SOS chip on the Find tab', () => {
-    expect(read('app/(tabs)/crew.tsx')).toContain("crewTab !== 'logistics'");
+    expect(read('app/(tabs)/crew.tsx')).toContain("crewTab !== 'find'");
   });
   it('CrewStatus header wraps', () => {
     expect(read('components/CrewStatus.tsx')).toMatch(/header: \{[^}]*flexWrap/);

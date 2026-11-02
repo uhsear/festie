@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { pickDefaultFestival } from '@festie/shared/utils';
 import { PENDING_JOIN_KEY } from '../components/auth/invite';
 import { useToast } from '../lib/toastContext';
 
@@ -95,7 +96,8 @@ export function useFestivalLoader() {
       .then(() => {
         const fests = useFestivalStore.getState().festivals;
         if (fests.length > 0 && !useFestivalStore.getState().currentFestival) {
-          selectFestival(fests[0]!.id).catch(() => {});
+          const pick = pickDefaultFestival(fests);
+          if (pick) selectFestival(pick.id).catch(() => {});
         }
       })
       .catch(() => {});

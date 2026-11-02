@@ -46,6 +46,7 @@ export default function AdminFestivals() {
   // When set, the dedicated map editor is shown for this festival (Phase D). It
   // owns stage-pin + amenity authoring and persists via the same PUT path.
   const [mapEditingId, setMapEditingId] = useState<string | null>(null);
+  const [importTarget, setImportTarget] = useState<{ id: string; name: string } | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
   const [removalBusy, setRemovalBusy] = useState(false);
   const { toast, toastError } = useToast();
@@ -219,14 +220,7 @@ export default function AdminFestivals() {
         {(['list', 'create', 'import'] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => {
-              setTab(t);
-              if (t === 'create') {
-                setEditingId(null);
-                setFormData({});
-                setInitialExpandedDays(new Set());
-              }
-            }}
+            onClick={() => setTab(t)}
             className={cn(
               'px-4 py-2 font-medium text-sm transition-colors border-b-2',
               tab === t
@@ -234,7 +228,7 @@ export default function AdminFestivals() {
                 : 'border-transparent text-text-secondary hover:text-text-primary',
             )}
           >
-            {t === 'list' ? 'Festivals' : t === 'create' ? 'Create/Edit' : 'Import Lineup'}
+            {t === 'list' ? 'Festivals' : t === 'create' ? (editingId ? 'Edit festival' : 'New festival') : 'Import lineup'}
           </button>
         ))}
       </div>
@@ -292,6 +286,15 @@ export default function AdminFestivals() {
                       Edit
                     </button>
                     <button
+                      onClick={() => {
+                        setImportTarget({ id: festival.id, name: festival.name });
+                        setTab('import');
+                      }}
+                      className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+                    >
+                      Import
+                    </button>
+                    <button
                       onClick={() => setMapEditingId(festival.id)}
                       className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
                     >
@@ -326,17 +329,35 @@ export default function AdminFestivals() {
       )}
 
       {/* Import */}
-      {tab === 'import' && editingId && (
+      {tab === 'import' && importTarget && (
         <LineupImport
-          festivalId={editingId}
-          onSuccess={() => {
+          key={importTarget.id}
+          festivalId={importTarget.id}
+          festivalName={importTarget.name}
+          onDone={() => {
             loadFestivals();
-            setTab('list');
           }}
         />
       )}
-      {tab === 'import' && !editingId && (
-        <p className="text-center text-[var(--color-text-muted)] py-8">Select a festival to import a lineup.</p>
+      {tab === 'import' && !importTarget && (
+        <label className="block text-sm text-text-primary">
+          Choose a festival
+          <select
+            className="mt-2 w-full px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary"
+            value=""
+            onChange={(e) => {
+              const f = festivals.find((x) => x.id === e.target.value);
+              if (f) setImportTarget({ id: f.id, name: f.name });
+            }}
+          >
+            <option value="">Select…</option>
+            {festivals.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
       <ConfirmDialog
         open={!!confirmDelete}

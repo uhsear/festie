@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { listTimeZones } from '@festie/shared/utils';
+import { joinArtistNames, listTimeZones } from '@festie/shared/utils';
+import type { Artist } from '@festie/shared/types';
 import DayEditor, { Day } from './DayEditor';
 import { Stage } from './SetEditor';
 
@@ -149,6 +150,30 @@ export default function FestivalEditForm({
     setFormData({ ...formData, days: updated });
   };
 
+  // Rejoin every B2B set, or the server reads an untouched "Kai b2b Mira" under the new separator as one artist.
+  const handleSeparator = (b2bSeparator: string) => {
+    const days = formData.days?.map((d) => ({
+      ...d,
+      sets: (d.sets || []).map((s) =>
+        s.artists?.length ? { ...s, artist: joinArtistNames(s.artists.map((a) => a.name), b2bSeparator) } : s,
+      ),
+    }));
+    setFormData({ ...formData, b2bSeparator, ...(days && { days }) });
+  };
+
+  const handleSetArtists = (dayId: string, setId: string, artists: Artist[]) => {
+    const artist = joinArtistNames(
+      artists.map((a) => a.name),
+      formData.b2bSeparator,
+    );
+    const updated = (formData.days || []).map((d) =>
+      d.id === dayId
+        ? { ...d, sets: (d.sets || []).map((s) => (s.id === setId ? { ...s, artists, artist } : s)) }
+        : d,
+    );
+    setFormData({ ...formData, days: updated });
+  };
+
   return (
     <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -198,6 +223,19 @@ export default function FestivalEditForm({
           </select>
           <span>Set times, countdowns and reminders use this zone.</span>
         </label>
+        <label className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
+          B2B separator
+          <input
+            type="text"
+            maxLength={10}
+            placeholder="b2b"
+            aria-label="B2B separator"
+            value={formData.b2bSeparator || ''}
+            onChange={(e) => handleSeparator(e.target.value)}
+            className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          />
+          <span>Joins B2B artist names, for example b2b, vs or &amp;.</span>
+        </label>
       </div>
 
       {/* Stages */}
@@ -246,6 +284,7 @@ export default function FestivalEditForm({
               key={day.id}
               day={day}
               stages={formData.stages || []}
+              separator={formData.b2bSeparator}
               isExpanded={expandedDays.has(day.id)}
               onToggleExpand={() => toggleDayExpanded(day.id)}
               onLabelChange={(v) => handleDayLabel(day.id, v)}
@@ -254,6 +293,7 @@ export default function FestivalEditForm({
               onAddSet={() => handleAddSet(day.id)}
               onRemoveSet={(setId) => handleRemoveSet(day.id, setId)}
               onSetField={(setId, field, value) => handleSetField(day.id, setId, field, value)}
+              onSetArtists={(setId, artists) => handleSetArtists(day.id, setId, artists)}
             />
           ))}
         </div>

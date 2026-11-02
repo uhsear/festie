@@ -172,12 +172,14 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
   // ── lineup_drop ─────────────────────────────────────────────────────────
   //
-  // Fires from the admin lineup-import path. Targets PRIOR-year attendees of the
+  // Fires from the admin "Announce lineup" action (routes/lineup-announce.ts). Targets PRIOR-year attendees of the
   // SAME-NAMED recurring festival (the inverse of getAttendedFestivals: users
   // who attended an earlier edition but NOT the new one). Deduped per user on
   // eventKey `lineup:<festivalId>`.
-  async function sendLineupDrop(festivalId: string) {
-    if (!festivalId || !db) return { sent: 0, reason: 'no_festival' };
+  async function resolveLineupDropRecipients(
+    festivalId: string,
+  ): Promise<{ festivalName: string; priorIds: string[]; fresh: string[] } | { reason: string }> {
+    if (!festivalId || !db) return { reason: 'no_festival' };
 
     // Resolve the new festival's name.
     let festivalName = '';
@@ -187,12 +189,14 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     } catch (err: any) {
       log?.warn?.('sendLineupDrop: name lookup failed', { festivalId, error: err?.message });
     }
-    if (!festivalName) return { sent: 0, reason: 'festival_not_found' };
+    if (!festivalName) return { reason: 'festival_not_found' };
 
-    // Prior-year attendees: users with a profile in an EARLIER same-named
-    // festival, who do NOT already have a profile in THIS one. Excludes deleted.
+    // Prior-edition attendees: users with a profile in an EARLIER festival whose
+    // name matches once a trailing year is ignored, who do NOT already have a
+    // profile in THIS one. Excludes deleted.
     let priorIds: string[];
     try {
+      // shortcut: name-minus-year match, replace with a festivals.series_id when editions need explicit links
       const { rows } = await db.query(
         `
         SELECT DISTINCT p.user_id AS "userId"
@@ -201,7 +205,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
         WHERE p.deleted_at IS NULL
           AND p.user_id IS NOT NULL
           AND fp.id <> $1
-          AND lower(fp.name) = (SELECT lower(name) FROM festivals WHERE id = $1)
+          AND regexp_replace(lower(fp.name), '\\s*(19|20)\\d{2}\\s*$', '')
+            = regexp_replace((SELECT lower(name) FROM festivals WHERE id = $1), '\\s*(19|20)\\d{2}\\s*$', '')
           AND NOT EXISTS (
             SELECT 1 FROM festival_profiles cur
             WHERE cur.user_id = p.user_id AND cur.festival_id = $1 AND cur.deleted_at IS NULL
@@ -212,12 +217,25 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       priorIds = rows.map((r: any) => r.userId).filter(Boolean);
     } catch (err: any) {
       log?.warn?.('sendLineupDrop: prior-attendee query failed', { festivalId, error: err?.message });
-      return { sent: 0, reason: 'query_failed' };
+      return { reason: 'query_failed' };
     }
-    if (priorIds.length === 0) return { sent: 0, reason: 'no_prior_attendees' };
+    const fresh = priorIds.length ? await filterFresh(priorIds, 'lineup_drop', `lineup:${festivalId}`) : [];
+    return { festivalName, priorIds, fresh };
+  }
 
+  /** Dry run for the admin "Announce lineup" button: how many people would be notified. */
+  async function countLineupDrop(festivalId: string) {
+    const r = await resolveLineupDropRecipients(festivalId);
+    if ('reason' in r) return { festivalName: '', recipients: 0, reason: r.reason };
+    return { festivalName: r.festivalName, recipients: r.fresh.length };
+  }
+
+  async function sendLineupDrop(festivalId: string) {
+    const r = await resolveLineupDropRecipients(festivalId);
+    if ('reason' in r) return { sent: 0, reason: r.reason };
+    const { festivalName, priorIds, fresh } = r;
+    if (priorIds.length === 0) return { sent: 0, reason: 'no_prior_attendees' };
     const eventKey = `lineup:${festivalId}`;
-    const fresh = await filterFresh(priorIds, 'lineup_drop', eventKey);
     if (fresh.length === 0) return { sent: 0, reason: 'all_deduped' };
 
     // Prior-year attendees are NOT in the new festival, so we push per-user
@@ -371,5 +389,5 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return sent;
   }
 
-  return { sendWrapReady, sendLineupDrop, sendCrewReformed };
+  return { sendWrapReady, sendLineupDrop, countLineupDrop, sendCrewReformed };
 }

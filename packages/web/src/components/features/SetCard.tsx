@@ -1,6 +1,7 @@
 import React, { memo, useRef, useState, useMemo } from 'react';
 import { Play, AlertTriangle, StickyNote, Clock } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
+import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { usePicks, usePickSync } from '@festie/shared/hooks';
 import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
@@ -314,10 +315,10 @@ function SetCard({
       )}
 
       {/* Footer with priority buttons, crew overlap, and preview */}
-      <div className={cn('card-footer', 'relative z-[2]', 'flex items-center justify-between mt-3')}>
+      <div className={cn('card-footer', 'relative z-[2]', 'flex flex-wrap gap-y-2 items-center justify-between mt-3')}>
         {/* Priority buttons */}
         {showPicks && (
-          <div className="card-priority flex gap-3">
+          <div className="card-priority flex gap-2" role="group" aria-label={`Priority for ${artistName}`}>
             {(['must', 'want-to-see', 'maybe'] as const).map((p) => {
               const active = myPick === p;
               const priKey = PRI_MAP[p];
@@ -332,7 +333,7 @@ function SetCard({
                   key={p}
                   className={cn(
                     'card-priority-btn',
-                    'w-11 h-11 min-w-11 min-h-11 rounded-full',
+                    'h-11 min-w-11 min-h-11 px-3 gap-1.5 rounded-full',
                     'flex items-center justify-center',
                     'bg-[var(--color-overlay-3)] border border-border-light',
                     'text-sm text-text-muted cursor-pointer',
@@ -366,12 +367,7 @@ function SetCard({
                   )}
                   type="button"
                   aria-pressed={active ? 'true' : 'false'}
-                  aria-label={
-                    (p === 'must' ? 'Must See' : p === 'want-to-see' ? 'Want to See' : 'Maybe') +
-                    (active ? ' (selected)' : '') +
-                    pendingSuffix
-                  }
-                  title={p === 'must' ? 'Must See' : p === 'want-to-see' ? 'Want to See' : 'Maybe'}
+                  aria-label={`${PRIORITY_SYMBOLS[p].label}: ${artistName}${pendingSuffix}`}
                   disabled={saving}
                   onClick={(e) => {
                     e.preventDefault();
@@ -379,7 +375,22 @@ function SetCard({
                     handlePriorityChange(p, active);
                   }}
                 >
-                  <PriorityIcon priority={p} filled={active} />
+                  <span
+                    className={
+                      active
+                        ? undefined
+                        : p === 'must'
+                          ? 'text-priority-must'
+                          : p === 'want-to-see'
+                            ? 'text-priority-want'
+                            : 'text-priority-maybe'
+                    }
+                  >
+                    <PriorityIcon priority={p} filled={active} />
+                  </span>
+                  <span className={cn('text-xs font-semibold', !active && 'text-text-secondary')}>
+                    {PRIORITY_SYMBOLS[p].short}
+                  </span>
                   {pending && <Clock className="w-3 h-3 ml-0.5" aria-hidden="true" data-testid="pick-pending-clock" />}
                 </button>
               );

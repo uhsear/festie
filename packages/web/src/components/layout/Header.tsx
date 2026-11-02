@@ -1,42 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { useAuthStore, useUIStore } from '@festie/shared';
-import { useFestivalStore } from '@festie/shared/stores';
-import { isFestivalOver } from '@festie/shared/utils';
+import { APP_SECTIONS } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { cn } from '@/lib/utils';
 import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
 import Button from '../ui/Button';
 import DaylightToggle from '../features/DaylightToggle';
 import { useThemeSync } from '../../lib/theme';
+import { SECTION_HREF, activeSection } from './sections';
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
-  const navigate = useNavigate();
 
-  // Desktop nav tabs — all visible for guests (parity with mobile + BottomNav).
-  // Picks/Crew render their own GuestTeaser / empty state when unauthenticated
-  // or not yet joined; keeping them always-visible preserves feature discovery.
-  // Schedule/Timeline/Grid collapse into one "Schedule" tab; the in-page
-  // ScheduleViewSwitcher (rendered by AppShell) swaps between the three views.
-  // Wrap appears only after the festival ends — mirrors BottomNav's gate so the
-  // desktop nav (which hides BottomNav at lg+) doesn't lose the Wrap entry.
-  const currentFestival = useFestivalStore((state) => state.currentFestival);
-  const days = useFestivalStore((state) => state.days);
-  const wrapUnlocked = isFestivalOver(currentFestival, days);
-  const desktopTabs = [
-    { label: 'Schedule', href: '/cards' },
-    { label: 'My Picks', href: '/picks' },
-    { label: 'Crew', href: '/crew' },
-    ...(wrapUnlocked ? [{ label: 'Wrap', href: '/wrap' }] : []),
-  ];
-
-  const scheduleHrefs = ['/', '/cards', '/timeline', '/grid'];
-  const isTabActive = (href: string) => {
-    if (href === '/cards') return scheduleHrefs.includes(location.pathname);
-    return location.pathname === href;
-  };
+  // Desktop nav tabs: the five shared sections. Guests skip More because the
+  // "Sign in" button in the right section already covers it.
+  const current = activeSection(location.pathname);
+  const desktopTabs = APP_SECTIONS.filter((section) => user || section.key !== 'more');
 
   // Apply the persisted theme (stage | daylight) to <html> and the PWA chrome
   // color. index.html does the same before first paint; this tracks changes.
@@ -215,23 +197,22 @@ export default function Header() {
         <nav aria-label="Main navigation">
           <div className="hidden lg:flex gap-1 ml-6">
             {desktopTabs.map((tab) => {
-              const active = isTabActive(tab.href);
+              const active = current === tab.key;
               return (
-                <button
-                  key={tab.href}
-                  type="button"
+                <Link
+                  key={tab.key}
+                  to={SECTION_HREF[tab.key]}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'px-4 py-2 bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
+                    'px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
                     'transition-colors duration-[250ms] ease-standard tracking-[0.3px]',
                     'hover:text-text-primary',
                     'border border-transparent',
                     active && 'bg-aqua-a12 text-accent-aqua !border-aqua-a2 !rounded-lg',
                   )}
-                  onClick={() => navigate({ to: tab.href })}
                 >
                   {tab.label}
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -260,6 +241,7 @@ export default function Header() {
         ) : (
           <Link
             to="/login"
+            search={{ next: location.href }}
             className={cn(
               'inline-flex items-center justify-center min-h-11 min-w-11 px-4 rounded-lg no-underline whitespace-nowrap',
               'text-accent-aqua text-[length:var(--font-size-14)] font-semibold tracking-[0.3px]',
@@ -268,7 +250,7 @@ export default function Header() {
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             )}
           >
-            Sign in
+            {COPY.auth.signIn}
           </Link>
         )}
       </div>

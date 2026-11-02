@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { HomeAction, HomeActionKey } from '@festie/shared/utils';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 
 interface ActionTarget {
@@ -12,10 +13,11 @@ interface ActionTarget {
 }
 
 // Destinations for the link actions. 'first-pick' is a hint and never navigates.
+// Find lives on the Map tab, so it switches tabs instead of pushing a route.
 const TARGETS: Record<Exclude<HomeActionKey, 'first-pick'>, ActionTarget> = {
   crew: { icon: 'people', href: '/(tabs)/crew' },
-  find: { icon: 'location', href: '/find', danger: true },
-  wrap: { icon: 'sparkles', href: '/wrap' },
+  find: { icon: CONCEPT_IONICON.find, href: '/(tabs)/map', danger: true },
+  wrap: { icon: CONCEPT_IONICON.wrap, href: '/wrap' },
   settle: { icon: 'wallet-outline', href: '/(tabs)/crew' },
 };
 
@@ -57,7 +59,7 @@ export default function PhaseHomeActions({ actions }: PhaseHomeActionsProps) {
               testID={`phase-action-${a.key}`}
               style={styles.chip}
               // Tab destinations switch tabs (navigate dedupes to the existing
-              // tab instance); the root-level pushed routes (Find, Wrap) must
+              // tab instance); the root-level pushed routes (Wrap) must
               // PUSH so Back pops cleanly to the schedule with the festival
               // context intact. router.navigate on those cross-navigator routes
               // warps the stack and can pop the user out to the OS home screen.

@@ -109,3 +109,20 @@ export function primarySpotifyArtist(set: FestivalSet): { name: string; url: str
   }
   return null;
 }
+
+const AUTH_PATH_PREFIXES = ['/login', '/register', '/forgot-password', '/(auth)'];
+
+/**
+ * Validate a post-sign-in return path. This is the open-redirect trust
+ * boundary: only a same-origin absolute path (at most 512 characters, no
+ * leading `//` or `/\`, no control characters) passes. Auth screens return
+ * null so sign-in never loops back to itself.
+ */
+export function safeReturnPath(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > 512 || raw[0] !== '/') return null;
+  if (raw[1] === '/' || raw[1] === '\\') return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
+  if (AUTH_PATH_PREFIXES.some((prefix) => raw.startsWith(prefix))) return null;
+  return raw;
+}

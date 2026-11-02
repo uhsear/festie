@@ -29,6 +29,7 @@ import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import AppPressable from './AppPressable';
 import { priorityColor } from '../lib/priorityColor';
+import { COPY } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS } from '../lib/prioritySymbol';
 
 import Avatar from './Avatar';
@@ -161,8 +162,8 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={
-        active
-          ? `${option.label} (selected${pending ? (pending === 'queued' ? ', waiting to sync' : ', saving') : ''})`
+        active && pending
+          ? `${option.label}, ${pending === 'queued' ? 'waiting to sync' : 'saving'}`
           : option.label
       }
     >
@@ -277,7 +278,7 @@ function SetCardMobileImpl({
           {hasConflict ? (
             <View style={styles.conflictBadge}>
               <Ionicons name="warning" size={12} color={t.colors.accent.coral} />
-              <Text style={styles.conflictText}>Conflict</Text>
+              <Text style={styles.conflictText}>{COPY.clash.badge}</Text>
             </View>
           ) : null}
         </View>

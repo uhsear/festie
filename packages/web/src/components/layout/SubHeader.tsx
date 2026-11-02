@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from '@tanstack/react-router';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -10,24 +10,19 @@ import {
   logicalDayIndexAt,
   resolveFestivalTimeZone,
   resolveStageColor,
-  type FestivalStatus,
 } from '@festie/shared/utils';
 import { getStageBadgeStyle } from '../ui/StageBadge';
 import { useSwipeDays } from '../../hooks/useSwipeDays';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useSetStatus';
 import { useScrollFade } from '../../hooks/useScrollFade';
-import { Filter, Star } from 'lucide-react';
+import { Filter, Search } from 'lucide-react';
+import { FESTIVAL_STATUS_LABEL } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
 import SaveStatusChip from '../features/SaveStatusChip';
 import FestivalPicker from './FestivalPicker';
-
-const STATUS_LABEL: Record<FestivalStatus, string> = {
-  upcoming: 'Upcoming',
-  ongoing: 'Live',
-  past: 'Past',
-};
 
 // Routes that carry the festival/day/stage controls. Anything else (admin, 404)
 // gets no schedule chrome; AppShell already hides it on account/crew/festival-mode.
@@ -39,6 +34,8 @@ interface SubHeaderProps {
   /** Show only festival selector (no day tabs, stage chips, or search). Used on /wrap. */
   festivalOnly: boolean;
 }
+
+const PicksIcon = CONCEPT_ICON.picks;
 
 export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const theme = useUIStore((s) => s.theme);
@@ -63,6 +60,13 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
     [getStageColorRaw],
   );
   const { select: selectHaptic } = useHaptics();
+  // Below md the search box and filters fold behind two buttons; md+ ignores both.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (searchOpen) searchBoxRef.current?.querySelector('input')?.focus();
+  }, [searchOpen]);
   const { ref: stageScrollRef, canScrollLeft, canScrollRight } = useScrollFade<HTMLDivElement>();
   const {
     ref: dayScrollRef,
@@ -131,6 +135,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   // Pass the store's days array — the currentFestival payload carries neither
   // startDate/endDate nor embedded days, so without it festivalStatus returns
   // null and the pill never renders.
+  const showFold = showSearch || !!showStageFilter;
+  const filterCount = Number(activeStages.length > 0) + Number(onlyMine) + Number(searchQuery !== '');
   const currentStatus = currentFestival ? festivalStatus(currentFestival, days) : null;
 
   if (!SUB_HEADER_PATHS.includes(pathname)) return null;
@@ -169,8 +175,47 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             )}
             data-testid="festival-status-pill"
           >
-            {STATUS_LABEL[currentStatus]}
+            {FESTIVAL_STATUS_LABEL[currentStatus]}
           </span>
+        )}
+
+        {showFold && (
+          <>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px] md:hidden',
+                'cursor-pointer border-2 border-border text-text-secondary',
+                'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+              )}
+              aria-expanded={searchOpen}
+              aria-controls="subheader-search"
+              onClick={() => {
+                selectHaptic();
+                setSearchOpen((v) => !v);
+              }}
+            >
+              <Search className="w-3.5 h-3.5" aria-hidden="true" />
+              Search
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px] md:hidden',
+                'cursor-pointer border-2 border-border text-text-secondary',
+                'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+              )}
+              aria-expanded={filtersOpen}
+              aria-controls="subheader-filters"
+              onClick={() => {
+                selectHaptic();
+                setFiltersOpen((v) => !v);
+              }}
+            >
+              <Filter className="w-3.5 h-3.5" aria-hidden="true" />
+              {filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
+            </button>
+          </>
         )}
 
         {/* Day tabs */}
@@ -254,6 +299,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
 
         {currentProfile && <SaveStatusChip />}
 
+        {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
+        <div id="subheader-filters" className={cn('md:contents', showFold && !filtersOpen && 'max-md:hidden')}>
         {/* My picks filter */}
         {showMyPicks && (
           <button
@@ -273,7 +320,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                 : 'border-border text-text-secondary hover:text-text-primary',
             )}
           >
-            <Star className="w-3.5 h-3.5" fill={onlyMine ? 'currentColor' : 'none'} aria-hidden="true" />
+            <PicksIcon className="w-3.5 h-3.5" aria-hidden="true" />
             My picks
           </button>
         )}
@@ -374,9 +421,19 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           </div>
         )}
 
+        </div>
+
         {/* Artist search */}
         {showSearch && (
-          <div className="search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[220px]" role="search">
+          <div
+            id="subheader-search"
+            ref={searchBoxRef}
+            className={cn(
+              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[220px]',
+              !searchOpen && searchQuery === '' && 'max-md:hidden',
+            )}
+            role="search"
+          >
             <Input
               variant="search"
               className="min-h-[44px] w-full text-[length:var(--font-size-14)] sm:max-w-[clamp(100px,30vw,180px)] lg:max-w-none"

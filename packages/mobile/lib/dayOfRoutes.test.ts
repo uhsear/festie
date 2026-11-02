@@ -13,7 +13,8 @@ describe('day-of routes', () => {
     });
   });
 
-  it('falls back to the crew logistics tab', () => {
+  it('falls back to the crew Find tab', () => {
+    expect(CREW_MEET_HREF).toEqual({ pathname: '/(tabs)/crew', params: { tab: 'find' } });
     expect(meetHref({ kind: 'meeting-point', id: 'mp2' }, [{ id: 'mp2', latitude: null, longitude: null }])).toBe(
       CREW_MEET_HREF,
     );

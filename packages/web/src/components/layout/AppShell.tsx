@@ -9,6 +9,7 @@ import BottomNav from './BottomNav';
 import SubHeader from './SubHeader';
 import ScheduleViewSwitcher, { isSchedulePath } from './ScheduleViewSwitcher';
 import PageTransition from './PageTransition';
+import RouteAnnouncer from './RouteAnnouncer';
 import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
@@ -16,6 +17,7 @@ import IOSInstallSheet from '../features/IOSInstallSheet';
 import NowNextStrip from '../features/NowNextStrip';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
+import LiveLocationSharing from '../crew/LiveLocationSharing';
 import Onboarding from '../features/Onboarding';
 import JoinCrewSheet from '../crew/JoinCrewSheet';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
@@ -120,6 +122,7 @@ export default function AppShell() {
         )}
         aria-label="Authentication"
       >
+        <RouteAnnouncer />
         <Suspense fallback={<RouteFallback />}>
           <Outlet />
         </Suspense>
@@ -152,12 +155,14 @@ export default function AppShell() {
         </a>
 
         <OfflineBanner />
+        <RouteAnnouncer />
         <UpdatePrompt />
         <IOSInstallSheet />
         <Onboarding suspended={!!pendingJoinCode} />
         {joinCrewSheet}
         <Header />
         <SosBanner />
+        <LiveLocationSharing />
 
         {showDayBanner && <FestivalDayBanner />}
 

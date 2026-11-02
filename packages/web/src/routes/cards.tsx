@@ -25,9 +25,12 @@ import { ChevronDown, ChevronUp, Music, SearchX } from 'lucide-react';
 
 export default function CardsView() {
   return (
-    <RenderErrorBoundary name="cards">
-      <CardsViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">Schedule</h1>
+      <RenderErrorBoundary name="cards">
+        <CardsViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 
@@ -53,11 +56,10 @@ function usePrefersReducedMotion(): boolean {
 }
 
 function CardsViewInner() {
-  const currentProfile = useFestivalStore((state) => state.currentProfile);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const days = useFestivalStore((state) => state.days);
+  const currentProfile = useFestivalStore((state) => state.currentProfile);
   const user = useAuthStore((state) => state.user);
-  const isLoading = useFestivalStore((state) => state.isLoading);
   const crews = useCrewStore((state) => state.crews);
   const sets = useFestivalStore((state) => state.sets);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
@@ -281,8 +283,7 @@ function CardsViewInner() {
                   set={set}
                   onTap={() => setDetailSet(set)}
                   onPreview={() => handlePreview(set)}
-                  showPicks={!!currentProfile}
-                  picksLoading={!!user && !currentProfile && isLoading}
+                  showPicks={!!user}
                   stageName={sn}
                   stageColor={sc}
                   friendProfiles={others}

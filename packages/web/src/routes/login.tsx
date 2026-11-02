@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearch, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
-import { AUTH_COPY } from '@festie/shared/constants';
+import { AUTH_COPY, COPY } from '@festie/shared/constants';
 import { ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores/authStore';
 import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -30,8 +30,8 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const navigate = useNavigate();
+  const { next, reset } = useSearch({ from: '/login' });
   const { login, isLoading } = useAuth();
-  const { reset } = useSearch({ from: '/login' });
   const { toast } = useToast();
 
   const [username, setUsername] = useState('');
@@ -58,7 +58,7 @@ function LoginPageInner() {
     try {
       const result = await login({ username, password });
       if (result?.reactivated) toast(ACCOUNT_REACTIVATED_MESSAGE, 'success');
-      await navigate({ to: '/cards' });
+      await (next ? navigate({ href: next }) : navigate({ to: '/cards' }));
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the
       // render before the request failed, so it is still null here.
@@ -124,7 +124,7 @@ function LoginPageInner() {
         </div>
 
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
-          {isLoading ? 'Signing in…' : AUTH_COPY.signIn}
+          {isLoading ? COPY.auth.signingIn : AUTH_COPY.signIn}
         </Button>
 
         <div className="mt-3 flex flex-col items-center">
