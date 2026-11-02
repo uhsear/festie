@@ -6,6 +6,7 @@ import { RATING_SCALE_DATA, ratingCaption } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import PressableScale from './PressableScale';
+import SetRatingSummary from './SetRatingSummary';
 
 /**
  * Mobile-specific icon map paired with the shared rating scale data. The pure
@@ -192,6 +193,7 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
             ? saveError
             : ratingCaption(current)}
       </Text>
+      <SetRatingSummary setId={setId} festivalId={festivalId} />
     </View>
   );
 }

@@ -300,9 +300,6 @@ export function generateOpenAPISpec(config: any) {
       '/api/v1/crews/{crewId}/activity': {
         get: { tags: ['Crews'], summary: 'Crew activity feed (cursor-paginated)', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Activity entries', ...jsonResponseWrapper({ items: arrayOf('CrewActivityEntry'), nextCursor: { type: 'string', nullable: true } }) } } },
       },
-      '/api/v1/festivals/{festivalId}/calendar': {
-        get: { tags: ['Export'], summary: 'Calendar events JSON for native integration', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Calendar events' } } },
-      },
       '/api/v1/notifications/tokens': {
         post: { tags: ['Notifications'], summary: 'Register FCM push token', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Token registered' } } },
       },

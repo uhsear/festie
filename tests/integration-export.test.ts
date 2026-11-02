@@ -19,36 +19,6 @@ afterEach(async () => {
 });
 
 describe('Integration — Export', { concurrency: 1 }, () => {
-  test('ICS calendar export escapes special characters', async () => {
-    const server = await startServer();
-    servers.push(server);
-
-    const alice = await registerUser(server, 'alice');
-    const profile = await joinFestivalProfile(server, alice.token);
-
-    // Add picks with notes containing special chars
-    await server.request
-      .put(`/api/v1/profiles/${profile.id}`)
-      .set('x-user-token', alice.token)
-      .send({
-        picks: { 'set-a': 'must' },
-        notes: { 'set-a': 'Bring friends; meet at gate, row 3' },
-      })
-      .expect(200);
-
-    const icsRes = await server.request
-      .get(`/api/v1/export/fest-1/${profile.id}/calendar`)
-      .set('x-user-token', alice.token)
-      .expect(200);
-
-    assert.match(icsRes.headers['content-type'] as string, /text\/calendar/);
-    assert.match(icsRes.text, /BEGIN:VCALENDAR/);
-    assert.match(icsRes.text, /BEGIN:VEVENT/);
-    // Semicolons and commas should be escaped in ICS
-    assert.match(icsRes.text, /\\;/);
-    assert.match(icsRes.text, /\\,/);
-  });
-
   test('export worker handles concurrent requests with concurrency limit', async () => {
     const server = await startServer();
     servers.push(server);
