@@ -19,7 +19,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalDataStore, useUIStore, selectMyPicks } from '@festie/shared/stores';
 import { usePicks, useFestival, usePicksPlan, usePickClear, useBulkAddPicks } from '@festie/shared/hooks';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import type { ConflictGroup } from '@festie/shared/utils';
@@ -40,12 +40,11 @@ import {
   listenListText,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
-import { COPY, GUEST_PROMPT_COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
+import { COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
 import { duration as motionDuration } from '@festie/shared/tokens';
-import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
 import { undoNotifier } from '../../lib/undoNotifier';
@@ -53,11 +52,11 @@ import { priorityIconName } from '../../lib/prioritySymbol';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import ScreenHeader from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
+import GuestPicksBanner from '../../components/GuestPicksBanner';
 import { Skeleton } from '../../components/Skeleton';
 import SetCardMobile from '../../components/SetCardMobile';
 import CrewSuggestionStrip from '../../components/CrewSuggestionStrip';
 import OfflineReadinessCard from '../../components/OfflineReadinessCard';
-
 
 const PRIORITY_CHOICES: readonly { value: Priority; label: string }[] = [
   { value: 'must', label: PRIORITY_SYMBOLS.must.short },
@@ -95,6 +94,7 @@ export default function PicksScreen() {
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const user = useAuthStore((s) => s.user);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
+  const myPicks = useFestivalDataStore(selectMyPicks);
   const sets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
   // Raw festival days (FestivalDay[]) — needed for the TZ-/date-aware interval
@@ -437,8 +437,13 @@ export default function PicksScreen() {
 
   // "Listen before you go": every pick by day with Spotify link-outs. No Spotify sign-in.
   const listenList = useMemo(
-    () => buildListenList(sets.filter((s) => currentProfile?.picks?.[s.id]), storeDays, currentFestival?.b2bSeparator),
-    [sets, currentProfile?.picks, storeDays, currentFestival?.b2bSeparator],
+    () =>
+      buildListenList(
+        sets.filter((s) => myPicks?.[s.id]),
+        storeDays,
+        currentFestival?.b2bSeparator,
+      ),
+    [sets, myPicks, storeDays, currentFestival?.b2bSeparator],
   );
   // Mobile has no clipboard module; the share sheet offers Copy.
   const handleShareListenList = useCallback(() => {
@@ -629,7 +634,10 @@ export default function PicksScreen() {
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={label}
               >
-                <Text style={[styles.segmentText, active && styles.segmentTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                <Text
+                  style={[styles.segmentText, active && styles.segmentTextActive]}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                >
                   {label}
                 </Text>
               </TouchableOpacity>
@@ -763,23 +771,26 @@ export default function PicksScreen() {
 
   const picksHeader = (
     <View>
-      <View style={styles.headerActions}>
-        {calendarButton}
-        <TouchableOpacity
-          style={[styles.calendarButton, !currentFestival && styles.calendarButtonDisabled]}
-          onPress={handleSharePicks}
-          disabled={!currentFestival}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !currentFestival }}
-          accessibilityLabel="Share my picks"
-        >
-          <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
-          <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-            {COPY.picks.share}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {!user ? <GuestPicksBanner /> : null}
+      {user ? (
+        <View style={styles.headerActions}>
+          {calendarButton}
+          <TouchableOpacity
+            style={[styles.calendarButton, !currentFestival && styles.calendarButtonDisabled]}
+            onPress={handleSharePicks}
+            disabled={!currentFestival}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !currentFestival }}
+            accessibilityLabel="Share my picks"
+          >
+            <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+            <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+              {COPY.picks.share}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {currentFestival && (
         <View style={styles.offlineCard}>
           <OfflineReadinessCard
@@ -844,33 +855,6 @@ export default function PicksScreen() {
       />
     );
 
-  if (!user) {
-    return (
-      <View style={styles.container} testID="picks-screen">
-        <ScreenHeader title="Picks" icon="star" />
-        <EmptyState
-          icon="star-outline"
-          title={GUEST_PROMPT_COPY.teasers.picks.title}
-          message={GUEST_PROMPT_COPY.teasers.picks.message}
-          action={{
-            label: GUEST_PROMPT_COPY.createAccount,
-            onPress: () => {
-              setReturnTo('/(tabs)/picks');
-              router.push('/(auth)/register');
-            },
-          }}
-          secondaryAction={{
-            label: GUEST_PROMPT_COPY.signIn,
-            onPress: () => {
-              setReturnTo('/(tabs)/picks');
-              router.push('/(auth)/login');
-            },
-          }}
-        />
-      </View>
-    );
-  }
-
   let body: React.ReactNode;
   if (!currentFestival) {
     body = (
@@ -880,7 +864,7 @@ export default function PicksScreen() {
         message="Choose a festival from the Schedule tab to start saving picks."
       />
     );
-  } else if (!currentProfile) {
+  } else if (user && !currentProfile) {
     body = (
       <EmptyState
         icon="musical-note-outline"

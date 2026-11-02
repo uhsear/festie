@@ -117,6 +117,7 @@ vi.mock('@festie/shared/hooks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@festie/shared/hooks')>()),
   useSpotifyPreview: () => mockUseSpotifyPreview(),
   usePickClear: () => mockClearPick,
+  useCanPick: () => true,
 }));
 vi.mock('../../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 vi.mock('./DetailPriorityPicker', () => ({
@@ -280,7 +281,7 @@ describe('DetailPanel', () => {
     });
     render(<DetailPanel {...defaultProps} />);
     expect(screen.getByText(GUEST_PROMPT_COPY.setSheet)).toBeInTheDocument();
-    expect(screen.queryByTestId('priority-picker')).not.toBeInTheDocument();
+    expect(screen.getByTestId('priority-picker')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(defaultProps.onClose).toHaveBeenCalled();
