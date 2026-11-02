@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fetchAuditPage, type AuditEntry } from '@festie/shared/services/admin';
-import { timeAgoFromIso } from '@festie/shared/utils';
+import { AUDIT_ACTION_FILTERS, timeAgoFromIso } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import EmptyState from '../ui/EmptyState';
 import { SearchX } from 'lucide-react';
@@ -117,18 +117,27 @@ export default function AdminAudit() {
       {/* Filters */}
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
         <h2 className="type-label text-text-primary mb-3">Filters</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <input
-            type="text"
-            placeholder="Action type…"
-            aria-label="Filter by action type"
-            value={actionFilter}
-            onChange={(e) => {
-              setActionFilter(e.target.value);
-              resetPagination();
-            }}
-            className="px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
-          />
+        <div role="group" aria-label="Filter by action type" className="flex flex-wrap gap-2 mb-3">
+          {AUDIT_ACTION_FILTERS.map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              aria-pressed={actionFilter === chip.prefix}
+              onClick={() => {
+                setActionFilter(chip.prefix);
+                resetPagination();
+              }}
+              className={`px-4 py-2 min-h-11 rounded-full text-sm font-medium transition-colors ${
+                actionFilter === chip.prefix
+                  ? 'bg-accent-aqua/20 text-accent-aqua'
+                  : 'bg-bg-primary text-text-muted hover:bg-bg-card/80'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           <input
             type="text"
             placeholder="Username…"

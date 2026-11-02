@@ -91,8 +91,14 @@ function makeDeps(overrides: any = {}) {
     invalidateUserCache: mock.fn(),
     getRequestIp: () => '127.0.0.1',
     getUsers: mock.fn(async () => [
-      { id: 'user-1', username: 'admin', email: 'admin@test.com', createdAt: '2026-01-01' },
-      { id: 'user-2', username: 'bob', email: 'bob@test.com', createdAt: '2026-01-02' },
+      {
+        id: 'user-1',
+        username: 'admin',
+        email: 'admin@test.com',
+        createdAt: '2026-01-01',
+        emailVerifiedAt: '2026-01-01T00:00:00.000Z',
+      },
+      { id: 'user-2', username: 'bob', email: 'bob@test.com', createdAt: '2026-01-02', emailVerifiedAt: null },
     ]),
     getFestivals: mock.fn(async () => [{ id: 'f1', name: 'Bonnaroo', stages: [], days: [] }]),
     getProfiles: mock.fn(async () => [
@@ -234,7 +240,7 @@ function makeDeps(overrides: any = {}) {
         }),
         getMembers: mock.fn(async () => [{ userId: 'user-1', username: 'admin' }]),
         getMember: mock.fn(async (crewId: any, userId: any) => {
-          if (crewId === 'crew-1' && userId === 'user-2') return { userId: 'user-2' };
+          if (crewId === 'crew-1' && userId === 'user-2') return { userId: 'user-2', role: 'member' };
           return null;
         }),
         removeMember: mock.fn(async () => {}),
@@ -642,12 +648,14 @@ describe('routes/admin-metrics.js', () => {
 // admin-audit.js
 // =====================================================================
 describe('routes/admin-audit.js', () => {
+  // Mounted through createAdminRoutes so the shared enrichAuditEntries in ctx runs.
+  async function buildAuditApp(deps = makeDeps()) {
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    return { app: buildApp(createAdminRoutes(deps)), deps };
+  }
+
   test('GET /audit returns audit entries', async () => {
-    const { default: mountAdminAuditRoutes } = await import('../routes/admin-audit.js');
-    const deps = makeDeps();
-    const router = express.Router();
-    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
-    const app = buildApp(router);
+    const { app } = await buildAuditApp();
 
     const res = await request(app).get('/audit').expect(200);
     assert.equal(res.body.error, null);
@@ -657,28 +665,61 @@ describe('routes/admin-audit.js', () => {
   });
 
   test('GET /audit passes query filters to store', async () => {
-    const { default: mountAdminAuditRoutes } = await import('../routes/admin-audit.js');
-    const deps = makeDeps();
-    const router = express.Router();
-    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
-    const app = buildApp(router);
+    const { app, deps } = await buildAuditApp();
 
-    await request(app).get('/audit?actor_id=user-1&action=login&limit=10').expect(200);
+    await request(app).get('/audit?actor_id=user-1&action=role_&limit=10').expect(200);
 
     const callArgs = deps.stores.auditLog.query.mock.calls[0]!.arguments[0];
     assert.equal(callArgs.actorId, 'user-1');
-    assert.equal(callArgs.action, 'login');
+    assert.equal(callArgs.action, 'role_');
+    assert.equal(deps.stores.auditLog.count.mock.calls[0]!.arguments[0].action, 'role_');
+  });
+
+  test('GET /audit enriches rows with friendly action, actor username and target label', async () => {
+    const deps = makeDeps();
+    deps.stores.auditLog.query = mock.fn(async () => ({
+      rows: [
+        {
+          id: 'a1',
+          action: 'crew_remove_member',
+          actorType: 'admin',
+          actorId: 'user-1',
+          targetType: 'crew_member',
+          targetId: 'crew-1:user-2',
+          details: { crewId: 'crew-1', userId: 'user-2', targetUsername: 'bob' },
+          createdAt: '2026-01-01',
+        },
+        {
+          id: 'a2',
+          action: 'user.private_data.viewed',
+          actorType: 'admin',
+          actorId: 'gone-user',
+          targetType: 'user',
+          targetId: 'user-9',
+          details: null,
+          createdAt: '2026-01-01',
+        },
+      ],
+      nextCursor: null,
+    }));
+    const { app } = await buildAuditApp(deps);
+
+    const res = await request(app).get('/audit').expect(200);
+    const [removed, viewed] = res.body.data;
+    assert.equal(removed.friendlyAction, 'Remove Crew Member');
+    assert.equal(removed.actorUsername, 'admin');
+    assert.equal(removed.targetLabel, 'bob');
+    assert.equal(viewed.friendlyAction, 'View User Details');
+    assert.equal(viewed.actorUsername, 'gone-user');
+    assert.equal(viewed.targetLabel, 'user user-9');
   });
 
   test('GET /audit returns 500 on store error', async () => {
-    const { default: mountAdminAuditRoutes } = await import('../routes/admin-audit.js');
     const deps = makeDeps();
     deps.stores.auditLog.query = mock.fn(async () => {
       throw new Error('DB down');
     });
-    const router = express.Router();
-    mountAdminAuditRoutes({ router, deps, ctx: { getFriendlyAction: (a: string) => a } });
-    const app = buildApp(router);
+    const { app } = await buildAuditApp(deps);
 
     const res = await request(app).get('/audit').expect(500);
     assert.equal(res.body.data, null);
@@ -709,6 +750,14 @@ describe('routes/admin-users.js', () => {
     assert.ok(Array.isArray(res.body.data));
     assert.ok(res.body.data.length > 0);
     assert.ok(res.body.data[0].roles);
+  });
+
+  test('GET /users items carry emailVerified from emailVerifiedAt', async () => {
+    const { app } = await buildUserRouter();
+    const res = await request(app).get('/users').expect(200);
+    const byName = new Map(res.body.data.map((u: any) => [u.username, u]));
+    assert.equal((byName.get('admin') as any).emailVerified, true);
+    assert.equal((byName.get('bob') as any).emailVerified, false);
   });
 
   test('GET /users supports search filter', async () => {
@@ -802,6 +851,15 @@ describe('routes/admin-users.js', () => {
     assert.ok(res.body.data.resetUrl);
     assert.ok(res.body.data.resetUrl.includes('http://localhost:3000/reset/'));
     assert.equal(res.body.data.username, 'bob');
+  });
+
+  test('POST /users/:id/reset-link returns expiresAt one RESET_TOKEN_TTL from now', async () => {
+    const { app } = await buildUserRouter();
+    const before = Date.now();
+    const res = await request(app).post('/users/user-2/reset-link').expect(200);
+    const expiresAt = Date.parse(res.body.data.expiresAt);
+    assert.ok(expiresAt >= before + 3600000);
+    assert.ok(expiresAt <= Date.now() + 3600000);
   });
 
   test('POST /users/:id/reset-link fails without PUBLIC_ORIGIN', async () => {
@@ -902,6 +960,129 @@ describe('routes/admin-users.js', () => {
     });
     const res = await request(app).delete('/users/%20').expect(400);
     assert.equal(res.body.data, null);
+  });
+
+  // GET /users/:id is mounted through createAdminRoutes so enrichAuditEntries is the real one.
+  async function buildDetailApp(deps: any) {
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    return buildApp(createAdminRoutes(deps));
+  }
+
+  function detailDeps() {
+    const deps = makeDeps({
+      getUserById: mock.fn(async (id: any) =>
+        id === 'user-2'
+          ? {
+              id: 'user-2',
+              username: 'bob',
+              displayName: 'Bob',
+              email: 'bob@test.com',
+              emailVerifiedAt: null,
+              createdAt: '2026-01-02T00:00:00.000Z',
+              publicSchedule: false,
+            }
+          : null,
+      ),
+    });
+    deps.stores.roles.getUserRoles = mock.fn(async () => []);
+    deps.stores.pool.query = mock.fn(async (sql: string) => {
+      if (sql.includes('festival_profiles fp')) {
+        return {
+          rows: [
+            {
+              festivalId: 'f1',
+              festivalName: 'Bonnaroo',
+              profileName: 'Bob',
+              joinedAt: new Date('2026-02-01T00:00:00.000Z'),
+              picks: 3,
+            },
+          ],
+        };
+      }
+      if (sql.includes('crew_members cm')) {
+        return {
+          rows: [
+            {
+              id: 'crew-1',
+              name: 'Test Crew',
+              festivalId: 'f1',
+              festivalName: 'Bonnaroo',
+              role: 'member',
+              joinedAt: new Date('2026-02-02T00:00:00.000Z'),
+              memberCount: 2,
+            },
+          ],
+        };
+      }
+      if (sql.includes('user_sessions')) return { rows: [{ lastActiveAt: new Date('2026-03-01T00:00:00.000Z') }] };
+      return { rows: [] };
+    });
+    deps.stores.auditLog.listForUser = mock.fn(async () => [
+      {
+        id: 'a1',
+        action: 'role_grant',
+        actorType: 'admin',
+        actorId: 'user-1',
+        targetType: 'user',
+        targetId: 'user-2',
+        details: { role: 'admin', targetUsername: 'bob' },
+        createdAt: '2026-01-03',
+      },
+    ]);
+    return deps;
+  }
+
+  test('GET /users/:id records the view, then returns the read-only detail', async () => {
+    const deps = detailDeps();
+    const app = await buildDetailApp(deps);
+
+    const res = await request(app).get('/users/user-2').expect(200);
+
+    assert.equal(deps.stores.auditLog.insert.mock.calls.length, 1);
+    const entry = deps.stores.auditLog.insert.mock.calls[0]!.arguments[0];
+    assert.equal(entry.action, 'user.private_data.viewed');
+    assert.equal(entry.actorType, 'admin');
+    assert.equal(entry.actorId, 'admin-1');
+    assert.equal(entry.targetType, 'user');
+    assert.equal(entry.targetId, 'user-2');
+    assert.deepEqual(JSON.parse(entry.detailsJson), { targetUsername: 'bob' });
+
+    const { user, festivals, crews, activity } = res.body.data;
+    assert.equal(user.username, 'bob');
+    assert.equal(user.emailVerified, false);
+    assert.equal(user.lastActiveAt, '2026-03-01T00:00:00.000Z');
+    assert.deepEqual(user.roles, []);
+    assert.equal(user.publicSchedule, false);
+    assert.equal(festivals[0].picks, 3);
+    assert.equal(festivals[0].joinedAt, '2026-02-01T00:00:00.000Z');
+    assert.equal(crews[0].role, 'member');
+    assert.equal(activity[0].friendlyAction, 'Grant Role');
+    assert.equal(activity[0].actorUsername, 'admin');
+    assert.equal(activity[0].targetLabel, 'bob');
+    assert.equal(deps.stores.auditLog.listForUser.mock.calls[0]!.arguments[0], 'user-2');
+  });
+
+  test('GET /users/:id returns 404 and writes no audit row for an unknown user', async () => {
+    const deps = detailDeps();
+    const app = await buildDetailApp(deps);
+
+    const res = await request(app).get('/users/missing').expect(404);
+    assert.equal(res.body.error.message, 'User not found');
+    assert.equal(deps.stores.auditLog.insert.mock.calls.length, 0);
+  });
+
+  test('GET /users/:id sends no user data when the audit insert fails', async () => {
+    const deps = detailDeps();
+    deps.stores.auditLog.insert = mock.fn(async () => {
+      throw new Error('audit down');
+    });
+    const app = await buildDetailApp(deps);
+
+    const res = await request(app).get('/users/user-2').expect(500);
+    assert.equal(res.body.data, null);
+    assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+    assert.equal(res.body.error.message, "Couldn't record this view, so the details stay hidden. Try again.");
+    assert.equal(deps.stores.auditLog.listForUser.mock.calls.length, 0);
   });
 });
 
@@ -1048,6 +1229,29 @@ describe('routes/admin-bulk.js', () => {
     const res = await request(app).delete('/crews/crew-1/members/user-2').expect(200);
     assert.equal(res.body.error, null);
     assert.ok(deps.stores.crews.removeMember.mock.calls.length > 0);
+  });
+
+  test('DELETE /crews/:id/members/:userId records crew name and username', async () => {
+    const { app, deps } = await buildBulkRouter();
+    await request(app).delete('/crews/crew-1/members/user-2').expect(200);
+    const entry = deps.stores.auditLog.insert.mock.calls[0]!.arguments[0];
+    assert.equal(entry.action, 'crew_remove_member');
+    assert.deepEqual(JSON.parse(entry.detailsJson), {
+      crewId: 'crew-1',
+      crewName: 'Test Crew',
+      userId: 'user-2',
+      targetUsername: 'bob',
+    });
+  });
+
+  test('DELETE /crews/:id/members/:userId refuses to remove the owner', async () => {
+    const { app, deps } = await buildBulkRouter();
+    deps.stores.crews.getMember = mock.fn(async () => ({ userId: 'user-2', role: 'owner' }));
+    const res = await request(app).delete('/crews/crew-1/members/user-2').expect(400);
+    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.equal(res.body.error.message, "The crew owner can't be removed. Delete the crew instead.");
+    assert.equal(deps.stores.crews.removeMember.mock.calls.length, 0);
+    assert.equal(deps.stores.auditLog.insert.mock.calls.length, 0);
   });
 
   test('DELETE /crews/:id/members/:userId returns 404 for missing member', async () => {

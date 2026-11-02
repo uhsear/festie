@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useSearch } from '@tanstack/react-router';
 import { api } from '@festie/shared/services/api';
-import { describeRemovals, removalFromError, withReauth } from '@festie/shared/services/admin';
+import {
+  bulkArchiveFestivals,
+  describeRemovals,
+  removalFromError,
+  withReauth,
+} from '@festie/shared/services/admin';
 import {
   fetchAdminFestival,
   fetchAdminFestivals,
@@ -10,9 +16,19 @@ import {
   restoreFestival,
 } from '@festie/shared/services/festivalAdmin';
 import type { AdminFestivalSummary, ArchivedFestival } from '@festie/shared/services/festivalAdmin';
-import { countFestivalChanges, describeDeleteImpact, sortLineup, timeAgo } from '@festie/shared/utils';
 import type { EditableFestival, FestivalIssue } from '@festie/shared/utils';
-import { describeScheduleNotice, type ScheduleNotice } from '@festie/shared/utils';
+import {
+  bulkConfirmCopy,
+  countFestivalChanges,
+  describeDeleteImpact,
+  describeScheduleNotice,
+  SELECTION_LIMIT_MESSAGE,
+  sortLineup,
+  summarizeBulkResults,
+  timeAgo,
+  toggleSelection,
+  type ScheduleNotice,
+} from '@festie/shared/utils';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import { useToast } from '../../lib/toastContext';
 import { useUnsavedChangesGuard } from '../../lib/useUnsavedChangesGuard';
@@ -20,6 +36,8 @@ import LineupImport from './LineupImport';
 import FestivalEditForm, { Festival as FormFestival } from './FestivalEditForm';
 import FestivalMapEditor from './FestivalMapEditor';
 import FestivalStatusPanel, { FestivalMeta } from './FestivalStatusPanel';
+import AdminFestivalPreview from './AdminFestivalPreview';
+import SelectionBar from './SelectionBar';
 import { cn } from '../../lib/utils';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -39,6 +57,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
  * DayEditor → SetEditor.
  */
 export default function AdminFestivals() {
+  const { preview: previewId } = useSearch({ from: '/admin' });
   const [festivals, setFestivals] = useState<AdminFestivalSummary[]>([]);
   const [archived, setArchived] = useState<ArchivedFestival[]>([]);
   const [view, setView] = useState<View>('live');
@@ -64,6 +83,10 @@ export default function AdminFestivals() {
   const [importTarget, setImportTarget] = useState<{ id: string; name: string } | null>(null);
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
   const [removalBusy, setRemovalBusy] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [selectionNote, setSelectionNote] = useState<string | undefined>();
   const { toast, toastError } = useToast();
   const { askPassword, reauthDialog } = useReauthPrompt();
 
@@ -255,6 +278,32 @@ export default function AdminFestivals() {
     }
   };
 
+  const toggleSelected = (id: string) => {
+    const { next, limited } = toggleSelection(selected, id);
+    setSelected(next);
+    setSelectionNote(limited ? SELECTION_LIMIT_MESSAGE : undefined);
+  };
+
+  const doArchive = async () => {
+    const ids = [...selected];
+    setArchiveBusy(true);
+    try {
+      const done = await withReauth(() => bulkArchiveFestivals(ids), askPassword);
+      if (done === null) return;
+      const archived = new Set(done.results.filter((r) => r.status === 'archived').map((r) => r.festivalId));
+      toast(summarizeBulkResults('archive', done.results), archived.size === ids.length ? 'success' : 'error');
+      setFestivals((prev) => prev.filter((f) => !archived.has(f.id)));
+      setSelected(new Set());
+      setSelectionNote(undefined);
+      setConfirmArchive(false);
+    } catch (err: unknown) {
+      setConfirmArchive(false);
+      toastError(err, "Couldn't archive festivals. Try again.");
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
+
   const handleRestore = async (item: ArchivedFestival) => {
     try {
       const { published } = await restoreFestival(item.id);
@@ -308,6 +357,8 @@ export default function AdminFestivals() {
       f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (f.location ?? '').toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  if (previewId) return <AdminFestivalPreview festivalId={previewId} />;
 
   if (loading && tab === 'list') {
     return <div className="text-center py-12 text-text-muted">Loading festivals…</div>;
@@ -423,6 +474,13 @@ export default function AdminFestivals() {
                     key={festival.id}
                     className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex items-center justify-between hover:bg-bg-card/80 transition-colors"
                   >
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${festival.name}`}
+                      checked={selected.has(festival.id)}
+                      onChange={() => toggleSelected(festival.id)}
+                      className="mr-3 h-5 w-5 shrink-0"
+                    />
                     <div className="flex-1">
                       <h2 className="text-base font-semibold text-text-primary">
                         {festival.name}
@@ -443,6 +501,15 @@ export default function AdminFestivals() {
                       >
                         Edit
                       </button>
+                      <Link
+                        to="/admin"
+                        search={{ tab: 'festivals', preview: festival.id }}
+                        target="_blank"
+                        rel="noopener"
+                        className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+                      >
+                        Preview
+                      </Link>
                       <button
                         onClick={() => confirmLeave(() => openImport({ id: festival.id, name: festival.name }))}
                         className="px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
@@ -466,6 +533,19 @@ export default function AdminFestivals() {
                 ))}
               </div>
             ))}
+          {view === 'live' && (
+            <SelectionBar
+              count={selected.size}
+              actionLabel="Archive"
+              onAction={() => setConfirmArchive(true)}
+              onClear={() => {
+                setSelected(new Set());
+                setSelectionNote(undefined);
+              }}
+              busy={archiveBusy}
+              note={selectionNote}
+            />
+          )}
         </div>
       )}
 
@@ -563,6 +643,16 @@ export default function AdminFestivals() {
         onConfirm={confirmRemovals}
       />
       {guardDialog}
+      <ConfirmDialog
+        open={confirmArchive}
+        onOpenChange={(o) => !o && setConfirmArchive(false)}
+        title={bulkConfirmCopy('archive', selected.size).title}
+        description={bulkConfirmCopy('archive', selected.size).message}
+        confirmLabel="Archive"
+        destructive
+        busy={archiveBusy}
+        onConfirm={doArchive}
+      />
       {reauthDialog}
     </div>
   );
