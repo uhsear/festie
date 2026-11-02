@@ -223,7 +223,7 @@ test.describe('festival planner browser regression', () => {
     await expect(page).toHaveURL(/\/grid$/);
   });
 
-  test('the grid clash chip focuses the first clashing set', async ({ app, page }) => {
+  test('the grid clash chip opens the clash cards in Picks', async ({ app, page }) => {
     await registerUser(page, app, `clasher_${Date.now()}`);
 
     // Alpha (10:00-11:00, Main) and Beta (10:30-11:30, Forest) overlap.
@@ -236,10 +236,11 @@ test.describe('festival planner browser regression', () => {
     }
 
     await openScheduleView(page, 'Grid');
-    const chip = page.getByRole('button', { name: 'You have 1 schedule clash. Show it.' });
+    const chip = page.getByRole('button', { name: 'You have 1 schedule clash. Open it in Picks.' });
     await expect(chip).toBeVisible();
     await chip.click();
-    await expect(page.locator('[data-set-id="set-a"] [data-open]')).toBeFocused();
+    await expect(page).toHaveURL(/\/picks$/);
+    await expect(page.locator('#clashes')).toBeFocused();
   });
 
   test('switching the day filter changes the visible sets', async ({ app, page }) => {

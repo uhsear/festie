@@ -453,24 +453,70 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       return result.rows[0] || null;
     },
 
-    // Keeps an earlier published_at, so a second publish changes nothing visible.
-    async publish(festivalId: string, userId: string | null = null) {
-      const result = await pool.query(
-        `
+    // Keeps an earlier published_at and slug, so a second publish changes nothing visible.
+    async publish(
+      festivalId: string,
+      userId: string | null = null,
+    ): Promise<{ publishedAt: string; slug: string | null } | null> {
+      const run = () =>
+        pool.query(
+          `
   UPDATE festivals
   SET
     published_at = COALESCE(published_at, NOW()),
+    slug = COALESCE(slug, festival_next_slug (id)),
     updated_at = NOW(),
     updated_by = $2
   WHERE
     id = $1
     AND deleted_at IS NULL
   RETURNING
-    published_at AS "publishedAt"
+    published_at AS "publishedAt",
+    slug
 `,
-        [festivalId, userId],
-      );
+          [festivalId, userId],
+        );
+      let result;
+      try {
+        result = await run();
+      } catch (error: any) {
+        // Two publishes raced to one free slug; the retry sees the winner's row.
+        if (error?.code !== '23505') throw error;
+        result = await run();
+      }
       return result.rows[0] || null;
+    },
+
+    /** The festival id behind a public page slug: published and not archived, else null. */
+    async findPublicIdBySlug(slug: string): Promise<string | null> {
+      const result = await pool.query(
+        'SELECT id FROM festivals WHERE slug = $1 AND deleted_at IS NULL AND published_at IS NOT NULL',
+        [slug],
+      );
+      return result.rows[0]?.id ?? null;
+    },
+
+    /** Slugs of every public festival, for the sitemap. */
+    async listPublicSlugs(): Promise<Array<{ slug: string; updatedAt: string }>> {
+      const result = await pool.query(
+        `
+  SELECT
+    slug,
+    updated_at AS "updatedAt"
+  FROM
+    festivals
+  WHERE
+    slug IS NOT NULL
+    AND deleted_at IS NULL
+    AND published_at IS NOT NULL
+  ORDER BY
+    published_at,
+    id
+  LIMIT
+    5000
+`,
+      );
+      return result.rows.map((row: any) => ({ slug: row.slug, updatedAt: new Date(row.updatedAt).toISOString() }));
     },
 
     async listDeleted() {
@@ -540,6 +586,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           f.created_at AS "createdAt",
           f.updated_at AS "updatedAt",
           f.published_at AS "publishedAt",
+          f.slug,
           COALESCE(
             (SELECT json_agg(
               json_build_object(
@@ -672,6 +719,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         await insertStagesBatch(client, stageRows);
         await insertDaysBatch(client, dayRows);
         await insertSetsBatch(client, setRows);
+        // After the days, so the slug takes the first day's year. Drafts stay without one.
+        await client.query(
+          'UPDATE festivals SET slug = festival_next_slug(id) WHERE id = $1 AND slug IS NULL AND published_at IS NOT NULL',
+          [festival.id],
+        );
 
         const result = await client.query(
           `
@@ -685,7 +737,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             map_config AS "mapConfig",
             created_at AS "createdAt",
             updated_at AS "updatedAt",
-            published_at AS "publishedAt"
+            published_at AS "publishedAt",
+            slug
           FROM
             festivals
           WHERE

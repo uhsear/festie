@@ -45,6 +45,7 @@ import {
   readLiveSnapshot,
   clampCapturedAt,
 } from '../lib/live-location-cache.js';
+import { noteBatteryLevel } from '../lib/battery-low.js';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket Event Validation Schemas
@@ -163,7 +164,7 @@ export default function setupSocketHandlers(deps: any) {
     getUserFestivalProfile,
     _getUserById,
     _buildAvatarUrl,
-    _emitter,
+    emitter,
     stores,
     removeSocketPresence,
     getPresenceList,
@@ -488,6 +489,7 @@ export default function setupSocketHandlers(deps: any) {
           // Phase 3C: cache the first fix so a late-joiner snapshot (location:sync)
           // can render this sharer immediately. Ephemeral (Redis-only) + fail-open.
           void writeLivePosition(redis, crewId, payload);
+          void noteBatteryLevel({ redis, stores, emitter, log }, payload);
         }
 
         log.debug('location:share', { userId: session.userId, crewId });
@@ -586,6 +588,7 @@ export default function setupSocketHandlers(deps: any) {
         socket.to('crew:' + crewId).emit('location:peer-update', payload);
         // Phase 3C: refresh the late-joiner snapshot cache with this fix.
         void writeLivePosition(redis, crewId, payload);
+        void noteBatteryLevel({ redis, stores, emitter, log }, payload);
       } catch (error: any) {
         log.error('location:update error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
       }

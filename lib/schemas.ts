@@ -1551,6 +1551,12 @@ export const crewIdMpIdParams = z.object({
 });
 export type CrewIdMpIdParams = z.infer<typeof crewIdMpIdParams>;
 
+export const crewIdUserIdParams = z.object({
+  crewId: z.string().min(1, 'Crew ID required').max(100),
+  userId: z.string().min(1, 'User ID required').max(100),
+});
+export type CrewIdUserIdParams = z.infer<typeof crewIdUserIdParams>;
+
 export const crewIdItemIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
   itemId: z.string().min(1, 'Item ID required').max(100),
@@ -1681,6 +1687,7 @@ export const schemas = {
   crewIdExpenseIdParams,
   crewIdPollIdParams,
   crewIdMpIdParams,
+  crewIdUserIdParams,
   crewIdItemIdParams,
   setIdParams,
   crewIdFestivalIdParams,

@@ -47,6 +47,8 @@ function makeRedis() {
   };
   return {
     pipeline: mock.fn(() => pipeline),
+    // The battery-low once-only key (lib/battery-low.ts).
+    set: mock.fn(async () => 'OK'),
     pexpire: mock.fn(async () => 1),
     hdel: mock.fn(async () => 1),
     _hset: hset,
@@ -86,7 +88,8 @@ function makeDeps(overrides: any = {}) {
     io,
     redis,
     pool,
-    stores: { crews },
+    emitter: { crewActivityLogged: mock.fn(() => {}) },
+    stores: { crews, activity: { log: mock.fn(async () => 'act-1') } },
   };
   return { deps, io, redis, pool, crews, userId };
 }
@@ -201,6 +204,40 @@ describe('POST /:crewId/live-location', () => {
     assert.equal(res.status, 429);
     assert.equal(res.body.error.code, 'RATE_LIMITED');
     assertNoWrites(pool, crews);
+  });
+});
+
+describe('POST /:crewId/live-location — battery-low line', () => {
+  // noteBatteryLevel runs fire-and-forget after the response; give it a tick.
+  const settle = () => new Promise((r) => setImmediate(r));
+
+  test('a 9% fix logs one battery-low row with detail 9%', async () => {
+    const { app, deps, userId } = await buildApp();
+    const res = await request(app).post('/crew-1/live-location').send(fix({ battery: 9 }));
+    assert.equal(res.status, 200);
+    await settle();
+    const logged = (deps.stores.activity.log.mock.calls as any[]).map((c) => c.arguments[0]);
+    assert.deepEqual(logged, [{ crewId: 'crew-1', userId, type: 'battery-low', detail: '9%' }]);
+    assert.equal(deps.emitter.crewActivityLogged.mock.calls.length, 1);
+  });
+
+  test('a 50% fix logs nothing', async () => {
+    const { app, deps } = await buildApp();
+    const res = await request(app).post('/crew-1/live-location').send(fix({ battery: 50 }));
+    assert.equal(res.status, 200);
+    await settle();
+    assert.equal(deps.stores.activity.log.mock.calls.length, 0);
+  });
+
+  test('a Redis error in the battery check still answers 200', async () => {
+    const { app, deps, redis } = await buildApp();
+    redis.set = mock.fn(async () => {
+      throw new Error('redis down');
+    });
+    const res = await request(app).post('/crew-1/live-location').send(fix({ battery: 9 }));
+    assert.equal(res.status, 200);
+    await settle();
+    assert.equal(deps.stores.activity.log.mock.calls.length, 0);
   });
 });
 

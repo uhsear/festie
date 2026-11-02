@@ -66,10 +66,13 @@ vi.mock('@festie/shared/hooks', () => {
         selectedDay: storeState.selectedDay as number,
         days: storeState.days as FestivalDay[],
       });
-      return { count: groups.length, groups, marks: buildClashMarks(groups, (s) => s.artist) };
+      return { count: groups.length, groups, marks: buildClashMarks(groups, (s) => s.artist), picked: 0 };
     },
+    useViewAs: () => ({ target: null, canView: () => false, start: vi.fn(), clear: vi.fn() }),
   };
 });
+
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
 vi.mock('../hooks/useNowIndicator', () => ({
   useNowIndicator: () => ({ nowIndicator: null, gridRef: useRef<HTMLDivElement | null>(null), scrollToNow: vi.fn() }),
@@ -149,7 +152,7 @@ describe('GridView perf (EDC Orlando-sized lineup)', () => {
     expect(day1).toHaveLength(35);
     for (const s of day1) expect(root.querySelectorAll(`[data-set-id="${s.id}"]`)).toHaveLength(1);
     expect(root.querySelectorAll('[data-set-id]')).toHaveLength(35);
-    expect(screen.getByRole('button', { name: 'You have 5 schedule clashes. Show the first one.' })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: 'You have 5 schedule clashes. Open them in Picks.' })).toHaveTextContent(
       '5 clashes',
     );
 

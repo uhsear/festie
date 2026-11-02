@@ -2,6 +2,7 @@ import {
   CREW_MEET_HREF,
   SCHEDULE_HREF,
   compassHref,
+  peerCompassHref,
   meetHref,
   meetingPointPrefillHref,
   sosPushCrewId,
@@ -18,6 +19,10 @@ describe('map entry routes', () => {
       pathname: '/compass',
       params: { label: 'Mainstage', latitude: '35.5', longitude: '-86.25' },
     });
+  });
+
+  it('builds the peer compass href', () => {
+    expect(peerCompassHref('u1')).toEqual({ pathname: '/compass', params: { peer: 'u1' } });
   });
 
   it('builds the meeting-point prefill href, with an empty stage reference for an amenity', () => {

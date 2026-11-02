@@ -41,6 +41,7 @@ import { useStageMarkers } from './crew-map/useStageMarkers';
 import { useAmenityMarkers } from './crew-map/useAmenityMarkers';
 import { usePeerMarkers } from './crew-map/usePeerMarkers';
 import { useSosMarkers } from './crew-map/useSosMarkers';
+import PeerNudgeButton from './crew-map/PeerNudgeButton';
 import { useZoneLayer } from './crew-map/useZoneLayer';
 import { useSiteplanLayer } from './crew-map/useSiteplanLayer';
 import { useDraftMarkers } from './crew-map/useDraftMarkers';
@@ -602,7 +603,7 @@ export default function CrewMap({
   useMeetingPointMarkers(mapRef, glRef, status, pins, pinsKey, mpMarkersRef, onSelectPlace);
   useStageMarkers(mapRef, glRef, status, stagePins, stagesKey, stageMarkersRef, onSelectPlace);
   useAmenityMarkers(mapRef, glRef, status, visibleAmenityPins, amenitiesKey, amenityMarkersRef, onSelectPlace);
-  usePeerMarkers(mapRef, glRef, status, peers, peersKey, peerMarkersRef, selectPursue);
+  usePeerMarkers(mapRef, glRef, status, peers, peersKey, stagePins, stagesKey, peerMarkersRef, selectPursue);
   useSosMarkers(mapRef, glRef, status, sosList, sosIdsKey, sosCoordsKey, sosMarkersRef, sosFramedRef, selectPursue);
   useSelfMarker(mapRef, glRef, status, selfCoord, accuracyM, interactive);
   useDraftMarkers(mapRef, glRef, status, draftPoints, draftPointsKey, draftMarkersRef);
@@ -667,6 +668,8 @@ export default function CrewMap({
   // use the aqua selection accent.
   const pursueIsSos = !!liveTarget && liveTarget.id.startsWith('sos:');
   const showPlaceCard = interactive && !!place && status === 'ready';
+  const nudgePeer =
+    liveTarget && liveTarget.id.startsWith('peer:') ? peers.find((p) => `peer:${p.userId}` === liveTarget.id) : undefined;
   const showPursueOverlay = status === 'ready' && !!liveTarget && !showPlaceCard;
 
   return (
@@ -730,10 +733,8 @@ export default function CrewMap({
         {/* ── Pursue overlay: directional arrow + label "Alex · 210 m NE · ~3 min". */}
         {showPursueOverlay && (
           <div
-            className="absolute left-2 bottom-2 right-2 z-10 flex items-center gap-3 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
+            className="absolute left-2 bottom-2 right-2 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
             style={{ borderColor: pursueIsSos ? 'var(--color-accent-coral)' : 'var(--color-accent-aqua)' }}
-            role="status"
-            aria-live="polite"
           >
             {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (
               <Navigation
@@ -750,7 +751,7 @@ export default function CrewMap({
             ) : (
               <Navigation className="w-7 h-7 shrink-0 text-text-muted opacity-50" aria-hidden="true" />
             )}
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1" role="status" aria-live="polite">
               {selfCoord && pursuit ? (
                 <p className="truncate text-sm text-text-primary">
                   <span className="font-semibold">{liveTarget.label}</span>
@@ -771,6 +772,7 @@ export default function CrewMap({
                 </button>
               )}
             </div>
+            {nudgePeer && <PeerNudgeButton crewId={nudgePeer.crewId} userId={nudgePeer.userId} name={liveTarget.label} />}
             <button
               type="button"
               onClick={clearPursue}

@@ -6,6 +6,7 @@ import { useFestivalDataStore } from './festivalDataStore';
 import { useFestivalUIStore } from './festivalUIStore';
 import { useFestivalModeStore } from './festivalModeStore';
 import { useLiveLocationStore } from './liveLocationStore';
+import { useInboxStore } from './inboxStore';
 import { useOfflineReadinessStore } from './offlineReadinessStore';
 import { useNotificationPrefsStore, DEFAULT_NOTIFICATION_PREFS } from './notificationPrefsStore';
 
@@ -28,6 +29,7 @@ describe('resetAllStores', () => {
       selectedDay: 3,
       activeStages: ['st1', 'st2'],
       searchQuery: 'test',
+      viewAsProfileId: 'p2',
       byFestival: {
         f1: { view: 'grid', activeStages: [], onlyMine: false, searchQuery: '', hiddenDays: [], dismissedPhase: null, groupBy: null },
       },
@@ -47,7 +49,9 @@ describe('resetAllStores', () => {
       pendingSync: 5,
       failedSync: [{ clientId: 'x', label: 'test', method: 'PUT', url: '/x', error: 'err', at: 1 }],
       onlineUsers: [{ id: 'u1' } as any],
+      crewBadgeSeen: { c1: { pollIds: ['p1'], balanceCents: 100 } },
     });
+    useInboxStore.setState({ items: [{ id: 'n1' } as any], seenAt: '2026-01-01T00:00:00Z', loaded: true });
     useLiveLocationStore.getState().startSharing('crew-1');
     useLiveLocationStore.getState().beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
     useFestivalModeStore.setState({ lowPowerMode: true });
@@ -93,6 +97,7 @@ describe('resetAllStores', () => {
     expect(state.activeStages).toEqual([]);
     expect(state.searchQuery).toBe('');
     expect(state.byFestival).toEqual({});
+    expect(state.viewAsProfileId).toBeNull();
   });
 
   it('resets crewStore to defaults', () => {
@@ -149,5 +154,14 @@ describe('resetAllStores', () => {
     expect(state.prefs).toEqual(DEFAULT_NOTIFICATION_PREFS);
     expect(state.loaded).toBe(false);
     expect(state.error).toBeNull();
+  });
+
+  it('clears crewBadgeSeen and the inbox', () => {
+    resetAllStores();
+    expect(useUIStore.getState().crewBadgeSeen).toEqual({});
+    const inbox = useInboxStore.getState();
+    expect(inbox.items).toEqual([]);
+    expect(inbox.seenAt).toBeNull();
+    expect(inbox.loaded).toBe(false);
   });
 });

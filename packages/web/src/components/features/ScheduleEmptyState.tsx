@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Filter, Music, SearchX, Star } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
+import { useViewAs } from '@festie/shared/hooks';
 import {
   hasAnyPick,
   isStageFilterActive,
@@ -32,12 +33,15 @@ export default function ScheduleEmptyState({ dayLabel, otherDayMatches, dayFallb
   const activeGenres = useFestivalStore((s) => s.activeGenres);
   const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
 
+  const { target, clear } = useViewAs();
+
   const reason = scheduleEmptyReason({
     query: searchQuery,
     onlyMine,
     hasAnyPick: hasAnyPick(picks),
     stageFilterActive: isStageFilterActive(activeStages, stages.length),
     genreFilterActive: (activeGenres?.length ?? 0) > 0,
+    viewAsName: target?.name,
   });
 
   if (reason === 'search') {
@@ -45,6 +49,7 @@ export default function ScheduleEmptyState({ dayLabel, otherDayMatches, dayFallb
     const hidden = searchHiddenByFilters(daySets, searchQuery, stages);
     const copy = searchEmptyCopy(searchQuery, dayLabel, !!otherDayMatches, hidden);
     const clearFilters = () => {
+      clear();
       setOnlyMine(false);
       setActiveStages([]);
       setActiveGenres([]);
@@ -70,8 +75,8 @@ export default function ScheduleEmptyState({ dayLabel, otherDayMatches, dayFallb
       />
     );
   }
-  const copy = scheduleEmptyCopy(reason, dayLabel);
-  const picksReason = reason === 'picks';
+  const copy = scheduleEmptyCopy(reason, dayLabel, target?.name);
+  const picksReason = reason === 'picks' || reason === 'viewAs';
   return (
     <EmptyState
       icon={
@@ -86,7 +91,8 @@ export default function ScheduleEmptyState({ dayLabel, otherDayMatches, dayFallb
       cta={{
         label: copy.actionLabel ?? '',
         onClick: () => {
-          if (picksReason) setOnlyMine(false);
+          if (reason === 'viewAs') clear();
+          else if (picksReason) setOnlyMine(false);
           else if (reason === 'genres') setActiveGenres([]);
           else setActiveStages([]);
         },

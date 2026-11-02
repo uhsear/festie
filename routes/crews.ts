@@ -15,6 +15,7 @@ import createCrewDaysRoutes from './crew-days.js';
 import createSosRoutes from './crew-sos.js';
 import createLiveLocationRoutes from './crew-live-location.js';
 import createCheckinRoutes from './crew-checkin.js';
+import createCrewNudgeRoutes from './crew-nudge.js';
 import createCrewMemberRoutes from './crew-members.js';
 
 /**
@@ -224,6 +225,7 @@ export default function createCrewRoutes(deps: any) {
   const sosRoutes = createSosRoutes(subDeps);
   const liveLocationRoutes = createLiveLocationRoutes(subDeps);
   const checkinRoutes = createCheckinRoutes(subDeps);
+  const nudgeRoutes = createCrewNudgeRoutes(subDeps);
   const memberRoutes = createCrewMemberRoutes(subDeps);
 
   router.use('/', inviteRoutes);
@@ -236,6 +238,7 @@ export default function createCrewRoutes(deps: any) {
   router.use('/', sosRoutes);
   router.use('/', liveLocationRoutes);
   router.use('/', checkinRoutes);
+  router.use('/', nudgeRoutes);
   router.use('/', memberRoutes);
 
   // ── Crew creation helpers ────────────────────────────────────────

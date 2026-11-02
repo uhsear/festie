@@ -82,6 +82,8 @@ export interface Festival {
   b2bSeparator?: string;
   /** null = draft, visible to admins only. */
   publishedAt?: string | null;
+  /** Public page slug (festie.us/f/<slug>); null or absent for drafts and old servers. */
+  slug?: string | null;
   /**
    * Optional IANA time-zone id (e.g. `America/New_York`). When present, set
    * reminders are anchored in the festival's zone so they fire at the right
