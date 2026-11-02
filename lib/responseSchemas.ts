@@ -158,6 +158,7 @@ export const festivalDepth1ResponseSchema = z.object({
   longitude: z.number().nullable().optional(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalDepth1DaySchema),
+  slug: z.string().nullable().optional(),
   mapConfig: festivalMapConfigSchema.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -182,6 +183,7 @@ export const festivalResponseSchema = z.object({
   updatedAt: z.string(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalFullDaySchema),
+  slug: z.string().nullable().optional(),
 });
 export type FestivalResponse = z.infer<typeof festivalResponseSchema>;
 
@@ -297,6 +299,7 @@ export const festivalListItemResponseSchema = z.object({
   dayCount: z.number(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
+  slug: z.string().nullable().optional(),
 });
 export type FestivalListItemResponse = z.infer<typeof festivalListItemResponseSchema>;
 

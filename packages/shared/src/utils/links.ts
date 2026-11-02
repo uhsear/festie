@@ -110,6 +110,14 @@ export function buildPublicScheduleUrl(username: string, origin?: string): strin
 }
 
 /**
+ * Public festival page: `<origin>/f/<slug>`.
+ * Mirrors the server route `GET /f/:slug`, which 404s for drafts and archived festivals.
+ */
+export function buildFestivalPageUrl(slug: string, origin?: string): string {
+  return absolute(`/f/${encodeURIComponent(slug)}`, origin);
+}
+
+/**
  * Bare home link (`<origin>`), used as the share-sheet URL where there is no
  * per-resource public page (e.g. web DetailPanel's set share text).
  */

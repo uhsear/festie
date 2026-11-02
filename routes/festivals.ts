@@ -216,6 +216,7 @@ export default function createFestivalsRoutes(deps: any) {
             dayCount: festival.days?.length || 0,
             startDate: dates[0] || null,
             endDate: dates[dates.length - 1] || null,
+            slug: festival.slug ?? null,
             published: !!festival.publishedAt,
             updatedAt: festival.updatedAt,
           };
@@ -359,6 +360,7 @@ export default function createFestivalsRoutes(deps: any) {
                 ...(s.movedAt ? { movedAt: s.movedAt, movedFrom: s.movedFrom } : {}),
               })),
             })),
+            slug: festival.slug ?? null,
             mapConfig: festival.mapConfig ?? null,
             createdAt: festival.createdAt,
             updatedAt: festival.updatedAt,
