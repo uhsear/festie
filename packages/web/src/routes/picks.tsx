@@ -7,7 +7,7 @@ import { usePicks, useFestival } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import {
-  formatTime,
+  formatSetTimeRange,
   byStartTime,
   artistDisplayName,
   buildPicksIcs,
@@ -26,6 +26,7 @@ import OfflineReadinessCard from '../components/features/OfflineReadinessCard';
 import CrewSuggestionStrip from '../components/features/CrewSuggestionStrip';
 import GuestTeaser from '../components/features/GuestTeaser';
 import PickConflicts from '../components/features/PickConflicts';
+import ListenList from '../components/features/ListenList';
 // Lazy-loaded: PlanQRShare pulls in qrcode.react, which has no business in the
 // picks bundle until the user actually opens the share modal.
 const PlanQRShare = lazy(() => import('../components/features/PlanQRShare'));
@@ -122,10 +123,8 @@ function PicksViewInner() {
   // True when the profile has any pick at all (across every day), which gates
   // the calendar export independently of the day filter — you can be on a day
   // with no picks and still export the whole festival plan.
-  const hasAnyPicks = useMemo(
-    () => !!currentProfile && sets.some((s) => currentProfile.picks?.[s.id]),
-    [sets, currentProfile],
-  );
+  const pickedSets = useMemo(() => sets.filter((s) => currentProfile?.picks?.[s.id]), [sets, currentProfile]);
+  const hasAnyPicks = pickedSets.length > 0;
 
   // Build the user's picks into an RFC-5545 .ics and trigger a browser
   // download. Mirrors the mobile Picks export (same shared buildPicksIcs over
@@ -255,6 +254,12 @@ function PicksViewInner() {
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
           <PickBulkActions />
+          <ListenList
+            sets={pickedSets}
+            days={days}
+            festivalName={currentFestival.name}
+            separator={currentFestival.b2bSeparator}
+          />
           <EmptyState
             illustration="noPicks"
             title="No picks yet"
@@ -274,6 +279,12 @@ function PicksViewInner() {
         <PickConflicts />
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
         <PickBulkActions />
+        <ListenList
+          sets={pickedSets}
+          days={days}
+          festivalName={currentFestival.name}
+          separator={currentFestival.b2bSeparator}
+        />
         {/* Priority sections */}
         {PRIORITY_SECTIONS.map(({ value: pri, label, accent, badge }) => {
           const items = picksGrouped[pri];
@@ -302,12 +313,12 @@ function PicksViewInner() {
                     key={set.id}
                     className="flex items-center gap-x-3 px-4 py-3 w-full text-left bg-bg-card border border-border rounded-xl mb-2 cursor-pointer transition-[background,transform] duration-200 ease-standard hover:bg-bg-card-hover active:scale-[0.97] motion-reduce:transition-none motion-reduce:transform-none focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
                     type="button"
-                    aria-label={`${dn} — ${dayLabel}${set.startTime ? ' ' + formatTime(set.startTime) : ' TBA'}`}
+                    aria-label={`${dn} — ${dayLabel} ${formatSetTimeRange(set) || 'TBA'}`}
                     onClick={() => setDetailSet(set)}
                   >
                     <div className="text-xs text-text-muted min-w-[100px] font-semibold tabular-nums">
                       {dayLabel}
-                      {set.startTime ? ' ' + formatTime(set.startTime) : ' TBA'}
+                      {' ' + (formatSetTimeRange(set) || 'TBA')}
                     </div>
                     <div className="flex-1 text-sm font-bold min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
                       {dn}

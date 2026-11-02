@@ -1,86 +1,76 @@
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { PHASE_ACTION_LABELS, PHASE_ACTION_ORDER } from '@festie/shared/utils';
-import type { FestivalPhase, PhaseActionKey } from '@festie/shared/utils';
+import type { HomeAction, HomeActionKey } from '@festie/shared/utils';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 
-interface ActionDef {
+interface ActionTarget {
   icon: keyof typeof Ionicons.glyphMap;
   href: string;
-  a11y: string;
-  /** Safety-adjacent destination (live map / SOS) → coral icon per the accent rule. */
+  /** Safety-adjacent destination (live map) -> coral icon per the accent rule. */
   danger?: boolean;
 }
 
-// Fixed destination set. Phase never adds or removes a destination — it only
-// reorders and re-emphasizes — so everything stays reachable in every phase.
-const ACTIONS: Record<PhaseActionKey, ActionDef> = {
-  myPlan: { icon: CONCEPT_IONICON.picks, href: '/(tabs)/picks', a11y: 'Open my picks' },
-  crew: { icon: 'people', href: '/(tabs)/crew', a11y: 'Open crew' },
-  map: { icon: 'map', href: '/(tabs)/map', a11y: 'Open the map: crew, meeting points and SOS', danger: true },
-  nownext: { icon: CONCEPT_IONICON.nowNext, href: '/festival-mode', a11y: 'Open Now and Next' },
-  wrap: { icon: CONCEPT_IONICON.wrap, href: '/wrap', a11y: 'Open your Festival Wrap' },
-};
-
-const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
-  pre: { label: 'Before the festival', hint: 'Lock in your picks and rally your crew.' },
-  live: { label: 'Happening now', hint: 'Find your crew, check Now & Next, stay safe.' },
-  post: { label: 'After the festival', hint: 'Relive it and settle up with your crew.' },
+// Destinations for the link actions. 'first-pick' is a hint and never navigates.
+// Find lives on the Map tab, so it switches tabs instead of pushing a route.
+const TARGETS: Record<Exclude<HomeActionKey, 'first-pick'>, ActionTarget> = {
+  crew: { icon: 'people', href: '/(tabs)/crew' },
+  find: { icon: CONCEPT_IONICON.find, href: '/(tabs)/map', danger: true },
+  wrap: { icon: CONCEPT_IONICON.wrap, href: '/wrap' },
+  settle: { icon: 'wallet-outline', href: '/(tabs)/crew' },
 };
 
 interface PhaseHomeActionsProps {
-  phase: FestivalPhase;
+  actions: HomeAction[];
 }
 
 /**
- * P1-5 — phase-aware home actions. A compact, horizontally-scrolling shortcut
- * band on the Schedule landing that re-prioritizes the crew's destinations by
- * festival PHASE (derived from the date range vs now via shared `festivalPhase`):
- *  - pre  → Picks / crew invites lead
- *  - live → Map (crew/SOS/meeting) + crew lead; Now & Next stays one tap away
- *  - post → festival wrap + settle-up lead
- *
- * The destination set is fixed — phase only reorders —
- * so nothing is ever hidden, only re-prioritized.
+ * Next-step band on the Schedule landing. The caller computes `actions` with
+ * shared `getHomeActions` (picks and crew before the festival, finding the crew
+ * during it, wrap and settle-up after) and mounts this only when the list is
+ * not empty. Tab destinations are not repeated here: the tab bar already
+ * carries them. A `hint` renders as a plain chip, not a button.
  */
-export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
+export default function PhaseHomeActions({ actions }: PhaseHomeActionsProps) {
   const t = useTokens();
   const styles = useStyles();
   const router = useRouter();
 
-  const order = PHASE_ACTION_ORDER[phase];
-  const heading = PHASE_HEADING[phase];
-
   return (
     <View style={styles.wrap}>
-      <Text style={styles.heading}>{heading.label}</Text>
-      <Text style={styles.hint}>{heading.hint}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {order.map((key) => {
-          const a = ACTIONS[key];
-          const iconColor = a.danger ? t.colors.accent.coral : t.colors.text.secondary;
+        {actions.map((a) => {
+          if (a.kind === 'hint' || a.key === 'first-pick') {
+            return (
+              <View key={a.key} testID={`phase-action-${a.key}`} style={styles.chip} accessibilityLabel={a.a11y}>
+                <Ionicons name="star-outline" size={16} color={t.colors.text.secondary} />
+                <Text style={styles.chipText} numberOfLines={1}>
+                  {a.label}
+                </Text>
+              </View>
+            );
+          }
+          const target = TARGETS[a.key];
+          const iconColor = target.danger ? t.colors.accent.coral : t.colors.text.secondary;
           return (
             <TouchableOpacity
-              key={key}
-              testID={`phase-action-${key}`}
+              key={a.key}
+              testID={`phase-action-${a.key}`}
               style={styles.chip}
               // Tab destinations switch tabs (navigate dedupes to the existing
-              // tab instance); the root-level pushed routes (Now & Next,
-              // Wrap) must PUSH so Back pops cleanly to the schedule with the
-              // festival context intact. router.navigate on those cross-navigator
-              // routes warps the stack — on a past festival it dropped the
-              // back-to-schedule entry, popping the user out to festival-select /
-              // the OS home screen on Back.
-              onPress={() => (a.href.startsWith('/(tabs)') ? router.navigate(a.href) : router.push(a.href))}
+              // tab instance); the root-level pushed routes (Wrap) must
+              // PUSH so Back pops cleanly to the schedule with the festival
+              // context intact. router.navigate on those cross-navigator routes
+              // warps the stack and can pop the user out to the OS home screen.
+              onPress={() => (target.href.startsWith('/(tabs)') ? router.navigate(target.href) : router.push(target.href))}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel={a.a11y}
             >
-              <Ionicons name={a.icon} size={16} color={iconColor} />
+              <Ionicons name={target.icon} size={16} color={iconColor} />
               <Text style={styles.chipText} numberOfLines={1}>
-                {PHASE_ACTION_LABELS[key]}
+                {a.label}
               </Text>
             </TouchableOpacity>
           );
@@ -93,24 +83,9 @@ export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
 const useStyles = makeStyles((t) => ({
   wrap: {
     gap: t.spacing[1],
-    // Separate the phase block from the filter controls above it.
+    // Separate the band from the controls above it.
     marginTop: t.spacing[3],
     paddingBottom: t.spacing[2],
-  },
-  heading: {
-    // typeStyle('caption', 700) selects SpaceGrotesk_700Bold — correct cut.
-    // Spreading typeStyle() then overriding fontWeight is inert on native
-    // because the weighted fontFamily wins (F4 faux-bold fix).
-    ...typeStyle('caption', 700),
-    color: t.colors.text.muted,
-    textTransform: 'uppercase',
-  },
-  hint: {
-    // Downsize to micro so the hint reads as contextual annotation rather than
-    // competing with the filter controls in the same visual register.
-    ...typeStyle('micro'),
-    color: t.colors.text.secondary,
-    marginBottom: t.spacing[1],
   },
   row: {
     gap: t.spacing[2],
