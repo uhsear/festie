@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { fetchSharingStatus, resetShareLinks, type SharingStatus } from '@festie/shared/services/sharing';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { buildPublicScheduleUrl } from '@festie/shared/utils';
 import { Globe } from 'lucide-react';
 import { useToast } from '../../lib/toastContext';
@@ -13,6 +15,7 @@ export default function PublicScheduleSection() {
   const { toast } = useToast();
   const user = useAuthStore((s) => s.user);
   const setPublicSchedule = useAuthStore((s) => s.setPublicSchedule);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [status, setStatus] = useState<SharingStatus | null>(null);
@@ -48,8 +51,8 @@ export default function PublicScheduleSection() {
     setSaving(true);
     try {
       await setPublicSchedule(next);
-    } catch {
-      toast("Couldn't update your public schedule page. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't update your public schedule page. Try again."), 'error');
     } finally {
       setSaving(false);
     }
@@ -102,7 +105,7 @@ export default function PublicScheduleSection() {
             Anyone with the link can see your picks for your newest festival. Turning it off hides this page. Links you sent from Share picks keep working until you reset them below.
           </p>
         </div>
-        <Switch checked={on} onChange={toggle} label="Public schedule page" disabled={saving} />
+        <Switch checked={on} onChange={toggle} label="Public schedule page" disabled={saving || offlineMode} />
       </div>
       {on && (
         <>
@@ -137,7 +140,7 @@ export default function PublicScheduleSection() {
         </>
       )}
       <div className="space-y-1">
-        <Button variant="outline" size="sm" onClick={() => setConfirmOpen(true)}>
+        <Button variant="outline" size="sm" disabled={offlineMode} onClick={() => setConfirmOpen(true)}>
           Reset my share links
         </Button>
         <p className="text-xs text-text-muted">

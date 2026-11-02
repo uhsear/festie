@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore, PASSWORD_CHANGED_MESSAGE } from '@festie/shared/stores/authStore';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -8,6 +10,7 @@ import { Lock } from 'lucide-react';
 export default function PasswordSection() {
   const { toast } = useToast();
   const changePassword = useAuthStore((s) => s.changePassword);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -35,8 +38,8 @@ export default function PasswordSection() {
       setNewPassword('');
       setConfirmPassword('');
       toast(PASSWORD_CHANGED_MESSAGE, 'success');
-    } catch {
-      toast("Couldn't change password. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't change password. Try again."), 'error');
     } finally {
       setSavingPassword(false);
     }
@@ -90,6 +93,7 @@ export default function PasswordSection() {
           fullWidth
           isLoading={savingPassword}
           disabled={
+            offlineMode ||
             !currentPassword ||
             !newPassword ||
             !confirmPassword ||

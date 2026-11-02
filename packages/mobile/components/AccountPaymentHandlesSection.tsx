@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { PAYMENT_COPY, PAYMENT_FIELDS } from '@festie/shared/constants';
 import { paymentProfileUrl } from '@festie/shared/utils';
@@ -22,6 +22,7 @@ export default function AccountPaymentHandlesSection() {
   const haptics = useHaptics();
   const user = useAuthStore((s) => s.user);
   const updatePaymentHandles = useAuthStore((s) => s.updatePaymentHandles);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const current = {
     venmo: user?.venmoHandle ?? '',
@@ -177,7 +178,7 @@ export default function AccountPaymentHandlesSection() {
             label="Save Payment Handles"
             onPress={() => void submit()}
             loading={submitting}
-            disabled={!dirty}
+            disabled={!dirty || offlineMode}
             accessibilityLabel="Save payment handles"
             style={styles.submit}
           />

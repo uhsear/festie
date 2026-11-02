@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ApiClientError } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import PasswordSection from './PasswordSection';
 
 // --- Mocks ---
@@ -18,6 +20,7 @@ vi.mock('../../lib/toastContext', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useUIStore.setState({ offlineMode: false });
   mockChangePassword.mockResolvedValue(undefined);
 });
 
@@ -145,8 +148,36 @@ describe('PasswordSection', () => {
     await user.click(screen.getByText('Update Password'));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith("Couldn't change password. Try again.", 'error');
+      expect(mockToast).toHaveBeenCalledWith('bad', 'error');
     });
+  });
+
+  it('shows the server message when the current password is wrong', async () => {
+    const user = userEvent.setup();
+    mockChangePassword.mockRejectedValue(
+      new ApiClientError('That password is not right. Try again.', 403, 'PASSWORD_INCORRECT'),
+    );
+
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
+    await user.type(screen.getByPlaceholderText(/New password/), 'newpass123');
+    await user.type(screen.getByPlaceholderText('Confirm new password'), 'newpass123');
+    await user.click(screen.getByText('Update Password'));
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith('That password is not right. Try again.', 'error');
+    });
+  });
+
+  it('disables submit while offline', async () => {
+    const user = userEvent.setup();
+    useUIStore.setState({ offlineMode: true });
+
+    render(<PasswordSection />);
+    await user.type(screen.getByPlaceholderText('Current password'), 'oldpass');
+    await user.type(screen.getByPlaceholderText(/New password/), 'newpass123');
+    await user.type(screen.getByPlaceholderText('Confirm new password'), 'newpass123');
+    expect(screen.getByText('Update Password').closest('button')).toBeDisabled();
   });
 
   it('shows warning toast and does not call API when new password is under 8 chars', async () => {

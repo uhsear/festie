@@ -74,6 +74,7 @@ export default function AccountScreen() {
   // The binary forces dark until app.json userInterfaceStyle is 'automatic' (P8), so
   // the OS scheme cannot be read before that. Hide "Match system" until then.
   const canMatchSystem = Constants.expoConfig?.userInterfaceStyle === 'automatic';
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [loggingOut, setLoggingOut] = useState(false);
   // Pull-to-refresh: a bump signal re-pulls the History card, and we reload
@@ -312,6 +313,12 @@ export default function AccountScreen() {
       >
         <AccountIdentityCard />
 
+        {offlineMode ? (
+          <Text style={styles.offlineNote} accessibilityRole="alert">
+            You're offline. Settings need a connection.
+          </Text>
+        ) : null}
+
         {ACCOUNT_SECTIONS.filter((s) => !('adminOnly' in s) || isAdmin).map((s) => (
           <Fragment key={s.id}>
             {s.label ? <SectionLabel>{s.label}</SectionLabel> : null}
@@ -427,6 +434,10 @@ const useStyles = makeStyles((t) => ({
   motionNote: {
     paddingHorizontal: t.spacing[4],
     paddingBottom: t.spacing[3],
+  },
+  offlineNote: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.amber,
   },
   version: {
     ...typeStyle('caption'),

@@ -23,6 +23,7 @@ export default function AccountPublicScheduleSection() {
   const haptics = useHaptics();
   const user = useAuthStore((s) => s.user);
   const setPublicSchedule = useAuthStore((s) => s.setPublicSchedule);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<SharingStatus | null>(null);
@@ -94,10 +95,10 @@ export default function AccountPublicScheduleSection() {
         </View>
         <AppSwitch
           value={on}
-          disabled={saving}
+          disabled={saving || offlineMode}
           onValueChange={(v) => void onChange(v)}
           accessibilityLabel="Public schedule page"
-          accessibilityState={{ checked: on }}
+          accessibilityState={{ checked: on, disabled: saving || offlineMode }}
           testID="public-schedule-switch"
         />
       </View>

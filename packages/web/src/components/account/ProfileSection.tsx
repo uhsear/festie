@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -15,6 +17,7 @@ interface ProfileSectionProps {
 export default function ProfileSection({ user }: ProfileSectionProps) {
   const { toast } = useToast();
   const updateDisplayName = useAuthStore((s) => s.updateDisplayName);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [displayName, setDisplayName] = useState(user.name || '');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
@@ -28,8 +31,8 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
     try {
       await updateDisplayName(next);
       toast('Display name updated', 'success');
-    } catch {
-      toast("Couldn't change display name. Try again.", 'error');
+    } catch (err) {
+      toast(mapErrorToUserMessage(err, "Couldn't change display name. Try again."), 'error');
     } finally {
       setSavingDisplayName(false);
     }
@@ -58,7 +61,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
             variant="primary"
             size="md"
             isLoading={savingDisplayName}
-            disabled={!displayName.trim() || displayName.trim() === (user.name ?? '')}
+            disabled={offlineMode || !displayName.trim() || displayName.trim() === (user.name ?? '')}
             className="min-h-[44px] min-w-[44px]"
           >
             Save

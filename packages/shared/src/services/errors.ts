@@ -35,7 +35,8 @@ export function parseRetryAfterMs(retryAfter: number | string | null | undefined
 
 /**
  * Map any thrown error to a user-facing message that distinguishes offline /
- * rate-limited / server / client failures. Non-ApiClientErrors fall back to
+ * rate-limited / server / client failures. A VALIDATION_ERROR drops the
+ * server's leading `field.path: ` so users see plain words. Non-ApiClientErrors fall back to
  * their `.message` (or the provided fallback), so plain-Error call sites and
  * existing message assertions are unaffected.
  */
@@ -57,6 +58,7 @@ export function mapErrorToUserMessage(err: unknown, fallback = 'Something went w
       return `This account is locked after too many failed sign-ins. Try again in ${n} minute${n === 1 ? '' : 's'}, or reset your password.`;
     }
     if (err.status >= 500) return 'Something went wrong on our side. Try again in a minute.';
+    if (err.code === 'VALIDATION_ERROR') return err.message.replace(/^[\w.[\]]+: /, '') || fallback;
     return err.message || fallback;
   }
   return err instanceof Error ? err.message : fallback;

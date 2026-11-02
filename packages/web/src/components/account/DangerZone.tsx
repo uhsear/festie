@@ -8,6 +8,7 @@ import {
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { crewCopy, ownedCrewsForDeletion } from '@festie/shared/utils/crewManage';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -22,6 +23,7 @@ export default function DangerZone() {
   const crews = useCrewStore((s) => s.crews);
   const loadCrews = useCrewStore((s) => s.loadCrews);
   const [newOwners, setNewOwners] = useState<Record<string, string>>({});
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -147,7 +149,7 @@ export default function DangerZone() {
                 type="submit"
                 variant="danger"
                 isLoading={deleting}
-                disabled={!deletePassword}
+                disabled={offlineMode || !deletePassword}
                 className="flex-1 min-h-[44px]"
               >
                 Confirm Delete

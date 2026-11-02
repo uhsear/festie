@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { ACCOUNT_COPY, AVATAR_COPY } from '@festie/shared/constants';
 import { AVATAR_ACCEPT, identityLabel } from '@festie/shared/utils';
@@ -17,6 +18,7 @@ export default function AccountIdentityCard() {
   const user = useAuthStore((s) => s.user);
   const uploadAvatar = useAuthStore((s) => s.uploadAvatar);
   const removeAvatar = useAuthStore((s) => s.removeAvatar);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'upload' | 'remove' | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -61,7 +63,7 @@ export default function AccountIdentityCard() {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        disabled={busy !== null}
+        disabled={offlineMode || busy !== null}
         aria-label={hasPhoto ? AVATAR_COPY.change : AVATAR_COPY.add}
         className="relative shrink-0 rounded-full min-h-11 min-w-11 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
       >
@@ -108,7 +110,7 @@ export default function AccountIdentityCard() {
             <button
               type="button"
               onClick={() => setConfirmRemove(true)}
-              disabled={busy !== null}
+              disabled={offlineMode || busy !== null}
               className="text-accent-aqua hover:underline disabled:opacity-60 min-h-6"
             >
               {AVATAR_COPY.remove}

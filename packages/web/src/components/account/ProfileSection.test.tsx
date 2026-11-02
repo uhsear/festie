@@ -109,7 +109,7 @@ describe('ProfileSection — display name submission', () => {
     await user.type(input, 'Grace');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(mockToast).toHaveBeenCalledWith("Couldn't change display name. Try again.", 'error'));
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith('network', 'error'));
   });
 });
 

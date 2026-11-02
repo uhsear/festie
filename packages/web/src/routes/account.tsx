@@ -5,6 +5,7 @@ import { useAuthStore } from '@festie/shared/stores/authStore';
 import { ACCOUNT_COPY, ACCOUNT_SECTIONS, COPY } from '@festie/shared/constants';
 import type { AccountSectionId } from '@festie/shared/constants';
 import AccountIdentityCard from '../components/account/AccountIdentityCard';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import ProfileSection from '../components/account/ProfileSection';
 import EmailSection from '../components/account/EmailSection';
 import PaymentHandlesSection from '../components/account/PaymentHandlesSection';
@@ -45,6 +46,7 @@ function AccountPageInner() {
   const isAdmin = useAuthStore((s) => s.isAdmin);
   const logout = useAuthStore((s) => s.logout);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
@@ -171,6 +173,12 @@ function AccountPageInner() {
         </div>
 
         <AccountIdentityCard />
+
+        {offlineMode ? (
+          <p role="status" className="rounded-xl border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber">
+            You're offline. Settings need a connection.
+          </p>
+        ) : null}
 
         {ACCOUNT_SECTIONS.filter((s) => !('adminOnly' in s) || isAdmin).map((s) => (
           <Section key={s.id} label={s.label}>

@@ -25,8 +25,6 @@ import type { FestivalSet, Priority } from '@festie/shared/types';
 import type { ConflictGroup } from '@festie/shared/utils';
 import {
   artistDisplayName,
-  hasOfflineBasemap,
-  festivalPhase,
   buildBulkPickGroups,
   BULK_SCOPE_LABEL,
   type PicksRow,
@@ -141,13 +139,6 @@ export default function PicksScreen() {
   const days = useMemo(() => getDays(), [getDays]);
   const conflictIds = plan.clashIds;
 
-  // The festival's offline vector basemap archive, when one has been authored
-  // for it. Null for every other festival, which makes the download card omit
-  // the map step entirely rather than offer a control that can never succeed.
-  const offlineBasemapUrl = useMemo(
-    () => (hasOfflineBasemap(currentFestival?.mapConfig) ? currentFestival.mapConfig.offlineBasemap.pmtilesUrl : null),
-    [currentFestival],
-  );
 
   const handlePickChange = useCallback(
     (set: FestivalSet, priority: Priority | null) => {
@@ -782,11 +773,7 @@ export default function PicksScreen() {
       </View>
       {currentFestival && (
         <View style={styles.offlineCard}>
-          <OfflineReadinessCard
-            festivalId={currentFestival.id}
-            pmtilesUrl={offlineBasemapUrl}
-            festivalPast={festivalPhase(currentFestival, storeDays) === 'post'}
-          />
+          <OfflineReadinessCard festivalId={currentFestival.id} />
         </View>
       )}
       {summaryRow}

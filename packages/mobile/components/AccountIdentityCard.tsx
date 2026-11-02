@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@festie/shared/hooks';
 import { AVATAR_COPY, ACCOUNT_COPY } from '@festie/shared/constants';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { displayInitials, identityLabel } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -71,6 +71,8 @@ export default function AccountIdentityCard() {
   const isAdmin = useAuthStore((s) => s.isAdmin);
 
   const [busy, setBusy] = useState<'upload' | 'remove' | null>(null);
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const locked = busy !== null || offlineMode;
   const [error, setError] = useState<string | null>(null);
   // Transient confirmation after a successful change — a quiet "Saved" beats a
   // modal Alert for a low-stakes action the user can see worked.
@@ -178,11 +180,11 @@ export default function AccountIdentityCard() {
     <Container entering={reduceMotion ? undefined : FadeInDown.duration(260)} style={styles.identity}>
       <TouchableOpacity
         onPress={() => void pickAndUpload()}
-        disabled={busy !== null}
+        disabled={locked}
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel={avatarUrl ? AVATAR_COPY.change : AVATAR_COPY.add}
-        accessibilityState={{ disabled: busy !== null }}
+        accessibilityState={{ disabled: locked }}
         style={styles.avatarTap}
       >
         {avatarUrl ? (
@@ -282,11 +284,11 @@ export default function AccountIdentityCard() {
         {avatarUrl ? (
           <TouchableOpacity
             onPress={confirmRemove}
-            disabled={busy !== null}
+            disabled={locked}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={AVATAR_COPY.remove}
-            accessibilityState={{ disabled: busy !== null }}
+            accessibilityState={{ disabled: locked }}
             style={styles.removeBtn}
           >
             <Text style={styles.removeText}>{`${AVATAR_COPY.remove} `}</Text>

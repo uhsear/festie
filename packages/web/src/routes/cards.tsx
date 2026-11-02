@@ -16,6 +16,7 @@ import {
 import { useNow } from '../hooks/useSetStatus';
 import SetCard from '../components/features/SetCard';
 import PhaseHomeActions from '../components/features/PhaseHomeActions';
+import OfflineStatusChip from '../components/features/OfflineStatusChip';
 import OtherDayMatches from '../components/features/OtherDayMatches';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
@@ -196,6 +197,8 @@ function CardsViewInner() {
           </div>
         </div>
       )}
+
+      {user ? <OfflineStatusChip className="mb-[var(--space-4)]" remind /> : null}
 
       {/* Card grid */}
       {filteredSets.length === 0 ? (

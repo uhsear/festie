@@ -35,6 +35,9 @@ export const FESTIVAL_CATALOG_RE = /^\/api\/v1\/festivals(\/[^/]+)?$/;
  */
 export const WEATHER_RE = /^\/api\/v1\/weather\/[^/]+$/;
 
+/** Cache name for a festival's offline PMTiles archive. */
+export const OFFLINE_MAP_CACHE = 'offline-map-cache';
+
 /**
  * Local structural type mirroring the subset of workbox-build's
  * `RuntimeCaching` shape that we use. Hand-written on purpose so shared does not
@@ -49,6 +52,7 @@ export interface RuntimeCachingRule {
     networkTimeoutSeconds?: number;
     expiration?: { maxEntries?: number; maxAgeSeconds?: number };
     cacheableResponse?: { statuses?: number[] };
+    rangeRequests?: boolean;
   };
 }
 
@@ -114,5 +118,15 @@ export const FESTIE_RUNTIME_CACHING: RuntimeCachingRule[] = [
       cacheName: 'google-fonts',
       expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
     },
+  },
+  {
+    // T29: a festival's offline PMTiles archive. The web card stores the WHOLE
+    // file here (one cache.put); pmtiles then reads it with Range requests, and
+    // rangeRequests slices the cached 200 into 206s offline. A Range miss is a 206
+    // from the network, which statuses [200] keeps out of the cache.
+    urlPattern: ({ url, request }: { url: URL; request: Request }) =>
+      request.method === 'GET' && url.pathname.endsWith('.pmtiles'),
+    handler: 'CacheFirst',
+    options: { cacheName: OFFLINE_MAP_CACHE, rangeRequests: true, cacheableResponse: { statuses: [200] } },
   },
 ];

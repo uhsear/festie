@@ -28,3 +28,4 @@ export * from './useCrewCompare';
 export * from './useAutoArrive';
 export * from './useCreateCrew';
 export * from './useAdminUserList';
+export * from './useFestivalWeather';

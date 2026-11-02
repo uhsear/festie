@@ -3,6 +3,7 @@ import { useAuthStore } from '@festie/shared/stores/authStore';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { PAYMENT_COPY, PAYMENT_FIELDS } from '@festie/shared/constants';
 import { paymentProfileUrl } from '@festie/shared/utils';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -21,6 +22,7 @@ export default function PaymentHandlesSection() {
   const user = useAuthStore((s) => s.user);
   const updatePaymentHandles = useAuthStore((s) => s.updatePaymentHandles);
   const idBase = useId();
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const saved: Values = {
     venmoHandle: user?.venmoHandle ?? '',
@@ -105,7 +107,7 @@ export default function PaymentHandlesSection() {
             </div>
           );
         })}
-        <Button type="submit" variant="primary" size="md" isLoading={saving} disabled={!dirty} className="min-h-[44px]">
+        <Button type="submit" variant="primary" size="md" isLoading={saving} disabled={offlineMode || !dirty} className="min-h-[44px]">
           Save
         </Button>
       </form>

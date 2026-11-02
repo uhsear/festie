@@ -34,6 +34,8 @@ vi.mock('../components/crew/SosRaiseButton', () => ({
   default: ({ crewId }: { crewId: string }) => <button data-testid="sos-raise">{crewId}</button>,
 }));
 vi.mock('../components/features/LowPowerToggle', () => ({ default: () => <div data-testid="low-power-toggle" /> }));
+vi.mock('../components/festival-mode/WeatherStrip', () => ({ default: () => <div data-testid="weather-strip" /> }));
+vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => <div data-testid="offline-chip" /> }));
 vi.mock('../components/features/LowPowerIndicator', () => ({ default: () => null }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -157,6 +159,17 @@ describe('FestivalModeView (Now surface)', () => {
     expect(mockLoadExpenses).toHaveBeenCalledWith('c1');
     fireEvent.click(screen.getByRole('button', { name: 'Settle up' }));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'money' } });
+  });
+
+  it('shows the weather strip, and the offline chip only when signed in', () => {
+    setup({ user: false });
+    const { unmount } = render(<FestivalModeView />);
+    expect(screen.getByTestId('weather-strip')).toBeInTheDocument();
+    expect(screen.queryByTestId('offline-chip')).not.toBeInTheDocument();
+    unmount();
+    setup({ user: true });
+    render(<FestivalModeView />);
+    expect(screen.getByTestId('offline-chip')).toBeInTheDocument();
   });
 
   it('guest or no crew: shows no SOS button', () => {
