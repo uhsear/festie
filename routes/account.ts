@@ -221,6 +221,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     setNoStore,
     serializePublicUser,
     sanitizeString,
+    sanitizeIdentifier,
     rateLimit,
     sendSuccess,
     sendError,
@@ -490,6 +491,55 @@ export default function createAccountRoutes(deps: RouteDeps) {
   };
   router.put('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
   router.patch('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
+
+  // ── POST /share-link/:festivalId — revocable picks link for one festival ─
+  router.post('/share-link/:festivalId', userAuth, rateLimit(20, 'share-link'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const festivalId = sanitizeIdentifier(req.params.festivalId);
+      if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
+      const profile = await stores.profiles.readByUserAndFestival(req.user.userId, festivalId);
+      const token = profile ? await stores.shareLinks.getOrCreateToken(profile.id) : null;
+      if (!token) {
+        return sendError(res, 404, 'Pick a set at this festival first, then share your picks.', ErrorCodes.NOT_FOUND);
+      }
+      return sendSuccess(res, { token });
+    } catch (error) {
+      log.error('share link failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to create share link', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── GET /sharing — public page status and last link reset ──────────────
+  router.get('/sharing', userAuth, rateLimit(60, 'sharing-status'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const status = await stores.shareLinks.getStatus(req.user.userId);
+      if (!status) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+      const newest = status.publicSchedule ? await stores.shareLinks.newestProfile(req.user.userId) : null;
+      return sendSuccess(res, {
+        publicSchedule: status.publicSchedule,
+        publicFestival: newest ? { id: newest.festivalId, name: newest.festivalName } : null,
+        linksResetAt: status.linksResetAt,
+      });
+    } catch (error) {
+      log.error('sharing status failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to load sharing status', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── POST /sharing/reset — stop every picks link and calendar feed sent ──
+  router.post('/sharing/reset', userAuth, rateLimit(5, 'share-reset'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const linksResetAt = await stores.shareLinks.resetForUser(req.user.userId);
+      log.info('account:share-links-reset', { userId: req.user.userId });
+      return sendSuccess(res, { linksResetAt });
+    } catch (error) {
+      log.error('share links reset failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, "Couldn't reset your links. Try again.", ErrorCodes.INTERNAL_ERROR);
+    }
+  });
 
   // ── POST /email — request a change of the account email address ────────
   // Shaped on POST /api/v1/auth/change-password (routes/auth.ts) and on

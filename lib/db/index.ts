@@ -16,6 +16,7 @@ import { createRatingsStore } from './stores/ratings.js';
 import { createExpensesStore } from './stores/expenses.js';
 import { createActivityStore } from './stores/activity.js';
 import { createCalendarTokensStore } from './stores/calendar-tokens.js';
+import { createShareLinksStore } from './stores/share-links.js';
 import { createEmailTokensStore } from './stores/email-tokens.js';
 import { createLineupImportsStore } from './stores/lineup-imports.js';
 import { createDbLatencyTracker } from './latency.js';
@@ -78,6 +79,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
   const expenses = createExpensesStore(pool);
   const activity = createActivityStore(pool);
   const calendarTokens = createCalendarTokensStore(pool);
+  const shareLinks = createShareLinksStore(pool);
   const emailTokens = createEmailTokensStore(pool);
   const lineupImports = createLineupImportsStore(pool, { festivals });
 
@@ -104,6 +106,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
     expenses,
     activity,
     calendarTokens,
+    shareLinks,
     refreshTokens,
     loginFailures,
     metricsRollups,

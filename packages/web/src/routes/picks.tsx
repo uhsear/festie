@@ -1,4 +1,4 @@
-import { useMemo, useCallback, lazy, Suspense } from 'react';
+import { useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
@@ -6,11 +6,9 @@ import { usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
 import type { PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
-import { buildPicksIcs, buildPicksShareUrl } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
-import Button from '../components/ui/Button';
 import RefreshableView from '../components/layout/RefreshableView';
 import PickBulkActions from '../components/PickBulkActions';
 import OfflineReadinessCard from '../components/features/OfflineReadinessCard';
@@ -19,11 +17,11 @@ import GuestTeaser from '../components/features/GuestTeaser';
 import PickConflicts from '../components/features/PickConflicts';
 import PicksPlanRow from '../components/features/PicksPlanRow';
 import ListenList from '../components/features/ListenList';
-// Lazy-loaded: PlanQRShare pulls in qrcode.react, which has no business in the
+// Lazy-loaded: SharePicksDialog pulls in qrcode.react, which has no business in the
 // picks bundle until the user actually opens the share modal.
-const PlanQRShare = lazy(() => import('../components/features/PlanQRShare'));
-import { useToast } from '../lib/toastContext';
-import { CalendarX, UserPlus, CalendarPlus, Share2, TriangleAlert, ChevronDown, Search, X } from 'lucide-react';
+const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
+const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
+import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X } from 'lucide-react';
 
 // Dot accent token and the matching tint-ring Badge variant per priority —
 // mirroring the mobile Picks tab where every tier shares one accent across its
@@ -57,7 +55,6 @@ function PicksViewInner() {
   const currentProfile = useFestivalStore((state) => state.currentProfile);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const sets = useFestivalStore((state) => state.sets);
-  const stages = useFestivalStore((state) => state.stages);
   const days = useFestivalStore((state) => state.days);
   const {
     groupMode,
@@ -76,93 +73,17 @@ function PicksViewInner() {
     clashIds,
     rows,
   } = usePicksPlan();
-  const { toast } = useToast();
 
   // True when the profile has any pick at all, which gates the calendar export
   // independently of the active filters.
   const pickedSets = useMemo(() => sets.filter((s) => currentProfile?.picks?.[s.id]), [sets, currentProfile]);
   const hasAnyPicks = pickedSets.length > 0;
 
-  // Build the user's picks into an RFC-5545 .ics and trigger a browser
-  // download. Mirrors the mobile Picks export (same shared buildPicksIcs over
-  // the already-loaded store data — fully client-side, no server round-trip);
-  // mobile hands the file to the OS share sheet, the web equivalent is a Blob
-  // download. Exports ALL picks, regardless of the active filters.
-  const handleExportCalendar = useCallback(() => {
-    if (!currentFestival || !currentProfile) return;
-    const ics = buildPicksIcs({
-      festival: {
-        id: currentFestival.id,
-        name: currentFestival.name,
-        location: currentFestival.location,
-      },
-      sets,
-      stages,
-      picks: currentProfile.picks,
-      notes: currentProfile.notes,
-    });
-    const safeName = (currentFestival.name || 'festival').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeName}_picks.ics`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }, [currentFestival, currentProfile, sets, stages]);
-
-  // Share a public, read-only link to my picks (server route GET /s/:profileId).
-  // Mirrors the mobile Picks share: native share sheet where available,
-  // clipboard copy as the desktop fallback.
-  const handleSharePicks = useCallback(async () => {
-    if (!currentProfile || !currentFestival) return;
-    const url = buildPicksShareUrl(currentProfile.id);
-    const text = `My ${currentFestival.name} picks on Festie`;
-    const nav = navigator as Navigator & {
-      share?: (data: ShareData) => Promise<void>;
-      canShare?: (data: ShareData) => boolean;
-    };
-    if (typeof nav.share === 'function') {
-      try {
-        await nav.share({ title: text, text, url });
-        return;
-      } catch (err) {
-        // AbortError = user dismissed the sheet; don't fall through to clipboard.
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      toast('Share link copied to clipboard', 'success');
-    } catch {
-      toast("Couldn't share link. Try again.", 'error');
-    }
-  }, [currentProfile, currentFestival, toast]);
-
   const actionButtons = hasAnyPicks ? (
-    <>
-      <Button variant="secondary" size="sm" type="button" onClick={handleSharePicks} aria-label="Share my picks">
-        <Share2 className="w-4 h-4" aria-hidden="true" />
-        Share picks
-      </Button>
-      {/* Offline-native QR handoff (mirrors mobile PlanQRShare). Suspense fallback
-          is the share-picks button row above, so nothing flashes while it loads. */}
-      <Suspense fallback={null}>
-        <PlanQRShare />
-      </Suspense>
-      <Button
-        variant="secondary"
-        size="sm"
-        type="button"
-        onClick={handleExportCalendar}
-        aria-label="Add picks to calendar"
-      >
-        <CalendarPlus className="w-4 h-4" aria-hidden="true" />
-        Add to calendar
-      </Button>
-    </>
+    <Suspense fallback={null}>
+      <SharePicksDialog />
+      <CalendarDialog />
+    </Suspense>
   ) : null;
 
   // Guests get the in-place sign-up teaser (parity with the always-visible nav

@@ -1895,7 +1895,11 @@ function makeShareDeps(overrides: any = {}) {
         readAll: mock.fn(async () => []),
         getById: mock.fn(async () => null),
       },
-      pool: { query: mock.fn(async () => ({ rows: [] })) },
+      // Legacy ids resolve to themselves, as before a reset.
+      shareLinks: {
+        findProfileId: mock.fn(async (id: string) => id),
+        newestProfile: mock.fn(async () => null),
+      },
     },
     getFestivalById: mock.fn(async (id: any) => ({
       id, name: 'Test Fest', location: 'Somewhere',
@@ -1966,7 +1970,6 @@ describe('routes/share.js', () => {
         stores: {
           ...makeShareDeps().stores,
           users: { getByUsername: mock.fn(async () => ({ id: 'u1', username: 'testuser', publicSchedule: true })) },
-          pool: { query: mock.fn(async () => ({ rows: [] })) },
         },
       });
       const res = await request(app).get('/s/u/testuser');
@@ -1974,24 +1977,40 @@ describe('routes/share.js', () => {
       assert.ok(res.text.includes('No Schedule Yet'));
     });
 
-    test('redirects to most recent profile', async () => {
+    test('renders the most recent profile in place, without a redirect', async () => {
+      const getById = mock.fn(async (id: string) => ({ id, userId: 'u1', festivalId: 'f1', picks: { 'set-a': 'must' } }));
       const { app } = await buildShareApp({
         stores: {
           ...makeShareDeps().stores,
           users: { getByUsername: mock.fn(async () => ({ id: 'u1', username: 'testuser', publicSchedule: true })) },
-          pool: { query: mock.fn(async () => ({ rows: [{ id: 'p-new' }] })) },
+          profiles: { ...makeShareDeps().stores.profiles, getById },
+          shareLinks: {
+            ...makeShareDeps().stores.shareLinks,
+            newestProfile: mock.fn(async () => ({ profileId: 'p-new', festivalId: 'f1', festivalName: 'Test Fest' })),
+          },
         },
       });
-      const res = await request(app).get('/s/u/testuser');
-      assert.equal(res.status, 302);
-      assert.ok(res.headers.location!.includes('/s/p-new'));
+      const res = await request(app).get('/s/u/TestUser');
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.location, undefined);
+      assert.equal(getById.mock.calls[0]!.arguments[0], 'p-new');
+      assert.ok(res.text.includes('Test Fest'));
+      assert.ok(res.text.includes('Alpha'));
+      // og:url is the vanity URL, never the profile id or a revocable token.
+      assert.ok(res.text.includes('content="http://localhost:3000/s/u/testuser"'));
+      assert.ok(!res.text.includes('p-new'));
+      assert.equal(res.headers['cache-control'], 'private, no-cache');
     });
 
     test('private user returns the exact same 404 as an unknown user', async () => {
-      const query = mock.fn(async () => ({ rows: [{ id: 'p-new' }] }));
+      const newestProfile = mock.fn(async () => ({ profileId: 'p-new', festivalId: 'f1', festivalName: 'Test Fest' }));
       const build = (user: unknown) =>
         buildShareApp({
-          stores: { ...makeShareDeps().stores, users: { getByUsername: mock.fn(async () => user) }, pool: { query } },
+          stores: {
+            ...makeShareDeps().stores,
+            users: { getByUsername: mock.fn(async () => user) },
+            shareLinks: { ...makeShareDeps().stores.shareLinks, newestProfile },
+          },
         });
       const unknown = await request((await build(null)).app).get('/s/u/testuser');
       const priv = await request((await build({ id: 'u1', username: 'testuser', publicSchedule: false })).app).get(
@@ -1999,7 +2018,7 @@ describe('routes/share.js', () => {
       );
       assert.equal(priv.status, 404);
       assert.equal(priv.text, unknown.text);
-      assert.equal(query.mock.callCount(), 0);
+      assert.equal(newestProfile.mock.callCount(), 0);
     });
 
     test('returns 500 on internal error', async () => {
@@ -2034,6 +2053,40 @@ describe('routes/share.js', () => {
       const res = await request(app).get('/s/unknown123');
       assert.equal(res.status, 404);
       assert.ok(res.text.includes('Schedule Not Found'));
+      assert.ok(res.text.includes('ask them for a new one'));
+    });
+
+    test('returns 404 without loading a profile when the share id does not resolve (reset link)', async () => {
+      const getById = mock.fn(async () => ({ id: 'p1', userId: 'u1', festivalId: 'f1', picks: {} }));
+      const { app } = await buildShareApp({
+        stores: {
+          ...makeShareDeps().stores,
+          profiles: { ...makeShareDeps().stores.profiles, getById },
+          shareLinks: { ...makeShareDeps().stores.shareLinks, findProfileId: mock.fn(async () => null) },
+        },
+      });
+      const html = await request(app).get('/s/p1');
+      const json = await request(app).get('/s/p1/json');
+      assert.equal(html.status, 404);
+      assert.ok(html.text.includes('Schedule Not Found'));
+      assert.equal(json.status, 404);
+      assert.equal(getById.mock.callCount(), 0);
+    });
+
+    test('resolves a share token to its profile and links og:url to the token', async () => {
+      const getById = mock.fn(async (id: string) => ({ id, userId: 'u1', festivalId: 'f1', picks: { 'set-a': 'must' } }));
+      const { app } = await buildShareApp({
+        stores: {
+          ...makeShareDeps().stores,
+          profiles: { ...makeShareDeps().stores.profiles, getById },
+          shareLinks: { ...makeShareDeps().stores.shareLinks, findProfileId: mock.fn(async () => 'p1') },
+        },
+      });
+      const res = await request(app).get('/s/tok_abc-123');
+      assert.equal(res.status, 200);
+      assert.equal(getById.mock.calls[0]!.arguments[0], 'p1');
+      assert.ok(res.text.includes('content="http://localhost:3000/s/tok_abc-123"'));
+      assert.equal(res.headers['cache-control'], 'private, no-cache');
     });
 
     test('returns 404 when profile has no userId', async () => {
@@ -2237,6 +2290,7 @@ describe('routes/share.js', () => {
       assert.deepStrictEqual(res.body.data.picks, { 'set-a': 'must' });
       assert.ok(res.body.data.festival);
       assert.equal(res.headers['x-robots-tag'], 'noindex');
+      assert.equal(res.headers['cache-control'], 'private, no-cache');
       assert.ok(res.body.data.festival.stages);
       assert.ok(res.body.data.festival.days);
     });

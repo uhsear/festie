@@ -5,8 +5,10 @@ import {
   PLAN_SNAPSHOT_VERSION,
   MAX_ENCODED_LENGTH,
   MAX_PICKS,
+  buildPlanSnapshotInput,
   type PlanSnapshotInput,
 } from './planSnapshot';
+import type { CrewMeetingPoint, Priority } from '../types';
 
 const base: PlanSnapshotInput = {
   festivalId: 'fest-123',
@@ -190,5 +192,61 @@ describe('planSnapshot malformed input', () => {
       .replace(/=+$/, '');
     const r = decodePlanSnapshot(bad);
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('buildPlanSnapshotInput', () => {
+  const festival = { id: 'f1', name: 'Fest' };
+  const mp = (id: string, over: Partial<CrewMeetingPoint> = {}) =>
+    ({ id, label: id, active: true, latitude: 1, longitude: 2, meet_at: null, ...over }) as CrewMeetingPoint;
+
+  it('ranks must first', () => {
+    const r = buildPlanSnapshotInput({
+      festival,
+      picks: { a: 'maybe', b: 'must', c: 'want-to-see' },
+      meetingPoints: [],
+      nowMs: 0,
+    });
+    expect(r.input.picks.map((p) => p.setId)).toEqual(['b', 'c', 'a']);
+    expect(r.input.picks[1]!.priority).toBe('want');
+    expect(r.picksCount).toBe(3);
+  });
+
+  it('caps at MAX_PICKS keeping the best', () => {
+    const picks: Record<string, Priority> = {};
+    for (let i = 0; i < 60; i++) picks[`m${i}`] = 'maybe';
+    picks['top'] = 'must';
+    const r = buildPlanSnapshotInput({ festival, picks, meetingPoints: [], nowMs: 0 });
+    expect(r.input.picks).toHaveLength(MAX_PICKS);
+    expect(r.input.picks[0]!.setId).toBe('top');
+  });
+
+  it('picks the soonest future meeting point', () => {
+    const now = Date.parse('2026-06-01T12:00:00Z');
+    const r = buildPlanSnapshotInput({
+      festival,
+      picks: {},
+      meetingPoints: [
+        mp('past', { meet_at: '2026-06-01T10:00:00Z' }),
+        mp('later', { meet_at: '2026-06-01T20:00:00Z' }),
+        mp('soon', { meet_at: '2026-06-01T14:00:00Z' }),
+      ],
+      nowMs: now,
+    });
+    expect(r.meetingPoint?.id).toBe('soon');
+    expect(r.input.meetingPoint).toEqual({ label: 'soon', lat: 1, lng: 2 });
+  });
+
+  it('falls back to any active point with coords, else none', () => {
+    const r = buildPlanSnapshotInput({
+      festival,
+      picks: {},
+      meetingPoints: [mp('off', { active: false }), mp('nocoord', { latitude: null }), mp('any')],
+      nowMs: 0,
+    });
+    expect(r.meetingPoint?.id).toBe('any');
+    const none = buildPlanSnapshotInput({ festival, picks: undefined, meetingPoints: undefined, nowMs: 0 });
+    expect(none.meetingPoint).toBeNull();
+    expect(none.input.meetingPoint).toBeUndefined();
   });
 });

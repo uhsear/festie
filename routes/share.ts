@@ -4,11 +4,13 @@
 /**
  * Shareable Pick Links — Public read-only profile view
  *
- * GET /s/:profileId — Renders an HTML page showing a user's picks for a festival.
+ * GET /s/:shareId — Renders an HTML page showing a user's picks for a festival.
  * No auth required. Profile must exist and have a non-null userId.
  *
- * The share URL is the profile ID itself (opaque, unguessable).
- * Profile IDs are generated via createOpaqueId('prof') — crypto random hex.
+ * The share id is the profile's revocable share_token (POST /account/share-link).
+ * A legacy profile-id link still resolves until the owner resets their links
+ * (POST /account/sharing/reset). Pages are `private, no-cache` so a reset takes
+ * effect at once, even behind the CDN.
  */
 
 import { escapeHtml } from '../lib/helpers/sanitize.js';
@@ -31,7 +33,8 @@ export default function createShareRoutes(deps: any) {
     return res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0f;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}.error-box{text-align:center;padding:40px 24px;max-width:400px}.error-icon{font-size:48px;margin-bottom:16px;opacity:.5}.error-title{font-size:20px;font-weight:700;margin-bottom:8px}.error-msg{font-size:14px;color:#888;margin-bottom:24px}.error-btn{display:inline-block;background:#ff3366;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px}.error-btn:hover{background:#e62e5c}</style></head><body><div class="error-box"><div class="error-icon">🎵</div><div class="error-title">${escapeHtml(title)}</div><div class="error-msg">${escapeHtml(message)}</div><a class="error-btn" href="${escapeHtml(config.PUBLIC_ORIGIN || '/')}">Go to Festie</a></div></body></html>`);
   }
 
-  // GET /u/:username — vanity share URL (redirects to opaque profile ID)
+  // GET /u/:username — opt-in vanity page. Renders in place: a redirect would
+  // leak the revocable token, or break after a reset.
   router.get('/u/:username', rateLimit(30, 'share'), async (req: any, res: any) => {
     try {
       const username = String(req.params.username || '').trim();
@@ -47,30 +50,11 @@ export default function createShareRoutes(deps: any) {
         return sendShareError(res, 404, 'User Not Found', 'No account with this username exists.');
       }
 
-      // Find their most recent profile (targeted query, not readAll)
-      const { rows: profileRows } = await stores.pool.query(
-        `
-  SELECT
-    id
-  FROM
-    festival_profiles
-  WHERE
-    user_id = $1
-    AND deleted_at IS NULL
-  ORDER BY
-    created_at DESC
-  LIMIT
-    1
-`,
-        [user.id],
-      );
-      if (profileRows.length === 0) {
+      const newest = await stores.shareLinks.newestProfile(user.id);
+      if (!newest) {
         return sendShareError(res, 404, 'No Schedule Yet', 'This user hasn\'t joined a festival yet.');
       }
-      const profile = profileRows[0];
-
-      // Redirect to the opaque share link
-      return res.redirect(302, `/s/${profile.id}`);
+      return await renderProfileShare(req, res, newest.profileId, `${shareOrigin(req)}/s/u/${username.toLowerCase()}`);
     } catch (error: any) {
       log.error('vanity share lookup failed', { error: error.message, username: req.params.username });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
@@ -109,43 +93,61 @@ export default function createShareRoutes(deps: any) {
     };
   }
 
-  // GET /s/:profileId — public share page (rate limited to prevent scraping)
+  function shareOrigin(req: any) {
+    return config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
+  }
+
+  function isValidShareId(id: string) {
+    return Boolean(id) && id.length <= 100 && /^[a-zA-Z0-9_-]+$/.test(id);
+  }
+
+  const SCHEDULE_NOT_FOUND = 'This schedule may have been removed or the link is incorrect. If someone sent you this link, ask them for a new one.';
+
+  async function renderProfileShare(req: any, res: any, profileId: string, shareUrl: string) {
+    const profile = await stores.profiles.getById(profileId);
+    if (!profile || !profile.userId) {
+      return sendShareError(res, 404, 'Schedule Not Found', SCHEDULE_NOT_FOUND);
+    }
+
+    const festival = await getFestivalById(profile.festivalId);
+    if (!festival) {
+      return sendShareError(res, 404, 'Festival Not Found', 'The festival for this schedule no longer exists.');
+    }
+
+    const user = await getUserById(profile.userId);
+    const picks = profile.picks || {};
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // Not cacheable by the CDN, so a link reset takes effect at once.
+    res.setHeader('Cache-Control', 'private, no-cache');
+    // Shared links keep working, but must never be indexed by search engines.
+    res.setHeader('X-Robots-Tag', 'noindex');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https:; frame-ancestors 'none'");
+    return res.send(renderSharePage({
+      username: escapeHtml(user?.username || profile.name || 'Anonymous'),
+      avatarUrl: escapeHtml(buildAvatarUrl(user) || ''),
+      festivalName: escapeHtml(festival.name),
+      festivalLocation: escapeHtml(festival.location || ''),
+      days: buildShareDays(festival, picks),
+      ...buildPickStats(picks),
+      origin: escapeHtml(shareOrigin(req)),
+      shareUrl: escapeHtml(shareUrl),
+    }));
+  }
+
+  // GET /s/:shareId — public share page (rate limited to prevent scraping)
   router.get('/:profileId', rateLimit(30, 'share'), async (req: any, res: any) => {
     try {
-      const profileId = String(req.params.profileId || '').trim();
-      if (!profileId || profileId.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(profileId)) {
+      const shareId = String(req.params.profileId || '').trim();
+      if (!isValidShareId(shareId)) {
         return sendShareError(res, 400, 'Invalid Link', 'This share link is not valid.');
       }
 
-      const profile = await stores.profiles.getById(profileId);
-      if (!profile || !profile.userId) {
-        return sendShareError(res, 404, 'Schedule Not Found', 'This schedule may have been removed or the link is incorrect.');
+      const profileId = await stores.shareLinks.findProfileId(shareId);
+      if (!profileId) {
+        return sendShareError(res, 404, 'Schedule Not Found', SCHEDULE_NOT_FOUND);
       }
-
-      const festival = await getFestivalById(profile.festivalId);
-      if (!festival) {
-        return sendShareError(res, 404, 'Festival Not Found', 'The festival for this schedule no longer exists.');
-      }
-
-      const user = await getUserById(profile.userId);
-      const picks = profile.picks || {};
-      const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
-
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'public, max-age=300');
-      // Shared links keep working, but must never be indexed by search engines.
-      res.setHeader('X-Robots-Tag', 'noindex');
-      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https:; frame-ancestors 'none'");
-      return res.send(renderSharePage({
-        username: escapeHtml(user?.username || profile.name || 'Anonymous'),
-        avatarUrl: escapeHtml(buildAvatarUrl(user) || ''),
-        festivalName: escapeHtml(festival.name),
-        festivalLocation: escapeHtml(festival.location || ''),
-        days: buildShareDays(festival, picks),
-        ...buildPickStats(picks),
-        origin: escapeHtml(origin),
-        profileId: escapeHtml(profileId),
-      }));
+      return await renderProfileShare(req, res, profileId, `${shareOrigin(req)}/s/${shareId}`);
     } catch (error: any) {
       log.error('share page error', { error: error.message, profileId: req.params.profileId });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
@@ -155,12 +157,13 @@ export default function createShareRoutes(deps: any) {
   // JSON API for share data (rate limited to prevent scraping)
   router.get('/:profileId/json', rateLimit(30, 'share-json'), async (req: any, res: any) => {
     try {
-      const profileId = String(req.params.profileId || '').trim();
-      if (!profileId || profileId.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(profileId)) {
+      const shareId = String(req.params.profileId || '').trim();
+      if (!isValidShareId(shareId)) {
         return sendError(res, 400, 'Invalid share link', ErrorCodes.INVALID_INPUT);
       }
 
-      const profile = await stores.profiles.getById(profileId);
+      const profileId = await stores.shareLinks.findProfileId(shareId);
+      const profile = profileId ? await stores.profiles.getById(profileId) : null;
       if (!profile || !profile.userId) {
         return sendError(res, 404, 'Schedule not found', ErrorCodes.NOT_FOUND);
       }
@@ -173,7 +176,7 @@ export default function createShareRoutes(deps: any) {
       const user = await getUserById(profile.userId);
       const username = user?.username || profile.name || 'Anonymous';
 
-      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Cache-Control', 'private, no-cache');
       res.setHeader('X-Robots-Tag', 'noindex');
       return sendSuccess(res, {
         username,
@@ -222,7 +225,7 @@ function priorityColor(priority: any) {
   return ({ must: '#ff3366', 'want-to-see': '#ffaa00', maybe: '#888' } as any)[priority] || '#888';
 }
 
-function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, days, totalPicks, mustCount, wantCount, maybeCount, origin, profileId }: any) {
+function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, days, totalPicks, mustCount, wantCount, maybeCount, origin, shareUrl }: any) {
   const dayHtml = days.map((day: any) => `
     <div class="share-day">
       <h3>${day.label}${day.date ? ` <span class="share-date">${day.date}</span>` : ''}</h3>
@@ -250,7 +253,7 @@ function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, 
   <meta name="description" content="${username}'s picks for ${festivalName} - ${totalPicks} sets selected">
   <meta property="og:title" content="${username}'s ${festivalName} Schedule">
   <meta property="og:description" content="${mustCount} must-see, ${wantCount} want-to-see, ${maybeCount} maybe - ${totalPicks} total picks">
-  <meta property="og:url" content="${origin}/s/${profileId}">
+  <meta property="og:url" content="${shareUrl}">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
   <style>

@@ -4,4 +4,5 @@ export * from './offlineQueue';
 export * from './admin';
 export * from './sos';
 export * from './meetingPoints';
+export * from './sharing';
 export * from './lineupImport';
