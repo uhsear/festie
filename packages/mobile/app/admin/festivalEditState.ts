@@ -15,7 +15,7 @@
  */
 
 import type { Artist, FestivalMapConfig } from '@festie/shared/types';
-import { joinArtistNames, withArtistNames } from '@festie/shared/utils';
+import { joinArtistNames, shiftSetTimes, sortLineup, withArtistNames } from '@festie/shared/utils';
 
 export interface StageRow {
   id: string;
@@ -141,6 +141,39 @@ export function addSet(f: FormState, dayId: string, newSet: SetRow): FormState {
     ...f,
     days: f.days.map((d) => (d.id === dayId ? { ...d, sets: [...d.sets, newSet] } : d)),
   };
+}
+
+/** Put a new set first in ONE day so the admin sees it without scrolling. Other days keep their reference. */
+export function prependSet(f: FormState, dayId: string, newSet: SetRow): FormState {
+  return {
+    ...f,
+    days: f.days.map((d) => (d.id === dayId ? { ...d, sets: [newSet, ...d.sets] } : d)),
+  };
+}
+
+/** Sort every day's sets by stage order, then start time (after-midnight sets last). */
+export function sortFormSets(f: FormState): FormState {
+  return { ...f, days: f.days.map((d) => ({ ...d, sets: sortLineup(d.sets, f.stages) })) };
+}
+
+/**
+ * Shift the listed sets of ONE day by `minutes`. Throws RangeError for a shift
+ * outside -720..720 or zero; other days are returned by reference.
+ */
+export function shiftDaySets(
+  f: FormState,
+  dayId: string,
+  ids: readonly string[],
+  minutes: number,
+): { form: FormState; result: { shifted: number; skipped: number; crossedDayStart: number } } {
+  let result = { shifted: 0, skipped: 0, crossedDayStart: 0 };
+  const days = f.days.map((d) => {
+    if (d.id !== dayId) return d;
+    const r = shiftSetTimes(d.sets, ids, minutes);
+    result = { shifted: r.shifted, skipped: r.skipped, crossedDayStart: r.crossedDayStart };
+    return { ...d, sets: r.sets };
+  });
+  return { form: { ...f, days }, result };
 }
 
 /**

@@ -4,3 +4,4 @@ export * from './offlineQueue';
 export * from './admin';
 export * from './sos';
 export * from './lineupImport';
+export * from './festivalAdmin';

@@ -27,6 +27,7 @@ import {
 } from '@festie/shared/utils';
 import type { AmenityType, Festival, FestivalMapConfig, Stage } from '@festie/shared/types';
 import { useToast } from '../../lib/toastContext';
+import { useUnsavedChangesGuard } from '../../lib/useUnsavedChangesGuard';
 import { cn } from '../../lib/utils';
 
 // CrewMap is heavy (MapLibre); lazy-load it exactly like the crew surface does so
@@ -111,24 +112,30 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
   const [siteplanOpacity, setSiteplanOpacity] = useState<number>(SITEPLAN_DEFAULT_OPACITY);
   const [draftCorners, setDraftCorners] = useState<Vertex[]>([]);
   const isPlacingSiteplan = armed?.kind === 'siteplan';
+  // Snapshot of what was loaded or last saved; the editor is dirty when it differs.
+  const [snapshot, setSnapshot] = useState<string | null>(null);
+  const dirty =
+    snapshot !== null &&
+    (JSON.stringify({ stages, mapConfig }) !== snapshot || draftVertices.length > 0 || draftCorners.length > 0);
+  const { confirmLeave, guardDialog } = useUnsavedChangesGuard(dirty);
 
   const load = useCallback(async () => {
     setLoadError(false);
     setLoading(true);
     try {
-      const full = await api.get<FestivalDetail>(`/festivals/${festivalId}`);
+      const full = await api.get<FestivalDetail>(`/admin/festivals/${festivalId}`);
       setDetail(full);
       setName(full.name || '');
-      setStages(
-        (full.stages || []).map((s) => ({
-          id: s.id || `stage-${Date.now()}`,
-          name: s.name || '',
-          color: s.color || DEFAULT_STAGE_COLOR,
-          latitude: typeof s.latitude === 'number' ? s.latitude : null,
-          longitude: typeof s.longitude === 'number' ? s.longitude : null,
-        })),
-      );
+      const loadedStages: StageEdit[] = (full.stages || []).map((s) => ({
+        id: s.id || `stage-${Date.now()}`,
+        name: s.name || '',
+        color: s.color || DEFAULT_STAGE_COLOR,
+        latitude: typeof s.latitude === 'number' ? s.latitude : null,
+        longitude: typeof s.longitude === 'number' ? s.longitude : null,
+      }));
+      setStages(loadedStages);
       setMapConfig(full.mapConfig ?? null);
+      setSnapshot(JSON.stringify({ stages: loadedStages, mapConfig: full.mapConfig ?? null }));
       // Hydrate the site-plan URL + opacity fields from the existing config (the
       // corners stay committed in mapConfig until the admin re-taps them).
       const existingSp = extractSiteplan(full.mapConfig ?? null);
@@ -162,7 +169,17 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       if (sp) cfg = setSiteplan(cfg, sp);
     }
     return cfg;
-  }, [isDrawingZone, draftVertices, zoneColor, zoneLabel, mapConfig, isPlacingSiteplan, draftCorners, siteplanUrl, siteplanOpacity]);
+  }, [
+    isDrawingZone,
+    draftVertices,
+    zoneColor,
+    zoneLabel,
+    mapConfig,
+    isPlacingSiteplan,
+    draftCorners,
+    siteplanUrl,
+    siteplanOpacity,
+  ]);
 
   // Fold stages into a Festival-shaped object for the live CrewMap preview. The
   // cast is safe: CrewMap reads only stages[], mapConfig and the geocoded venue
@@ -194,7 +211,9 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       // tap); extra taps beyond 4 are ignored until the admin re-starts.
       if (armed.kind === 'siteplan') {
         setDraftCorners((prev) =>
-          prev.length >= SITEPLAN_CORNER_COUNT ? prev : [...prev, { latitude: coord.latitude, longitude: coord.longitude }],
+          prev.length >= SITEPLAN_CORNER_COUNT
+            ? prev
+            : [...prev, { latitude: coord.latitude, longitude: coord.longitude }],
         );
         return;
       }
@@ -318,6 +337,9 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
     try {
       await api.put<void>(`/admin/festivals/${festivalId}`, payload);
       toast('Festival map saved', 'success');
+      setSnapshot(JSON.stringify({ stages, mapConfig }));
+      setDraftVertices([]);
+      setDraftCorners([]);
       onClose();
     } catch (err: unknown) {
       toastError(err, "Couldn't save the map. Try again.");
@@ -348,7 +370,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       <div className="flex items-center justify-between">
         <h2 className="type-label text-text-primary">Festival map — {name || 'Untitled'}</h2>
         <button
-          onClick={onClose}
+          onClick={() => confirmLeave(onClose)}
           className="px-3 py-1.5 rounded-md bg-bg-primary border border-glass-border text-text-secondary hover:text-text-primary transition-colors text-sm"
         >
           Back
@@ -406,9 +428,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-text-primary truncate">{stage.name || 'Untitled stage'}</p>
                     <p className="text-xs text-text-muted truncate">
-                      {pinned
-                        ? `${stage.latitude!.toFixed(5)}, ${stage.longitude!.toFixed(5)}`
-                        : 'No location pinned'}
+                      {pinned ? `${stage.latitude!.toFixed(5)}, ${stage.longitude!.toFixed(5)}` : 'No location pinned'}
                     </p>
                   </div>
                   {pinned && (
@@ -443,8 +463,8 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
         <h3 className="type-label text-text-primary">Zones</h3>
         <p className="text-xs text-text-muted">
-          Pick a color, name the area, then click the map to drop points. Finish with 3 or more.{' '}
-          {zoneCount(mapConfig)} drawn.
+          Pick a color, name the area, then click the map to drop points. Finish with 3 or more. {zoneCount(mapConfig)}{' '}
+          drawn.
         </p>
 
         {/* Color presets + label input */}
@@ -554,8 +574,8 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
         <h3 className="type-label text-text-primary">Site plan overlay</h3>
         <p className="text-xs text-text-muted">
-          Underlay the organizer’s map image. Paste an https image link, then click the four corners
-          (top-left, top-right, bottom-right, bottom-left) to georeference it.
+          Underlay the organizer’s map image. Paste an https image link, then click the four corners (top-left,
+          top-right, bottom-right, bottom-left) to georeference it.
         </p>
         <input
           type="url"
@@ -633,7 +653,9 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
 
         {committedSiteplan && (
           <div className="flex items-center gap-2 border-t border-glass-border pt-3">
-            <span className="text-sm text-text-primary flex-1 truncate">Overlay set ({SITEPLAN_CORNER_COUNT} corners)</span>
+            <span className="text-sm text-text-primary flex-1 truncate">
+              Overlay set ({SITEPLAN_CORNER_COUNT} corners)
+            </span>
             <button
               onClick={removeSiteplanOverlay}
               className="px-2 py-1 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
@@ -718,7 +740,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
 
       <div className="flex gap-2 justify-end">
         <button
-          onClick={onClose}
+          onClick={() => confirmLeave(onClose)}
           disabled={saving}
           className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium disabled:opacity-60"
         >
@@ -732,6 +754,7 @@ export default function FestivalMapEditor({ festivalId, onClose }: FestivalMapEd
           {saving ? 'Saving…' : 'Save map'}
         </button>
       </div>
+      {guardDialog}
     </div>
   );
 }

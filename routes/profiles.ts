@@ -59,7 +59,8 @@ export default function createProfilesRoutes(deps: any) {
       const festivalId = sanitizeIdentifier(req.validatedBody?.festivalId, 100);
       if (!festivalId) return sendError(res, 400, 'Festival ID required', ErrorCodes.MISSING_FIELD);
       const festival = await getFestivalById(festivalId);
-      if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      // A draft (no publishedAt) cannot be joined; it reads as missing, like the public detail route.
+      if (!festival?.publishedAt) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
       const result = await ensureFestivalProfile(deps, req.user, festivalId);
       if (result.error === 'limit') {

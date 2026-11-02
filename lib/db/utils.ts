@@ -45,6 +45,7 @@ export default function createUtils(pool: Pool) {
         f.map_config AS "mapConfig",
         f.created_at AS "createdAt",
         f.updated_at AS "updatedAt",
+        f.published_at AS "publishedAt",
         COALESCE(
           (SELECT json_agg(
             json_build_object(
