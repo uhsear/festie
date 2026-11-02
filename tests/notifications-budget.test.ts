@@ -53,7 +53,7 @@ describe('push budget', () => {
   });
 
   it('exempts SOS, set reminders, meeting points and set-time changes', () => {
-    assert.deepEqual([...PUSH_BUDGET_EXEMPT].sort(), ['crew_meeting_point', 'crew_sos', 'schedule_change', 'set_reminder']);
+    assert.deepEqual([...PUSH_BUDGET_EXEMPT].sort(), ['crew_meeting_point', 'crew_nudge', 'crew_sos', 'schedule_change', 'set_reminder']);
   });
 
   it('a user with 6 counted pushes gets a held inbox row and no transport call', async () => {
@@ -81,7 +81,7 @@ describe('push budget', () => {
     assert.equal(messaging.send.mock.calls.length, 1);
   });
 
-  for (const type of ['crew_sos', 'set_reminder', 'crew_meeting_point', 'schedule_change']) {
+  for (const type of ['crew_sos', 'set_reminder', 'crew_meeting_point', 'schedule_change', 'crew_nudge']) {
     it(`${type} reaches the device at the cap and is never counted`, async () => {
       const stores = makeStores({ counts: { u1: 20 } });
       const { svc, messaging } = build(stores);

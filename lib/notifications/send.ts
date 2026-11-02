@@ -94,6 +94,8 @@ export const PREF_MAP: Record<string, string> = {
   crew_poll: 'crewPolls',
   crew_money: 'crewMoney',
   crew_ride: 'crewRides',
+  // T52 "Looking for you". Shares the crewUpdates switch until it has a preference column of its own.
+  crew_nudge: 'crewUpdates',
   // Admin announcements share the "Schedule changes" switch: no own preference column.
   festival_announcement: 'scheduleChanges',
 };
@@ -105,14 +107,17 @@ export const PREF_MAP: Record<string, string> = {
  */
 const CRITICAL_TYPES = new Set(['crew_sos']);
 
+/** Types that keep their opt-out but skip quiet hours: "Looking for you" is useless once the night is over. */
+const DND_EXEMPT_TYPES = new Set(['crew_nudge']);
 /** At most this many pushes reach one user in a rolling hour. */
 export const PUSH_BUDGET_PER_HOUR = 6;
 /**
  * Never held by the budget and never counted: an emergency, reminders the user asked
- * for, meeting points (owner decision 2026-11-02), and set-time changes, so crew chatter
- * cannot use up a person's budget and hold back news that one of their sets moved.
+ * for, meeting points and the "Looking for you" nudge (owner decision 2026-11-02), and
+ * set-time changes, so crew chatter cannot use up a person's budget and hold back news
+ * that one of their sets moved. The nudge has its own per-recipient cap in crew-nudge.ts.
  */
-export const PUSH_BUDGET_EXEMPT = new Set(['crew_sos', 'set_reminder', 'crew_meeting_point', 'schedule_change']);
+export const PUSH_BUDGET_EXEMPT = new Set(['crew_sos', 'set_reminder', 'crew_meeting_point', 'schedule_change', 'crew_nudge']);
 
 /** Per-type push channel/category overrides for critical alerts. */
 const CRITICAL_CHANNEL: Record<string, { channelId: string; category: string }> = {
@@ -132,12 +137,13 @@ const TYPE_CHANNEL_MAP: Record<string, string> = {
   crew_poll: 'crew',
   crew_money: 'crew',
   crew_ride: 'crew',
+  crew_nudge: 'crew',
   // Exists on every build since DC7 (useMobilePush.ts); 'updates' was the legacy fallback.
   set_reminder: 'set-reminders',
 };
 
 /** Time-sensitive types: a browser should show them soon or not at all. */
-const URGENT_WEB_TYPES = new Set(['set_reminder', 'crew_sos']);
+const URGENT_WEB_TYPES = new Set(['set_reminder', 'crew_sos', 'crew_nudge']);
 
 /** Check if a stale token error code signals the device is no longer registered */
 function isStaleTokenError(code: any) {
@@ -483,7 +489,7 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     if (!isCritical && prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
     // shortcut: count-then-send is not atomic, so concurrent sends can pass the cap by one or two; use a Redis counter if that matters.
     let held: string | null = null;
-    if (!isCritical && isInDndWindow(prefs)) held = 'dnd_active';
+    if (!isCritical && !DND_EXEMPT_TYPES.has(type) && isInDndWindow(prefs)) held = 'dnd_active';
     else if (!isCritical && !PUSH_BUDGET_EXEMPT.has(type)) {
       const count = (await recentPushCounts([userId])).get(userId) ?? 0;
       if (count >= PUSH_BUDGET_PER_HOUR) held = 'budget';

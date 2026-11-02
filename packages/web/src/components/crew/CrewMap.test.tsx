@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, renderHook, waitFor } from '@testing-library/react';
-import type { Festival, SosEntry } from '@festie/shared/types';
+import type { Festival, PeerLocation, SosEntry } from '@festie/shared/types';
 import { useSosMarkers } from './crew-map/useSosMarkers';
+import { usePeerMarkers } from './crew-map/usePeerMarkers';
 import { useStageMarkers } from './crew-map/useStageMarkers';
 import type { GlRefObject, MapRefObject, GlMarker } from './crew-map/mapDom';
 
@@ -497,5 +498,57 @@ describe('useStageMarkers place selection', () => {
     parent.appendChild(marker.element);
     marker.element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(parentClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('usePeerMarkers near-stage label', () => {
+  class FakeMarker {
+    element: HTMLElement;
+    constructor(opts: { element: HTMLElement }) {
+      this.element = opts.element;
+    }
+    setLngLat() {
+      return this;
+    }
+    setPopup() {
+      return this;
+    }
+    addTo() {
+      return this;
+    }
+    remove() {}
+    togglePopup() {}
+  }
+  class FakePopup {
+    setDOMContent() {
+      return this;
+    }
+  }
+  const peer: PeerLocation = {
+    crewId: 'c1',
+    userId: 'u1',
+    username: 'Ana',
+    lat: 41.88,
+    lng: -87.62,
+    serverAt: new Date().toISOString(),
+  } as PeerLocation;
+
+  function labelWithStageAt(dLat: number): string {
+    const mapRef = { current: {} } as unknown as MapRefObject;
+    const glRef = { current: { Marker: FakeMarker, Popup: FakePopup } } as unknown as GlRefObject;
+    const markersRef = { current: [] as GlMarker[] };
+    const stage = { id: 's1', kind: 'stage', label: 'Main Stage', sublabel: '', latitude: 41.88 + dLat, longitude: -87.62 };
+    renderHook(() =>
+      usePeerMarkers(mapRef, glRef, 'ready', [peer], 'k', [stage] as never, 's1', markersRef, vi.fn()),
+    );
+    return (markersRef.current[0] as unknown as FakeMarker).element.getAttribute('aria-label') ?? '';
+  }
+
+  it('adds near Main Stage within 150 m', () => {
+    expect(labelWithStageAt(0.0009)).toContain('near Main Stage'); // ~100 m
+  });
+
+  it('omits it at 200 m', () => {
+    expect(labelWithStageAt(0.0018)).not.toContain('near Main Stage'); // ~200 m
   });
 });

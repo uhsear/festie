@@ -4,15 +4,15 @@
 /**
  * MeetingPointCompass.tsx — M5 proximity compass (mobile-only).
  *
- * Points an on-screen arrow at a SAVED meeting-point coord and shows the
+ * Points an on-screen arrow at a SAVED meeting-point coord, or at a crewmate's
+ * last shared position (which they chose to share), and shows the
  * straight-line distance. Heading (true north when known) and the viewer's
  * position both come from expo-location watchers, so distance and arrow update
  * as you walk; the bearing/distance math is the pure shared geo util.
  *
- * OFFLINE-HONEST: this is 100% on-device and uses ZERO network. The distance is
- * straight-line ("as the crow flies") to a point YOU saved, not a routed or
- * live position — the copy says so. It is never presented as real-time tracking
- * of another person.
+ * OFFLINE-HONEST: the compass itself is 100% on-device and uses ZERO network. The
+ * distance is straight-line ("as the crow flies"), not routed — the copy says so.
+ * For a crewmate the caller passes a note saying it is where they last shared.
  *
  * Graceful degradation: permission-denied, sensor-unavailable, and no-coords
  * (legacy free-text meeting point) states each render an honest explanation
@@ -22,7 +22,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { bearing, haversineDistance, relativeArrowAngle, formatDistance, etaMinutes } from '@festie/shared/utils';
+import { buildPursuit, relativeArrowAngle, formatDistance } from '@festie/shared/utils';
 import type { Coord } from '@festie/shared/utils';
 import { useFestivalModeStore } from '@festie/shared/stores';
 import { headingFromReading, needsCalibration, smoothHeading } from '../lib/compass';
@@ -40,6 +40,10 @@ export interface MeetingPointTarget {
 
 interface MeetingPointCompassProps {
   target: MeetingPointTarget;
+  /** Replaces the default honesty line. */
+  note?: string;
+  /** Extra line under the note, same style. */
+  subNote?: string;
 }
 
 const SMOOTHING_ALPHA = 0.15; // low-pass factor — small = calm needle
@@ -50,14 +54,13 @@ const NO_HEADING_TIMEOUT_MS = 5_000;
 
 type Phase = 'init' | 'denied' | 'no-sensor' | 'no-fix' | 'no-coords' | 'ready';
 
-export default function MeetingPointCompass({ target }: MeetingPointCompassProps) {
+export default function MeetingPointCompass({ target, note, subNote }: MeetingPointCompassProps) {
   const t = useTokens();
   const styles = useStyles();
   const reduceMotion = useReduceMotion();
 
-  // Memoized on the coord primitives so its identity is stable across renders;
-  // this lets the sensor/GPS effects depend on `targetCoord` directly (they only
-  // re-subscribe when the actual lat/lng change, not on every render).
+  // Memoized on the coord primitives. The sensor/GPS effect depends only on
+  // `hasTarget`, so a moving target never restarts the watchers.
   const targetCoord: Coord | null = useMemo(
     () =>
       Number.isFinite(target.latitude) && Number.isFinite(target.longitude)
@@ -66,6 +69,7 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
     [target.latitude, target.longitude],
   );
 
+  const hasTarget = targetCoord != null;
   const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
   const [phase, setPhase] = useState<Phase>(targetCoord ? 'init' : 'no-coords');
   // Smoothed, degrees CW from north; null until the first reading so the arrow
@@ -78,7 +82,7 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
 
   // ── Permission, then GPS + heading watchers ──────────────────────────────
   useEffect(() => {
-    if (!targetCoord) return;
+    if (!hasTarget) return;
     let cancelled = false;
     let hasOrigin = false;
     let hasHeading = false;
@@ -160,14 +164,13 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
       posSub?.remove();
       headSub?.remove();
     };
-  }, [targetCoord, reduceMotion, lowPowerMode, retry]);
+  }, [hasTarget, reduceMotion, lowPowerMode, retry]);
 
   // ── Derived bearing / distance / arrow rotation ──────────────────────────
-  const brng = origin && targetCoord ? bearing(origin, targetCoord) : NaN;
-  const distanceM = origin && targetCoord ? haversineDistance(origin, targetCoord) : NaN;
-  const arrowAngle = heading == null ? NaN : relativeArrowAngle(brng, heading);
+  const p = buildPursuit(origin, targetCoord);
+  const distanceM = p.distanceM;
+  const arrowAngle = heading == null ? NaN : relativeArrowAngle(p.bearingDeg, heading);
   const hasFix = Number.isFinite(arrowAngle);
-  const eta = etaMinutes(origin, targetCoord);
 
   // ── Non-ready states ─────────────────────────────────────────────────────
   if (phase === 'no-coords') {
@@ -272,13 +275,16 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
       >
         <DisplayWords text={formatDistance(distanceM)} fontSize={styles.distance.fontSize} />
       </Text>
-      {eta != null ? <Text style={styles.honest}>{`~${eta} min walk`}</Text> : null}
+      {p.etaLabel !== '—' ? <Text style={styles.honest}>{`~${p.etaLabel} walk`}</Text> : null}
       {calibrate ? (
         <Text style={styles.calibrate} accessibilityRole="alert">
           Move your phone in a figure 8 to calibrate the compass.
         </Text>
       ) : null}
-      <Text style={styles.honest}>Straight-line direction to a point you saved. Works without signal.</Text>
+      <Text style={styles.honest}>
+        {note ?? 'Straight-line direction to a point you saved. Works without signal.'}
+      </Text>
+      {subNote ? <Text style={styles.honest}>{subNote}</Text> : null}
     </View>
   );
 }

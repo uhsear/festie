@@ -88,4 +88,5 @@ export * from './crewDays';
 export * from './crewBadge';
 export * from './privacySummary';
 export * from './setMoves';
+export * from './findFriends';
 export * from './alsoPlays';

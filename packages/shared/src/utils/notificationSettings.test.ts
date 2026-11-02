@@ -14,6 +14,12 @@ describe('notificationSettings', () => {
     expect(keys).toContain('crewMeetingPoints');
   });
 
+  it('says the crew picks switch also covers "Looking for you"', () => {
+    const row = visibleNotificationRows().find((r) => r.key === 'crewUpdates');
+    expect(row?.label).toBe('Crew picks');
+    expect(row?.hint).toBe('When someone in your crew changes their picks or is looking for you.');
+  });
+
   it('validates quiet windows', () => {
     expect(isValidQuietWindow('04:00', '04:00')).toBe(false);
     expect(isValidQuietWindow('04:00', '11:00')).toBe(true);
