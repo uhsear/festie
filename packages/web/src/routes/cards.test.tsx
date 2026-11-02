@@ -37,7 +37,7 @@ vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => null
 vi.mock('../components/features/ScheduleEmptyState', () => ({ default: () => <div data-testid="empty-state" /> }));
 vi.mock('../components/features/SetTimesBanner', () => ({ default: () => null }));
 vi.mock('../components/features/DiscoverRow', () => ({ default: () => null }));
-vi.mock('../components/ui/skeletons/CardsSkeleton', () => ({ default: () => <div /> }));
+vi.mock('../components/ui/skeletons/CardsSkeleton', () => ({ default: () => <div data-testid="cards-skeleton" /> }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -69,6 +69,10 @@ describe('CardsView order and earlier row', () => {
       stages: [],
       searchQuery: '',
       isLoading: false,
+      festivals: [],
+      error: null,
+      loadFestivals: vi.fn(),
+      selectFestival: vi.fn(),
       setSelectedDay: vi.fn(),
       setActiveStages: vi.fn(),
       setOnlyMine: vi.fn(),
@@ -76,6 +80,15 @@ describe('CardsView order and earlier row', () => {
   });
 
   const ids = () => screen.getAllByTestId('set-card').map((e) => e.getAttribute('data-id'));
+
+  it('shows the load error and a retry, not the skeleton, when the festival list failed', () => {
+    Object.assign(festivalState, { currentFestival: null, error: 'Network down' });
+    render(<CardsView />);
+    expect(screen.getByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByTestId('cards-skeleton')).not.toBeInTheDocument();
+  });
 
   it('folds ended sets into one collapsed row and keeps time order', () => {
     render(<CardsView />);

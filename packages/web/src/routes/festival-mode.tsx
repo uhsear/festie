@@ -4,6 +4,7 @@ import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/sto
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
 import {
+  festivalLoadState,
   festivalTimeLabel,
   fmtZonedClock,
   isFixRecent,
@@ -14,6 +15,7 @@ import {
 } from '@festie/shared/utils';
 import LowPowerToggle from '../components/features/LowPowerToggle';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useLastKnownFix } from '../hooks/useLastKnownFix';
@@ -83,7 +85,15 @@ function FestivalModeViewInner() {
     if (after && crewId) useCrewStore.getState().loadExpenses(crewId).catch(() => {});
   }, [after, crewId]);
 
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
+    if (loadState === 'error') {
+      return (
+        <div className={PAGE}>
+          <FestivalLoadError />
+        </div>
+      );
+    }
     return (
       <div className={PAGE}>
         <EmptyState

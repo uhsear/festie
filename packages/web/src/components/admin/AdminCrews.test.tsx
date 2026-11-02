@@ -21,6 +21,7 @@ vi.mock('@festie/shared/services/admin', () => ({
 const mockGet = vi.fn();
 vi.mock('@festie/shared/services/api', () => ({
   api: { get: (...a: unknown[]) => mockGet(...a), delete: vi.fn() },
+  mapErrorToUserMessage: (_e: unknown, fallback: string) => fallback,
 }));
 
 const crew = {
@@ -76,5 +77,15 @@ describe('AdminCrews', () => {
     expect(await screen.findByText('Remove @bob from Sunset Squad?')).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole('button', { name: 'Remove' }).at(-1)!);
     expect(mockRemove).toHaveBeenCalledWith('c1', 'u2');
+  });
+
+  it('load fails, shows the error, Retry reloads', async () => {
+    mockFetchCrews.mockRejectedValueOnce(new Error('down'));
+    render(<AdminCrews />);
+    expect(await screen.findByText("Couldn't load crews")).toBeInTheDocument();
+    expect(screen.queryByText('No crews found')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Sunset Squad')).toBeInTheDocument();
+    expect(mockFetchCrews).toHaveBeenCalledTimes(2);
   });
 });

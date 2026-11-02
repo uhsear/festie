@@ -194,6 +194,11 @@ describe('GridView', () => {
       stages: [{ id: 'st1', name: 'Main Stage' }],
       days: [{ index: 0, label: 'Friday', date: '2026-06-12' }],
       activeStages: [],
+      festivals: [],
+      error: null,
+      isLoading: false,
+      loadFestivals: vi.fn(),
+      selectFestival: vi.fn(),
       searchQuery: '',
       onlyMine: false,
       currentProfile: null,
@@ -215,12 +220,21 @@ describe('GridView', () => {
     expect(container).toBeTruthy();
   });
 
-  it('shows "No festival loaded" when no festival is selected', () => {
+  it('shows "No festival selected" when no festival is selected', () => {
     setFilters({ currentFestival: null });
     render(<GridView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
-    expect(screen.getByText('No festival loaded')).toBeInTheDocument();
-    expect(screen.getByText('Choose a festival from the top menu to see the schedule grid.')).toBeInTheDocument();
+    expect(screen.getByText('No festival selected')).toBeInTheDocument();
+    expect(screen.getByText('Choose a festival on the Lineup tab to see the schedule grid.')).toBeInTheDocument();
+  });
+
+  it('shows the load error and a retry when the festival list failed', () => {
+    storeState.error = 'Network down';
+    setFilters({ currentFestival: null });
+    render(<GridView />);
+    expect(screen.getByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
   });
 
   it('shows the TBA section with the "times aren\'t out yet" heading when only timeless sets exist', () => {

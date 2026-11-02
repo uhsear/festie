@@ -171,7 +171,7 @@ function SetCard({
         // Hover — gentle lift + surface shift + light glow (no heavy drop shadow).
         // R12: Aqua spotlight effect with 200ms ease-out transition.
         'hover:bg-bg-card-hover hover:-translate-y-0.5',
-        'hover:shadow-[0_0_12px_rgba(0,232,208,0.25),0_0_1px_rgba(0,232,208,0.4)]',
+        'hover:shadow-[0_0_12px_var(--color-aqua-a25),0_0_1px_var(--color-aqua-a4)]',
         'transition-shadow duration-200 ease-out',
         // R12: Radial spotlight gradient via ::after pseudo-element.
         'after:content-[""] after:absolute after:inset-0 after:rounded-[inherit]',

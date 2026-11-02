@@ -10,7 +10,7 @@ import {
   planSharedPicksAdd,
   type ComparedSet,
 } from '@festie/shared/utils';
-import { PRIORITY_LABEL } from '@festie/shared/constants';
+import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -174,11 +174,11 @@ export default function FriendPicksScreen() {
   const banner = !user ? (
     <View style={styles.banner}>
       <Text style={styles.bannerText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        Sign in to compare these picks with yours.
+        {signInTo('compare these picks with yours')}
       </Text>
       <View style={styles.bannerActions}>
-        <Button label="Log in" size="sm" onPress={() => router.push('/(auth)/login')} />
-        <Button label="Sign up" size="sm" variant="secondary" onPress={() => router.push('/(auth)/register')} />
+        <Button label={COPY.auth.signIn} size="sm" onPress={() => router.push('/(auth)/login')} />
+        <Button label={COPY.auth.createAccount} size="sm" variant="secondary" onPress={() => router.push('/(auth)/register')} />
       </View>
     </View>
   ) : !sameFestival ? (

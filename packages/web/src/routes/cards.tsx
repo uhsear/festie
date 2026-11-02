@@ -4,6 +4,7 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import { usePicks, useFestival, useCanPick, useFestivalReady } from '@festie/shared/hooks';
 import {
   getHomeActions,
+  festivalLoadState,
   resolveFestivalTimeZone,
   splitCardsByNow,
   detectConflicts,
@@ -23,6 +24,7 @@ import OtherDayMatches from '../components/features/OtherDayMatches';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import SetTimesBanner from '../components/features/SetTimesBanner';
 import DiscoverRow from '../components/features/DiscoverRow';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -150,7 +152,9 @@ function CardsViewInner() {
   // Show layout-matched skeleton while festivals are being fetched on boot
   // — same component the router uses for the chunk-load fallback so the
   // visual is continuous across route-transition → data-fetch.
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
+    if (loadState === 'error') return <FestivalLoadError />;
     return <CardsSkeleton />;
   }
 

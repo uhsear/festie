@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Linking, Switch, AccessibilityInfo } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Linking, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -25,6 +25,7 @@ import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { useHaptics } from '../hooks/useHaptics';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useNow } from '../hooks/useNow';
+import AppSwitch from './AppSwitch';
 import Button from './Button';
 import EmptyState from './EmptyState';
 import CrewSyncMarker from './CrewSyncMarker';
@@ -626,15 +627,12 @@ export default function CrewMeetingPoints({
                   Meet here at the same time every festival day.
                 </Text>
               </View>
-              <Switch
+              <AppSwitch
                 value={recursDaily}
                 onValueChange={(v) => {
                   setRecursDaily(v);
                   setTimeTouched(true);
                 }}
-                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-                ios_backgroundColor={t.colors.text.muted}
-                thumbColor={t.colors.text.onAccent}
                 accessibilityLabel="Repeats daily"
               />
             </View>

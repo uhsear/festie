@@ -220,7 +220,7 @@ export function buildPicksIcsExport(opts: BuildPicksIcsOpts & { reminders?: Reco
     });
   }
 
-  const ics = buildVCalendar(events, { calendarName: `${festival.name || 'Festival'} — My Picks` });
+  const ics = buildVCalendar(events, { calendarName: `${festival.name || 'Festival'} — My picks` });
   return { ics, timed, timeTba, skipped };
 }
 

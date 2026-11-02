@@ -19,6 +19,7 @@ import { Card } from '../components/ui/Card';
 import Skeleton from '../components/ui/Skeleton';
 import WrapSkeleton from '../components/ui/skeletons/WrapSkeleton';
 import Button from '../components/ui/Button';
+import Switch from '../components/ui/Switch';
 import CrewWrapPoster, { type CrewWrapData } from '../components/features/CrewWrapPoster';
 import CrewPhotosCard from '../components/crew/CrewPhotosCard';
 import { useToast } from '../lib/toastContext';
@@ -30,7 +31,6 @@ import { useRovingTabs } from '../hooks/useRovingTabs';
 import { RATING_META } from '../lib/ratingIcon';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { Sparkles, Trophy, Share2, Users } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 export default function WrapPage() {
   return (
@@ -244,25 +244,7 @@ function WrapPageInner() {
             <p id="wrap-handle-title" className="min-w-0 flex-1 text-sm text-text-primary">
               Show @{user.username} on cards
             </p>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showHandle}
-              aria-labelledby="wrap-handle-title"
-              onClick={() => setShowHandle(!showHandle)}
-              className={cn(
-                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors',
-                showHandle ? 'bg-accent-aqua' : 'bg-bg-card',
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'inline-block h-4 w-4 rounded-full bg-white transition-transform',
-                  showHandle ? 'translate-x-6' : 'translate-x-1',
-                )}
-              />
-            </button>
+            <Switch checked={showHandle} onChange={setShowHandle} labelledBy="wrap-handle-title" />
           </div>
         )}
 
