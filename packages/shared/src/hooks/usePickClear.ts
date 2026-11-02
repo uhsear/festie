@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { useFestivalStore } from '../stores/festivalStore';
+import { useFestivalStore, selectMyPicks } from '../stores/festivalStore';
 import { UNDO_WINDOW_MS } from '../utils/crewWrites';
 import { mapErrorToUserMessage } from '../services/errors';
 import type { UndoNotifier } from './useUndoableRemove';
@@ -18,7 +18,7 @@ export function usePickClear(notify: UndoNotifier): (setId: string, label: strin
   return useCallback((setId: string, label: string) => {
     const store = useFestivalStore.getState();
     const festivalId = store.currentFestivalId;
-    const prevPriority = store.currentProfile?.picks?.[setId];
+    const prevPriority = selectMyPicks(store)?.[setId];
     const prevReminder = store.currentProfile?.reminders?.[setId];
     if (!festivalId || !prevPriority) return;
 

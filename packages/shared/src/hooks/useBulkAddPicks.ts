@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { useFestivalStore } from '../stores/festivalStore';
+import { useFestivalStore, selectMyPicks } from '../stores/festivalStore';
 import { UNDO_WINDOW_MS } from '../utils/crewWrites';
 import { mapErrorToUserMessage } from '../services/errors';
 import { bulkAddMessage, type BulkPickGroup } from '../utils/picksPlan';
@@ -27,14 +27,14 @@ export function useBulkAddPicks(notify: UndoNotifier): {
     setBusyKey(group.key);
     try {
       const store = useFestivalStore.getState();
-      const before = { ...(store.currentProfile?.picks ?? {}) };
+      const before = { ...(selectMyPicks(store) ?? {}) };
       const changed = await store.bulkSavePicks(group.setIds, priority);
       const message = bulkAddMessage({ changed, total: group.setIds.length, label: group.label, priority });
       if (changed === 0) {
         notifyRef.current.info(message);
         return 'none';
       }
-      const after = useFestivalStore.getState().currentProfile?.picks ?? {};
+      const after = selectMyPicks(useFestivalStore.getState()) ?? {};
       // shortcut: a pick changed by hand while the bulk PUT is in flight is also undone; switch to a store-returned diff if that is ever reported.
       const previous: Record<string, Priority | undefined> = {};
       for (const id of group.setIds) if (after[id] !== before[id]) previous[id] = before[id];

@@ -5,6 +5,7 @@ import { mapErrorToUserMessage } from '../services/errors';
 import { TRUSTED_MUTATION_HEADER } from '../constants/config';
 import { getStorage, getSecureStorage, hasSecureStorage } from '../platform/storage';
 import { resetAllStores } from './resetStores';
+import { useFestivalDataStore } from './festivalDataStore';
 import {
   User,
   LoginRequest,
@@ -216,6 +217,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
         isAdmin,
         isLoading: false,
       });
+      void useFestivalDataStore.getState().mergeGuestPicks().catch(() => {});
       return { reactivated: response.reactivated === true };
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Login failed');
@@ -240,6 +242,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
         userToken: token || null,
         isLoading: false,
       });
+      void useFestivalDataStore.getState().mergeGuestPicks().catch(() => {});
       return { emailVerificationSent: response.emailVerificationSent ?? false };
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Registration failed');
@@ -301,6 +304,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
           isAdmin,
           sessionChecked: true,
         });
+        void useFestivalDataStore.getState().mergeGuestPicks().catch(() => {});
         return true;
       }
       // Authenticated probe succeeded but returned no user -- genuinely logged out.
