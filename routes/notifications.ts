@@ -199,12 +199,12 @@ export default function createNotificationRoutes(deps: any) {
     }
   });
 
-  // ── GET /history — notification delivery history ───────────────────
+  // ── GET /history — the in-app inbox: one row per notification, newest first ──
   router.get('/history', userAuth, rl(60, 'notif-history'), async (req: any, res: any) => {
     try {
       setNoStore(res);
       const { limit } = parsePageParams(req.query, { defaultSize: 25, maxSize: 100 });
-      const notifications = await stores.notificationLog.listByUser(req.user.userId, limit);
+      const notifications = await stores.notificationLog.listInbox(req.user.userId, limit);
       return sendSuccess(res, notifications, { pagination: { pageSize: limit } });
     } catch (error: any) {
       log.error('get notification history failed', { error: error.message, userId: req.user.userId });

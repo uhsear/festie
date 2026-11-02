@@ -42,6 +42,7 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
   useFestivalDataStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+  useUIStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
 vi.mock('../components/crew/SosRaiseButton', () => ({ default: () => <div data-testid="sos-raise" /> }));
@@ -225,6 +226,7 @@ function setStoreState(overrides: Record<string, unknown> = {}) {
     handOverAndLeave: vi.fn().mockResolvedValue('left'),
     kickMember: vi.fn().mockResolvedValue(undefined),
     updateCrew: vi.fn().mockResolvedValue(undefined),
+    markCrewBadgeSeen: vi.fn(),
     currentFestival: { id: 'f1', name: 'Bonnaroo' },
     // useFestivalDataStore selectors (ReformCrewButton)
     festivals: [],
@@ -378,6 +380,20 @@ describe('CrewView', () => {
     expect(screen.getByTestId('crew-tab-bar')).toHaveAttribute('data-active', 'find');
     expect(screen.getByTestId('MeetingPointsTab')).toBeInTheDocument();
     expect(screen.queryByText('Crew plan')).not.toBeInTheDocument();
+  });
+
+  it('marks open polls seen when the Plan tab shows loaded polls', () => {
+    h.search = { tab: 'plan' };
+    crewWithActive();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const crewId = (storeState.activeCrew as { id: string }).id;
+    client.setQueryData(['polls', crewId], [{ id: 'p1', closed: false }, { id: 'p2', closed: true }]);
+    rtlRender(
+      <QueryClientProvider client={client}>
+        <CrewView />
+      </QueryClientProvider>,
+    );
+    expect(storeState.markCrewBadgeSeen).toHaveBeenCalledWith(crewId, { pollIds: ['p1'] });
   });
 
   it('shows the plan links and Polls heading on the Plan tab, not in the setup footer', () => {
