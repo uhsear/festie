@@ -25,6 +25,7 @@ import {
   dropLivePosition,
   readLiveSnapshot,
   readLivePosition,
+  clampCapturedAt,
 } from '../lib/live-location-cache.js';
 
 const NOW = Date.parse('2026-06-25T18:00:00.000Z');
@@ -299,5 +300,23 @@ describe('live-location-cache — readLivePosition', () => {
   it('returns null when Redis throws or is missing', async () => {
     assert.equal(await readLivePosition(hgetRedis(null, { throws: true }), 'crew-1', 'user-a', NOW), null);
     assert.equal(await readLivePosition(null, 'crew-1', 'user-a', NOW), null);
+  });
+});
+
+describe('clampCapturedAt', () => {
+  const nowIso = new Date(NOW).toISOString();
+
+  it('returns server now for an unparseable value', () => {
+    assert.equal(clampCapturedAt('not a date', NOW, nowIso), nowIso);
+  });
+
+  it('clamps a fix 10 minutes old to now minus 60 s', () => {
+    const old = new Date(NOW - 10 * 60_000).toISOString();
+    assert.equal(clampCapturedAt(old, NOW, nowIso), new Date(NOW - 60_000).toISOString());
+  });
+
+  it('clamps a fix 5 minutes ahead to now plus 30 s', () => {
+    const ahead = new Date(NOW + 5 * 60_000).toISOString();
+    assert.equal(clampCapturedAt(ahead, NOW, nowIso), new Date(NOW + 30_000).toISOString());
   });
 });

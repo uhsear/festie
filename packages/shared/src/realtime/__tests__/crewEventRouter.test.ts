@@ -10,6 +10,7 @@ import {
   routePackingChanged,
   routeRidesChanged,
   routeActivityLogged,
+  routeLocationPeerUpdate,
 } from '../crewEventRouter';
 import { createStoreSink } from '../crewRealtimeSink';
 import { useCrewStore } from '../../stores/crewStore';
@@ -411,5 +412,27 @@ describe('crewEventRouter + createStoreSink integration', () => {
     sink().onExpensesChanged(OTHER);
     await new Promise((r) => setTimeout(r, 0));
     expect(api.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('routeLocationPeerUpdate selfUserId', () => {
+  const payload = {
+    _v: 1,
+    crewId: ACTIVE,
+    userId: 'u1',
+    username: 'one',
+    lat: 1,
+    lng: 2,
+    capturedAt: '2026-06-06T12:00:00.000Z',
+    serverAt: '2026-06-06T12:00:01.000Z',
+  } as const;
+
+  it('drops an echo of the viewer\'s own fix', () => {
+    expect(routeLocationPeerUpdate(payload, ACTIVE, 'u1')).toBeNull();
+  });
+
+  it('routes another user and routes with no selfUserId', () => {
+    expect(routeLocationPeerUpdate(payload, ACTIVE, 'u2')?.peer.userId).toBe('u1');
+    expect(routeLocationPeerUpdate(payload, ACTIVE)?.peer.userId).toBe('u1');
   });
 });

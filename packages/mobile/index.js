@@ -5,4 +5,6 @@
 // Relying on import order inside app/_layout.tsx is not enough: expo-router may
 // evaluate other route modules (which import the stores) first.
 import './bootstrap';
+// Defines the background-location task at launch; must load after bootstrap (its stores hydrate on import).
+import './lib/backgroundShare';
 import 'expo-router/entry';

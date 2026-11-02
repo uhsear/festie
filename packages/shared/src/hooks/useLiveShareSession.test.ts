@@ -89,4 +89,28 @@ describe('useLiveShareSession', () => {
     act(() => w.fail({ code: 1 }));
     expect(useLiveLocationStore.getState().shareEndedReason).toBe('denied');
   });
+
+  it('a background intent emits no location:share and starts no watcher, but still expires', () => {
+    const { socket, emit } = makeSocket();
+    const w = makeWatcher();
+    const watch = vi.fn(w.watchPosition);
+    renderHook(() => useLiveShareSession({ socket, watchPosition: watch }));
+    act(() => useLiveLocationStore.getState().beginShare('c1', END, false, true));
+    expect(emit).not.toHaveBeenCalled();
+    expect(watch).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(10 * 60_000);
+    });
+    expect(useLiveLocationStore.getState().shareIntent).toBeNull();
+    expect(useLiveLocationStore.getState().shareEndedReason).toBe('expired');
+  });
+
+  it('low-power mode still ends a background intent', () => {
+    const { socket } = makeSocket();
+    const w = makeWatcher();
+    renderHook(() => useLiveShareSession({ socket, watchPosition: w.watchPosition }));
+    act(() => useLiveLocationStore.getState().beginShare('c1', END, false, true));
+    act(() => useFestivalModeStore.setState({ lowPowerMode: true }));
+    expect(useLiveLocationStore.getState().shareEndedReason).toBe('low-power');
+  });
 });

@@ -13,6 +13,7 @@ import createRidesRoutes from './crew-rides.js';
 import createStatusRoutes from './crew-status.js';
 import createCrewDaysRoutes from './crew-days.js';
 import createSosRoutes from './crew-sos.js';
+import createLiveLocationRoutes from './crew-live-location.js';
 import createCheckinRoutes from './crew-checkin.js';
 import createCrewMemberRoutes from './crew-members.js';
 
@@ -216,6 +217,7 @@ export default function createCrewRoutes(deps: any) {
   const statusRoutes = createStatusRoutes(subDeps);
   const daysRoutes = createCrewDaysRoutes(subDeps);
   const sosRoutes = createSosRoutes(subDeps);
+  const liveLocationRoutes = createLiveLocationRoutes(subDeps);
   const checkinRoutes = createCheckinRoutes(subDeps);
   const memberRoutes = createCrewMemberRoutes(subDeps);
 
@@ -227,6 +229,7 @@ export default function createCrewRoutes(deps: any) {
   router.use('/', statusRoutes);
   router.use('/', daysRoutes);
   router.use('/', sosRoutes);
+  router.use('/', liveLocationRoutes);
   router.use('/', checkinRoutes);
   router.use('/', memberRoutes);
 

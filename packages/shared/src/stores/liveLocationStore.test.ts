@@ -465,6 +465,16 @@ describe('liveLocationStore', () => {
   });
 
   describe('share session', () => {
+    it('beginShare stores background, defaulting to false, and pause keeps it', () => {
+      const store = useLiveLocationStore.getState();
+      store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
+      expect(useLiveLocationStore.getState().shareIntent?.background).toBe(false);
+      store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', false, true);
+      expect(useLiveLocationStore.getState().shareIntent?.background).toBe(true);
+      store.setSharePaused(true);
+      expect(useLiveLocationStore.getState().shareIntent?.background).toBe(true);
+    });
+
     it('keeps the intent and flips paused', () => {
       const store = useLiveLocationStore.getState();
       store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', true);
@@ -474,6 +484,7 @@ describe('liveLocationStore', () => {
         expiresAt: '2026-06-06T14:00:00.000Z',
         paused: true,
         shareBattery: true,
+        background: false,
       });
     });
 

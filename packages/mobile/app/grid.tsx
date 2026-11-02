@@ -28,6 +28,8 @@ import {
   fmtHour,
   fmtShort,
   artistDisplayName,
+  nextPickFromMenu,
+  pickMenuItems,
   resolveFestivalTimeZone,
   hasAnyPick,
   isStageFilterActive,
@@ -39,7 +41,7 @@ import {
   type GridBounds,
   type HourMark,
 } from '@festie/shared/utils';
-import type { FestivalSet, Stage } from '@festie/shared/types';
+import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE, type Tokens } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
@@ -83,8 +85,10 @@ const MIN_CELL_H = 44;
  * color/name resolution. The pure grid math (zoom levels, two-up column width,
  * fmtHour, fmtShort, bounds) is imported from @festie/shared/utils.
  *
- * Holding a cell cycles its pick (useQuickPick). A day with only TBA sets shows
- * the stage-grouped TBA list instead of the empty state.
+ * Holding a cell cycles its pick (useQuickPick). Screen readers get the same
+ * picks as accessibility actions. The native long-press menu (SetPickMenu) stays
+ * unwired until the P6 device spike passes on both platforms. A day with only
+ * TBA sets shows the stage-grouped TBA list instead of the empty state.
  *
  * Pick colors are resolved from the design tokens (t.colors.priority) rather
  * than the web grid's CSS `var(--color-accent-*)` strings, which RN can't parse.
@@ -114,7 +118,8 @@ export default function GridScreen() {
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const picks = useFestivalDataStore((s) => s.currentProfile)?.picks;
-  const { getMyPick, getOtherPicks } = usePicks();
+  const { getMyPick, getOtherPicks, savePick, removePick } = usePicks();
+  const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const { getStageColor, getStageName, getDays, getFilteredSets, getCurrentDaySets } = useFestival();
   const dayLabel = getDays()[selectedDay]?.label ?? 'Grid';
   const screenTitle = `${dayLabel} · Grid`;
@@ -311,6 +316,19 @@ export default function GridScreen() {
 
   const openSet = useCallback((s: FestivalSet) => router.push(`/set/${s.id}`), [router]);
 
+  const handleMenuPick = useCallback(
+    (setId: string, next: Priority | null) => {
+      if (!currentFestival) return;
+      if (!currentProfile) {
+        router.push(user ? `/set/${setId}` : '/(auth)/login');
+        return;
+      }
+      const write = next === null ? removePick(currentFestival.id, setId) : savePick(currentFestival.id, setId, next);
+      write.catch(() => {});
+    },
+    [currentFestival, currentProfile, user, router, savePick, removePick],
+  );
+
   // ── Empty states (mirror the web grid) ──
   if (!currentFestival) {
     return (
@@ -434,7 +452,7 @@ export default function GridScreen() {
           const { start: a, end: b } = setMinuteRange(set)!;
           const top = (a - bounds.lo) * pxPerMin;
           const height = Math.max((b - a) * pxPerMin, MIN_CELL_H);
-          const pick = getMyPick(set.id);
+          const pick = getMyPick(set.id) ?? null;
           const pickColor = pick ? t.colors.priority[pick === 'want-to-see' ? 'want' : pick] : null;
           const cellColor = pickColor ?? stageColor;
           const dn = artistDisplayName(set, currentFestival.b2bSeparator);
@@ -497,6 +515,11 @@ export default function GridScreen() {
               onPress={() => router.push(`/set/${set.id}`)}
               {...holdToPick(set.id, pick)}
               accessibilityRole="button"
+              accessibilityActions={pickMenuItems(pick).map((item) => ({ name: item.key, label: item.label }))}
+              onAccessibilityAction={(e) => {
+                const key = e.nativeEvent.actionName as Priority | 'remove';
+                handleMenuPick(set.id, nextPickFromMenu(pick, key));
+              }}
               accessibilityLabel={`${dn} at ${getStageName(st.id) || st.id}, ${fmtShort(set.startTime!)} to ${fmtShort(set.endTime!)}${pick ? ', ' + pick : ''}${overlapLabel}${mark ? ', ' + mark.text : ''}`}
             >
               {inner}
