@@ -327,7 +327,7 @@ describe('PUT /:id venue and geocoding', () => {
     const geocodeVenue = mock.fn(async () => null);
     const deps = baseDeps({
       getFestivalById: mock.fn(async () => existing),
-      validateFestival: () => [],
+      validateFestivalIssues: () => [],
       sanitizeFestivalPayload: (input: any, ex: any) =>
         sanitizeFestivalPayload(input, ex, { MAX_STAGES: 20, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 }, () => 'x'),
       geocodeVenue,
