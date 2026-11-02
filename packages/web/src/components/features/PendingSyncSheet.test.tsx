@@ -7,6 +7,16 @@ import type { FailedSyncItem } from '@festie/shared/stores/uiStore';
 
 const dismissFailedSync = vi.fn();
 const clearFailedSync = vi.fn();
+const { dismissFailed, clearPersistedFailed } = vi.hoisted(() => ({
+  dismissFailed: vi.fn(),
+  clearPersistedFailed: vi.fn(),
+}));
+
+vi.mock('@festie/shared/services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/services')>()),
+  dismissFailed,
+  clearPersistedFailed,
+}));
 
 interface MockState {
   failedSync: FailedSyncItem[];
@@ -51,6 +61,8 @@ beforeAll(() => {
 describe('PendingSyncSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dismissFailed.mockResolvedValue(undefined);
+    clearPersistedFailed.mockResolvedValue(undefined);
     (window as Record<string, unknown>).__festieQueue = undefined;
   });
 
@@ -70,12 +82,12 @@ describe('PendingSyncSheet', () => {
     expect(screen.getByText('Conflict')).toBeInTheDocument();
   });
 
-  it('dismisses a single item via its Dismiss button', async () => {
+  it('dismisses a single item from the store and storage via its Dismiss button', async () => {
     const user = userEvent.setup();
     setStoreState([item({ clientId: 'abc' })]);
     render(<PendingSyncSheet onClose={vi.fn()} />);
     await user.click(screen.getByText('Dismiss'));
-    expect(dismissFailedSync).toHaveBeenCalledWith('abc');
+    expect(dismissFailed).toHaveBeenCalledWith('abc');
   });
 
   it('re-enqueues via window.__festieQueue on Retry', async () => {
@@ -89,8 +101,8 @@ describe('PendingSyncSheet', () => {
     expect(queueMutation).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'api', clientId: 'abc', url: '/crews/x/polls', method: 'POST' }),
     );
-    // It optimistically drops the item from the failed list.
-    expect(dismissFailedSync).toHaveBeenCalledWith('abc');
+    // It optimistically drops the item from the failed list and from storage.
+    expect(dismissFailed).toHaveBeenCalledWith('abc');
   });
 
   it('clears all items via Dismiss all', async () => {
@@ -99,5 +111,6 @@ describe('PendingSyncSheet', () => {
     render(<PendingSyncSheet onClose={vi.fn()} />);
     await user.click(screen.getByText('Dismiss all'));
     expect(clearFailedSync).toHaveBeenCalled();
+    expect(clearPersistedFailed).toHaveBeenCalled();
   });
 });

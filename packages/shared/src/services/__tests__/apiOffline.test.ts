@@ -6,7 +6,7 @@ const enqueueMutation = vi.fn(async () => {});
 const drainQueue = vi.fn(async () => {});
 vi.mock('../offlineQueue', () => ({ enqueueMutation, drainQueue }));
 
-import { api, isOfflineEligible } from '../api';
+import { api, isOfflineEligible, ApiClientError } from '../api';
 import { useUIStore } from '../../stores/uiStore';
 
 const okResponse = (data: unknown) =>
@@ -170,6 +170,29 @@ describe('api offline interception', () => {
         isNetworkError: true,
       });
       expect(enqueueMutation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('enqueue failure (residual E)', () => {
+    it('an up-front enqueue throw falls through to the network error, never the raw storage error', async () => {
+      useUIStore.setState({ offlineMode: true });
+      const storageError = new Error('QuotaExceededError: setItem failed');
+      // offlineQueue is mocked, so a rejecting enqueue stands in for storage.setItem throwing.
+      enqueueMutation.mockRejectedValue(storageError);
+      fetchSpy.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const err = await api.post('/crews/c1/expenses', { amount: 5 }).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(ApiClientError);
+        expect(err).toMatchObject({ isNetworkError: true });
+        expect(err).not.toBe(storageError);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith('offline enqueue failed; sending online', storageError);
+      } finally {
+        enqueueMutation.mockReset();
+        enqueueMutation.mockImplementation(async () => {});
+        warn.mockRestore();
+      }
     });
   });
 

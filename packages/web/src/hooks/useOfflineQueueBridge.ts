@@ -32,7 +32,12 @@ export function useOfflineQueueBridge() {
       init: { method?: string; body?: unknown; idempotencyKey?: string } = {},
     ) => {
       const m = (init.method || 'POST').toUpperCase();
-      const opts = init.idempotencyKey ? { headers: { 'Idempotency-Key': init.idempotencyKey } } : {};
+      // A replay is never re-queued by the api layer: a network failure comes back
+      // here, so the entry keeps its clientId and Idempotency-Key.
+      const opts = {
+        _bypassOfflineQueue: true,
+        ...(init.idempotencyKey ? { headers: { 'Idempotency-Key': init.idempotencyKey } } : {}),
+      };
       if (m === 'GET')    return api.get(url, opts);
       if (m === 'PUT')    return api.put(url, init.body, opts);
       if (m === 'PATCH')  return api.patch(url, init.body, opts);

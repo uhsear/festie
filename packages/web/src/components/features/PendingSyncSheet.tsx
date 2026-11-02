@@ -2,6 +2,7 @@ import React from 'react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { FailedSyncItem } from '@festie/shared/stores/uiStore';
 import { timeAgo } from '@festie/shared/utils';
+import { clearPersistedFailed, dismissFailed } from '@festie/shared/services';
 import Sheet from '../ui/Sheet';
 
 /**
@@ -26,8 +27,13 @@ function retryItem(item: FailedSyncItem): void {
         /* a re-failure will re-add it to the list via processQueue */
       });
   }
-  // Optimistically clear it; if the retry fails again the queue re-reports it.
-  useUIStore.getState().dismissFailedSync(item.clientId);
+  // Optimistically clear it (store and storage); if the retry fails again the queue re-reports it.
+  dismissItem(item.clientId);
+}
+
+/** Drop a failed item from the list AND from storage, so a reload does not bring it back. */
+function dismissItem(clientId: string): void {
+  dismissFailed(clientId).catch((err) => console.warn('PendingSyncSheet: dismiss failed', err));
 }
 
 interface PendingSyncSheetProps {
@@ -42,7 +48,6 @@ interface PendingSyncSheetProps {
  */
 export default function PendingSyncSheet({ onClose }: PendingSyncSheetProps) {
   const failedSync = useUIStore((state) => state.failedSync);
-  const dismissFailedSync = useUIStore((state) => state.dismissFailedSync);
   const clearFailedSync = useUIStore((state) => state.clearFailedSync);
 
   // If the list empties (e.g. user dismissed the last item), close the sheet.
@@ -84,7 +89,7 @@ export default function PendingSyncSheet({ onClose }: PendingSyncSheetProps) {
                 Retry
               </button>
               <button
-                onClick={() => dismissFailedSync(item.clientId)}
+                onClick={() => dismissItem(item.clientId)}
                 className="text-xs font-medium px-3 rounded text-text-secondary hover:text-text-primary min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
               >
                 Dismiss
@@ -96,7 +101,10 @@ export default function PendingSyncSheet({ onClose }: PendingSyncSheetProps) {
 
       <div className="flex items-center justify-end gap-2 pt-3 border-t border-border-default">
         <button
-          onClick={() => clearFailedSync()}
+          onClick={() => {
+            clearFailedSync();
+            void clearPersistedFailed();
+          }}
           className="text-xs font-medium px-3 min-h-11 rounded text-text-secondary hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
         >
           Dismiss all

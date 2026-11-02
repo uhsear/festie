@@ -15,6 +15,7 @@
  */
 
 import type { CrewMemberDay, CrewMeetingPoint, CrewPoll, PeerLocation, SosEntry } from '../types/domain';
+import { useUIStore } from '../stores/uiStore';
 
 /**
  * The minimal crewStore surface the store-sink adapter depends on. Declared
@@ -31,6 +32,8 @@ export interface CrewStoreSinkApi {
     applyPollCreated: (poll: CrewPoll) => void;
     applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => void;
     applyPollClosed: (pollId: string) => void;
+    loadMeetingPoints: (crewId: string) => Promise<void>;
+    loadCrewDays: (crewId: string) => Promise<void>;
     loadPolls: (crewId: string) => Promise<void>;
     loadExpenses: (crewId: string) => Promise<void>;
     loadPacking: (crewId: string) => Promise<void>;
@@ -87,6 +90,12 @@ export interface CrewRealtimeSink {
   onSosCleared: (crewId: string, userId: string, clearedBy: string) => void;
   /** Re-read the active SOS list (socket (re)connect). Optional so older sink doubles still compile. */
   onSosResync?: (crewId: string) => void;
+  /**
+   * Re-read the crew sub-resources after a socket reconnect (events sent during
+   * the drop are lost). Sinks skip it while offline writes are still queued, so
+   * a mid-drain reload cannot drop optimistic rows. Optional for older doubles.
+   */
+  onReconnectResync?: (crewId: string) => void;
 }
 
 /**
@@ -180,6 +189,21 @@ export function createStoreSink(
     },
     onSosResync: (crewId) => {
       void liveLocationApi?.getState().loadActiveSos(crewId);
+    },
+    onReconnectResync: (crewId) => {
+      if (!stillActive(crewId) || useUIStore.getState().pendingSync > 0) return;
+      const s = crewStoreApi.getState();
+      for (const load of [
+        s.loadMeetingPoints,
+        s.loadPolls,
+        s.loadExpenses,
+        s.loadPacking,
+        s.loadRides,
+        s.loadActivity,
+        s.loadCrewDays,
+      ]) {
+        void load(crewId).catch((e: unknown) => console.warn('crew resync failed', e));
+      }
     },
   };
 }
