@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useMobilePush } from '../../hooks/useMobilePush';
 import { useAuth } from '@festie/shared/hooks';
-import { COPY } from '@festie/shared/constants';
+import { COPY, INTRO_REPLAY_COPY } from '@festie/shared/constants';
 import { displayInitials, identityLabel } from '@festie/shared/utils';
 import { useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -332,6 +332,21 @@ export default function AccountScreen() {
         {/* Data */}
         <SectionLabel>Data</SectionLabel>
         <AccountDataSection />
+
+        {/* Help */}
+        <SectionLabel>Help</SectionLabel>
+        <View style={styles.card}>
+          <LinkRow
+            icon="help-circle-outline"
+            title={INTRO_REPLAY_COPY.title}
+            hint={INTRO_REPLAY_COPY.hint}
+            onPress={() => {
+              haptics.tap();
+              useUIStore.getState().setIntroReplay(true);
+            }}
+            accessibilityLabel={INTRO_REPLAY_COPY.a11y}
+          />
+        </View>
 
         {/* Legal */}
         <SectionLabel>Legal</SectionLabel>

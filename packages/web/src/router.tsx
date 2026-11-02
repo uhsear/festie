@@ -215,9 +215,10 @@ const crewRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/crew',
   component: CrewView,
-  validateSearch: (search: Record<string, unknown>): { sos?: string; tab?: CrewTabKey } => {
-    const out: { sos?: string; tab?: CrewTabKey } = {};
+  validateSearch: (search: Record<string, unknown>): { sos?: string; tab?: CrewTabKey; start?: 'create' | 'join' } => {
+    const out: { sos?: string; tab?: CrewTabKey; start?: 'create' | 'join' } = {};
     if (typeof search.sos === 'string') out.sos = search.sos;
+    if (search.start === 'create' || search.start === 'join') out.start = search.start;
     const tab = parseCrewTab(search.tab);
     if (tab) out.tab = tab;
     return out;

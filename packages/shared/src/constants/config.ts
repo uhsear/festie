@@ -242,23 +242,62 @@ export function resolveLiveShareMs(d: LiveShareDuration): number {
   return d.ms == null ? LIVE_SHARE_MAX_MS : Math.min(d.ms, LIVE_SHARE_MAX_MS);
 }
 
-/**
- * Onboarding slide copy single-sourced for web + mobile parity (DC29 Option B).
- * Mobile's third slide (local notifications) is platform-specific and lives only
- * in FirstRunIntro.tsx. These two shared slides cover the core product value props.
- * Web step-1 icon uses the Star icon (picks); web step-2 icon uses the Users icon.
- * Mobile slides 1 and 2 correspond to these entries.
- */
+/** Intro slides, single-sourced for web and mobile (design-system-23). Slide 1 names the three priorities. */
 export const ONBOARDING_SLIDES_SHARED = [
   {
-    title: 'Your festival, planned',
-    description: "Pick the sets you can't miss across every stage and see your whole weekend at a glance.",
+    key: 'plan',
+    title: 'Plan your weekend',
+    description: 'Tap Must See, Want to See or Maybe on any set. Your plan fills in across every stage.',
   },
   {
+    key: 'crew',
     title: 'Keep your crew together',
-    description: 'Compare schedules, drop meeting points, and find each other when the signal drops.',
+    description: 'Compare plans, set meeting points and find each other when the signal drops.',
+  },
+  {
+    key: 'reminders',
+    title: 'Reminders before your sets',
+    description: 'Get a reminder before each set you picked.',
   },
 ] as const;
+
+export const ONBOARDING_COPY = {
+  dialogLabel: 'Welcome to Festie',
+  next: 'Next',
+  skip: 'Skip',
+  skipA11y: 'Skip intro',
+  festival: {
+    title: 'Which festival?',
+    description: 'Pick the one you are going to. You can switch later.',
+  },
+  going: {
+    title: 'Going with friends?',
+    description: 'A crew shares plans, meeting points and where everyone is.',
+    start: 'Start a crew',
+    join: 'I have an invite code',
+    solo: 'Just me',
+  },
+  signInPrompt: 'Already have an account?',
+  signIn: 'Sign in',
+} as const;
+
+export const INTRO_REPLAY_COPY = {
+  title: 'How Festie works',
+  hint: 'Replay the intro',
+  a11y: 'Replay the Festie intro',
+} as const;
+
+export const FESTIVAL_READY_COPY = {
+  title: 'Festival ready',
+  hide: 'Hide',
+  hideA11y: 'Hide the Festival ready checklist',
+  items: {
+    picks: { label: 'Pick your first sets', hint: 'Tap Must See, Want to See or Maybe on any set below.' },
+    crew: { label: 'Start or join a crew', hint: 'Share plans and find each other on the day.' },
+    reminders: { label: 'Turn on set reminders', hint: 'Get a reminder before each set you picked.' },
+    offline: { label: 'Download for offline', hint: 'Keep your schedule and picks when the signal drops.' },
+  },
+} as const;
 
 /** Guest sign-in prompts, single-sourced so web and mobile teasers match. */
 export const GUEST_PROMPT_COPY = {
