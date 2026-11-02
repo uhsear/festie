@@ -39,8 +39,9 @@ describe('DetailConflictWarning', () => {
     render(
       <DetailConflictWarning {...defaultProps} conflicts={conflicts} />,
     );
-    // The warning text includes the unicode ⚠ character followed by " Time conflict with: DJ Snake"
-    expect(screen.getByText(/Time conflict with.*DJ Snake/)).toBeInTheDocument();
+    expect(screen.getByText(/Clashes with.*DJ Snake/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('⚠');
+    expect(document.body.textContent).not.toMatch(/conflict/i);
   });
 
   it('renders multiple conflicting artists', () => {

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { describe, test, beforeEach } from 'node:test';
+import express from 'express';
+import request from 'supertest';
 import { createNotificationService } from '../lib/notifications';
+import createNotificationRoutes from '../routes/notifications';
+import { schemas, validate } from '../lib/schemas';
 
 // ── Test helpers ──────────────────────────────────────────────
 
@@ -222,6 +227,96 @@ describe('Notification Service — type validation', () => {
       festivalId: 'f1', type: 'reminder', title: 'T', body: 'B',
     });
     assert.equal(result.sent, 0);
+  });
+});
+
+describe('Notification routes — web push', () => {
+  function buildApp(config: any = {}) {
+    const registered: any[] = [];
+    const router = createNotificationRoutes({
+      express,
+      config,
+      log: silentLog,
+      stores: {
+        deviceTokens: {
+          getTokenOwner: async () => null,
+          listByUser: async () => [],
+          unregister: async () => {},
+          register: async (row: any) => registered.push(row),
+        },
+      },
+      userAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'u1' };
+        next();
+      },
+      setNoStore: () => {},
+      sanitizeString: (s: string) => s,
+      sanitizeIdentifier: (s: string) => s,
+      createOpaqueId: () => 'dtoken-1',
+      getRequestIp: () => '127.0.0.1',
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string, code: string) =>
+        res.status(status).json({ data: null, error: { message, code } }),
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      schemas,
+      validate,
+    });
+    const app = express();
+    app.use(express.json());
+    app.use(router);
+    return { app, registered };
+  }
+
+  function webSubscription(endpoint: string) {
+    const ua = crypto.createECDH('prime256v1');
+    ua.generateKeys();
+    return JSON.stringify({
+      endpoint,
+      keys: { p256dh: ua.getPublicKey('base64url'), auth: crypto.randomBytes(16).toString('base64url') },
+    });
+  }
+
+  test('POST /token rejects a web subscription on a host that is not allowed', async () => {
+    const { app, registered } = buildApp();
+    const res = await request(app)
+      .post('/token')
+      .send({ token: webSubscription('https://evil.example/push/1'), platform: 'web' })
+      .expect(400);
+    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.match(res.body.error.message, /push subscription is not valid/);
+    assert.equal(registered.length, 0);
+  });
+
+  test('POST /token rejects a web token that is not a subscription', async () => {
+    const { app } = buildApp();
+    await request(app).post('/token').send({ token: 'fcm-test-token-abc123456789', platform: 'web' }).expect(400);
+  });
+
+  test('POST /token accepts a valid web subscription', async () => {
+    const { app, registered } = buildApp();
+    await request(app)
+      .post('/token')
+      .send({ token: webSubscription('https://fcm.googleapis.com/fcm/send/abc'), platform: 'web' })
+      .expect(200);
+    assert.equal(registered.length, 1);
+    assert.equal(registered[0].platform, 'web');
+  });
+
+  test('GET /vapid-key returns 404 without keys', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/vapid-key').expect(404);
+    assert.equal(res.body.error.code, 'NOT_FOUND');
+    assert.equal(res.body.error.message, 'Web push is not set up on this server.');
+  });
+
+  test('GET /vapid-key returns the public key when both keys are set', async () => {
+    const ecdh = crypto.createECDH('prime256v1');
+    ecdh.generateKeys();
+    const publicKey = ecdh.getPublicKey('base64url');
+    const { app } = buildApp({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: ecdh.getPrivateKey('base64url') });
+    const res = await request(app).get('/vapid-key').expect(200);
+    assert.equal(res.body.data.publicKey, publicKey);
+    assert.equal(res.headers['cache-control'], 'public, max-age=3600');
   });
 });
 

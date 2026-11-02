@@ -66,6 +66,7 @@ function baseDeps(overrides: any = {}) {
       VALIDATION_ERROR: 'VALIDATION_ERROR',
       CONFLICT: 'CONFLICT',
       SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+      TOKEN_EXPIRED: 'TOKEN_EXPIRED',
     },
     userAuth: (req: any, _res: any, next: any) => {
       req.user = { userId: 'user-1' };
@@ -144,7 +145,7 @@ describe('routes/email-auth', () => {
   // Mock the external modules that email-auth requires internally
   let createEmailAuthRoutes: any;
 
-  // We need to handle the internal require of lib/email and lib/reset-pages.
+  // We need to handle the internal require of lib/email.
   // These modules exist on disk so they'll load, but their email-sending
   // functions will fail gracefully without valid config.
 
@@ -536,7 +537,8 @@ describe('routes/email-auth', () => {
       .send({ token: 'bad-token', newPassword: 'StrongPass1!', confirmPassword: 'StrongPass1!' })
       .expect(400);
 
-    assert.match(res.body.error.message, /invalid or expired/i);
+    assert.match(res.body.error.message, /expired or was already used/i);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
   });
 
   test('POST /reset-password — succeeds with valid DB token', async () => {
@@ -1609,26 +1611,41 @@ describe('routes/calendar-sync', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('routes/lineup-import', () => {
+  const FESTIVAL = {
+    id: 'fest-1',
+    name: 'Test Fest',
+    b2bSeparator: 'b2b',
+    stages: [{ id: 'stage-1', name: 'Main Stage', color: '#fff' }],
+    days: [{ dayIndex: 0, label: 'Day 1', date: '2026-06-01', sets: [] }],
+  };
+
   function buildLineupDeps(overrides: any = {}) {
     const storePool = makePool();
     return baseDeps({
       adminAuth: noopMw,
       setNoStore: noop,
-      getFestivalById: mock.fn(async () => ({
-        id: 'fest-1',
-        name: 'Test Fest',
-        stages: [{ id: 'stage-1', name: 'Main Stage' }],
-        days: [{ label: 'Day 1', date: '2026-06-01', sets: [] }],
-      })),
       invalidateFestivalCache: mock.fn(noop),
       getRequestIp: () => '127.0.0.1',
+      reengagement: { sendLineupDrop: mock.fn(async () => {}) },
       stores: {
         pool: storePool,
-        festivals: { applyLineupImport: mock.fn(async () => {}) },
+        festivals: { getById: mock.fn(async () => FESTIVAL) },
+        lineupImports: {
+          // Runs the route's plan builder against the mocked festival, like the real store.
+          commit: mock.fn(async (_id: string, buildPlan: any) => {
+            const { plan, writes } = buildPlan(FESTIVAL);
+            if (plan.counts.error > 0 || plan.problems.length > 0) return { committed: false, plan };
+            return { committed: true, plan, writes, importId: 'import-1' };
+          }),
+        },
       },
       pool: storePool,
       config: {
         ...baseDeps().config,
+        MAX_IMPORT_SETS: 500,
+        MAX_STAGES: 20,
+        MAX_DAYS: 10,
+        MAX_SETS_PER_DAY: 200,
         SPOTIFY_CLIENT_ID: null,
         SPOTIFY_CLIENT_SECRET: null,
       },
@@ -1642,87 +1659,71 @@ describe('routes/lineup-import', () => {
     return mountApp(router);
   }
 
-  test('POST /:id/import-lineup — imports CSV data', async () => {
+  const rows = [
+    { row: 2, artist: 'DJ Test', stage: 'Main Stage', day: 'Day 1', startTime: '14:00', endTime: '15:00' },
+    { row: 3, artist: 'DJ Two', stage: 'Main Stage', day: 'Day 1', startTime: '4pm', endTime: '5:30 PM' },
+  ];
+
+  test('POST /:id/import-lineup — commits rows and never sends the lineup-drop notification', async () => {
     const deps = buildLineupDeps();
     const app = await mountLineup(deps);
 
-    const csvText =
-      'artist,stage,day,start,end\nDJ Test,Main Stage,Day 1,14:00,15:00\nDJ Two,Main Stage,Day 1,16:00,17:00';
-
-    const res = await request(app).post('/fest-1/import-lineup').send({ text: csvText, format: 'auto' }).expect(200);
+    const res = await request(app).post('/fest-1/import-lineup').send({ rows, skipSpotify: true }).expect(200);
 
     assert.equal(res.body.error, null);
-    assert.equal(res.body.data.imported, 2);
+    assert.equal(res.body.data.committed, true);
+    assert.equal(res.body.data.result.created, 2);
+    assert.deepEqual(res.body.data.plan.rows.map((r: any) => r.startTime), ['14:00', '16:00']);
+    assert.equal(deps.invalidateFestivalCache.mock.callCount(), 1);
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(deps.reengagement.sendLineupDrop.mock.callCount(), 0);
   });
 
-  test('POST /:id/import-lineup — imports TSV data', async () => {
+  test('POST /:id/import-lineup/preview — returns the plan and writes nothing', async () => {
     const deps = buildLineupDeps();
     const app = await mountLineup(deps);
 
-    const tsvText = 'DJ Tab\tMain Stage\tDay 1\t14:00\t15:00';
+    const res = await request(app).post('/fest-1/import-lineup/preview').send({ rows }).expect(200);
 
-    const res = await request(app).post('/fest-1/import-lineup').send({ text: tsvText, format: 'tsv' }).expect(200);
-
-    assert.equal(res.body.error, null);
-    assert.equal(res.body.data.imported, 1);
+    assert.equal(res.body.data.counts.new, 2);
+    assert.equal(res.body.data.festivalName, 'Test Fest');
+    assert.equal(deps.stores.lineupImports.commit.mock.callCount(), 0);
   });
 
-  test('POST /:id/import-lineup — rejects empty text', async () => {
+  test('POST /:id/import-lineup — the old { text } payload is a 400', async () => {
     const deps = buildLineupDeps();
     const app = await mountLineup(deps);
 
-    await request(app).post('/fest-1/import-lineup').send({ text: '', format: 'auto' }).expect(400);
+    const res = await request(app)
+      .post('/fest-1/import-lineup')
+      .send({ text: 'artist,stage\nDJ X,Main Stage', format: 'auto' })
+      .expect(400);
+    assert.equal(res.body.error.message, 'Invalid import payload');
   });
 
   test('POST /:id/import-lineup — 404 when festival not found', async () => {
     const deps = buildLineupDeps();
-    deps.getFestivalById = mock.fn(async () => null);
+    deps.stores.festivals.getById = mock.fn(async () => null);
     const app = await mountLineup(deps);
 
-    const res = await request(app)
-      .post('/fest-1/import-lineup')
-      .send({ text: 'DJ X,Stage,Day 1,14:00,15:00', format: 'csv' })
-      .expect(404);
+    const res = await request(app).post('/fest-1/import-lineup').send({ rows }).expect(404);
 
     assert.equal(res.body.error.code, 'NOT_FOUND');
   });
 
-  test('POST /:id/import-lineup — normalizes 12hr time to 24hr', async () => {
-    const deps = buildLineupDeps();
-    const app = await mountLineup(deps);
-
-    const csvText = 'DJ PM,Main Stage,Day 1,2:00 PM,3:30 PM';
-
-    const res = await request(app).post('/fest-1/import-lineup').send({ text: csvText, format: 'csv' }).expect(200);
-
-    const rows = res.body.data.rows;
-    assert.equal(rows[0].startTime, '14:00');
-    assert.equal(rows[0].endTime, '15:30');
-  });
-
-  test('POST /:id/import-lineup — rejects an unknown stage and writes nothing', async () => {
-    const deps = buildLineupDeps();
-    const app = await mountLineup(deps);
-
-    const csvText = 'DJ X,Unknown Stage,Day 1,14:00,15:00';
-
-    await request(app).post('/fest-1/import-lineup').send({ text: csvText, format: 'csv' }).expect(400);
-    assert.equal(deps.stores.festivals.applyLineupImport.mock.callCount(), 0);
-  });
-
-  test('POST /:id/import-lineup — dryRun flags an unknown stage as a row error and writes nothing', async () => {
+  test('POST /:id/import-lineup — an unknown stage without createMissing commits nothing', async () => {
     const deps = buildLineupDeps();
     const app = await mountLineup(deps);
 
     const res = await request(app)
       .post('/fest-1/import-lineup')
-      .send({ text: 'DJ X,Unknown Stage,Day 1,14:00,15:00', format: 'csv', dryRun: true })
+      .send({ rows: [{ row: 2, artist: 'DJ X', stage: 'Unknown Stage', day: 'Day 1' }], createMissing: false })
       .expect(200);
 
-    assert.equal(res.body.data.rows[0].status, 'error');
-    assert.match(res.body.data.rows[0].message, /not in this festival/i);
-    assert.equal(res.body.data.counts.error, 1);
-    assert.equal(deps.stores.festivals.applyLineupImport.mock.callCount(), 0);
+    assert.equal(res.body.data.committed, false);
+    assert.equal(res.body.data.plan.rows[0].status, 'error');
+    assert.match(res.body.data.plan.rows[0].errors[0].message, /Unknown stage "Unknown Stage"/);
+    assert.equal(deps.invalidateFestivalCache.mock.callCount(), 0);
   });
 });
 

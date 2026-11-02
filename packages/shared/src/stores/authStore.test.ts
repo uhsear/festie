@@ -196,6 +196,40 @@ describe('authStore', () => {
     });
   });
 
+  describe('register emailVerificationSent', () => {
+    const req = { username: 'alice', password: 'pass', confirmPassword: 'pass', tosAccepted: true };
+    it('returns true when the response says so', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, emailVerificationSent: true });
+      await expect(useAuthStore.getState().register(req)).resolves.toEqual({ emailVerificationSent: true });
+    });
+    it('returns false when absent', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser });
+      await expect(useAuthStore.getState().register(req)).resolves.toEqual({ emailVerificationSent: false });
+    });
+  });
+
+  describe('resetPassword', () => {
+    const req = { token: 't'.repeat(64), newPassword: 'newpassw0rd', confirmPassword: 'newpassw0rd' };
+    it('posts the body and logs out a signed-in user', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.post).mockResolvedValue(undefined);
+      await useAuthStore.getState().resetPassword(req);
+      expect(api.post).toHaveBeenCalledWith('/auth/reset-password', req);
+      expect(api.post).toHaveBeenCalledWith('/auth/logout', {});
+      expect(useAuthStore.getState().user).toBeNull();
+    });
+    it('does not log out when no user is set', async () => {
+      vi.mocked(api.post).mockResolvedValue(undefined);
+      await useAuthStore.getState().resetPassword(req);
+      expect(api.post).toHaveBeenCalledTimes(1);
+    });
+    it('rethrows and leaves error null on rejection', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('nope'));
+      await expect(useAuthStore.getState().resetPassword(req)).rejects.toThrow('nope');
+      expect(useAuthStore.getState().error).toBeNull();
+    });
+  });
+
   describe('logout', () => {
     it('clears user state and calls resetAllStores', async () => {
       useAuthStore.setState({

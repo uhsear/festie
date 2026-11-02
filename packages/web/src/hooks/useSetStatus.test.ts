@@ -79,7 +79,7 @@ describe('getSetStatus', () => {
       const set = makeSet({ date: '2026-06-15', startTime: '14:00', endTime: '15:00' });
       const result = getSetStatus(set, now);
       expect(result.status).toBe('live');
-      expect(result.label).toBe('LIVE');
+      expect(result.label).toBe('Playing');
     });
 
     it('returns correct progress (50% at midpoint)', () => {

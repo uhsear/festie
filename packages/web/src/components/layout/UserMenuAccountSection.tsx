@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
+import { COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 
@@ -218,7 +219,7 @@ export default function UserMenuAccountSection({
           </Button>
         )}
         <Button variant="ghost" size="sm" type="button" onClick={onLogout}>
-          Logout
+          {COPY.auth.signOut}
         </Button>
       </div>
     </section>

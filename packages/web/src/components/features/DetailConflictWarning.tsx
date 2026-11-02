@@ -1,5 +1,7 @@
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName } from '@festie/shared/utils';
+import { TriangleAlert } from 'lucide-react';
+import { clashesWith } from '@festie/shared/constants';
 import Button from '../ui/Button';
 
 interface Props {
@@ -25,7 +27,10 @@ export default function DetailConflictWarning({
 
   return (
     <div className="py-2.5 px-3.5 rounded-sm bg-accent-coral/[0.08] border border-accent-coral/25 mb-4 text-xs text-[var(--color-text-danger)] font-semibold">
-      <div>{'\u26A0 Time conflict with: ' + conflicts.map((c) => artistDisplayName(c, b2bSeparator)).join(', ')}</div>
+      <div className="flex items-center gap-1.5">
+        <TriangleAlert className="w-4 h-4 shrink-0" aria-hidden="true" />
+        <span>{clashesWith(conflicts.map((c) => artistDisplayName(c, b2bSeparator)))}</span>
+      </div>
       <div className="flex flex-col gap-4 mt-2.5">
         {conflicts.map((c) => {
           const cOthers = getOtherPicks(c.id);

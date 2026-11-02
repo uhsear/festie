@@ -13,7 +13,7 @@ import {
   MAX_ENCODED_LENGTH,
   type PlanSnapshotInput,
 } from '@festie/shared/utils';
-import { PRIORITY_WEIGHT } from '@festie/shared/constants';
+import { COPY, PRIORITY_WEIGHT } from '@festie/shared/constants';
 import type { CrewMeetingPoint, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -152,7 +152,7 @@ export default function PlanQRShare() {
         Have your friend open Festie and scan this. Works offline — nothing is sent over the internet.
       </Text>
       <Text style={styles.instructions}>
-        Have your friend open Crew › Share plan › Scan QR and point their camera here.
+        Have your friend open Crew › {COPY.picks.shareOffline} › Scan QR and point their camera here.
       </Text>
       <Text style={[styles.instructions, { color: t.colors.text.muted }]}>
         Your friend sees your picks{meetingPoint ? ' and the meeting point' : ''} first, then chooses which to add to

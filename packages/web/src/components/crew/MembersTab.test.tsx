@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MembersTab, { type MembersTabProps } from './MembersTab';
 
@@ -104,51 +104,47 @@ describe('MembersTab', () => {
     expect(screen.getByText('dave_99')).toBeInTheDocument();
   });
 
-  // --- Transfer ownership ---
+  // --- Manage disclosure ---
 
-  it('shows "Make owner" only on non-owner non-self rows when isOwner is true', () => {
-    // current user is the owner u1; offered to transfer to u2 and u3 only
+  it('shows a "Manage" button only on non-owner non-self rows when isOwner is true', () => {
     render(<MembersTab {...makeProps({ isOwner: true, currentUserId: 'u1' })} />);
-    const buttons = screen.getAllByRole('button', { name: /make .* the owner/i });
-    expect(buttons).toHaveLength(2);
-    expect(screen.getByRole('button', { name: /make Bob the owner/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /make Charlie the owner/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Manage / })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Manage Bob' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Manage Charlie' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Manage Alice' })).not.toBeInTheDocument();
   });
 
-  it('does not render "Make owner" for the owner row', () => {
-    render(<MembersTab {...makeProps({ isOwner: true, currentUserId: 'u1' })} />);
-    expect(screen.queryByRole('button', { name: /make Alice the owner/i })).not.toBeInTheDocument();
-  });
-
-  it('does not render "Make owner" for the current user row', () => {
-    // current user is u2 (Bob), who is also owner here so they can transfer to others
+  it('does not render "Manage" for the current user row', () => {
     render(<MembersTab {...makeProps({ isOwner: true, currentUserId: 'u2' })} />);
-    expect(screen.queryByRole('button', { name: /make Bob the owner/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Manage Bob' })).not.toBeInTheDocument();
   });
 
-  it('hides all "Make owner" buttons when isOwner is false', () => {
+  it('hides all "Manage" buttons when isOwner is false', () => {
     render(<MembersTab {...makeProps({ isOwner: false, currentUserId: 'u2' })} />);
-    expect(screen.queryByRole('button', { name: /the owner/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Manage / })).not.toBeInTheDocument();
   });
 
-  it('calls onTransferOwnership with the member when "Make owner" is clicked', async () => {
-    const user = userEvent.setup();
-    const onTransferOwnership = vi.fn();
-    render(<MembersTab {...makeProps({ isOwner: true, currentUserId: 'u1', onTransferOwnership })} />);
-    await user.click(screen.getByRole('button', { name: /make Bob the owner/i }));
-    expect(onTransferOwnership).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u2' }),
-    );
-  });
-
-  it('renders member removal as a quiet icon button, never a filled danger button', async () => {
+  it('reveals labelled Make owner and Remove from crew buttons and calls the handlers', async () => {
     const user = userEvent.setup();
     const onKick = vi.fn();
-    render(<MembersTab {...makeProps({ isOwner: true, currentUserId: 'u1', onKick })} />);
-    const remove = screen.getByRole('button', { name: 'Remove Bob from crew' });
-    expect(remove).not.toHaveTextContent('Remove');
-    await user.click(remove);
+    const onTransferOwnership = vi.fn();
+    render(<MembersTab {...makeProps({ isOwner: true, currentUserId: 'u1', onKick, onTransferOwnership })} />);
+    const manage = screen.getByRole('button', { name: 'Manage Bob' });
+    await user.click(manage);
+    expect(manage).toHaveAttribute('aria-expanded', 'true');
+    const group = screen.getByRole('group', { name: 'Manage Bob' });
+    await user.click(within(group).getByRole('button', { name: 'Make owner' }));
+    expect(onTransferOwnership).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u2' }));
+    await user.click(within(group).getByRole('button', { name: 'Remove from crew' }));
     expect(onKick).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u2' }));
+  });
+
+  it('omits Remove from crew when onKick is not given', async () => {
+    const user = userEvent.setup();
+    render(<MembersTab {...makeProps({ isOwner: true, currentUserId: 'u1' })} />);
+    await user.click(screen.getByRole('button', { name: 'Manage Bob' }));
+    expect(screen.getByRole('button', { name: 'Make owner' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove from crew' })).not.toBeInTheDocument();
   });
 
   it('shows Leave crew to every member and Delete crew only to the owner', () => {

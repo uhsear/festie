@@ -17,9 +17,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore } from '@festie/shared/stores';
 import { useCrew } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
+import { COPY, GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import {
   setLabel,
   buildJoinUrl,
@@ -164,6 +166,7 @@ export default function CrewScreen() {
   const [forceAddName, setForceAddName] = useState('');
   const [forceAddBusy, setForceAddBusy] = useState(false);
   const [reformBusy, setReformBusy] = useState(false);
+  const [managingMemberId, setManagingMemberId] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherMode, setSwitcherMode] = useState<'list' | 'join'>('list');
   const [renameOpen, setRenameOpen] = useState(false);
@@ -616,10 +619,23 @@ export default function CrewScreen() {
       <View style={styles.screen} testID="crew-screen">
         <ScreenHeader title="Crew" icon="people" />
         <EmptyState
-          icon="lock-closed-outline"
-          title="Sign in required"
-          message="Log in to coordinate with your crew."
-          action={{ label: 'Sign in', onPress: () => router.push('/(auth)/login') }}
+          icon="people-outline"
+          title={GUEST_PROMPT_COPY.teasers.crew.title}
+          message={GUEST_PROMPT_COPY.teasers.crew.message}
+          action={{
+            label: GUEST_PROMPT_COPY.createAccount,
+            onPress: () => {
+              setReturnTo('/(tabs)/crew');
+              router.push('/(auth)/register');
+            },
+          }}
+          secondaryAction={{
+            label: GUEST_PROMPT_COPY.signIn,
+            onPress: () => {
+              setReturnTo('/(tabs)/crew');
+              router.push('/(auth)/login');
+            },
+          }}
         />
       </View>
     );
@@ -916,6 +932,7 @@ export default function CrewScreen() {
         <FlatList
           style={styles.flex1}
           data={members}
+          extraData={managingMemberId}
           keyExtractor={(m) => m.userId}
           contentContainerStyle={memberListStyle}
           contentInsetAdjustmentBehavior="automatic"
@@ -930,43 +947,40 @@ export default function CrewScreen() {
             // Owners may manage other members (kick + transfer). Force-add and
             // these controls hit admin-gated shared store actions.
             const canManage = isOwner && !rowIsOwner && !isSelf;
+            const managing = managingMemberId === item.userId;
             return (
-              <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
-                <Avatar name={displayName} image={memberAvatarUrl(item, FESTIE_ORIGIN)} size="md" />
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName} numberOfLines={2}>
-                    {displayName}
-                    {isSelf ? ' (you)' : ''}
-                  </Text>
-                  {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
-                </View>
-                {canManage ? (
-                  <View style={[styles.memberActions, largeText && styles.memberActionsWrap]}>
-                    <TouchableOpacity
-                      onPress={() => handleTransfer(crew.id, item)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Transfer ownership to ${displayName}`}
-                    >
-                      {/* swap-horizontal reads as "hand over / transfer"; the
-                          star glyph is reserved for the Owner badge so the two
-                          aren't visually conflated. */}
-                      <Ionicons name="swap-horizontal" size={18} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleKick(crew.id, item)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${displayName} from crew`}
-                    >
-                      <Ionicons name="person-remove-outline" size={18} color={t.colors.text.danger} />
-                    </TouchableOpacity>
+              <View>
+                <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
+                  <Avatar name={displayName} image={memberAvatarUrl(item, FESTIE_ORIGIN)} size="md" />
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName} numberOfLines={2}>
+                      {displayName}
+                      {isSelf ? ' (you)' : ''}
+                    </Text>
+                    {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
                   </View>
-                ) : rowIsOwner ? (
-                  <View accessible accessibilityLabel="Owner">
-                    <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
+                  {canManage ? (
+                    <TouchableOpacity
+                      onPress={() => setManagingMemberId(managing ? null : item.userId)}
+                      style={styles.manageButton}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Manage ${displayName}`}
+                      accessibilityState={{ expanded: managing }}
+                    >
+                      <Text style={styles.manageButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Manage</Text>
+                      <Ionicons name={managing ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.accent.aqua} />
+                    </TouchableOpacity>
+                  ) : rowIsOwner ? (
+                    <View accessible accessibilityLabel="Owner">
+                      <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
+                    </View>
+                  ) : null}
+                </View>
+                {canManage && managing ? (
+                  <View style={styles.memberActionRow}>
+                    <Button variant="secondary" size="sm" label="Make owner" onPress={() => handleTransfer(crew.id, item)} />
+                    <Button variant="danger" size="sm" label="Remove from crew" onPress={() => handleKick(crew.id, item)} />
                   </View>
                 ) : null}
               </View>
@@ -1389,12 +1403,12 @@ export default function CrewScreen() {
             onPress={() => router.push('/plan-share')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Share your plan — QR or SMS handoff, works offline"
+            accessibilityLabel="Share offline: QR or text, works without signal"
           >
             <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
             <View style={styles.overlapToggleLabelStack}>
-              <Text style={styles.overlapToggleText}>Share plan</Text>
-              <Text style={styles.overlapToggleHint}>QR / SMS handoff, works offline</Text>
+              <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
+              <Text style={styles.overlapToggleHint}>QR or text, works without signal</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
@@ -1509,10 +1523,10 @@ export default function CrewScreen() {
             onPress={() => router.push('/plan-share')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Share your plan with a friend (QR or text)"
+            accessibilityLabel="Share offline with a friend (QR or text)"
           >
             <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>Share plan (QR / text)</Text>
+            <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
             <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
 
@@ -1983,14 +1997,25 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
-  memberActions: {
+  manageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: t.spacing[2],
+    justifyContent: 'center',
+    gap: t.spacing[1],
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
   },
-  memberActionsWrap: {
-    width: '100%',
-    justifyContent: 'flex-end',
+  manageButtonText: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
+  },
+  memberActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[3],
+    paddingBottom: t.spacing[3],
   },
   liveSafetyBlock: {
     gap: t.spacing[3],

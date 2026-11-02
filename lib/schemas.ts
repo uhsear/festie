@@ -178,6 +178,14 @@ export const notificationPrefsSchema = z
     lineupDrops: z.boolean().optional(),
     crewReformed: z.boolean().optional(),
     wrapReady: z.boolean().optional(),
+    crewMeetingPoints: z.boolean().optional(),
+    crewPolls: z.boolean().optional(),
+    crewMoney: z.boolean().optional(),
+    crewRides: z.boolean().optional(),
+    mustSeeReminderMinutes: z
+      .union([z.literal(5), z.literal(10), z.literal(15), z.literal(30), z.literal(60)])
+      .nullable()
+      .optional(),
     dndStart: dndTime.optional(),
     dndEnd: dndTime.optional(),
     dndTimeZone: z.string().max(64).refine(isIanaTimeZone, { message: 'Invalid IANA time zone' }).nullable().optional(),
@@ -466,8 +474,38 @@ export const festivalUpdateSchema = festivalCreateSchema
     expectedUpdatedAt: z.string().max(40).optional(),
   })
   .partial()
+  // false saves without pushing schedule alerts to people whose picks changed.
+  .extend({ notify: z.boolean().optional() })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
+
+// ── Lineup import (admin) ───────────────────────────────────────────
+// A field that is absent means "column not mapped, leave alone". An empty string means "clear".
+export const lineupImportRowSchema = z
+  .object({
+    row: z.number().int().min(1).max(100_000), // 1-based line number in the source file
+    setId: z.string().max(100).optional(), // a re-imported export matches by id first
+    artist: z.string().max(300),
+    day: z.string().max(100).optional(),
+    date: z.string().max(20).optional(),
+    stage: z.string().max(100).optional(),
+    startTime: z.string().max(20).optional(),
+    endTime: z.string().max(20).optional(),
+    stageColor: z.string().max(20).optional(),
+    link: z.string().max(500).optional(),
+  })
+  .strict();
+export type LineupImportRowInput = z.infer<typeof lineupImportRowSchema>;
+
+export const lineupImportRequestSchema = z
+  .object({
+    rows: z.array(lineupImportRowSchema).min(1).max(500),
+    updateExisting: z.boolean().default(false),
+    createMissing: z.boolean().default(true),
+    skipSpotify: z.boolean().default(false),
+  })
+  .strict();
+export type LineupImportRequestInput = z.infer<typeof lineupImportRequestSchema>;
 
 // ── Crew schemas ─────────────────────────────────────────────────────
 export const crewCreateSchema = z.object({

@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { PHASE_ACTION_LABELS, PHASE_ACTION_ORDER } from '@festie/shared/utils';
 import type { FestivalPhase, PhaseActionKey } from '@festie/shared/utils';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 
 interface ActionDef {
@@ -16,17 +17,17 @@ interface ActionDef {
 // Fixed destination set. Phase never adds or removes a destination — it only
 // reorders and re-emphasizes — so everything stays reachable in every phase.
 const ACTIONS: Record<PhaseActionKey, ActionDef> = {
-  myPlan: { icon: 'star', href: '/(tabs)/picks', a11y: 'Open my plan' },
+  myPlan: { icon: CONCEPT_IONICON.picks, href: '/(tabs)/picks', a11y: 'Open my picks' },
   crew: { icon: 'people', href: '/(tabs)/crew', a11y: 'Open crew' },
   map: { icon: 'map', href: '/(tabs)/map', a11y: 'Open the map: crew, meeting points and SOS', danger: true },
-  nownext: { icon: 'flash', href: '/festival-mode', a11y: 'Open Now and Next' },
-  wrap: { icon: 'sparkles', href: '/wrap', a11y: 'Open festival wrap-up' },
+  nownext: { icon: CONCEPT_IONICON.nowNext, href: '/festival-mode', a11y: 'Open Now and Next' },
+  wrap: { icon: CONCEPT_IONICON.wrap, href: '/wrap', a11y: 'Open your Festival Wrap' },
 };
 
 const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
   pre: { label: 'Before the festival', hint: 'Lock in your picks and rally your crew.' },
   live: { label: 'Happening now', hint: 'Find your crew, check Now & Next, stay safe.' },
-  post: { label: 'Festival wrap', hint: 'Relive it and settle up with your crew.' },
+  post: { label: 'After the festival', hint: 'Relive it and settle up with your crew.' },
 };
 
 interface PhaseHomeActionsProps {
@@ -37,7 +38,7 @@ interface PhaseHomeActionsProps {
  * P1-5 — phase-aware home actions. A compact, horizontally-scrolling shortcut
  * band on the Schedule landing that re-prioritizes the crew's destinations by
  * festival PHASE (derived from the date range vs now via shared `festivalPhase`):
- *  - pre  → My Plan / crew invites lead
+ *  - pre  → Picks / crew invites lead
  *  - live → Map (crew/SOS/meeting) + crew lead; Now & Next stays one tap away
  *  - post → festival wrap + settle-up lead
  *

@@ -1,7 +1,10 @@
-import { Flame } from 'lucide-react';
 import { Link, useLocation } from '@tanstack/react-router';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '@/lib/conceptIcons';
 import { useHaptics } from '../../hooks/useHaptics';
 import { cn } from '@/lib/utils';
+
+const NowNextIcon = CONCEPT_ICON.nowNext;
 
 export default function FestivalModeToggle() {
   const { select } = useHaptics();
@@ -14,9 +17,9 @@ export default function FestivalModeToggle() {
       onClick={select}
       // Same name as mobile's Now & Next screen; it contains the visible
       // "Now" (WCAG 2.5.3).
-      aria-label="Now & Next"
+      aria-label={COPY.nowNext.name}
       aria-current={active ? 'page' : undefined}
-      title="Now & Next"
+      title={COPY.nowNext.name}
       data-testid="festival-mode-toggle"
       className={cn(
         'relative px-2.5 py-2 rounded-lg transition-[background-color,color,box-shadow] duration-300 min-h-11 min-w-11 flex items-center justify-center active:scale-95 motion-reduce:active:transform-none',
@@ -26,8 +29,8 @@ export default function FestivalModeToggle() {
       )}
     >
       <div className="flex items-center gap-1.5">
-        <Flame className="w-5 h-5" aria-hidden="true" />
-        <span className="text-sm font-semibold">Now</span>
+        <NowNextIcon className="w-5 h-5" aria-hidden="true" />
+        <span className="text-sm font-semibold">{COPY.nowNext.name}</span>
       </div>
     </Link>
   );
