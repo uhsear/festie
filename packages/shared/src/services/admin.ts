@@ -1,10 +1,12 @@
 import { api, ApiClientError } from './api';
 import { buildFestivalPreview, type FestivalPreviewInput } from '../utils/admin';
+import { auditEntriesToCsv } from '../utils/auditActions';
+import { normalizeAnalytics, type AnalyticsData } from '../utils/analyticsNormalize';
+import type { AdminHealth, DashboardStats } from '../utils/adminDashboard';
 
 export interface AuditEntry {
   id: string;
   action: string;
-  friendlyAction: string;
   actorType: string;
   actorId: string | null;
   actorUsername: string | null;
@@ -14,6 +16,7 @@ export interface AuditEntry {
   details: Record<string, unknown> | null;
   status: string;
   createdAt: string;
+  requestId: string | null;
 }
 
 export interface AuditPage {
@@ -22,12 +25,16 @@ export interface AuditPage {
   total: number;
 }
 
-export interface AuditPageParams {
+export interface AuditFilters {
   scope?: 'admin' | 'user' | 'all';
-  action?: string;
   actor?: string;
+  user?: string;
+  action?: string;
   from?: string;
   to?: string;
+}
+
+export interface AuditPageParams extends AuditFilters {
   cursor?: string | null;
   limit?: number;
 }
@@ -44,6 +51,39 @@ export async function fetchAuditPage(params: AuditPageParams = {}): Promise<Audi
     nextCursor: typeof meta.nextCursor === 'string' ? meta.nextCursor : null,
     total: typeof meta.total === 'number' ? meta.total : 0,
   };
+}
+
+const EXPORT_PAGE_SIZE = 200;
+
+export async function exportAuditCsv(
+  filters: AuditFilters,
+  { maxRows = 1000 }: { maxRows?: number } = {},
+): Promise<{ csv: string; rows: number; capped: boolean }> {
+  const entries: AuditEntry[] = [];
+  let cursor: string | null = null;
+  do {
+    const page: AuditPage = await fetchAuditPage({ ...filters, cursor, limit: EXPORT_PAGE_SIZE });
+    entries.push(...page.entries);
+    cursor = page.nextCursor;
+  } while (cursor && entries.length < maxRows);
+  const rows = entries.slice(0, maxRows);
+  return { csv: auditEntriesToCsv(rows), rows: rows.length, capped: cursor !== null || entries.length > maxRows };
+}
+
+export interface AdminDashboardData {
+  stats: DashboardStats;
+  health?: AdminHealth;
+  recentActivity: AuditEntry[];
+}
+
+export function fetchAdminDashboard(): Promise<AdminDashboardData> {
+  return api.get<AdminDashboardData>('/admin/dashboard');
+}
+
+export async function fetchAdminAnalytics(festivalId?: string): Promise<AnalyticsData> {
+  return normalizeAnalytics(
+    await api.get(`/admin/analytics${festivalId ? `?festivalId=${encodeURIComponent(festivalId)}` : ''}`),
+  );
 }
 
 export type LineupRowStatus = 'new' | 'update' | 'unchanged' | 'skipped' | 'error';

@@ -3,12 +3,14 @@ import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '@festie/shared/services';
+import { fetchAdminAnalytics } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import {
-  normalizeAnalytics,
-  ANALYTICS_DEFAULTS,
   timeAgoFromIso,
+  analyticsQuestions,
+  analyticsScopeLine,
+  funnelSteps,
+  formatDate,
   type AnalyticsData,
 } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -20,34 +22,16 @@ import SectionLabel from '../../components/SectionLabel';
 /**
  * Admin Analytics — mobile mirror of the web AdminAnalytics dashboard.
  *
- * Renders:
- *   1. Pick distribution totals (must / want / maybe) as a token-bar + counts
- *   2. Engagement metrics (avg picks/user, avg crew size, crew participation %)
- *   3. Top Sets table (artist, pick count with must/want/maybe breakdown)
- *   4. Festival Stats (profile count, unique sets picked, total picks)
- *   5. Most Active Users (username, profiles, total picks, last active)
- *   6. Crews (name, member count, created date)
+ * Renders, for all festivals or one (festival pills):
+ *   the scope line, named questions, the sign-up funnel, pick priority, top sets,
+ *   festivals (tap to filter), recently active people and largest crews.
  *
- * Data flows through normalizeAnalytics() from @festie/shared/utils, which
- * coerces raw SQL strings to numbers — same normalizer the web console uses
- * (extracted to shared so both platforms stay in sync).
+ * Totals come from the server (GET /admin/analytics, via fetchAdminAnalytics);
+ * the lists are samples and their headings say so. A failed load shows the
+ * error state, never zeros.
  *
  * Gated on isAdmin; the AuthGate on the admin segment also enforces this.
- * Pull-to-refresh re-runs GET /admin/analytics.
  */
-
-function formatDate(s: string): string {
-  if (!s) return '—';
-  try {
-    return new Date(s).toISOString().slice(0, 10);
-  } catch {
-    return s;
-  }
-}
-
-function formatPct(n: number): string {
-  return `${Math.round(n * 100)}%`;
-}
 
 /** Simple inline bar: three segments sized by proportion. */
 function PickBar({
@@ -92,6 +76,9 @@ export default function AdminAnalyticsScreen() {
   const isAdmin = useAuthStore((s) => s.isAdmin);
 
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [festivalId, setFestivalId] = useState<string | undefined>(undefined);
+  // Pills come from the all-festivals load, so they stay put when a scoped load returns one festival.
+  const [pills, setPills] = useState<{ id?: string; name: string }[]>([{ name: 'All festivals' }]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
@@ -99,13 +86,16 @@ export default function AdminAnalyticsScreen() {
   const fetchAnalytics = useCallback(async () => {
     setError(false);
     try {
-      const raw = await api.get<unknown>('/admin/analytics');
-      setData(normalizeAnalytics(raw));
+      const next = await fetchAdminAnalytics(festivalId);
+      setData(next);
+      if (!next.scope.festivalId) {
+        setPills([{ name: 'All festivals' }, ...next.festivalStats.map((f) => ({ id: f.id, name: f.name }))]);
+      }
     } catch {
       setError(true);
-      setData(ANALYTICS_DEFAULTS);
+      setData(null);
     }
-  }, []);
+  }, [festivalId]);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -140,25 +130,6 @@ export default function AdminAnalyticsScreen() {
       </View>
     );
   }
-
-  // Derived metrics (match web AdminAnalytics exactly)
-  const totals = data
-    ? data.topSets.reduce(
-        (acc, s) => ({
-          must: acc.must + s.mustCount,
-          want: acc.want + s.wantCount,
-          maybe: acc.maybe + s.maybeCount,
-        }),
-        { must: 0, want: 0, maybe: 0 },
-      )
-    : { must: 0, want: 0, maybe: 0 };
-
-  const totalUsers = data?.activeUsers.length ?? 0;
-  const picksSum = data?.activeUsers.reduce((s, u) => s + u.totalPicks, 0) ?? 0;
-  const avgPicksPerUser = totalUsers > 0 ? picksSum / totalUsers : 0;
-  const crewMembers = data?.crews.reduce((s, c) => s + c.memberCount, 0) ?? 0;
-  const avgCrewSize = (data?.crews.length ?? 0) > 0 ? crewMembers / (data?.crews.length ?? 1) : 0;
-  const crewParticipation = totalUsers > 0 ? Math.min(1, crewMembers / totalUsers) : 0;
 
   return (
     <View style={styles.screen}>
@@ -224,63 +195,115 @@ export default function AdminAnalyticsScreen() {
             />
           }
         >
-          {/* ── Pick distribution ─────────────────────────────── */}
-          <SectionLabel>Pick distribution</SectionLabel>
-          <View style={styles.card}>
-            <View style={styles.section}>
-              <PickBar must={totals.must} want={totals.want} maybe={totals.maybe} />
-              <View style={styles.legendRow}>
-                <LegendDot color={t.colors.accent.coralStrong} label={`Must (${totals.must})`} />
-                <LegendDot color={t.colors.accent.aqua} label={`Want (${totals.want})`} />
-                <LegendDot color={t.colors.text.muted} label={`Maybe (${totals.maybe})`} />
-              </View>
-            </View>
-          </View>
+          {/* ── Festival filter ───────────────────────────────── */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pillRow}
+            style={styles.pillScroll}
+          >
+            {pills.map((f) => {
+              const selected = f.id === festivalId;
+              return (
+                <TouchableOpacity
+                  key={f.id ?? 'all'}
+                  style={[styles.filterPill, selected && styles.filterPillActive]}
+                  onPress={() => setFestivalId(f.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={f.name}
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.filterPillText, selected && styles.filterPillTextActive]} numberOfLines={1}>
+                    {f.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
-          {/* ── Engagement metrics ────────────────────────────── */}
-          <SectionLabel>Engagement</SectionLabel>
+          <Text style={styles.scopeLine}>{analyticsScopeLine(data)}</Text>
+
+          {/* ── Questions ─────────────────────────────────────── */}
+          <SectionLabel>Questions</SectionLabel>
           <View style={styles.card}>
-            {(
-              [
-                { label: 'Avg picks / user', value: avgPicksPerUser.toFixed(1) },
-                { label: 'Avg crew size', value: avgCrewSize.toFixed(1) },
-                { label: 'Crew participation', value: formatPct(crewParticipation) },
-              ] as { label: string; value: string }[]
-            ).map((m, i, arr) => (
+            {analyticsQuestions(data).map((q, i, arr) => (
               <View
-                key={m.label}
+                key={q.id}
                 style={[styles.row, i < arr.length - 1 && styles.rowDivider]}
                 accessibilityRole="text"
-                accessibilityLabel={`${m.label}: ${m.value}`}
+                accessibilityLabel={`${q.question} ${q.answer}`}
               >
                 <View style={styles.rowBody}>
-                  <Text style={styles.rowTitle}>{m.label}</Text>
-                </View>
-                <View style={styles.pill}>
-                  <Text style={styles.pillText}>{m.value}</Text>
+                  <Text style={styles.rowTitle}>{q.question}</Text>
+                  <Text style={styles.rowHint}>{q.answer}</Text>
                 </View>
               </View>
             ))}
           </View>
 
+          {/* ── Funnel ────────────────────────────────────────── */}
+          <SectionLabel>Where do people drop off?</SectionLabel>
+          <Text style={styles.rowHint}>
+            Each step counts people. A step can be larger than the one before it, for example when someone joins a crew
+            before picking.
+          </Text>
+          <View style={styles.card}>
+            {funnelSteps(data).map((step, i, arr) => (
+              <View
+                key={step.label}
+                style={[styles.section, i < arr.length - 1 && styles.rowDivider]}
+                accessibilityRole="text"
+                accessibilityLabel={`${step.label}: ${step.count}, ${step.pctOfStart} of sign-ups`}
+              >
+                <Text style={styles.rowTitle}>{step.label}</Text>
+                <View style={styles.barTrack}>
+                  <View style={[styles.barFill, { width: `${Math.min(100, parseInt(step.pctOfStart, 10) || 0)}%` }]} />
+                </View>
+                <Text style={styles.rowHint}>
+                  {step.count} · {step.pctOfStart} of sign-ups
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* ── Pick priority ─────────────────────────────────── */}
+          <SectionLabel>{`Pick priority across all ${data.totals.picks} picks`}</SectionLabel>
+          <View style={styles.card}>
+            <View style={styles.section}>
+              <PickBar
+                must={data.pickDistribution.must}
+                want={data.pickDistribution.want}
+                maybe={data.pickDistribution.maybe}
+              />
+              <View style={styles.legendRow}>
+                <LegendDot color={t.colors.accent.coralStrong} label={`Must (${data.pickDistribution.must})`} />
+                <LegendDot color={t.colors.accent.aqua} label={`Want (${data.pickDistribution.want})`} />
+                <LegendDot color={t.colors.text.muted} label={`Maybe (${data.pickDistribution.maybe})`} />
+              </View>
+            </View>
+          </View>
+
           {/* ── Top sets ──────────────────────────────────────── */}
           {data.topSets.length > 0 ? (
             <>
-              <SectionLabel>Top sets</SectionLabel>
+              <SectionLabel>Most-picked sets (top 20)</SectionLabel>
               <View style={styles.card}>
-                {data.topSets.slice(0, 15).map((s, i) => (
+                {data.topSets.slice(0, 20).map((s, i, arr) => (
                   <View
                     key={`${s.artist}-${s.festivalId}-${i}`}
-                    style={[styles.row, i < Math.min(data.topSets.length, 15) - 1 && styles.rowDivider]}
+                    style={[styles.row, i < arr.length - 1 && styles.rowDivider]}
                     accessibilityRole="text"
-                    accessibilityLabel={`${s.artist}: ${s.pickCount} picks`}
+                    accessibilityLabel={`${s.artist}, ${s.festivalName}${s.dayLabel ? `, ${s.dayLabel}` : ''}: ${s.pickCount} picks`}
                   >
                     <View style={styles.rowBody}>
                       <Text style={styles.rowTitle} numberOfLines={1}>
                         {s.artist}
                       </Text>
                       <Text style={styles.rowHint} numberOfLines={1}>
-                        {s.mustCount}M · {s.wantCount}W · {s.maybeCount}Mb
+                        {[s.festivalName, s.dayLabel].filter(Boolean).join(' · ')}
+                      </Text>
+                      <Text style={styles.rowHint} numberOfLines={1}>
+                        {s.mustCount} must · {s.wantCount} want · {s.maybeCount} maybe
                       </Text>
                     </View>
                     <View style={styles.pill}>
@@ -292,41 +315,42 @@ export default function AdminAnalyticsScreen() {
             </>
           ) : null}
 
-          {/* ── Festival stats ────────────────────────────────── */}
+          {/* ── Festivals ─────────────────────────────────────── */}
           {data.festivalStats.length > 0 ? (
             <>
-              <SectionLabel>Festival stats</SectionLabel>
+              <SectionLabel>Festivals</SectionLabel>
               <View style={styles.card}>
                 {data.festivalStats.map((f, i) => (
-                  <View
+                  <TouchableOpacity
                     key={f.id}
                     style={[styles.row, i < data.festivalStats.length - 1 && styles.rowDivider]}
-                    accessibilityRole="text"
-                    accessibilityLabel={`${f.name}: ${f.profileCount} profiles, ${f.totalPicks} picks`}
+                    onPress={() => setFestivalId(f.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${f.name}: ${f.profileCount} festival plans, ${f.totalPicks} picks. Show only this festival.`}
                   >
                     <View style={styles.rowBody}>
                       <Text style={styles.rowTitle} numberOfLines={1}>
                         {f.name}
                       </Text>
                       <Text style={styles.rowHint} numberOfLines={1}>
-                        {f.profileCount} profiles · {f.uniqueSetsPicked} sets · {f.totalPicks} picks
+                        {f.profileCount} plans · {f.uniqueSetsPicked} sets · {f.totalPicks} picks
                       </Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </>
           ) : null}
 
-          {/* ── Most active users ─────────────────────────────── */}
+          {/* ── Recently active people ────────────────────────── */}
           {data.activeUsers.length > 0 ? (
             <>
-              <SectionLabel>Most active users</SectionLabel>
+              <SectionLabel>Most recently active people (latest 50)</SectionLabel>
               <View style={styles.card}>
-                {data.activeUsers.slice(0, 15).map((u, i) => (
+                {data.activeUsers.map((u, i, arr) => (
                   <View
                     key={u.id}
-                    style={[styles.row, i < Math.min(data.activeUsers.length, 15) - 1 && styles.rowDivider]}
+                    style={[styles.row, i < arr.length - 1 && styles.rowDivider]}
                     accessibilityRole="text"
                     accessibilityLabel={`${u.username}: ${u.totalPicks} picks, last active ${timeAgoFromIso(u.lastActive)}`}
                   >
@@ -335,7 +359,7 @@ export default function AdminAnalyticsScreen() {
                         {u.username}
                       </Text>
                       <Text style={styles.rowHint} numberOfLines={1}>
-                        {u.profileCount} profile{u.profileCount !== 1 ? 's' : ''} · {u.totalPicks} picks · {timeAgoFromIso(u.lastActive)}
+                        {u.profileCount} plan{u.profileCount !== 1 ? 's' : ''} · {u.totalPicks} picks · {timeAgoFromIso(u.lastActive)}
                       </Text>
                     </View>
                   </View>
@@ -344,10 +368,10 @@ export default function AdminAnalyticsScreen() {
             </>
           ) : null}
 
-          {/* ── Crews ─────────────────────────────────────────── */}
+          {/* ── Largest crews ─────────────────────────────────── */}
           {data.crews.length > 0 ? (
             <>
-              <SectionLabel>Crews</SectionLabel>
+              <SectionLabel>Largest crews (top 20)</SectionLabel>
               <View style={styles.card}>
                 {data.crews.map((c, i) => (
                   <View
@@ -361,6 +385,7 @@ export default function AdminAnalyticsScreen() {
                         {c.name}
                       </Text>
                       <Text style={styles.rowHint} numberOfLines={1}>
+                        {c.festivalName ? `${c.festivalName} · ` : ''}
                         {c.memberCount} member{c.memberCount !== 1 ? 's' : ''} · created {formatDate(c.createdAt)}
                       </Text>
                     </View>
@@ -509,6 +534,47 @@ const useStyles = makeStyles((t) => ({
   pillText: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  pillScroll: {
+    flexGrow: 0,
+  },
+  pillRow: {
+    gap: t.spacing[2],
+  },
+  filterPill: {
+    minHeight: 44,
+    paddingHorizontal: t.spacing[4],
+    borderRadius: t.radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  filterPillActive: {
+    borderColor: t.colors.accent.aqua,
+    backgroundColor: t.colors.ring.aqua,
+  },
+  filterPillText: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.secondary,
+  },
+  filterPillTextActive: {
+    color: t.colors.accent.aqua,
+  },
+  scopeLine: {
+    ...typeStyle('body'),
+    color: t.colors.text.primary,
+  },
+  barTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: t.colors.bg.primary,
+  },
+  barFill: {
+    height: 8,
+    backgroundColor: t.colors.accent.aqua,
   },
   generatedAt: {
     ...typeStyle('caption'),

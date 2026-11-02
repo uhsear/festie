@@ -266,6 +266,42 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     state.timers.push(_wrapReadyTimer);
     log.info('wrap_ready sweep registered (hourly, leader-only)');
   }
+
+  // T37 rate_prompt sweep: hourly, leader-only. Candidates are festivals with a
+  // day dated in [today-2d, today]; sendRatePrompt picks the day whose morning
+  // window (10:00-20:00 festival time, the next day) is open now, and its
+  // per-user eventKey dedup makes the hourly re-runs send once per day.
+  if (ctx.reengagement?.sendRatePrompt) {
+    const RATE_PROMPT_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly
+    const runRatePromptSweep = async () => {
+      try {
+        const { rows } = await stores.pool.query(`
+          SELECT f.id
+          FROM festivals f
+          WHERE f.deleted_at IS NULL
+            AND EXISTS (
+              SELECT 1 FROM festival_days d
+              WHERE d.festival_id = f.id
+                AND d.date BETWEEN (CURRENT_DATE - 2)::text AND CURRENT_DATE::text
+            )
+        `);
+        for (const r of rows) {
+          try {
+            await ctx.reengagement.sendRatePrompt(r.id);
+          } catch (err: any) {
+            log.debug('rate_prompt sweep: per-festival send failed', { festivalId: r.id, error: err.message });
+          }
+        }
+        if (rows.length > 0) log.debug('rate_prompt sweep complete', { festivals: rows.length });
+      } catch (err: any) {
+        log.warn('rate_prompt sweep failed', { error: err.message });
+      }
+    };
+    const _ratePromptTimer = setInterval(runRatePromptSweep, RATE_PROMPT_SWEEP_INTERVAL_MS);
+    _ratePromptTimer.unref();
+    state.timers.push(_ratePromptTimer);
+    log.info('rate_prompt sweep registered (hourly, leader-only)');
+  }
 }
 
 /**

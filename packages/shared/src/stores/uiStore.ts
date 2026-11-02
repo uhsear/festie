@@ -75,6 +75,8 @@ export interface UIState {
   followSystemTheme: boolean;
   /** Persisted device preference. Not reset on logout. SOS (heavy) always vibrates. */
   hapticsEnabled: boolean;
+  /** Persisted device preference. Not reset on logout. Shows @handle on Wrap posters. */
+  wrapShowHandle: boolean;
   /** Mobile: asks AuthGate to replay the first-run intro. Not persisted. */
   introReplay: boolean;
 }
@@ -103,6 +105,7 @@ export interface UIActions {
   /** Applies the OS colour scheme to `theme`; does nothing unless followSystemTheme is on. */
   applySystemScheme: (scheme: 'light' | 'dark' | null | undefined) => void;
   setHapticsEnabled: (enabled: boolean) => void;
+  setWrapShowHandle: (v: boolean) => void;
   setIntroReplay: (v: boolean) => void;
 }
 
@@ -120,6 +123,7 @@ const uiStore: StateCreator<UIStore> = (set, get) => ({
   theme: 'stage',
   followSystemTheme: false,
   hapticsEnabled: true,
+  wrapShowHandle: true,
   introReplay: false,
 
   setDetailSet: (detailSet: FestivalSet | null) => {
@@ -211,6 +215,10 @@ const uiStore: StateCreator<UIStore> = (set, get) => ({
     set({ hapticsEnabled });
   },
 
+  setWrapShowHandle: (wrapShowHandle: boolean) => {
+    set({ wrapShowHandle });
+  },
+
   setIntroReplay: (introReplay: boolean) => {
     set({ introReplay });
   },
@@ -227,6 +235,7 @@ export const useUIStore = create<UIStore>()(
       theme: state.theme,
       followSystemTheme: state.followSystemTheme,
       hapticsEnabled: state.hapticsEnabled,
+      wrapShowHandle: state.wrapShowHandle,
     }),
   }),
 );

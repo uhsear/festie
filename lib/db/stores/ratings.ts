@@ -211,16 +211,24 @@ export function aggregateCrewWrap(
   };
 }
 
+// Hours of one set (alias s). Wraps past midnight, so 23:00 to 01:00 is 2, not -22.
+// getWrapStats and getLifetimeStats both use it so their totals agree.
+const SET_HOURS_EXPR = `
+  CASE WHEN s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+  THEN MOD((EXTRACT(EPOCH FROM (s.end_time::time - s.start_time::time)) / 3600.0 + 24)::numeric, 24)
+  ELSE 0 END`;
+
 export function createRatingsStore(pool: Pool) {
   return {
-    async upsert(userId: string, setId: string, rating: number, note: string = '') {
+    /** A null note keeps the stored note; '' clears it. A first rating stores ''. */
+    async upsert(userId: string, setId: string, rating: number, note: string | null = null) {
       const result = await pool.query(
         `
         INSERT INTO set_ratings (user_id, set_id, rating, note, updated_at)
-        VALUES ($1, $2, $3, $4, NOW())
+        VALUES ($1, $2, $3, COALESCE($4, ''), NOW())
         ON CONFLICT (user_id, set_id) DO UPDATE SET
           rating = EXCLUDED.rating,
-          note = EXCLUDED.note,
+          note = CASE WHEN $4::text IS NULL THEN set_ratings.note ELSE EXCLUDED.note END,
           updated_at = NOW()
         RETURNING id, user_id AS "userId", set_id AS "setId", rating, note, created_at AS "createdAt", updated_at AS "updatedAt"
       `,
@@ -241,12 +249,15 @@ export function createRatingsStore(pool: Pool) {
           r.updated_at AS "updatedAt",
           s.artist,
           s.stage_id AS "stageId",
+          st.name AS "stageName",
           s.start_time AS "startTime",
           s.end_time AS "endTime",
           s.day_index AS "dayIndex"
         FROM
           set_ratings r
           JOIN festival_sets s ON s.id = r.set_id
+          LEFT JOIN festival_stages st ON st.festival_id = s.festival_id
+          AND st.id = s.stage_id
         WHERE
           r.user_id = $1
           AND s.festival_id = $2
@@ -414,8 +425,7 @@ export function createRatingsStore(pool: Pool) {
      * Returns three slices:
      *   - totals: lifetime aggregates across ALL festivals (same per-row math
      *     as getWrapStats so lifetime totals = sum of per-festival stats and
-     *     there's no TZ drift — the hours math reuses the identical
-     *     EXTRACT(EPOCH FROM end::time - start::time)/3600 expression).
+     *     there's no TZ drift — the hours math reuses SET_HOURS_EXPR).
      *   - byFestival: one row per festival (a per-year breakdown), newest first,
      *     carrying the festival name + its date span (MIN/MAX of festival_days,
      *     which is the only date source — `festivals` has no start/end columns).
@@ -429,12 +439,7 @@ export function createRatingsStore(pool: Pool) {
     async getLifetimeStats(userId: string) {
       // Reused hours expression — identical to getWrapStats so per-festival
       // numbers sum to the lifetime total with no timezone drift.
-      const HOURS_EXPR = `
-        SUM(
-          CASE WHEN s.start_time IS NOT NULL AND s.end_time IS NOT NULL
-          THEN EXTRACT(EPOCH FROM (s.end_time::time - s.start_time::time)) / 3600.0
-          ELSE 0 END
-        )::float`;
+      const HOURS_EXPR = `SUM(${SET_HOURS_EXPR})::float`;
 
       const [totalsRes, byFestivalRes, topArtistsRes] = await Promise.all([
         // Lifetime totals across every (non-deleted) festival the user rated in.
@@ -550,26 +555,123 @@ export function createRatingsStore(pool: Pool) {
       return result.rows;
     },
 
+    /**
+     * Hours and stages count the sets marked caught = true once the user has
+     * any caught row for this festival. Otherwise they count rated sets, so
+     * festivals from before caught marks existed keep their numbers.
+     */
     async getWrapStats(userId: string, festivalId: string) {
       const result = await pool.query(
         `
+        WITH rated AS (
+          SELECT r.rating, s.stage_id, s.day_index, ${SET_HOURS_EXPR} AS hours
+          FROM set_ratings r
+          JOIN festival_sets s ON s.id = r.set_id
+          WHERE r.user_id = $1 AND s.festival_id = $2
+        ),
+        marks AS (
+          SELECT c.caught, s.stage_id, ${SET_HOURS_EXPR} AS hours
+          FROM set_caught c
+          JOIN festival_sets s ON s.id = c.set_id
+          WHERE c.user_id = $1 AND s.festival_id = $2
+        ),
+        counted AS (
+          SELECT stage_id, hours FROM marks WHERE caught
+          UNION ALL
+          SELECT stage_id, hours FROM rated WHERE NOT EXISTS (SELECT 1 FROM marks)
+        )
         SELECT
-          COUNT(*)::int AS "totalRated",
-          ROUND(AVG(r.rating), 1)::float AS "avgRating",
-          COUNT(DISTINCT s.stage_id)::int AS "stagesVisited",
-          COUNT(DISTINCT s.day_index)::int AS "daysAttended",
-          SUM(
-            CASE WHEN s.start_time IS NOT NULL AND s.end_time IS NOT NULL
-            THEN EXTRACT(EPOCH FROM (s.end_time::time - s.start_time::time)) / 3600.0
-            ELSE 0 END
-          )::float AS "totalHours"
-        FROM set_ratings r
-        JOIN festival_sets s ON s.id = r.set_id
-        WHERE r.user_id = $1 AND s.festival_id = $2
+          (SELECT COUNT(*)::int FROM rated) AS "totalRated",
+          (SELECT ROUND(AVG(rating), 1)::float FROM rated) AS "avgRating",
+          (SELECT COUNT(DISTINCT stage_id)::int FROM counted) AS "stagesVisited",
+          (SELECT COUNT(DISTINCT day_index)::int FROM rated) AS "daysAttended",
+          (SELECT COALESCE(SUM(hours), 0)::float FROM counted) AS "totalHours"
       `,
         [userId, festivalId],
       );
       return result.rows[0] || { totalRated: 0, avgRating: 0, stagesVisited: 0, daysAttended: 0, totalHours: 0 };
+    },
+
+    /** caught null deletes the mark (back to unknown). */
+    async setCaught(userId: string, setId: string, caught: boolean | null) {
+      if (caught === null) {
+        await pool.query('DELETE FROM set_caught WHERE user_id = $1 AND set_id = $2', [userId, setId]);
+        return { setId, caught: null };
+      }
+      const result = await pool.query(
+        `
+        INSERT INTO set_caught (user_id, set_id, caught, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, set_id) DO UPDATE SET caught = EXCLUDED.caught, updated_at = NOW()
+        RETURNING set_id AS "setId", caught
+      `,
+        [userId, setId, caught],
+      );
+      return result.rows[0];
+    },
+
+    /**
+     * Every set the user picked in this festival, with their rating and caught
+     * mark. crewAlso counts the other non-deleted members of crewId who picked
+     * the same set; it is null when crewId is null. No other member's name or
+     * id leaves this query.
+     */
+    async getPlannedForWrap(userId: string, festivalId: string, crewId: string | null) {
+      const result = await pool.query(
+        `
+        SELECT
+          s.id AS "setId",
+          s.artist,
+          s.stage_id AS "stageId",
+          st.name AS "stageName",
+          s.day_index AS "dayIndex",
+          s.start_time AS "startTime",
+          s.end_time AS "endTime",
+          pp.priority,
+          r.rating,
+          r.note,
+          c.caught,
+          CASE WHEN $3::text IS NULL THEN NULL ELSE (
+            SELECT COUNT(DISTINCT p2.user_id)::int
+            FROM festival_profile_picks pp2
+            JOIN festival_profiles p2 ON p2.id = pp2.profile_id
+              AND p2.deleted_at IS NULL
+              AND p2.festival_id = $2
+            JOIN crew_members cm ON cm.user_id = p2.user_id AND cm.crew_id = $3
+            JOIN users u ON u.id = p2.user_id AND u.deleted_at IS NULL
+            WHERE pp2.set_id = s.id AND p2.user_id <> $1
+          ) END AS "crewAlso"
+        FROM festival_profiles p
+        JOIN festival_profile_picks pp ON pp.profile_id = p.id
+        JOIN festival_sets s ON s.id = pp.set_id AND s.festival_id = $2
+        LEFT JOIN festival_stages st ON st.festival_id = s.festival_id AND st.id = s.stage_id
+        LEFT JOIN set_ratings r ON r.user_id = $1 AND r.set_id = s.id
+        LEFT JOIN set_caught c ON c.user_id = $1 AND c.set_id = s.id
+        WHERE p.user_id = $1 AND p.festival_id = $2 AND p.deleted_at IS NULL
+        ORDER BY s.day_index NULLS LAST, s.start_time NULLS LAST
+      `,
+        [userId, festivalId, crewId],
+      );
+      return result.rows;
+    },
+
+    /** Festival name, zone and days ordered by day_index, or null when missing or deleted. */
+    async getWrapFestival(festivalId: string) {
+      const [festivalRes, daysRes] = await Promise.all([
+        pool.query('SELECT id, name, time_zone FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]),
+        pool.query('SELECT label, date FROM festival_days WHERE festival_id = $1 ORDER BY day_index', [festivalId]),
+      ]);
+      const festival = festivalRes.rows[0];
+      if (!festival) return null;
+      return {
+        id: festival.id,
+        name: festival.name,
+        timeZone: festival.time_zone ?? null,
+        days: daysRes.rows.map((d: { label: string | null; date: string | null }) => ({
+          date: d.date,
+          label: d.label ?? null,
+        })),
+      };
     },
   };
 }

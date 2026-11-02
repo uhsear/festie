@@ -29,6 +29,12 @@ function ridePassengerIds(offer: string) {
   return `COALESCE(ARRAY(SELECT p.user_id FROM crew_ride_passengers p JOIN crew_members cm ON cm.user_id = p.user_id AND cm.crew_id = ${offer}.crew_id WHERE p.ride_id = ${offer}.id ORDER BY p.created_at), '{}') AS passenger_ids`;
 }
 
+/**
+ * 090: user ids of members who tapped "I'll be there" on meeting point `mp`,
+ * oldest tap first. Deleted users drop out. A fixed SQL fragment, no input.
+ */
+const MP_COMING = `COALESCE((SELECT array_agg(c.user_id ORDER BY c.created_at) FROM crew_meeting_point_coming c JOIN users u ON u.id = c.user_id AND u.deleted_at IS NULL WHERE c.meeting_point_id = mp.id), '{}') AS coming`;
+
 export default function createCrewsStore(pool: Pool, _utils: any) {
   // #29: Topic subscription store
   const topicSubscriptions = {
@@ -694,9 +700,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           recurs_daily,
           active,
           created_at,
-          updated_at
+          updated_at,
+          ${MP_COMING}
         FROM
-          crew_meeting_points
+          crew_meeting_points mp
         WHERE
           id = $1
       `,
@@ -724,7 +731,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           mp.active,
           mp.created_at,
           mp.updated_at,
-          u.username AS creator_name
+          u.username AS creator_name,
+          ${MP_COMING}
         FROM
           crew_meeting_points mp
           JOIN users u ON u.id = mp.created_by
@@ -798,9 +806,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           recurs_daily,
           active,
           created_at,
-          updated_at
+          updated_at,
+          ${MP_COMING}
         FROM
-          crew_meeting_points
+          crew_meeting_points mp
         WHERE
           id = $1
       `,
@@ -831,9 +840,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           recurs_daily,
           active,
           created_at,
-          updated_at
+          updated_at,
+          ${MP_COMING}
         FROM
-          crew_meeting_points
+          crew_meeting_points mp
         WHERE
           id = $1
       `,
@@ -895,6 +905,22 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       return pool.query(
         'UPDATE crew_meeting_points SET active = FALSE, updated_at = NOW() WHERE active = TRUE AND expires_at IS NOT NULL AND expires_at < NOW()',
       );
+    },
+
+    // 090: "I'll be there". Both directions are idempotent. Returns the point with `coming`.
+    async setComing(mpId: string, crewId: string, userId: string, coming: boolean) {
+      if (coming) {
+        await pool.query(
+          'INSERT INTO crew_meeting_point_coming (meeting_point_id, crew_id, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          [mpId, crewId, userId],
+        );
+      } else {
+        await pool.query('DELETE FROM crew_meeting_point_coming WHERE meeting_point_id = $1 AND user_id = $2', [
+          mpId,
+          userId,
+        ]);
+      }
+      return meetingPoints.getById(mpId);
     },
   };
 
@@ -1432,5 +1458,57 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     },
   };
 
-  return { crews, topicSubscriptions, meetingPoints, crewPacking, crewRides, crewStatus };
+  // 090: which festival days each member attends. No row means no answer.
+  // Rows of members who left are gone by the crew_members cascade.
+  const crewDays = {
+    async listByCrew(crewId: string) {
+      const result = await pool.query(
+        `
+        SELECT
+          d.user_id AS "userId",
+          d.day_index AS "dayIndex",
+          d.answer
+        FROM
+          crew_member_days d
+          JOIN users u ON u.id = d.user_id
+          AND u.deleted_at IS NULL
+        WHERE
+          d.crew_id = $1
+        ORDER BY
+          d.user_id,
+          d.day_index
+      `,
+        [crewId],
+      );
+      return result.rows;
+    },
+
+    // Replaces the member's full answer set, so a replay of the same body is a no-op.
+    async replaceMine(crewId: string, userId: string, days: Array<{ dayIndex: number; answer: string }>) {
+      return withTransaction(pool, async (client) => {
+        await client.query('DELETE FROM crew_member_days WHERE crew_id = $1 AND user_id = $2', [crewId, userId]);
+        if (days.length) {
+          await client.query(
+            'INSERT INTO crew_member_days (crew_id, user_id, day_index, answer) SELECT $1, $2, d, a FROM unnest($3::int[], $4::text[]) AS t(d, a)',
+            [crewId, userId, days.map((d) => d.dayIndex), days.map((d) => d.answer)],
+          );
+        }
+        const result = await client.query(
+          'SELECT user_id AS "userId", day_index AS "dayIndex", answer FROM crew_member_days WHERE crew_id = $1 AND user_id = $2 ORDER BY day_index',
+          [crewId, userId],
+        );
+        return result.rows;
+      });
+    },
+
+    async dayCount(crewId: string) {
+      const result = await pool.query(
+        'SELECT COUNT(*)::int AS count FROM festival_days WHERE festival_id = (SELECT festival_id FROM crews WHERE id = $1)',
+        [crewId],
+      );
+      return result.rows[0].count as number;
+    },
+  };
+
+  return { crews, topicSubscriptions, meetingPoints, crewPacking, crewRides, crewStatus, crewDays };
 }

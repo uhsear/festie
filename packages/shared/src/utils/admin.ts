@@ -108,14 +108,15 @@ export function filterAdminCrews<
 
 export const AUDIT_ACTION_FILTERS: ReadonlyArray<{ label: string; prefix: string }> = [
   { label: 'All', prefix: '' },
-  { label: 'Roles', prefix: 'role_' },
-  { label: 'Passwords', prefix: 'admin_reset_' },
-  { label: 'Deleted users', prefix: 'admin_delete_user' },
-  { label: 'Logouts', prefix: 'force_logout' },
-  { label: 'Crews', prefix: 'crew_' },
-  { label: 'Festivals', prefix: 'festival' },
-  { label: 'Imports', prefix: 'lineup_import' },
-  { label: 'Profile views', prefix: 'user.private_data' },
+  { label: 'Roles', prefix: 'user.role.*' },
+  { label: 'Passwords', prefix: 'user.password.*' },
+  { label: 'Reset links', prefix: 'user.password_reset_link.*' },
+  { label: 'Deleted users', prefix: 'user.deleted' },
+  { label: 'Logouts', prefix: 'user.sessions.*' },
+  { label: 'Crews', prefix: 'crew.*' },
+  { label: 'Festivals', prefix: 'festival.*' },
+  { label: 'Imports', prefix: 'festival.lineup.*' },
+  { label: 'Profile views', prefix: 'user.private_data.*' },
 ];
 
 export const PRIVATE_VIEW_NOTICE = 'Opening this page is recorded in the audit log.';

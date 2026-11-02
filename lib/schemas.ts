@@ -650,6 +650,28 @@ export const meetingPointUpdateSchema = z
   });
 export type MeetingPointUpdateInput = z.infer<typeof meetingPointUpdateSchema>;
 
+// 090: "I'll be there" on a meeting point. The member sets only their own tap.
+export const meetingPointComingSchema = z.object({ coming: z.boolean() });
+export type MeetingPointComingInput = z.infer<typeof meetingPointComingSchema>;
+
+// 090: the member's full set of day answers. A day left out is cleared; `days: []` clears all.
+// The route rejects a dayIndex at or past the festival's day count.
+export const crewDaysSchema = z
+  .object({
+    days: z
+      .array(
+        z.object({
+          dayIndex: z.number().int().min(0).max(60),
+          answer: z.enum(['going', 'maybe', 'no']),
+        }),
+      )
+      .max(61),
+  })
+  .refine((body) => new Set(body.days.map((d) => d.dayIndex)).size === body.days.length, {
+    message: 'Each day can appear only once.',
+  });
+export type CrewDaysInput = z.infer<typeof crewDaysSchema>;
+
 // ── Validation middleware factory ───────────────────────────────────
 export function validate(schema: z.ZodType<any>) {
   return (req: any, res: any, next: any) => {
@@ -1265,6 +1287,18 @@ export const ratingCreateSchema = z.object({
 });
 export type RatingCreateInput = z.infer<typeof ratingCreateSchema>;
 
+// null clears the mark (back to unknown).
+export const caughtUpdateSchema = z.object({
+  caught: z.boolean().nullable(),
+});
+export type CaughtUpdateInput = z.infer<typeof caughtUpdateSchema>;
+
+// crewId picks which of the requester's crews the wrap reports on.
+export const wrapQuery = z.object({
+  crewId: identifier.optional(),
+});
+export type WrapQueryInput = z.infer<typeof wrapQuery>;
+
 // ── Expense schemas ─────────────────────────────────────────────
 // Keep in sync with CREW_CURRENCIES in packages/shared/src/constants/config.ts
 // (the backend cannot import @festie/shared, see lib/time-zone.ts). Every code
@@ -1377,7 +1411,13 @@ export type PaginationQueryInput = z.infer<typeof paginationQuery>;
 const validDateString = z.string().refine((v) => !isNaN(new Date(v).getTime()), 'Must be a valid date string');
 export const adminAuditQuery = z.object({
   actor_id: z.string().trim().max(100).optional(),
-  action: z.string().trim().max(100).optional(),
+  // A trailing `.*` asks for a prefix match: `festival.*` matches `festival.created`.
+  action: z
+    .string()
+    .trim()
+    .max(100)
+    .regex(/^[a-z0-9_.:-]+(\.\*)?$/i)
+    .optional(),
   resource_type: z.string().trim().max(100).optional(),
   cursor: z.string().trim().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
@@ -1385,8 +1425,15 @@ export const adminAuditQuery = z.object({
   to: validDateString.optional(),
   scope: z.enum(['admin', 'user', 'all']).default('admin'),
   actor: z.string().trim().max(100).optional(),
+  user: z.string().trim().max(100).optional(),
 });
 export type AdminAuditQueryInput = z.infer<typeof adminAuditQuery>;
+
+// ── Admin analytics query schema ──────────────────────────────
+export const adminAnalyticsQuery = z.object({
+  festivalId: z.string().trim().min(1).max(100).optional(),
+});
+export type AdminAnalyticsQueryInput = z.infer<typeof adminAnalyticsQuery>;
 
 // ── Admin sign-up ref counts query schema ─────────────────────
 export const adminRefCountsQuery = z.object({
@@ -1534,6 +1581,8 @@ export const schemas = {
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,
   meetingPointUpdate: meetingPointUpdateSchema,
+  meetingPointComing: meetingPointComingSchema,
+  crewDays: crewDaysSchema,
   pollCreate: pollCreateSchema,
   pollVote: pollVoteSchema,
   packingCreate: packingCreateSchema,
@@ -1555,6 +1604,8 @@ export const schemas = {
   updateEmail: updateEmailSchema,
   refreshToken: refreshTokenSchema,
   ratingCreate: ratingCreateSchema,
+  caughtUpdate: caughtUpdateSchema,
+  wrapQuery,
   expenseCreate: expenseCreateSchema,
   expenseUpdate: expenseUpdateSchema,
   expenseCurrency: expenseCurrencySchema,
@@ -1565,6 +1616,7 @@ export const schemas = {
   adminAddRole: adminAddRoleSchema,
   paginationQuery,
   adminAuditQuery,
+  adminAnalyticsQuery,
   adminRefCountsQuery,
   adminUserSearchQuery,
   festivalDepthQuery,

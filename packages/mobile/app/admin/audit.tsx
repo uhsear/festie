@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,28 @@ import {
   TextInput,
   RefreshControl,
   Pressable,
+  Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchAuditPage, type AuditEntry } from '@festie/shared/services';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import {
+  exportAuditCsv,
+  fetchAuditPage,
+  type AuditEntry,
+} from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
-import { timeAgoFromIso, AUDIT_ACTION_FILTERS } from '@festie/shared/utils';
+import {
+  AUDIT_ACTION_FILTERS,
+  timeAgoFromIso,
+  auditActionLabel,
+  describeAuditChanges,
+  parseAuditQuery,
+  removeAuditQueryToken,
+  setAuditQueryAction,
+} from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import DisplayWords from '../../components/DisplayWords';
 import EmptyState from '../../components/EmptyState';
@@ -23,9 +38,11 @@ import SectionLabel from '../../components/SectionLabel';
 /**
  * Admin Audit Log — filtered, cursor-paginated view of GET /admin/audit.
  *
- * A toggle picks Admin actions (default) or User activity. Filters: action
- * (chips from AUDIT_ACTION_FILTERS, sent as a prefix match), username (free text), from/to date (YYYY-MM-DD, coerced to ISO strings). Pagination uses the cursor the server
- * returns in meta.nextCursor; Prev goes back through a local stack of cursors.
+ * A toggle picks Admin actions (default) or User activity. One search box takes
+ * qualifiers (actor:, user:, action:, after:, before:); the parsed tokens show as
+ * removable chips and apply on submit. Export CSV shares up to 1,000 matching rows.
+ * Pagination uses the cursor the server returns in meta.nextCursor; Prev goes back
+ * through a local stack of cursors.
  *
  * Each row is expandable to show the full detail object as formatted JSON.
  * Gated on isAdmin; non-admins see EmptyState and the route is unreachable
@@ -34,13 +51,6 @@ import SectionLabel from '../../components/SectionLabel';
 
 type AuditScope = 'admin' | 'user';
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-function isValidDate(s: string): boolean {
-  if (!DATE_RE.test(s.trim())) return false;
-  const d = new Date(s.trim());
-  return !isNaN(d.getTime());
-}
-
 export default function AdminAuditScreen() {
   const t = useTokens();
   const styles = useStyles();
@@ -48,16 +58,12 @@ export default function AdminAuditScreen() {
   const router = useRouter();
   const isAdmin = useAuthStore((s) => s.isAdmin);
 
-  // Filter state
-  const [filterActor, setFilterActor] = useState('');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
-
-  // Applied filters (separate from pending edits so we only re-fetch on submit)
-  const [appliedAction, setAppliedAction] = useState('');
-  const [appliedActor, setAppliedActor] = useState('');
-  const [appliedFrom, setAppliedFrom] = useState('');
-  const [appliedTo, setAppliedTo] = useState('');
+  // Search text: draft is what is typed, applied is what the list was fetched with.
+  const [draft, setDraft] = useState('');
+  const [applied, setApplied] = useState('');
+  const [submitErrors, setSubmitErrors] = useState<string[]>([]);
+  const parsed = useMemo(() => parseAuditQuery(applied), [applied]);
+  const [exporting, setExporting] = useState(false);
 
   // Which log to show: admin actions by default, or what users did.
   const [scope, setScope] = useState<AuditScope>('admin');
@@ -81,41 +87,22 @@ export default function AdminAuditScreen() {
   // Expanded row ids
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  // Filter panel open
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
-  // Validation errors
-  const fromError = filterFrom.trim() && !isValidDate(filterFrom) ? 'Use YYYY-MM-DD' : null;
-  const toError = filterTo.trim() && !isValidDate(filterTo) ? 'Use YYYY-MM-DD' : null;
-
-  const fetchAudit = useCallback(
-    async (
-      cursor: string | null,
-      applied: { action: string; actor: string; from: string; to: string },
-      auditScope: AuditScope,
-    ) => {
-      setError(false);
-      try {
-        const page = await fetchAuditPage({
-          scope: auditScope,
-          action: applied.action.trim(),
-          actor: applied.actor.trim(),
-          from: applied.from.trim() ? new Date(applied.from.trim()).toISOString() : undefined,
-          to: applied.to.trim() ? new Date(applied.to.trim()).toISOString() : undefined,
-          cursor,
-          limit: 25,
-        });
-        setEntries(page.entries);
-        setTotal(page.total);
-        setNextCursor(page.nextCursor);
-      } catch {
-        setError(true);
-      }
-    },
-    [],
-  );
-
-  const applied = { action: appliedAction, actor: appliedActor, from: appliedFrom, to: appliedTo };
+  const fetchAudit = useCallback(async (cursor: string | null, query: string, auditScope: AuditScope) => {
+    setError(false);
+    try {
+      const page = await fetchAuditPage({
+        scope: auditScope,
+        ...parseAuditQuery(query).filters,
+        cursor,
+        limit: 25,
+      });
+      setEntries(page.entries);
+      setTotal(page.total);
+      setNextCursor(page.nextCursor);
+    } catch {
+      setError(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -131,56 +118,75 @@ export default function AdminAuditScreen() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only re-fetch when applied filters or cursor change
-  }, [isAdmin, appliedAction, appliedActor, appliedFrom, appliedTo, currentCursor, scope]);
+  }, [isAdmin, fetchAudit, applied, currentCursor, scope]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     void fetchAudit(currentCursor, applied, scope).finally(() => setRefreshing(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCursor, appliedAction, appliedActor, appliedFrom, appliedTo, scope]);
+  }, [fetchAudit, currentCursor, applied, scope]);
 
-  const applyFilters = useCallback(() => {
-    if (fromError || toError) return;
-    // Reset to first page whenever filters change
-    cursorStack.current = [];
-    setIsPrevAvailable(false);
-    setCurrentCursor(null);
-    setAppliedActor(filterActor);
-    setAppliedFrom(filterFrom);
-    setAppliedTo(filterTo);
-    setFiltersOpen(false);
-  }, [filterActor, filterFrom, filterTo, fromError, toError]);
-
-  const clearFilters = useCallback(() => {
-    setFilterActor('');
-    setFilterFrom('');
-    setFilterTo('');
-    cursorStack.current = [];
-    setIsPrevAvailable(false);
-    setCurrentCursor(null);
-    setAppliedAction('');
-    setAppliedActor('');
-    setAppliedFrom('');
-    setAppliedTo('');
-    setFiltersOpen(false);
-  }, []);
-
-  const changeAction = useCallback((prefix: string) => {
+  const resetPaging = useCallback(() => {
     cursorStack.current = [];
     setIsPrevAvailable(false);
     setCurrentCursor(null);
     setExpandedIds(new Set());
-    setAppliedAction(prefix);
   }, []);
 
-  const changeScope = useCallback((next: AuditScope) => {
-    cursorStack.current = [];
-    setIsPrevAvailable(false);
-    setCurrentCursor(null);
-    setExpandedIds(new Set());
-    setScope(next);
-  }, []);
+  const applySearch = useCallback(() => {
+    const errors = parseAuditQuery(draft).errors;
+    setSubmitErrors(errors);
+    if (errors.length > 0) return;
+    resetPaging();
+    setApplied(draft.trim());
+  }, [draft, resetPaging]);
+
+  const applyQuery = useCallback(
+    (next: string) => {
+      setDraft(next);
+      setSubmitErrors([]);
+      resetPaging();
+      setApplied(next);
+    },
+    [resetPaging],
+  );
+
+  const removeChip = useCallback((raw: string) => applyQuery(removeAuditQueryToken(applied, raw)), [applied, applyQuery]);
+
+  const changeScope = useCallback(
+    (next: AuditScope) => {
+      resetPaging();
+      setScope(next);
+    },
+    [resetPaging],
+  );
+
+  const handleExport = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { csv, rows, capped } = await exportAuditCsv({ scope, ...parsed.filters });
+      const file = new File(Paths.cache, `festie-audit-${new Date().toISOString().slice(0, 10)}.csv`);
+      file.create({ overwrite: true });
+      file.write(csv);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/csv',
+          UTI: 'public.comma-separated-values-text',
+          dialogTitle: 'Export audit log',
+        });
+        Alert.alert(
+          'Audit log exported',
+          capped ? 'Exported the newest 1,000 rows. Narrow the filters to export older rows.' : `Exported ${rows} rows.`,
+        );
+      } else {
+        Alert.alert('Sharing unavailable', 'File sharing is not available on this device.');
+      }
+    } catch {
+      Alert.alert("Couldn't export the audit log. Try again.");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, scope, parsed.filters]);
 
   const goNext = useCallback(() => {
     if (!nextCursor) return;
@@ -210,7 +216,7 @@ export default function AdminAuditScreen() {
     });
   }, []);
 
-  const hasActiveFilters = !!(appliedAction || appliedActor || appliedFrom || appliedTo);
+  const hasActiveFilters = parsed.tokens.length > 0;
 
   if (!isAdmin) {
     return (
@@ -256,19 +262,6 @@ export default function AdminAuditScreen() {
             </Text>
           ) : null}
         </View>
-        <TouchableOpacity
-          onPress={() => setFiltersOpen((v) => !v)}
-          style={[styles.filterButton, hasActiveFilters && styles.filterButtonActive]}
-          accessibilityRole="button"
-          accessibilityLabel={filtersOpen ? 'Close filters' : 'Open filters'}
-          accessibilityState={{ expanded: filtersOpen }}
-        >
-          <Ionicons
-            name={hasActiveFilters ? 'filter' : 'filter-outline'}
-            size={t.iconSize.md}
-            color={hasActiveFilters ? t.colors.accent.aqua : t.colors.text.secondary}
-          />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.scopeRow} accessibilityRole="tablist">
@@ -290,84 +283,64 @@ export default function AdminAuditScreen() {
         })}
       </View>
 
-      {/* Action chips — each prefix matches every action that starts with it. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipScroll}
-        contentContainerStyle={styles.chipRow}
-      >
-        {AUDIT_ACTION_FILTERS.map((chip) => {
-          const selected = appliedAction === chip.prefix;
-          return (
-            <TouchableOpacity
-              key={chip.label}
-              style={[styles.scopeBtn, selected && styles.scopeBtnActive]}
-              onPress={() => changeAction(chip.prefix)}
-              accessibilityRole="button"
-              accessibilityLabel={chip.label}
-              accessibilityState={{ selected }}
-            >
-              <Text style={[styles.scopeLabel, selected && styles.scopeLabelActive]}>{chip.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      {/* Filter panel (collapsible) */}
-      {filtersOpen ? (
-        <View style={styles.filterPanel}>
-          <View style={styles.filterRow}>
-            <FilterInput
-              label="Username"
-              value={filterActor}
-              onChangeText={setFilterActor}
-              placeholder="username"
-            />
+      <View style={styles.searchBox}>
+        <FilterInput
+          label="Search the audit log"
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="actor:asir action:festival.*"
+          onSubmitEditing={applySearch}
+        />
+        {submitErrors.map((message) => (
+          <Text key={message} style={styles.searchError} accessibilityLiveRegion="polite">
+            {message}
+          </Text>
+        ))}
+        {parsed.tokens.length === 0 ? (
+          <Text style={styles.rowHint}>Try: actor:asir · user:sam · action:festival.* · after:2026-10-01</Text>
+        ) : (
+          <View style={styles.chipWrap}>
+            {parsed.tokens.map((token) => (
+              <TouchableOpacity
+                key={token.raw}
+                style={[styles.scopeBtn, styles.scopeBtnActive]}
+                onPress={() => removeChip(token.raw)}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove filter ${token.raw}`}
+              >
+                <Text style={[styles.scopeLabel, styles.scopeLabelActive]}>{token.raw} ×</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <View style={styles.filterRow}>
-            <FilterInput
-              label="From"
-              value={filterFrom}
-              onChangeText={setFilterFrom}
-              placeholder="YYYY-MM-DD"
-              error={fromError}
-              keyboardType="numbers-and-punctuation"
-            />
-            <FilterInput
-              label="To"
-              value={filterTo}
-              onChangeText={setFilterTo}
-              placeholder="YYYY-MM-DD"
-              error={toError}
-              keyboardType="numbers-and-punctuation"
-            />
-          </View>
-          <View style={styles.filterActions}>
-            <TouchableOpacity
-              style={[styles.filterActionBtn, styles.filterClearBtn]}
-              onPress={clearFilters}
-              accessibilityRole="button"
-              accessibilityLabel="Clear filters"
-            >
-              <Text style={styles.filterClearLabel}>Clear</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.filterActionBtn,
-                styles.filterApplyBtn,
-                !!(fromError || toError) && styles.filterApplyBtnDisabled,
-              ]}
-              onPress={applyFilters}
-              disabled={!!(fromError || toError)}
-              accessibilityRole="button"
-              accessibilityLabel="Apply filters"
-            >
-              <Text style={styles.filterApplyLabel}>Apply</Text>
-            </TouchableOpacity>
-          </View>
+        )}
+        <View style={styles.chipWrap} accessibilityLabel="Filter by action type">
+          {AUDIT_ACTION_FILTERS.map((chip) => {
+            const active = (parsed.filters.action ?? '') === chip.prefix;
+            return (
+              <TouchableOpacity
+                key={chip.label}
+                style={[styles.scopeBtn, active && styles.scopeBtnActive]}
+                onPress={() => applyQuery(setAuditQueryAction(applied, chip.prefix))}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.scopeLabel, active && styles.scopeLabelActive]}>{chip.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      ) : null}
+        <TouchableOpacity
+          style={[styles.scopeBtn, exporting && styles.filterApplyBtnDisabled]}
+          onPress={handleExport}
+          disabled={exporting}
+          accessibilityRole="button"
+          accessibilityLabel="Export CSV"
+          accessibilityHint="Exports the rows that match your filters, up to 1,000"
+        >
+          <Text style={styles.scopeLabel}>{exporting ? 'Exporting…' : 'Export CSV'}</Text>
+        </TouchableOpacity>
+        <Text style={styles.rowHint}>Exports the rows that match your filters, up to 1,000.</Text>
+      </View>
 
       {loading ? (
         <LoadingState label="Loading audit log" />
@@ -423,21 +396,28 @@ export default function AdminAuditScreen() {
                       style={[styles.row, !isLast && styles.rowDivider]}
                       onPress={() => toggleExpand(entry.id)}
                       accessibilityRole="button"
-                      accessibilityLabel={`${entry.friendlyAction ?? entry.action} by ${entry.actorUsername ?? 'system'}, ${timeAgoFromIso(entry.createdAt)}. ${isExpanded ? 'Collapse' : 'Expand'} details.`}
+                      accessibilityLabel={`${auditActionLabel(entry.action)} by ${entry.actorUsername ?? 'System'}, ${timeAgoFromIso(entry.createdAt)}. ${isExpanded ? 'Collapse' : 'Expand'} details.`}
                       accessibilityState={{ expanded: isExpanded }}
                     >
                       <View style={styles.rowBody}>
                         <Text style={styles.rowTitle} numberOfLines={isExpanded ? undefined : 1}>
-                          {entry.friendlyAction ?? entry.action}
+                          {auditActionLabel(entry.action)}
                         </Text>
                         <Text style={styles.rowHint} numberOfLines={1}>
-                          {entry.actorUsername ?? 'system'}
-                          {entry.targetLabel ? ` · ${entry.targetLabel}` : ''}
-                          {' · '}
-                          {timeAgoFromIso(entry.createdAt)}
+                          {`${entry.actorUsername ?? 'System'}${entry.targetLabel ? ` · ${entry.targetLabel}` : ''} · ${timeAgoFromIso(entry.createdAt)}`}
                         </Text>
                         {isExpanded ? (
                           <View style={styles.detailBox}>
+                            {describeAuditChanges(entry.details).map((c) => (
+                              <Text key={c.field} style={styles.detailLine} selectable>
+                                {`${c.label}: ${c.before} to ${c.after}`}
+                              </Text>
+                            ))}
+                            {entry.requestId ? (
+                              <Text style={styles.detailLine} selectable>
+                                {`Request ID: ${entry.requestId}`}
+                              </Text>
+                            ) : null}
                             {entry.targetId ? (
                               <Text style={styles.detailLine} selectable>
                                 <Text style={styles.detailKey}>Target: </Text>
@@ -536,9 +516,18 @@ interface FilterInputProps {
   placeholder?: string;
   error?: string | null;
   keyboardType?: 'default' | 'numbers-and-punctuation';
+  onSubmitEditing?: () => void;
 }
 
-function FilterInput({ label, value, onChangeText, placeholder, error, keyboardType = 'default' }: FilterInputProps) {
+function FilterInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  keyboardType = 'default',
+  onSubmitEditing,
+}: FilterInputProps) {
   const t = useTokens();
   const styles = useFilterStyles();
   const [focused, setFocused] = useState(false);
@@ -554,6 +543,8 @@ function FilterInput({ label, value, onChangeText, placeholder, error, keyboardT
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType={keyboardType}
+        returnKeyType="search"
+        onSubmitEditing={onSubmitEditing}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         accessibilityLabel={label}
@@ -637,14 +628,6 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[4],
     paddingBottom: t.spacing[3],
   },
-  chipScroll: {
-    flexGrow: 0,
-    paddingBottom: t.spacing[3],
-  },
-  chipRow: {
-    gap: t.spacing[2],
-    paddingHorizontal: t.spacing[4],
-  },
   scopeBtn: {
     minHeight: 44,
     paddingHorizontal: t.spacing[4],
@@ -666,63 +649,22 @@ const useStyles = makeStyles((t) => ({
   scopeLabelActive: {
     color: t.colors.accent.aqua,
   },
-  filterButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-    flexShrink: 0,
-  },
-  filterButtonActive: {
-    borderColor: t.colors.accent.aqua,
-    backgroundColor: t.colors.ring.aqua,
-  },
-  filterPanel: {
-    backgroundColor: t.colors.bg.secondary,
-    borderBottomWidth: 1,
-    borderBottomColor: t.colors.border.default,
+  searchBox: {
     paddingHorizontal: t.spacing[4],
-    paddingVertical: t.spacing[3],
-    gap: t.spacing[3],
+    paddingBottom: t.spacing[3],
+    gap: t.spacing[2],
   },
-  filterRow: {
+  searchError: {
+    ...typeStyle('caption'),
+    color: t.colors.text.danger,
+  },
+  chipWrap: {
     flexDirection: 'row',
-    gap: t.spacing[3],
-  },
-  filterActions: {
-    flexDirection: 'row',
-    gap: t.spacing[3],
-    justifyContent: 'flex-end',
-  },
-  filterActionBtn: {
-    minHeight: 44,
-    paddingHorizontal: t.spacing[4],
-    borderRadius: t.radii.default,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterClearBtn: {
-    backgroundColor: t.colors.bg.primary,
-    borderWidth: 1,
-    borderColor: t.colors.border.light,
-  },
-  filterClearLabel: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.primary,
-  },
-  filterApplyBtn: {
-    backgroundColor: t.colors.accent.aqua,
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
   },
   filterApplyBtnDisabled: {
     opacity: 0.4,
-  },
-  filterApplyLabel: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.onLightAccent,
   },
   scroll: {
     width: '100%',

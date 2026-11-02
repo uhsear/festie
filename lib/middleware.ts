@@ -12,6 +12,7 @@ import type { Application } from 'express';
 import { createTracingMiddleware } from './tracing.js';
 import { mountSwaggerUI } from './swagger-ui-setup.js';
 import { default as createAuditMiddleware } from './audit-middleware.js';
+import { recordRecentRequest } from './recent-requests.js';
 import { sentry } from './sentry.js';
 
 /**
@@ -474,6 +475,7 @@ function configureMiddleware(app: Application, ctx: any) {
       if (res.statusCode >= 400) state.metrics.totalErrors += 1;
       const bucket = `${Math.floor(res.statusCode / 100)}xx`;
       state.metrics.statusCodes[bucket] = (state.metrics.statusCodes[bucket] || 0) + 1;
+      recordRecentRequest(state.metrics, res.statusCode);
 
       const routePath = req.route?.path || req.path?.replace(/\/[a-zA-Z0-9_-]{10,}(?=\/|$)/g, '/:id') || 'unknown';
       const endpointKey = `${req.method} ${routePath}`;

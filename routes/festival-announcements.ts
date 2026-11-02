@@ -15,6 +15,7 @@
  */
 
 import crypto from 'crypto';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 
 const MAX_LATE_MS = 60_000;
 const MAX_AHEAD_MS = 14 * 24 * 60 * 60 * 1000;
@@ -128,7 +129,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
           createdBy: req.user?.userId ?? null,
         });
         const recipients = await countRecipients(festivalId);
-        await writeAudit(req, res, festivalId, 'festival_announcement_send', {
+        await writeAudit(req, res, festivalId, AUDIT_ACTIONS.FESTIVAL_ANNOUNCEMENT_SENT, {
           announcementId: announcement.id,
           severity,
           screen,
@@ -161,7 +162,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
         if (!announcementId) return sendError(res, 404, 'Announcement not found', ErrorCodes.NOT_FOUND);
         const announcement = await stores.announcements.cancel(festivalId, announcementId);
         if (!announcement) return sendError(res, 404, 'Announcement not found', ErrorCodes.NOT_FOUND);
-        await writeAudit(req, res, festivalId, 'festival_announcement_cancel', {
+        await writeAudit(req, res, festivalId, AUDIT_ACTIONS.FESTIVAL_ANNOUNCEMENT_CANCELLED, {
           announcementId,
           wasSent: Boolean(announcement.sentAt),
         });

@@ -11,6 +11,7 @@ import createPollRoutes from './crew-polls.js';
 import createPackingRoutes from './crew-packing.js';
 import createRidesRoutes from './crew-rides.js';
 import createStatusRoutes from './crew-status.js';
+import createCrewDaysRoutes from './crew-days.js';
 import createSosRoutes from './crew-sos.js';
 import createLiveLocationRoutes from './crew-live-location.js';
 import createCheckinRoutes from './crew-checkin.js';
@@ -214,6 +215,7 @@ export default function createCrewRoutes(deps: any) {
   const packingRoutes = createPackingRoutes(subDeps);
   const ridesRoutes = createRidesRoutes(subDeps);
   const statusRoutes = createStatusRoutes(subDeps);
+  const daysRoutes = createCrewDaysRoutes(subDeps);
   const sosRoutes = createSosRoutes(subDeps);
   const liveLocationRoutes = createLiveLocationRoutes(subDeps);
   const checkinRoutes = createCheckinRoutes(subDeps);
@@ -225,6 +227,7 @@ export default function createCrewRoutes(deps: any) {
   router.use('/', packingRoutes);
   router.use('/', ridesRoutes);
   router.use('/', statusRoutes);
+  router.use('/', daysRoutes);
   router.use('/', sosRoutes);
   router.use('/', liveLocationRoutes);
   router.use('/', checkinRoutes);

@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { parseJsonObject } from '../lib/db/connection';
 import { logCrewActivity } from '../lib/db/stores/activity';
-import { AUDIT_ACTION_CREW_ADD_MEMBER } from '../lib/db/stores/audit.js';
 import { dropLivePosition } from '../lib/live-location-cache.js';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 
 export default function createCrewMemberRoutes(deps: any) {
   const {
@@ -410,13 +410,12 @@ export default function createCrewMemberRoutes(deps: any) {
             await stores.auditLog.insert({
               actorType: 'admin',
               actorId: req.user.userId,
-              action: AUDIT_ACTION_CREW_ADD_MEMBER,
-              targetType: 'crew_member',
-              targetId: `${crew.id}:${targetUserId}`,
+              action: AUDIT_ACTIONS.CREW_MEMBER_ADDED,
+              targetType: 'user',
+              targetId: targetUserId,
               detailsJson: JSON.stringify({
                 crewId: crew.id,
                 crewName: crew.name,
-                userId: targetUserId,
                 targetUsername: targetUser.username,
               }),
               ip: getRequestIp(req),

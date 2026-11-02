@@ -6,6 +6,8 @@
  * Mounts: /bulk/deactivate, /bulk/archive-festivals,
  *         /crews, /crews/:id/members, /crews/:id/members/:userId, /crews/:id
  */
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+
 export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
   const {
     log,
@@ -121,8 +123,9 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
   // can log straight back in with unchanged credentials. A real deactivation
   // would require a DB migration (new column + login + session-validation
   // gates), which is intentionally out of scope here (migration-free deploy).
-  // We therefore rename the semantics to `force_logout` so the response/audit
-  // match the actual behavior; the route path is kept for API compatibility.
+  // We therefore rename the semantics to a force-logout (audit action
+  // `user.sessions.revoked`) so the response/audit match the actual behavior;
+  // the route path is kept for API compatibility.
   router.post(
     '/bulk/deactivate',
     adminAuth,
@@ -154,15 +157,20 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
           }
         }
         if (stores.auditLog) {
-          await stores.auditLog.insert({
-            actorType: 'admin',
-            actorId: req.user?.userId || 'admin',
-            action: 'force_logout',
-            targetType: 'users',
-            targetId: userIds.join(','),
-            detailsJson: JSON.stringify({ count: userIds.length, results }),
-            ip: getRequestIp(req),
-          });
+          // One row per user, so the audit `user:` filter finds it by target_id.
+          for (const r of results) {
+            const target = await getUserById(r.userId);
+            await stores.auditLog.insert({
+              actorType: 'admin',
+              actorId: req.user?.userId || 'admin',
+              action: AUDIT_ACTIONS.USER_SESSIONS_REVOKED,
+              targetType: 'user',
+              targetId: r.userId,
+              detailsJson: JSON.stringify({ targetUsername: target?.username ?? null, status: r.status }),
+              ip: getRequestIp(req),
+              status: r.status === 'logged_out' ? 'success' : 'failure',
+            });
+          }
           res.locals.auditWritten = true;
         }
         return sendSuccess(res, { results });
@@ -187,8 +195,11 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
           return sendError(res, 400, 'Provide 1-50 festival IDs', ErrorCodes.INVALID_INPUT);
         }
         const results: any[] = [];
+        const names = new Map<string, string | null>();
         for (const festivalId of festivalIds) {
           try {
+            // Read the name first: the audit row needs it after the soft delete.
+            names.set(festivalId, (await stores.festivals.getById(festivalId))?.name ?? null);
             // H1: evict crew-room sockets before the festival is archived, while
             // listByFestival can still resolve its crews.
             await evictFestivalCrewRooms(festivalId);
@@ -201,15 +212,18 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
         if (deps.invalidateFestivalListCache) deps.invalidateFestivalListCache();
         deps.invalidateFestivalCache?.();
         if (stores.auditLog) {
-          await stores.auditLog.insert({
-            actorType: 'admin',
-            actorId: req.user?.userId || 'admin',
-            action: 'bulk_archive',
-            targetType: 'festivals',
-            targetId: festivalIds.join(','),
-            detailsJson: JSON.stringify({ count: festivalIds.length }),
-            ip: getRequestIp(req),
-          });
+          for (const r of results) {
+            await stores.auditLog.insert({
+              actorType: 'admin',
+              actorId: req.user?.userId || 'admin',
+              action: AUDIT_ACTIONS.FESTIVAL_ARCHIVED,
+              targetType: 'festival',
+              targetId: r.festivalId,
+              detailsJson: JSON.stringify({ name: names.get(r.festivalId) ?? null, status: r.status }),
+              ip: getRequestIp(req),
+              status: r.status === 'archived' ? 'success' : 'failure',
+            });
+          }
           res.locals.auditWritten = true;
         }
         return sendSuccess(res, { results });
@@ -329,13 +343,12 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
           await stores.auditLog.insert({
             actorType: 'admin',
             actorId: req.user?.userId || 'admin',
-            action: 'crew_remove_member',
-            targetType: 'crew_member',
-            targetId: `${crewId}:${targetUserId}`,
+            action: AUDIT_ACTIONS.CREW_MEMBER_REMOVED,
+            targetType: 'user',
+            targetId: targetUserId,
             detailsJson: JSON.stringify({
               crewId,
               crewName: crew?.name ?? null,
-              userId: targetUserId,
               targetUsername: targetUser?.username ?? null,
             }),
             ip: getRequestIp(req),
@@ -377,7 +390,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
           await stores.auditLog.insert({
             actorType: 'admin',
             actorId: req.user?.userId || 'admin',
-            action: 'crew_delete',
+            action: AUDIT_ACTIONS.CREW_DELETED,
             targetType: 'crew',
             targetId: crewId,
             detailsJson: JSON.stringify({ crewName: crew.name, festivalId: crew.festivalId }),

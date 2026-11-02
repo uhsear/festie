@@ -7,10 +7,11 @@ import {
 } from './notificationSettings';
 
 describe('notificationSettings', () => {
-  it('hides the four crew rows that have no sender yet', () => {
+  it('hides the three crew rows that have no sender yet', () => {
     const keys = visibleNotificationRows().map((r) => r.key);
-    expect(keys).toHaveLength(6);
-    for (const k of ['crewMeetingPoints', 'crewPolls', 'crewMoney', 'crewRides']) expect(keys).not.toContain(k);
+    expect(keys).toHaveLength(7);
+    for (const k of ['crewPolls', 'crewMoney', 'crewRides']) expect(keys).not.toContain(k);
+    expect(keys).toContain('crewMeetingPoints');
   });
 
   it('validates quiet windows', () => {

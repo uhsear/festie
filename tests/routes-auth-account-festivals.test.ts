@@ -2283,6 +2283,7 @@ describe('routes/festivals.js — PUT /:id save guards', () => {
       picksLost: 1,
       scheduleChanges: 1,
       notifiedPeople: 1,
+      changes: { location: [null, 'Somewhere'], b2bSeparator: [null, ' b2b '], days: [2, 1], sets: [2, 1] },
     });
   });
 

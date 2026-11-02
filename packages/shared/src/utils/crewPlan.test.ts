@@ -171,6 +171,17 @@ describe('buildCrewMix', () => {
     expect(buildCrewMix({ sets, days, profiles, nowMs: at(12) }).map((e) => e.set.id)).toEqual(['a', 'b', 'c']);
     expect(buildCrewMix({ sets, days, profiles, minCount: 3 }).map((e) => e.set.id)).toEqual(['a']);
   });
+  it('with isAttending skips absent profiles and counts total per day', () => {
+    const profiles = [
+      profile('m1', 'Ann', { a: 'must' }),
+      profile('m2', 'Bo', { a: 'must' }),
+      profile('m3', 'Cy', { a: 'maybe' }),
+    ];
+    const [entry] = buildCrewMix({ sets, days, profiles, isAttending: (p) => p.id !== 'm3' });
+    expect(entry).toMatchObject({ count: 2, total: 2, memberIds: ['m1', 'm2'] });
+    const all = buildCrewMix({ sets, days, profiles, isAttending: () => true });
+    expect(all[0]).toMatchObject({ count: 3, total: 3 });
+  });
 });
 
 describe('findFreeTogether', () => {

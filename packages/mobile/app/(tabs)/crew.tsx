@@ -61,6 +61,8 @@ import CrewHomeBase from '../../components/CrewHomeBase';
 import CrewPhotoLink from '../../components/CrewPhotoLink';
 import CrewPolls from '../../components/CrewPolls';
 import CrewMeetingPoints from '../../components/CrewMeetingPoints';
+import CrewMyDays from '../../components/CrewMyDays';
+import MemberDayChips from '../../components/MemberDayChips';
 import CrewStatus from '../../components/CrewStatus';
 import { festivalForCrew } from '../../lib/crewFestival';
 import CrewPacking from '../../components/CrewPacking';
@@ -991,6 +993,7 @@ export default function CrewScreen() {
                       {isSelf ? ' (you)' : ''}
                     </Text>
                     {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
+                    {crewFestival ? <MemberDayChips userId={item.userId} name={displayName} days={festivalDays} /> : null}
                   </View>
                   {canManage ? (
                     <TouchableOpacity
@@ -1075,6 +1078,9 @@ export default function CrewScreen() {
                     ) : null}
                   </View>
                 </View>
+              ) : null}
+              {crewFestival ? (
+                <CrewMyDays crewId={crew.id} myUserId={user.id} days={festivalDays} />
               ) : null}
             </View>
           }

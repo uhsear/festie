@@ -50,6 +50,7 @@ vi.mock('../components/features/ListenList', () => ({
   default: () => <div data-testid="listen-list" />,
 }));
 vi.mock('../components/features/CrewSuggestionStrip', () => ({ default: () => null }));
+vi.mock('../components/features/RateNightBanner', () => ({ default: () => null }));
 vi.mock('../components/PickBulkActions', () => ({ default: () => <div data-testid="bulk-actions" /> }));
 vi.mock('../components/features/PicksPlanRow', () => ({
   default: ({ set }: { set: { artist: string } }) => <div data-testid="plan-row">{set.artist}</div>,

@@ -11,6 +11,7 @@ import DaylightToggle from '../features/DaylightToggle';
 import { useThemeSync } from '../../lib/theme';
 import { SECTION_HREF, activeSection } from './sections';
 import { useLineupHref } from '../../hooks/useLineupHref';
+import { postInstallEvent } from '../../lib/installAnalytics';
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
@@ -71,6 +72,8 @@ export default function Header() {
       e.preventDefault();
       window.__festieInstallPrompt = e as BeforeInstallPromptEvent;
       setInstallAvailable(true);
+      // The button only shows at 768px and wider; count it as shown there.
+      if (window.matchMedia('(min-width: 768px)').matches) postInstallEvent('shown');
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -165,7 +168,8 @@ export default function Header() {
                 if (!evt) return;
                 try {
                   await evt.prompt();
-                  await evt.userChoice;
+                  const choice = await evt.userChoice;
+                  postInstallEvent(choice.outcome === 'accepted' ? 'accepted' : 'dismissed');
                 } catch {
                   /* user dismissed or prompt already consumed */
                 }

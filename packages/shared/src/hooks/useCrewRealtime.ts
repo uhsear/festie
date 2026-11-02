@@ -41,6 +41,7 @@ import type {
   CrewHomeBaseUpdatedPayload,
   CrewMeetingPointPayload,
   CrewMeetingPointRemovedPayload,
+  CrewDaysUpdatedPayload,
   CrewPollCreatedPayload,
   CrewPollVotedPayload,
   CrewPollClosedPayload,
@@ -114,6 +115,11 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     const handleMeetingPointRemoved = (data: CrewMeetingPointRemovedPayload) => {
       const intent = routeMeetingPointRemoved(data, getActiveCrewId());
       if (intent) sink.onMeetingPointRemoved(intent.crewId, intent.mpId);
+    };
+
+    const handleDaysUpdated = (data: CrewDaysUpdatedPayload) => {
+      if (data.crewId !== getActiveCrewId()) return;
+      sink.onDaysUpdated(data.crewId, data);
     };
 
     const handlePollCreated = (data: CrewPollCreatedPayload) => {
@@ -208,6 +214,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     socket.on('crew:meeting-point-created', handleMeetingPointUpsert);
     socket.on('crew:meeting-point-updated', handleMeetingPointUpsert);
     socket.on('crew:meeting-point-removed', handleMeetingPointRemoved);
+    socket.on('crew:days-updated', handleDaysUpdated);
     socket.on('crew:poll-created', handlePollCreated);
     socket.on('crew:poll-voted', handlePollVoted);
     socket.on('crew:poll-closed', handlePollClosed);
@@ -250,6 +257,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       socket.off('crew:meeting-point-created', handleMeetingPointUpsert);
       socket.off('crew:meeting-point-updated', handleMeetingPointUpsert);
       socket.off('crew:meeting-point-removed', handleMeetingPointRemoved);
+      socket.off('crew:days-updated', handleDaysUpdated);
       socket.off('crew:poll-created', handlePollCreated);
       socket.off('crew:poll-voted', handlePollVoted);
       socket.off('crew:poll-closed', handlePollClosed);

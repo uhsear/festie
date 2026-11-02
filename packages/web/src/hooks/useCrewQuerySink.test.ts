@@ -233,3 +233,16 @@ describe('buildCrewQuerySink packing and rides', () => {
     expect(loadRides).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('buildCrewQuerySink crew days', () => {
+  afterEach(() => {
+    useCrewStore.setState({ activeCrew: null, crewDays: [] });
+  });
+
+  it('applies a days event to the crew store', () => {
+    useCrewStore.setState({ activeCrew: { id: 'c1' } as never, crewDays: [] });
+    const days = [{ userId: 'u2', dayIndex: 0, answer: 'no' as const }];
+    buildCrewQuerySink(new QueryClient()).onDaysUpdated('c1', { crewId: 'c1', userId: 'u2', days });
+    expect(useCrewStore.getState().crewDays).toEqual(days);
+  });
+});

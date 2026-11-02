@@ -29,6 +29,7 @@ export * from './useBulkAddPicks';
 export * from './useActiveCrew';
 export * from './useCrewHub';
 export * from './useCrewCompare';
+export * from './useCrewDaysIndex';
 export * from './useAutoArrive';
 export * from './useCreateCrew';
 export * from './useAdminUserList';

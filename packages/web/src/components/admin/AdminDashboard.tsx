@@ -1,60 +1,45 @@
-import React, { useEffect, useState } from 'react';
-import { api } from '@festie/shared/services/api';
-import { formatUptime, timeAgoFromIso } from '@festie/shared/utils';
-import { Users, Tent, ClipboardList, Music } from 'lucide-react';
-import { useToast } from '../../lib/toastContext';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchAdminDashboard } from '@festie/shared/services/admin';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import {
+  auditActionLabel,
+  dashboardStatRows,
+  describeHealth,
+  healthDetailRows,
+  timeAgoFromIso,
+} from '@festie/shared/utils';
+import { CircleCheck, CircleHelp, ClipboardList, Music, Tent, TriangleAlert, Users } from 'lucide-react';
+import EmptyState from '../ui/EmptyState';
 import { cn } from '../../lib/utils';
+import { ADMIN_QUERY_OPTIONS, adminKeys } from './adminQueries';
+import { useAdminSearch } from './useAdminSearch';
 
-interface DashboardData {
-  stats: {
-    users: number;
-    festivals: number;
-    profiles: number;
-    picks: number;
-  };
-  health: {
-    uptime: number;
-    memory: { rss: number; heapUsed: number; heapTotal: number };
-    connections: number;
-    onlineRooms: number;
-    database?: { totalCount: number; idleCount: number; waitingCount: number };
-  };
-  recentActivity: Array<{
-    id: string;
-    action: string;
-    actorUsername?: string;
-    details?: { targetUsername?: string };
-    count?: number;
-    createdAt: string;
-  }>;
-}
+const STAT_ICONS = {
+  users: <Users />,
+  festivals: <Tent />,
+  profiles: <ClipboardList />,
+  picks: <Music />,
+};
+
+const HEALTH_ICONS = {
+  ok: <CircleCheck className="w-5 h-5 text-accent-green shrink-0" aria-hidden="true" />,
+  warn: <TriangleAlert className="w-5 h-5 text-accent-amber shrink-0" aria-hidden="true" />,
+  unknown: <CircleHelp className="w-5 h-5 text-text-muted shrink-0" aria-hidden="true" />,
+};
 
 /**
  * Admin dashboard overview with stats, health, and recent activity
  */
 export default function AdminDashboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { toastError } = useToast();
+  const [, setAdminSearch] = useAdminSearch();
+  const { data, error, isError, isPending, refetch } = useQuery({
+    queryKey: adminKeys.dashboard,
+    queryFn: fetchAdminDashboard,
+    ...ADMIN_QUERY_OPTIONS,
+  });
 
-  useEffect(() => {
-    loadDashboard();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load once on mount
-
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      const result = await api.get<DashboardData>('/admin/dashboard');
-      setData(result);
-    } catch (err: unknown) {
-      toastError(err, "Couldn't load the dashboard. Try again.");
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
+  if (isPending) {
     return (
       <div className="space-y-6">
         {[1, 2, 3, 4].map((i) => (
@@ -64,21 +49,18 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!data) {
+  if (isError || !data) {
     return (
-      <div className="text-center py-12">
-        <p className="text-text-muted">Dashboard data unavailable</p>
-        <button
-          onClick={loadDashboard}
-          className="mt-4 px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium"
-        >
-          Try Again
-        </button>
-      </div>
+      <EmptyState
+        title="Couldn't load the dashboard"
+        description={mapErrorToUserMessage(error, 'Check your connection, then try again.')}
+        cta={{ label: 'Retry', onClick: () => void refetch() }}
+      />
     );
   }
 
   const { stats, health, recentActivity } = data;
+  const healthLine = describeHealth(health);
 
   return (
     <div className="space-y-8">
@@ -86,97 +68,81 @@ export default function AdminDashboard() {
       <div>
         <h2 className="type-heading text-text-primary mb-4">Statistics</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Users', value: stats.users, icon: <Users />, color: 'text-accent-aqua' },
-            { label: 'Festivals', value: stats.festivals, icon: <Tent />, color: 'text-accent-aqua' },
-            { label: 'Profiles', value: stats.profiles, icon: <ClipboardList />, color: 'text-accent-aqua' },
-            { label: 'Total Picks', value: stats.picks, icon: <Music />, color: 'text-accent-aqua' },
-          ].map((card) => (
-            <div key={card.label} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
-              <div className={cn('mb-2 [&_svg]:w-6 [&_svg]:h-6', card.color)} aria-hidden="true">
-                {card.icon}
+          {dashboardStatRows(stats).map((card) => (
+            <button
+              key={card.key}
+              type="button"
+              aria-label={`${card.value} ${card.label}. Open ${card.target}.`}
+              onClick={() => setAdminSearch({ tab: card.target })}
+              className="text-left bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 min-h-11 hover:bg-bg-card/80 transition-colors"
+            >
+              <div className={cn('mb-2 [&_svg]:w-6 [&_svg]:h-6 text-accent-aqua')} aria-hidden="true">
+                {STAT_ICONS[card.key]}
               </div>
               <div className="text-3xl font-bold text-text-primary">{card.value}</div>
-              <div className="text-xs text-text-muted mt-1">{card.label}</div>
-            </div>
+              <div className="text-sm text-text-primary mt-1">{card.label}</div>
+              <div className="text-xs text-text-muted">{card.hint}</div>
+            </button>
           ))}
         </div>
       </div>
 
-      {/* System Health */}
+      {/* Health */}
       <div>
-        <h2 className="type-heading text-text-primary mb-4">System Health</h2>
-        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Uptime</div>
-              <div className="text-2xl font-bold text-text-primary">{formatUptime(health.uptime)}</div>
-            </div>
-
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Memory (RSS)</div>
-              <div className="text-2xl font-bold text-text-primary">{health.memory.rss} MB</div>
-            </div>
-
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Heap Usage</div>
-              <div className="text-2xl font-bold text-text-primary">
-                {health.memory.heapUsed} / {health.memory.heapTotal} MB
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">WebSocket Connections</div>
-              <div className="text-2xl font-bold text-text-primary">{health.connections}</div>
-            </div>
-
-            <div>
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Online Rooms</div>
-              <div className="text-2xl font-bold text-text-primary">{health.onlineRooms}</div>
-            </div>
-
-            {health.database && (
-              <div>
-                <div className="text-xs text-text-muted uppercase tracking-wide mb-1">DB Pool</div>
-                <div className="text-sm text-text-primary font-mono">
-                  {health.database.totalCount - health.database.idleCount}A /{health.database.idleCount}I /
-                  {health.database.waitingCount}W
-                </div>
-                <div className="text-xs text-text-muted mt-1">Active / Idle / Waiting</div>
-              </div>
-            )}
+        <h2 className="type-heading text-text-primary mb-4">Health</h2>
+        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            {HEALTH_ICONS[healthLine.tone]}
+            <p className="text-text-primary">{healthLine.text}</p>
           </div>
+          {health && (
+            <details>
+              <summary className="cursor-pointer text-sm text-text-muted min-h-11 flex items-center">Details</summary>
+              <p className="text-xs text-text-muted mb-3">This server process. A restart resets these numbers.</p>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {healthDetailRows(health).map((row) => (
+                  <div key={row.label}>
+                    <dt className="text-xs text-text-muted">{row.label}</dt>
+                    <dd className="text-sm text-text-primary">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+          <a
+            href="/api/v1/admin/status"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block text-sm text-accent-aqua underline"
+          >
+            Open the full status page
+          </a>
         </div>
       </div>
 
       {/* Recent Activity */}
       <div>
-        <h2 className="type-heading text-text-primary mb-4">Recent Activity</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="type-heading text-text-primary">Recent admin activity</h2>
+          <button
+            type="button"
+            onClick={() => setAdminSearch({ tab: 'audit' })}
+            className="px-4 py-2 min-h-11 rounded-lg text-sm font-medium text-accent-aqua hover:bg-accent-aqua/10 transition-colors"
+          >
+            See all
+          </button>
+        </div>
         {recentActivity.length === 0 ? (
           <p className="text-text-muted text-sm">No recent activity</p>
         ) : (
           <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-hidden">
             <div className="divide-y divide-glass-border">
-              {recentActivity.slice(0, 15).map((activity, idx) => (
-                <div
-                  key={idx}
-                  className="px-6 py-4 flex items-center justify-between hover:bg-bg-primary/20 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-2 h-2 rounded-full bg-accent-aqua" />
-                    <div>
-                      <div className="text-sm font-medium text-text-primary">
-                        {activity.action.replace(/[_:]/g, ' ')}
-                        {activity.count && activity.count > 1 && (
-                          <span className="text-accent-amber ml-2">× {activity.count}</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-text-muted mt-1">
-                        {activity.actorUsername || activity.details?.targetUsername || 'system'}
-                      </div>
-                    </div>
+              {recentActivity.slice(0, 10).map((activity) => (
+                <div key={activity.id} className="px-6 py-4 hover:bg-bg-primary/20 transition-colors">
+                  <div className="text-sm font-medium text-text-primary">{auditActionLabel(activity.action)}</div>
+                  <div className="text-xs text-text-muted mt-1">
+                    {activity.actorUsername ?? 'System'} · {timeAgoFromIso(activity.createdAt)}
                   </div>
-                  <div className="text-xs text-text-muted whitespace-nowrap">{timeAgoFromIso(activity.createdAt)}</div>
                 </div>
               ))}
             </div>
@@ -187,8 +153,8 @@ export default function AdminDashboard() {
       {/* Refresh button */}
       <div className="flex justify-center pt-4">
         <button
-          onClick={loadDashboard}
-          className="px-6 py-2 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium border border-accent-aqua/30"
+          onClick={() => void refetch()}
+          className="px-6 py-2 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium border border-accent-aqua/30"
         >
           Refresh Dashboard
         </button>

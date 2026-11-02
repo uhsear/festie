@@ -175,7 +175,7 @@ describe('festival announcements admin POST', () => {
     await flush();
     assert.equal(calls.audit.length, 1);
     const row = calls.audit[0];
-    assert.equal(row.action, 'festival_announcement_send');
+    assert.equal(row.action, 'festival.announcement.sent');
     assert.equal(row.actorType, 'admin');
     assert.equal(row.actorId, 'admin-1');
     assert.equal(row.targetType, 'festival');
@@ -250,7 +250,7 @@ describe('festival announcements admin GET and DELETE', () => {
     assert.equal(first.status, 200);
     assert.ok(first.body.data.announcement.cancelledAt);
     assert.equal(calls.audit.length, 1);
-    assert.equal(calls.audit[0].action, 'festival_announcement_cancel');
+    assert.equal(calls.audit[0].action, 'festival.announcement.cancelled');
     assert.deepEqual(JSON.parse(calls.audit[0].detailsJson), { announcementId: id, wasSent: false });
     const second = await request(app).delete(`${BASE}/${id}`).set('x-test-admin', '1');
     assert.equal(second.status, 200);

@@ -399,13 +399,15 @@ export default function FestivalEditForm({
                   />
                   <input
                     type="color"
+                    aria-label={`Stage colour for ${stage.name || 'new stage'}`}
                     value={stage.color}
                     onChange={(e) => handleStageColor(i, e.target.value)}
                     className="w-12 h-10 rounded-lg cursor-pointer"
                   />
                   <button
                     onClick={() => handleRemoveStage(stage.id)}
-                    className="px-2 py-2 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
+                    aria-label={`Remove stage ${stage.name || 'new stage'}`}
+                    className="px-2 py-2 min-h-11 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
                   >
                     Remove
                   </button>

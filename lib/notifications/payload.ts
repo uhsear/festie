@@ -22,6 +22,8 @@ export const ALLOWED_NOTIFICATION_TYPES = new Set([
   'lineup_drop',
   'crew_reformed',
   'wrap_ready',
+  // Morning-after nudge to rate yesterday's picked sets (reengagement.ts sendRatePrompt).
+  'rate_prompt',
   // T42: a festival's first set times are out. Shares the lineupDrops opt-out.
   'set_times_out',
   // Finer crew types. Each has its own opt-out (PREF_MAP) and routes to the Android 'crew' channel.
