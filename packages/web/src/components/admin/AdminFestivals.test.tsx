@@ -8,6 +8,10 @@ const put = vi.fn();
 vi.mock('@festie/shared/services/api', () => ({
   api: { get: (...a: unknown[]) => get(...a), put: (...a: unknown[]) => put(...a), post: vi.fn(), delete: vi.fn() },
 }));
+vi.mock('@tanstack/react-router', () => ({
+  useSearch: () => ({}),
+  Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
+}));
 vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast, toastError: vi.fn() }),
 }));

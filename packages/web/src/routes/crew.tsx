@@ -23,6 +23,7 @@ import GuestTeaser from '../components/features/GuestTeaser';
 import { useCrewAdmin } from '../components/crew/useCrewAdmin';
 import { useToast } from '../lib/toastContext';
 import PromptDialog from '../components/ui/PromptDialog';
+import UserPickerDialog from '../components/admin/UserPickerDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import {
@@ -71,6 +72,7 @@ function CrewViewInner() {
   const { isAdmin, adminOpen, setAdminOpen, adminAddBusy, submitForceAdd, handleForceAdd } = useCrewAdmin(
     user,
     activeCrew?.id,
+    activeCrew?.name,
     toast,
   );
 
@@ -324,15 +326,12 @@ function CrewViewInner() {
         onConfirm={submitJoinCrew}
       />
       <JoinCrewSheet code={sheetCode} onClose={() => setSheetCode(null)} />
-      <PromptDialog
+      <UserPickerDialog
         open={adminOpen}
         onOpenChange={setAdminOpen}
-        title="Force add member"
-        description="Admin only. Type a username or email to add them without an invite code."
-        placeholder="username or email"
-        confirmLabel="Add"
-        busy={adminAddBusy}
-        onConfirm={submitForceAdd}
+        title={`Add a member to ${activeCrew?.name ?? 'this crew'}`}
+        existingUserIds={members.map((m) => m.userId)}
+        onPick={submitForceAdd}
       />
       <ConfirmDialog
         open={confirmOpen}

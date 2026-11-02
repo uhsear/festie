@@ -288,8 +288,14 @@ const adminRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/admin',
   component: AdminPanel,
-  validateSearch: (search: Record<string, unknown>): { tab?: string } =>
-    typeof search.tab === 'string' ? { tab: search.tab } : {},
+  validateSearch: (search: Record<string, unknown>): { tab?: string; user?: string; preview?: string } => {
+    const keep = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.length > 0 && v.length <= 100 ? v : undefined;
+    const tab = keep(search.tab);
+    const user = keep(search.user);
+    const preview = keep(search.preview);
+    return { ...(tab && { tab }), ...(user && { user }), ...(preview && { preview }) };
+  },
   beforeLoad: async ({ location }) => {
     await authReady();
     if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });

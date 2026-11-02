@@ -31,6 +31,7 @@ import mountAdminAuditRoutes from './admin-audit.js';
 import mountAdminBulkRoutes from './admin-bulk.js';
 import * as spotify from '../lib/spotify.js';
 import { sanitizeLinkRecord } from '../lib/schemas.js';
+import { AUDIT_ACTION_CREW_ADD_MEMBER, AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED } from '../lib/db/stores/audit.js';
 import type { Router } from 'express';
 
 export default function createAdminRoutes(deps: any): Router {
@@ -89,9 +90,26 @@ export default function createAdminRoutes(deps: any): Router {
     lineup_import: 'Lineup Imported',
     spotify_backfill: 'Spotify Backfill',
     'delete:users': 'Delete User',
+    [AUDIT_ACTION_USER_PRIVATE_DATA_VIEWED]: 'View User Details',
+    [AUDIT_ACTION_CREW_ADD_MEMBER]: 'Add Crew Member',
+    crew_remove_member: 'Remove Crew Member',
+    crew_delete: 'Delete Crew',
   };
 
   const getFriendlyAction = (action: string) => ACTION_FRIENDLY_MAP[action] || action;
+
+  // One place adds the display fields to audit rows, so the audit list and the
+  // user detail page show the same actor names. An unknown actor falls back to its id.
+  const enrichAuditEntries = async (rows: any[]) => {
+    const users = await getUsers();
+    const usernameById = new Map<string, string>(users.map((u: any) => [u.id, u.username]));
+    return rows.map((row: any) => ({
+      ...row,
+      friendlyAction: getFriendlyAction(row.action),
+      actorUsername: usernameById.get(row.actorId) || row.actorId,
+      targetLabel: row.details?.targetUsername || row.details?.name || `${row.targetType} ${row.targetId ?? ''}`.trim(),
+    }));
+  };
 
   // Collapse consecutive audit entries with same action+actorId within 5-minute window
   const groupAuditActivity = (entries: any[]) => {
@@ -206,7 +224,15 @@ export default function createAdminRoutes(deps: any): Router {
   // registered — all paths here are unique so order-reshuffling within a
   // single router is safe, but we preserve the original order to make diffs
   // trivial to audit.
-  const ctx = { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray, getFriendlyAction };
+  const ctx = {
+    adminWriteLimit,
+    passwordResetRateLimit,
+    crypto,
+    parsePageParams,
+    paginateArray,
+    getFriendlyAction,
+    enrichAuditEntries,
+  };
   mountAdminUserRoutes({ router, deps, ctx }); // /users, /users/:id/*
   mountAdminAuditRoutes({ router, deps, ctx }); // /audit
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*

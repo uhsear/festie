@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchAuditPage, type AuditEntry } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
-import { timeAgoFromIso } from '@festie/shared/utils';
+import { timeAgoFromIso, AUDIT_ACTION_FILTERS } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import DisplayWords from '../../components/DisplayWords';
 import EmptyState from '../../components/EmptyState';
@@ -24,7 +24,7 @@ import SectionLabel from '../../components/SectionLabel';
  * Admin Audit Log — filtered, cursor-paginated view of GET /admin/audit.
  *
  * A toggle picks Admin actions (default) or User activity. Filters: action
- * (free text), username (free text), from/to date (YYYY-MM-DD, coerced to ISO strings). Pagination uses the cursor the server
+ * (chips from AUDIT_ACTION_FILTERS, sent as a prefix match), username (free text), from/to date (YYYY-MM-DD, coerced to ISO strings). Pagination uses the cursor the server
  * returns in meta.nextCursor; Prev goes back through a local stack of cursors.
  *
  * Each row is expandable to show the full detail object as formatted JSON.
@@ -49,7 +49,6 @@ export default function AdminAuditScreen() {
   const isAdmin = useAuthStore((s) => s.isAdmin);
 
   // Filter state
-  const [filterAction, setFilterAction] = useState('');
   const [filterActor, setFilterActor] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
@@ -147,15 +146,13 @@ export default function AdminAuditScreen() {
     cursorStack.current = [];
     setIsPrevAvailable(false);
     setCurrentCursor(null);
-    setAppliedAction(filterAction);
     setAppliedActor(filterActor);
     setAppliedFrom(filterFrom);
     setAppliedTo(filterTo);
     setFiltersOpen(false);
-  }, [filterAction, filterActor, filterFrom, filterTo, fromError, toError]);
+  }, [filterActor, filterFrom, filterTo, fromError, toError]);
 
   const clearFilters = useCallback(() => {
-    setFilterAction('');
     setFilterActor('');
     setFilterFrom('');
     setFilterTo('');
@@ -167,6 +164,14 @@ export default function AdminAuditScreen() {
     setAppliedFrom('');
     setAppliedTo('');
     setFiltersOpen(false);
+  }, []);
+
+  const changeAction = useCallback((prefix: string) => {
+    cursorStack.current = [];
+    setIsPrevAvailable(false);
+    setCurrentCursor(null);
+    setExpandedIds(new Set());
+    setAppliedAction(prefix);
   }, []);
 
   const changeScope = useCallback((next: AuditScope) => {
@@ -285,16 +290,34 @@ export default function AdminAuditScreen() {
         })}
       </View>
 
+      {/* Action chips — each prefix matches every action that starts with it. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipScroll}
+        contentContainerStyle={styles.chipRow}
+      >
+        {AUDIT_ACTION_FILTERS.map((chip) => {
+          const selected = appliedAction === chip.prefix;
+          return (
+            <TouchableOpacity
+              key={chip.label}
+              style={[styles.scopeBtn, selected && styles.scopeBtnActive]}
+              onPress={() => changeAction(chip.prefix)}
+              accessibilityRole="button"
+              accessibilityLabel={chip.label}
+              accessibilityState={{ selected }}
+            >
+              <Text style={[styles.scopeLabel, selected && styles.scopeLabelActive]}>{chip.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
       {/* Filter panel (collapsible) */}
       {filtersOpen ? (
         <View style={styles.filterPanel}>
           <View style={styles.filterRow}>
-            <FilterInput
-              label="Action"
-              value={filterAction}
-              onChangeText={setFilterAction}
-              placeholder="e.g. user.login"
-            />
             <FilterInput
               label="Username"
               value={filterActor}
@@ -613,6 +636,14 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing[2],
     paddingHorizontal: t.spacing[4],
     paddingBottom: t.spacing[3],
+  },
+  chipScroll: {
+    flexGrow: 0,
+    paddingBottom: t.spacing[3],
+  },
+  chipRow: {
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[4],
   },
   scopeBtn: {
     minHeight: 44,

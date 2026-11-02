@@ -1,35 +1,42 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, TextInput, FlatList } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { api, withReauth } from '@festie/shared/services';
+import {
+  addCrewMember,
+  api,
+  fetchAdminCrews,
+  fetchCrewMembers,
+  removeCrewMember,
+  type AdminCrewMember,
+  type AdminCrewRow,
+  type AdminUserRow,
+} from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
-import type { Festival } from '@festie/shared/types';
+import { filterAdminCrews, removeMemberCopy } from '@festie/shared/utils';
 import ScreenHeader from '../../components/ScreenHeader';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
-import { ConfirmDialog, useReauthPrompt } from '../../components/admin';
+import { ConfirmDialog, UserPicker } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
- * Admin — Crew management + bulk operations. The native mirror of the web admin
- * crew console (packages/web/src/components/admin/AdminCrews.tsx) plus the bulk
- * moderation ops backed by routes/admin-bulk.ts. No business logic lives here —
- * every call is the generic api.*; parsing/validation is server-side.
+ * Admin — Crew management. The native mirror of the web admin crew console
+ * (packages/web/src/components/admin/AdminCrews.tsx). No business logic lives
+ * here — calls go through @festie/shared/services; parsing/validation is
+ * server-side.
  *
  * Surfaces, against the same endpoints the web console uses:
- *   GET    /admin/crews                     → crew rows (with memberCount, creator)
+ *   GET    /admin/crews                     → crew rows (memberCount, creator, invite code)
  *   GET    /admin/crews/:id/members         → member rows (userId/username/role)
  *   DELETE /admin/crews/:id                 → delete a crew entirely
- *   GET    /admin/users                     → users (force-logout candidates)
- *   GET    /festivals                       → festivals (archive candidates)
- *   POST   /admin/bulk/deactivate    body { userIds }     → force-logout users
- *   POST   /admin/bulk/archive-festivals body { festivalIds } → archive festivals
+ *   DELETE /admin/crews/:id/members/:userId → remove one member (never the owner)
+ *   POST   /crews/:id/members body { userId } → add any user to the crew
  *
- * EVERY destructive write (delete crew, force-logout, archive) is gated behind
+ * EVERY destructive write (delete crew, remove member) is gated behind
  * ConfirmDialog before the api call fires — the same destructive-confirm
  * discipline as the rest of the admin write surface.
  *
@@ -37,44 +44,25 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  * (seg[0] === 'admin') guards it. Back-navigates to '/admin'.
  */
 
-// ── Shapes ───────────────────────────────────────────────────────
-// Crew rows from /admin/crews. memberCount arrives as a Postgres COUNT (a
-// string); coerce defensively at render time.
-interface Crew {
-  id: string;
-  name: string;
-  festivalId: string;
-  createdBy: string;
-  creatorUsername?: string | null;
-  festivalName?: string | null;
-  memberCount: number | string;
-  createdAt: string;
-}
-
-// Raw getMembers rows (admin-bulk.ts returns them unserialized).
-interface CrewMember {
-  userId: string;
-  username?: string | null;
-  role?: string | null;
-}
-
-interface AdminUser {
-  id: string;
-  username: string;
-  email: string;
-  roles: string[];
-}
-
-type ConfirmKind = 'delete-crew' | 'force-logout' | 'archive';
+type ConfirmKind = 'delete-crew' | 'remove-member';
 interface ConfirmState {
   kind: ConfirmKind;
   title: string;
   message: string;
+  confirmLabel: string;
 }
 
-function memberCountOf(c: Crew): number {
-  const n = typeof c.memberCount === 'number' ? c.memberCount : parseInt(String(c.memberCount), 10);
-  return Number.isFinite(n) ? n : 0;
+interface RemoveTarget {
+  crewId: string;
+  userId: string;
+  username: string;
+}
+
+function crewSubLine(c: AdminCrewRow): string {
+  const count = c.memberCount;
+  const creator = c.creatorUsername ? `Created by @${c.creatorUsername}` : 'Created by a deleted user';
+  const date = new Date(c.createdAt).toLocaleDateString();
+  return `${count} member${count === 1 ? '' : 's'} · ${creator} · ${c.festivalName ?? 'Archived festival'} · ${date}`;
 }
 
 export default function AdminCrewsScreen() {
@@ -83,31 +71,24 @@ export default function AdminCrewsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isAdmin = useAuthStore((s) => s.isAdmin);
-  const currentUserId = useAuthStore((s) => s.user?.id);
 
-  const [crews, setCrews] = useState<Crew[]>([]);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [festivals, setFestivals] = useState<Festival[]>([]);
+  const [crews, setCrews] = useState<AdminCrewRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [membersByCrew, setMembersByCrew] = useState<Record<string, CrewMember[]>>({});
+  const [membersByCrew, setMembersByCrew] = useState<Record<string, AdminCrewMember[]>>({});
   const [membersLoading, setMembersLoading] = useState<Record<string, boolean>>({});
+  const [pickerCrewId, setPickerCrewId] = useState<string | null>(null);
 
-  // Bulk-ops selections (Sets of ids) + collapsed/expanded section state.
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
-  const [selectedFestivalIds, setSelectedFestivalIds] = useState<Set<string>>(new Set());
-
-  // The pending destructive action + the id(s) it targets. The parent owns the
+  // The pending destructive action + what it targets. The parent owns the
   // ConfirmDialog visibility, mirroring the lineup-import + Account inline edits.
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [confirmTargetId, setConfirmTargetId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
   const [busy, setBusy] = useState(false);
-  const { askPassword: askReauthPassword, reauthDialog } = useReauthPrompt();
 
   const [banner, setBanner] = useState<{ text: string; error: boolean } | null>(null);
 
@@ -124,14 +105,8 @@ export default function AdminCrewsScreen() {
   const load = useCallback(async () => {
     setError(false);
     try {
-      const [crewRows, userRows, festivalRows] = await Promise.all([
-        api.get<Crew[]>('/admin/crews'),
-        api.get<AdminUser[]>('/admin/users'),
-        api.get<Festival[]>('/festivals'),
-      ]);
+      const crewRows = await fetchAdminCrews();
       setCrews(Array.isArray(crewRows) ? crewRows : []);
-      setUsers(Array.isArray(userRows) ? userRows : []);
-      setFestivals(Array.isArray(festivalRows) ? festivalRows : []);
     } catch {
       setError(true);
     }
@@ -154,11 +129,11 @@ export default function AdminCrewsScreen() {
   }, [isAdmin, load]);
 
   const loadCrewMembers = useCallback(
-    async (crewId: string) => {
-      if (membersByCrew[crewId]) return; // cached — re-expand is instant
+    async (crewId: string, force = false) => {
+      if (membersByCrew[crewId] && !force) return; // cached: re-expand is instant
       setMembersLoading((prev) => ({ ...prev, [crewId]: true }));
       try {
-        const result = await api.get<CrewMember[]>(`/admin/crews/${crewId}/members`);
+        const result = await fetchCrewMembers(crewId);
         setMembersByCrew((prev) => ({ ...prev, [crewId]: Array.isArray(result) ? result : [] }));
       } catch {
         setBanner({ text: "Couldn't load members. Try again.", error: true });
@@ -181,69 +156,45 @@ export default function AdminCrewsScreen() {
     [expandedId, loadCrewMembers],
   );
 
-  const toggleSelect = useCallback((set: Set<string>, setter: (s: Set<string>) => void, id: string) => {
-    const next = new Set(set);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setter(next);
-  }, []);
-
-  const filteredCrews = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return crews;
-    return crews.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.creatorUsername || c.createdBy || '').toLowerCase().includes(q) ||
-        (c.festivalName || '').toLowerCase().includes(q),
-    );
-  }, [crews, search]);
+  const filteredCrews = useMemo(() => filterAdminCrews(crews, search), [crews, search]);
 
   // ── Destructive-action requests (open the confirm) ───────────────
-  const requestDeleteCrew = useCallback((crew: Crew) => {
-    const links = `${memberCountOf(crew)} member link${memberCountOf(crew) === 1 ? '' : 's'}`;
+  const requestDeleteCrew = useCallback((crew: AdminCrewRow) => {
+    const links = `${crew.memberCount} member link${crew.memberCount === 1 ? '' : 's'}`;
     setConfirmTargetId(crew.id);
+    setRemoveTarget(null);
     setConfirm({
       kind: 'delete-crew',
       title: `Delete ${crew.name}?`,
       message: `This removes the crew and all ${links}. Members lose access to shared picks. This can't be undone.`,
+      confirmLabel: 'Delete',
     });
   }, []);
 
-  const requestForceLogout = useCallback(() => {
-    const n = selectedUserIds.size;
-    if (n === 0) return;
+  const requestRemoveMember = useCallback((crew: AdminCrewRow, member: AdminCrewMember) => {
     setConfirmTargetId(null);
-    setConfirm({
-      kind: 'force-logout',
-      title: `Force logout ${n} user${n === 1 ? '' : 's'}?`,
-      message: `This clears the selected user${n === 1 ? "'s" : "s'"} active sessions, signing them out everywhere. They can sign back in with unchanged credentials.`,
-    });
-  }, [selectedUserIds]);
+    setRemoveTarget({ crewId: crew.id, userId: member.userId, username: member.username });
+    setConfirm({ kind: 'remove-member', ...removeMemberCopy(member.username, crew.name) });
+  }, []);
 
-  const requestArchive = useCallback(() => {
-    const n = selectedFestivalIds.size;
-    if (n === 0) return;
-    setConfirmTargetId(null);
-    setConfirm({
-      kind: 'archive',
-      title: `Archive ${n} festival${n === 1 ? '' : 's'}?`,
-      message: `This soft-deletes the selected festival${n === 1 ? '' : 's'} and evicts their crew rooms. Attendees lose access until restored.`,
-    });
-  }, [selectedFestivalIds]);
+  const addMember = useCallback(
+    async (user: AdminUserRow) => {
+      const crew = crews.find((c) => c.id === pickerCrewId);
+      if (!crew) return;
+      await addCrewMember(crew.id, user.id);
+      setCrews((prev) => prev.map((c) => (c.id === crew.id ? { ...c, memberCount: c.memberCount + 1 } : c)));
+      void loadCrewMembers(crew.id, true);
+      setBanner({ text: `Added @${user.username} to ${crew.name}.`, error: false });
+      setPickerCrewId(null);
+    },
+    [crews, pickerCrewId, loadCrewMembers],
+  );
 
   // ── Confirmed actions (fire the api call) ────────────────────────
   const runConfirmed = useCallback(async () => {
     if (!confirm) return;
     setBusy(true);
     setBanner(null);
-    // withReauth returns null both on cancel and for an empty response, so track cancel here.
-    let cancelled = false;
-    const askPassword = async () => {
-      const password = await askReauthPassword();
-      if (password === null) cancelled = true;
-      return password;
-    };
     try {
       if (confirm.kind === 'delete-crew' && confirmTargetId) {
         const name = crews.find((c) => c.id === confirmTargetId)?.name || 'crew';
@@ -251,48 +202,29 @@ export default function AdminCrewsScreen() {
         setCrews((prev) => prev.filter((c) => c.id !== confirmTargetId));
         if (expandedId === confirmTargetId) setExpandedId(null);
         setBanner({ text: `Deleted ${name}.`, error: false });
-      } else if (confirm.kind === 'force-logout') {
-        const userIds = Array.from(selectedUserIds);
-        const res = await withReauth(
-          () => api.post<{ results: { status: string }[] }>('/admin/bulk/deactivate', { userIds }),
-          askPassword,
-        );
-        if (cancelled || !res) {
-          setConfirm(null);
-          return;
-        }
-        const { results } = res;
-        const ok = results.filter((r) => r.status === 'logged_out').length;
-        const failed = results.length - ok;
-        setSelectedUserIds(new Set());
-        setBanner({
-          text: `Logged out ${ok} of ${results.length} users.${failed > 0 ? ` ${failed} failed.` : ''}`,
-          error: failed > 0,
-        });
-      } else if (confirm.kind === 'archive') {
-        const festivalIds = Array.from(selectedFestivalIds);
-        await withReauth(() => api.post<void>('/admin/bulk/archive-festivals', { festivalIds }), askPassword);
-        if (cancelled) {
-          setConfirm(null);
-          return;
-        }
-        setFestivals((prev) => prev.filter((f) => !selectedFestivalIds.has(f.id)));
-        setSelectedFestivalIds(new Set());
-        setBanner({ text: `Archived ${festivalIds.length} festival${festivalIds.length === 1 ? '' : 's'}.`, error: false });
+      } else if (confirm.kind === 'remove-member' && removeTarget) {
+        const { crewId, userId, username } = removeTarget;
+        const crewName = crews.find((c) => c.id === crewId)?.name || 'crew';
+        await removeCrewMember(crewId, userId);
+        setMembersByCrew((prev) => ({ ...prev, [crewId]: (prev[crewId] ?? []).filter((m) => m.userId !== userId) }));
+        setCrews((prev) => prev.map((c) => (c.id === crewId ? { ...c, memberCount: Math.max(0, c.memberCount - 1) } : c)));
+        setBanner({ text: `Removed @${username} from ${crewName}.`, error: false });
       }
       setConfirm(null);
       setConfirmTargetId(null);
+      setRemoveTarget(null);
     } catch (err: unknown) {
       setBanner({ text: err instanceof Error ? err.message : 'Action failed. Try again.', error: true });
     } finally {
       setBusy(false);
     }
-  }, [confirm, confirmTargetId, crews, expandedId, selectedUserIds, selectedFestivalIds, askReauthPassword]);
+  }, [confirm, confirmTargetId, removeTarget, crews, expandedId]);
 
   const cancelConfirm = useCallback(() => {
     if (busy) return;
     setConfirm(null);
     setConfirmTargetId(null);
+    setRemoveTarget(null);
   }, [busy]);
 
   // ── Non-admin guard (AuthGate already bounces; mirror defensively) ─
@@ -315,7 +247,7 @@ export default function AdminCrewsScreen() {
       <View style={styles.screen}>
         <ScreenHeader
           title="Crews"
-          subtitle="Management & bulk ops"
+          subtitle="Members and invite codes"
           icon="people-outline"
           right={<Button label="Back" variant="ghost" size="sm" icon="chevron-back" onPress={goBack} />}
         />
@@ -330,7 +262,7 @@ export default function AdminCrewsScreen() {
       <View style={styles.screen}>
         <ScreenHeader
           title="Crews"
-          subtitle="Management & bulk ops"
+          subtitle="Members and invite codes"
           icon="people-outline"
           right={<Button label="Back" variant="ghost" size="sm" icon="chevron-back" onPress={goBack} />}
         />
@@ -345,11 +277,13 @@ export default function AdminCrewsScreen() {
     );
   }
 
+  const pickerCrew = crews.find((c) => c.id === pickerCrewId);
+
   return (
     <View style={styles.screen}>
       <ScreenHeader
         title="Crews"
-        subtitle="Management & bulk ops"
+        subtitle="Members and invite codes"
         icon="people-outline"
         right={<Button label="Back" variant="ghost" size="sm" icon="chevron-back" onPress={goBack} />}
       />
@@ -377,13 +311,13 @@ export default function AdminCrewsScreen() {
               style={[styles.search, searchFocused && styles.searchFocused]}
               value={search}
               onChangeText={setSearch}
-              placeholder="Search by crew, creator, or festival…"
+              placeholder="Search by crew, creator, festival or invite code…"
               placeholderTextColor={t.colors.text.placeholder}
               autoCapitalize="none"
               autoCorrect={false}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
-              accessibilityLabel="Search crews by name, creator, or festival"
+              accessibilityLabel="Search crews by name, creator, festival or invite code"
             />
           </View>
         }
@@ -391,7 +325,6 @@ export default function AdminCrewsScreen() {
           const isExpanded = expandedId === crew.id;
           const members = membersByCrew[crew.id];
           const isLoadingMembers = !!membersLoading[crew.id];
-          const count = memberCountOf(crew);
           return (
             <View style={[styles.card, styles.crewCard]}>
               <View style={styles.crewHead}>
@@ -399,9 +332,8 @@ export default function AdminCrewsScreen() {
                   <Text style={styles.crewName} numberOfLines={1}>
                     {crew.name}
                   </Text>
-                  <Text style={styles.crewSub} numberOfLines={2}>
-                    {count} member{count === 1 ? '' : 's'} · {crew.creatorUsername || crew.createdBy}
-                    {crew.festivalName ? ` · ${crew.festivalName}` : ''}
+                  <Text style={styles.crewSub} numberOfLines={3}>
+                    {crewSubLine(crew)}
                   </Text>
                 </View>
               </View>
@@ -426,6 +358,11 @@ export default function AdminCrewsScreen() {
 
               {isExpanded ? (
                 <View style={styles.membersBlock}>
+                  {crew.inviteCode ? (
+                    <Text style={styles.memberHint} selectable>
+                      Invite code {crew.inviteCode}
+                    </Text>
+                  ) : null}
                   <Text style={styles.membersHeading}>Members</Text>
                   {isLoadingMembers && !members ? (
                     <Text style={styles.memberHint}>Loading members…</Text>
@@ -438,10 +375,29 @@ export default function AdminCrewsScreen() {
                         <Text style={styles.memberName} numberOfLines={1}>
                           {m.username || m.userId}
                         </Text>
-                        <Text style={styles.memberRole}>· {m.role || 'member'}</Text>
+                        {m.role === 'owner' ? (
+                          <Text style={styles.memberRole}>· Owner</Text>
+                        ) : (
+                          <Button
+                            label="Remove"
+                            variant="ghost"
+                            size="sm"
+                            onPress={() => requestRemoveMember(crew, m)}
+                            style={styles.removeBtn}
+                            accessibilityLabel={`Remove ${m.username}`}
+                          />
+                        )}
                       </View>
                     ))
                   )}
+                  <Button
+                    label="Add member"
+                    variant="secondary"
+                    size="sm"
+                    icon="person-add-outline"
+                    onPress={() => setPickerCrewId(crew.id)}
+                    style={styles.addBtn}
+                  />
                 </View>
               ) : null}
             </View>
@@ -454,159 +410,30 @@ export default function AdminCrewsScreen() {
             message={search.trim() ? 'Try adjusting your search.' : 'No crews have been created yet.'}
           />
         }
-        ListFooterComponent={
-          <View style={styles.footerBlock}>
-            {/* ── Bulk operations ─────────────────────────────────── */}
-            <SectionLabel>Bulk operations</SectionLabel>
-            <TouchableOpacity
-              style={[styles.card, styles.bulkToggle]}
-              onPress={() => setBulkOpen((o) => !o)}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={`Bulk operations, ${bulkOpen ? 'collapse' : 'expand'}`}
-              accessibilityState={{ expanded: bulkOpen }}
-            >
-              <View style={styles.bulkToggleBody}>
-                <Text style={styles.bulkTitle}>Force-logout &amp; archive</Text>
-                <Text style={styles.memberHint} numberOfLines={1}>
-                  Select users or festivals to act on in bulk
-                </Text>
-              </View>
-              <Ionicons
-                name={bulkOpen ? 'chevron-up' : 'chevron-down'}
-                size={t.iconSize.md}
-                color={t.colors.text.placeholder}
-              />
-            </TouchableOpacity>
-
-            {bulkOpen ? (
-              <View style={styles.bulkBody}>
-                {/* Force-logout users */}
-                <Text style={styles.bulkGroupTitle}>Force-logout users</Text>
-                <View style={styles.card}>
-                  {users.length === 0 ? (
-                    <View style={styles.selectRow}>
-                      <Text style={styles.memberHint}>No users.</Text>
-                    </View>
-                  ) : (
-                    users.map((u, i) => {
-                      const selected = selectedUserIds.has(u.id);
-                      const isSelf = u.id === currentUserId;
-                      return (
-                        <TouchableOpacity
-                          key={u.id}
-                          style={[styles.selectRow, i < users.length - 1 && styles.selectDivider]}
-                          onPress={isSelf ? undefined : () => toggleSelect(selectedUserIds, setSelectedUserIds, u.id)}
-                          disabled={isSelf}
-                          activeOpacity={isSelf ? 1 : 0.7}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: selected, disabled: isSelf }}
-                          accessibilityLabel={`${u.username}${u.roles.includes('admin') ? ', admin' : ''}${isSelf ? ' (you — cannot force-logout yourself)' : ''}`}
-                        >
-                          <Ionicons
-                            name={selected ? 'checkbox' : 'square-outline'}
-                            size={t.iconSize.md}
-                            color={isSelf ? t.colors.text.placeholder : selected ? t.colors.accent.aqua : t.colors.text.muted}
-                          />
-                          <View style={styles.selectMeta}>
-                            <Text style={[styles.selectName, isSelf && styles.selectNameMuted]} numberOfLines={1}>
-                              {u.username}
-                              {u.roles.includes('admin') ? ' · admin' : ''}
-                              {isSelf ? ' (you)' : ''}
-                            </Text>
-                            <Text style={styles.selectSub} numberOfLines={1}>
-                              {u.email}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })
-                  )}
-                </View>
-                <Button
-                  label={
-                    selectedUserIds.size > 0
-                      ? `Force-logout ${selectedUserIds.size} user${selectedUserIds.size === 1 ? '' : 's'}`
-                      : 'Force-logout selected'
-                  }
-                  variant="danger"
-                  icon="log-out-outline"
-                  disabled={selectedUserIds.size === 0}
-                  onPress={requestForceLogout}
-                  style={styles.bulkActionBtn}
-                />
-
-                {/* Archive festivals */}
-                <Text style={styles.bulkGroupTitle}>Archive festivals</Text>
-                <View style={styles.card}>
-                  {festivals.length === 0 ? (
-                    <View style={styles.selectRow}>
-                      <Text style={styles.memberHint}>No festivals.</Text>
-                    </View>
-                  ) : (
-                    festivals.map((f, i) => {
-                      const selected = selectedFestivalIds.has(f.id);
-                      return (
-                        <TouchableOpacity
-                          key={f.id}
-                          style={[styles.selectRow, i < festivals.length - 1 && styles.selectDivider]}
-                          onPress={() => toggleSelect(selectedFestivalIds, setSelectedFestivalIds, f.id)}
-                          activeOpacity={0.7}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: selected }}
-                          accessibilityLabel={f.name}
-                        >
-                          <Ionicons
-                            name={selected ? 'checkbox' : 'square-outline'}
-                            size={t.iconSize.md}
-                            color={selected ? t.colors.accent.aqua : t.colors.text.muted}
-                          />
-                          <View style={styles.selectMeta}>
-                            <Text style={styles.selectName} numberOfLines={1}>
-                              {f.name}
-                            </Text>
-                            {f.location ? (
-                              <Text style={styles.selectSub} numberOfLines={1}>
-                                {f.location}
-                              </Text>
-                            ) : null}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })
-                  )}
-                </View>
-                <Button
-                  label={
-                    selectedFestivalIds.size > 0
-                      ? `Archive ${selectedFestivalIds.size} festival${selectedFestivalIds.size === 1 ? '' : 's'}`
-                      : 'Archive selected'
-                  }
-                  variant="danger"
-                  icon="archive-outline"
-                  disabled={selectedFestivalIds.size === 0}
-                  onPress={requestArchive}
-                  style={styles.bulkActionBtn}
-                />
-              </View>
-            ) : null}
-          </View>
-        }
       />
 
-      {/* Destructive confirm — gates delete-crew / force-logout / archive. */}
+      {/* Destructive confirm — gates delete-crew / remove-member. */}
       <ConfirmDialog
         visible={!!confirm && !busy}
         title={confirm?.title || ''}
         message={confirm?.message || ''}
-        confirmLabel={
-          confirm?.kind === 'delete-crew' ? 'Delete' : confirm?.kind === 'archive' ? 'Archive' : 'Force logout'
-        }
+        confirmLabel={confirm?.confirmLabel || ''}
         destructive
         onConfirm={() => void runConfirmed()}
         onCancel={cancelConfirm}
       />
-      {reauthDialog}
+      <UserPicker
+        visible={!!pickerCrewId}
+        onClose={() => setPickerCrewId(null)}
+        title={`Add a member to ${pickerCrew?.name ?? 'crew'}`}
+        existingUserIds={(pickerCrewId ? membersByCrew[pickerCrewId] : undefined)?.map((m) => m.userId) ?? []}
+        fullMessage={
+          pickerCrew && pickerCrew.memberCount >= pickerCrew.maxMembers
+            ? `This crew is full (${pickerCrew.maxMembers} members).`
+            : null
+        }
+        onPick={addMember}
+      />
 
       <Stack.Screen options={{ headerShown: false }} />
     </View>
@@ -628,10 +455,6 @@ const useStyles = makeStyles((t) => ({
   },
   headerBlock: {
     gap: t.spacing[2],
-  },
-  footerBlock: {
-    gap: t.spacing[2],
-    marginTop: t.spacing[2],
   },
   card: {
     backgroundColor: t.colors.bg.secondary,
@@ -713,6 +536,12 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.muted,
   },
+  removeBtn: {
+    minHeight: 44,
+  },
+  addBtn: {
+    minHeight: 44,
+  },
   // Banner ----------------------------------------------------------------
   banner: {
     borderRadius: t.radii.default,
@@ -734,60 +563,5 @@ const useStyles = makeStyles((t) => ({
   },
   bannerTextError: {
     color: t.colors.text.danger,
-  },
-  // Bulk ------------------------------------------------------------------
-  bulkToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    paddingHorizontal: t.spacing[4],
-    paddingVertical: t.spacing[3],
-    minHeight: 56,
-  },
-  bulkToggleBody: {
-    flex: 1,
-    gap: t.spacing[1],
-  },
-  bulkTitle: {
-    ...typeStyle('body'),
-    color: t.colors.text.primary,
-  },
-  bulkBody: {
-    gap: t.spacing[2],
-  },
-  bulkGroupTitle: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.secondary,
-    marginTop: t.spacing[2],
-  },
-  bulkActionBtn: {
-    marginTop: t.spacing[1],
-  },
-  selectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    paddingHorizontal: t.spacing[4],
-    paddingVertical: t.spacing[3],
-    minHeight: 56,
-  },
-  selectDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: t.colors.border.default,
-  },
-  selectMeta: {
-    flex: 1,
-    gap: t.spacing[1],
-  },
-  selectName: {
-    ...typeStyle('body'),
-    color: t.colors.text.primary,
-  },
-  selectNameMuted: {
-    color: t.colors.text.muted,
-  },
-  selectSub: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
   },
 }));

@@ -77,6 +77,7 @@ function makeDeps(overrides: any = {}) {
     stores.crews = { ...storesBase.crews, ...overrides.stores.crews };
     stores.roles = { ...storesBase.roles, ...overrides.stores.roles };
     stores.users = { ...storesBase.users, ...overrides.stores.users };
+    if (overrides.stores.auditLog) stores.auditLog = overrides.stores.auditLog;
   }
 
   // resolveCrewOwnership mock — returns { crew, membership } by default
@@ -141,6 +142,7 @@ function makeDeps(overrides: any = {}) {
       crewAddMember: {},
     },
     io: overrides.io !== undefined ? overrides.io : ioObj,
+    getRequestIp: () => '127.0.0.1',
     stores,
     _crewHelpers: {
       resolveCrewOwnership,
@@ -939,6 +941,52 @@ describe('routes/crew-members.js — POST /:crewId/members (admin force-add)', (
     assert.equal(addMember.mock.calls.length, 1);
     assert.equal((addMember.mock.calls as any[])[0].arguments[0].userId, 'user-3');
     assert.equal((addMember.mock.calls as any[])[0].arguments[0].role, 'member');
+  });
+
+  test('admin add writes one crew_add_member audit row and marks it written', async () => {
+    const insert = mock.fn(async () => 'audit-1');
+    const deps = makeDeps({
+      stores: {
+        roles: { hasRole: mock.fn(async () => true) },
+        crews: {
+          getById: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getMember: mock.fn(async () => null),
+          getMemberCount: mock.fn(async () => 2),
+          addMember: mock.fn(async () => {}),
+        },
+        users: { getById: mock.fn(async () => ({ id: 'user-3', username: 'newbie' })) },
+        auditLog: { insert },
+      },
+    });
+    const { default: createCrewMemberRoutes } = await import('../routes/crew-members.js');
+    let auditWritten: unknown;
+    const app = express();
+    app.use(express.json());
+    // Read the flag the generic audit middleware checks, after the route has run.
+    app.use((_req: any, res: any, next: any) => {
+      res.on('finish', () => {
+        auditWritten = res.locals.auditWritten;
+      });
+      next();
+    });
+    app.use('/', createCrewMemberRoutes(deps));
+
+    await request(app).post('/crew-1/members').send({ userId: 'user-3' }).expect(200);
+
+    assert.equal(insert.mock.calls.length, 1);
+    const entry = (insert.mock.calls as any[])[0].arguments[0];
+    assert.equal(entry.action, 'crew_add_member');
+    assert.equal(entry.actorType, 'admin');
+    assert.equal(entry.actorId, 'user-1');
+    assert.equal(entry.targetType, 'crew_member');
+    assert.equal(entry.targetId, 'crew-1:user-3');
+    assert.deepEqual(JSON.parse(entry.detailsJson), {
+      crewId: 'crew-1',
+      crewName: 'Test Crew',
+      userId: 'user-3',
+      targetUsername: 'newbie',
+    });
+    assert.equal(auditWritten, true);
   });
 
   test('emits crew:member-joined via Socket.IO on admin add', async () => {

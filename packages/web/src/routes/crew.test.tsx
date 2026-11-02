@@ -150,6 +150,10 @@ vi.mock('../components/ui/PromptDialog', () => ({
   },
 }));
 
+vi.mock('../components/admin/UserPickerDialog', () => ({
+  default: () => null,
+}));
+
 vi.mock('../components/crew/JoinCrewSheet', () => ({
   default: ({ code }: { code: string | null }) => (code ? <div data-testid="join-sheet">{code}</div> : null),
 }));
