@@ -57,8 +57,8 @@ describe('migration 096 crew lock, Plan B and edit trail', { skip }, () => {
     await pool.query(SQL);
     for (const u of ['owner', 'editor']) {
       await pool.query(
-        'INSERT INTO users (id, username, password_hash, created_at) VALUES ($1, $1, $2, NOW()) ON CONFLICT DO NOTHING',
-        [`m096-${u}`, 'x'],
+        'INSERT INTO users (id, username, password_hash, created_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT DO NOTHING',
+        [`m096-${u}`, `m096-${u}`, 'x'],
       );
     }
     await pool.query("INSERT INTO festivals (id, name) VALUES ('m096-f1', 'M096 Fest') ON CONFLICT DO NOTHING");
