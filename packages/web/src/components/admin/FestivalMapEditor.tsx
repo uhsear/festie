@@ -36,7 +36,6 @@ import { useToast } from '../../lib/toastContext';
 import { useUnsavedChangesGuard } from '../../lib/useUnsavedChangesGuard';
 import { cn } from '../../lib/utils';
 import Button from '../ui/Button';
-import ConfirmDialog from '../ui/ConfirmDialog';
 
 // CrewMap is heavy (MapLibre); lazy-load it exactly like the crew surface does so
 // it never lands in the admin bundle until the map editor opens.

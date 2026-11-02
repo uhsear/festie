@@ -300,9 +300,9 @@ export default function AdminFestivals() {
     try {
       const done = await withReauth(() => bulkArchiveFestivals(ids), askPassword);
       if (done === null) return;
-      const archived = new Set(done.results.filter((r) => r.status === 'archived').map((r) => r.festivalId));
-      toast(summarizeBulkResults('archive', done.results), archived.size === ids.length ? 'success' : 'error');
-      setFestivals((prev) => prev.filter((f) => !archived.has(f.id)));
+      const archivedIds = new Set(done.results.filter((r) => r.status === 'archived').map((r) => r.festivalId));
+      toast(summarizeBulkResults('archive', done.results), archivedIds.size === ids.length ? 'success' : 'error');
+      setFestivals((prev) => prev.filter((f) => !archivedIds.has(f.id)));
       setSelected(new Set());
       setSelectionNote(undefined);
       setConfirmArchive(false);

@@ -75,8 +75,8 @@ import {
   type ChecklistItem,
   type DeleteImpact,
   type FestivalIssue,
+  type ScheduleNotice,
 } from '@festie/shared/utils';
-import type { ScheduleNotice } from '@festie/shared/utils';
 import type { Artist, FestivalMapConfig } from '@festie/shared/types';
 
 /**

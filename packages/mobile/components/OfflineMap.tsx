@@ -34,7 +34,6 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
-import { COPY } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, iconSize } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
