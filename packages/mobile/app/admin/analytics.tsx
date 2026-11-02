@@ -18,12 +18,14 @@ import DisplayWords from '../../components/DisplayWords';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import SectionLabel from '../../components/SectionLabel';
+import PickInsight from '../../components/admin/PickInsight';
 
 /**
  * Admin Analytics — mobile mirror of the web AdminAnalytics dashboard.
  *
  * Renders, for all festivals or one (festival pills):
  *   the scope line, named questions, the sign-up funnel, pick priority, top sets,
+ *   clashing picks with a per-set CSV export (one festival only, PickInsight),
  *   festivals (tap to filter), recently active people and largest crews.
  *
  * Totals come from the server (GET /admin/analytics, via fetchAdminAnalytics);
@@ -82,6 +84,7 @@ export default function AdminAnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   const fetchAnalytics = useCallback(async () => {
     setError(false);
@@ -114,6 +117,7 @@ export default function AdminAnalyticsScreen() {
   }, [isAdmin, fetchAnalytics]);
 
   const onRefresh = useCallback(() => {
+    setRefreshToken((n) => n + 1);
     setRefreshing(true);
     void fetchAnalytics().finally(() => setRefreshing(false));
   }, [fetchAnalytics]);
@@ -314,6 +318,13 @@ export default function AdminAnalyticsScreen() {
               </View>
             </>
           ) : null}
+
+          {/* ── Clashing picks ────────────────────────────────── */}
+          {festivalId ? (
+            <PickInsight festivalId={festivalId} refreshToken={refreshToken} />
+          ) : (
+            <Text style={styles.rowHint}>Choose a festival to see clashing picks and export picks per set.</Text>
+          )}
 
           {/* ── Festivals ─────────────────────────────────────── */}
           {data.festivalStats.length > 0 ? (

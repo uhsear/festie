@@ -1460,12 +1460,12 @@ export type PaginationQueryInput = z.infer<typeof paginationQuery>;
 const validDateString = z.string().refine((v) => !isNaN(new Date(v).getTime()), 'Must be a valid date string');
 export const adminAuditQuery = z.object({
   actor_id: z.string().trim().max(100).optional(),
-  // A trailing `.*` asks for a prefix match: `festival.*` matches `festival.created`.
+  // A comma list matches any item. A trailing `.*` on an item asks for a prefix match: `festival.*` matches `festival.created`.
   action: z
     .string()
     .trim()
-    .max(100)
-    .regex(/^[a-z0-9_.:-]+(\.\*)?$/i)
+    .max(200)
+    .regex(/^[a-z0-9_.:-]+(\.\*)?(,[a-z0-9_.:-]+(\.\*)?){0,4}$/i)
     .optional(),
   resource_type: z.string().trim().max(100).optional(),
   cursor: z.string().trim().max(200).optional(),

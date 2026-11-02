@@ -6,6 +6,7 @@ import { analyticsQuestions, analyticsScopeLine, formatDate, funnelSteps, timeAg
 import EmptyState from '../ui/EmptyState';
 import PickDistribution from './PickDistribution';
 import TopSets from './TopSets';
+import FestivalPickInsight from './FestivalPickInsight';
 import FestivalStats from './FestivalStats';
 import { ADMIN_QUERY_OPTIONS, adminKeys } from './adminQueries';
 import { useAdminSearch } from './useAdminSearch';
@@ -102,6 +103,12 @@ export default function AdminAnalytics() {
       />
 
       <TopSets sets={data.topSets} />
+
+      {festival ? (
+        <FestivalPickInsight festivalId={festival} />
+      ) : (
+        <p className="text-sm text-text-muted">Choose a festival to see clashing picks and export picks per set.</p>
+      )}
 
       <FestivalStats stats={data.festivalStats} onSelect={(id) => selectFestival(id)} />
 

@@ -7,11 +7,14 @@ import { normalizeAnalytics } from '@festie/shared/utils';
 import AdminAnalytics from './AdminAnalytics';
 
 const setAdminSearch = vi.fn();
-vi.mock('./useAdminSearch', () => ({ useAdminSearch: () => [{}, setAdminSearch] }));
+let searchState: { festival?: string } = {};
+vi.mock('./useAdminSearch', () => ({ useAdminSearch: () => [searchState, setAdminSearch] }));
 
 const mockFetch = vi.fn();
+const mockInsight = vi.fn();
 vi.mock('@festie/shared/services/admin', () => ({
   fetchAdminAnalytics: (...a: unknown[]) => mockFetch(...a),
+  fetchAdminPickInsight: (...a: unknown[]) => mockInsight(...a),
 }));
 
 const data = normalizeAnalytics({
@@ -34,7 +37,16 @@ function renderAnalytics() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  searchState = {};
   mockFetch.mockResolvedValue(data);
+  mockInsight.mockResolvedValue({
+    festivalId: 'f1',
+    festivalName: 'Forbidden Kingdom',
+    minPairPeople: 5,
+    sets: [],
+    clashes: [],
+    generatedAt: '2026-11-02T00:00:00Z',
+  });
 });
 
 describe('AdminAnalytics', () => {
@@ -44,6 +56,21 @@ describe('AdminAnalytics', () => {
     expect(screen.getByText('4 of 8 people with a plan (50%).')).toBeInTheDocument();
     expect(screen.getByText('Where do people drop off?')).toBeInTheDocument();
     expect(screen.getByText('Pick priority across all 30 picks')).toBeInTheDocument();
+  });
+
+  it('without a festival it asks for one and makes no insight request', async () => {
+    renderAnalytics();
+    expect(
+      await screen.findByText('Choose a festival to see clashing picks and export picks per set.'),
+    ).toBeInTheDocument();
+    expect(mockInsight).not.toHaveBeenCalled();
+  });
+
+  it('with a festival it shows Clashing picks and requests that festival', async () => {
+    searchState = { festival: 'f1' };
+    renderAnalytics();
+    expect(await screen.findByText('Clashing picks')).toBeInTheDocument();
+    expect(mockInsight).toHaveBeenCalledWith('f1');
   });
 
   it('an error shows Retry and no zeros', async () => {
