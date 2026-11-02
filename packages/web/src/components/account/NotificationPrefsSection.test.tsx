@@ -255,9 +255,10 @@ describe('NotificationPrefsSection', () => {
 
   it('does not render the crew rows that have no sender yet', () => {
     render(<NotificationPrefsSection />);
-    for (const name of ['Meeting points', 'Polls', 'Money', 'Rides']) {
+    for (const name of ['Polls', 'Money', 'Rides']) {
       expect(screen.queryByRole('switch', { name })).toBeNull();
     }
+    expect(screen.getByRole('switch', { name: 'Meeting points' })).toBeInTheDocument();
   });
 
   it('saves the must-see lead time through updatePrefs', async () => {

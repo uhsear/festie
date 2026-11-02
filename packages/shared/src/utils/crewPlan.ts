@@ -233,8 +233,10 @@ export function buildCrewMix(i: {
   dayIndex?: number;
   minCount?: number;
   limit?: number;
+  /** T43: when given, a profile is skipped for a set on a day it returns false for. */
+  isAttending?: (profile: Profile, dayIndex: number) => boolean;
 }): CrewMixEntry[] {
-  const { sets, days, profiles, nowMs, timeZone, dayIndex, minCount = 2, limit = 5 } = i;
+  const { sets, days, profiles, nowMs, timeZone, dayIndex, minCount = 2, limit = 5, isAttending } = i;
   const entries: Array<CrewMixEntry & { weight: number }> = [];
   for (const set of sets) {
     if (dayIndex != null && set.dayIndex !== dayIndex) continue;
@@ -245,7 +247,9 @@ export function buildCrewMix(i: {
     let weight = 0;
     let top: Priority | null = null;
     const memberIds: string[] = [];
-    for (const profile of profiles) {
+    const here =
+      isAttending && set.dayIndex != null ? profiles.filter((p) => isAttending(p, set.dayIndex as number)) : profiles;
+    for (const profile of here) {
       const priority = profile.picks?.[set.id] as Priority | undefined;
       if (!priority) continue;
       memberIds.push(profile.id);
@@ -253,7 +257,7 @@ export function buildCrewMix(i: {
       if (!top || PRIORITY_WEIGHT[priority] > PRIORITY_WEIGHT[top]) top = priority;
     }
     if (!top || memberIds.length < minCount) continue;
-    entries.push({ set, count: memberIds.length, total: profiles.length, topPriority: top, memberIds, weight });
+    entries.push({ set, count: memberIds.length, total: here.length, topPriority: top, memberIds, weight });
   }
   const start = (e: { set: FestivalSet }) => (e.set.startTime ? festivalStartMinutes(e.set.startTime) : Infinity);
   entries.sort(

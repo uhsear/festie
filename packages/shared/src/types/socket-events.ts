@@ -1,4 +1,4 @@
-import type { OnlineUser, Priority, CrewMemberStatus, CrewExpense } from './domain';
+import type { OnlineUser, Priority, CrewMemberStatus, CrewExpense, CrewMemberDay } from './domain';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket.IO Event Payload Types
@@ -106,6 +106,12 @@ export interface CrewMeetingPointPayload {
 export interface CrewMeetingPointRemovedPayload {
   id: string;
   crewId: string;
+}
+
+export interface CrewDaysUpdatedPayload {
+  crewId: string;
+  userId: string;
+  days: CrewMemberDay[];
 }
 
 export interface CrewPollCreatedPayload {
@@ -333,6 +339,7 @@ export interface ServerToClientEvents {
   'crew:meeting-point-created': (data: CrewMeetingPointPayload) => void;
   'crew:meeting-point-updated': (data: CrewMeetingPointPayload) => void;
   'crew:meeting-point-removed': (data: CrewMeetingPointRemovedPayload) => void;
+  'crew:days-updated': (data: CrewDaysUpdatedPayload) => void;
   'crew:poll-created': (data: CrewPollCreatedPayload) => void;
   'crew:poll-voted': (data: CrewPollVotedPayload) => void;
   'crew:poll-closed': (data: CrewPollClosedPayload) => void;

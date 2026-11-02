@@ -49,6 +49,7 @@ function setup(nowIso: string) {
     meetingPoints: [],
     polls: [],
     crewStatuses: [],
+    crewDays: [],
     loadPolls,
     loadStatuses: vi.fn().mockResolvedValue(undefined),
     loadMeetingPoints: vi.fn().mockResolvedValue(undefined),
@@ -86,6 +87,16 @@ describe('useCrewHub', () => {
     expect(result.current.upNext[0]!.groups[0]!.names).toEqual(['u1', 'u2']);
     expect(result.current.festivalName).toBe('Fest');
     expect(result.current.isOwner).toBe(true);
+  });
+
+  it('leaves an absent member out of the mix on their day only', () => {
+    const nowMs = setup('2026-08-01T12:00:00');
+    const base = renderHook(() => useCrewHub(nowMs)).result.current.mix;
+    expect(base.every((e) => e.total === 2)).toBe(true);
+    useCrewStore.setState({ crewDays: [{ userId: 'u2', dayIndex: 0, answer: 'no' }] });
+    const { result } = renderHook(() => useCrewHub(nowMs));
+    expect(result.current.mix.map((e) => e.set.id)).not.toContain('s1');
+    expect(result.current.mix.find((e) => e.set.id === 's3')).toMatchObject({ count: 2, total: 2 });
   });
 
   it('loads polls once per crew id', () => {

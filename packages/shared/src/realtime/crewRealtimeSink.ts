@@ -14,7 +14,7 @@
  * shared path later without behavior change).
  */
 
-import type { CrewMeetingPoint, CrewPoll, PeerLocation, SosEntry } from '../types/domain';
+import type { CrewMemberDay, CrewMeetingPoint, CrewPoll, PeerLocation, SosEntry } from '../types/domain';
 
 /**
  * The minimal crewStore surface the store-sink adapter depends on. Declared
@@ -27,6 +27,7 @@ export interface CrewStoreSinkApi {
     applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null }) => void;
     applyMeetingPointUpsert: (meetingPoint: CrewMeetingPoint) => void;
     applyMeetingPointRemoval: (mpId: string) => void;
+    applyCrewDays: (payload: { crewId: string; userId: string; days: CrewMemberDay[] }) => void;
     applyPollCreated: (poll: CrewPoll) => void;
     applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => void;
     applyPollClosed: (pollId: string) => void;
@@ -58,6 +59,7 @@ export interface CrewRealtimeSink {
   onHomeBaseUpdated: (crewId: string, payload: { location: string | null; time: string | null }) => void;
   onMeetingPointUpsert: (crewId: string, meetingPoint: CrewMeetingPoint) => void;
   onMeetingPointRemoved: (crewId: string, mpId: string) => void;
+  onDaysUpdated: (crewId: string, payload: { crewId: string; userId: string; days: CrewMemberDay[] }) => void;
   /**
    * Poll-created carries no full poll shape; the authoritative reload happens
    * in the hook's debounced path. `partial` carries the raw event fields for
@@ -114,6 +116,9 @@ export function createStoreSink(
     },
     onMeetingPointRemoved: (_crewId, mpId) => {
       crewStoreApi.getState().applyMeetingPointRemoval(mpId);
+    },
+    onDaysUpdated: (_crewId, payload) => {
+      crewStoreApi.getState().applyCrewDays(payload);
     },
     onPollCreated: (crewId) => {
       // The event lacks the full poll shape; reload the authoritative list.

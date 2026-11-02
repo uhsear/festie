@@ -2,7 +2,18 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import type { CreateCrewExpenseRequest, CrewExpense } from '@festie/shared/types';
 import { EXPENSE_CATEGORIES } from '@festie/shared/constants';
-import { evenShares, sharesError, formatCents, toCents } from '@festie/shared/utils';
+import {
+  evenShares,
+  sharesByDays,
+  sharesError,
+  formatCents,
+  toCents,
+  attendingDayCount,
+  hasDayAnswers,
+  memberSummary,
+} from '@festie/shared/utils';
+import { useCrewDaysIndex } from '@festie/shared/hooks';
+import { useFestivalStore } from '@festie/shared/stores';
 import { ExpenseIcon } from '../../lib/expenseIcon';
 import { cn } from '@/lib/utils';
 import { inputBase } from '../../lib/styles';
@@ -57,6 +68,10 @@ export default function ExpenseForm({
     Object.fromEntries(Object.entries(initialShares ?? {}).map(([id, cents]) => [id, centsToText(cents)])),
   );
 
+  const daysIndex = useCrewDaysIndex();
+  const dayCount = useFestivalStore((s) => s.days.length);
+  const [removedNames, setRemovedNames] = useState<string[]>([]);
+
   const editing = !!initial;
   const payerLocked = editing && !canChangePayer;
   const nameOf = (m: FormMember) => m.name || m.username || 'Crewmate';
@@ -73,6 +88,23 @@ export default function ExpenseForm({
     setShareText(Object.fromEntries(evenShares(totalCents, splitWith).map((s) => [s.userId, centsToText(s.cents)])));
     setUneven(true);
   }
+
+  function splitByDays() {
+    const { shares: byDays, removed } = sharesByDays(totalCents, splitWith, (id) =>
+      attendingDayCount(daysIndex, id, dayCount),
+    );
+    if (byDays.length === 0) return;
+    setSplitWith((prev) => prev.filter((id) => !removed.includes(id)));
+    setShareText(Object.fromEntries(byDays.map((s) => [s.userId, centsToText(s.cents)])));
+    setRemovedNames(
+      removed.map((id) => {
+        const m = members.find((x) => x.userId === id);
+        return m ? nameOf(m) : 'Crewmate';
+      }),
+    );
+  }
+
+  const canSplitByDays = uneven && totalCents > 0 && dayCount > 0 && hasDayAnswers(daysIndex, splitWith);
 
   const canSubmit = !!description.trim() && totalCents > 0 && splitWith.length > 0 && !error;
 
@@ -232,9 +264,26 @@ export default function ExpenseForm({
                 {error}
               </div>
             )}
+            {canSplitByDays && (
+              <button
+                type="button"
+                onClick={splitByDays}
+                className="min-h-11 block text-sm text-accent-aqua underline underline-offset-2"
+              >
+                By days attending
+              </button>
+            )}
+            {removedNames.length > 0 && (
+              <div className="text-xs text-text-muted">
+                {memberSummary(removedNames)} not there any day, so not in this split.
+              </div>
+            )}
             <button
               type="button"
-              onClick={() => setUneven(false)}
+              onClick={() => {
+                setUneven(false);
+                setRemovedNames([]);
+              }}
               className="min-h-11 text-sm text-accent-aqua underline underline-offset-2"
             >
               Split evenly

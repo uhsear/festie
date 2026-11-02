@@ -23,6 +23,7 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
  *   onPackingChanged / onRidesChanged -> crewStore.loadPacking / loadRides (store, not Query)
  *   onActivityLogged    -> ['crew-activity', crewId]
  *   onHomeBaseUpdated   -> crewStore.applyHomeBaseUpdate (store, not Query)
+ *   onDaysUpdated       -> crewStore.applyCrewDays (store; Compare and Members read it)
  *
  * The crewId passed to each method is the already-guarded active crew id
  * (the shared router scopes poll/expense events to the active crew), so
@@ -32,6 +33,9 @@ export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
   return {
     onHomeBaseUpdated: (crewId, payload) => {
       useCrewStore.getState().applyHomeBaseUpdate(crewId, payload);
+    },
+    onDaysUpdated: (_crewId, payload) => {
+      useCrewStore.getState().applyCrewDays(payload);
     },
     onMeetingPointUpsert: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['meeting-points', crewId] });

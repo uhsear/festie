@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewCompare, useCrewFestival, useFestival, usePicks } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { artistDisplayName, formatTime } from '@festie/shared/utils';
+import { artistDisplayName, formatTime, memberSummary } from '@festie/shared/utils';
 import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
@@ -39,7 +39,7 @@ export default function CrewCompareScreen() {
   const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
 
   const [sort, setSort] = useState<'time' | 'mix'>('time');
-  const { columns, rows, freeTogether, split, together, timeZone } = useCrewCompare(sort);
+  const { columns, rows, freeTogether, split, together, notThere, timeZone } = useCrewCompare(sort);
   const { savePick } = usePicks();
   const { getDays, getStageColor } = useFestival();
 
@@ -140,7 +140,8 @@ export default function CrewCompareScreen() {
       </Wrapper>
     );
   }
-  if (columns.length <= 1) {
+  // With everyone else Not going, keep the screen so the day selector can reach another day.
+  if (columns.length <= 1 && notThere.length === 0) {
     return (
       <Wrapper>
         <EmptyState
@@ -207,6 +208,11 @@ export default function CrewCompareScreen() {
             })}
           </ScrollView>
         </View>
+      ) : null}
+      {notThere.length > 0 ? (
+        <Text style={styles.notThere} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {`Not there ${days.find((d) => d.index === selectedDay)?.label ?? days.find((d) => d.index === selectedDay)?.date ?? 'this day'}: ${memberSummary(notThere.map((c) => c.name))}`}
+        </Text>
       ) : null}
       <View style={styles.sortRow}>
         {(
@@ -465,6 +471,12 @@ const useStyles = makeStyles((t) => ({
   topWrap: {
     paddingHorizontal: t.spacing[4],
     paddingTop: t.spacing[3],
+  },
+  notThere: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+    paddingHorizontal: t.spacing[4],
+    paddingTop: t.spacing[2],
   },
   sortRow: {
     flexDirection: 'row',

@@ -21,6 +21,7 @@ import {
   PollSetRef,
   ClosePollOptions,
   CrewMeetingPoint,
+  CrewMemberDay,
   CreateCrewMeetingPointRequest,
   UpdateCrewMeetingPointRequest,
   CrewPackingItem,
@@ -103,6 +104,8 @@ export interface CrewState {
   // sync snapshot list (NOT live GPS) — render each row's `updated_at` with
   // formatStaleness ("as of N ago"), never as real-time.
   crewStatuses: CrewMemberStatus[];
+  // T43: each member's per-day answers for the active crew (no row = no answer).
+  crewDays: CrewMemberDay[];
   expenses: CrewExpense[];
   expenseBalances: CrewExpenseBalance[];
   // Netted who-pays-whom plan (greedy min-cash-flow) + payee handles. Loaded
@@ -175,6 +178,14 @@ export interface CrewActions {
     request: UpdateCrewMeetingPointRequest,
   ) => Promise<CrewMeetingPoint>;
   deleteMeetingPoint: (crewId: string, mpId: string) => Promise<WriteOutcome>;
+  // T43: crew days and the "I'll be there" tap.
+  loadCrewDays: (crewId: string) => Promise<void>;
+  setMyDays: (
+    crewId: string,
+    myUserId: string,
+    body: { days: Array<{ dayIndex: number; answer: CrewMemberDay['answer'] }> },
+  ) => Promise<WriteOutcome>;
+  setMeetingPointComing: (crewId: string, mpId: string, myUserId: string, coming: boolean) => Promise<WriteOutcome>;
   // Packing board (routes/crew-packing.ts). Offline-native like polls.
   loadPacking: (crewId: string) => Promise<void>;
   createPackingItem: (crewId: string, request: CreateCrewPackingItemRequest) => Promise<CrewPackingItem>;
@@ -235,6 +246,7 @@ export interface CrewActions {
   applyPhotoAlbumUpdate: (crewId: string, payload: { photoAlbumUrl: string | null }) => void;
   applyMeetingPointUpsert: (meetingPoint: CrewMeetingPoint) => void;
   applyMeetingPointRemoval: (mpId: string) => void;
+  applyCrewDays: (payload: { crewId: string; userId: string; days: CrewMemberDay[] }) => void;
   applyPollCreated: (poll: CrewPoll) => void;
   applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => void;
   applyPollClosed: (pollId: string) => void;
@@ -271,6 +283,7 @@ const MAX_CACHED_PACKING = 200;
 const MAX_CACHED_RIDES = 200;
 const MAX_CACHED_STATUSES = 100;
 const MAX_CACHED_EXPENSES = 100;
+const MAX_CACHED_CREW_DAYS = 600;
 
 // ── Offline optimistic-create helpers (Phase 2) ────────────────────────────
 // Drop any lingering client-only optimistic placeholders from a list. Called
@@ -293,6 +306,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   packingItems: [],
   rideOffers: [],
   crewStatuses: [],
+  crewDays: [],
   expenses: [],
   expenseBalances: [],
   settlements: [],
@@ -336,6 +350,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
         packingItems: sameCrew ? state.packingItems : [],
         rideOffers: sameCrew ? state.rideOffers : [],
         crewStatuses: sameCrew ? state.crewStatuses : [],
+        crewDays: sameCrew ? state.crewDays : [],
         expenses: sameCrew ? state.expenses : [],
         expenseBalances: sameCrew ? state.expenseBalances : [],
         settlements: sameCrew ? state.settlements : [],
@@ -357,6 +372,8 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
         _cachedAt: Date.now(),
         _cachedCrewId: crewId,
       });
+      // Fire and forget: a failed days read must not fail the crew load.
+      void Promise.resolve(get().loadCrewDays(crewId)).catch(() => {});
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load crew');
       set({ error: message, crewLoading: false });
@@ -1437,6 +1454,98 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
     }
   },
 
+  // ── Crew days (T43) ────────────────────────────────────────────
+  // GET /crews/:crewId/days -> { days }. An old server answers 404: treat it as
+  // "no answers" so a new client never breaks against it.
+  loadCrewDays: async (crewId: string) => {
+    try {
+      const res = await api.get<{ days: CrewMemberDay[] } | CrewMemberDay[]>(`/crews/${crewId}/days`);
+      const days = Array.isArray(res) ? res : (res?.days ?? []);
+      if (get().activeCrew?.id !== crewId) return;
+      set({ crewDays: days });
+    } catch (err) {
+      if ((err as { status?: number } | null)?.status === 404) {
+        if (get().activeCrew?.id === crewId) set({ crewDays: [] });
+        return;
+      }
+      throw err;
+    }
+  },
+
+  // PUT /crews/:crewId/days replaces MY full answer set. Optimistic; a deterministic
+  // clientId collapses repeated offline changes into the latest body. An online
+  // reject restores only my previous rows.
+  setMyDays: async (crewId, myUserId, body) => {
+    set({ error: null });
+    let prevMine: CrewMemberDay[] = [];
+    const nextMine: CrewMemberDay[] = body.days.map((d) => ({ userId: myUserId, dayIndex: d.dayIndex, answer: d.answer }));
+    set((state) => {
+      prevMine = state.crewDays.filter((d) => d.userId === myUserId);
+      return { crewDays: [...state.crewDays.filter((d) => d.userId !== myUserId), ...nextMine] };
+    });
+    try {
+      const res = await api.put<{ days: CrewMemberDay[] } | (typeof body & { _optimistic: true })>(
+        `/crews/${crewId}/days`,
+        body,
+        {
+          clientId: `PUT:/crews/${crewId}/days:days-${crewId}-${myUserId}`,
+          offlineLabel: 'Update my days',
+        },
+      );
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const mine = (res as { days?: CrewMemberDay[] } | undefined)?.days;
+      if (Array.isArray(mine)) {
+        set((state) => ({ crewDays: [...state.crewDays.filter((d) => d.userId !== myUserId), ...mine] }));
+      }
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, "Couldn't save your days. Try again.");
+      set((state) => ({
+        crewDays: [...state.crewDays.filter((d) => d.userId !== myUserId), ...prevMine],
+        error: message,
+      }));
+      throw err;
+    }
+  },
+
+  // PUT /crews/:crewId/meeting-points/:mpId/coming -> { meetingPoint }. Optimistically
+  // adds or removes my id in that point's `coming`; same deterministic-clientId
+  // collapse as setMyDays. An online reject puts my id back as it was.
+  setMeetingPointComing: async (crewId, mpId, myUserId, coming) => {
+    set({ error: null });
+    const withMine = (ids: string[], on: boolean) =>
+      on ? (ids.includes(myUserId) ? ids : [...ids, myUserId]) : ids.filter((id) => id !== myUserId);
+    const patch = (on: boolean) =>
+      set((state) => ({
+        meetingPoints: state.meetingPoints.map((m) =>
+          m.id === mpId ? { ...m, coming: withMine(m.coming ?? [], on) } : m,
+        ),
+      }));
+    const wasComing = (get().meetingPoints.find((m) => m.id === mpId)?.coming ?? []).includes(myUserId);
+    patch(coming);
+    try {
+      const res = await api.put<{ meetingPoint: CrewMeetingPoint } | { coming: boolean; _optimistic: true }>(
+        `/crews/${crewId}/meeting-points/${mpId}/coming`,
+        { coming },
+        {
+          clientId: `PUT:/crews/${crewId}/meeting-points/${mpId}/coming:coming-${mpId}-${myUserId}`,
+          offlineLabel: "Update I'll be there",
+        },
+      );
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const { meetingPoint } = res as { meetingPoint?: CrewMeetingPoint };
+      if (meetingPoint && typeof meetingPoint.id === 'string') {
+        set((state) => ({ meetingPoints: state.meetingPoints.map((m) => (m.id === mpId ? meetingPoint : m)) }));
+      }
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, "Couldn't update I'll be there");
+      patch(wasComing);
+      set({ error: message });
+      throw err;
+    }
+  },
+
   // ── Expenses ───────────────────────────────────────────────────
   // GET /crews/:crewId/expenses -> array (api unwraps the data envelope).
   // Fetches the expense list AND the balance ledger together so one call
@@ -1811,6 +1920,12 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
     });
   },
 
+  // T43: replace one member's day answers from a crew:days-updated event.
+  applyCrewDays: ({ crewId, userId, days }) => {
+    if (get().activeCrew?.id !== crewId) return;
+    set((state) => ({ crewDays: [...state.crewDays.filter((d) => d.userId !== userId), ...days] }));
+  },
+
   setError: (error: string | null) => {
     set({ error });
   },
@@ -1822,7 +1937,7 @@ export const useCrewStore = create<CrewStore>()(
     // v2 (M5): added the persisted `crewStatuses` read-cache. Old v1 blobs lack
     // the key; the migrate below backfills it to an empty list so a rehydrate
     // from v1 never yields `crewStatuses: undefined`.
-    version: 2,
+    version: 3,
     storage: createJSONStorage(() => getStorage()),
     // Persist ONLY the read-cache for the active crew so a cold start with no
     // signal (the festival condition) renders the crew's members / meeting
@@ -1840,6 +1955,7 @@ export const useCrewStore = create<CrewStore>()(
       packingItems: state.packingItems.slice(0, MAX_CACHED_PACKING),
       rideOffers: state.rideOffers.slice(0, MAX_CACHED_RIDES),
       crewStatuses: state.crewStatuses.slice(0, MAX_CACHED_STATUSES),
+      crewDays: state.crewDays.slice(0, MAX_CACHED_CREW_DAYS),
       expenses: state.expenses.slice(0, MAX_CACHED_EXPENSES),
       expenseBalances: state.expenseBalances,
       settlements: state.settlements,
@@ -1853,10 +1969,11 @@ export const useCrewStore = create<CrewStore>()(
     // carried through unchanged.
     migrate: (persistedState, version) => {
       const s = (persistedState ?? {}) as Partial<CrewStore>;
-      if (version < 2 && !Array.isArray(s.crewStatuses)) {
-        return { ...s, crewStatuses: [] } as CrewStore;
-      }
-      return s as CrewStore;
+      let next = s;
+      if (version < 2 && !Array.isArray(s.crewStatuses)) next = { ...next, crewStatuses: [] };
+      // v2 -> v3 (T43): backfill the crew days read-cache.
+      if (version < 3 && !Array.isArray(s.crewDays)) next = { ...next, crewDays: [] };
+      return next as CrewStore;
     },
   }),
 );

@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CrewExpense } from '@festie/shared/types';
@@ -25,6 +26,57 @@ function setup(props: Partial<React.ComponentProps<typeof ExpenseForm>> = {}) {
   );
   return { onSubmit, user: userEvent.setup() };
 }
+
+describe('ExpenseForm by days attending', () => {
+  const day = (i: number) => ({ id: `d${i}`, dayIndex: i, date: `2026-07-0${i + 1}`, label: `Day ${i + 1}` });
+
+  beforeEach(() => {
+    useFestivalStore.setState({ days: [day(0), day(1), day(2)] } as never);
+    useCrewStore.setState({
+      crewDays: [
+        { userId: 'sam', dayIndex: 0, answer: 'no' },
+        { userId: 'sam', dayIndex: 1, answer: 'no' },
+        { userId: 'alex', dayIndex: 0, answer: 'no' },
+        { userId: 'alex', dayIndex: 1, answer: 'no' },
+        { userId: 'alex', dayIndex: 2, answer: 'no' },
+      ],
+    });
+  });
+  afterEach(() => {
+    useFestivalStore.setState({ days: [] } as never);
+    useCrewStore.setState({ crewDays: [] });
+  });
+
+  it('fills shares by days, drops a zero-day member and says so', async () => {
+    const { user, onSubmit } = setup();
+    await user.type(screen.getByLabelText('Description'), 'Gas');
+    await user.type(screen.getByLabelText('Amount'), '40');
+    await user.click(screen.getByRole('button', { name: 'Split unevenly' }));
+    await user.click(screen.getByRole('button', { name: 'By days attending' }));
+    expect(screen.getByLabelText('Me')).toHaveValue(30);
+    expect(screen.getByLabelText('Sam')).toHaveValue(10);
+    expect(screen.queryByLabelText('Alex')).not.toBeInTheDocument();
+    expect(screen.getByText('Alex not there any day, so not in this split.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        splitWith: ['me', 'sam'],
+        shares: [
+          { userId: 'me', cents: 3000 },
+          { userId: 'sam', cents: 1000 },
+        ],
+      }),
+    );
+  });
+
+  it('hides the button when nobody in the split has answered', async () => {
+    useCrewStore.setState({ crewDays: [] });
+    const { user } = setup();
+    await user.type(screen.getByLabelText('Amount'), '40');
+    await user.click(screen.getByRole('button', { name: 'Split unevenly' }));
+    expect(screen.queryByRole('button', { name: 'By days attending' })).not.toBeInTheDocument();
+  });
+});
 
 describe('ExpenseForm', () => {
   it('blocks an uneven split that does not add up and shows why', async () => {

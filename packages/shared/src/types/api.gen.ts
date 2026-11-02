@@ -1183,6 +1183,111 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/crews/{crewId}/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the day answers of current crew members */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    crewId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Day answers, ordered by user and day */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            days?: {
+                                /** @enum {string} */
+                                answer: "going" | "maybe" | "no";
+                                dayIndex: number;
+                                userId: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not a crew member */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** Replace my day answers (a day left out is cleared) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    crewId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        days: {
+                            /** @enum {string} */
+                            answer: "going" | "maybe" | "no";
+                            dayIndex: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description My day answers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            days?: {
+                                /** @enum {string} */
+                                answer: "going" | "maybe" | "no";
+                                dayIndex: number;
+                                userId: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description A repeated day, or a day that is not part of this festival */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not a crew member */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/crews/{crewId}/expenses": {
         parameters: {
             query?: never;
@@ -1274,6 +1379,67 @@ export type paths = {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crews/{crewId}/meeting-points/{mpId}/coming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or clear my I'll be there tap on an active meeting point (idempotent) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    crewId: string;
+                    mpId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        coming: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description The meeting point with its coming list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            meetingPoint?: components["schemas"]["MeetingPoint"];
+                        };
+                    };
+                };
+                /** @description Not a crew member */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Meeting point not found or not active */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -2607,6 +2773,7 @@ export type components = {
         };
         MeetingPoint: {
             active: boolean;
+            coming?: string[];
             created_at: string;
             created_by: string;
             creator_name?: string;

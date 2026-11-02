@@ -114,6 +114,8 @@ const OFFLINE_ELIGIBLE_PATTERNS: RegExp[] = [
   // (status-<crewId>-<userId>) collapses repeated offline toggles into the
   // latest, replay-safe write — captured offline, delivered on a signal blip.
   /^\/crews\/[^/]+\/status(\/|$)/,
+  // T43: my per-day attendance answers. PUT replaces my full set, so a replay is safe.
+  /^\/crews\/[^/]+\/days(\/|$)/,
   // DELIBERATELY ABSENT: /crews/:id/sos, /sos/clear, /sos/seen and
   // /crews/:id/checkin (start and done). An SOS must be ONLINE-ONLY, and so
   // must a check-in timer. Queuing it would let a "rescue" replay hours later when signal
