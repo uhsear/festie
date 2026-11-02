@@ -51,7 +51,7 @@ const QUEUE_NAME = 'reengagement';
 // the durability this module exists to provide was never actually active. It
 // failed silently because the fallback is correct: the notification still sends,
 // just on the request's event loop instead of a background worker.
-type JobName = 'wrap_ready' | 'lineup_drop' | 'crew_reformed';
+type JobName = 'wrap_ready' | 'lineup_drop' | 'crew_reformed' | 'rate_prompt';
 
 // Bound worker.close() so a long-running fan-out job can't hold up shutdown past
 // the process shutdown timeout; on timeout we force-close.
@@ -61,6 +61,7 @@ export interface ReengagementExecutor {
   sendWrapReady: (festivalId: string) => Promise<any>;
   sendLineupDrop: (festivalId: string) => Promise<any>;
   sendCrewReformed: (args: any) => Promise<any>;
+  sendRatePrompt: (festivalId: string) => Promise<any>;
 }
 
 export interface ReengagementQueueDeps {
@@ -155,6 +156,7 @@ export function createReengagementQueue(deps: ReengagementQueueDeps) {
         if (name === 'wrap_ready') return executor.sendWrapReady(data.festivalId);
         if (name === 'lineup_drop') return executor.sendLineupDrop(data.festivalId);
         if (name === 'crew_reformed') return executor.sendCrewReformed(data);
+        if (name === 'rate_prompt') return executor.sendRatePrompt(data.festivalId);
         throw new Error(`reengagement-queue: unknown job name ${name}`);
       },
       { connection: workerConn, prefix: bullPrefix, concurrency },
@@ -207,6 +209,8 @@ export function createReengagementQueue(deps: ReengagementQueueDeps) {
       enqueue('lineup_drop', `lineup-${festivalId}`, { festivalId }, () => executor.sendLineupDrop(festivalId)),
     sendCrewReformed: (args: any) =>
       enqueue('crew_reformed', `reform-${args?.newCrewId}`, args, () => executor.sendCrewReformed(args)),
+    sendRatePrompt: (festivalId: string) =>
+      enqueue('rate_prompt', 'rate-' + festivalId, { festivalId }, () => executor.sendRatePrompt(festivalId)),
     async close() {
       // worker.close() waits for in-flight jobs to finish, which is unbounded —
       // a large fan-out can keep one job busy for minutes. Bound it and force a

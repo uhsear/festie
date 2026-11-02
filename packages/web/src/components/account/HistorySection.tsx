@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared/services';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
+import { festivalPhase } from '@festie/shared/utils';
+import { Link, useNavigate } from '@tanstack/react-router';
 import EmptyState from '../ui/EmptyState';
 import Skeleton from '../ui/Skeleton';
 import { History, Trophy, CalendarDays, Clock, Music } from 'lucide-react';
@@ -59,6 +61,10 @@ function dateSpan(start: string | null, end: string | null): string | null {
  */
 export default function HistorySection() {
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
+  const currentFestival = useFestivalStore((s) => s.currentFestival);
+  const days = useFestivalStore((s) => s.days);
+  const phase = festivalPhase(currentFestival, days);
 
   const { data, isLoading, isError, refetch } = useQuery<LifetimeResponse>({
     queryKey: ['ratings-lifetime', user?.id],
@@ -96,6 +102,14 @@ export default function HistorySection() {
         icon={<History className="w-10 h-10" aria-hidden="true" />}
         title="No festival history yet"
         description="Rate sets at a festival and your year-over-year history will build here."
+        cta={
+          currentFestival && (phase === 'live' || phase === 'post')
+            ? {
+                label: `Rate sets from ${currentFestival.name}`,
+                onClick: () => navigate({ to: '/rate', search: { festival: currentFestival.id } }),
+              }
+            : undefined
+        }
       />
     );
   }
@@ -137,7 +151,13 @@ export default function HistorySection() {
             {byFestival.map((f) => {
               const span = dateSpan(f.startDate, f.endDate);
               return (
-                <div key={f.festivalId} className="p-4 rounded-xl bg-bg-card border border-border">
+                <Link
+                  key={f.festivalId}
+                  to="/wrap"
+                  search={{ festival: f.festivalId }}
+                  aria-label={`Open your ${f.festivalName || f.festivalId} wrap`}
+                  className="block p-4 rounded-xl bg-bg-card border border-border focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+                >
                   <div className="flex items-baseline justify-between gap-2">
                     <div className="font-semibold text-text-primary truncate">{f.festivalName || f.festivalId}</div>
                     {span && <div className="text-xs text-text-muted flex-shrink-0">{span}</div>}
@@ -151,7 +171,7 @@ export default function HistorySection() {
                     </span>
                     <span>{(f.totalHours ?? 0).toFixed(1)}h</span>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

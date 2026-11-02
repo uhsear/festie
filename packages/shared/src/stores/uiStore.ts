@@ -66,6 +66,8 @@ export interface UIState {
   theme: ThemePreference;
   /** Persisted device preference. Not reset on logout. SOS (heavy) always vibrates. */
   hapticsEnabled: boolean;
+  /** Persisted device preference. Not reset on logout. Shows @handle on Wrap posters. */
+  wrapShowHandle: boolean;
 }
 
 export interface UIActions {
@@ -88,6 +90,7 @@ export interface UIActions {
   dismissToast: (id: number) => void;
   setTheme: (theme: ThemePreference) => void;
   setHapticsEnabled: (enabled: boolean) => void;
+  setWrapShowHandle: (v: boolean) => void;
 }
 
 export type UIStore = UIState & UIActions;
@@ -103,6 +106,7 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   toasts: [],
   theme: 'stage',
   hapticsEnabled: true,
+  wrapShowHandle: true,
 
   setDetailSet: (detailSet: FestivalSet | null) => {
     set({ detailSet });
@@ -182,6 +186,10 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   setHapticsEnabled: (hapticsEnabled: boolean) => {
     set({ hapticsEnabled });
   },
+
+  setWrapShowHandle: (wrapShowHandle: boolean) => {
+    set({ wrapShowHandle });
+  },
 });
 
 /** localStorage key; packages/web/index.html reads it before first paint. */
@@ -191,6 +199,6 @@ export const useUIStore = create<UIStore>()(
   persist(uiStore, {
     name: THEME_STORAGE_KEY,
     storage: createJSONStorage(() => getStorage()),
-    partialize: (state) => ({ theme: state.theme, hapticsEnabled: state.hapticsEnabled }),
+    partialize: (state) => ({ theme: state.theme, hapticsEnabled: state.hapticsEnabled, wrapShowHandle: state.wrapShowHandle }),
   }),
 );

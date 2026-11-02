@@ -212,15 +212,25 @@ describe('uiStore', () => {
     });
   });
 
+  describe('wrap handle preference', () => {
+    it('defaults to true, flips with setWrapShowHandle and persists', () => {
+      expect(useUIStore.getState().wrapShowHandle).toBe(true);
+      useUIStore.getState().setWrapShowHandle(false);
+      expect(useUIStore.getState().wrapShowHandle).toBe(false);
+      expect(JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!).state.wrapShowHandle).toBe(false);
+      useUIStore.getState().setWrapShowHandle(true);
+    });
+  });
+
   describe('theme preference', () => {
-    it('defaults to stage and persists only theme and hapticsEnabled', () => {
+    it('defaults to stage and persists only theme, hapticsEnabled and wrapShowHandle', () => {
       useUIStore.getState().setTheme('stage');
       expect(useUIStore.getState().theme).toBe('stage');
       useUIStore.getState().setTheme('daylight');
       useUIStore.getState().showToast('not persisted');
       expect(useUIStore.getState().theme).toBe('daylight');
       const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
-      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true });
+      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true, wrapShowHandle: true });
       useUIStore.getState().setTheme('stage');
     });
   });

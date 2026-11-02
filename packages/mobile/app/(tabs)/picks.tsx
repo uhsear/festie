@@ -56,6 +56,7 @@ import EmptyState from '../../components/EmptyState';
 import { Skeleton } from '../../components/Skeleton';
 import SetCardMobile from '../../components/SetCardMobile';
 import CrewSuggestionStrip from '../../components/CrewSuggestionStrip';
+import RateNightBanner from '../../components/RateNightBanner';
 import OfflineReadinessCard from '../../components/OfflineReadinessCard';
 
 
@@ -794,6 +795,7 @@ export default function PicksScreen() {
       {orderRow}
       {searchField}
       <CrewSuggestionStrip />
+      <RateNightBanner />
       <ClashBannerInline
         groups={conflictGroups}
         days={days}

@@ -23,6 +23,8 @@ export const ALLOWED_NOTIFICATION_TYPES = new Set([
   'lineup_drop',
   'crew_reformed',
   'wrap_ready',
+  // Morning-after nudge to rate yesterday's picked sets (reengagement.ts sendRatePrompt).
+  'rate_prompt',
   // Finer crew types. Each has its own opt-out (PREF_MAP) and routes to the Android 'crew' channel.
   'crew_meeting_point',
   'crew_poll',

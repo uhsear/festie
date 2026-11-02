@@ -13,6 +13,7 @@
  * effect at once, even behind the CDN.
  */
 
+import { festivalTint } from '../lib/festival-tint.js';
 import { escapeHtml } from '../lib/helpers/sanitize.js';
 import { festivalStartMinutes } from '../lib/time-zone.js';
 
@@ -127,6 +128,7 @@ export default function createShareRoutes(deps: any) {
       username: escapeHtml(user?.username || profile.name || 'Anonymous'),
       avatarUrl: escapeHtml(buildAvatarUrl(user) || ''),
       festivalName: escapeHtml(festival.name),
+      tint: festivalTint(festival.name),
       festivalLocation: escapeHtml(festival.location || ''),
       days: buildShareDays(festival, picks),
       ...buildPickStats(picks),
@@ -225,7 +227,7 @@ function priorityColor(priority: any) {
   return ({ must: '#ff3366', 'want-to-see': '#ffaa00', maybe: '#888' } as any)[priority] || '#888';
 }
 
-function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, days, totalPicks, mustCount, wantCount, maybeCount, origin, shareUrl }: any) {
+function renderSharePage({ username, avatarUrl, festivalName, tint, festivalLocation, days, totalPicks, mustCount, wantCount, maybeCount, origin, shareUrl }: any) {
   const dayHtml = days.map((day: any) => `
     <div class="share-day">
       <h3>${day.label}${day.date ? ` <span class="share-date">${day.date}</span>` : ''}</h3>
@@ -259,7 +261,7 @@ function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #0a0a0f;
+      background: ${tint.bg};
       color: #e0e0e0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       line-height: 1.5;
@@ -273,6 +275,7 @@ function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, 
     .share-header {
       text-align: center;
       padding: 24px 0;
+      border-top: 4px solid ${tint.active};
       border-bottom: 1px solid rgba(255,255,255,0.1);
       margin-bottom: 20px;
     }
@@ -342,7 +345,8 @@ function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, 
       gap: 6px;
     }
     .share-set {
-      background: rgba(255,255,255,0.04);
+      background: ${tint.pale};
+      border: 1px solid ${tint.faint};
       border-radius: 8px;
       padding: 10px 12px;
     }

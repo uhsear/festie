@@ -1419,9 +1419,14 @@ describe('routes/ratings', () => {
           getByFestival: mock.fn(async () => ({ items: [], nextCursor: null })),
           getCrewRatings: mock.fn(async () => ({ items: [], nextCursor: null })),
           getWrapStats: mock.fn(async () => ({ total: 5, avgRating: 4.2 })),
+          getWrapFestival: mock.fn(async () => ({ id: 'fest-1', name: 'Test Fest', timeZone: null, days: [] })),
+          getPlannedForWrap: mock.fn(async () => []),
+          setCaught: mock.fn(async (_userId, setId, caught) => ({ setId, caught })),
         },
         crews: {
           getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          listByUserAndFestival: mock.fn(async () => []),
+          getMemberCount: mock.fn(async () => '3'),
         },
       },
       ...overrides,
@@ -1442,6 +1447,48 @@ describe('routes/ratings', () => {
 
     assert.equal(res.body.error, null);
     assert.equal(res.body.data.rating, 5);
+  });
+
+  test('POST /:setId — a missing note keeps the stored note (null), an empty note clears it', async () => {
+    const deps = buildRatingDeps();
+    const app = await mountRatings(deps);
+
+    await request(app).post('/set-a').send({ rating: 4 }).expect(200);
+    await request(app).post('/set-a').send({ rating: 4, note: '' }).expect(200);
+
+    const calls = deps.stores.ratings.upsert.mock.calls;
+    assert.equal(calls[0].arguments[3], null);
+    assert.equal(calls[1].arguments[3], '');
+  });
+
+  test('PUT /:setId/caught — stores true, false and null', async () => {
+    const deps = buildRatingDeps();
+    const app = await mountRatings(deps);
+
+    for (const caught of [true, false, null]) {
+      const res = await request(app).put('/set-a/caught').send({ caught }).expect(200);
+      assert.equal(res.body.data.caught, caught);
+    }
+    assert.deepEqual(
+      deps.stores.ratings.setCaught.mock.calls.map((c: any) => c.arguments[2]),
+      [true, false, null],
+    );
+    // This harness stubs validate(), so check the real schemas directly.
+    const { caughtUpdateSchema, wrapQuery } = await import('../lib/schemas.js');
+    assert.equal(caughtUpdateSchema.safeParse({}).success, false);
+    assert.equal(caughtUpdateSchema.safeParse({ caught: 'yes' }).success, false);
+    assert.equal(caughtUpdateSchema.safeParse({ caught: null }).success, true);
+    assert.equal(wrapQuery.safeParse({}).success, true);
+    assert.equal(wrapQuery.safeParse({ crewId: '' }).success, false);
+  });
+
+  test('PUT /:setId/caught — 404 when set not found', async () => {
+    const deps = buildRatingDeps();
+    deps.stores.pool.query = mock.fn(async () => ({ rows: [] }));
+    const app = await mountRatings(deps);
+
+    await request(app).put('/set-missing/caught').send({ caught: true }).expect(404);
+    assert.equal(deps.stores.ratings.setCaught.mock.calls.length, 0);
   });
 
   test('POST /:setId — 404 when set not found', async () => {
@@ -1502,6 +1549,41 @@ describe('routes/ratings', () => {
     assert.ok(res.body.data.stats);
     assert.ok(Array.isArray(res.body.data.topSets));
     assert.ok(Array.isArray(res.body.data.allRatings));
+    assert.deepEqual(res.body.data.festival, { id: 'fest-1', name: 'Test Fest', timeZone: null, days: [] });
+    assert.deepEqual(res.body.data.planned, []);
+    assert.equal(res.body.data.crew, null);
+    assert.equal(deps.stores.ratings.getPlannedForWrap.mock.calls[0].arguments[2], null);
+  });
+
+  test('GET /wrap/:festivalId — 404 for an unknown festival', async () => {
+    const deps = buildRatingDeps();
+    deps.stores.ratings.getWrapFestival = mock.fn(async () => null);
+    const app = await mountRatings(deps);
+
+    const res = await request(app).get('/wrap/fest-x').expect(404);
+    assert.equal(res.body.error.code, 'NOT_FOUND');
+    assert.equal(res.body.error.message, 'Festival not found');
+  });
+
+  test('GET /wrap/:festivalId — uses ?crewId= when the user is in it, else the oldest crew', async () => {
+    const deps = buildRatingDeps();
+    deps.stores.crews.listByUserAndFestival = mock.fn(async () => [
+      { id: 'crew-old', name: 'Old', photoAlbumUrl: null },
+      { id: 'crew-new', name: 'New', photoAlbumUrl: 'https://photos.example/a' },
+    ]);
+    const app = await mountRatings(deps);
+
+    const chosen = await request(app).get('/wrap/fest-1?crewId=crew-new').expect(200);
+    assert.deepEqual(chosen.body.data.crew, {
+      id: 'crew-new',
+      name: 'New',
+      memberCount: 3,
+      photoAlbumUrl: 'https://photos.example/a',
+    });
+    assert.equal(deps.stores.ratings.getPlannedForWrap.mock.calls[0].arguments[2], 'crew-new');
+
+    const fallback = await request(app).get('/wrap/fest-1?crewId=not-mine').expect(200);
+    assert.equal(fallback.body.data.crew.id, 'crew-old');
   });
 });
 

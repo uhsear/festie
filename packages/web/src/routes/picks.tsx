@@ -15,6 +15,7 @@ import OfflineReadinessCard from '../components/features/OfflineReadinessCard';
 import CrewSuggestionStrip from '../components/features/CrewSuggestionStrip';
 import GuestTeaser from '../components/features/GuestTeaser';
 import PickConflicts from '../components/features/PickConflicts';
+import RateNightBanner from '../components/features/RateNightBanner';
 import PicksPlanRow from '../components/features/PicksPlanRow';
 import ListenList from '../components/features/ListenList';
 // Lazy-loaded: SharePicksDialog pulls in qrcode.react, which has no business in the
@@ -251,6 +252,7 @@ function PicksViewInner() {
         </div>
 
         <PickConflicts groups={conflictGroups} />
+        <RateNightBanner />
         <PickBulkActions />
         <ListenList
           sets={pickedSets}

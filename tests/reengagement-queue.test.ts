@@ -25,6 +25,10 @@ function makeExecutor() {
       calls.push(['reform', args]);
       return { sent: 3, eventKey: `reform:${args.newCrewId}` };
     },
+    sendRatePrompt: async (festivalId: string) => {
+      calls.push(['rate', festivalId]);
+      return { sent: 4, eventKey: `rate:${festivalId}:0` };
+    },
   };
 }
 
@@ -127,6 +131,37 @@ describe('createReengagementQueue', () => {
     assert.equal(fakes.added[2].name, 'crew_reformed');
     assert.equal(fakes.added[2].jobOpts.jobId, 'reform-crew-9');
     assert.equal(fakes.added[2].data.crewName, 'Wolves');
+  });
+
+  it('enqueues rate_prompt with job id rate-<festivalId> and the worker routes it to the executor', async () => {
+    const fakes = makeFakes();
+    const executor = makeExecutor();
+    const q = createReengagementQueue({ executor: executor as any, log, ...fakes });
+    assert.ok(q);
+
+    const r = await q!.sendRatePrompt('fk-2026');
+    assert.deepEqual(r, { queued: true, jobId: 'rate-fk-2026' });
+    assert.deepEqual(fakes.added, [
+      { name: 'rate_prompt', data: { festivalId: 'fk-2026' }, jobOpts: { jobId: 'rate-fk-2026' } },
+    ]);
+
+    const out = await fakes.getProcessor()({
+      name: 'rate_prompt',
+      data: { festivalId: 'fk-2026' },
+      id: 'rate-fk-2026',
+      attemptsMade: 0,
+    });
+    assert.equal(out.sent, 4);
+    assert.deepEqual(executor.calls, [['rate', 'fk-2026']]);
+  });
+
+  it('rate_prompt falls back to inline execution when enqueue throws', async () => {
+    const fakes = makeFakes({ addThrows: true });
+    const executor = makeExecutor();
+    const q = createReengagementQueue({ executor: executor as any, log, ...fakes });
+    const r = await q!.sendRatePrompt('fk-2026');
+    assert.equal(r.sent, 4);
+    assert.deepEqual(executor.calls, [['rate', 'fk-2026']]);
   });
 
   it('a duplicate enqueue with an existing jobId is a no-op (BullMQ existing-jobId semantics)', async () => {
