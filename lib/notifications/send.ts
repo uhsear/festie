@@ -94,6 +94,8 @@ export const PREF_MAP: Record<string, string> = {
   crew_poll: 'crewPolls',
   crew_money: 'crewMoney',
   crew_ride: 'crewRides',
+  // T52 "Looking for you". Shares the crewUpdates switch until it has a preference column of its own.
+  crew_nudge: 'crewUpdates',
   // Admin announcements share the "Schedule changes" switch: no own preference column.
   festival_announcement: 'scheduleChanges',
 };
@@ -104,6 +106,9 @@ export const PREF_MAP: Record<string, string> = {
  * must reach people. They also route to a dedicated high-priority push channel.
  */
 const CRITICAL_TYPES = new Set(['crew_sos']);
+
+/** Types that keep their opt-out but skip quiet hours: "Looking for you" is useless once the night is over. */
+const DND_EXEMPT_TYPES = new Set(['crew_nudge']);
 
 /** Per-type push channel/category overrides for critical alerts. */
 const CRITICAL_CHANNEL: Record<string, { channelId: string; category: string }> = {
@@ -123,12 +128,13 @@ const TYPE_CHANNEL_MAP: Record<string, string> = {
   crew_poll: 'crew',
   crew_money: 'crew',
   crew_ride: 'crew',
+  crew_nudge: 'crew',
   // Exists on every build since DC7 (useMobilePush.ts); 'updates' was the legacy fallback.
   set_reminder: 'set-reminders',
 };
 
 /** Time-sensitive types: a browser should show them soon or not at all. */
-const URGENT_WEB_TYPES = new Set(['set_reminder', 'crew_sos']);
+const URGENT_WEB_TYPES = new Set(['set_reminder', 'crew_sos', 'crew_nudge']);
 
 /** Check if a stale token error code signals the device is no longer registered */
 function isStaleTokenError(code: any) {
@@ -446,7 +452,7 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     // (omitted from PREF_MAP), but guard explicitly so intent is unmistakable.
     if (!isCritical) {
       if (prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
-      if (isInDndWindow(prefs)) return { sent: 0, reason: 'dnd_active' };
+      if (!DND_EXEMPT_TYPES.has(type) && isInDndWindow(prefs)) return { sent: 0, reason: 'dnd_active' };
     }
 
     const tokens = await stores.deviceTokens.listByUser(userId);

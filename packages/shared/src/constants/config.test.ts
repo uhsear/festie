@@ -13,6 +13,7 @@ import {
   RATING_LABEL,
   ratingCaption,
   LIVE_SHARE_DURATIONS,
+  FIND_FRIEND_COPY,
 } from './config';
 import { PRIORITY_WEIGHT } from '../utils/crewNudges';
 
@@ -85,6 +86,7 @@ describe('CREW_ACTIVITY_LABELS', () => {
       'packing-created',
       'ride-created',
       'photo-album-updated',
+      'battery-low',
     ];
     for (const key of required) {
       expect(CREW_ACTIVITY_LABELS[key], `missing key: ${key}`).toBeTruthy();
@@ -100,6 +102,15 @@ describe('CREW_ACTIVITY_LABELS', () => {
     for (const [, label] of Object.entries(CREW_ACTIVITY_LABELS)) {
       expect(typeof label).toBe('string');
       expect(label.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('FIND_FRIEND_COPY', () => {
+  it('says none of the retired or watching words', () => {
+    for (const v of Object.values(FIND_FRIEND_COPY)) {
+      const text = typeof v === 'function' ? (v as (a: string | number) => string)('X') : v;
+      expect(text).not.toMatch(/log in|\bping|\bpoke|\btrack|\bfollow|\bpursue/i);
     }
   });
 });

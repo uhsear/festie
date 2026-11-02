@@ -33,6 +33,11 @@ export function compassHref(label: string, c: Coord): Href {
   return { pathname: '/compass', params: { label, latitude: String(c.latitude), longitude: String(c.longitude) } };
 }
 
+/** The compass, pointed at a sharing crewmate. */
+export function peerCompassHref(userId: string): Href {
+  return { pathname: '/compass', params: { peer: userId } };
+}
+
 /** The meeting-point create sheet, prefilled from a tapped map place. */
 export function meetingPointPrefillHref(place: MapPlace): Href {
   return {

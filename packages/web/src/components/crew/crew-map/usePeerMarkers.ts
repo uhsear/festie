@@ -2,12 +2,15 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
+import { FIND_FRIEND_COPY } from '@festie/shared/constants';
 import {
   formatBatteryLabel,
   formatShareWindow,
   getInitials,
   headingToArrow,
   isPeerStale,
+  nearStageName,
+  type MapPin,
 } from '@festie/shared/utils';
 import type { PeerLocation } from '@festie/shared/types';
 import {
@@ -33,11 +36,15 @@ export function usePeerMarkers(
   status: MapStatus,
   peers: PeerLocation[],
   peersKey: string,
+  stagePins: MapPin[],
+  stagesKey: string,
   markersRef: MutableRefObject<GlMarker[]>,
   selectPursue: (next: PursueTarget) => void,
 ): void {
   const peersRef = useRef(peers);
   peersRef.current = peers;
+  const stagePinsRef = useRef(stagePins);
+  stagePinsRef.current = stagePins;
 
   useEffect(() => {
     const map = mapRef.current;
@@ -51,13 +58,15 @@ export function usePeerMarkers(
     for (const peer of peersRef.current) {
       const rel = relAge(peer.serverAt);
       const stale = isPeerStale(peer.serverAt, now);
+      const near = nearStageName({ latitude: peer.lat, longitude: peer.lng }, stagePinsRef.current);
+      const nearCopy = near ? FIND_FRIEND_COPY.nearStage(near) : null;
       const initials = getInitials(peer.username || 'User') || '?';
       const el = document.createElement('div');
       // Stale (Snap Map-style): desaturated, no pulse, "last seen N ago" chip.
       el.className = stale ? 'festie-peer-marker festie-peer-marker--stale' : 'festie-peer-marker';
       el.setAttribute('role', 'button');
       el.setAttribute('tabindex', '0');
-      el.setAttribute('aria-label', `${peer.username} — ${stale ? `last seen ${rel}` : `live location, ${rel}`}`);
+      el.setAttribute('aria-label', `${peer.username} — ${stale ? `last seen ${rel}` : `live location, ${rel}`}${nearCopy ? `, ${nearCopy}` : ''}`);
       // Pulsing ring (CSS ::before) + initials, then a chip for stale peers. All
       // text via textContent keeps it injection-safe.
       const iniEl = document.createElement('span');
@@ -96,6 +105,7 @@ export function usePeerMarkers(
       const popupEl = popupContent([
         titleEl(peer.username),
         subEl(stale ? `Last seen ${rel}` : `Live · ${rel}`),
+        nearCopy ? subEl(nearCopy) : null,
         headingLabel,
         batteryEl,
         lowPowerEl,
@@ -123,5 +133,5 @@ export function usePeerMarkers(
       });
       markersRef.current.push(marker);
     }
-  }, [status, peersKey, selectPursue, mapRef, glRef, markersRef]);
+  }, [status, peersKey, stagesKey, selectPursue, mapRef, glRef, markersRef]);
 }

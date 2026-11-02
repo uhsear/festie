@@ -1,8 +1,10 @@
 /**
- * In-memory stand-in for the ioredis commands the check-in timer uses:
- * strings (get / set with PX / del), sorted sets (zadd / zrem /
- * zrangebyscore with LIMIT), hashes (hget / hset / hgetall / hexists /
- * pexpire) and multi().exec(). TTLs are recorded, not enforced.
+ * In-memory stand-in for the ioredis commands the check-in timer, the crew
+ * nudge limit and the battery-low line use: strings (get / set with PX and NX /
+ * del / pttl), sorted sets (zadd / zrem / zrangebyscore with LIMIT), hashes
+ * (hget / hset / hgetall / hexists / pexpire) and multi().exec(). TTLs are
+ * recorded, not enforced: a key never expires, and pttl returns the recorded
+ * TTL (-1 when none was set, -2 when the key is missing).
  */
 export function makeFakeRedis() {
   const strings = new Map<string, string>();
@@ -18,10 +20,15 @@ export function makeFakeRedis() {
     async get(key: string) {
       return strings.get(key) ?? null;
     },
-    async set(key: string, value: string, mode?: string, ms?: number) {
+    async set(key: string, value: string, mode?: string, ms?: number, flag?: string) {
+      if (flag === 'NX' && strings.has(key)) return null;
       strings.set(key, value);
       if (mode === 'PX' && typeof ms === 'number') ttls.set(key, ms);
       return 'OK';
+    },
+    async pttl(key: string) {
+      if (!strings.has(key) && !hashes.has(key) && !zsets.has(key)) return -2;
+      return ttls.get(key) ?? -1;
     },
     async del(key: string) {
       const had = strings.delete(key) || hashes.delete(key) || zsets.delete(key);
