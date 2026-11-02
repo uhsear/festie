@@ -43,6 +43,7 @@ vi.mock('@festie/shared/stores', () => ({
 vi.mock('@festie/shared/hooks', () => ({
   useFestival: () => ({ getStageColor: () => '#00e8d0', getFilteredSets: () => [] }),
   useSaveStatus: () => ({ kind: 'saved', label: 'Saved' }),
+  useViewAs: () => ({ target: null, canView: () => false, start: vi.fn(), clear: vi.fn() }),
 }));
 
 let mockPathname = '/cards';

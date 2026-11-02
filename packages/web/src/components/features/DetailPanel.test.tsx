@@ -121,6 +121,7 @@ vi.mock('@festie/shared/hooks', async (importOriginal) => ({
   usePickClear: () => mockClearPick,
   useCanPick: () => true,
   useSetMove: () => moveMock.value,
+  useViewAs: () => ({ target: null, clear: vi.fn(), ...mockViewAs }),
 }));
 vi.mock('../../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 vi.mock('./DetailPriorityPicker', () => ({
@@ -132,7 +133,12 @@ vi.mock('./DetailPriorityPicker', () => ({
   ),
 }));
 vi.mock('./DetailCrewSection', () => ({
-  default: ({ title }: { title: string }) => <div data-testid="crew-section">{title}</div>,
+  default: ({ title, onViewAs }: { title: string; onViewAs?: (id: string) => void }) => (
+    <div data-testid="crew-section">
+      {title}
+      <button onClick={() => onViewAs?.('p2')}>View as Ana</button>
+    </div>
+  ),
 }));
 vi.mock('./DetailNotesSection', () => ({
   default: ({ onPersonalChange }: { onPersonalChange: (v: string) => void }) => (
@@ -151,7 +157,13 @@ vi.mock('../../hooks/usePushNotifications', () => ({
   }),
 }));
 const mockNavigate = vi.hoisted(() => vi.fn());
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => mockNavigate }));
+const mockPathname = vi.hoisted(() => ({ value: '/cards' }));
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => mockNavigate,
+  useLocation: () => ({ pathname: mockPathname.value }),
+}));
+const mockViewAs = vi.hoisted(() => ({ start: vi.fn(), canView: vi.fn(() => true) }));
+vi.mock('./AlsoPlaysSection', () => ({ default: () => <div data-testid="also-plays" /> }));
 
 import DetailPanel from './DetailPanel';
 import { hasSetStarted, formatSetWhen } from '@festie/shared/utils';
@@ -210,6 +222,7 @@ describe('DetailPanel', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPathname.value = '/cards';
     vi.mocked(useDetailPanelData).mockReturnValue(defaultDetailData());
     vi.mocked(hasSetStarted).mockReturnValue(false);
     mockUseSpotifyPreview.mockReturnValue({ status: 'none', preview: null });
@@ -460,5 +473,32 @@ describe('DetailPanel', () => {
     // handleReminderClick clears reminderBusy in finally, so the buttons
     // become interactive again (not stuck disabled).
     expect(screen.getByRole('button', { name: 'Remind me 5m before' })).not.toBeDisabled();
+  });
+
+  it('renders Also plays between the time line and the priority picker', () => {
+    render(<DetailPanel {...defaultProps} />);
+    const when = screen.getByTestId('set-when');
+    const also = screen.getByTestId('also-plays');
+    const picker = screen.getByTestId('priority-picker');
+    expect(when.compareDocumentPosition(also) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(also.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('View as starts the filter, closes the sheet and stays put on a schedule path', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<DetailPanel {...defaultProps} onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: 'View as Ana' }));
+    expect(mockViewAs.start).toHaveBeenCalledWith('p2');
+    expect(onClose).toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/' });
+  });
+
+  it('View as navigates to the schedule from a non-schedule path', async () => {
+    mockPathname.value = '/picks';
+    const user = userEvent.setup();
+    render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByRole('button', { name: 'View as Ana' }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/' });
   });
 });

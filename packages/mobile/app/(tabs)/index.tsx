@@ -25,7 +25,7 @@ import {
   useUIStore,
   selectMyPicks,
 } from '@festie/shared/stores';
-import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady } from '@festie/shared/hooks';
+import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady, useViewAs } from '@festie/shared/hooks';
 import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
 import {
   artistDisplayName,
@@ -470,13 +470,15 @@ export default function TimelineScreen() {
 
   // One-tap reset for every active schedule filter (search text, my-picks, stage
   // selection) — the recoverability companion to the results summary chip.
+  const viewAs = useViewAs();
   const clearAllFilters = useCallback(() => {
     haptics.select();
     setSearchQuery('');
     setOnlyMine(false);
     setActiveStages([]);
     setActiveGenres([]);
-  }, [haptics, setSearchQuery, setOnlyMine, setActiveStages, setActiveGenres]);
+    viewAs.clear();
+  }, [haptics, setSearchQuery, setOnlyMine, setActiveStages, setActiveGenres, viewAs]);
 
   // Cards scroll tracking: reveal the scroll-to-top FAB once the user is well
   // past the fold. Guarded so the setState only fires on an actual transition.
@@ -655,6 +657,7 @@ export default function TimelineScreen() {
                 onPress: () => {
                   setOnlyMine(false);
                   setActiveStages([]);
+                  viewAs.clear();
                 },
               }
             : { label: searchCopy.actionLabel, onPress: () => setSearchQuery('') }
@@ -673,18 +676,21 @@ export default function TimelineScreen() {
     hasAnyPick: canFilterMine,
     stageFilterActive,
     genreFilterActive,
+    viewAsName: viewAs.target?.name,
   });
-  const filterEmptyState = (reason: 'picks' | 'stages' | 'genres') => {
-    const copy = scheduleEmptyCopy(reason, selectedDayLabel ?? 'this day');
+  const filterEmptyState = (reason: 'viewAs' | 'picks' | 'stages' | 'genres') => {
+    const copy = scheduleEmptyCopy(reason, selectedDayLabel ?? 'this day', viewAs.target?.name);
     const undo =
-      reason === 'picks'
+      reason === 'viewAs'
+        ? viewAs.clear
+        : reason === 'picks'
         ? () => setOnlyMine(false)
         : reason === 'genres'
           ? () => setActiveGenres([])
           : () => setActiveStages([]);
     return (
       <EmptyState
-        icon={reason === 'picks' ? 'star-outline' : 'filter-outline'}
+        icon={reason === 'picks' || reason === 'viewAs' ? 'star-outline' : 'filter-outline'}
         title={copy.title}
         message={copy.message}
         action={copy.actionLabel ? { label: copy.actionLabel, onPress: undo } : undefined}
@@ -698,7 +704,11 @@ export default function TimelineScreen() {
   const emptyScheduleState =
     emptyReason === 'search' ? (
       searchEmptyState
-    ) : (emptyReason === 'picks' || emptyReason === 'stages' || emptyReason === 'genres') && timelessSets.length === 0 ? (
+    ) : (emptyReason === 'viewAs' ||
+      emptyReason === 'picks' ||
+      emptyReason === 'stages' ||
+      emptyReason === 'genres') &&
+    timelessSets.length === 0 ? (
       filterEmptyState(emptyReason)
     ) : (
       <EmptyState
@@ -726,7 +736,10 @@ export default function TimelineScreen() {
     errorScheduleState
   ) : emptyReason === 'search' ? (
     searchEmptyState
-  ) : emptyReason === 'picks' || emptyReason === 'stages' || emptyReason === 'genres' ? (
+  ) : emptyReason === 'viewAs' ||
+    emptyReason === 'picks' ||
+    emptyReason === 'stages' ||
+    emptyReason === 'genres' ? (
     filterEmptyState(emptyReason)
   ) : (
     <EmptyState
@@ -784,7 +797,7 @@ export default function TimelineScreen() {
   const filtersOpen = showFilters || filtersActive;
   // Any narrowing in effect (search OR my-picks OR a stage subset) — gates the
   // results-summary + Clear-all chip.
-  const anyFilterActive = searchQuery.trim() !== '' || filtersActive;
+  const anyFilterActive = searchQuery.trim() !== '' || filtersActive || viewAs.target !== null;
 
   // Schedule controls (Now & Next, phase actions, search, day + stage filters).
   // In Cards view these ride in the FlatList's ListHeaderComponent so the WHOLE
@@ -1101,6 +1114,7 @@ export default function TimelineScreen() {
             onlyMine: mineActive,
             activeStageCount: stageFilterActive ? activeStages.length : 0,
             activeGenreCount: activeGenres.length,
+            viewAsName: viewAs.target?.name,
             tbaCount: viewMode === 'timeline' ? timelessSets.length : 0,
           })}
           onClearAll={clearAllFilters}
