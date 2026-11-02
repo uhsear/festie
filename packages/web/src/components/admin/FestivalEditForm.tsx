@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { listTimeZones } from '@festie/shared/utils';
+import type { SetEngagementMap } from '@festie/shared/services';
 import DayEditor, { Day } from './DayEditor';
 import { Stage } from './SetEditor';
 
@@ -25,6 +26,9 @@ export interface FestivalEditFormProps {
   notifyPickers: boolean;
   onNotifyPickersChange: (v: boolean) => void;
   initialExpandedDays?: Set<string>;
+  /** Picks and reminders per set id; undefined until loaded. */
+  engagement?: SetEngagementMap;
+  engagementError?: boolean;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -43,6 +47,8 @@ export default function FestivalEditForm({
   notifyPickers,
   onNotifyPickersChange,
   initialExpandedDays,
+  engagement,
+  engagementError,
   onSave,
   onCancel,
 }: FestivalEditFormProps) {
@@ -240,12 +246,14 @@ export default function FestivalEditForm({
       {/* Days */}
       <div className="border-t border-glass-border pt-4">
         <h2 className="type-label text-text-primary mb-3">Days &amp; Artists</h2>
+        {engagementError && <p className="text-xs text-text-muted mb-3">Couldn't load pick counts.</p>}
         <div className="space-y-3">
           {(formData.days || []).map((day) => (
             <DayEditor
               key={day.id}
               day={day}
               stages={formData.stages || []}
+              engagement={engagement}
               isExpanded={expandedDays.has(day.id)}
               onToggleExpand={() => toggleDayExpanded(day.id)}
               onLabelChange={(v) => handleDayLabel(day.id, v)}
@@ -283,6 +291,13 @@ export default function FestivalEditForm({
             </span>
           </div>
         </div>
+      )}
+
+      {editingId && (
+        <p className="text-xs text-text-muted">
+          Saving sends a “Schedule Updated” notification to everyone who joined this festival and allows schedule
+          alerts.
+        </p>
       )}
 
       <div className="flex gap-2 justify-end border-t border-glass-border pt-4">

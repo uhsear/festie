@@ -292,6 +292,14 @@
           "location": {
             "type": "string"
           },
+          "latitude": {
+            "nullable": true,
+            "type": "number"
+          },
+          "longitude": {
+            "nullable": true,
+            "type": "number"
+          },
           "stages": {
             "type": "array",
             "items": {
@@ -836,6 +844,14 @@
           "timeZone": {
             "nullable": true,
             "type": "string"
+          },
+          "latitude": {
+            "nullable": true,
+            "type": "number"
+          },
+          "longitude": {
+            "nullable": true,
+            "type": "number"
           },
           "mapConfig": {
             "nullable": true,

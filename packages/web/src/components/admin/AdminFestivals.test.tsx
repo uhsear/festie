@@ -13,6 +13,11 @@ vi.mock('../../lib/toastContext', () => ({
 }));
 vi.mock('./LineupImport', () => ({ default: () => null }));
 vi.mock('./FestivalMapEditor', () => ({ default: () => null }));
+vi.mock('./FestivalLinks', () => ({
+  default: ({ festivalName, onClose }: { festivalName: string; onClose: () => void }) => (
+    <button onClick={onClose}>links panel for {festivalName}</button>
+  ),
+}));
 
 import AdminFestivals from './AdminFestivals';
 
@@ -67,5 +72,30 @@ describe('AdminFestivals notify switch', () => {
     await openEditorAndSave();
     fireEvent.click(screen.getByText('Update Festival'));
     await waitFor(() => expect(toast).toHaveBeenCalledWith('Festival updated', 'success'));
+  });
+});
+
+describe('AdminFestivals Links button', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    get.mockImplementation(async (url: string) => (url === '/admin/festivals' ? [festival] : festival));
+  });
+
+  it('opens the links panel for the row and returns to the list', async () => {
+    render(<AdminFestivals />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Spotify links for Fest' }));
+    fireEvent.click(await screen.findByText('links panel for Fest'));
+    expect(await screen.findByText('Edit')).toBeTruthy();
+  });
+
+  it('shows the save note and the pick-count error when engagement fails', async () => {
+    get.mockImplementation(async (url: string) => {
+      if (url === '/admin/festivals') return [festival];
+      if (url.endsWith('/set-engagement')) throw new Error('boom');
+      return festival;
+    });
+    await openEditorAndSave();
+    expect(await screen.findByText("Couldn't load pick counts.")).toBeTruthy();
+    expect(screen.getByText(/Saving sends a “Schedule Updated” notification/)).toBeTruthy();
   });
 });

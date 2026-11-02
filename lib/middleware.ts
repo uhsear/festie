@@ -268,6 +268,30 @@ function configureMiddleware(app: Application, ctx: any) {
     }),
   );
 
+  // ── Site-plan static files ────────────────────────────────────────────
+  // Uploaded site-plan images (routes/admin-siteplan.ts). Same caching and CSP as
+  // avatars, plus cross-origin access: the mobile map WebView loads them from
+  // another origin, and Helmet sets CORP same-origin on everything else.
+  app.use(
+    '/uploads/siteplans',
+    express.static(path.join(config.PUBLIC_DIR, 'uploads', 'siteplans'), {
+      immutable: true,
+      maxAge: '365d',
+      fallthrough: true,
+      setHeaders(res: any, filePath: any) {
+        if (!filePath.endsWith('.webp')) return;
+        res.setHeader('Content-Type', 'image/webp');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader(
+          'Content-Security-Policy',
+          "default-src 'none'; img-src 'self'; style-src 'none'; script-src 'none'",
+        );
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      },
+    }),
+  );
+
   // ── Offline basemap static files (Phase 3B) ───────────────────────────
   // Per-festival PMTiles vector basemaps for the offline map. Mirrors the avatar
   // static handler: immutable long-cache (a festival's archive is content-stable;

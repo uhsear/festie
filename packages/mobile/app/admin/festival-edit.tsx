@@ -3,7 +3,15 @@ import { Alert, View, Text, ScrollView, Switch, TouchableOpacity, KeyboardAvoidi
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api, describeRemovals, removalFromError, withReauth, type RemovalSummary } from '@festie/shared/services';
+import {
+  api,
+  describeRemovals,
+  getSetEngagement,
+  removalFromError,
+  withReauth,
+  type RemovalSummary,
+  type SetEngagementMap,
+} from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
@@ -37,7 +45,13 @@ import {
   type DayRow,
   type FormState,
 } from './festivalEditState';
-import { amenityCount, describeScheduleNotice, listTimeZones, startsAfterMidnight } from '@festie/shared/utils';
+import {
+  amenityCount,
+  describeScheduleNotice,
+  listTimeZones,
+  setEngagementLabel,
+  startsAfterMidnight,
+} from '@festie/shared/utils';
 import type { ScheduleNotice } from '@festie/shared/utils';
 import type { FestivalMapConfig } from '@festie/shared/types';
 
@@ -64,7 +78,6 @@ import type { FestivalMapConfig } from '@festie/shared/types';
  *       the admin confirms, re-enters their password if asked, and it re-sends with
  *       confirmRemovals: true.
  * Delete: DELETE /admin/festivals/:id — gated behind ConfirmDialog and a password re-check.
- * Backfill: POST /admin/festivals/:id/backfill-spotify — gated behind ConfirmDialog.
  *
  * Back-navigates to '/admin' on save / cancel / delete.
  */
@@ -141,9 +154,12 @@ export default function FestivalEditScreen() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
-  const [confirm, setConfirm] = useState<'delete' | 'backfill' | null>(null);
+  const [confirm, setConfirm] = useState<'delete' | null>(null);
   const [busy, setBusy] = useState(false);
   const [notifyPickers, setNotifyPickers] = useState(true);
+  // Per-set picks and reminders (edit only). null until loaded.
+  const [engagement, setEngagement] = useState<SetEngagementMap | null>(null);
+  const [engagementError, setEngagementError] = useState(false);
   // Dirty flag: flipped by user edit handlers only (never by the initial load
   // hydration below), so Cancel can tell an untouched form from one with
   // unsaved edits. Simplest honest signal — no deep compare.
@@ -201,6 +217,13 @@ export default function FestivalEditScreen() {
       setExpandedDays(new Set(days.map((d) => d.id)));
     } catch {
       setLoadError(true);
+      return;
+    }
+    try {
+      setEngagement(await getSetEngagement(editingId));
+      setEngagementError(false);
+    } catch {
+      setEngagementError(true);
     }
   }, [editingId]);
 
@@ -246,14 +269,17 @@ export default function FestivalEditScreen() {
   // Open the dedicated map editor for this festival. The map screen loads the
   // festival by id and persists stage pins + amenities itself, so geo authoring
   // is fully owned there (this text-form screen never needs the map). Edit-only.
-  const goToMapEditor = useCallback(() => {
-    if (!editingId) return;
-    if (touched) {
-      setFormError('Save your changes before you edit the map.');
-      return;
-    }
-    router.push({ pathname: '/admin/festival-map', params: { id: editingId } });
-  }, [router, editingId, touched]);
+  const goToMapEditor = useCallback(
+    (stageId?: string) => {
+      if (!editingId) return;
+      if (touched) {
+        setFormError('Save your changes before you edit the map.');
+        return;
+      }
+      router.push({ pathname: '/admin/festival-map', params: { id: editingId, ...(stageId ? { stageId } : {}) } });
+    },
+    [router, editingId, touched],
+  );
 
   // ── Stage editing ─────────────────────────────────────────────────────────
   const addStage = () =>
@@ -425,23 +451,6 @@ export default function FestivalEditScreen() {
     }
   };
 
-  // ── Backfill Spotify ──────────────────────────────────────────────────────
-  const doBackfill = async () => {
-    if (!editingId) return;
-    setBusy(true);
-    try {
-      await api.post<void>(`/admin/festivals/${editingId}/backfill-spotify`);
-      setConfirm(null);
-      // Re-load so freshly-attached links hydrate the set rows.
-      await load();
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Couldn't backfill Spotify links. Try again.");
-      setConfirm(null);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const headerTitle = editingId ? 'Edit festival' : 'Create festival';
 
   // Non-admins never reach the editor (AuthGate also blocks the route).
@@ -484,10 +493,7 @@ export default function FestivalEditScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: headerTitle, headerShown: true }} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
@@ -573,15 +579,13 @@ export default function FestivalEditScreen() {
                     </Text>
                     {editingId ? (
                       <TouchableOpacity
-                        onPress={goToMapEditor}
+                        onPress={() => goToMapEditor(stage.id)}
                         style={styles.locationBtn}
                         activeOpacity={0.7}
                         accessibilityRole="button"
                         accessibilityLabel={`Set location for ${stage.name || 'stage'} on the map`}
                       >
-                        <Text style={styles.locationBtnText}>
-                          {stageIsPinned(stage) ? 'Move' : 'Set location'}
-                        </Text>
+                        <Text style={styles.locationBtnText}>{stageIsPinned(stage) ? 'Move' : 'Set location'}</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -602,7 +606,7 @@ export default function FestivalEditScreen() {
                 id and persists stage pins + amenities itself). */}
             {editingId ? (
               <TouchableOpacity
-                onPress={goToMapEditor}
+                onPress={() => goToMapEditor()}
                 style={styles.toolBtn}
                 activeOpacity={0.7}
                 accessibilityRole="button"
@@ -619,6 +623,7 @@ export default function FestivalEditScreen() {
           {/* Days & Artists */}
           <SectionLabel>Days &amp; artists</SectionLabel>
           <View style={styles.card}>
+            {engagementError ? <Text style={styles.emptyHint}>Couldn't load pick counts.</Text> : null}
             {form.days.length === 0 ? (
               <Text style={styles.emptyHint}>No days yet. Add one below.</Text>
             ) : (
@@ -667,11 +672,7 @@ export default function FestivalEditScreen() {
                           placeholder="Day 1 / Friday"
                           autoCapitalize="words"
                         />
-                        <DateField
-                          label="Date"
-                          value={day.date}
-                          onChangeText={(v) => setDayField(day.id, 'date', v)}
-                        />
+                        <DateField label="Date" value={day.date} onChangeText={(v) => setDayField(day.id, 'date', v)} />
 
                         {day.sets.length === 0 ? (
                           <Text style={styles.emptyHint}>No artists yet. Add one below.</Text>
@@ -690,6 +691,11 @@ export default function FestivalEditScreen() {
                                   <Ionicons name="close" size={t.iconSize.sm} color={t.colors.accent.coral} />
                                 </TouchableOpacity>
                               </View>
+                              {engagement ? (
+                                <Text style={styles.emptyHint}>
+                                  {setEngagementLabel(engagement[s.id] ?? { picks: 0, reminders: 0 })}
+                                </Text>
+                              ) : null}
                               <LabeledTextInput
                                 label="Artist"
                                 value={s.artist}
@@ -765,28 +771,6 @@ export default function FestivalEditScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Spotify backfill (edit only) */}
-          {editingId ? (
-            <>
-              <SectionLabel>Tools</SectionLabel>
-              <View style={styles.card}>
-                <TouchableOpacity
-                  onPress={() => setConfirm('backfill')}
-                  style={styles.toolBtn}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Backfill Spotify links"
-                >
-                  <Ionicons name="musical-notes-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                  <Text style={styles.toolBtnText}>Backfill Spotify</Text>
-                </TouchableOpacity>
-                <Text style={styles.emptyHint}>
-                  Auto-searches Spotify for each artist and attaches a link where one is found.
-                </Text>
-              </View>
-            </>
-          ) : null}
-
           {/* Form error */}
           {formError ? (
             <Text style={styles.formError} accessibilityLiveRegion="polite">
@@ -798,7 +782,9 @@ export default function FestivalEditScreen() {
             <View style={styles.notifyRow}>
               <View style={styles.notifyBody}>
                 <Text style={styles.notifyTitle}>Tell people whose picks changed</Text>
-                <Text style={styles.notifyHint}>Sends one alert to each person who picked a set you moved or removed.</Text>
+                <Text style={styles.notifyHint}>
+                  Sends one alert to each person who picked a set you moved or removed.
+                </Text>
               </View>
               <Switch
                 value={notifyPickers}
@@ -810,6 +796,13 @@ export default function FestivalEditScreen() {
                 accessibilityState={{ checked: notifyPickers }}
               />
             </View>
+          ) : null}
+
+          {editingId ? (
+            <Text style={styles.emptyHint}>
+              Saving sends a “Schedule Updated” notification to everyone who joined this festival and allows schedule
+              alerts.
+            </Text>
           ) : null}
 
           {/* Primary actions */}
@@ -862,15 +855,6 @@ export default function FestivalEditScreen() {
         confirmLabel={busy ? 'Deleting…' : 'Delete'}
         destructive
         onConfirm={() => void doDelete()}
-        onCancel={() => !busy && setConfirm(null)}
-      />
-      <ConfirmDialog
-        visible={confirm === 'backfill' && !busy}
-        title="Backfill Spotify links?"
-        message="Searches Spotify for every artist in this festival and attaches a link where a confident match is found. Existing links are preserved."
-        confirmLabel={busy ? 'Working…' : 'Backfill'}
-        destructive
-        onConfirm={() => void doBackfill()}
         onCancel={() => !busy && setConfirm(null)}
       />
       <ConfirmDialog

@@ -2,7 +2,14 @@
 // lifted into lib/adminValidators.ts — a framework-free module with no react /
 // react-native imports — so this test loads cleanly under node-vitest without
 // stubbing the token runtime. AdminFields.tsx re-exports them for the component.
-import { isValidDate, isValidTime, HEX_RE, filterOptions } from '../../lib/adminValidators';
+import {
+  isValidDate,
+  isValidTime,
+  HEX_RE,
+  filterOptions,
+  pickerDateFromValue,
+  valueFromPickerDate,
+} from '../../lib/adminValidators';
 
 // Mobile-LOCAL validators for the OTA-able admin write surface (no native
 // datetimepicker / color-picker). These are the pure branches behind
@@ -90,6 +97,42 @@ describe('filterOptions (ModalSelect search)', () => {
 
   it('returns nothing when no label matches', () => {
     expect(filterOptions(zones, 'zzz')).toEqual([]);
+  });
+});
+
+describe('Android picker value mapping', () => {
+  const now = new Date(2026, 5, 3, 8, 15);
+
+  it('opens a valid date at local noon', () => {
+    const d = pickerDateFromValue('date', '2026-06-23', now);
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2026, 5, 23, 12]);
+  });
+
+  it('opens a valid time today at that hour and minute', () => {
+    const d = pickerDateFromValue('time', '21:30', now);
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()]).toEqual([2026, 5, 3, 21, 30]);
+  });
+
+  it('opens a blank time at today 12:00', () => {
+    const d = pickerDateFromValue('time', '', now);
+    expect([d.getDate(), d.getHours(), d.getMinutes()]).toEqual([3, 12, 0]);
+  });
+
+  it('opens TBA / invalid at now (date) or 12:00 (time)', () => {
+    expect(pickerDateFromValue('date', 'TBA', now)).toBe(now);
+    expect(pickerDateFromValue('date', '', now)).toBe(now);
+    expect(pickerDateFromValue('time', 'TBA', now).getHours()).toBe(12);
+  });
+
+  it('zero-pads picked values', () => {
+    expect(valueFromPickerDate('time', new Date(2026, 0, 1, 9, 5))).toBe('09:05');
+    expect(valueFromPickerDate('date', new Date(2026, 5, 3))).toBe('2026-06-03');
+  });
+
+  it('round-trips', () => {
+    expect(valueFromPickerDate('date', pickerDateFromValue('date', '2026-12-31', now))).toBe('2026-12-31');
+    expect(valueFromPickerDate('time', pickerDateFromValue('time', '00:00', now))).toBe('00:00');
+    expect(valueFromPickerDate('time', pickerDateFromValue('time', '23:59', now))).toBe('23:59');
   });
 });
 

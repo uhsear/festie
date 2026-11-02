@@ -37,6 +37,33 @@ export function filterOptions<T extends { label: string }>(options: readonly T[]
   return q ? options.filter((o) => o.label.toLowerCase().includes(q)) : [...options];
 }
 
+/**
+ * Initial Date for the Android system picker. A valid date opens at local noon
+ * (keeps the day stable across DST); a valid time opens today at that time.
+ * Blank, "TBA" or invalid values open at `now` (dates) or today 12:00 (times).
+ */
+export function pickerDateFromValue(kind: 'date' | 'time', value: string, now: Date = new Date()): Date {
+  const v = value.trim();
+  if (kind === 'date') {
+    if (!isValidDate(v)) return now;
+    const [y = 0, m = 1, d = 1] = v.split('-').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0, 0);
+  }
+  const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  if (!isValidTime(v)) return base;
+  const [h = 12, min = 0] = v.split(':').map(Number);
+  base.setHours(h, min, 0, 0);
+  return base;
+}
+
+/** Local `YYYY-MM-DD` or 24h `HH:MM` (zero-padded) from a picker Date. */
+export function valueFromPickerDate(kind: 'date' | 'time', d: Date): string {
+  const p = (n: number, w = 2) => String(n).padStart(w, '0');
+  return kind === 'date'
+    ? `${p(d.getFullYear(), 4)}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    : `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 /** Empty or a literal "TBA" (case-insensitive) is the permitted fallback. */
 export function isTbaFallback(value: string): boolean {
   const v = value.trim();

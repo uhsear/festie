@@ -15,6 +15,10 @@ import {
   stageCoordFromTap,
   captureCenter,
   amenityCount,
+  buildZoneFeature,
+  appendZone,
+  setZoneLabel,
+  moveZone,
   type AmenityFeature,
 } from './mapAuthoring';
 import type { FestivalMapConfig } from '../types/domain';
@@ -215,5 +219,49 @@ describe('amenityCount', () => {
   it('counts amenities; 0 for null', () => {
     expect(amenityCount(null)).toBe(0);
     expect(amenityCount(appendAmenity(null, feature({ id: 'a1' })))).toBe(1);
+  });
+});
+
+describe('setZoneLabel and moveZone', () => {
+  const sq = (id: string, lat: number, lng: number) =>
+    buildZoneFeature(
+      [
+        { latitude: lat, longitude: lng },
+        { latitude: lat, longitude: lng + 2 },
+        { latitude: lat + 2, longitude: lng + 2 },
+        { latitude: lat + 2, longitude: lng },
+      ],
+      { label: 'x' },
+      id,
+    )!;
+  const cfg = (): FestivalMapConfig =>
+    appendZone(appendZone({ version: 1, center: [1, 2] }, sq('z1', 10, 10)), sq('z2', 20, 20));
+
+  it('setZoneLabel changes only the target zone and trims', () => {
+    const next = setZoneLabel(cfg(), 'z1', '  VIP  ');
+    expect(next.zones!.features.map((f) => (f.properties as { label: string }).label)).toEqual(['VIP', 'x']);
+    expect(next.center).toEqual([1, 2]);
+    expect(setZoneLabel(cfg(), 'z1', '   ').zones!.features[0]!.properties).toMatchObject({ label: '' });
+    expect(setZoneLabel(cfg(), 'nope', 'a')).toEqual(cfg());
+  });
+
+  it('moveZone centres the ring on the target, stays closed, and does not mutate', () => {
+    const input = cfg();
+    const snapshot = JSON.parse(JSON.stringify(input));
+    const next = moveZone(input, 'z1', { latitude: 50, longitude: 60 });
+    expect(input).toEqual(snapshot);
+    const geom = next.zones!.features[0]!.geometry as { coordinates: [number, number][][] };
+    const ring = geom.coordinates[0]!;
+    expect(ring[0]).toEqual(ring[ring.length - 1]);
+    const open = ring.slice(0, -1);
+    expect(open.reduce((s, p) => s + p[0], 0) / open.length).toBeCloseTo(60);
+    expect(open.reduce((s, p) => s + p[1], 0) / open.length).toBeCloseTo(50);
+    expect(next.zones!.features[1]).toEqual(input.zones!.features[1]);
+  });
+
+  it('moveZone ignores an invalid target or a shift out of range', () => {
+    expect(moveZone(cfg(), 'z1', { latitude: 91, longitude: 0 })).toEqual(cfg());
+    expect(moveZone(cfg(), 'z1', { latitude: 90, longitude: 0 })).toEqual(cfg());
+    expect(moveZone(cfg(), 'nope', { latitude: 1, longitude: 1 })).toEqual(cfg());
   });
 });

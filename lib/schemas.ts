@@ -455,6 +455,9 @@ export const festivalCreateSchema = z.object({
   timeZone: festivalTimeZone,
   stages: z.array(stageSchema).max(20).optional(),
   days: z.array(daySchema).max(10).optional(),
+  // Venue point the map and weather use. Sent only when the admin changes it.
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
   // Optional festival site-map. Nullable so an update can clear it; omitted on
   // legacy clients ⇒ map_config stays NULL and the festival renders unmapped.
   mapConfig: festivalMapConfigSchema.optional().nullable(),
@@ -537,8 +540,34 @@ export const setLinkSchema = z.object({
     .nullable()
     .optional()
     .or(z.literal('')),
+  // Which artist of a B2B set the link belongs to (default 0).
+  artistIndex: z.number().int().min(0).max(3).optional(),
 });
 export type SetLinkInput = z.infer<typeof setLinkSchema>;
+
+// Spotify backfill body. All optional: old mobile bundles post no body.
+export const spotifyBackfillSchema = z
+  .object({
+    force: z.boolean().optional(),
+    skipSearch: z.boolean().optional(),
+    // Artist name -> verified link, preferred over search.
+    overrides: z
+      .record(
+        z.string().trim().min(1).max(200),
+        // url() alone accepts javascript: and data: links.
+        z
+          .string()
+          .url()
+          .max(500)
+          .refine((u) => u.startsWith('https://'), 'Must be an https URL'),
+      )
+      .refine((o) => Object.keys(o).length <= 500, 'At most 500 overrides')
+      .optional(),
+    // Limits the run to these sets.
+    setIds: z.array(identifier).max(500).optional(),
+  })
+  .default({});
+export type SpotifyBackfillInput = z.infer<typeof spotifyBackfillSchema>;
 
 // ── Meeting Point schemas (Phase 1B) ────────────────────────────
 
@@ -847,6 +876,11 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
   // An explicit null clears it; undefined keeps whatever the festival already had.
   const mapConfig =
     input.mapConfig !== undefined ? (input.mapConfig ?? null) : (existingFestival?.mapConfig ?? null);
+  // Venue: neither sent keeps the stored point; a valid pair replaces it; anything else clears both.
+  const venueSent = input.latitude !== undefined || input.longitude !== undefined;
+  const venueLat = venueSent ? coord(input.latitude, 90) : (existingFestival?.latitude ?? null);
+  const venueLng = venueSent ? coord(input.longitude, 180) : (existingFestival?.longitude ?? null);
+  const venueValid = venueLat !== null && venueLng !== null;
   const storedSets = new Map<string, any>();
   for (const day of existingFestival?.days || []) {
     for (const set of day?.sets || []) if (set?.id) storedSets.set(set.id, set);
@@ -887,6 +921,8 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
       }),
     })),
     mapConfig,
+    latitude: venueValid ? venueLat : null,
+    longitude: venueValid ? venueLng : null,
     createdAt: existingFestival?.createdAt || now,
     updatedAt: now,
   };
@@ -1325,6 +1361,7 @@ export const schemas = {
   crewTransfer: crewTransferSchema,
   crewAddMember: crewAddMemberSchema,
   setLink: setLinkSchema,
+  spotifyBackfill: spotifyBackfillSchema,
   crewHomeBase: crewHomeBaseSchema,
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,

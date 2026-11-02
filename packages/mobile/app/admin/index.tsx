@@ -29,6 +29,8 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  *   /admin/audit          — full audit log
  *   /admin/festival-edit  — create (no id) or edit (?id=) a festival
  *   /admin/lineup-import?id=  — CSV lineup import for a festival
+ *   /admin/festival-map?id=   — festival map editor
+ *   /admin/festival-links?id= — Spotify links for a festival's artists
  *
  * Gated on useAuthStore isAdmin; a non-admin sees an "Admins only" EmptyState.
  * Pull-to-refresh re-runs the three GETs. Endpoints resolve under /api/v1:
@@ -344,40 +346,57 @@ export default function AdminScreen() {
             </>
           ) : null}
 
-          {/* Festivals — each row links to edit + lineup import. */}
+          {/* Festivals — each row links to edit, lineup import, map and links. */}
           <SectionLabel>Festivals</SectionLabel>
           <View style={styles.card}>
             {festivals.length > 0 ? (
               festivals.map((f, i) => (
                 <View
                   key={f.id}
-                  style={[styles.row, i < festivals.length - 1 && styles.rowDivider]}
+                  style={[styles.festivalRow, i < festivals.length - 1 && styles.rowDivider]}
                   accessibilityLabel={`Festival: ${f.name}`}
                 >
                   <View style={styles.rowBody}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
                       {f.name}
                     </Text>
+                    {f.location ? (
+                      <Text style={styles.rowHint} numberOfLines={1}>
+                        {f.location}
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={styles.rowActions}>
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => router.push(`/admin/festival-edit?id=${f.id}`)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Edit ${f.name}`}
-                    >
-                      <Ionicons name="create-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => router.push(`/admin/lineup-import?id=${f.id}`)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Import lineup for ${f.name}`}
-                    >
-                      <Ionicons name="cloud-upload-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
+                    {(
+                      [
+                        { label: 'Edit', icon: 'create-outline', path: 'festival-edit', a11y: `Edit ${f.name}` },
+                        {
+                          label: 'Import',
+                          icon: 'cloud-upload-outline',
+                          path: 'lineup-import',
+                          a11y: `Import lineup for ${f.name}`,
+                        },
+                        { label: 'Map', icon: 'map-outline', path: 'festival-map', a11y: `Edit map for ${f.name}` },
+                        {
+                          label: 'Links',
+                          icon: 'musical-notes-outline',
+                          path: 'festival-links',
+                          a11y: `Spotify links for ${f.name}`,
+                        },
+                      ] as const
+                    ).map((b) => (
+                      <TouchableOpacity
+                        key={b.label}
+                        style={styles.actionBtn}
+                        activeOpacity={0.7}
+                        onPress={() => router.push(`/admin/${b.path}?id=${f.id}`)}
+                        accessibilityRole="button"
+                        accessibilityLabel={b.a11y}
+                      >
+                        <Ionicons name={b.icon} size={t.iconSize.md} color={t.colors.accent.aqua} />
+                        <Text style={styles.actionText}>{b.label}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 </View>
               ))
@@ -431,20 +450,31 @@ const useStyles = makeStyles((t) => ({
     flex: 1,
     gap: t.spacing[1],
   },
-  rowActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  festivalRow: {
+    paddingHorizontal: t.spacing[4],
+    paddingVertical: t.spacing[3],
     gap: t.spacing[2],
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
+  rowActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    gap: t.spacing[1],
     borderRadius: t.radii.default,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: t.colors.bg.primary,
     borderWidth: 1,
     borderColor: t.colors.border.default,
+  },
+  actionText: {
+    ...typeStyle('caption'),
+    color: t.colors.text.primary,
   },
   rowTitle: {
     ...typeStyle('body'),

@@ -8,6 +8,7 @@
 //     - PUBLIC_ORIGIN throw on /users/:id/reset-link (lines guarded below)
 //     - SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET config reads on
 //       /festivals/:id/backfill-spotify
+//   Also owns GET /festivals/:id/set-engagement (per-set picks and reminders).
 //
 // AUDIT FIX (2026-04-14, DEFERRED FIX AGENT 6):
 //   Split 716-line file into four modules. This file now owns the dashboard +
@@ -30,7 +31,7 @@ import mountAdminUserRoutes from './admin-users.js';
 import mountAdminAuditRoutes from './admin-audit.js';
 import mountAdminBulkRoutes from './admin-bulk.js';
 import * as spotify from '../lib/spotify.js';
-import { sanitizeLinkRecord } from '../lib/schemas.js';
+import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import type { Router } from 'express';
 
 export default function createAdminRoutes(deps: any): Router {
@@ -244,6 +245,12 @@ export default function createAdminRoutes(deps: any): Router {
   router.post('/festivals/:id/backfill-spotify', adminAuth, adminWriteLimit, async (req: any, res: any) => {
     try {
       setNoStore(res);
+      const parsed = spotifyBackfillSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0]!;
+        const message = issue.path.length > 0 ? `${issue.path.join('.')}: ${issue.message}` : issue.message;
+        return sendError(res, 400, message, ErrorCodes.VALIDATION_ERROR);
+      }
       const spotifyClientId = config.SPOTIFY_CLIENT_ID;
       const spotifyClientSecret = config.SPOTIFY_CLIENT_SECRET;
       if (!spotifyClientId || !spotifyClientSecret) {
@@ -258,16 +265,17 @@ export default function createAdminRoutes(deps: any): Router {
 
       // Optional body: verified overrides (artistName -> spotifyUrl) take
       // precedence over search; `force` re-links sets that already have a link.
-      const body = req.body || {};
+      const body = parsed.data;
       const force = body.force === true;
       const skipSearch = body.skipSearch === true; // overrides-only, no Spotify calls
+      const setIds = body.setIds;
       const normName = (s: any) =>
         spotify
           .cleanArtistName(s)
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '');
       const overrideMap = new Map<string, string>();
-      if (body.overrides && typeof body.overrides === 'object') {
+      if (body.overrides) {
         for (const [k, v] of Object.entries(body.overrides)) {
           if (typeof v !== 'string' || !v) continue;
           // Allowlist link schemes (drop javascript:/data: etc.) before persisting.
@@ -283,13 +291,21 @@ export default function createAdminRoutes(deps: any): Router {
           .map((s) => s.trim())
           .filter(Boolean);
 
+      const setFilter = setIds ? ' AND id = ANY($2::text[])' : '';
+      // Without force, also pick a B2B set where only some artists are linked:
+      // link_url holds the first linked artist, so it alone hides the others.
+      const missingLink = `(link_url IS NULL OR link_url = '' OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(artists) = 'array' THEN artists ELSE '[]'::jsonb END) a
+          WHERE COALESCE(a->'links'->>'spotify', '') = ''))`;
       const { rows: sets } = await stores.pool.query(
         force
-          ? 'SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1'
-          : "SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1 AND (link_url IS NULL OR link_url = '')",
-        [festivalId],
+          ? `SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1${setFilter}`
+          : `SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1 AND ${missingLink}${setFilter}`,
+        setIds ? [festivalId, setIds] : [festivalId],
       );
-      if (sets.length === 0) return sendSuccess(res, { updated: 0, skipped: 0, message: 'No sets to backfill' });
+      if (sets.length === 0) {
+        return sendSuccess(res, { updated: 0, skipped: 0, total: 0, unmatched: [], message: 'No sets to backfill' });
+      }
 
       // Collect cleaned sub-artist names that need a search (skip overridden).
       const searchNames = new Set<string>();
@@ -315,6 +331,8 @@ export default function createAdminRoutes(deps: any): Router {
         return spotifyResults.get(spotify.cleanArtistName(rawName) || rawName) || null;
       };
 
+      // Cleaned names that still have no Spotify link after this run.
+      const unmatched = new Set<string>();
       let updated = 0;
       for (const set of sets) {
         const arr = set.artists?.length ? set.artists : [{ name: set.artist }];
@@ -333,6 +351,7 @@ export default function createAdminRoutes(deps: any): Router {
               }
               if (m?.imageUrl) entry.photo = m.imageUrl;
               if (m?.genres?.length) entry.genres = m.genres;
+              if (!m?.spotifyUrl) unmatched.add(entry.name);
               newArtists.push(entry);
             }
           } else {
@@ -344,6 +363,7 @@ export default function createAdminRoutes(deps: any): Router {
             }
             if (m?.imageUrl && !entry.photo) entry.photo = m.imageUrl;
             if (m?.genres?.length && !entry.genres?.length) entry.genres = m.genres;
+            if (!m?.spotifyUrl && !entry.links.spotify) unmatched.add(spotify.cleanArtistName(a?.name) || a?.name);
             newArtists.push(entry);
           }
         }
@@ -363,6 +383,10 @@ export default function createAdminRoutes(deps: any): Router {
         await stores.pool.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
       }
       if (_invalidateFestivalCache) _invalidateFestivalCache();
+      const unmatchedList = [...unmatched]
+        .filter(Boolean)
+        .sort((x, y) => x.localeCompare(y))
+        .slice(0, 200);
       log.info('spotify backfill complete', {
         festivalId,
         updated,
@@ -376,16 +400,78 @@ export default function createAdminRoutes(deps: any): Router {
           action: 'spotify_backfill',
           targetType: 'festival',
           targetId: festivalId,
-          detailsJson: JSON.stringify({ updated, skipped: sets.length - updated, total: sets.length }),
+          detailsJson: JSON.stringify({
+            updated,
+            skipped: sets.length - updated,
+            total: sets.length,
+            setIds: setIds?.length ?? null,
+            unmatched: unmatchedList.length,
+          }),
           ip: getRequestIp(req),
         });
         // eslint-disable-next-line require-atomic-updates -- res is request-scoped
         res.locals.auditWritten = true;
       }
-      return sendSuccess(res, { updated, skipped: sets.length - updated, total: sets.length });
+      return sendSuccess(res, {
+        updated,
+        skipped: sets.length - updated,
+        total: sets.length,
+        unmatched: unmatchedList,
+      });
     } catch (error: any) {
       log.error('spotify backfill failed', { error: error.message, festivalId: req.params.id });
       return sendError(res, 500, 'Spotify backfill failed', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── GET /festivals/:id/set-engagement — picks and reminders per set ──
+  // Reminders live in festival_profiles.reminders_json (no table since migration 013).
+  router.get('/festivals/:id/set-engagement', adminAuth, async (req: any, res: any) => {
+    try {
+      setNoStore(res);
+      const festivalId = req.params.id;
+      const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [
+        festivalId,
+      ]);
+      if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+
+      const [picks, reminders] = await Promise.all([
+        stores.pool.query(
+          `
+  SELECT
+    fpp.set_id AS "setId",
+    COUNT(*)::int AS picks
+  FROM
+    festival_profile_picks fpp
+    JOIN festival_profiles fp ON fp.id = fpp.profile_id
+  WHERE
+    fp.festival_id = $1
+    AND fp.deleted_at IS NULL
+  GROUP BY
+    fpp.set_id
+`,
+          [festivalId],
+        ),
+        stores.pool.query(
+          `SELECT k AS "setId", COUNT(*)::int AS reminders
+           FROM festival_profiles fp,
+                jsonb_object_keys(fp.reminders_json) AS k
+           WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL
+             AND jsonb_typeof(fp.reminders_json) = 'object'
+           GROUP BY k`,
+          [festivalId],
+        ),
+      ]);
+      // A Map, because reminder keys come from user data and could be "__proto__".
+      const engagement = new Map<string, { picks: number; reminders: number }>();
+      for (const row of picks.rows) engagement.set(row.setId, { picks: row.picks, reminders: 0 });
+      for (const row of reminders.rows) {
+        engagement.set(row.setId, { picks: engagement.get(row.setId)?.picks ?? 0, reminders: row.reminders });
+      }
+      return sendSuccess(res, Object.fromEntries(engagement));
+    } catch (error: any) {
+      log.error('admin set engagement failed', { error: error.message, festivalId: req.params.id });
+      return sendError(res, 500, 'Failed to load set engagement', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
