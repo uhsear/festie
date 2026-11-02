@@ -110,6 +110,8 @@ interface Props {
    * Omitted/empty in normal crew use — no dots drawn. Backward-compatible.
    */
   draftPoints?: { latitude: number; longitude: number }[];
+  /** Height classes for the map canvas. Defaults to the 288 px crew-tab size. */
+  canvasClassName?: string;
 }
 
 // Amenity categories the filter chips can toggle, in display order. Mirrors the
@@ -160,6 +162,7 @@ export default function CrewMap({
   onMapClick,
   draftPoints,
   authoring = false,
+  canvasClassName = 'h-72',
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // 'pending' until we know whether the GL library mounted; flips to 'error' on
@@ -568,7 +571,7 @@ export default function CrewMap({
       <div className="relative rounded-lg overflow-hidden border border-border bg-bg-secondary">
         <div
           ref={containerRef}
-          className="festie-map-canvas h-72 w-full"
+          className={`festie-map-canvas ${canvasClassName} w-full`}
           role="region"
           tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: focus enables arrow-key map pan/zoom (see aria-describedby help below); rule only exempts role=tabpanel
           aria-label="Crew map with meeting points and live locations"

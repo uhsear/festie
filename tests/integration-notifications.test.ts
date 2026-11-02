@@ -20,7 +20,7 @@ describe('Integration — Notifications', { concurrency: 1 }, () => {
     const regRes = await server.request
       .post('/api/v1/notifications/token')
       .set('x-user-token', alice.token)
-      .send({ token: 'fcm-test-token-abc123456789', platform: 'web' })
+      .send({ token: 'fcm-test-token-abc123456789', platform: 'android' })
       .expect(200);
     assert.ok(regRes.body.data);
     assert.equal(regRes.body.data.success, true);
@@ -29,7 +29,7 @@ describe('Integration — Notifications', { concurrency: 1 }, () => {
     const dupRes = await server.request
       .post('/api/v1/notifications/token')
       .set('x-user-token', alice.token)
-      .send({ token: 'fcm-test-token-abc123456789', platform: 'web' })
+      .send({ token: 'fcm-test-token-abc123456789', platform: 'android' })
       .expect(200);
     assert.equal(dupRes.body.data.success, true);
 
@@ -228,7 +228,7 @@ describe('Integration — Notifications', { concurrency: 1 }, () => {
       await server.request
         .post('/api/v1/notifications/token')
         .set('x-user-token', alice.token)
-        .send({ token: `fcm-test-token-${i}123456789`, platform: 'web' })
+        .send({ token: `fcm-test-token-${i}123456789`, platform: 'android' })
         .expect(200);
     }
 
@@ -236,7 +236,50 @@ describe('Integration — Notifications', { concurrency: 1 }, () => {
     const rateLimitRes = await server.request
       .post('/api/v1/notifications/token')
       .set('x-user-token', alice.token)
-      .send({ token: 'fcm-test-token-5123456789', platform: 'web' });
+      .send({ token: 'fcm-test-token-5123456789', platform: 'android' });
     assert.equal(rateLimitRes.status, 429);
+  });
+
+  test('crew type toggles and must-see lead time round-trip; bad values are rejected', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const alice = await registerUser(server, 'alice');
+
+    const before = await server.request.get('/api/v1/notifications/prefs').set('x-user-token', alice.token).expect(200);
+    assert.equal(before.body.data.crewPolls, 1);
+    assert.equal(before.body.data.mustSeeReminderMinutes, null);
+
+    await server.request
+      .put('/api/v1/notifications/prefs')
+      .set('x-user-token', alice.token)
+      .send({ crewPolls: false, mustSeeReminderMinutes: 15 })
+      .expect(200);
+    const after = await server.request.get('/api/v1/notifications/prefs').set('x-user-token', alice.token).expect(200);
+    assert.equal(after.body.data.crewPolls, 0);
+    assert.equal(after.body.data.crewMeetingPoints, 1);
+    assert.equal(after.body.data.crewMoney, 1);
+    assert.equal(after.body.data.crewRides, 1);
+    assert.equal(after.body.data.mustSeeReminderMinutes, 15);
+
+    const badLead = await server.request
+      .put('/api/v1/notifications/prefs')
+      .set('x-user-token', alice.token)
+      .send({ mustSeeReminderMinutes: 20 });
+    assert.equal(badLead.status, 400);
+
+    const evil = await server.request
+      .post('/api/v1/notifications/token')
+      .set('x-user-token', alice.token)
+      .send({
+        token: JSON.stringify({
+          endpoint: 'https://evil.example/push/1',
+          keys: {
+            p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4',
+            auth: 'BTBZMqHH6r4Tts7J_aSIgg',
+          },
+        }),
+        platform: 'web',
+      });
+    assert.equal(evil.status, 400);
   });
 });

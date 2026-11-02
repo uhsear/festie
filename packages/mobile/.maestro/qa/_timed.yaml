@@ -3,7 +3,7 @@
 appId: us.festie.app
 ---
 - tapOn:
-    text: "Schedule"
+    text: "Lineup"
     optional: true
 - tapOn:
     text: "Switch festival"
@@ -55,7 +55,7 @@ appId: us.festie.app
 - stopApp
 - launchApp
 - extendedWaitUntil:
-    visible: "Schedule"
+    visible: "Lineup"
     timeout: 30000
 - tapOn:
     text: "Switch festival"

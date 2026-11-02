@@ -111,16 +111,8 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
     );
   }
 
-  return (
-    <button
-      type="button"
-      onClick={() => (isOwner ? setEditing(true) : undefined)}
-      disabled={!isOwner}
-      className={`w-full py-1.5 px-2 min-h-11 rounded-lg bg-bg-card border text-left transition-colors ${
-        hasHomeBase ? 'border-accent-aqua/40' : 'border-dashed border-border hover:border-border-light'
-      } ${isOwner ? 'cursor-pointer' : 'cursor-default'}`}
-    >
-      <div className="flex items-center gap-2">
+  const body = (
+    <div className="flex items-center gap-2">
         <HomeIcon
           className={`w-4 h-4 flex-shrink-0 ${hasHomeBase ? 'text-accent-aqua' : 'text-text-muted'}`}
           aria-hidden="true"
@@ -143,7 +135,27 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
             <span className="text-xs text-text-secondary">{COPY.homeBase.empty}</span>
           )}
         </div>
+    </div>
+  );
+
+  if (!isOwner) {
+    return (
+      <div className="w-full py-1.5 px-2 min-h-11 rounded-lg bg-bg-card border border-accent-aqua/40 text-left">
+        <span className="sr-only">Home base: </span>
+        {body}
       </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className={`w-full py-1.5 px-2 min-h-11 rounded-lg bg-bg-card border text-left transition-colors cursor-pointer ${
+        hasHomeBase ? 'border-accent-aqua/40' : 'border-dashed border-border hover:border-border-light'
+      }`}
+    >
+      {body}
     </button>
   );
 }

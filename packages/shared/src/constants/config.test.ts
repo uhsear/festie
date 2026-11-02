@@ -9,6 +9,7 @@ import {
   RATING_SCALE_DATA,
   RATING_SCALE,
   RATING_LABEL,
+  ratingCaption,
 } from './config';
 import { PRIORITY_WEIGHT } from '../utils/crewNudges';
 
@@ -149,6 +150,18 @@ describe('RATING_LABEL', () => {
   it('maps 5→Fire, 1→Skip', () => {
     expect(RATING_LABEL[5]).toBe('Fire');
     expect(RATING_LABEL[1]).toBe('Skip');
+  });
+});
+
+describe('ratingCaption', () => {
+  it('prompts when unrated', () => {
+    expect(ratingCaption(null)).toBe('Tap to rate this set');
+  });
+  it('names the rating', () => {
+    expect(ratingCaption(5)).toBe('You rated this: Fire (5 of 5)');
+  });
+  it('prompts for an unknown value', () => {
+    expect(ratingCaption(9)).toBe('Tap to rate this set');
   });
 });
 

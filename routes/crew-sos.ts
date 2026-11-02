@@ -9,6 +9,7 @@ import type { RouteDeps } from '../lib/types';
 import type { crewIdParams, sosClearSchema, sosRaiseSchema } from '../lib/schemas';
 import { SOS_RAISE_LIMIT, markSosActive, clearSosActive, listActiveSos } from '../lib/rate-limiting.js';
 import { sanitizeString } from '../lib/helpers/sanitize.js';
+import { appLink } from '../lib/notifications/links.js';
 
 /**
  * Crew SOS (Live Location + SOS, safety-critical path).
@@ -291,7 +292,11 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
   async function fanoutSosPush({ crewId, raiserId, username, message, position }: any) {
     const members = await stores.crews.getMembers(crewId);
     const recipients = members.filter((m: any) => m.userId && m.userId !== raiserId);
-    const data: Record<string, any> = { crewId, userId: raiserId, deepLink: `rave://crew/${crewId}/sos` };
+    const data: Record<string, any> = {
+      crewId,
+      userId: raiserId,
+      deepLink: appLink(config, '/crew?sos=' + encodeURIComponent(raiserId)),
+    };
     if (position) {
       data.lat = String(position.lat);
       data.lng = String(position.lng);

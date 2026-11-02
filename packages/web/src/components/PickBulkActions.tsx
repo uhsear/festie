@@ -135,7 +135,7 @@ export default function PickBulkActions() {
                 type="button"
                 role="radio"
                 aria-checked={priority === p.value}
-                aria-label={`${p.label}${priority === p.value ? ' (selected)' : ''}`}
+                aria-label={p.label}
                 onClick={() => setPriority(p.value)}
                 className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border cursor-pointer transition-colors ${
                   priority === p.value

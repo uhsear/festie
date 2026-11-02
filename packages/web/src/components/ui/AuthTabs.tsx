@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { COPY } from '@festie/shared/constants';
+import { AUTH_COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
 
 interface AuthTabsProps {
@@ -15,8 +15,8 @@ interface AuthTabsProps {
 }
 
 const TABS = [
-  { key: 'login', label: COPY.auth.signIn, to: '/login' },
-  { key: 'register', label: COPY.auth.createAccount, to: '/register' },
+  { key: 'login', label: AUTH_COPY.signIn, to: '/login' },
+  { key: 'register', label: AUTH_COPY.createAccount, to: '/register' },
 ] as const;
 
 /**
@@ -57,6 +57,7 @@ export default function AuthTabs({ active, variant }: AuthTabsProps) {
           <Link
             key={tab.key}
             to={tab.to}
+            search={true}
             aria-current={isActive ? 'page' : undefined}
             className={cn(segBase, isActive ? activeSeg : inactiveSeg)}
           >

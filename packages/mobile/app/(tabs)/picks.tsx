@@ -18,7 +18,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFestivalDataStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
 import { usePicks, useFestival } from '@festie/shared/hooks';
 import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import type { ConflictGroup } from '@festie/shared/utils';
@@ -34,11 +34,12 @@ import {
   buildPicksShareUrl,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
+import { COPY, GUEST_PROMPT_COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
 import { duration as motionDuration } from '@festie/shared/tokens';
+import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
 import { priorityIconName } from '../../lib/prioritySymbol';
@@ -103,6 +104,7 @@ export default function PicksScreen() {
   );
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const user = useAuthStore((s) => s.user);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const sets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
@@ -974,6 +976,33 @@ export default function PicksScreen() {
       />
     );
 
+  if (!user) {
+    return (
+      <View style={styles.container} testID="picks-screen">
+        <ScreenHeader title="Picks" icon="star" />
+        <EmptyState
+          icon="star-outline"
+          title={GUEST_PROMPT_COPY.teasers.picks.title}
+          message={GUEST_PROMPT_COPY.teasers.picks.message}
+          action={{
+            label: GUEST_PROMPT_COPY.createAccount,
+            onPress: () => {
+              setReturnTo('/(tabs)/picks');
+              router.push('/(auth)/register');
+            },
+          }}
+          secondaryAction={{
+            label: GUEST_PROMPT_COPY.signIn,
+            onPress: () => {
+              setReturnTo('/(tabs)/picks');
+              router.push('/(auth)/login');
+            },
+          }}
+        />
+      </View>
+    );
+  }
+
   let body: React.ReactNode;
   if (!currentFestival) {
     body = (
@@ -987,8 +1016,8 @@ export default function PicksScreen() {
     body = (
       <EmptyState
         icon="musical-note-outline"
-        title="Join this festival first"
-        message="Open the Schedule tab and join the festival to start saving picks."
+        title="No picks yet"
+        message="Tap Must See, Want to See or Maybe on any set to start your plan. Your first pick joins the festival."
         action={{ label: 'Go to Schedule', onPress: () => router.navigate('/(tabs)/') }}
       />
     );

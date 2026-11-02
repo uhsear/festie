@@ -200,6 +200,8 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
     assert.equal(r.priorAttendees, 2);
     assert.equal(sends[0].type, 'lineup_drop');
     assert.equal(sends[0].data.eventKey, 'lineup:fest-2027');
+    // A real web route: web reads ?festival=, mobile resolves it via pushTarget.
+    assert.equal(sends[0].data.deepLink, 'https://festie.test/?festival=fest-2027');
   });
 
   describe('email opt-out', () => {
@@ -226,6 +228,26 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
     it('sends the email when lineupDrops is on', async () => {
       assert.equal(await run({ lineupDrops: true }), 1);
     });
+  });
+
+  it('countLineupDrop returns the fresh count and sends nothing', async () => {
+    const { triggers, sends } = build(mockPool('North Coast', ['p1', 'p2']));
+    const r = await triggers.countLineupDrop('fest-2027');
+    assert.deepEqual(r, { festivalName: 'North Coast', recipients: 2 });
+    assert.equal(sends.length, 0);
+  });
+
+  it('edition match ignores a trailing year', async () => {
+    const sqls: string[] = [];
+    const pool = {
+      query: async (sql: string) => {
+        sqls.push(sql);
+        return { rows: sql.includes('SELECT name') ? [{ name: 'North Coast 2027' }] : [] };
+      },
+    };
+    const { triggers } = build(pool);
+    await triggers.countLineupDrop('fest-2027');
+    assert.ok(sqls.some((q) => q.includes('regexp_replace(lower(fp.name)')));
   });
 
   it('no prior attendees → nothing sent', async () => {

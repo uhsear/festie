@@ -230,8 +230,8 @@ function PicksViewInner() {
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
         <EmptyState
           icon={<UserPlus className="w-9 h-9" aria-hidden="true" />}
-          title="Join this festival first"
-          description="Open the Schedule tab and tap Join festival to start saving picks."
+          title="No picks yet"
+          description="Tap Must See, Want to See or Maybe on any set to start your plan. Your first pick joins the festival."
           cta={{ label: 'Browse Artists', onClick: () => navigate({ to: '/cards' }) }}
         />
       </div>
@@ -342,8 +342,11 @@ function PicksViewInner() {
 
 export default function PicksView() {
   return (
-    <RenderErrorBoundary name="picks">
-      <PicksViewInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">My picks</h1>
+      <RenderErrorBoundary name="picks">
+        <PicksViewInner />
+      </RenderErrorBoundary>
+    </>
   );
 }

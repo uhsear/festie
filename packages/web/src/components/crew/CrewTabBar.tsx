@@ -1,42 +1,32 @@
 import React, { useRef } from 'react';
-import { Users, MapPin, BarChart3, Backpack, Car, DollarSign, Activity } from 'lucide-react';
+import { Users, MapPin, CalendarClock, Banknote } from 'lucide-react';
+import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils';
 import { useRovingTabs } from '@/hooks/useRovingTabs';
 import { cn } from '@/lib/utils';
 
-export type TabKey = 'members' | 'meeting' | 'polls' | 'packing' | 'rides' | 'expenses' | 'activity';
-
-// Day-of first: Meet holds crew status, live location, SOS and meeting points.
-const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
-  { key: 'meeting', label: 'Meet', icon: <MapPin className="w-4 h-4" aria-hidden="true" /> },
-  { key: 'members', label: 'Members', icon: <Users className="w-4 h-4" aria-hidden="true" /> },
-  { key: 'polls', label: 'Polls', icon: <BarChart3 className="w-4 h-4" aria-hidden="true" /> },
-  { key: 'packing', label: 'Packing', icon: <Backpack className="w-4 h-4" aria-hidden="true" /> },
-  { key: 'rides', label: 'Rides', icon: <Car className="w-4 h-4" aria-hidden="true" /> },
-  { key: 'expenses', label: 'Expenses', icon: <DollarSign className="w-4 h-4" aria-hidden="true" /> },
-  { key: 'activity', label: 'Activity', icon: <Activity className="w-4 h-4" aria-hidden="true" /> },
-];
+const TAB_ICONS: Record<CrewTabKey, React.ReactNode> = {
+  find: <MapPin className="w-4 h-4" aria-hidden="true" />,
+  members: <Users className="w-4 h-4" aria-hidden="true" />,
+  plan: <CalendarClock className="w-4 h-4" aria-hidden="true" />,
+  money: <Banknote className="w-4 h-4" aria-hidden="true" />,
+};
 
 interface CrewTabBarProps {
-  activeTab: TabKey;
-  onTabChange: (tab: TabKey) => void;
+  activeTab: CrewTabKey;
+  onTabChange: (tab: CrewTabKey) => void;
   /**
    * Per-tab badge content rendered after the label. A number renders a small
    * count pill; `true` renders a dot indicator. Falsy values render nothing.
    */
-  badges?: Partial<Record<TabKey, number | boolean>>;
+  badges?: Partial<Record<CrewTabKey, number | boolean>>;
 }
 
 export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBarProps) {
   const tablistRef = useRef<HTMLDivElement>(null);
   useRovingTabs(tablistRef);
   return (
-    <div
-      ref={tablistRef}
-      className="flex gap-1 overflow-x-auto lg:flex-wrap lg:overflow-visible lg:[mask-image:none] px-3 scrollbar-hide min-w-0 max-w-full snap-x snap-mandatory [scroll-padding-inline:0.75rem] [mask-image:linear-gradient(to_right,transparent,black_0.75rem,black_calc(100%-0.75rem),transparent)]"
-      role="tablist"
-      aria-label="Crew tabs"
-    >
-      {TABS.map((t) => (
+    <div ref={tablistRef} className="flex gap-1 px-3 min-w-0 max-w-full" role="tablist" aria-label="Crew tabs">
+      {CREW_TABS.map((t) => (
         <button
           key={t.key}
           role="tab"
@@ -45,14 +35,14 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
           aria-controls="crew-tab-panel"
           onClick={() => onTabChange(t.key)}
           className={cn(
-            'flex-shrink-0 snap-start px-2.5 py-1.5 min-h-11 rounded-md flex items-center gap-1 text-xs font-medium whitespace-nowrap',
+            'flex-1 min-w-0 justify-center px-2.5 py-1.5 min-h-11 rounded-md flex items-center gap-1 text-xs font-medium whitespace-nowrap',
             'transition-[transform,background-color,border-color,color] duration-150 ease-out active:scale-[0.97] motion-reduce:active:!transform-none',
             activeTab === t.key
               ? 'bg-accent-aqua/15 text-accent-aqua border border-accent-aqua/30'
               : 'bg-bg-card text-text-secondary border border-border hover:border-border-light',
           )}
         >
-          {t.icon}
+          {TAB_ICONS[t.key]}
           {t.label}
           {(() => {
             const badge = badges?.[t.key];

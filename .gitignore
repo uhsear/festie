@@ -117,3 +117,20 @@ public/uploads/
 # They live in the private repo uhsear/festie-fonts; scripts/fetch-fonts.mjs copies them in.
 packages/mobile/assets/fonts/clash-display/
 packages/web/public/fonts/clash-display/
+
+# Internal docs: kept on the workstation and the server, never published.
+/GETTING_STARTED.md
+/ARCHITECTURE.md
+/CONTEXT.md
+/CONTRIBUTING.md
+/docs/*
+!/docs/brand/
+packages/*/CLAUDE.md
+packages/*/DESIGN.md
+packages/*/PRODUCT.md
+packages/shared/src/DATA_FLOW.md
+packages/mobile/.github-android-release-SETUP.md
+packages/mobile/store/play/README.md
+packages/mobile/.fingerprint/README.md
+migrations/README.md
+tests/README.md

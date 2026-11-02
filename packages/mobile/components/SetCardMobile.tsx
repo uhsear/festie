@@ -156,8 +156,8 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={
-        active
-          ? `${option.label} (selected${pending ? (pending === 'queued' ? ', waiting to sync' : ', saving') : ''})`
+        active && pending
+          ? `${option.label}, ${pending === 'queued' ? 'waiting to sync' : 'saving'}`
           : option.label
       }
     >

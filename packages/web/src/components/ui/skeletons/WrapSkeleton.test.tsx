@@ -3,6 +3,12 @@ import { render, screen } from '@testing-library/react';
 import WrapSkeleton from './WrapSkeleton';
 
 describe('WrapSkeleton', () => {
+  it('announces loading as a status with sr-only text', () => {
+    render(<WrapSkeleton />);
+    expect(screen.getByRole('status', { name: 'Loading wrap' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading wrap…')).toBeInTheDocument();
+  });
+
   it('renders with aria-busy for loading state', () => {
     render(<WrapSkeleton />);
     expect(screen.getByLabelText('Loading wrap')).toHaveAttribute('aria-busy', 'true');

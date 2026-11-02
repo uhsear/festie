@@ -14,7 +14,7 @@ function render(ui: React.ReactElement) {
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
-  useSearch: () => ({}),
+  useSearch: () => h.search,
   Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
     <a href={to} {...rest}>
       {children}
@@ -29,6 +29,7 @@ const storeState: Record<string, unknown> = {};
 const h = vi.hoisted(() => ({
   prompts: {} as Record<string, { description?: string; placeholder?: string; maxLength?: number; parsePaste?: unknown; onConfirm: (v: string) => void }>,
   toast: vi.fn(),
+  search: {} as Record<string, unknown>,
 }));
 
 vi.mock('@festie/shared/stores', () => ({
@@ -107,12 +108,21 @@ vi.mock('../components/crew/CrewInviteBar', () => ({
 }));
 
 vi.mock('../components/crew/CrewTabBar', () => ({
-  default: () => <div data-testid="crew-tab-bar" />,
+  default: ({ activeTab, onTabChange }: { activeTab: string; onTabChange: (t: string) => void }) => (
+    <div data-testid="crew-tab-bar" data-active={activeTab}>
+      <button onClick={() => onTabChange('money')}>Money</button>
+    </div>
+  ),
 }));
 
-vi.mock('../components/crew/CrewTabContent', () => ({
-  default: () => <div data-testid="crew-tab-content" />,
-}));
+// CrewTabContent stays real; stub only the tab bodies it composes.
+vi.mock('../components/crew/MembersTab', () => ({ default: () => <div data-testid="MembersTab" /> }));
+vi.mock('../components/crew/MeetingPointsTab', () => ({ default: () => <div data-testid="MeetingPointsTab" /> }));
+vi.mock('../components/crew/PollsTab', () => ({ default: () => <div data-testid="PollsTab" /> }));
+vi.mock('../components/crew/PackingTab', () => ({ default: () => <div data-testid="PackingTab" /> }));
+vi.mock('../components/crew/RidesTab', () => ({ default: () => <div data-testid="RidesTab" /> }));
+vi.mock('../components/crew/ExpensesTab', () => ({ default: () => <div data-testid="ExpensesTab" /> }));
+vi.mock('../components/crew/ActivityTab', () => ({ default: () => <div data-testid="ActivityTab" /> }));
 
 vi.mock('../components/crew/ReformCrewButton', () => ({
   default: () => <div data-testid="reform-crew-button" />,
@@ -188,6 +198,7 @@ function setStoreState(overrides: Record<string, unknown> = {}) {
 describe('CrewView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    h.search = {};
     setStoreState();
   });
 
@@ -255,7 +266,7 @@ describe('CrewView', () => {
     expect(screen.getByTestId('home-base-card')).toBeInTheDocument();
     expect(screen.getByTestId('crew-invite-bar')).toBeInTheDocument();
     expect(screen.getByTestId('crew-tab-bar')).toBeInTheDocument();
-    expect(screen.getByTestId('crew-tab-content')).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel')).toBeInTheDocument();
   });
 
   it('renders crew selector when crews exist', () => {
@@ -272,17 +283,44 @@ describe('CrewView', () => {
     expect(screen.getByTestId('crew-selector')).toBeInTheDocument();
   });
 
-  it('renders Compare schedules link when active crew', () => {
+  const crewWithActive = () =>
     setStoreState({
       crews: [{ id: 'c1', name: 'Squad', owner: 'u1' }],
-      activeCrew: {
-        id: 'c1',
-        name: 'Squad',
-        owner: 'u1',
-        members: [],
-      },
+      activeCrew: { id: 'c1', name: 'Squad', inviteCode: 'ABC123', owner: 'u1', members: [] },
     });
+
+  it('selects Find when the URL has no tab', () => {
+    crewWithActive();
     render(<CrewView />);
-    expect(screen.getByText('Compare schedules')).toBeInTheDocument();
+    expect(screen.getByTestId('crew-tab-bar')).toHaveAttribute('data-active', 'find');
+    expect(screen.getByTestId('MeetingPointsTab')).toBeInTheDocument();
+    expect(screen.queryByText('Crew plan')).not.toBeInTheDocument();
+  });
+
+  it('shows the plan links and Polls heading on the Plan tab, not in the setup footer', () => {
+    h.search = { tab: 'plan' };
+    crewWithActive();
+    render(<CrewView />);
+    const panel = screen.getByRole('tabpanel');
+    expect(within(panel).getByText('Crew plan')).toBeInTheDocument();
+    expect(within(panel).getByText('Compare schedules')).toBeInTheDocument();
+    expect(within(panel).getByRole('heading', { name: 'Polls' })).toBeInTheDocument();
+    const footer = document.querySelector('[aria-labelledby="crew-setup-heading"]') as HTMLElement;
+    expect(within(footer).queryByText('Crew plan')).not.toBeInTheDocument();
+    expect(within(footer).queryByText('Compare schedules')).not.toBeInTheDocument();
+  });
+
+  it('puts the tab in the URL when a tab is clicked', () => {
+    crewWithActive();
+    render(<CrewView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Money' }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'money' }, replace: true });
+  });
+
+  it('an SOS link opens Find even when a tab is set', () => {
+    h.search = { tab: 'money', sos: 'u2' };
+    crewWithActive();
+    render(<CrewView />);
+    expect(screen.getByTestId('crew-tab-bar')).toHaveAttribute('data-active', 'find');
   });
 });
