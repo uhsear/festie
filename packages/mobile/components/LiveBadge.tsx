@@ -1,5 +1,6 @@
 import { View, Text } from 'react-native';
 import type { SetStatus } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 
 interface LiveBadgeProps {
@@ -24,7 +25,7 @@ export default function LiveBadge({ status, label }: LiveBadgeProps) {
 
   if (status === 'live') {
     return (
-      <View style={[styles.pill, styles.livePill]} accessibilityRole="text" accessibilityLabel="Live">
+      <View style={[styles.pill, styles.livePill]} accessibilityRole="text" accessibilityLabel={COPY.status.playingA11y}>
         <View style={styles.liveDot} />
         <Text style={styles.liveText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {label}

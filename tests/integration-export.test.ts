@@ -1,6 +1,7 @@
 import { afterEach, describe, test } from 'node:test';
 import {
   assert,
+  Pool,
   TRUSTED_MUTATION_HEADER,
   startServer,
   registerUser,
@@ -130,6 +131,13 @@ describe('Edge Case: Empty Festivals', { concurrency: 1 }, () => {
         days: [{ date: '2026-06-01', sets: [] }]
       });
     assert.equal(createRes.status, 201);
+    // A festival with no sets cannot pass the publish checklist, so publish this draft in the database.
+    const pool = new Pool({ connectionString: server.databaseUrl });
+    try {
+      await pool.query("UPDATE festivals SET published_at = NOW() WHERE id = 'empty-fest'");
+    } finally {
+      await pool.end();
+    }
 
     const user = await registerUser(server, 'empty-fest-user');
     const profile = await joinFestivalProfile(server, user.token, 'empty-fest');

@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared/services';
 import { useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
 import { useFestival } from '@festie/shared/hooks';
+import { COPY } from '@festie/shared/constants';
 import GuestTeaser from '../components/features/GuestTeaser';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
@@ -133,7 +134,7 @@ function WrapPageInner() {
       if (!blob) throw new Error('Capture failed');
       const file = new File([blob], `festie-wrap-${currentFestival.id}.png`, { type: 'image/png' });
       if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'My Festie Wrap' });
+        await navigator.share({ files: [file], title: `My ${COPY.wrap.name}` });
       } else {
         const url = URL.createObjectURL(blob);
         const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
@@ -174,7 +175,7 @@ function WrapPageInner() {
         <Card padding="lg">
           <EmptyState
             icon={<Sparkles className="w-12 h-12 text-accent-aqua" aria-hidden="true" />}
-            title="Festival wrap coming soon"
+            title={`${COPY.wrap.name} coming soon`}
             description="We'll put together your highlights the day after the festival ends."
           />
         </Card>
@@ -213,7 +214,7 @@ function WrapPageInner() {
             tab === 'crew' ? 'bg-accent-aqua text-bg-primary' : 'text-text-secondary hover:text-text-primary'
           }`}
         >
-          Crew wrap
+          {COPY.wrap.crewName}
         </button>
       </div>
     </div>
@@ -244,8 +245,8 @@ function WrapPageInner() {
         <Card padding="lg">
           <EmptyState
             icon={<Sparkles className="w-12 h-12" aria-hidden="true" />}
-            title="Couldn't load your wrap"
-            description="Something went wrong loading your festival wrap."
+            title={`Couldn't load your ${COPY.wrap.name}`}
+            description={`Something went wrong loading your ${COPY.wrap.name}.`}
             cta={{ label: 'Retry', onClick: () => refetch() }}
           />
         </Card>
@@ -360,7 +361,7 @@ function WrapPageInner() {
               onClick={() => setTab('crew')}
               className="mt-3 min-h-11 text-sm font-medium text-accent-aqua underline underline-offset-2"
             >
-              Open the crew wrap
+              Open the {COPY.wrap.crewName}
             </button>
           </section>
         )}
@@ -455,7 +456,7 @@ function CrewWrapTab({
       if (!blob) throw new Error('Capture failed');
       const file = new File([blob], `festie-crew-wrap-${crewId}.png`, { type: 'image/png' });
       if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Our Festie Crew Wrap' });
+        await navigator.share({ files: [file], title: `Our ${COPY.wrap.crewName}` });
       } else {
         const url = URL.createObjectURL(blob);
         const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
@@ -478,7 +479,7 @@ function CrewWrapTab({
           <EmptyState
             icon={<Users className="w-12 h-12" aria-hidden="true" />}
             title="No active crew"
-            description="Join or select a crew to see your shared festival recap."
+            description={`Join or select a crew to see your ${COPY.wrap.crewName}.`}
           />
         </Card>
       </div>
@@ -498,8 +499,8 @@ function CrewWrapTab({
         <Card padding="lg">
           <EmptyState
             icon={<Users className="w-12 h-12" aria-hidden="true" />}
-            title="Couldn't load your crew wrap"
-            description="Something went wrong loading the shared recap."
+            title={`Couldn't load your ${COPY.wrap.crewName}`}
+            description={`Something went wrong loading the ${COPY.wrap.crewName}.`}
             cta={{ label: 'Retry', onClick: () => refetch() }}
           />
         </Card>
@@ -515,7 +516,7 @@ function CrewWrapTab({
       <header className="text-center space-y-1">
         <div className="inline-flex items-center gap-2 text-accent-aqua text-xs uppercase tracking-[var(--letter-spacing-caps)]">
           <Users className="w-4 h-4" aria-hidden="true" />
-          Crew Wrap
+          {COPY.wrap.crewName}
         </div>
         <h1 className="text-xl font-display font-bold text-text-primary leading-tight">{crewName}</h1>
         <p className="text-sm text-text-secondary">{festivalName}</p>
@@ -618,7 +619,7 @@ function CrewWrapTab({
           </PosterPreview>
           <Button variant="primary" fullWidth isLoading={sharing} onClick={handleShare} className="min-h-[44px]">
             <Share2 className="w-4 h-4" aria-hidden="true" />
-            Share crew wrap
+            Share {COPY.wrap.crewName}
           </Button>
         </section>
       )}

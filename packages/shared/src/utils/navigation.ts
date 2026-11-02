@@ -1,9 +1,10 @@
 import type { FestivalPhase } from './festivalTime';
+import { COPY } from '../constants/copy';
 
 export type AppSectionKey = 'lineup' | 'myPlan' | 'crew' | 'map' | 'more';
 export const APP_SECTIONS: readonly { key: AppSectionKey; label: string }[] = [
   { key: 'lineup', label: 'Lineup' },
-  { key: 'myPlan', label: 'My Plan' },
+  { key: 'myPlan', label: COPY.picks.tab },
   { key: 'crew', label: 'Crew' },
   { key: 'map', label: 'Map' },
   { key: 'more', label: 'More' },
@@ -39,11 +40,11 @@ export function parseCrewTab(raw: unknown): CrewTabKey | null {
 
 export type PhaseActionKey = 'myPlan' | 'crew' | 'map' | 'nownext' | 'wrap';
 export const PHASE_ACTION_LABELS: Record<PhaseActionKey, string> = {
-  myPlan: 'My Plan',
+  myPlan: COPY.picks.tab,
   crew: 'Crew',
   map: 'Map',
-  nownext: 'Now & Next',
-  wrap: 'Festival wrap',
+  nownext: COPY.nowNext.name,
+  wrap: COPY.wrap.name,
 };
 export const PHASE_ACTION_ORDER: Record<FestivalPhase, readonly PhaseActionKey[]> = {
   pre: ['myPlan', 'crew', 'nownext', 'map', 'wrap'],

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CalendarClock, Footprints, Music, PartyPopper, Star } from 'lucide-react';
+import { CalendarClock, Footprints, Music, PartyPopper } from 'lucide-react';
 import type { FestivalSet } from '@festie/shared/types';
 import {
   artistDisplayName,
@@ -10,6 +10,8 @@ import {
   type DayOfSet,
   type NowNextSelection,
 } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
 
@@ -126,7 +128,7 @@ export default function NowHero({
         action={
           onWrap && (
             <Button variant="outline" onClick={onWrap} className="self-start">
-              See your Wrap
+              {COPY.wrap.open}
             </Button>
           )
         }
@@ -135,7 +137,7 @@ export default function NowHero({
   } else if (!lineupMode && todayCount === 0) {
     body = (
       <Quiet
-        icon={<Star />}
+        icon={<CONCEPT_ICON.picks />}
         title="No picks today"
         body={next ? `Your next pick is ${name(next.set)}, ${fmtStartsIn(next.start, nowMs, timeZone)}.` : 'Pick the sets you want to see today.'}
         action={

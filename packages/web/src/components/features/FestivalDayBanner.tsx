@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { COPY } from '@festie/shared/constants';
 import { useHaptics } from '../../hooks/useHaptics';
 
 /**
@@ -52,7 +53,7 @@ export default function FestivalDayBanner() {
         onClick={enter}
         data-testid="festival-day-banner-enter"
       >
-        Open Now &amp; Next
+        {COPY.nowNext.open}
       </Link>
       <button
         type="button"

@@ -153,4 +153,39 @@ describe('PickConflicts', () => {
     await user.click(screen.getByLabelText('Open details for Artist s1'));
     expect(setDetailSet).toHaveBeenCalledTimes(1);
   });
+
+  const twoActs = (): ConflictGroup => ({
+    picks: [
+      { set: makeSet('s1', { dayIndex: 1 }) as never, priority: 'must', startMs: 0, endMs: 3_600_000, durationMin: 60 },
+      {
+        set: makeSet('s2', { artist: 'Odesza', dayIndex: 1 }) as never,
+        priority: 'want-to-see',
+        startMs: 1_800_000,
+        endMs: 5_400_000,
+        durationMin: 60,
+      },
+    ],
+    recommendedKeepId: 's1',
+    overlapMin: 30,
+  });
+
+  it('renders the groups prop without calling buildPickConflicts', () => {
+    render(<PickConflicts groups={[twoActs()]} />);
+    expect(screen.getByText('Artist s1')).toBeInTheDocument();
+    expect(buildPickConflicts).not.toHaveBeenCalled();
+  });
+
+  it('adds the day label to the title when the festival has 2 days', () => {
+    festivalState.days = [
+      { date: '2026-06-10', label: 'Day 1' },
+      { date: '2026-06-11', label: 'Day 2' },
+    ];
+    render(<PickConflicts groups={[twoActs()]} />);
+    expect(screen.getByText('Schedule clash · Day 2')).toBeInTheDocument();
+  });
+
+  it('omits the day label when the festival has one day', () => {
+    render(<PickConflicts groups={[twoActs()]} />);
+    expect(screen.getByText('Schedule clash')).toBeInTheDocument();
+  });
 });

@@ -221,6 +221,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     setNoStore,
     serializePublicUser,
     sanitizeString,
+    sanitizeIdentifier,
     rateLimit,
     sendSuccess,
     sendError,
@@ -491,6 +492,55 @@ export default function createAccountRoutes(deps: RouteDeps) {
   router.put('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
   router.patch('/public-schedule', userAuth, rateLimit(20, 'public-schedule'), validate(schemas.publicSchedule), updatePublicSchedule);
 
+  // ── POST /share-link/:festivalId — revocable picks link for one festival ─
+  router.post('/share-link/:festivalId', userAuth, rateLimit(20, 'share-link'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const festivalId = sanitizeIdentifier(req.params.festivalId);
+      if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
+      const profile = await stores.profiles.readByUserAndFestival(req.user.userId, festivalId);
+      const token = profile ? await stores.shareLinks.getOrCreateToken(profile.id) : null;
+      if (!token) {
+        return sendError(res, 404, 'Pick a set at this festival first, then share your picks.', ErrorCodes.NOT_FOUND);
+      }
+      return sendSuccess(res, { token });
+    } catch (error) {
+      log.error('share link failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to create share link', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── GET /sharing — public page status and last link reset ──────────────
+  router.get('/sharing', userAuth, rateLimit(60, 'sharing-status'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const status = await stores.shareLinks.getStatus(req.user.userId);
+      if (!status) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+      const newest = status.publicSchedule ? await stores.shareLinks.newestProfile(req.user.userId) : null;
+      return sendSuccess(res, {
+        publicSchedule: status.publicSchedule,
+        publicFestival: newest ? { id: newest.festivalId, name: newest.festivalName } : null,
+        linksResetAt: status.linksResetAt,
+      });
+    } catch (error) {
+      log.error('sharing status failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to load sharing status', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── POST /sharing/reset — stop every picks link and calendar feed sent ──
+  router.post('/sharing/reset', userAuth, rateLimit(5, 'share-reset'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const linksResetAt = await stores.shareLinks.resetForUser(req.user.userId);
+      log.info('account:share-links-reset', { userId: req.user.userId });
+      return sendSuccess(res, { linksResetAt });
+    } catch (error) {
+      log.error('share links reset failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, "Couldn't reset your links. Try again.", ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
   // ── POST /email — request a change of the account email address ────────
   // Shaped on POST /api/v1/auth/change-password (routes/auth.ts) and on
   // DELETE / below: current-password re-auth, scoped rate limit, Zod body.
@@ -594,7 +644,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     validate(schemas.accountDelete),
     async (req: Request, res: Response) => {
       try {
-        const { password } = req.validatedBody as z.infer<typeof accountDeleteSchema>;
+        const { password, crewHandover } = req.validatedBody as z.infer<typeof accountDeleteSchema>;
 
         const { verifyPassword, invalidateUserSessions, disconnectUserSockets, getRequestIp } = deps;
         const currentUser = await getUserById(req.user.userId);
@@ -615,7 +665,13 @@ export default function createAccountRoutes(deps: RouteDeps) {
         // until the 30-day purge, so a sign-in before then restores them.
         // Sessions, refresh tokens and device tokens go now.
         // Retry once on deadlock (PG 40P01) — concurrent test cleanup can trigger this.
+        // Owned crews are handed over first, so a failure there deletes nothing,
+        // and a retry finds no owned crew with members left to hand over.
+        const handedOver: Array<{ crewId: string; newOwnerId: string }> = [];
         const performSoftDelete = async () => {
+          if (stores.crews) {
+            handedOver.push(...(await stores.crews.handOverOwnedCrews(req.user.userId, crewHandover ?? [])));
+          }
           await stores.users.update(req.user.userId, { deletedAt: new Date().toISOString() });
           invalidateUserCache();
           await invalidateUserSessions(req.user.userId);
@@ -640,6 +696,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           userId: req.user.userId,
           username: currentUser.username,
           ip: getRequestIp(req),
+          crewsHandedOver: handedOver.length,
         });
         deps.clearUserSessionCookie(res);
         const deletionDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -649,6 +706,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           success: true,
           message: `Your account will be deleted on ${deletionDay}. Sign in before then to keep it.`,
           deletionDate: deletionDate.toISOString(),
+          handedOver,
         });
       } catch (error) {
         log.error('account soft-delete failed', { error: (error as Error).message, userId: req.user.userId });

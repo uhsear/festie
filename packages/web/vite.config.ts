@@ -84,6 +84,9 @@ export default defineConfig({
           // which means the token never reaches the server and the flow breaks.
           /^\/reset(\/|-password)/,
           /^\/join\//,
+          // Server-rendered share pages and calendar feeds (/s/<token>, /s/u/<username>, /cal/<token>.ics).
+          /^\/s\//,
+          /^\/cal\//,
         ],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Vite's manualChunks does not produce admin-prefixed filenames; the

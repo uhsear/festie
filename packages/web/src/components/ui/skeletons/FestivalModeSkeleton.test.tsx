@@ -5,13 +5,13 @@ import FestivalModeSkeleton from './FestivalModeSkeleton';
 describe('FestivalModeSkeleton', () => {
   it('announces loading as a status with sr-only text', () => {
     render(<FestivalModeSkeleton />);
-    expect(screen.getByRole('status', { name: 'Loading festival mode' })).toHaveAttribute('aria-live', 'polite');
-    expect(screen.getByText('Loading festival mode…')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading Now & Next' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading Now & Next…')).toBeInTheDocument();
   });
 
   it('renders with aria-busy for loading state', () => {
     render(<FestivalModeSkeleton />);
-    expect(screen.getByLabelText('Loading festival mode')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByLabelText('Loading Now & Next')).toHaveAttribute('aria-busy', 'true');
   });
 
   it('renders a header section', () => {

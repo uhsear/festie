@@ -73,7 +73,7 @@ describe('RegisterPage', () => {
 
   it('renders Login and Create account tabs', () => {
     render(<RegisterPage />);
-    // Both auth-method segments are nav links now; "Create Account" also appears
+    // Both auth-method segments are nav links now; "Create account" also appears
     // on the submit button, so scope to the link role.
     expect(screen.getByRole('link', { name: 'Create account' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();

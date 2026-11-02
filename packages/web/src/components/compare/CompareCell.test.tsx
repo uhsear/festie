@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import CompareCell from './CompareCell';
 
@@ -49,5 +49,13 @@ describe('CompareCell', () => {
     const span = screen.getByText('Must');
     expect(span.style.background).toBeTruthy();
     expect(span.style.color).toBeTruthy();
+  });
+
+  it('renders an Add button with the label when onAdd is set and no priority', () => {
+    const onAdd = vi.fn();
+    renderInTable(<CompareCell priority={undefined} onAdd={onAdd} label="Add X to my picks" />);
+    screen.getByRole('button', { name: 'Add X to my picks' }).click();
+    expect(onAdd).toHaveBeenCalled();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 });

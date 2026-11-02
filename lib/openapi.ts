@@ -31,6 +31,7 @@ import {
   refreshTokenSchema,
   adminBulkDeactivateSchema,
   festivalDepthQuery,
+  lineupImportRequestSchema,
 } from './schemas';
 import { responseSchemas } from './responseSchemas';
 
@@ -311,6 +312,43 @@ export function generateOpenAPISpec(config: any) {
       },
       '/api/v1/admin/bulk/deactivate': {
         post: { tags: ['Admin'], summary: 'Bulk deactivate users', security: [{ bearerAuth: [] }], requestBody: jsonBody(adminBulkDeactivateSchema), responses: { 200: { description: 'Results' } } },
+      },
+      '/api/v1/admin/festivals/{id}/import-lineup/preview': {
+        post: { tags: ['Admin'], summary: 'Preview a lineup import (writes nothing)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(lineupImportRequestSchema), responses: { 200: { description: 'Import plan: row statuses, counts, new stages and days, problems' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/import-lineup': {
+        post: { tags: ['Admin'], summary: 'Commit a lineup import', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(lineupImportRequestSchema), responses: { 200: { description: '{ committed: false, plan } when the plan has errors, else { committed: true, result, plan }' }, 400: { description: 'Invalid import payload' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/imports': {
+        get: { tags: ['Admin'], summary: 'Lineup import history (newest 20)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, imports }' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/imports/{importId}/undo': {
+        post: { tags: ['Admin'], summary: 'Undo the newest lineup import', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'importId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Removed, restored and kept sets' }, 400: { description: 'Not the newest import' }, 404: { description: 'Import not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/lineup-announcement': {
+        get: { tags: ['Admin'], summary: 'Count who a lineup announcement would reach', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, recipients }' }, 404: { description: 'Festival not found' } } },
+        post: { tags: ['Admin'], summary: 'Send the lineup announcement push and email', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ queued: true, recipients }' }, 400: { description: 'No one to notify' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals': {
+        get: { tags: ['Admin'], summary: 'List every non-deleted festival, drafts included', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Festival list items plus { published, updatedAt }' } } },
+      },
+      '/api/v1/admin/festivals/archived': {
+        get: { tags: ['Admin'], summary: 'List deleted festivals (newest 100)', security: [{ bearerAuth: [] }], responses: { 200: { description: '[{ id, name, location, deletedAt, publishedAt }]' } } },
+      },
+      '/api/v1/admin/festivals/{id}': {
+        get: { tags: ['Admin'], summary: 'Get a festival, draft or published, with its publish checklist', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, ...queryParams(festivalDepthQuery)], responses: { 200: { description: 'The full festival plus { publishedAt, updatedByUsername, checklist }' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/impact': {
+        get: { tags: ['Admin'], summary: 'Count who loses access if the festival is deleted', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ profiles, crews, picks }' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/publish': {
+        post: { tags: ['Admin'], summary: 'Publish a draft festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ publishedAt, checklist }' }, 404: { description: 'Festival not found' }, 409: { description: 'PUBLISH_BLOCKED: the checklist has a todo item (error.checklist)' } } },
+      },
+      '/api/v1/admin/festivals/{id}/restore': {
+        post: { tags: ['Admin'], summary: 'Restore a deleted festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ id, published }' }, 404: { description: 'This festival is not in Archived.' } } },
+      },
+      '/api/v1/admin/env': {
+        get: { tags: ['Admin'], summary: 'Environment label for the admin header band', security: [{ bearerAuth: [] }], responses: { 200: { description: '{ label: string | null }' } } },
       },
       '/api/v1/admin/bulk/archive-festivals': {
         post: { tags: ['Admin'], summary: 'Bulk archive festivals', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Results' } } },

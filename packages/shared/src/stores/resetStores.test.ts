@@ -27,6 +27,9 @@ describe('resetAllStores', () => {
       selectedDay: 3,
       activeStages: ['st1', 'st2'],
       searchQuery: 'test',
+      byFestival: {
+        f1: { view: 'grid', activeStages: [], onlyMine: false, searchQuery: '', hiddenDays: [], dismissedPhase: null, groupBy: null },
+      },
     });
     useCrewStore.setState({
       crews: [{ id: 'c1' } as any],
@@ -87,6 +90,7 @@ describe('resetAllStores', () => {
     expect(state.selectedDay).toBe(0);
     expect(state.activeStages).toEqual([]);
     expect(state.searchQuery).toBe('');
+    expect(state.byFestival).toEqual({});
   });
 
   it('resets crewStore to defaults', () => {

@@ -126,7 +126,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     const handlePollVoted = (data: CrewPollVotedPayload) => {
       const intent = routePollVoted(data, getActiveCrewId());
       if (intent) {
-        sink.onPollVoted(intent.crewId, intent.pollId, intent.userId, intent.optionIndex);
+        sink.onPollVoted(intent.crewId, intent.pollId, intent.userId, intent.optionIndexes);
       }
     };
 

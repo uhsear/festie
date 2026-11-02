@@ -42,4 +42,19 @@ describe('UserMenuAccountSection', () => {
     );
     expect(screen.getByText('Waiting for you to confirm new@b.co. Check that inbox.')).toBeInTheDocument();
   });
+
+  it('labels the sign-out button "Sign out", not "Logout"', () => {
+    render(
+      <UserMenuAccountSection
+        user={{ email: 'a@b.co' }}
+        isLoading={false}
+        onClose={vi.fn()}
+        onLogout={vi.fn()}
+        onChangePassword={vi.fn()}
+        onChangeEmail={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    expect(screen.queryByText('Logout')).toBeNull();
+  });
 });

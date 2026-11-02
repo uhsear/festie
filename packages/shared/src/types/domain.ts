@@ -80,6 +80,8 @@ export interface Festival {
   endDate: string;
   location?: string;
   b2bSeparator?: string;
+  /** null = draft, visible to admins only. */
+  publishedAt?: string | null;
   /**
    * Optional IANA time-zone id (e.g. `America/New_York`). When present, set
    * reminders are anchored in the festival's zone so they fire at the right
@@ -230,7 +232,8 @@ export interface CrewMember {
 // SINGLE-SOURCING NOTE (Phase 3): NOT aliased to api.gen.ts
 // `components['schemas']['Crew']`. The generated type requires
 // `createdBy`/`memberCount` (and adds `maxMembers`/`inviteExpiresAt`/`role`);
-// this domain model omits those, makes `festivalId?` optional, and carries the
+// this domain model carries `role`/`maxMembers`/`memberCount` as optional,
+// omits `createdBy`, makes `festivalId?` optional, and carries the
 // client-only `_optimistic` flag. Broader client model — kept hand-written.
 export interface Crew {
   id: string;
@@ -239,6 +242,10 @@ export interface Crew {
   /** Sent to every member; regenerate is owner-only. */
   inviteExpiresAt?: string | null;
   owner: string;
+  /** The caller's role in this crew (the server sends it on list and detail reads). */
+  role?: 'owner' | 'member';
+  maxMembers?: number;
+  memberCount?: number;
   festivalId?: string;
   members: CrewMember[];
   // Home base is surfaced on the serialized crew (routes/crews.ts:48-50);
@@ -355,12 +362,19 @@ export interface CrewPoll {
    * when the poll closes. Omitted or null for plain polls.
    */
   set_refs?: (PollSetRef | null)[] | null;
+  /** One voter may pick several options. Absent on old rows (single-answer). */
+  multi_answer?: boolean;
+  /** When the poll ended (manual or timed). Null while open. */
+  closed_at?: string | null;
+  /** When the one allowed reminder was sent. Null if none yet. */
+  nudged_at?: string | null;
 }
 
 export interface CreateCrewPollRequest {
   question: string;
   options: string[];
   closesAt?: string;
+  multiAnswer?: boolean;
 }
 
 /**
@@ -511,6 +525,9 @@ export interface UpdateCrewRideOfferRequest {
   note?: string | null;
 }
 
+/** Must match the `crewStatusSchema` enum in lib/schemas.ts. */
+export type CrewStatusKey = 'on-my-way' | 'here' | 'delayed' | 'at-camp' | 'at-stage' | 'break' | 'lost';
+
 /**
  * Crew member status (M5) as serialized by the backend (routes/crew-status.ts).
  * snake_case from Postgres.
@@ -520,7 +537,8 @@ export interface UpdateCrewRideOfferRequest {
  * render `updated_at` as honest staleness ("as of N ago" via formatStaleness) —
  * never imply real-time.
  *
- * - `status`: 'on-my-way' | 'here' | 'delayed' | null (null = cleared)
+ * - `status`: a `CrewStatusKey` or null (null = cleared). `at-stage` keeps the
+ *   stage name in `note`.
  * - `target_meeting_point_id`: free TEXT ref to a crew_meeting_points row (the
  *   ETA target); may dangle if the point was removed → renders without a target.
  * - `eta_minutes`: the member's own estimate (or geo-computed when the target
@@ -529,7 +547,7 @@ export interface UpdateCrewRideOfferRequest {
 export interface CrewMemberStatus {
   crew_id: string;
   user_id: string;
-  status: 'on-my-way' | 'here' | 'delayed' | null;
+  status: CrewStatusKey | null;
   target_meeting_point_id: string | null;
   eta_minutes: number | null;
   note: string | null;
@@ -558,7 +576,7 @@ export interface CrewMemberStatus {
  * fields optional; an empty `status` (null) clears it.
  */
 export interface UpdateCrewMemberStatusRequest {
-  status?: 'on-my-way' | 'here' | 'delayed' | null;
+  status?: CrewStatusKey | null;
   targetMeetingPointId?: string | null;
   etaMinutes?: number | null;
   note?: string | null;

@@ -132,10 +132,22 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     'activeStages',
     'searchQuery',
     'onlyMine',
+    'scheduleView',
+    'hiddenDays',
+    'dismissedPhase',
+    'scheduleGroupBy',
+    'prefsFestivalId',
+    'prefsScope',
+    'byFestival',
     'setSelectedDay',
     'setActiveStages',
     'setSearchQuery',
     'setOnlyMine',
+    'setScheduleView',
+    'setHiddenDays',
+    'dismissPhaseBand',
+    'setScheduleGroupBy',
+    'restoreForFestival',
   ]);
 
   const dataPart: Record<string, unknown> = {};

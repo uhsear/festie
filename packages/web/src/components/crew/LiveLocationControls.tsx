@@ -8,7 +8,7 @@ import { clearCrewSos, sosErrorMessage } from '@festie/shared';
 import type { SosEntry } from '@festie/shared/types';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { LIVE_LOCATION } from '@festie/shared/constants';
+import { COPY, LIVE_LOCATION } from '@festie/shared/constants';
 import { formatStaleness } from '@festie/shared/utils';
 import { useSharedSocket } from '../../lib/socketContext';
 import { useToast } from '../../lib/toastContext';
@@ -174,7 +174,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
             </p>
             <p id="live-share-desc" className="text-xs text-text-muted">
               {lowPowerMode
-                ? 'Paused by low-power mode to save battery. Turn it off in Festival Mode to share.'
+                ? `Paused by low-power mode to save battery. Turn it off in ${COPY.nowNext.name} to share.`
                 : `Ephemeral and crew-only. Keeps running on other pages and auto-stops after ${SESSION_MINUTES} min.`}
             </p>
           </div>

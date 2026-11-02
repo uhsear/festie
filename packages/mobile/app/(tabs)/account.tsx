@@ -8,9 +8,11 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useMobilePush } from '../../hooks/useMobilePush';
 import { useAuth } from '@festie/shared/hooks';
+import { COPY } from '@festie/shared/constants';
 import { displayInitials, identityLabel } from '@festie/shared/utils';
 import { useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import ScreenHeader from '../../components/ScreenHeader';
+import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import AppPressable from '../../components/AppPressable';
 import SectionLabel from '../../components/SectionLabel';
 import AccountAvatarSection from '../../components/AccountAvatarSection';
@@ -101,10 +103,10 @@ export default function AccountScreen() {
 
   const confirmLogout = () => {
     haptics.warning();
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+    Alert.alert(COPY.auth.signOut, COPY.auth.signOutConfirm, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Sign Out',
+        text: COPY.auth.signOut,
         style: 'destructive',
         onPress: () => void handleLogout(),
       },
@@ -315,11 +317,11 @@ export default function AccountScreen() {
         <SectionLabel>Festival</SectionLabel>
         <View style={styles.card}>
           <LinkRow
-            icon="sparkles-outline"
-            title="Festival Wrap"
+            icon={CONCEPT_IONICON.wrap}
+            title={COPY.wrap.name}
             hint="Your stats & top sets after the festival"
             onPress={() => go('/wrap')}
-            accessibilityLabel="Open your festival wrap"
+            accessibilityLabel="Open your Festival Wrap"
           />
         </View>
 
@@ -386,7 +388,7 @@ export default function AccountScreen() {
               <Ionicons name="log-out-outline" size={20} color={t.colors.text.danger} />
             </View>
             <View style={styles.rowBody}>
-              <Text style={[styles.rowTitle, styles.dangerText]}>Sign Out</Text>
+              <Text style={[styles.rowTitle, styles.dangerText]}>{COPY.auth.signOut}</Text>
             </View>
             {loggingOut ? (
               <ActivityIndicator size="small" color={t.colors.text.danger} />

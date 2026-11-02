@@ -4,9 +4,11 @@ import userEvent from '@testing-library/user-event';
 import type { FestivalSet } from '@festie/shared/types';
 
 // Mock dependencies
+const clearPickMock = vi.fn();
 const pickSyncMock = { sync: undefined as { state: string; priority: string | null } | undefined, retry: vi.fn(() => Promise.resolve()) };
 vi.mock('@festie/shared/hooks', () => ({
   usePickSync: () => pickSyncMock,
+  usePickClear: () => clearPickMock,
   usePicks: vi.fn(() => ({
     getMyPick: vi.fn(() => null),
     savePick: vi.fn(),
@@ -42,6 +44,10 @@ vi.mock('@/lib/toastContext', () => ({
   useToast: vi.fn(() => ({ toast: vi.fn() })),
 }));
 
+vi.mock('@/lib/useUndoNotifier', () => ({
+  useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
+}));
+
 vi.mock('@/hooks/useHaptics', () => ({
   useHaptics: vi.fn(() => ({ tap: vi.fn(), select: vi.fn(), warning: vi.fn() })),
 }));
@@ -54,6 +60,7 @@ vi.mock('./LiveBadge', () => ({
 
 import SetCard from './SetCard';
 import { useSetStatus } from '@/hooks/useSetStatus';
+import { api } from '@festie/shared/services/api';
 import { usePicks } from '@festie/shared/hooks';
 import { ensureWhiteContrast } from '../ui/StageBadge';
 
@@ -147,6 +154,40 @@ describe('SetCard', () => {
     expect(btn).toBeInTheDocument();
   });
 
+  describe('Listen', () => {
+    const spotifySet = makeSet({
+      artists: [{ name: 'Daft Punk', links: { spotify: 'https://open.spotify.com/artist/abc123' } }],
+    } as unknown as Partial<FestivalSet>);
+
+    it('calls onPreview and never fetches', async () => {
+      const onPreview = vi.fn();
+      const onTap = vi.fn();
+      render(<SetCard {...defaultProps} set={spotifySet} onPreview={onPreview} onTap={onTap} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Listen to Daft Punk' }));
+      expect(onPreview).toHaveBeenCalledOnce();
+      expect(onTap).not.toHaveBeenCalled();
+      expect(api.get).not.toHaveBeenCalled();
+    });
+
+    it('is hidden without a Spotify artist link', () => {
+      render(<SetCard {...defaultProps} />);
+      expect(screen.queryByRole('button', { name: /Listen to/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('pick placeholders', () => {
+    it('renders three placeholders while picks load', () => {
+      const { container } = render(<SetCard {...defaultProps} showPicks={false} picksLoading />);
+      expect(container.querySelectorAll('.skeleton-shimmer')).toHaveLength(3);
+      expect(container.querySelector('.card-priority')).toBeNull();
+    });
+
+    it('renders no placeholders when not loading', () => {
+      const { container } = render(<SetCard {...defaultProps} showPicks={false} />);
+      expect(container.querySelectorAll('.skeleton-shimmer')).toHaveLength(0);
+    });
+  });
+
   describe('priority buttons', () => {
     it('renders 3 priority buttons when showPicks is true', () => {
       render(<SetCard {...defaultProps} showPicks />);
@@ -183,6 +224,18 @@ describe('SetCard', () => {
       expect(screen.getByRole('button', { name: 'Want to See: Daft Punk' })).toHaveAttribute('aria-pressed', 'false');
       expect(screen.queryByRole('button', { name: /\(selected\)/ })).not.toBeInTheDocument();
     });
+
+    it('clears through usePickClear when the active priority is clicked', async () => {
+      vi.mocked(usePicks).mockReturnValue({
+        getMyPick: vi.fn(() => 'must'),
+        savePick: vi.fn(),
+        getMyNote: vi.fn(() => ''),
+      });
+      clearPickMock.mockClear();
+      render(<SetCard {...defaultProps} />);
+      await userEvent.click(screen.getByLabelText('Must See: Daft Punk'));
+      expect(clearPickMock).toHaveBeenCalledWith('set-1', 'Daft Punk');
+    });
   });
 
   describe('priority class', () => {
@@ -206,6 +259,7 @@ describe('SetCard', () => {
     it('shows conflict badge when conflicts exist', () => {
       render(<SetCard {...defaultProps} conflicts={[makeSet({ id: 'set-2' })]} />);
       expect(screen.getByTestId('set-card').className).toContain('has-conflict');
+      expect(screen.getByText('Clash')).toBeInTheDocument();
     });
 
     it('does not show conflict badge when no conflicts', () => {

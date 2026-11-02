@@ -108,6 +108,8 @@ import { configureSocketIO } from './lib/socket-setup';
 import { createBackgroundTasks, createCloseHandler } from './lib/shutdown';
 import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
+import { createCrewNotifier } from './lib/notifications/crew-notify';
+import { createPollCloser } from './lib/poll-close';
 import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
 import createPageRoutes from './routes/pages';
@@ -131,6 +133,7 @@ import createExportRoutes from './routes/export';
 import createNotificationRoutes from './routes/notifications';
 import createCrewRoutes from './routes/crews';
 import createLineupImportRoutes from './routes/lineup-import';
+import createLineupAnnounceRoutes from './routes/lineup-announce';
 import createShareRoutes from './routes/share';
 import { createRatingsRoutes } from './routes/ratings';
 import { createWeatherRoutes } from './routes/weather';
@@ -220,6 +223,7 @@ async function createFestieApp(overrides: any = {}) {
   }
   const reengagement = reengagementQueue || reengagementExecutor;
   deps.reengagement = reengagement;
+  deps.reengagementExecutor = reengagementExecutor;
   ctx.reengagement = reengagement; // also exposed to background tasks (wrap_ready sweep)
   ctx.reengagementQueue = reengagementQueue; // for graceful shutdown
   ctx.reengagementExecutor = reengagementExecutor; // inline path for the shutdown sweep
@@ -234,6 +238,19 @@ async function createFestieApp(overrides: any = {}) {
   });
   ctx.reminderScheduler = reminderScheduler;
   deps.emitter = emitter;
+  const crewNotify = createCrewNotifier({ stores: ctx.stores, notificationService, log });
+  const pollCloser = createPollCloser({
+    stores: ctx.stores,
+    io,
+    emitter,
+    crewNotify,
+    createOpaqueId: ctx.createOpaqueId,
+    log,
+  });
+  deps.crewNotify = crewNotify;
+  ctx.crewNotify = crewNotify;
+  deps.pollCloser = pollCloser;
+  ctx.pollCloser = pollCloser;
   // Venue geocoding (OpenStreetMap Nominatim). Off under test so suites make no network calls.
   if (config.NODE_ENV !== 'test') deps.geocodeVenue = createVenueGeocoder({ log }).geocodeVenue;
 
@@ -248,6 +265,7 @@ async function createFestieApp(overrides: any = {}) {
   const notificationRoutes = createNotificationRoutes(deps);
   const crewRoutes = createCrewRoutes(deps);
   const lineupImportRoutes = createLineupImportRoutes(deps);
+  const lineupAnnounceRoutes = createLineupAnnounceRoutes(deps);
   const shareRoutes = createShareRoutes(deps);
   const ratingsRoutes = createRatingsRoutes(deps);
   const weatherRoutes = createWeatherRoutes(deps);
@@ -268,6 +286,7 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/admin', adminRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
+  app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);
   app.use('/api/v1/festivals', festivalRoutes);
   app.use('/api/v1/profiles', profileRoutes);
   app.use('/api/v1', exportRoutes);
@@ -456,6 +475,7 @@ async function createFestieApp(overrides: any = {}) {
     redis,
     cacheBus,
     emitter,
+    crewNotify,
     clearPresenceTimers: ctx.clearPresenceTimers,
     avatarPool,
     inFlightRequests,

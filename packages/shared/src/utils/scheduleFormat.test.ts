@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { fmtCountdown, byStartTime, setLabel } from './scheduleFormat';
+import {
+  fmtCountdown,
+  byStartTime,
+  setLabel,
+  formatDayChip,
+  formatSetWhen,
+  splitCardsByNow,
+  reminderNoteSummary,
+  formatSetTimeRange,
+  buildListenList,
+  listenListText,
+} from './scheduleFormat';
+import { zonedWallTimeToMs } from './setStatus';
+import type { SetStatus } from './setStatus';
 import type { FestivalSet } from '../types/domain';
 
 // ---------------------------------------------------------------------------
@@ -129,5 +142,146 @@ describe('setLabel', () => {
   it('falls back to truncated id only when no artist, no artists, and no startTime', () => {
     const set = { ...base, artist: undefined, artists: undefined, startTime: '' };
     expect(setLabel(set, 'abc123xyz')).toBe('Set abc123');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T19 helpers
+// ---------------------------------------------------------------------------
+
+const TZ = 'America/New_York';
+const days = [
+  { id: 'd0', festivalId: 'f', date: '2026-11-07', label: 'Saturday', createdAt: '' },
+  { id: 'd1', festivalId: 'f', date: '2026-11-08', label: 'Day 2', createdAt: '' },
+];
+const at = (date: string, hh: number, mm = 0) => zonedWallTimeToMs(date, hh, mm, TZ);
+const mk = (id: string, startTime: string, endTime: string, dayIndex = 0, artist = id): FestivalSet => ({
+  id,
+  festivalId: 'f',
+  stageId: 's',
+  dayIndex,
+  startTime,
+  endTime,
+  artist,
+  createdAt: '',
+  updatedAt: '',
+});
+const status = (s: SetStatus, label: string) => ({ status: s, label, minutesUntil: 0, progress: 0 });
+
+describe('formatDayChip', () => {
+  it('adds the date beside a weekday label', () => {
+    expect(formatDayChip({ date: '2026-11-07', label: 'Saturday' })).toEqual({
+      label: 'Saturday',
+      date: 'Nov 7',
+      a11y: 'Saturday, November 7',
+    });
+  });
+  it('keeps an admin label and falls back to the weekday', () => {
+    expect(formatDayChip({ date: '2026-11-07', label: 'Day 1' }).label).toBe('Day 1');
+    expect(formatDayChip({ date: '2026-11-07' }).label).toBe('Saturday');
+  });
+  it('omits the date when the label has it or the date is invalid', () => {
+    expect(formatDayChip({ date: '2026-11-07', label: 'Sat Nov 7' })).toEqual({
+      label: 'Sat Nov 7',
+      date: null,
+      a11y: 'Sat Nov 7',
+    });
+    expect(formatDayChip({ date: 'soon' })).toEqual({ label: 'soon', date: null, a11y: 'soon' });
+    expect(formatDayChip({ date: '' }).label).toBe('Day');
+  });
+});
+
+describe('formatSetWhen', () => {
+  it('joins day, time and status', () => {
+    const set = mk('a', '15:00', '15:55');
+    expect(formatSetWhen(set, days, status('upcoming', 'In 2h'))).toBe('Saturday, Nov 7 · 3:00 PM - 3:55 PM · In 2h');
+    expect(formatSetWhen(set, days, status('live', 'LIVE'))).toBe('Saturday, Nov 7 · 3:00 PM - 3:55 PM · Live now');
+    expect(formatSetWhen(set, days, status('past', 'Ended'))).toBe('Saturday, Nov 7 · 3:00 PM - 3:55 PM · Ended');
+    expect(formatSetWhen(set, days, status('later', '3:00 PM'))).toBe('Saturday, Nov 7 · 3:00 PM - 3:55 PM');
+  });
+  it('handles TBA and a missing day', () => {
+    expect(formatSetWhen(mk('a', '', ''), days, status('tba', 'TBA'))).toBe('Saturday, Nov 7 · Time TBA');
+    expect(formatSetWhen({ ...mk('a', '15:00', ''), dayIndex: undefined }, days, null)).toBe('3:00 PM');
+  });
+});
+
+describe('splitCardsByNow', () => {
+  const sets = [mk('late', '22:00', '23:00'), mk('early', '12:00', '13:00'), mk('mid', '15:00', '16:00')];
+  it('puts ended sets of today in earlier, in time order', () => {
+    const r = splitCardsByNow(sets, { days, nowMs: at('2026-11-07', 15, 30), timeZone: TZ });
+    expect(r.earlier.map((s) => s.id)).toEqual(['early']);
+    expect(r.rest.map((s) => s.id)).toEqual(['mid', 'late']);
+  });
+  it('has no earlier group before the festival or between days', () => {
+    expect(splitCardsByNow(sets, { days, nowMs: at('2026-11-05', 15), timeZone: TZ }).earlier).toEqual([]);
+    const r = splitCardsByNow(sets, { days, nowMs: at('2026-11-08', 15), timeZone: TZ });
+    expect(r.earlier).toEqual([]);
+    expect(r.rest.map((s) => s.id)).toEqual(['early', 'mid', 'late']);
+  });
+  it('breaks start-time ties by name', () => {
+    const r = splitCardsByNow([mk('b', '12:00', '13:00', 0, 'Bee'), mk('a', '12:00', '13:00', 0, 'ant')], {
+      days,
+      nowMs: at('2026-11-05', 15),
+      timeZone: TZ,
+    });
+    expect(r.rest.map((s) => s.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('reminderNoteSummary', () => {
+  it('describes each state', () => {
+    expect(reminderNoteSummary(15, false, true)).toBe('Reminder 15m before · Add a note');
+    expect(reminderNoteSummary(60, true, true)).toBe('Reminder 1h before · Note added');
+    expect(reminderNoteSummary(null, false, true)).toBe('Remind me · Add a note');
+    expect(reminderNoteSummary(15, true, false)).toBe('Note added');
+  });
+});
+
+describe('formatSetTimeRange', () => {
+  it('shows start - end, the start alone, or nothing', () => {
+    expect(formatSetTimeRange(mk('a', '15:00', '15:55'))).toBe('3:00 PM - 3:55 PM');
+    expect(formatSetTimeRange(mk('a', '15:00', ''))).toBe('3:00 PM');
+    expect(formatSetTimeRange(mk('a', '', '15:55'))).toBe('');
+  });
+});
+
+describe('buildListenList / listenListText', () => {
+  const spotify = (set: FestivalSet, url: string): FestivalSet => ({
+    ...set,
+    artists: [{ name: set.artist ?? '', links: { spotify: url } }],
+  });
+  const sets = [
+    spotify(mk('late', '22:00', '23:00', 0, 'Late'), 'https://open.spotify.com/artist/abc123'),
+    mk('d2', '14:00', '15:00', 1, 'Second'),
+    spotify(mk('early', '13:00', '14:00', 0, 'Early'), 'javascript:alert(1)//artist/x1'),
+    { ...mk('tba', '', '', 0, 'Unplaced'), dayIndex: undefined },
+  ];
+
+  it('groups by day in time order, unscheduled last, https links only', () => {
+    expect(buildListenList(sets, days)).toEqual([
+      {
+        label: 'Saturday, Nov 7',
+        rows: [
+          { setId: 'early', name: 'Early', spotifyUrl: null },
+          { setId: 'late', name: 'Late', spotifyUrl: 'https://open.spotify.com/artist/abc123' },
+        ],
+      },
+      { label: 'Day 2, Nov 8', rows: [{ setId: 'd2', name: 'Second', spotifyUrl: null }] },
+      { label: 'Unscheduled', rows: [{ setId: 'tba', name: 'Unplaced', spotifyUrl: null }] },
+    ]);
+  });
+
+  it('formats copyable text', () => {
+    expect(listenListText('Fest', buildListenList(sets.slice(0, 2), days))).toBe(
+      [
+        'Listen before you go: Fest',
+        '',
+        'Saturday, Nov 7',
+        '- Late: https://open.spotify.com/artist/abc123',
+        '',
+        'Day 2, Nov 8',
+        '- Second',
+      ].join('\n'),
+    );
   });
 });

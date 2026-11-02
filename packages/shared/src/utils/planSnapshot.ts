@@ -25,6 +25,8 @@
  */
 
 import { z } from 'zod';
+import type { CrewMeetingPoint, Priority } from '../types';
+import { PRIORITY_WEIGHT } from './crewNudges';
 
 /** Current envelope version. Bump when the payload shape changes incompatibly. */
 export const PLAN_SNAPSHOT_VERSION = 1 as const;
@@ -293,4 +295,48 @@ export function decodePlanSnapshot(text: unknown): DecodeResult {
     return { ok: false, error: 'snapshot failed validation' };
   }
   return { ok: true, data: result.data };
+}
+
+// ---------------------------------------------------------------------------
+// snapshot assembly (shared by web + mobile PlanQRShare)
+// ---------------------------------------------------------------------------
+
+/** Soonest active, future meeting point with a coord; falls back to any active+coord one. */
+export function pickShareMeetingPoint(points: CrewMeetingPoint[], nowMs: number): CrewMeetingPoint | null {
+  const withCoord = points.filter((p) => p.active && typeof p.latitude === 'number' && typeof p.longitude === 'number');
+  const future = withCoord
+    .filter((p) => p.meet_at)
+    .map((p) => ({ p, ms: new Date(p.meet_at as string).getTime() }))
+    .filter(({ ms }) => Number.isFinite(ms) && ms >= nowMs)
+    .sort((a, b) => a.ms - b.ms);
+  if (future.length > 0) return future[0]!.p;
+  return withCoord[0] ?? null;
+}
+
+/**
+ * Build the snapshot input from in-memory store data: picks ranked
+ * must > want > maybe and capped to {@link MAX_PICKS}, plus the best meeting
+ * point when it has coordinates.
+ */
+export function buildPlanSnapshotInput(args: {
+  festival: { id: string; name: string };
+  picks: Record<string, Priority> | undefined;
+  meetingPoints: CrewMeetingPoint[] | undefined;
+  nowMs: number;
+}): { input: PlanSnapshotInput; picksCount: number; meetingPoint: CrewMeetingPoint | null } {
+  const picks = Object.entries(args.picks ?? {})
+    .sort(([, a], [, b]) => (PRIORITY_WEIGHT[b] ?? 0) - (PRIORITY_WEIGHT[a] ?? 0))
+    .slice(0, MAX_PICKS)
+    .map(([setId, priority]) => ({ setId, priority: toPickPriority(priority) }));
+
+  const mp = pickShareMeetingPoint(args.meetingPoints ?? [], args.nowMs);
+  const input: PlanSnapshotInput = {
+    festivalId: args.festival.id,
+    festivalName: args.festival.name,
+    picks,
+    ...(mp && typeof mp.latitude === 'number' && typeof mp.longitude === 'number'
+      ? { meetingPoint: { label: mp.label, lat: mp.latitude, lng: mp.longitude } }
+      : {}),
+  };
+  return { input, picksCount: picks.length, meetingPoint: mp };
 }

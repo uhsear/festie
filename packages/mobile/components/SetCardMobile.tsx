@@ -11,14 +11,18 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import {
-  formatTime,
+  formatSetTimeRange,
   artistDisplayName,
   artistSubtitle,
   ensureWhiteContrast,
   PRIORITY_RANK,
   buildOverlapBreakdown,
+  festivalPhase,
+  primarySpotifyArtist,
+  reminderLeadLabel,
+  reminderLeadA11y,
 } from '@festie/shared/utils';
-import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
+import { useCrewStore, useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
 import { usePickSync } from '@festie/shared/hooks';
 import { duration, easing } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -27,6 +31,7 @@ import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import AppPressable from './AppPressable';
 import { priorityColor } from '../lib/priorityColor';
+import { COPY } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS } from '../lib/prioritySymbol';
 
 import Avatar from './Avatar';
@@ -65,12 +70,18 @@ interface SetCardMobileProps {
   hasConflict?: boolean;
   /** When true, shows a small "has note" indicator next to the time. */
   hasNote?: boolean;
+  /** Lead time in minutes of this set's reminder; shows a bell with the lead. */
+  reminderMinutes?: number;
   /**
    * Crew members (other than the current user) who have this set picked.
    * Renders an overlapping avatar cluster + "+N" overflow in the footer,
    * mirroring the web SetCard. Optional — omit to hide the cluster entirely.
    */
   friendProfiles?: FriendProfile[];
+  /** Festival's B2B separator ("x", "&"); defaults to the shared default. */
+  b2bSeparator?: string;
+  /** Opens the set with the player open. Shown only for sets with a Spotify artist link. */
+  onListen?: () => void;
 }
 
 
@@ -191,7 +202,10 @@ function SetCardMobileImpl({
   onPress,
   hasConflict = false,
   hasNote = false,
+  reminderMinutes,
   friendProfiles,
+  b2bSeparator,
+  onListen,
 }: SetCardMobileProps) {
   const t = useTokens();
   const styles = useStyles();
@@ -199,18 +213,27 @@ function SetCardMobileImpl({
   const { sync, retry } = usePickSync(set.id);
   const pickPending = sync?.state === 'saving' || sync?.state === 'queued' ? sync.state : null;
 
-  const artistName = artistDisplayName(set);
-  const subtitle = artistSubtitle(set);
-  const timeLabel = set.startTime && set.endTime ? `${formatTime(set.startTime)} - ${formatTime(set.endTime)}` : 'TBA';
+  const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const days = useFestivalDataStore((s) => s.days);
+
+  const artistName = artistDisplayName(set, b2bSeparator);
+  const subtitle = artistSubtitle(set, b2bSeparator);
+  const timeLabel = formatSetTimeRange(set) || 'TBA';
 
   // R19: live state drives the aqua border AND the coral "now" progress bar.
   const isLive = setStatus.status === 'live';
   // Spell out how far through a live set we are so the body's accessible name
   // carries the same "now" context the visual progress bar does for sighted users.
   const livePct = isLive ? Math.round(setStatus.progress * 100) : 0;
-  const a11yBody = isLive
-    ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
-    : `${artistName}, ${stageName}, ${timeLabel}`;
+  const reminderA11y = reminderMinutes != null ? `Reminder ${reminderLeadA11y(reminderMinutes)} before` : null;
+  const a11yBody =
+    (isLive
+      ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
+      : `${artistName}, ${stageName}, ${timeLabel}`) + (reminderA11y ? `, ${reminderA11y.toLowerCase()}` : '');
+
+  // Ended sets dim only while the festival is on, mirroring web SetCard.
+  const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
+  const canListen = !!onListen && primarySpotifyArtist(set) !== null;
 
   // The stage pill renders white (onAccent) text on the stage color, so darken
   // the fill just enough for that text to clear WCAG AA (see shared
@@ -230,8 +253,8 @@ function SetCardMobileImpl({
     <View style={[styles.card, isLive && styles.cardLive]}>
       <AppPressable style={styles.body} onPress={onPress} accessibilityRole="button" accessibilityLabel={a11yBody}>
         <View style={styles.stagePill}>
-          <View style={[styles.stagePillBg, { backgroundColor: pillBg }]} pointerEvents="none" />
-          <Text style={styles.stageText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          <View style={[styles.stagePillBg, { backgroundColor: dimmed ? t.colors.overlay[3] : pillBg }]} pointerEvents="none" />
+          <Text style={[styles.stageText, dimmed && styles.dimmedText]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {/* Trailing NBSP absorbs Fabric's single-line self-under-measure so a
                 longer stage name doesn't drop its last glyph (the bg-sibling
                 already prevents the rounded-pill clip). */}
@@ -239,7 +262,7 @@ function SetCardMobileImpl({
           </Text>
         </View>
 
-        <Text style={styles.artist} numberOfLines={2} maxFontSizeMultiplier={typeScaleCap('title')}>
+        <Text style={[styles.artist, dimmed && styles.dimmedText]} numberOfLines={2} maxFontSizeMultiplier={typeScaleCap('title')}>
           {artistName}
         </Text>
         {subtitle ? (
@@ -249,7 +272,7 @@ function SetCardMobileImpl({
         ) : null}
 
         <View style={styles.metaRow}>
-          <Text style={styles.time}>{timeLabel}</Text>
+          <Text style={[styles.time, dimmed && styles.dimmedText]}>{timeLabel}</Text>
           <LiveBadge status={setStatus.status} label={setStatus.label} />
           {hasNote ? (
             <Ionicons
@@ -259,10 +282,18 @@ function SetCardMobileImpl({
               accessibilityLabel="Has note"
             />
           ) : null}
+          {reminderMinutes != null ? (
+            <View style={styles.reminderMark} accessibilityLabel={reminderA11y ?? undefined}>
+              <Ionicons name="notifications-outline" size={12} color={t.colors.text.muted} />
+              <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {reminderLeadLabel(reminderMinutes)}
+              </Text>
+            </View>
+          ) : null}
           {hasConflict ? (
             <View style={styles.conflictBadge}>
-              <Ionicons name="warning" size={12} color={t.colors.accent.coral} />
-              <Text style={styles.conflictText}>Conflict</Text>
+              <Ionicons name="warning" size={12} color={t.colors.clash.mark} />
+              <Text style={styles.conflictText}>{COPY.clash.badge}</Text>
             </View>
           ) : null}
         </View>
@@ -277,6 +308,17 @@ function SetCardMobileImpl({
             />
           ))}
         </View>
+
+        {canListen ? (
+          <AppPressable
+            style={styles.listenButton}
+            onPress={onListen}
+            accessibilityRole="button"
+            accessibilityLabel={`Listen to ${artistName}`}
+          >
+            <Ionicons name="musical-notes" size={18} color={t.colors.text.secondary} />
+          </AppPressable>
+        ) : null}
 
         {friendProfiles && friendProfiles.length > 0 ? <CrewCluster friendProfiles={friendProfiles} /> : null}
       </View>
@@ -360,7 +402,10 @@ function areEqual(prev: SetCardMobileProps, next: SetCardMobileProps): boolean {
     prev.stageColor !== next.stageColor ||
     prev.myPick !== next.myPick ||
     prev.hasConflict !== next.hasConflict ||
-    prev.hasNote !== next.hasNote
+    prev.hasNote !== next.hasNote ||
+    prev.b2bSeparator !== next.b2bSeparator ||
+    !!prev.onListen !== !!next.onListen ||
+    prev.reminderMinutes !== next.reminderMinutes
   ) {
     return false;
   }
@@ -526,6 +571,15 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
+  reminderMark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
+  },
+  reminderText: {
+    ...typeStyle('micro'),
+    color: t.colors.text.muted,
+  },
   conflictBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -533,13 +587,13 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     borderRadius: t.radii.default,
-    backgroundColor: t.colors.ring.coral,
+    backgroundColor: t.colors.clash.tint,
     borderWidth: 1,
-    borderColor: t.colors.accent.coral,
+    borderColor: t.colors.clash.mark,
   },
   conflictText: {
     ...typeStyle('micro'),
-    color: t.colors.accent.coral,
+    color: t.colors.text.primary,
   },
   footer: {
     flexDirection: 'row',
@@ -553,6 +607,16 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: t.spacing[2],
     flexShrink: 1,
+  },
+  dimmedText: {
+    color: t.colors.text.secondary,
+  },
+  listenButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: t.radii.pill,
   },
   crewCluster: {
     flexDirection: 'row',

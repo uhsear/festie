@@ -9,11 +9,14 @@ import {
   fmtTimeLeft,
   fmtZonedClock,
   fmtZonedDayClock,
+  settleUpLine,
   timeAgo,
   type ActiveMeet,
   type CrewWhereabout,
   type NowNextSelection,
 } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import AppPressable from './AppPressable';
 import Avatar from './Avatar';
@@ -137,10 +140,10 @@ export function NowHero({
   } else if (phase === 'after') {
     body = (
       <Quiet
-        icon="sparkles-outline"
+        icon={CONCEPT_IONICON.wrap}
         title="That's a wrap"
         body="The festival is over."
-        action={onWrap ? <Button label="See your Wrap" variant="secondary" onPress={onWrap} /> : undefined}
+        action={onWrap ? <Button label={COPY.wrap.open} variant="secondary" onPress={onWrap} /> : undefined}
       />
     );
   } else if (!lineupMode && todayCount === 0) {
@@ -342,6 +345,34 @@ export function CrewPrompt({ title, body, cta, onPress }: { title: string; body:
         </View>
       </View>
       <Button label={cta} onPress={onPress} />
+    </View>
+  );
+}
+
+export function CrewWrapUp({
+  crewName,
+  balance,
+  onSettle,
+  onReform,
+}: {
+  crewName: string;
+  balance: number;
+  onSettle: () => void;
+  onReform: () => void;
+}) {
+  const t = useTokens();
+  const s = useStyles();
+  return (
+    <View style={[s.card, s.section]}>
+      <View style={s.quietRow}>
+        <Ionicons name="people-outline" size={iconSize.md} color={t.colors.accent.aqua} />
+        <View style={s.flex}>
+          <Text style={s.quietTitle}>Wrap up with {crewName}</Text>
+          <Text style={s.secondary}>{settleUpLine(balance)}</Text>
+        </View>
+      </View>
+      <Button label={Math.abs(balance) > 0.01 ? 'Settle up' : 'See expenses'} onPress={onSettle} />
+      <Button label="Reform this crew for another festival" variant="secondary" onPress={onReform} />
     </View>
   );
 }

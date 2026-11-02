@@ -92,7 +92,7 @@ describe('JoinCrewSheet', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(h.join).toHaveBeenCalledWith('ABC123');
     expect(h.toast).toHaveBeenCalledWith('Joined Bass Gang', 'success');
-    expect(h.navigate).toHaveBeenCalledWith({ to: '/crew' });
+    expect(h.navigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'members' } });
   });
 
   it('says so when the caller is already in the crew', async () => {
@@ -101,7 +101,7 @@ describe('JoinCrewSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join crew' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(h.toast).toHaveBeenCalledWith("You're already in Bass Gang", 'info');
-    expect(h.navigate).toHaveBeenCalledWith({ to: '/crew' });
+    expect(h.navigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'members' } });
   });
 
   it('tells the user a queued join finishes when back online, without navigating', async () => {

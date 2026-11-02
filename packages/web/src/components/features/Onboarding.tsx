@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { X, Star, Users, ChevronRight } from 'lucide-react';
+import { X, Users, ChevronRight } from 'lucide-react';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { ONBOARDING_SLIDES_SHARED } from '@festie/shared';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
@@ -44,7 +45,7 @@ interface StepConfig {
 // set cards since onboarding can render before any festival lineup is loaded.
 const STEPS: StepConfig[] = [
   {
-    icon: <Star className="w-10 h-10 text-accent-aqua" />,
+    icon: <CONCEPT_ICON.picks className="w-10 h-10 text-accent-aqua" />,
     title: ONBOARDING_SLIDES_SHARED[0].title,
     description: ONBOARDING_SLIDES_SHARED[0].description,
   },

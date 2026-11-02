@@ -65,7 +65,13 @@ export const PRIORITY_SYMBOLS: Record<
 export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   'member-joined': 'joined the crew',
   'member-left': 'left the crew',
-  'member-kicked': 'was removed',
+  'member-kicked': 'was removed from the crew',
+  'owner-changed': 'changed the crew owner',
+  'poll-closed': 'ended a poll',
+  'meeting-point-updated': 'changed a meeting point',
+  'packing-created': 'added to the packing list',
+  'ride-created': 'offered a ride',
+  'photo-album-updated': 'updated the shared photo album',
   'poll-created': 'created a poll',
   'poll-voted': 'voted on a poll',
   'expense-added': 'added an expense',
@@ -73,7 +79,7 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   'expense-settled': 'settled up',
   expense_settled: 'settled up',
   'settlement-undone': 'undid a payment',
-  'home-base-updated': 'updated the home base',
+  'home-base-updated': 'updated Home Base',
   'meeting-point-added': 'dropped a meeting point',
   'meeting-point-removed': 'removed a meeting point',
   'crew-updated': 'updated the crew',
@@ -282,3 +288,9 @@ export const SOCKET_RECONNECTION_CONFIG = {
   reconnectionDelayMax: 5000,
   reconnectionAttempts: Infinity,
 };
+
+// ── Crew limits ────────────────────────────────────────────────────────────
+// `lib/constants.ts` is the source. `tests/constants-parity.test.ts` guards this copy.
+export const MAX_CREWS_PER_FESTIVAL = 3;
+export const MAX_OPEN_POLLS_PER_CREW = 3;
+export const DEFAULT_CREW_MAX_MEMBERS = 30;

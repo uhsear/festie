@@ -1,89 +1,78 @@
 import { useNavigate } from '@tanstack/react-router';
-import { Star, Users, Zap, Sparkles, Map as MapIcon, type LucideIcon } from 'lucide-react';
-import {
-  PHASE_ACTION_LABELS,
-  PHASE_ACTION_ORDER,
-  type FestivalPhase,
-  type PhaseActionKey,
-} from '@festie/shared/utils';
+import { MapPin, Sparkles, Star, Users, Wallet, X, type LucideIcon } from 'lucide-react';
+import type { HomeAction, HomeActionKey } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
 
-type RoutePath = '/picks' | '/crew' | '/map' | '/festival-mode' | '/wrap';
+type RoutePath = '/crew' | '/wrap';
 
-interface ActionDef {
-  Icon: LucideIcon;
-  to: RoutePath;
-  a11y: string;
-}
-
-// Fixed destination set — phase only reorders + re-emphasizes, never hides.
-// Labels and per-phase order come from @festie/shared so mobile matches.
-const ACTIONS: Record<PhaseActionKey, ActionDef> = {
-  myPlan: { Icon: Star, to: '/picks', a11y: 'Go to my plan' },
-  crew: { Icon: Users, to: '/crew', a11y: 'Go to crew' },
-  map: { Icon: MapIcon, to: '/map', a11y: 'Open map' },
-  nownext: { Icon: Zap, to: '/festival-mode', a11y: 'Open Now and Next' },
-  wrap: { Icon: Sparkles, to: '/wrap', a11y: 'Open festival wrap-up' },
-};
-
-const PHASE_HEADING: Record<FestivalPhase, { label: string; hint: string }> = {
-  pre: { label: 'Before the festival', hint: 'Lock in your picks and rally your crew.' },
-  live: { label: 'Happening now', hint: 'Find your crew, check Now & Next, stay safe.' },
-  post: { label: 'Festival wrap', hint: 'Relive it and settle up with your crew.' },
+const LINKS: Partial<Record<HomeActionKey, { Icon: LucideIcon; to: RoutePath }>> = {
+  crew: { Icon: Users, to: '/crew' },
+  find: { Icon: MapPin, to: '/crew' },
+  wrap: { Icon: Sparkles, to: '/wrap' },
+  settle: { Icon: Wallet, to: '/crew' },
 };
 
 interface PhaseHomeActionsProps {
-  phase: FestivalPhase;
+  actions: HomeAction[];
+  onDismiss?: () => void;
 }
 
 /**
- * P1-5 — phase-aware home actions for the web landing (`/`). Mirrors the mobile
- * PhaseHomeActions band: re-prioritizes the crew's destinations by festival
- * PHASE (derived from the date range vs now via shared `festivalPhase`) — pre
- * leads with picks/crew, live leads with Now & Next + crew (live map / SOS live
- * inside /crew), post leads with wrap + settle-up. The destination set is fixed;
- * phase only reorders and emphasizes the lead, so nothing is ever hidden.
+ * Next-step band above the schedule cards. The list comes from shared
+ * `getHomeActions` (picks and crew before the festival, finding the crew during
+ * it, wrap and settle-up after). A `link` is a button that navigates; a `hint`
+ * is plain text. The caller renders nothing when the list is empty.
  */
-export default function PhaseHomeActions({ phase }: PhaseHomeActionsProps) {
+export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeActionsProps) {
   const navigate = useNavigate();
-  const order = PHASE_ACTION_ORDER[phase];
-  const heading = PHASE_HEADING[phase];
 
   return (
-    <section
-      className="mb-[var(--space-4)] flex flex-col gap-[var(--space-2)]"
-      aria-label={`${heading.label} — quick actions`}
-    >
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[length:var(--font-size-12)] font-bold uppercase tracking-wide text-text-muted">{heading.label}</span>
-        <span className="text-xs text-text-secondary">{heading.hint}</span>
-      </div>
-      <div className="flex flex-wrap gap-[var(--space-2)]" role="group" aria-label="Phase actions">
-        {order.map((key, i) => {
-          const a = ACTIONS[key];
-          const primary = i === 0;
-          const { Icon } = a;
+    <section className="mb-[var(--space-4)]" aria-label="Next steps">
+      <div className="flex flex-wrap gap-[var(--space-2)]">
+        {actions.map((a) => {
+          const link = a.kind === 'link' ? LINKS[a.key] : undefined;
+          if (!link) {
+            return (
+              <span
+                key={a.key}
+                data-testid={`phase-action-${a.key}`}
+                className="inline-flex items-center gap-1.5 min-h-[44px] px-1 text-xs font-medium text-text-secondary"
+              >
+                <Star className="w-4 h-4" aria-hidden="true" />
+                {a.label}
+              </span>
+            );
+          }
+          const { Icon } = link;
           return (
             <button
-              key={key}
+              key={a.key}
               type="button"
-              data-testid={`phase-action-${key}`}
-              onClick={() => navigate({ to: a.to })}
+              data-testid={`phase-action-${a.key}`}
+              onClick={() => navigate({ to: link.to })}
               aria-label={a.a11y}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold',
                 'min-h-[44px] cursor-pointer border-2 transition-colors duration-200',
                 'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
-                primary
-                  ? 'border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua'
-                  : 'border-border text-text-secondary hover:text-text-primary',
+                'border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua',
               )}
             >
               <Icon className="w-4 h-4" aria-hidden="true" />
-              {PHASE_ACTION_LABELS[key]}
+              {a.label}
             </button>
           );
         })}
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Hide these shortcuts"
+            className="inline-flex h-[44px] w-[44px] shrink-0 items-center justify-center ml-auto cursor-pointer text-text-muted hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
     </section>
   );

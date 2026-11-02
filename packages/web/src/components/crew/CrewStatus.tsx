@@ -5,38 +5,60 @@ import {
   etaMinutes,
   writeOutcomeMessage,
   type CrewMemberStatus,
+  type CrewMeetingPoint,
+  type CrewStatusKey,
 } from '@festie/shared';
-import { useCurrentPosition } from '@festie/shared/hooks';
+import { useCurrentPosition, useAutoArrive, useFestival } from '@festie/shared/hooks';
+import { useFestivalStore } from '@festie/shared/stores';
+import {
+  CREW_STATUS_PRESETS,
+  arrivedMessage,
+  crewStatusLabel,
+  isStatusFresh,
+  noStatusLine,
+  presetStageName,
+  resolveFestivalTimeZone,
+  selectNowNext,
+  statusNoteLine,
+} from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
 import Skeleton from '../ui/Skeleton';
-import { Navigation, LocateFixed, X, MapPin, Footprints, CircleCheck, Hourglass } from 'lucide-react';
+import Avatar from '../ui/Avatar';
+import {
+  Navigation,
+  LocateFixed,
+  X,
+  MapPin,
+  Footprints,
+  CircleCheck,
+  Hourglass,
+  Tent,
+  Music,
+  Coffee,
+  LifeBuoy,
+} from 'lucide-react';
 import { inputBase } from '../../lib/styles';
-
-// A meeting point as the parent passes it (snake_case server shape). Only the
-// fields CrewStatus needs to render the ETA target + compute distance.
-interface MeetingPointLite {
-  id: string;
-  label: string;
-  latitude?: number | null;
-  longitude?: number | null;
-}
 
 interface Props {
   crewId: string;
   currentUserId: string;
   festivalId?: string;
   /** Meeting points (for the ETA-target picker + coord-based ETA). */
-  meetingPoints: MeetingPointLite[];
+  meetingPoints: CrewMeetingPoint[];
 }
 
-// Status enum → user-facing label + lucide icon. `null` means "cleared".
+// Status key → lucide icon. Labels come from crewStatusLabel (shared).
 // Icons (not emoji) keep the crew UI on the app's single icon vocabulary.
-const STATUS_META: Record<string, { Icon: React.ComponentType<{ className?: string }>; label: string }> = {
-  'on-my-way': { Icon: Footprints, label: 'On my way' },
-  here: { Icon: CircleCheck, label: "I'm here" },
-  delayed: { Icon: Hourglass, label: 'Running late' },
+const STATUS_META: Record<CrewStatusKey, { Icon: React.ComponentType<{ className?: string }> }> = {
+  'on-my-way': { Icon: Footprints },
+  here: { Icon: CircleCheck },
+  delayed: { Icon: Hourglass },
+  'at-camp': { Icon: Tent },
+  'at-stage': { Icon: Music },
+  break: { Icon: Coffee },
+  lost: { Icon: LifeBuoy },
 };
 
 /**
@@ -60,9 +82,22 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
   const statuses = useCrewStore((s) => s.crewStatuses);
   const loadStatuses = useCrewStore((s) => s.loadStatuses);
   const updateMyStatus = useCrewStore((s) => s.updateMyStatus);
+  const crewMembers = useCrewStore((s) => s.crewMembers);
 
+  const sets = useFestivalStore((s) => s.sets);
+  const days = useFestivalStore((s) => s.days);
+  const picks = useFestivalStore((s) => s.currentProfile?.picks);
+  const currentFestival = useFestivalStore((s) => s.currentFestival);
+  const { getStageName } = useFestival();
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const [showPresets, setShowPresets] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [status, setStatus] = useState<'on-my-way' | 'here' | 'delayed'>('on-my-way');
   const [targetId, setTargetId] = useState<string>('');
   const [manualEta, setManualEta] = useState<string>('');
   const [note, setNote] = useState('');
@@ -121,8 +156,24 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
 
   const effectiveEta = computedEta ?? (manualEta.trim() ? Number(manualEta.trim()) : null);
 
+  const stageName = useMemo(
+    () =>
+      presetStageName(
+        selectNowNext({ sets, days, picks: picks ?? {}, nowMs, timeZone: resolveFestivalTimeZone(currentFestival) }),
+        nowMs,
+        getStageName,
+      ),
+    [sets, days, picks, nowMs, currentFestival, getStageName],
+  );
+
+  useAutoArrive({
+    crewId,
+    userId: currentUserId,
+    meetingPoints,
+    onArrive: (label) => toast(arrivedMessage(label), 'success'),
+  });
+
   function reset() {
-    setStatus('on-my-way');
     setTargetId('');
     setManualEta('');
     setNote('');
@@ -157,7 +208,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
       const outcome = await updateMyStatus(
         crewId,
         {
-          status,
+          status: 'on-my-way',
           targetMeetingPointId: targetId || null,
           etaMinutes: eta != null && eta >= 0 ? Math.min(eta, 1440) : null,
           note: note.trim() || null,
@@ -171,6 +222,37 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
       // Honest, never "live": say "shared" only after the server ack.
       toast(writeOutcomeMessage(outcome, 'Status shared'), outcome === 'queued' ? 'info' : 'success');
       reset();
+    } catch (err) {
+      toastError(err, "Couldn't share status. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendPreset(key: CrewStatusKey) {
+    if (busy) return;
+    if (key === 'on-my-way') {
+      setShowPresets(false);
+      setShowForm(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      // "Lost" also saves the last-known position; a failed fix sends without one.
+      const pos = key === 'lost' ? await getCurrentPosition() : undefined;
+      const outcome = await updateMyStatus(
+        crewId,
+        {
+          status: key,
+          targetMeetingPointId: null,
+          etaMinutes: null,
+          note: key === 'at-stage' ? stageName : null,
+          ...(pos ? { position: { lat: pos.lat, lng: pos.lng } } : {}),
+        },
+        currentUserId,
+      );
+      toast(writeOutcomeMessage(outcome, 'Status shared'), outcome === 'queued' ? 'info' : 'success');
+      setShowPresets(false);
     } catch (err) {
       toastError(err, "Couldn't share status. Try again.");
     } finally {
@@ -194,7 +276,8 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
     }
   }
 
-  const mine = statuses.find((s) => s.user_id === currentUserId && s.status);
+  const freshStatuses = statuses.filter((s) => isStatusFresh(s, nowMs));
+  const mine = freshStatuses.find((s) => s.user_id === currentUserId);
   const labelFor = (id: string | null) => (id ? (meetingPoints.find((m) => m.id === id)?.label ?? null) : null);
 
   return (
@@ -203,9 +286,9 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
         <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
           <Navigation className="w-4 h-4 text-accent-aqua" aria-hidden="true" /> Crew status
         </h3>
-        {!showForm && (
-          <Button variant="outline" onClick={() => setShowForm(true)} className="text-xs">
-            {mine ? 'Update mine' : 'On my way…'}
+        {!showForm && !showPresets && (
+          <Button variant="outline" onClick={() => setShowPresets(true)} className="text-xs">
+            {mine ? 'Update mine' : 'Share status'}
           </Button>
         )}
       </div>
@@ -215,10 +298,43 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
         Statuses show where each crewmate was when they last synced. Sent when signal returns. Live location sharing is separate, below.
       </p>
 
+      {showPresets && (
+        <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-sm text-text-primary">Share my status</span>
+            <button
+              type="button"
+              aria-label="Cancel"
+              onClick={() => setShowPresets(false)}
+              className="text-text-muted hover:text-text-primary"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Status presets">
+            {CREW_STATUS_PRESETS.filter((p) => p.key !== 'at-stage' || stageName).map((p) => {
+              const { Icon } = STATUS_META[p.key];
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => sendPreset(p.key)}
+                  className="px-2 py-2 rounded-lg border border-border bg-bg-card text-text-secondary hover:border-border-light text-xs font-medium min-h-11 flex items-center gap-2 text-left transition-colors"
+                >
+                  <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
+                  <span>{p.key === 'at-stage' ? `At ${stageName}` : p.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {showForm && (
         <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-sm text-text-primary">Share my status</span>
+            <span className="font-semibold text-sm text-text-primary">On my way</span>
             <button
               type="button"
               aria-label="Cancel"
@@ -227,29 +343,6 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
             >
               <X className="w-5 h-5" />
             </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Status">
-            {(['on-my-way', 'here', 'delayed'] as const).map((key) => {
-              const { Icon, label } = STATUS_META[key]!;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  role="radio"
-                  aria-checked={status === key}
-                  onClick={() => setStatus(key)}
-                  className={`px-2 py-2 rounded-lg border text-xs font-medium min-h-11 flex flex-col items-center gap-1 transition-colors ${
-                    status === key
-                      ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
-                      : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" aria-hidden="true" />
-                  <span>{label}</span>
-                </button>
-              );
-            })}
           </div>
 
           {/* ETA target: a meeting point. Coordless points still work (manual ETA). */}
@@ -308,7 +401,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
           />
 
           <Button type="submit" variant="primary" isLoading={busy} className="w-full min-h-11">
-            {target && status === 'on-my-way'
+            {target
               ? `On my way to ${target.label}${effectiveEta != null ? ` · ETA ~${Math.round(effectiveEta)} min` : ''}`
               : 'Share status'}
           </Button>
@@ -338,10 +431,20 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
           }}
         />
       ) : (
-        statuses.filter((s) => s.status).length > 0 && (
+        freshStatuses.length === 0 ? (
+          crewMembers.length > 0 && (
+            <div role="note" className="flex items-center gap-2 text-xs text-text-secondary">
+              <div className="flex -space-x-1.5">
+                {crewMembers.slice(0, 6).map((m) => (
+                  <Avatar key={m.userId} size="xs" name={m.name || m.username} />
+                ))}
+              </div>
+              <span>{noStatusLine(crewMembers.length)}</span>
+            </div>
+          )
+        ) : (
         <ul className="space-y-2">
-          {statuses
-            .filter((s) => s.status)
+          {freshStatuses
             .map((s: CrewMemberStatus) => {
               const meta = s.status ? STATUS_META[s.status] : null;
               const isMe = s.user_id === currentUserId;
@@ -359,7 +462,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
                         <span className="text-sm font-medium text-text-primary truncate">
                           {isMe ? 'You' : s.name || s.username || 'Crewmate'}
                         </span>
-                        <span className="text-xs text-text-secondary">{meta?.label ?? ''}</span>
+                        <span className="text-xs text-text-secondary">{crewStatusLabel(s) ?? ''}</span>
                       </div>
                       {targetLabel && (
                         <div className="text-xs text-accent-aqua mt-0.5 flex items-center gap-1">
@@ -371,7 +474,9 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
                       {!targetLabel && typeof s.eta_minutes === 'number' && (
                         <div className="text-xs text-accent-aqua mt-0.5">ETA ~{s.eta_minutes} min</div>
                       )}
-                      {s.note && <div className="text-xs text-text-secondary mt-0.5">{s.note}</div>}
+                      {statusNoteLine(s) && (
+                        <div className="text-xs text-text-secondary mt-0.5">{statusNoteLine(s)}</div>
+                      )}
                       {/* Last-synced breadcrumb — NOT live. Staleness is read from
                           location_captured_at (when the device stamped the fix),
                           distinct from updated_at (when the row last synced). */}

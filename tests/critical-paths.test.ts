@@ -844,7 +844,7 @@ describe('shareable pick links', { concurrency: 1 }, () => {
     const profile = await joinFestival(server, user.token);
 
     const res = await server.request.get(`/s/${profile.id}`).expect(200);
-    assert.match(res.headers['cache-control']!, /max-age=300/);
+    assert.equal(res.headers['cache-control'], 'private, no-cache');
   });
 });
 

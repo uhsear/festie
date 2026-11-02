@@ -256,6 +256,9 @@ export type PublicScheduleInput = z.infer<typeof publicScheduleSchema>;
 
 export const accountDeleteSchema = z.object({
   password: z.string().min(1, 'Password confirmation required'),
+  // Who takes over each crew the account owns. Optional: the server picks the
+  // earliest-joined active member when a choice is missing or invalid.
+  crewHandover: z.array(z.object({ crewId: identifier, newOwnerId: identifier })).max(50).optional(),
 });
 export type AccountDeleteInput = z.infer<typeof accountDeleteSchema>;
 
@@ -475,6 +478,34 @@ export const festivalUpdateSchema = festivalCreateSchema
   .extend({ notify: z.boolean().optional() })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
+
+// ── Lineup import (admin) ───────────────────────────────────────────
+// A field that is absent means "column not mapped, leave alone". An empty string means "clear".
+export const lineupImportRowSchema = z
+  .object({
+    row: z.number().int().min(1).max(100_000), // 1-based line number in the source file
+    setId: z.string().max(100).optional(), // a re-imported export matches by id first
+    artist: z.string().max(300),
+    day: z.string().max(100).optional(),
+    date: z.string().max(20).optional(),
+    stage: z.string().max(100).optional(),
+    startTime: z.string().max(20).optional(),
+    endTime: z.string().max(20).optional(),
+    stageColor: z.string().max(20).optional(),
+    link: z.string().max(500).optional(),
+  })
+  .strict();
+export type LineupImportRowInput = z.infer<typeof lineupImportRowSchema>;
+
+export const lineupImportRequestSchema = z
+  .object({
+    rows: z.array(lineupImportRowSchema).min(1).max(500),
+    updateExisting: z.boolean().default(false),
+    createMissing: z.boolean().default(true),
+    skipSpotify: z.boolean().default(false),
+  })
+  .strict();
+export type LineupImportRequestInput = z.infer<typeof lineupImportRequestSchema>;
 
 // ── Crew schemas ─────────────────────────────────────────────────────
 export const crewCreateSchema = z.object({
@@ -935,6 +966,7 @@ export const pollCreateSchema = z
     options: z.array(z.string().trim().min(1).max(200)).min(2).max(4),
     closesAt: z.string().datetime().optional().nullable(),
     setRefs: z.array(pollSetRefSchema.nullable()).max(4).optional(),
+    multiAnswer: z.boolean().optional(),
   })
   .refine((d) => d.setRefs === undefined || d.setRefs.length === d.options.length, {
     message: 'setRefs must match options',
@@ -942,9 +974,16 @@ export const pollCreateSchema = z
   });
 export type PollCreateInput = z.infer<typeof pollCreateSchema>;
 
-export const pollVoteSchema = z.object({
-  optionIndex: z.number().int().min(0).max(3),
-});
+// Exactly one field: optionIndex (old clients) or optionIndexes (an empty array takes the vote back).
+export const pollVoteSchema = z
+  .object({
+    optionIndex: z.number().int().min(0).max(3).optional(),
+    optionIndexes: z.array(z.number().int().min(0).max(3)).max(4).optional(),
+  })
+  .refine((b) => (b.optionIndex === undefined) !== (b.optionIndexes === undefined), {
+    message: 'Send optionIndex or optionIndexes',
+    path: ['optionIndexes'],
+  });
 export type PollVoteInput = z.infer<typeof pollVoteSchema>;
 
 // ── Crew packing-board schemas (M2 logistics) ───────────────────────
@@ -970,7 +1009,9 @@ export type PackingUpdateInput = z.infer<typeof packingUpdateSchema>;
 // A last-synced, degraded-sync snapshot the member set (often offline) — NOT
 // live GPS. All fields optional/nullable so a member can post just a status,
 // just an ETA, or clear it. `status` is a small enum: 'on-my-way' | 'here' |
-// 'delayed' | null (clear). etaMinutes is bounded (0–1440 = up to a day).
+// 'delayed' | 'at-camp' | 'at-stage' | 'break' | 'lost' | null (clear).
+// 'at-stage' stores the stage name in `note`. The list must match
+// `CrewStatusKey` in packages/shared/src/types/domain.ts. etaMinutes is bounded (0–1440 = up to a day).
 // 055: optional last-known LOCATION breadcrumb the member captured (often
 // OFFLINE) and that delivers on the next signal blip. NOT live GPS — the UI
 // renders it with honest staleness ("last seen near X, as of N ago"). lat/lng
@@ -987,7 +1028,7 @@ const crewStatusPosition = z
 
 export const crewStatusSchema = z
   .object({
-    status: z.enum(['on-my-way', 'here', 'delayed']).optional().nullable(),
+    status: z.enum(['on-my-way', 'here', 'delayed', 'at-camp', 'at-stage', 'break', 'lost']).optional().nullable(),
     targetMeetingPointId: z.string().trim().max(100).optional().nullable(),
     etaMinutes: z.number().int().min(0).max(1440).optional().nullable(),
     note: z.string().trim().max(280).optional().nullable(),

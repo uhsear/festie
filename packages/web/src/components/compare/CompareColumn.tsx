@@ -5,9 +5,10 @@ interface CompareColumnProps {
   id: string;
   name: string | undefined;
   isMe: boolean;
+  color: string;
 }
 
-export default memo(function CompareColumn({ name, isMe }: CompareColumnProps) {
+export default memo(function CompareColumn({ name, isMe, color }: CompareColumnProps) {
   return (
     <th scope="col" className="py-2 px-2 text-center min-w-[72px]">
       <div className="flex flex-col items-center gap-1">
@@ -15,6 +16,12 @@ export default memo(function CompareColumn({ name, isMe }: CompareColumnProps) {
         <span className="text-[length:var(--font-size-12)] normal-case font-medium text-text-secondary truncate max-w-[72px]">
           {isMe ? 'You' : name || 'Member'}
         </span>
+        <span
+          className="block h-[3px] w-full rounded-full"
+          style={{ background: color }}
+          data-testid="compare-column-bar"
+          aria-hidden="true"
+        />
       </div>
     </th>
   );

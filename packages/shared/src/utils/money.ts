@@ -22,6 +22,13 @@ export function formatBalance(value: number): string {
   return '$0.00';
 }
 
+/** Standing for the wrap-up card: "You owe $24.00", "You're owed $12.50" or "You're all settled up". */
+export function settleUpLine(balance: number): string {
+  if (balance < -ZERO_EPSILON) return `You owe ${formatAmount(Math.abs(balance))}`;
+  if (balance > ZERO_EPSILON) return `You're owed ${formatAmount(balance)}`;
+  return "You're all settled up";
+}
+
 /**
  * Bare currency string for a (non-signed) amount: "$X.XX". Coerces string|number
  * inputs (the API returns amounts as strings) the same way both apps did inline.

@@ -3,7 +3,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, formatTime, writeOutcomeOf, writeOutcomeMessage } from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
-import { MapPin, X, Clock } from 'lucide-react';
+import { X, Clock } from 'lucide-react';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import IconButton from '../ui/IconButton';
 import { inputBase } from '../../lib/styles';
 
@@ -24,6 +26,7 @@ interface Props {
 // Legacy free-text values ("6pm") are not valid for <input type="time">, so they stay
 // out of the field and are kept on save instead.
 const HHMM = /^\d{2}:\d{2}$/;
+const HomeIcon = CONCEPT_ICON.homeBase;
 
 export default function HomeBaseCard({ crewId, currentLocation, currentTime, isOwner, onSaved }: Props) {
   const { toast, toastError } = useToast();
@@ -40,12 +43,12 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
   }, [currentLocation, currentTime]);
 
   const save = useMutation({
-    mutationFn: (payload: { location: string; time: string | null }) => api.put(`/crews/${crewId}/home-base`, payload),
-    onSuccess: async (result) => {
+    mutationFn: (payload: { location: string | null; time: string | null }) => api.put(`/crews/${crewId}/home-base`, payload),
+    onSuccess: async (result, payload) => {
       qc.invalidateQueries({ queryKey: ['crews'] });
       qc.invalidateQueries({ queryKey: ['crew', crewId] });
       const outcome = writeOutcomeOf(result);
-      toast(writeOutcomeMessage(outcome, 'Home base updated'), outcome === 'queued' ? 'info' : 'success');
+      toast(writeOutcomeMessage(outcome, payload.location ? 'Home Base updated' : 'Home Base removed'), outcome === 'queued' ? 'info' : 'success');
       setEditing(false);
       try {
         await onSaved?.();
@@ -68,8 +71,8 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
       <div className="p-3 rounded-lg bg-bg-card border border-accent-aqua/40 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-text-primary flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
-            Set Home Base
+            <HomeIcon className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
+            {COPY.homeBase.set}
           </h3>
           <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={() => setEditing(false)} />
         </div>
@@ -81,6 +84,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
           onChange={(e) => setLoc(e.target.value)}
           maxLength={200}
         />
+        <p className="text-xs text-text-muted -mt-1">{COPY.homeBase.hint}</p>
         <input
           type="time"
           className={`${inputBase} min-h-11`}
@@ -103,18 +107,29 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
         >
           Save
         </Button>
+        {hasHomeBase && (
+          <Button
+            variant="ghost"
+            isLoading={save.isPending}
+            onClick={() => save.mutate({ location: null, time: null })}
+            className="w-full min-h-11"
+          >
+            Remove Home Base
+          </Button>
+        )}
       </div>
     );
   }
 
   const body = (
     <div className="flex items-center gap-2">
-        <MapPin
+        <HomeIcon
           className={`w-4 h-4 flex-shrink-0 ${hasHomeBase ? 'text-accent-aqua' : 'text-text-muted'}`}
           aria-hidden="true"
         />
         <div className="flex-1 min-w-0">
           {hasHomeBase ? (
+            <>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-text-primary truncate">{currentLocation}</span>
               {currentTime && (
@@ -124,8 +139,10 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
                 </span>
               )}
             </div>
+            <p className="text-xs text-text-muted mt-0.5">{COPY.homeBase.hint}</p>
+            </>
           ) : (
-            <span className="text-xs text-text-secondary">Tap to set your crew's Home Base</span>
+            <span className="text-xs text-text-secondary">{COPY.homeBase.empty}</span>
           )}
         </div>
     </div>

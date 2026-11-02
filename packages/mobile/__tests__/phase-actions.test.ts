@@ -5,14 +5,14 @@ import { describe, expect, it } from 'vitest';
 const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 
 describe('P7b phase band and map shortcuts', () => {
-  it('PhaseHomeActions reads the shared order and has no /find route', () => {
+  it('PhaseHomeActions renders the shared home actions and has no /find route', () => {
     const src = read('components/PhaseHomeActions.tsx');
-    expect(src).toContain('PHASE_ACTION_ORDER');
+    expect(src).toContain('HomeAction');
     expect(src).not.toContain("'/find'");
   });
-  it('Lineup shows the band after the festival and has no /find route', () => {
+  it('Lineup shows the band whenever there are home actions and has no /find route', () => {
     const src = read('app/(tabs)/index.tsx');
-    expect(src).toContain("phase === 'post'");
+    expect(src).toContain('homeActions.length > 0');
     expect(src).not.toContain("'/find'");
   });
   it('festival-mode has no /find route', () => {

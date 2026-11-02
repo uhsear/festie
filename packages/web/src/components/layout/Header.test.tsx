@@ -17,7 +17,9 @@ vi.mock('@tanstack/react-router', () => ({
 // Mock auth store
 const mockAuthStore = vi.fn();
 let mockConnected = true;
+const mockFestival = { scheduleView: null as string | null, sets: [], days: [], currentFestival: null };
 vi.mock('@festie/shared', () => ({
+  useFestivalStore: (selector: (s: typeof mockFestival) => unknown) => selector(mockFestival),
   useAuthStore: (selector: (s: { user: unknown }) => unknown) => selector({ user: mockAuthStore() }),
   useUIStore: (selector: (s: { connected: boolean }) => unknown) => selector({ connected: mockConnected }),
 }));
@@ -45,6 +47,7 @@ describe('Header', () => {
     vi.clearAllMocks();
     mockAuthStore.mockReturnValue(null);
     mockConnected = true;
+    mockFestival.scheduleView = null;
     document.documentElement.removeAttribute('data-theme');
   });
 
@@ -80,10 +83,10 @@ describe('Header', () => {
   });
 
   describe('desktop tabs for guest users', () => {
-    it('shows Lineup, My Plan, Crew and Map but no More button', () => {
+    it('shows Lineup, Picks, Crew and Map but no More button', () => {
       mockAuthStore.mockReturnValue(null);
       render(<Header />);
-      for (const name of ['Lineup', 'My Plan', 'Crew', 'Map']) {
+      for (const name of ['Lineup', 'Picks', 'Crew', 'Map']) {
         expect(screen.getByRole('link', { name })).toBeInTheDocument();
       }
       expect(screen.queryByRole('link', { name: 'More' })).not.toBeInTheDocument();
@@ -98,7 +101,7 @@ describe('Header', () => {
       const nav = screen.getByRole('navigation', { name: 'Main navigation' });
       expect(within(nav).getAllByRole('link').map((b) => b.textContent)).toEqual([
         'Lineup',
-        'My Plan',
+        'Picks',
         'Crew',
         'Map',
         'More',
@@ -110,6 +113,12 @@ describe('Header', () => {
       render(<Header />);
       expect(screen.queryByRole('link', { name: 'Wrap' })).not.toBeInTheDocument();
     });
+  });
+
+  it('sends the Lineup tab to the remembered view', () => {
+    mockFestival.scheduleView = 'grid';
+    render(<Header />);
+    expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('href', '/grid');
   });
 
   describe('active tab detection', () => {
@@ -142,7 +151,7 @@ describe('Header', () => {
     it('renders tabs as real links', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'My Plan' })).toHaveAttribute('href', '/picks');
+      expect(screen.getByRole('link', { name: 'Picks' })).toHaveAttribute('href', '/picks');
     });
   });
 

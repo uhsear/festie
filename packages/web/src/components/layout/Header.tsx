@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
 import { useAuthStore, useUIStore } from '@festie/shared';
 import { APP_SECTIONS } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { cn } from '@/lib/utils';
 import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
@@ -9,6 +10,7 @@ import Button from '../ui/Button';
 import DaylightToggle from '../features/DaylightToggle';
 import { useThemeSync } from '../../lib/theme';
 import { SECTION_HREF, activeSection } from './sections';
+import { useLineupHref } from '../../hooks/useLineupHref';
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
@@ -17,6 +19,7 @@ export default function Header() {
   // Desktop nav tabs: the five shared sections. Guests skip More because the
   // "Sign in" button in the right section already covers it.
   const current = activeSection(location.pathname);
+  const lineupHref = useLineupHref();
   const desktopTabs = APP_SECTIONS.filter((section) => user || section.key !== 'more');
 
   // Apply the persisted theme (stage | daylight) to <html> and the PWA chrome
@@ -200,7 +203,7 @@ export default function Header() {
               return (
                 <Link
                   key={tab.key}
-                  to={SECTION_HREF[tab.key]}
+                  to={tab.key === 'lineup' ? lineupHref : SECTION_HREF[tab.key]}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     'px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
@@ -249,7 +252,7 @@ export default function Header() {
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             )}
           >
-            Sign in
+            {COPY.auth.signIn}
           </Link>
         )}
       </div>

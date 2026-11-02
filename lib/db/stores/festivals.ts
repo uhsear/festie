@@ -7,7 +7,7 @@ import { withTransaction } from '../connection';
  * @param startIdx - Starting $N index (1-based)
  * @returns { clause, params }
  */
-function buildMultiInsert(rows: any[][], startIdx: number = 1): { clause: string; params: any[] } {
+export function buildMultiInsert(rows: any[][], startIdx: number = 1): { clause: string; params: any[] } {
   const params: any[] = [];
   let idx = startIdx;
   const tuples = rows.map((row) => {
@@ -99,7 +99,7 @@ async function insertDaysBatch(client: any, rows: any[][]) {
 }
 
 /** Batch-insert sets in a single multi-row query. */
-async function insertSetsBatch(client: any, rows: any[][]) {
+export async function insertSetsBatch(client: any, rows: any[][]) {
   if (rows.length === 0) return;
   const { clause, params } = buildMultiInsert(rows);
   await client.query(
@@ -292,12 +292,91 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       await pool.query('UPDATE festivals SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
     },
 
-    async restore(festivalId: string) {
-      await pool.query('UPDATE festivals SET deleted_at = NULL WHERE id = $1', [festivalId]);
+    async restore(festivalId: string, userId: string | null = null) {
+      const result = await pool.query(
+        `
+  UPDATE festivals
+  SET
+    deleted_at = NULL,
+    updated_at = NOW(),
+    updated_by = $2
+  WHERE
+    id = $1
+    AND deleted_at IS NOT NULL
+  RETURNING
+    id,
+    published_at AS "publishedAt"
+`,
+        [festivalId, userId],
+      );
+      return result.rows[0] || null;
     },
 
-    async getById(festivalId: string) {
+    // Keeps an earlier published_at, so a second publish changes nothing visible.
+    async publish(festivalId: string, userId: string | null = null) {
       const result = await pool.query(
+        `
+  UPDATE festivals
+  SET
+    published_at = COALESCE(published_at, NOW()),
+    updated_at = NOW(),
+    updated_by = $2
+  WHERE
+    id = $1
+    AND deleted_at IS NULL
+  RETURNING
+    published_at AS "publishedAt"
+`,
+        [festivalId, userId],
+      );
+      return result.rows[0] || null;
+    },
+
+    async listDeleted() {
+      const result = await pool.query(
+        `
+  SELECT
+    id,
+    name,
+    COALESCE(location, '') AS location,
+    deleted_at AS "deletedAt",
+    published_at AS "publishedAt"
+  FROM
+    festivals
+  WHERE
+    deleted_at IS NOT NULL
+  ORDER BY
+    deleted_at DESC
+  LIMIT
+    100
+`,
+      );
+      return result.rows;
+    },
+
+    /** The id of the admin who last saved, published or restored the festival. */
+    async getEditor(festivalId: string) {
+      const result = await pool.query('SELECT updated_by AS "updatedBy" FROM festivals WHERE id = $1', [festivalId]);
+      return result.rows[0]?.updatedBy ?? null;
+    },
+
+    /** Who loses access when the festival is deleted. */
+    async countImpact(festivalId: string) {
+      const result = await pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM festival_profiles WHERE festival_id = $1) AS profiles,
+           (SELECT COUNT(*) FROM crews WHERE festival_id = $1) AS crews,
+           (SELECT COUNT(*) FROM festival_profile_picks p
+              JOIN festival_profiles fp ON fp.id = p.profile_id
+             WHERE fp.festival_id = $1) AS picks`,
+        [festivalId],
+      );
+      const row = result.rows[0] || {};
+      return { profiles: Number(row.profiles) || 0, crews: Number(row.crews) || 0, picks: Number(row.picks) || 0 };
+    },
+
+    async getById(festivalId: string, db: { query: Pool['query'] } = pool) {
+      const result = await db.query(
         `
         SELECT
           f.id,
@@ -310,6 +389,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           f.map_config AS "mapConfig",
           f.created_at AS "createdAt",
           f.updated_at AS "updatedAt",
+          f.published_at AS "publishedAt",
           COALESCE(
             (SELECT json_agg(
               json_build_object(
@@ -405,40 +485,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         await client.query('DELETE FROM calendar_tokens WHERE festival_id = $1', [festivalId]);
         await client.query('DELETE FROM notification_counts WHERE festival_id = $1', [festivalId]);
         await client.query('DELETE FROM notification_topic_subs WHERE festival_id = $1', [festivalId]);
+        await client.query('DELETE FROM lineup_imports WHERE festival_id = $1', [festivalId]);
         await client.query('DELETE FROM festivals WHERE id = $1', [festivalId]);
-      });
-    },
-
-    /**
-     * Apply a lineup import in one transaction: insert new sets, then update the stage and
-     * times of matched sets. Matched sets keep their ids, so picks and ratings survive.
-     */
-    async applyLineupImport(
-      festivalId: string,
-      inserts: any[],
-      updates: { id: string; stageId: string; startTime: string; endTime: string }[],
-    ) {
-      return withTransaction(pool, async (client) => {
-        const rows = inserts.map((set: any, sortOrder: number) => [
-          set.id,
-          festivalId,
-          set.dayIndex,
-          set.artist,
-          set.stageId,
-          set.startTime,
-          set.endTime,
-          set.sortOrder ?? sortOrder,
-          set.linkUrl || null,
-          JSON.stringify(set.artists || []),
-        ]);
-        await insertSetsBatch(client, rows);
-        for (const u of updates) {
-          await client.query(
-            'UPDATE festival_sets SET stage_id = $1, start_time = $2, end_time = $3 WHERE id = $4 AND festival_id = $5',
-            [u.stageId, u.startTime, u.endTime, u.id, festivalId],
-          );
-        }
-        await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
       });
     },
 
@@ -449,7 +497,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         const updatedAt = festival.updatedAt || createdAt;
 
         await client.query(
-          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)',
           [
             festival.id,
             festival.name,
@@ -461,6 +509,9 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             festival.longitude || null,
             festival.timeZone ?? null,
             festival.mapConfig == null ? null : JSON.stringify(festival.mapConfig),
+            // Only the admin create route passes null (a draft); every other caller publishes.
+            festival.publishedAt === undefined ? new Date().toISOString() : festival.publishedAt,
+            festival.updatedBy ?? null,
           ],
         );
 
@@ -481,7 +532,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             longitude,
             map_config AS "mapConfig",
             created_at AS "createdAt",
-            updated_at AS "updatedAt"
+            updated_at AS "updatedAt",
+            published_at AS "publishedAt"
           FROM
             festivals
           WHERE
@@ -536,6 +588,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           values.push(fields.mapConfig == null ? null : JSON.stringify(fields.mapConfig));
           idx++;
         }
+        if (fields.updatedBy !== undefined) {
+          sets.push(`updated_by = $${idx}`);
+          values.push(fields.updatedBy);
+          idx++;
+        }
         sets.push(`updated_at = $${idx}`);
         values.push(new Date().toISOString());
         idx++;
@@ -588,7 +645,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             longitude,
             map_config AS "mapConfig",
             created_at AS "createdAt",
-            updated_at AS "updatedAt"
+            updated_at AS "updatedAt",
+            published_at AS "publishedAt"
           FROM
             festivals
           WHERE

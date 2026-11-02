@@ -7,6 +7,7 @@ import { useFestivalDataStore } from '@festie/shared/stores';
 import { usePickConflicts } from '@festie/shared/hooks';
 import type { ConflictGroup, ConflictPick } from '@festie/shared/utils';
 import { artistDisplayName, formatTime } from '@festie/shared/utils';
+import { clashCount } from '@festie/shared/constants';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -40,7 +41,7 @@ function ClashBannerList({ groups }: { groups: ConflictGroup[] }) {
       <View style={styles.heading}>
         <Ionicons name="warning-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
         <Text style={styles.headingText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {groups.length === 1 ? 'Schedule clash' : `${groups.length} schedule clashes`}
+          {clashCount(groups.length)}
         </Text>
       </View>
       {groups.map((group) => (

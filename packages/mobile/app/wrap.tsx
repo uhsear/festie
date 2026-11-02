@@ -9,11 +9,12 @@ import { api } from '@festie/shared/services';
 import { useFestivalDataStore, useCrewStore } from '@festie/shared/stores';
 import { useFestival } from '@festie/shared/hooks';
 import { isFestivalOver } from '@festie/shared/utils';
-import { RATING_LABEL } from '@festie/shared/constants';
+import { COPY, RATING_LABEL } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import DisplayWords from '../components/DisplayWords';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { RATING_IONICON } from '../lib/ratingIcon';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { useSharedValue, withTiming, Easing, useDerivedValue, runOnJS } from 'react-native-reanimated';
 import EmptyState from '../components/EmptyState';
 import SectionLabel from '../components/SectionLabel';
@@ -178,7 +179,7 @@ export default function WrapScreen() {
     if (!currentFestival) {
       return (
         <EmptyState
-          icon="sparkles-outline"
+          icon={CONCEPT_IONICON.wrap}
           title="Select a festival first"
           message="Your wrap appears here once a festival ends."
         />
@@ -187,8 +188,8 @@ export default function WrapScreen() {
     if (!over) {
       return (
         <EmptyState
-          icon="sparkles-outline"
-          title="Festival wrap coming soon"
+          icon={CONCEPT_IONICON.wrap}
+          title={`${COPY.wrap.name} coming soon`}
           message="We'll put together your highlights the day after the festival ends."
         />
       );
@@ -225,8 +226,8 @@ export default function WrapScreen() {
       >
         <View style={styles.headerBlock}>
           <View style={styles.kicker}>
-            <Ionicons name="sparkles" size={iconSize.compact} color={t.colors.accent.aqua} />
-            <Text style={styles.kickerText}>Your Festival Wrap</Text>
+            <Ionicons name={CONCEPT_IONICON.wrap} size={iconSize.compact} color={t.colors.accent.aqua} />
+            <Text style={styles.kickerText}>{COPY.wrap.name}</Text>
           </View>
           <Text style={styles.festivalName}>{currentFestival.name}</Text>
         </View>
@@ -296,9 +297,9 @@ export default function WrapScreen() {
               onPress={() => setTab('crew')}
               style={styles.momentLink}
               accessibilityRole="button"
-              accessibilityLabel="Open the crew wrap"
+              accessibilityLabel="Open the Crew Wrap"
             >
-              <Text style={styles.momentLinkText}>Open the crew wrap</Text>
+              <Text style={styles.momentLinkText}>Open the Crew Wrap</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -646,11 +647,11 @@ function CrewWrapTab({
         await Sharing.shareAsync(uri, {
           mimeType: 'image/png',
           UTI: 'public.png',
-          dialogTitle: 'Share your crew wrap',
+          dialogTitle: 'Share your Crew Wrap',
         });
       } else {
         await Share.share({
-          message: `Our ${festivalName} crew wrap\n${crewName} · ${wrap.memberCount} in the crew\nfestie.us`,
+          message: `Our ${festivalName} Crew Wrap\n${crewName} · ${wrap.memberCount} in the crew\nfestie.us`,
         });
       }
     } catch {
@@ -665,7 +666,7 @@ function CrewWrapTab({
       <EmptyState
         icon="people-outline"
         title="No active crew"
-        message="Join or select a crew to see your shared festival recap."
+        message="Join or select a crew to see your Crew Wrap."
       />
     );
   }
@@ -676,8 +677,8 @@ function CrewWrapTab({
     return (
       <EmptyState
         icon="cloud-offline-outline"
-        title="Couldn't load your crew wrap"
-        message="Something went wrong loading the shared recap."
+        title="Couldn't load your Crew Wrap"
+        message={`Something went wrong loading the ${COPY.wrap.crewName}.`}
         action={{ label: 'Try again', onPress: () => setReloadKey((k) => k + 1) }}
       />
     );
@@ -773,14 +774,14 @@ function CrewWrapTab({
               disabled={sharing}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Share crew wrap"
+              accessibilityLabel="Share Crew Wrap"
             >
               {sharing ? (
                 <ActivityIndicator size="small" color={t.colors.text.onLightAccent} />
               ) : (
                 <Ionicons name="share-social-outline" size={16} color={t.colors.text.onLightAccent} />
               )}
-              <Text style={styles.shareButtonText}>{sharing ? 'Preparing…' : 'Share crew wrap'}</Text>
+              <Text style={styles.shareButtonText}>{sharing ? 'Preparing…' : 'Share Crew Wrap'}</Text>
             </TouchableOpacity>
           </View>
         ) : null}

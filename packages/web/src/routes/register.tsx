@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearch, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
-import { AUTH_COPY } from '@festie/shared/constants';
+import { AUTH_COPY, COPY } from '@festie/shared/constants';
 import { registerErrorField, usernameError } from '@festie/shared/utils';
 import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -248,7 +248,7 @@ function RegisterPageInner() {
         )}
 
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
-          {isLoading ? 'Creating account…' : AUTH_COPY.createAccount}
+          {isLoading ? COPY.auth.creatingAccount : AUTH_COPY.createAccount}
         </Button>
 
         <div className="mt-3 flex flex-col items-center">

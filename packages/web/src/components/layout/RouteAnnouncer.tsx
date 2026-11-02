@@ -7,7 +7,7 @@ const ROUTE_TITLES: Record<string, { page: string; festival: boolean }> = {
   '/cards': { page: 'Schedule', festival: true },
   '/timeline': { page: 'Timeline', festival: true },
   '/grid': { page: 'Grid', festival: true },
-  '/picks': { page: 'My Picks', festival: true },
+  '/picks': { page: 'My picks', festival: true },
   '/crew': { page: 'Crew', festival: true },
   '/crew-plan': { page: 'Crew plan', festival: true },
   '/compare': { page: 'Compare schedules', festival: true },

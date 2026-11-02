@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Crew } from '@festie/shared/types';
+import type { Crew, Festival } from '@festie/shared/types';
 
 // Mock useHaptics
 vi.mock('@/hooks/useHaptics', () => ({
@@ -84,30 +84,30 @@ describe('CrewSelector', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
-  it('renders Create Crew and Join by Code buttons in the dropdown', async () => {
+  it('renders Create crew and Join with code buttons in the dropdown', async () => {
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} />);
     await user.click(screen.getByLabelText('Select crew'));
-    expect(screen.getByRole('button', { name: /Create Crew/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Join by Code/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create crew/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Join with code/ })).toBeInTheDocument();
   });
 
-  it('calls onCreateCrew and closes when Create Crew is clicked', async () => {
+  it('calls onCreateCrew and closes when Create crew is clicked', async () => {
     const onCreateCrew = vi.fn();
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} onCreateCrew={onCreateCrew} />);
     await user.click(screen.getByLabelText('Select crew'));
-    await user.click(screen.getByRole('button', { name: /Create Crew/ }));
+    await user.click(screen.getByRole('button', { name: /Create crew/ }));
     expect(onCreateCrew).toHaveBeenCalledOnce();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
-  it('calls onJoinCrew and closes when Join by Code is clicked', async () => {
+  it('calls onJoinCrew and closes when Join with code is clicked', async () => {
     const onJoinCrew = vi.fn();
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} onJoinCrew={onJoinCrew} />);
     await user.click(screen.getByLabelText('Select crew'));
-    await user.click(screen.getByRole('button', { name: /Join by Code/ }));
+    await user.click(screen.getByRole('button', { name: /Join with code/ }));
     expect(onJoinCrew).toHaveBeenCalledOnce();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
@@ -144,5 +144,32 @@ describe('CrewSelector', () => {
     expect(screen.getByRole('listbox')).toBeInTheDocument();
     await user.click(trigger);
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  describe('festival groups', () => {
+    const festivals = [
+      { id: 'f-now', name: 'EDC Orlando', startDate: '2026-11-06', endDate: '2026-11-08' },
+      { id: 'f-past', name: 'Lost Lands 2025', startDate: '2025-09-18', endDate: '2025-09-20' },
+    ] as unknown as Festival[];
+    const crews = [
+      makeCrew({ id: 'c-past', name: 'Old Crew', festivalId: 'f-past' }),
+      makeCrew({ id: 'c-now', name: 'New Crew', festivalId: 'f-now' }),
+    ];
+    const props = { ...defaultProps, crews, selectedCrewId: 'c-now', festivals, currentFestivalId: 'f-now' };
+
+    it('renders labelled groups with the current festival first and past ones dimmed', async () => {
+      const user = userEvent.setup();
+      render(<CrewSelector {...props} />);
+      await user.click(screen.getByLabelText('Select crew'));
+      const groups = screen.getAllByRole('group');
+      expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['EDC Orlando 2026', 'Lost Lands 2025']);
+      expect(groups[1]).toHaveClass('opacity-60');
+      expect(groups[0]).not.toHaveClass('opacity-60');
+    });
+
+    it('shows the festival label of the selected crew under its name in the trigger', () => {
+      render(<CrewSelector {...props} />);
+      expect(screen.getByLabelText('Select crew')).toHaveTextContent('New CrewEDC Orlando 2026');
+    });
   });
 });

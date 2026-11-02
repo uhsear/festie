@@ -1,12 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Linking, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useCrewStore } from '@festie/shared/stores';
-import { etaMinutes, formatStaleness } from '@festie/shared/utils';
-import type { CrewMemberStatus } from '@festie/shared/types';
+import { useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
+import { useAutoArrive, useFestival } from '@festie/shared/hooks';
+import {
+  CREW_STATUS_PRESETS,
+  arrivedMessage,
+  crewStatusLabel,
+  etaMinutes,
+  formatStaleness,
+  isStatusFresh,
+  presetStageName,
+  resolveFestivalTimeZone,
+  selectNowNext,
+  splitMeetingPoints,
+  statusNoteLine,
+} from '@festie/shared/utils';
+import type { CrewMemberStatus, CrewStatusKey } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { useNow } from '../hooks/useNow';
 import Avatar from './Avatar';
 import Button from './Button';
 
@@ -15,21 +29,18 @@ interface CrewStatusProps {
   currentUserId: string;
 }
 
-// Status enum → user-facing label + icon. `null` clears the status.
-const STATUS_OPTIONS = [
-  { key: 'on-my-way', label: 'On my way', icon: 'walk-outline' },
-  { key: 'here', label: "I'm here", icon: 'checkmark-circle-outline' },
-  { key: 'delayed', label: 'Running late', icon: 'time-outline' },
-] as const;
+const STATUS_ICON: Record<CrewStatusKey, keyof typeof Ionicons.glyphMap> = {
+  'on-my-way': 'walk-outline',
+  here: 'checkmark-circle-outline',
+  delayed: 'time-outline',
+  'at-camp': 'bonfire-outline',
+  'at-stage': 'musical-notes-outline',
+  break: 'cafe-outline',
+  lost: 'help-buoy-outline',
+};
 
-type StatusKey = (typeof STATUS_OPTIONS)[number]['key'];
-
-function statusMeta(status: string | null): { label: string; icon: keyof typeof Ionicons.glyphMap } {
-  const found = STATUS_OPTIONS.find((o) => o.key === status);
-  return found
-    ? { label: found.label, icon: found.icon as keyof typeof Ionicons.glyphMap }
-    : { label: '', icon: 'location-outline' };
-}
+const statusIcon = (status: string | null): keyof typeof Ionicons.glyphMap =>
+  STATUS_ICON[status as CrewStatusKey] ?? 'location-outline';
 
 /**
  * Crew member status (M5) — last-synced "On my way to [meeting point] · ETA ~N
@@ -57,8 +68,15 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
   const loadStatuses = useCrewStore((s) => s.loadStatuses);
   const updateMyStatus = useCrewStore((s) => s.updateMyStatus);
 
+  const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const sets = useFestivalDataStore((s) => s.sets);
+  const days = useFestivalDataStore((s) => s.days);
+  const picks = useFestivalDataStore((s) => s.currentProfile?.picks);
+  const { getStageName } = useFestival();
+  const nowMs = useNow(60_000);
+
+  const [showPresets, setShowPresets] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [status, setStatus] = useState<StatusKey>('on-my-way');
   const [targetId, setTargetId] = useState<string>('');
   const [manualEta, setManualEta] = useState<string>('');
   const [note, setNote] = useState('');
@@ -74,6 +92,29 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
 
   // Realtime crew:status-updated patching is wired centrally (single shared
   // socket), so this component just reads crewStore.crewStatuses.
+
+  useAutoArrive({
+    crewId,
+    userId: currentUserId,
+    meetingPoints,
+    onArrive: (label) => {
+      haptics.success();
+      AccessibilityInfo.announceForAccessibility(arrivedMessage(label));
+    },
+  });
+
+  const stageName = useMemo(() => {
+    const selection = selectNowNext({
+      sets,
+      days,
+      picks: picks ?? {},
+      nowMs,
+      timeZone: resolveFestivalTimeZone(currentFestival),
+    });
+    return presetStageName(selection, nowMs, getStageName);
+  }, [sets, days, picks, nowMs, currentFestival, getStageName]);
+
+  const openTargets = useMemo(() => splitMeetingPoints(meetingPoints, [], nowMs).current, [meetingPoints, nowMs]);
 
   const target = useMemo(() => meetingPoints.find((m) => m.id === targetId) ?? null, [meetingPoints, targetId]);
 
@@ -93,7 +134,6 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
   const effectiveEta = computedEta ?? (manualEta.trim() ? Number(manualEta.trim()) : null);
 
   const reset = () => {
-    setStatus('on-my-way');
     setTargetId('');
     setManualEta('');
     setNote('');
@@ -125,6 +165,48 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
     }
   };
 
+  // Silent fix for the "Lost" preset: no denial alert, send without a position on failure.
+  const quietFix = async (): Promise<{ lat: number; lng: number } | null> => {
+    try {
+      const { status: perm } = await Location.requestForegroundPermissionsAsync();
+      if (perm !== 'granted') return null;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    } catch {
+      return null;
+    }
+  };
+
+  const sendPreset = async (key: CrewStatusKey) => {
+    if (busy) return;
+    if (key === 'on-my-way') {
+      setShowPresets(false);
+      setShowForm(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      const fix = key === 'lost' ? await quietFix() : null;
+      await updateMyStatus(
+        crewId,
+        {
+          status: key,
+          targetMeetingPointId: null,
+          etaMinutes: null,
+          note: key === 'at-stage' ? stageName : null,
+          ...(fix ? { position: fix } : {}),
+        },
+        currentUserId,
+      );
+      haptics.success();
+      setShowPresets(false);
+    } catch {
+      // Error surfaced via the crew store.
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async () => {
     if (busy) return;
     setBusy(true);
@@ -133,7 +215,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
       await updateMyStatus(
         crewId,
         {
-          status,
+          status: 'on-my-way',
           targetMeetingPointId: targetId || null,
           etaMinutes: eta != null && eta >= 0 ? Math.min(eta, 1440) : null,
           note: note.trim() || null,
@@ -175,9 +257,9 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
     Linking.openURL(`https://maps.google.com/?q=${lat},${lng}`).catch(() => {});
   };
 
-  const mine = statuses.find((s) => s.user_id === currentUserId && s.status);
+  const mine = statuses.find((s) => s.user_id === currentUserId && isStatusFresh(s, nowMs));
   const labelFor = (id: string | null) => (id ? (meetingPoints.find((m) => m.id === id)?.label ?? null) : null);
-  const activeStatuses = statuses.filter((s) => s.status);
+  const activeStatuses = statuses.filter((s) => isStatusFresh(s, nowMs));
 
   return (
     <View style={styles.container}>
@@ -186,15 +268,15 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
           <Ionicons name="navigate-outline" size={16} color={t.colors.accent.aqua} />
           <Text style={styles.headerTitle}>Crew status</Text>
         </View>
-        {!showForm ? (
+        {!showForm && !showPresets ? (
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => setShowForm(true)}
+            onPress={() => setShowPresets(true)}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={mine ? 'Update my status' : 'Share that you are on my way'}
+            accessibilityLabel="Share your status"
           >
-            <Text style={styles.headerButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{mine ? 'Update mine' : 'On my way…'}</Text>
+            <Text style={styles.headerButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{mine ? 'Update mine' : 'Share status'}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -202,10 +284,47 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
       {/* Honesty banner: this is NEVER live. */}
       <Text style={styles.banner}>Not live: each status shows when that crewmate last had signal.</Text>
 
-      {showForm ? (
+      {showPresets ? (
         <View style={styles.formBox}>
           <View style={styles.formHeader}>
             <Text style={styles.formTitle}>Share my status</Text>
+            <TouchableOpacity
+              onPress={() => setShowPresets(false)}
+              style={styles.iconButton}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel status"
+            >
+              <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.statusGrid}>
+            {CREW_STATUS_PRESETS.map((preset) => {
+              if (preset.key === 'at-stage' && !stageName) return null;
+              const label = preset.key === 'at-stage' ? `At ${stageName}` : preset.label;
+              return (
+                <TouchableOpacity
+                  key={preset.key}
+                  style={styles.statusChip}
+                  onPress={() => sendPreset(preset.key)}
+                  disabled={busy}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                >
+                  <Ionicons name={STATUS_ICON[preset.key]} size={16} color={t.colors.text.secondary} />
+                  <Text style={styles.statusChipText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
+      {showForm ? (
+        <View style={styles.formBox}>
+          <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>On my way</Text>
             <TouchableOpacity
               onPress={reset}
               style={styles.iconButton}
@@ -215,34 +334,6 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
             >
               <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.secondary} />
             </TouchableOpacity>
-          </View>
-
-          {/* Status radios */}
-          <View style={styles.statusGrid}>
-            {STATUS_OPTIONS.map((opt) => {
-              const active = status === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.statusChip, active && styles.statusChipActive]}
-                  onPress={() => {
-                    if (!active) haptics.select();
-                    setStatus(opt.key);
-                  }}
-                  activeOpacity={0.8}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={opt.label}
-                >
-                  <Ionicons
-                    name={opt.icon as keyof typeof Ionicons.glyphMap}
-                    size={16}
-                    color={active ? t.colors.accent.aqua : t.colors.text.secondary}
-                  />
-                  <Text style={[styles.statusChipText, active && styles.statusChipTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{opt.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
           </View>
 
           {/* ETA target: a meeting point. Coordless points still work (manual ETA). */}
@@ -258,7 +349,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
             >
               <Text style={[styles.targetChipText, !targetId && styles.targetChipTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>No specific point</Text>
             </TouchableOpacity>
-            {meetingPoints.map((m) => {
+            {openTargets.map((m) => {
               const active = targetId === m.id;
               const hasCoord = typeof m.latitude === 'number' && typeof m.longitude === 'number';
               return (
@@ -324,7 +415,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
 
           <Button
             label={
-              target && status === 'on-my-way'
+              target
                 ? `On my way to ${target.label}${effectiveEta != null ? ` · ETA ~${Math.round(effectiveEta)} min` : ''}`
                 : 'Share status'
             }
@@ -342,19 +433,18 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
       {activeStatuses.length > 0 ? (
         <View style={styles.list}>
           {activeStatuses.map((s: CrewMemberStatus) => {
-            const meta = statusMeta(s.status);
             const isMe = s.user_id === currentUserId;
             const targetLabel = labelFor(s.target_meeting_point_id);
             return (
               <View key={s.user_id} style={styles.statusRow}>
-                <Ionicons name={meta.icon} size={t.iconSize.action} color={t.colors.accent.aqua} style={styles.statusRowIcon} />
+                <Ionicons name={statusIcon(s.status)} size={t.iconSize.action} color={t.colors.accent.aqua} style={styles.statusRowIcon} />
                 <View style={styles.statusRowBody}>
                   <View style={styles.statusRowTitle}>
                     <Text style={styles.statusRowName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
                       {isMe ? 'You' : s.name || s.username || 'Crewmate'}
                     </Text>
                     <Text style={styles.statusRowState} numberOfLines={1}>
-                      {meta.label}
+                      {crewStatusLabel(s)}
                     </Text>
                   </View>
                   {targetLabel ? (
@@ -365,9 +455,9 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
                   ) : typeof s.eta_minutes === 'number' ? (
                     <Text style={styles.statusRowTarget}>ETA ~{s.eta_minutes} min</Text>
                   ) : null}
-                  {s.note ? (
+                  {statusNoteLine(s) ? (
                     <Text style={styles.statusRowNote} numberOfLines={2}>
-                      {s.note}
+                      {statusNoteLine(s)}
                     </Text>
                   ) : null}
                   {/* Honest staleness — the cardinal rule. */}

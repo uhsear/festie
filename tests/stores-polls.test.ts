@@ -78,6 +78,18 @@ describe('lib/db/stores/polls.js', () => {
       assert.strictEqual((pool.query.mock.calls[1]!.arguments as any[])[1][6], null);
     });
 
+    it('writes multi_answer, false unless multiAnswer is true', async () => {
+      const pool = makePool([{ rows: [{ id: 'poll-1' }] }, { rows: [{ id: 'poll-2' }] }]);
+      const store = createPollsStore(pool);
+      const base = { crewId: 'c', createdBy: 'u', question: 'Q?', options: ['A', 'B'], closesAt: null };
+      await store.create({ ...base, multiAnswer: true });
+      await store.create(base);
+      const sql = (pool.query.mock.calls[0]!.arguments as any[])[0];
+      assert.ok(sql.includes('multi_answer'));
+      assert.strictEqual((pool.query.mock.calls[0]!.arguments as any[])[1][7], true);
+      assert.strictEqual((pool.query.mock.calls[1]!.arguments as any[])[1][7], false);
+    });
+
     it('generates a unique poll id with poll- prefix', async () => {
       const pool = makePool([{ rows: [{ id: 'poll-generated' }] }]);
       const store = createPollsStore(pool);
@@ -166,6 +178,16 @@ describe('lib/db/stores/polls.js', () => {
       assert.ok(sql.includes('crew_poll_votes'));
       assert.ok(sql.includes('LEFT JOIN'));
       assert.deepStrictEqual((pool.query.mock.calls[0]!.arguments as any[])[1], ['crew-1']);
+    });
+
+    it('lists open polls plus the 10 most recently ended, one vote entry per option', async () => {
+      const pool = makePool([{ rows: [] }]);
+      await createPollsStore(pool).listByCrew('crew-1');
+      const sql = (pool.query.mock.calls[0]!.arguments as any[])[0];
+      assert.match(sql, /closed = TRUE OR closes_at <= NOW\(\)/);
+      assert.match(sql, /ORDER BY COALESCE\(closed_at, closes_at, created_at\) DESC LIMIT 10/);
+      assert.match(sql, /unnest\(COALESCE\(v\.option_indexes, ARRAY\[v\.option_index\]\)\)/);
+      assert.match(sql, /FILTER \(WHERE v\.user_id IS NOT NULL\), '\[\]'\)/);
     });
 
     it('returns empty array when crew has no active polls', async () => {
@@ -274,13 +296,13 @@ describe('lib/db/stores/polls.js', () => {
       const pool = makePool([{ rows: [voteRow] }]);
       const store = createPollsStore(pool);
 
-      const result = await store.vote('poll-1', 'user-1', 0);
+      const result = await store.vote('poll-1', 'user-1', [0]);
 
       assert.deepStrictEqual(result, voteRow);
       assert.strictEqual(pool.query.mock.calls.length, 1);
       const call = pool.query.mock.calls[0]!;
       assert.ok((call.arguments as any[])[0].includes('INSERT INTO crew_poll_votes'));
-      assert.deepStrictEqual((call.arguments as any[])[1], ['poll-1', 'user-1', 0]);
+      assert.deepStrictEqual((call.arguments as any[])[1], ['poll-1', 'user-1', 0, [0]]);
     });
 
     it('handles duplicate vote via ON CONFLICT upsert', async () => {
@@ -293,7 +315,7 @@ describe('lib/db/stores/polls.js', () => {
       const pool = makePool([{ rows: [updatedVote] }]);
       const store = createPollsStore(pool);
 
-      const result = await store.vote('poll-1', 'user-1', 2);
+      const result = await store.vote('poll-1', 'user-1', [2]);
 
       assert.deepStrictEqual(result, updatedVote);
       // Verify the SQL uses ON CONFLICT ... DO UPDATE
@@ -307,19 +329,23 @@ describe('lib/db/stores/polls.js', () => {
       const pool = makePool([{ rows: [{ poll_id: 'p', user_id: 'u', option_index: 3 }] }]);
       const store = createPollsStore(pool);
 
-      await store.vote('poll-99', 'user-42', 3);
+      await store.vote('poll-99', 'user-42', [1, 3]);
 
       const params = (pool.query.mock.calls[0]!.arguments as any[])[1];
       assert.strictEqual(params[0], 'poll-99');
       assert.strictEqual(params[1], 'user-42');
-      assert.strictEqual(params[2], 3);
+      assert.strictEqual(params[2], 1);
+      assert.deepStrictEqual(params[3], [1, 3]);
+      const sql = (pool.query.mock.calls[0]!.arguments as any[])[0];
+      assert.match(sql, /option_indexes = \$4/);
+      assert.match(sql, /voted_at = NOW\(\)/);
     });
 
     it('returns undefined when no row is returned', async () => {
       const pool = makePool([{ rows: [] }]);
       const store = createPollsStore(pool);
 
-      const result = await store.vote('poll-x', 'user-x', 0);
+      const result = await store.vote('poll-x', 'user-x', [0]);
 
       assert.strictEqual(result, undefined);
     });
@@ -461,7 +487,9 @@ describe('lib/db/stores/polls.js', () => {
       assert.ok((call.arguments as any[])[0].includes('UPDATE crew_polls'));
       assert.ok((call.arguments as any[])[0].includes('closed = TRUE'));
       assert.ok((call.arguments as any[])[0].includes('AND closed = FALSE'));
+      assert.ok((call.arguments as any[])[0].includes('closed_at = NOW()'));
       assert.ok((call.arguments as any[])[0].includes('RETURNING'));
+      assert.ok((call.arguments as any[])[0].includes('multi_answer, closed_at, nudged_at'));
       assert.deepStrictEqual((call.arguments as any[])[1], ['poll-1']);
     });
 
@@ -481,6 +509,58 @@ describe('lib/db/stores/polls.js', () => {
       const store = createPollsStore(pool);
       assert.deepStrictEqual(await store.tallyVotes('poll-1'), [1, 0, 3]);
       assert.deepStrictEqual((pool.query.mock.calls[0]!.arguments as any[])[1], ['poll-1']);
+    });
+
+    it('counts multi-answer votes once per option, falling back to option_index', async () => {
+      const pool = makePool([{ rows: [] }]);
+      await createPollsStore(pool).tallyVotes('poll-1');
+      const sql = (pool.query.mock.calls[0]!.arguments as any[])[0];
+      assert.match(sql, /unnest\(COALESCE\(v\.option_indexes, ARRAY\[v\.option_index\]\)\)/);
+    });
+  });
+
+  describe('removeVote', () => {
+    it('deletes the caller vote row', async () => {
+      const pool = makePool();
+      await createPollsStore(pool).removeVote('poll-1', 'user-1');
+      const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+      assert.match(sql, /DELETE FROM crew_poll_votes WHERE poll_id = \$1 AND user_id = \$2/);
+      assert.deepStrictEqual(params, ['poll-1', 'user-1']);
+    });
+  });
+
+  describe('closeExpired', () => {
+    it('ends only polls whose closes_at has passed and returns them', async () => {
+      const rows = [{ id: 'poll-1', crew_id: 'c' }];
+      const pool = makePool([{ rows }]);
+      const result = await createPollsStore(pool).closeExpired();
+      assert.deepStrictEqual(result, rows);
+      const sql = (pool.query.mock.calls[0]!.arguments as any[])[0];
+      assert.match(sql, /closed = FALSE AND closes_at IS NOT NULL AND closes_at <= NOW\(\)/);
+      assert.match(sql, /closed_at = closes_at/);
+      assert.match(sql, /RETURNING[^;]*set_refs/);
+    });
+  });
+
+  describe('markNudged', () => {
+    it('returns true only when the first reminder claims the row', async () => {
+      const pool = makePool([{ rows: [{ id: 'poll-1' }] }, { rows: [] }]);
+      const store = createPollsStore(pool);
+      assert.strictEqual(await store.markNudged('poll-1'), true);
+      assert.strictEqual(await store.markNudged('poll-1'), false);
+      const sql = (pool.query.mock.calls[0]!.arguments as any[])[0];
+      assert.match(sql, /nudged_at IS NULL/);
+    });
+  });
+
+  describe('nonVoterIds', () => {
+    it('returns member ids with no vote row', async () => {
+      const pool = makePool([{ rows: [{ user_id: 'u2' }, { user_id: 'u3' }] }]);
+      const ids = await createPollsStore(pool).nonVoterIds('poll-1', 'crew-1');
+      assert.deepStrictEqual(ids, ['u2', 'u3']);
+      const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+      assert.match(sql, /NOT EXISTS/);
+      assert.deepStrictEqual(params, ['poll-1', 'crew-1']);
     });
   });
 
@@ -642,7 +722,7 @@ describe('lib/db/stores/polls.js', () => {
       const store = createPollsStore(pool);
 
       await assert.rejects(
-        () => store.vote('poll-1', 'user-1', 0),
+        () => store.vote('poll-1', 'user-1', [0]),
         { message: 'deadlock detected' },
       );
     });

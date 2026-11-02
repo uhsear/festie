@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { fontSize } from '@festie/shared/tokens';
 import { typeStyle, useTokens } from '../hooks/useTokens';
 
@@ -14,9 +14,9 @@ import { typeStyle, useTokens } from '../hooks/useTokens';
  * weighted family triggers synthetic bold, widening glyphs and clipping the trailing
  * character.
  */
-export default function HeaderTitle({ children }: { children: string }) {
+export default function HeaderTitle({ children, subtitle }: { children: string; subtitle?: string }) {
   const { colors } = useTokens();
-  return (
+  const title = (
     <Text
       numberOfLines={1}
       adjustsFontSizeToFit
@@ -30,5 +30,19 @@ export default function HeaderTitle({ children }: { children: string }) {
     >
       {children}
     </Text>
+  );
+  if (!subtitle) return title;
+  return (
+    <View style={{ alignItems: 'center' }}>
+      {title}
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        style={{ ...typeStyle('caption'), color: colors.text.secondary }}
+      >
+        {subtitle}
+      </Text>
+    </View>
   );
 }
