@@ -288,12 +288,12 @@ describe('festival drafts and publish', { skip, concurrency: 1 }, () => {
 
     const publicList = await server.request.get('/api/v1/festivals').expect(200);
     h.assert.ok(publicList.body.data.some((f: any) => f.id === 'fest-p'));
-    h.assert.equal(await auditCount(server, 'festival:publish', 'fest-p'), 1);
+    h.assert.equal(await auditCount(server, 'festival.published', 'fest-p'), 1);
 
     const second = await admin(token, server.request.post('/api/v1/admin/festivals/fest-p/publish')).expect(200);
     h.assert.equal(new Date(second.body.data.publishedAt).getTime(), new Date(first.body.data.publishedAt).getTime());
     await new Promise((resolve) => setTimeout(resolve, 100));
-    h.assert.equal(await auditCount(server, 'festival:publish', 'fest-p'), 1);
+    h.assert.equal(await auditCount(server, 'festival.published', 'fest-p'), 1);
   });
 
   test('an overlap is a structured 400 that names both sets', async () => {

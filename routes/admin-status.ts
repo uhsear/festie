@@ -5,14 +5,149 @@
 //   GET /admin/health              — JSON system status (admin-auth)
 //   GET /admin/status              — HTML dashboard (admin-auth, strict nonce CSP)
 //   GET /admin/analytics           — aggregated festival analytics JSON (admin-auth)
-//   GET /admin/analytics/view      — HTML analytics dashboard (admin-auth, strict nonce CSP)
 //
-// The strict nonce CSP helper lives here because both HTML routes in this
-// file need it. If a third file ever needs the same policy, promote it to
-// lib/csp-helpers.js.
-import { renderAnalyticsDashboard } from '../lib/analytics-template.js';
+// The strict nonce CSP helper lives here because the HTML status route in
+// this file needs it. If another file ever needs the same policy, promote it
+// to lib/csp-helpers.js.
+import { adminAnalyticsQuery, validateQuery } from '../lib/schemas.js';
 import { renderStatusPage } from '../lib/helpers/status-template.js';
 import type { Router } from 'express';
+
+// "In scope": festival not deleted, plan not deleted, user not deleted, and the
+// festival equals $1 when $1 is not NULL. Crew members count only live users.
+const TOTALS_SQL = `
+  WITH
+    f AS (
+      SELECT id FROM festivals
+      WHERE deleted_at IS NULL AND ($1::TEXT IS NULL OR id = $1::TEXT)
+    ),
+    p AS (
+      SELECT fp.id, fp.user_id
+      FROM festival_profiles fp
+        JOIN f ON f.id = fp.festival_id
+        JOIN users u ON u.id = fp.user_id AND u.deleted_at IS NULL
+      WHERE fp.deleted_at IS NULL
+    ),
+    pk AS (
+      SELECT fpp.profile_id, fpp.priority, p.user_id
+      FROM festival_profile_picks fpp JOIN p ON p.id = fpp.profile_id
+    ),
+    c AS (SELECT cr.id FROM crews cr JOIN f ON f.id = cr.festival_id),
+    cm AS (
+      SELECT m.crew_id, m.user_id
+      FROM crew_members m
+        JOIN c ON c.id = m.crew_id
+        JOIN users u ON u.id = m.user_id AND u.deleted_at IS NULL
+    )
+  SELECT
+    (SELECT COUNT(*)::int FROM users WHERE deleted_at IS NULL) AS "signedUp",
+    (SELECT COUNT(DISTINCT user_id)::int FROM p) AS "usersWithPlan",
+    (SELECT COUNT(*)::int FROM p) AS "plans",
+    (SELECT COUNT(DISTINCT profile_id)::int FROM pk) AS "plansWithPicks",
+    (SELECT COUNT(DISTINCT user_id)::int FROM pk) AS "usersWithPick",
+    (SELECT COUNT(*)::int FROM pk) AS "picks",
+    (SELECT COUNT(*)::int FROM c) AS "crews",
+    (SELECT COUNT(*)::int FROM cm) AS "crewMembers",
+    (SELECT COUNT(DISTINCT user_id)::int FROM cm) AS "usersInCrews",
+    (SELECT COUNT(*)::int FROM (SELECT crew_id FROM cm GROUP BY crew_id HAVING COUNT(*) >= 2) big) AS "crewsWithTwoPlus",
+    (SELECT COUNT(*)::int FROM pk WHERE priority = 'must') AS "must",
+    (SELECT COUNT(*)::int FROM pk WHERE priority = 'want-to-see') AS "want",
+    (SELECT COUNT(*)::int FROM pk WHERE priority = 'maybe') AS "maybe"
+`;
+
+const TOP_SETS_SQL = `
+  SELECT
+    fs.artist,
+    fs.stage_id AS "stageId",
+    fs.start_time AS "startTime",
+    fs.end_time AS "endTime",
+    fs.day_index AS "dayIndex",
+    fs.festival_id AS "festivalId",
+    f.name AS "festivalName",
+    fd.label AS "dayLabel",
+    COUNT(*)::int AS "pickCount",
+    (COUNT(*) FILTER (WHERE fpp.priority = 'must'))::int AS "mustCount",
+    (COUNT(*) FILTER (WHERE fpp.priority = 'want-to-see'))::int AS "wantCount",
+    (COUNT(*) FILTER (WHERE fpp.priority = 'maybe'))::int AS "maybeCount"
+  FROM
+    festival_profile_picks fpp
+    JOIN festival_sets fs ON fpp.set_id = fs.id
+    JOIN festival_profiles fp ON fpp.profile_id = fp.id AND fp.deleted_at IS NULL
+    JOIN users u ON u.id = fp.user_id AND u.deleted_at IS NULL
+    JOIN festivals f ON f.id = fs.festival_id AND f.deleted_at IS NULL
+    LEFT JOIN festival_days fd ON fd.festival_id = fs.festival_id AND fd.day_index = fs.day_index
+  WHERE $1::TEXT IS NULL OR fs.festival_id = $1::TEXT
+  GROUP BY
+    fs.id, fs.artist, fs.stage_id, fs.start_time, fs.end_time, fs.day_index, fs.festival_id, f.name, fd.label
+  ORDER BY "pickCount" DESC
+  LIMIT 20
+`;
+
+const ACTIVE_USERS_SQL = `
+  SELECT
+    u.id,
+    u.username,
+    u.avatar_key AS "avatarKey",
+    COUNT(DISTINCT fp.id)::int AS "profileCount",
+    COUNT(fpp.set_id)::int AS "totalPicks",
+    MAX(fp.updated_at) AS "lastActive"
+  FROM
+    users u
+    JOIN festival_profiles fp ON fp.user_id = u.id AND fp.deleted_at IS NULL
+    JOIN festivals f ON f.id = fp.festival_id AND f.deleted_at IS NULL
+    LEFT JOIN festival_profile_picks fpp ON fpp.profile_id = fp.id
+  WHERE u.deleted_at IS NULL AND ($1::TEXT IS NULL OR fp.festival_id = $1::TEXT)
+  GROUP BY u.id, u.username, u.avatar_key
+  ORDER BY "lastActive" DESC NULLS LAST
+  LIMIT 50
+`;
+
+const CREWS_SQL = `
+  SELECT
+    c.id,
+    c.name,
+    c.festival_id AS "festivalId",
+    f.name AS "festivalName",
+    COUNT(u.id)::int AS "memberCount",
+    c.created_at AS "createdAt"
+  FROM
+    crews c
+    JOIN festivals f ON f.id = c.festival_id AND f.deleted_at IS NULL
+    LEFT JOIN crew_members cm ON cm.crew_id = c.id
+    LEFT JOIN users u ON u.id = cm.user_id AND u.deleted_at IS NULL
+  WHERE $1::TEXT IS NULL OR c.festival_id = $1::TEXT
+  GROUP BY c.id, c.name, c.festival_id, f.name, c.created_at
+  ORDER BY "memberCount" DESC
+  LIMIT 20
+`;
+
+const INSTALL_SQL = `
+  SELECT
+    event,
+    COUNT(*)::int AS n
+  FROM
+    install_events
+  WHERE
+    created_at >= NOW() - INTERVAL '30 days'
+  GROUP BY
+    event
+`;
+
+const FESTIVAL_STATS_SQL = `
+  SELECT
+    f.id,
+    f.name,
+    COUNT(DISTINCT fp.id)::int AS "profileCount",
+    COUNT(DISTINCT fpp.set_id)::int AS "uniqueSetsPicked",
+    COUNT(fpp.*)::int AS "totalPicks"
+  FROM
+    festivals f
+    LEFT JOIN festival_profiles fp ON fp.festival_id = f.id AND fp.deleted_at IS NULL
+    LEFT JOIN festival_profile_picks fpp ON fpp.profile_id = fp.id
+  WHERE f.deleted_at IS NULL
+  GROUP BY f.id, f.name
+  ORDER BY "profileCount" DESC
+`;
 
 export default function createAdminStatusRoutes(deps: any): { router: Router } {
   const {
@@ -148,155 +283,64 @@ export default function createAdminStatusRoutes(deps: any): { router: Router } {
     }
   });
 
-  // Admin Analytics Dashboard — aggregated stats for festival management
-  router.get('/admin/analytics', adminAuth, async (req: any, res: any) => {
+  // Admin analytics: true totals plus clearly sampled lists (top 20 sets,
+  // latest 50 people, largest 20 crews). Every query takes $1 = the festival
+  // id or NULL; signedUp, festivalStats and install ignore the filter.
+  router.get('/admin/analytics', adminAuth, validateQuery(adminAnalyticsQuery), async (req: any, res: any) => {
     try {
       setNoStore(res);
-       
+
       const analyticsPool = deps.pool || stores?.pool;
       if (!analyticsPool) return res.json({ data: null, error: { message: 'Database not available' } });
 
-      const [topSetsResult, activeUsersResult, crewsResult, festivalStatsResult] = await Promise.all([
-        analyticsPool.query(`
-          SELECT
-            fs.artist,
-            fs.stage_id AS "stageId",
-            fs.start_time AS "startTime",
-            fs.end_time AS "endTime",
-            fs.day_index AS "dayIndex",
-            fs.festival_id AS "festivalId",
-            COUNT(*) AS "pickCount",
-            COUNT(*) FILTER (
-              WHERE
-                fpp.priority = 'must'
-            ) AS "mustCount",
-            COUNT(*) FILTER (
-              WHERE
-                fpp.priority = 'want-to-see'
-            ) AS "wantCount",
-            COUNT(*) FILTER (
-              WHERE
-                fpp.priority = 'maybe'
-            ) AS "maybeCount"
-          FROM
-            festival_profile_picks fpp
-            JOIN festival_sets fs ON fpp.set_id = fs.id
-            JOIN festival_profiles fp ON fpp.profile_id = fp.id
-            AND fp.deleted_at IS NULL
-          GROUP BY
-            fs.id,
-            fs.artist,
-            fs.stage_id,
-            fs.start_time,
-            fs.end_time,
-            fs.day_index,
-            fs.festival_id
-          ORDER BY
-            "pickCount" DESC
-          LIMIT
-            20
-        `),
-        analyticsPool.query(`
-          SELECT
-            u.id,
-            u.username,
-            u.avatar_key AS "avatarKey",
-            COUNT(DISTINCT fp.id) AS "profileCount",
-            COUNT(fpp.set_id) AS "totalPicks",
-            MAX(fp.updated_at) AS "lastActive"
-          FROM
-            users u
-            JOIN festival_profiles fp ON fp.user_id = u.id
-            AND fp.deleted_at IS NULL
-            LEFT JOIN festival_profile_picks fpp ON fpp.profile_id = fp.id
-          WHERE
-            u.deleted_at IS NULL
-          GROUP BY
-            u.id,
-            u.username,
-            u.avatar_key
-          ORDER BY
-            "lastActive" DESC NULLS LAST
-          LIMIT
-            50
-        `),
-        analyticsPool.query(`
-          SELECT
-            c.id,
-            c.name,
-            c.festival_id AS "festivalId",
-            COUNT(cm.user_id) AS "memberCount",
-            c.created_at AS "createdAt"
-          FROM
-            crews c
-            LEFT JOIN crew_members cm ON cm.crew_id = c.id
-          GROUP BY
-            c.id,
-            c.name,
-            c.festival_id,
-            c.created_at
-          ORDER BY
-            "memberCount" DESC
-          LIMIT
-            20
-        `),
-        analyticsPool.query(`
-          SELECT
-            f.id,
-            f.name,
-            COUNT(DISTINCT fp.id) AS "profileCount",
-            COUNT(DISTINCT fpp.set_id) AS "uniqueSetsPicked",
-            COUNT(fpp.*) AS "totalPicks"
-          FROM
-            festivals f
-            LEFT JOIN festival_profiles fp ON fp.festival_id = f.id
-            AND fp.deleted_at IS NULL
-            LEFT JOIN festival_profile_picks fpp ON fpp.profile_id = fp.id
-          WHERE
-            f.deleted_at IS NULL
-          GROUP BY
-            f.id,
-            f.name
-          ORDER BY
-            "profileCount" DESC
-        `),
-      ]);
+      const festivalId: string | null = req.validatedQuery?.festivalId ?? null;
+      let festivalName: string | null = null;
+      if (festivalId) {
+        const found = await analyticsPool.query(
+          'SELECT name FROM festivals WHERE id = $1 AND deleted_at IS NULL',
+          [festivalId],
+        );
+        if (found.rows.length === 0) return sendError(res, 404, 'Festival not found.', ErrorCodes.NOT_FOUND);
+        festivalName = found.rows[0].name;
+      }
+
+      const params = [festivalId];
+      const [totalsResult, topSetsResult, activeUsersResult, crewsResult, installResult, festivalStatsResult] =
+        await Promise.all([
+          analyticsPool.query(TOTALS_SQL, params),
+          analyticsPool.query(TOP_SETS_SQL, params),
+          analyticsPool.query(ACTIVE_USERS_SQL, params),
+          analyticsPool.query(CREWS_SQL, params),
+          analyticsPool.query(INSTALL_SQL),
+          analyticsPool.query(FESTIVAL_STATS_SQL),
+        ]);
+
+      const { must, want, maybe, ...totals } = totalsResult.rows[0];
+      const installCounts = Object.fromEntries(installResult.rows.map((r: any) => [r.event, r.n]));
+      const install = {
+        days: 30,
+        shown: installCounts.shown ?? 0,
+        accepted: installCounts.accepted ?? 0,
+        dismissed: installCounts.dismissed ?? 0,
+      };
 
       return sendSuccess(res, {
-          topSets: topSetsResult.rows,
-          activeUsers: activeUsersResult.rows.map((u: any) => ({
-            ...u,
-            avatarKey: undefined, // don't expose avatar keys
-          })),
-          crews: crewsResult.rows,
-          festivalStats: festivalStatsResult.rows,
-          generatedAt: new Date().toISOString(),
+        scope: { festivalId, festivalName },
+        totals,
+        pickDistribution: { must, want, maybe },
+        install,
+        topSets: topSetsResult.rows,
+        activeUsers: activeUsersResult.rows.map((u: any) => ({
+          ...u,
+          avatarKey: undefined, // don't expose avatar keys
+        })),
+        crews: crewsResult.rows,
+        festivalStats: festivalStatsResult.rows,
+        generatedAt: new Date().toISOString(),
       });
     } catch (error: any) {
       log.error('analytics query failed', { error: error.message });
       return sendError(res, 500, 'Failed to load analytics', ErrorCodes.INTERNAL_ERROR);
-    }
-  });
-
-  // Admin Analytics Dashboard — HTML view
-  router.get('/admin/analytics/view', adminAuth, async (req: any, res: any) => {
-    try {
-      setNoStore(res);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      // AUDIT FIX (2026-04-14): the previous per-route CSP whitelisted
-      // 'unsafe-inline' for both script-src and style-src, which defeated
-      // the global nonce-based policy. Replace with a strict nonce CSP.
-      // renderAnalyticsDashboard must emit inline <style>/<script> tags with
-      // nonce="${res.locals.cspNonce}"; any remaining inline without a nonce
-      // will be blocked (which is the intended failure mode).
-      res.setHeader('Content-Security-Policy', buildStrictNonceCSP(res.locals.cspNonce || ''));
-
-      const origin = deps.config.PUBLIC_ORIGIN || '';
-      return res.send(renderAnalyticsDashboard(origin, { nonce: res.locals.cspNonce || '' }));
-    } catch (error: any) {
-
-      log.error('analytics view error', { error: error.message });
-      return res.status(500).send('Failed to load analytics dashboard');
     }
   });
 

@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert, Share } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -74,6 +74,12 @@ export default function AdminUsersScreen() {
   const router = useRouter();
   const { users, total, hasMore, loading, loadingMore, error, search, setSearch, loadMore, refresh, patchUser, removeUser } =
     useAdminUserList({ enabled: isAdmin });
+  // The admin home Find box deep-links here with ?q=; seed the search once.
+  const { q: initialSearch } = useLocalSearchParams<{ q?: string }>();
+  useEffect(() => {
+    if (initialSearch) setSearch(initialSearch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once from the route
+  }, []);
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());

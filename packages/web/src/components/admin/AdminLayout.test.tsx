@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import AdminLayout from './AdminLayout';
 
 const fetchAdminEnv = vi.fn();
@@ -30,5 +30,30 @@ describe('AdminLayout environment band', () => {
     await screen.findByText('body');
     await Promise.resolve();
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+describe('AdminLayout section picker', () => {
+  it('is named "Admin section" and reports the chosen tab', async () => {
+    fetchAdminEnv.mockResolvedValue({ label: null });
+    const onTabChange = vi.fn();
+    render(
+      <AdminLayout
+        title="Admin"
+        onTabChange={onTabChange}
+        activeTab="dashboard"
+        tabs={[
+          { id: 'dashboard', label: 'Dashboard' },
+          { id: 'analytics', label: 'Analytics' },
+        ]}
+      >
+        <p>body</p>
+      </AdminLayout>,
+    );
+    const select = screen.getByRole('combobox', { name: 'Admin section' });
+    expect(select).toHaveValue('dashboard');
+    fireEvent.change(select, { target: { value: 'analytics' } });
+    expect(onTabChange).toHaveBeenCalledWith('analytics');
+    await screen.findByText('body');
   });
 });

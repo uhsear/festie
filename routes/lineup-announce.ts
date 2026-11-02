@@ -12,6 +12,7 @@
  */
 
 import crypto from 'crypto';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 
 export default function createLineupAnnounceRoute(deps: any) {
   const {
@@ -71,7 +72,7 @@ export default function createLineupAnnounceRoute(deps: any) {
             id: crypto.randomUUID(),
             actorType: 'admin',
             actorId: req.user?.userId,
-            action: 'lineup_announce',
+            action: AUDIT_ACTIONS.LINEUP_ANNOUNCED,
             targetType: 'festival',
             targetId: festivalId,
             detailsJson: JSON.stringify({ recipients }),

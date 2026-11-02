@@ -1,22 +1,32 @@
-import { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert, useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  api,
   bulkArchiveFestivals,
+  fetchAdminCrews,
+  fetchAdminDashboard,
   fetchAdminFestivals,
   fetchAdminEnv,
   fetchArchivedFestivals,
   restoreFestival,
   withReauth,
 } from '@festie/shared/services';
-import type { AdminFestivalSummary, ArchivedFestival } from '@festie/shared/services';
+import type {
+  AdminCrewRow,
+  AdminDashboardData,
+  AdminFestivalSummary,
+  ArchivedFestival,
+} from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import {
   timeAgoFromIso,
-  formatUptime,
+  auditActionLabel,
+  dashboardStatRows,
+  describeHealth,
+  healthDetailRows,
+  searchAdminTargets,
   toggleSelection,
   bulkConfirmCopy,
   summarizeBulkResults,
@@ -25,17 +35,20 @@ import {
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
-import { ConfirmDialog, SelectionBar, useReauthPrompt } from '../../components/admin';
+import { ConfirmDialog, LabeledTextInput, SelectionBar, useReauthPrompt } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
  * Admin home — the hub of the mobile admin console
- * (packages/web/src/components/admin). Surfaces dashboard stats, a System
- * Health card (uptime / memory / connections / DB pool, straight from the
- * dashboard.health object), the recent activity feed, the audit log, and the
- * festival list (GET /admin/festivals, drafts included, with an Archived view). This screen itself stays read-only; every destructive write
+ * (packages/web/src/components/admin). Top to bottom: a Find box (festivals,
+ * users, crews, invite codes), the festival list (GET /admin/festivals, drafts
+ * included, with an Archived view), the Admin actions links, five rows of
+ * recent admin activity with a "See all" link to the audit screen, a one-line
+ * stats summary that expands to the four counts, and a one-sentence health
+ * line with a Details toggle. The full audit list lives on /admin/audit only.
+ * This screen itself stays read-only; every destructive write
  * lives behind a dedicated, ConfirmDialog-gated sub-screen reached from the
- * "Admin actions" section or the per-festival row actions below.
+ * "Admin actions" section or the per-festival row actions.
  *
  * Navigation (router.push, exact route strings — the screens exist so
  * expo-router typed routes resolve):
@@ -52,46 +65,22 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  * Gated on useAuthStore isAdmin; a non-admin sees an "Admins only" EmptyState.
  * The Festivals card has a Select mode: tick festivals, then Archive them through
  * a ConfirmDialog and a re-auth-wrapped POST /admin/bulk/archive-festivals.
- * Pull-to-refresh re-runs the three GETs. Endpoints resolve under /api/v1:
+ * Pull-to-refresh re-runs the GETs. Endpoints resolve under /api/v1:
  *   GET /admin/dashboard → { stats, health, recentActivity (enriched) }
- *   GET /admin/audit     → recent audit entries (array; wrapper strips meta)
  *   GET /admin/festivals → AdminFestivalSummary[] (drafts included)
+ *   GET /admin/crews     → crew rows for the Find box (loaded once, on first text)
  *   GET /admin/env       → { label } (staging band; a failure hides the band)
  *   GET /admin/festivals/archived → deleted festivals, each with Restore
  */
 
-interface DashboardStats {
-  users: number;
-  festivals: number;
-  profiles: number;
-  picks: number;
-}
-interface ActivityEntry {
-  id: string;
-  action: string;
-  friendlyAction?: string;
-  actorUsername?: string;
-  createdAt: string;
-}
-interface HealthData {
-  uptime: number;
-  memory: { rss: number; heapUsed: number; heapTotal: number };
-  connections: number;
-  onlineRooms: number;
-  database?: { totalCount: number; idleCount: number; waitingCount: number } | null;
-}
-interface DashboardResponse {
-  stats: DashboardStats;
-  health?: HealthData;
-  recentActivity: ActivityEntry[];
-}
-interface AuditEntry {
-  id: string;
-  action: string;
-  friendlyAction?: string;
-  actorUsername?: string;
-  createdAt: string;
-}
+const RECENT_ACTIVITY_ROWS = 5;
+const LARGE_FONT_SCALE = 1.3;
+const HEALTH_DETAILS_HEADING = 'This server process. A restart resets these numbers.';
+const HEALTH_ICONS = {
+  ok: 'checkmark-circle-outline',
+  warn: 'warning-outline',
+  unknown: 'help-circle-outline',
+} as const;
 
 export default function AdminScreen() {
   const t = useTokens();
@@ -99,11 +88,16 @@ export default function AdminScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isAdmin = useAuthStore((s) => s.isAdmin);
+  const stacked = useWindowDimensions().fontScale > LARGE_FONT_SCALE;
 
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [health, setHealth] = useState<HealthData | null>(null);
-  const [activity, setActivity] = useState<ActivityEntry[]>([]);
-  const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [stats, setStats] = useState<AdminDashboardData['stats'] | null>(null);
+  const [health, setHealth] = useState<AdminDashboardData['health'] | null>(null);
+  const [activity, setActivity] = useState<AdminDashboardData['recentActivity']>([]);
+  const [findText, setFindText] = useState('');
+  const [crews, setCrews] = useState<AdminCrewRow[] | null>(null);
+  const [crewsFailed, setCrewsFailed] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
   const [festivals, setFestivals] = useState<AdminFestivalSummary[]>([]);
   const [envLabel, setEnvLabel] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -123,17 +117,17 @@ export default function AdminScreen() {
   const load = useCallback(async () => {
     setError(false);
     try {
-      const [dashboard, auditRows, festivalList, env] = await Promise.all([
-        api.get<DashboardResponse>('/admin/dashboard'),
-        api.get<AuditEntry[]>('/admin/audit'),
+      const [dashboard, festivalList, env] = await Promise.all([
+        fetchAdminDashboard(),
         fetchAdminFestivals(),
         fetchAdminEnv().catch(() => null),
       ]);
+      setCrews(null);
+      setCrewsFailed(false);
       setEnvLabel(env?.label ?? null);
       setStats(dashboard?.stats ?? null);
       setHealth(dashboard?.health ?? null);
       setActivity(Array.isArray(dashboard?.recentActivity) ? dashboard.recentActivity : []);
-      setAudit(Array.isArray(auditRows) ? auditRows : []);
       setFestivals(Array.isArray(festivalList) ? festivalList : []);
     } catch {
       setError(true);
@@ -192,6 +186,40 @@ export default function AdminScreen() {
     void load().finally(() => setRefreshing(false));
   }, [load]);
 
+  // Crews load once, on the first non-empty Find text; a failure is retried on the next keystroke.
+  const onFindChange = useCallback(
+    (text: string) => {
+      setFindText(text);
+      if (!text.trim() || crews) return;
+      fetchAdminCrews()
+        .then((rows) => {
+          setCrews(Array.isArray(rows) ? rows : []);
+          setCrewsFailed(false);
+        })
+        .catch(() => setCrewsFailed(true));
+    },
+    [crews],
+  );
+
+  const findResults = useMemo(
+    () => searchAdminTargets(findText, { festivals, crews: crews ?? [] }),
+    [findText, festivals, crews],
+  );
+
+  const openTarget = useCallback(
+    (target: { kind: 'festival' | 'crew' | 'user'; id: string; label: string }) => {
+      if (target.kind === 'festival') {
+        router.push(`/admin/festival-edit?id=${encodeURIComponent(target.id)}`);
+      } else if (target.kind === 'crew') {
+        const crew = crews?.find((c) => c.id === target.id);
+        router.push(`/admin/crews?q=${encodeURIComponent(crew?.inviteCode || target.label)}`);
+      } else {
+        router.push(`/admin/users?q=${encodeURIComponent(target.id)}`);
+      }
+    },
+    [router, crews],
+  );
+
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
     setSelected(new Set());
@@ -239,34 +267,12 @@ export default function AdminScreen() {
     );
   }
 
-  const statRows: { label: string; value: number }[] = stats
-    ? [
-        { label: 'Users', value: stats.users },
-        { label: 'Festivals', value: stats.festivals },
-        { label: 'Profiles', value: stats.profiles },
-        { label: 'Picks', value: stats.picks },
-      ]
-    : [];
-
-  // System Health rows — mirrors the web console's System Health card, built
-  // from the dashboard.health object (uptime / memory / connections / DB pool).
-  const healthRows: { label: string; value: string }[] = health
-    ? [
-        { label: 'Uptime', value: formatUptime(health.uptime) },
-        { label: 'Memory (RSS)', value: `${health.memory.rss} MB` },
-        { label: 'Heap usage', value: `${health.memory.heapUsed} / ${health.memory.heapTotal} MB` },
-        { label: 'WebSocket connections', value: String(health.connections) },
-        { label: 'Online rooms', value: String(health.onlineRooms) },
-        ...(health.database
-          ? [
-              {
-                label: 'DB pool (A / I / W)',
-                value: `${health.database.totalCount - health.database.idleCount}A / ${health.database.idleCount}I / ${health.database.waitingCount}W`,
-              },
-            ]
-          : []),
-      ]
-    : [];
+  const statRows = stats ? dashboardStatRows(stats) : [];
+  const statsSummary = stats
+    ? `${stats.users} users · ${stats.festivals} festivals · ${stats.profiles} festival plans · ${stats.picks} picks`
+    : '';
+  const healthSummary = describeHealth(health);
+  const healthRows = health ? healthDetailRows(health) : [];
 
   // Admin actions — read-only home links into the destructive sub-screens.
   // Each sub-screen exists under app/admin/, so AuthGate (seg[0]==='admin')
@@ -274,8 +280,8 @@ export default function AdminScreen() {
   const adminActions: { label: string; icon: keyof typeof Ionicons.glyphMap; route: string }[] = [
     { label: 'Manage users', icon: 'people-outline', route: '/admin/users' },
     { label: 'Manage crews', icon: 'people-circle-outline', route: '/admin/crews' },
-    { label: 'Analytics', icon: 'bar-chart-outline', route: '/admin/analytics' },
     { label: 'Audit log', icon: 'document-text-outline', route: '/admin/audit' },
+    { label: 'Analytics', icon: 'bar-chart-outline', route: '/admin/analytics' },
   ];
 
   return (
@@ -313,143 +319,44 @@ export default function AdminScreen() {
             </View>
           ) : null}
 
-          {/* Dashboard stats */}
-          <SectionLabel>Dashboard</SectionLabel>
-          <View style={styles.card}>
-            {statRows.length > 0 ? (
-              statRows.map((row, i) => (
-                <View
-                  key={row.label}
-                  style={[styles.row, i < statRows.length - 1 && styles.rowDivider]}
-                  accessibilityRole="text"
-                  accessibilityLabel={`${row.label}: ${row.value}`}
-                >
-                  <View style={styles.rowBody}>
-                    <Text style={styles.rowTitle}>{row.label}</Text>
-                  </View>
-                  <View style={styles.statusPill}>
-                    <Text style={styles.statusText}>{row.value}</Text>
-                  </View>
-                </View>
-              ))
-            ) : (
-              <View style={styles.row}>
-                <Text style={styles.rowHint}>No stats available</Text>
-              </View>
-            )}
-          </View>
-
-          {/* System Health — uptime / memory / connections / DB pool, from
-              the dashboard.health object (read-only). */}
-          {healthRows.length > 0 ? (
-            <>
-              <SectionLabel>System health</SectionLabel>
-              <View style={styles.card}>
-                {healthRows.map((row, i) => (
-                  <View
-                    key={row.label}
-                    style={[styles.row, i < healthRows.length - 1 && styles.rowDivider]}
-                    accessibilityRole="text"
-                    accessibilityLabel={`${row.label}: ${row.value}`}
-                  >
-                    <View style={styles.rowBody}>
-                      <Text style={styles.rowTitle}>{row.label}</Text>
-                    </View>
-                    <View style={styles.statusPill}>
-                      <Text style={styles.statusText}>{row.value}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </>
-          ) : null}
-
-          {/* Admin actions — navigation into the destructive sub-screens. */}
-          <SectionLabel>Admin actions</SectionLabel>
-          <View style={styles.card}>
-            {adminActions.map((act, i) => (
-              <TouchableOpacity
-                key={act.route}
-                style={[styles.row, i < adminActions.length - 1 && styles.rowDivider]}
-                activeOpacity={0.7}
-                onPress={() => router.push(act.route)}
-                accessibilityRole="button"
-                accessibilityLabel={act.label}
-              >
-                <Ionicons name={act.icon} size={t.iconSize.md} color={t.colors.accent.aqua} />
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowTitle}>{act.label}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.secondary} />
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              style={styles.row}
-              activeOpacity={0.7}
-              onPress={() => router.push('/admin/festival-edit')}
-              accessibilityRole="button"
-              accessibilityLabel="New festival"
-            >
-              <Ionicons name="add-circle-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-              <View style={styles.rowBody}>
-                <Text style={styles.rowTitle}>New festival</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Recent activity */}
-          <SectionLabel>Recent activity</SectionLabel>
-          <View style={styles.card}>
-            {activity.length > 0 ? (
-              activity.slice(0, 15).map((a, i) => (
-                <View
-                  key={a.id ?? i}
-                  style={[styles.row, i < Math.min(activity.length, 15) - 1 && styles.rowDivider]}
-                  accessibilityRole="text"
-                  accessibilityLabel={`${a.friendlyAction ?? a.action} by ${a.actorUsername ?? 'system'}, ${timeAgoFromIso(a.createdAt)}`}
+          {/* Find — festivals, users, crews and invite codes */}
+          <LabeledTextInput
+            label="Find"
+            value={findText}
+            onChangeText={onFindChange}
+            placeholder="Festival, user, crew or invite code"
+            autoCapitalize="none"
+          />
+          {findResults.length > 0 ? (
+            <View style={styles.card}>
+              {findResults.map((r, i) => (
+                <TouchableOpacity
+                  key={`${r.kind}:${r.id}`}
+                  style={[styles.row, i < findResults.length - 1 && styles.rowDivider]}
+                  activeOpacity={0.7}
+                  onPress={() => openTarget(r)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${r.label}, ${r.hint}`}
                 >
                   <View style={styles.rowBody}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
-                      {a.friendlyAction ?? a.action}
+                      {r.label}
                     </Text>
-                    <Text style={styles.rowHint} numberOfLines={1}>
-                      {a.actorUsername ?? 'system'} · {timeAgoFromIso(a.createdAt)}
-                    </Text>
-                  </View>
-                </View>
-              ))
-            ) : (
-              <View style={styles.row}>
-                <Text style={styles.rowHint}>No recent activity</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Audit log — most recent entries, read-only */}
-          {audit.length > 0 ? (
-            <>
-              <SectionLabel>Audit log</SectionLabel>
-              <View style={styles.card}>
-                {audit.slice(0, 15).map((a, i) => (
-                  <View
-                    key={a.id ?? i}
-                    style={[styles.row, i < Math.min(audit.length, 15) - 1 && styles.rowDivider]}
-                    accessibilityRole="text"
-                    accessibilityLabel={`${a.friendlyAction ?? a.action} by ${a.actorUsername ?? 'system'}, ${timeAgoFromIso(a.createdAt)}`}
-                  >
-                    <View style={styles.rowBody}>
-                      <Text style={styles.rowTitle} numberOfLines={1}>
-                        {a.friendlyAction ?? a.action}
-                      </Text>
+                    {r.hint ? (
                       <Text style={styles.rowHint} numberOfLines={1}>
-                        {a.actorUsername ?? 'system'} · {timeAgoFromIso(a.createdAt)}
+                        {r.hint}
                       </Text>
-                    </View>
+                    ) : null}
                   </View>
-                ))}
-              </View>
-            </>
+                  <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.secondary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+          {crewsFailed && findText.trim() ? (
+            <Text style={styles.rowHint} accessibilityLiveRegion="polite">
+              Couldn't load crews. Pull to refresh.
+            </Text>
           ) : null}
 
           {/* Festivals — each row links to edit, lineup import, map, links and preview; Select mode bulk-archives. */}
@@ -470,6 +377,19 @@ export default function AdminScreen() {
             ) : null}
           </View>
           <View style={styles.card}>
+            <TouchableOpacity
+              style={[styles.row, styles.rowDivider]}
+              activeOpacity={0.7}
+              onPress={() => router.push('/admin/festival-edit')}
+              accessibilityRole="button"
+              accessibilityLabel="New festival"
+            >
+              <Ionicons name="add-circle-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>New festival</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.secondary} />
+            </TouchableOpacity>
             {festivals.length > 0 ? (
               festivals.map((f, i) => (
                 <TouchableOpacity
@@ -595,6 +515,184 @@ export default function AdminScreen() {
               )}
             </View>
           ) : null}
+
+          {/* Admin actions — navigation into the destructive sub-screens. */}
+          <SectionLabel>Admin actions</SectionLabel>
+          <View style={styles.card}>
+            {adminActions.map((act, i) => (
+              <TouchableOpacity
+                key={act.route}
+                style={[styles.row, i < adminActions.length - 1 && styles.rowDivider]}
+                activeOpacity={0.7}
+                onPress={() => router.push(act.route)}
+                accessibilityRole="button"
+                accessibilityLabel={act.label}
+              >
+                <Ionicons name={act.icon} size={t.iconSize.md} color={t.colors.accent.aqua} />
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>{act.label}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.secondary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Recent admin activity — five rows, the rest on the audit screen */}
+          <SectionLabel>Recent admin activity</SectionLabel>
+          <View style={styles.card}>
+            {activity.length > 0 ? (
+              activity.slice(0, RECENT_ACTIVITY_ROWS).map((a, i) => (
+                <View
+                  key={a.id ?? i}
+                  style={[styles.row, styles.rowDivider]}
+                  accessibilityRole="text"
+                  accessibilityLabel={`${auditActionLabel(a.action)} by ${a.actorUsername ?? 'System'}, ${timeAgoFromIso(a.createdAt)}`}
+                >
+                  <View style={styles.rowBody}>
+                    <Text style={styles.rowTitle} numberOfLines={1}>
+                      {auditActionLabel(a.action)}
+                    </Text>
+                    <Text style={styles.rowHint} numberOfLines={1}>
+                      {a.actorUsername ?? 'System'} · {timeAgoFromIso(a.createdAt)}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={[styles.row, styles.rowDivider]}>
+                <Text style={styles.rowHint}>No recent activity</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.row}
+              activeOpacity={0.7}
+              onPress={() => router.push('/admin/audit')}
+              accessibilityRole="button"
+              accessibilityLabel="See all audit log entries"
+            >
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>See all</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Stats — one summary row that expands to the four counts */}
+          <SectionLabel>Stats</SectionLabel>
+          <View style={styles.card}>
+            {stats ? (
+              <TouchableOpacity
+                style={[styles.row, statsOpen && styles.rowDivider]}
+                activeOpacity={0.7}
+                onPress={() => setStatsOpen((v) => !v)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: statsOpen }}
+                accessibilityLabel={statsSummary}
+              >
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>{statsSummary}</Text>
+                </View>
+                <Ionicons
+                  name={statsOpen ? 'chevron-up' : 'chevron-down'}
+                  size={t.iconSize.sm}
+                  color={t.colors.text.secondary}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.row}>
+                <Text style={styles.rowHint}>No stats available</Text>
+              </View>
+            )}
+            {statsOpen
+              ? statRows.map((row, i) => {
+                  const route =
+                    row.target === 'users' ? '/admin/users' : row.target === 'analytics' ? '/admin/analytics' : null;
+                  return (
+                    <TouchableOpacity
+                      key={row.key}
+                      style={[
+                        styles.row,
+                        stacked && styles.rowStacked,
+                        i < statRows.length - 1 && styles.rowDivider,
+                      ]}
+                      activeOpacity={0.7}
+                      disabled={!route}
+                      onPress={() => route && router.push(route)}
+                      accessibilityRole={route ? 'button' : 'text'}
+                      accessibilityLabel={`${row.label}: ${row.value}. ${row.hint}`}
+                    >
+                      <View style={styles.rowBody}>
+                        <Text style={styles.rowTitle}>{row.label}</Text>
+                        <Text style={styles.rowHint}>{row.hint}</Text>
+                      </View>
+                      <View style={styles.statusPill}>
+                        <Text style={styles.statusText}>{row.value}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              : null}
+          </View>
+
+          {/* Health — one sentence; the raw numbers sit behind Details */}
+          <SectionLabel>Health</SectionLabel>
+          <View style={styles.card}>
+            <View
+              style={[styles.row, healthRows.length > 0 && styles.rowDivider]}
+              accessibilityRole="text"
+              accessibilityLabel={healthSummary.text}
+            >
+              <Ionicons
+                name={HEALTH_ICONS[healthSummary.tone]}
+                size={t.iconSize.md}
+                color={healthSummary.tone === 'warn' ? t.colors.accent.amber : t.colors.accent.aqua}
+              />
+              <View style={styles.rowBody}>
+                <Text style={styles.rowTitle}>{healthSummary.text}</Text>
+              </View>
+            </View>
+            {healthRows.length > 0 ? (
+              <TouchableOpacity
+                style={[styles.row, healthOpen && styles.rowDivider]}
+                activeOpacity={0.7}
+                onPress={() => setHealthOpen((v) => !v)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: healthOpen }}
+                accessibilityLabel="Details"
+              >
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>Details</Text>
+                </View>
+                <Ionicons
+                  name={healthOpen ? 'chevron-up' : 'chevron-down'}
+                  size={t.iconSize.sm}
+                  color={t.colors.text.secondary}
+                />
+              </TouchableOpacity>
+            ) : null}
+            {healthOpen ? (
+              <>
+                <View style={[styles.row, styles.rowDivider]}>
+                  <Text style={styles.rowHint}>{HEALTH_DETAILS_HEADING}</Text>
+                </View>
+                {healthRows.map((row, i) => (
+                  <View
+                    key={row.label}
+                    style={[styles.row, stacked && styles.rowStacked, i < healthRows.length - 1 && styles.rowDivider]}
+                    accessibilityRole="text"
+                    accessibilityLabel={`${row.label}: ${row.value}`}
+                  >
+                    <View style={styles.rowBody}>
+                      <Text style={styles.rowTitle}>{row.label}</Text>
+                    </View>
+                    <View style={styles.statusPill}>
+                      <Text style={styles.statusText}>{row.value}</Text>
+                    </View>
+                  </View>
+                ))}
+              </>
+            ) : null}
+          </View>
         </ScrollView>
       )}
 
@@ -651,6 +749,10 @@ const useStyles = makeStyles((t) => ({
     paddingVertical: t.spacing[3],
     minHeight: 56,
   },
+  rowStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
   rowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: t.colors.border.default,
@@ -686,6 +788,7 @@ const useStyles = makeStyles((t) => ({
   actionBtn: {
     flexDirection: 'row',
     minHeight: 44,
+    minWidth: 44,
     paddingHorizontal: t.spacing[3],
     gap: t.spacing[1],
     borderRadius: t.radii.default,

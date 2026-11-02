@@ -1366,7 +1366,13 @@ export type PaginationQueryInput = z.infer<typeof paginationQuery>;
 const validDateString = z.string().refine((v) => !isNaN(new Date(v).getTime()), 'Must be a valid date string');
 export const adminAuditQuery = z.object({
   actor_id: z.string().trim().max(100).optional(),
-  action: z.string().trim().max(100).optional(),
+  // A trailing `.*` asks for a prefix match: `festival.*` matches `festival.created`.
+  action: z
+    .string()
+    .trim()
+    .max(100)
+    .regex(/^[a-z0-9_.:-]+(\.\*)?$/i)
+    .optional(),
   resource_type: z.string().trim().max(100).optional(),
   cursor: z.string().trim().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
@@ -1374,8 +1380,15 @@ export const adminAuditQuery = z.object({
   to: validDateString.optional(),
   scope: z.enum(['admin', 'user', 'all']).default('admin'),
   actor: z.string().trim().max(100).optional(),
+  user: z.string().trim().max(100).optional(),
 });
 export type AdminAuditQueryInput = z.infer<typeof adminAuditQuery>;
+
+// ── Admin analytics query schema ──────────────────────────────
+export const adminAnalyticsQuery = z.object({
+  festivalId: z.string().trim().min(1).max(100).optional(),
+});
+export type AdminAnalyticsQueryInput = z.infer<typeof adminAnalyticsQuery>;
 
 // ── Admin sign-up ref counts query schema ─────────────────────
 export const adminRefCountsQuery = z.object({
@@ -1553,6 +1566,7 @@ export const schemas = {
   adminAddRole: adminAddRoleSchema,
   paginationQuery,
   adminAuditQuery,
+  adminAnalyticsQuery,
   adminRefCountsQuery,
   adminUserSearchQuery,
   festivalDepthQuery,

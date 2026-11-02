@@ -421,20 +421,79 @@ describe('routes/admin-status.js', () => {
     assert.ok(res.text.includes('Socket.IO'));
   });
 
-  test('GET /admin/analytics returns analytics data', async () => {
+  function analyticsQueryMock() {
+    const totalsRow = {
+      signedUp: 3, usersWithPlan: 2, plans: 2, plansWithPicks: 2, usersWithPick: 2, picks: 5,
+      crews: 2, crewMembers: 4, usersInCrews: 3, crewsWithTwoPlus: 1, must: 2, want: 2, maybe: 1,
+    };
+    return mock.fn(async (sql: string, params?: any[]) => {
+      if (sql.includes('SELECT name FROM festivals')) {
+        return { rows: params?.[0] === 'f1' ? [{ name: 'Bonnaroo' }] : [] };
+      }
+      if (sql.includes('"signedUp"')) return { rows: [totalsRow] };
+      if (sql.includes('install_events')) {
+        return { rows: [{ event: 'shown', n: 3 }, { event: 'accepted', n: 1 }] };
+      }
+      if (sql.includes('"pickCount"')) {
+        return { rows: [{ artist: 'Test', festivalId: 'f1', festivalName: 'Bonnaroo', dayLabel: 'Friday', pickCount: 5 }] };
+      }
+      if (sql.includes('"lastActive"')) return { rows: [{ id: 'user-1', username: 'admin', avatarKey: 'k' }] };
+      if (sql.includes('"memberCount"')) return { rows: [{ id: 'c1', festivalName: 'Bonnaroo', memberCount: 3 }] };
+      if (sql.includes('"uniqueSetsPicked"')) return { rows: [{ id: 'f1', name: 'Bonnaroo' }] };
+      throw new Error(`unexpected SQL: ${sql}`);
+    });
+  }
+
+  test('GET /admin/analytics returns totals, distribution, install and scope', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
-    deps.pool.query = mock.fn(async () => ({ rows: [{ artist: 'Test', pickCount: 5 }] }));
+    deps.pool.query = analyticsQueryMock();
     const { router } = createAdminStatusRoutes(deps);
     const app = buildApp(router);
 
     const res = await request(app).get('/admin/analytics').expect(200);
     assert.equal(res.body.error, null);
-    assert.ok(res.body.data.topSets);
-    assert.ok(res.body.data.activeUsers);
-    assert.ok(res.body.data.crews);
-    assert.ok(res.body.data.festivalStats);
-    assert.ok(res.body.data.generatedAt);
+    const data = res.body.data;
+    assert.deepEqual(data.scope, { festivalId: null, festivalName: null });
+    assert.deepEqual(data.totals, {
+      signedUp: 3, usersWithPlan: 2, plans: 2, plansWithPicks: 2, usersWithPick: 2, picks: 5,
+      crews: 2, crewMembers: 4, usersInCrews: 3, crewsWithTwoPlus: 1,
+    });
+    assert.deepEqual(data.pickDistribution, { must: 2, want: 2, maybe: 1 });
+    assert.deepEqual(data.install, { days: 30, shown: 3, accepted: 1, dismissed: 0 });
+    assert.equal(data.topSets[0].festivalName, 'Bonnaroo');
+    assert.equal(data.activeUsers[0].avatarKey, undefined);
+    assert.equal(data.crews[0].festivalName, 'Bonnaroo');
+    assert.equal(data.festivalStats.length, 1);
+    assert.ok(data.generatedAt);
+    // Every scoped query gets the festival id (here NULL) as a parameter.
+    const calls = deps.pool.query.mock.calls;
+    assert.ok(calls.filter((c: any) => c.arguments[1]?.[0] === null).length >= 4);
+  });
+
+  test('GET /admin/analytics?festivalId scopes the queries and names the festival', async () => {
+    const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
+    const deps = makeDeps();
+    deps.pool.query = analyticsQueryMock();
+    const { router } = createAdminStatusRoutes(deps);
+    const app = buildApp(router);
+
+    const res = await request(app).get('/admin/analytics?festivalId=f1').expect(200);
+    assert.deepEqual(res.body.data.scope, { festivalId: 'f1', festivalName: 'Bonnaroo' });
+    const scoped = deps.pool.query.mock.calls.filter((c: any) => c.arguments[1]?.[0] === 'f1');
+    assert.equal(scoped.length, 5);
+  });
+
+  test('GET /admin/analytics returns 404 for an unknown or deleted festival', async () => {
+    const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
+    const deps = makeDeps();
+    deps.pool.query = analyticsQueryMock();
+    const { router } = createAdminStatusRoutes(deps);
+    const app = buildApp(router);
+
+    const res = await request(app).get('/admin/analytics?festivalId=nope').expect(404);
+    assert.equal(res.body.error.code, 'NOT_FOUND');
+    assert.equal(res.body.error.message, 'Festival not found.');
   });
 
   test('GET /admin/analytics returns 500 when pool unavailable', async () => {
@@ -462,15 +521,13 @@ describe('routes/admin-status.js', () => {
     assert.equal(res.body.data, null);
   });
 
-  test('GET /admin/analytics/view returns HTML', async () => {
+  test('GET /admin/analytics/view is gone', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
     const { router } = createAdminStatusRoutes(deps);
     const app = buildApp(router);
 
-    const res = await request(app).get('/admin/analytics/view').expect(200);
-    assert.ok(res.headers['content-type']!.includes('text/html'));
-    assert.ok(res.headers['content-security-policy']);
+    await request(app).get('/admin/analytics/view').expect(404);
   });
 });
 
@@ -667,26 +724,66 @@ describe('routes/admin-audit.js', () => {
   test('GET /audit passes query filters to store', async () => {
     const { app, deps } = await buildAuditApp();
 
-    await request(app).get('/audit?actor_id=user-1&action=role_&limit=10').expect(200);
+    await request(app).get('/audit?actor_id=user-1&action=user.role.granted&limit=10').expect(200);
 
     const callArgs = deps.stores.auditLog.query.mock.calls[0]!.arguments[0];
     assert.equal(callArgs.actorId, 'user-1');
-    assert.equal(callArgs.action, 'role_');
-    assert.equal(deps.stores.auditLog.count.mock.calls[0]!.arguments[0].action, 'role_');
+    assert.equal(callArgs.action, 'user.role.granted');
+    assert.equal(callArgs.actionPrefix, null);
+    assert.equal(deps.stores.auditLog.count.mock.calls[0]!.arguments[0].action, 'user.role.granted');
   });
 
-  test('GET /audit enriches rows with friendly action, actor username and target label', async () => {
+  test('GET /audit turns a trailing .* into a prefix match up to the dot', async () => {
+    const { app, deps } = await buildAuditApp();
+
+    await request(app).get('/audit?action=user.role.*').expect(200);
+
+    const callArgs = deps.stores.auditLog.query.mock.calls[0]!.arguments[0];
+    assert.equal(callArgs.action, null);
+    assert.equal(callArgs.actionPrefix, 'user.role.');
+    assert.equal(deps.stores.auditLog.count.mock.calls[0]!.arguments[0].actionPrefix, 'user.role.');
+  });
+
+  test('GET /audit resolves user= to a target id, case-insensitive', async () => {
+    const { app, deps } = await buildAuditApp();
+
+    await request(app).get('/audit?user=BOB').expect(200);
+
+    assert.equal(deps.stores.auditLog.query.mock.calls[0]!.arguments[0].targetId, 'user-2');
+    assert.equal(deps.stores.auditLog.count.mock.calls[0]!.arguments[0].targetId, 'user-2');
+  });
+
+  test('GET /audit returns an empty page for an unknown user=', async () => {
+    const { app, deps } = await buildAuditApp();
+
+    const res = await request(app).get('/audit?user=nobody').expect(200);
+
+    assert.deepEqual(res.body.data, []);
+    assert.equal(res.body.meta.total, 0);
+    assert.equal(deps.stores.auditLog.query.mock.calls.length, 0);
+  });
+
+  test('adminAuditQuery accepts a .* suffix and user, and rejects a bad action', async () => {
+    const { adminAuditQuery } = await import('../lib/schemas.js');
+    assert.equal(adminAuditQuery.safeParse({ action: 'festival.*' }).success, true);
+    assert.equal(adminAuditQuery.safeParse({ action: 'create:crews' }).success, true);
+    assert.equal(adminAuditQuery.safeParse({ action: 'bad value' }).success, false);
+    assert.equal(adminAuditQuery.safeParse({ action: 'festival*' }).success, false);
+    assert.equal(adminAuditQuery.parse({ user: ' sam ' }).user, 'sam');
+  });
+
+  test('GET /audit enriches rows with actor username and target label, without friendlyAction', async () => {
     const deps = makeDeps();
     deps.stores.auditLog.query = mock.fn(async () => ({
       rows: [
         {
           id: 'a1',
-          action: 'crew_remove_member',
+          action: 'crew.member.removed',
           actorType: 'admin',
           actorId: 'user-1',
-          targetType: 'crew_member',
-          targetId: 'crew-1:user-2',
-          details: { crewId: 'crew-1', userId: 'user-2', targetUsername: 'bob' },
+          targetType: 'user',
+          targetId: 'user-2',
+          details: { crewId: 'crew-1', targetUsername: 'bob' },
           createdAt: '2026-01-01',
         },
         {
@@ -706,10 +803,10 @@ describe('routes/admin-audit.js', () => {
 
     const res = await request(app).get('/audit').expect(200);
     const [removed, viewed] = res.body.data;
-    assert.equal(removed.friendlyAction, 'Remove Crew Member');
+    assert.equal('friendlyAction' in removed, false);
     assert.equal(removed.actorUsername, 'admin');
     assert.equal(removed.targetLabel, 'bob');
-    assert.equal(viewed.friendlyAction, 'View User Details');
+    assert.equal('friendlyAction' in viewed, false);
     assert.equal(viewed.actorUsername, 'gone-user');
     assert.equal(viewed.targetLabel, 'user user-9');
   });
@@ -781,10 +878,17 @@ describe('routes/admin-users.js', () => {
 
   test('POST /users/:id/roles grants a role', async () => {
     const { app, deps } = await buildUserRouter();
+    let roleReads = 0;
+    deps.stores.roles.getUserRoles = mock.fn(async () => (roleReads++ === 0 ? ['user'] : ['user', 'admin']));
     const res = await request(app).post('/users/user-2/roles').send({ role: 'admin' }).expect(200);
     assert.equal(res.body.error, null);
     assert.equal(res.body.data.userId, 'user-2');
     assert.ok(deps.stores.roles.grantRole.mock.calls.length > 0);
+    const entry = deps.stores.auditLog.insert.mock.calls[0]!.arguments[0];
+    assert.equal(entry.action, 'user.role.granted');
+    assert.equal(entry.targetType, 'user');
+    assert.equal(entry.targetId, 'user-2');
+    assert.deepEqual(JSON.parse(entry.detailsJson).changes, { roles: [['user'], ['admin', 'user']] });
   });
 
   test('POST /users/:id/roles rejects invalid role', async () => {
@@ -1020,7 +1124,7 @@ describe('routes/admin-users.js', () => {
     deps.stores.auditLog.listForUser = mock.fn(async () => [
       {
         id: 'a1',
-        action: 'role_grant',
+        action: 'user.role.granted',
         actorType: 'admin',
         actorId: 'user-1',
         targetType: 'user',
@@ -1056,7 +1160,7 @@ describe('routes/admin-users.js', () => {
     assert.equal(festivals[0].picks, 3);
     assert.equal(festivals[0].joinedAt, '2026-02-01T00:00:00.000Z');
     assert.equal(crews[0].role, 'member');
-    assert.equal(activity[0].friendlyAction, 'Grant Role');
+    assert.equal('friendlyAction' in activity[0], false);
     assert.equal(activity[0].actorUsername, 'admin');
     assert.equal(activity[0].targetLabel, 'bob');
     assert.equal(deps.stores.auditLog.listForUser.mock.calls[0]!.arguments[0], 'user-2');
@@ -1110,7 +1214,15 @@ describe('routes/admin-bulk.js', () => {
     assert.ok(Array.isArray(res.body.data.results));
     assert.equal(res.body.data.results.length, 2);
     assert.equal(res.body.data.results[0].status, 'logged_out');
-    assert.ok(deps.stores.auditLog.insert.mock.calls.length > 0);
+    // One row per user, each targeting that user.
+    const rows = deps.stores.auditLog.insert.mock.calls.map((c: any) => c.arguments[0]);
+    assert.deepEqual(
+      rows.map((r: any) => [r.action, r.targetType, r.targetId, JSON.parse(r.detailsJson)]),
+      [
+        ['user.sessions.revoked', 'user', 'user-1', { targetUsername: 'admin', status: 'logged_out' }],
+        ['user.sessions.revoked', 'user', 'user-2', { targetUsername: 'bob', status: 'logged_out' }],
+      ],
+    );
   });
 
   test('POST /bulk/deactivate rejects >50 user IDs', async () => {
@@ -1149,7 +1261,14 @@ describe('routes/admin-bulk.js', () => {
       .expect(200);
     assert.equal(res.body.error, null);
     assert.equal(res.body.data.results.length, 2);
-    assert.ok(deps.stores.auditLog.insert.mock.calls.length > 0);
+    const rows = deps.stores.auditLog.insert.mock.calls.map((c: any) => c.arguments[0]);
+    assert.deepEqual(
+      rows.map((r: any) => [r.action, r.targetType, r.targetId, JSON.parse(r.detailsJson)]),
+      [
+        ['festival.archived', 'festival', 'f1', { name: 'Test', status: 'archived' }],
+        ['festival.archived', 'festival', 'f2', { name: 'Test', status: 'archived' }],
+      ],
+    );
   });
 
   test('POST /bulk/archive-festivals rejects >50 festival IDs', async () => {
@@ -1235,11 +1354,12 @@ describe('routes/admin-bulk.js', () => {
     const { app, deps } = await buildBulkRouter();
     await request(app).delete('/crews/crew-1/members/user-2').expect(200);
     const entry = deps.stores.auditLog.insert.mock.calls[0]!.arguments[0];
-    assert.equal(entry.action, 'crew_remove_member');
+    assert.equal(entry.action, 'crew.member.removed');
+    assert.equal(entry.targetType, 'user');
+    assert.equal(entry.targetId, 'user-2');
     assert.deepEqual(JSON.parse(entry.detailsJson), {
       crewId: 'crew-1',
       crewName: 'Test Crew',
-      userId: 'user-2',
       targetUsername: 'bob',
     });
   });
@@ -1338,6 +1458,7 @@ describe('routes/admin.js', () => {
     assert.ok(typeof res.body.data.stats.profiles === 'number');
     assert.ok(res.body.data.health);
     assert.ok(typeof res.body.data.health.uptime === 'number');
+    assert.deepEqual(res.body.data.health.recent, { minutes: 15, requests: 0, serverErrors: 0 });
     assert.ok(res.body.data.recentActivity);
     assert.ok(res.body.data.groupedActivity);
   });

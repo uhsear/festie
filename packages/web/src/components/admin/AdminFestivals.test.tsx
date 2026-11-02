@@ -1,19 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import { ApiClientError } from '@festie/shared/services/api';
 import AdminFestivals from './AdminFestivals';
 
 const toast = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
-  useSearch: () => ({}),
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
 }));
+// URL state behind a real React state, so a pushed search re-renders like the router would.
+const setAdminSearch = vi.fn();
+let initialSearch: Record<string, string> = {};
+vi.mock('./useAdminSearch', async () => {
+  const { useState } = await import('react');
+  return {
+    useAdminSearch: () => {
+      const [search, setSearch] = useState(initialSearch);
+      return [
+        search,
+        (...args: [Record<string, string>, unknown?]) => {
+          setAdminSearch(...args);
+          setSearch(args[0]);
+        },
+      ];
+    },
+  };
+});
 vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast, toastError: vi.fn() }),
 }));
 vi.mock('./LineupImport', () => ({ default: () => null }));
-vi.mock('./FestivalMapEditor', () => ({ default: () => null }));
+vi.mock('./FestivalMapEditor', () => ({
+  default: ({ festivalId }: { festivalId: string }) => <p>map editor for {festivalId}</p>,
+}));
 vi.mock('./FestivalStatusPanel', () => ({ default: () => null }));
 vi.mock('../../lib/useUnsavedChangesGuard', () => ({
   useUnsavedChangesGuard: () => ({ confirmLeave: (fn: () => void) => fn(), guardDialog: null }),
@@ -86,6 +106,11 @@ vi.mock('@festie/shared/services/api', async (orig) => ({
   },
 }));
 
+const render = (ui: React.ReactElement) =>
+  rtlRender(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })}>{ui}</QueryClientProvider>,
+  );
+
 const FULL = {
   id: 'f1',
   name: 'Fest',
@@ -96,13 +121,14 @@ const FULL = {
   days: [],
 };
 
+const fetchAdminFestivals = vi.fn();
 const fetchAdminFestival = vi.fn();
 const fetchArchivedFestivals = vi.fn();
 const fetchDeleteImpact = vi.fn();
 const restoreFestival = vi.fn();
 vi.mock('@festie/shared/services/festivalAdmin', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
-  fetchAdminFestivals: async () => [{ ...FULL, published: true, stageCount: 0, dayCount: 0 }],
+  fetchAdminFestivals: () => fetchAdminFestivals(),
   fetchAdminFestival: (...a: unknown[]) => fetchAdminFestival(...a),
   fetchArchivedFestivals: (...a: unknown[]) => fetchArchivedFestivals(...a),
   fetchDeleteImpact: (...a: unknown[]) => fetchDeleteImpact(...a),
@@ -111,6 +137,8 @@ vi.mock('@festie/shared/services/festivalAdmin', async (orig) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  initialSearch = {};
+  fetchAdminFestivals.mockResolvedValue([{ ...FULL, published: true, stageCount: 0, dayCount: 0 }]);
   mockGet.mockResolvedValue({});
   fetchAdminFestival.mockResolvedValue(FULL);
   fetchArchivedFestivals.mockResolvedValue([]);
@@ -127,7 +155,7 @@ describe('AdminFestivals', () => {
     mockPut.mockResolvedValueOnce(undefined);
 
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
     await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
 
     expect(await screen.findByText('Remove sets with picks?')).toBeInTheDocument();
@@ -142,7 +170,7 @@ describe('AdminFestivals', () => {
   it('sends notify: false when the box is unchecked', async () => {
     mockPut.mockResolvedValueOnce({ ...FULL });
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
     const box = await screen.findByRole('checkbox', { name: 'Tell people whose picks changed' });
     expect(box).toBeChecked();
     await userEvent.click(box);
@@ -154,7 +182,7 @@ describe('AdminFestivals', () => {
   it('toasts the schedule notice, else the saved-changes line', async () => {
     mockPut.mockResolvedValueOnce({ ...FULL, scheduleNotice: { changes: 2, people: 0, notified: false } });
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
     await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('Saved. No one had picked the changed sets, so no alerts were sent.', 'success'),
@@ -168,7 +196,7 @@ describe('AdminFestivals', () => {
     mockPost.mockResolvedValueOnce({ id: 'new1' });
     fetchAdminFestival.mockResolvedValue({ ...FULL, id: 'new1' });
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: '+ Create New' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'New festival' }));
     await userEvent.click(await screen.findByRole('button', { name: 'fill form' }));
     await userEvent.click(screen.getByRole('button', { name: 'save form' }));
     await waitFor(() => expect(fetchAdminFestival).toHaveBeenCalledWith('new1'));
@@ -189,7 +217,7 @@ describe('AdminFestivals', () => {
 
   it('shows the delete impact in the dialog', async () => {
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete Fest' }));
     expect(await screen.findByText('Delete Fest?')).toBeInTheDocument();
     expect(screen.getByText(/2 people joined this festival and 1 crew uses it/)).toBeInTheDocument();
   });
@@ -203,7 +231,7 @@ describe('AdminFestivals', () => {
       ],
     });
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
     await userEvent.click(await screen.findByRole('button', { name: 'edit day 1' }));
     const days = await screen.findAllByTestId('day');
     expect(days.map((d) => d.textContent)).toEqual(['day-0:Changed', 'day-1:Sat']);
@@ -211,7 +239,7 @@ describe('AdminFestivals', () => {
 
   it('remounts the form on Discard so local drafts show the saved values again', async () => {
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
     const input = await screen.findByLabelText('local draft');
     await userEvent.type(input, ' Edited');
     expect(input).toHaveValue('Fest Edited');
@@ -225,7 +253,7 @@ describe('AdminFestivals Links button', () => {
     render(<AdminFestivals />);
     await userEvent.click(await screen.findByRole('button', { name: 'Spotify links for Fest' }));
     await userEvent.click(await screen.findByText('links panel for Fest'));
-    expect(await screen.findByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Edit Fest' })).toBeInTheDocument();
   });
 
   it('shows the pick-count error when engagement fails', async () => {
@@ -234,7 +262,48 @@ describe('AdminFestivals Links button', () => {
       return {};
     });
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
     expect(await screen.findByText("Couldn't load pick counts.")).toBeInTheDocument();
+  });
+});
+
+describe('AdminFestivals URL state', () => {
+  it('renders the map editor for festival and view=map', async () => {
+    initialSearch = { tab: 'festivals', festival: 'f1', view: 'map' };
+    render(<AdminFestivals />);
+    expect(await screen.findByText('map editor for f1')).toBeInTheDocument();
+  });
+
+  it('shows a load error with Retry instead of the empty list', async () => {
+    fetchAdminFestivals.mockRejectedValueOnce(new Error('boom'));
+    render(<AdminFestivals />);
+    expect(await screen.findByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.queryByText('No festivals found')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('button', { name: 'Edit Fest' })).toBeInTheDocument();
+    expect(fetchAdminFestivals).toHaveBeenCalledTimes(2);
+  });
+
+  it('names every row button and pushes the view into the URL', async () => {
+    render(<AdminFestivals />);
+    await screen.findByRole('button', { name: 'Edit Fest' });
+    for (const name of ['Edit map for Fest', 'Delete Fest', 'Import lineup for Fest']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    await userEvent.click(screen.getByRole('button', { name: 'Edit map for Fest' }));
+    expect(setAdminSearch).toHaveBeenCalledWith({ tab: 'festivals', festival: 'f1', view: 'map' });
+  });
+
+  it('New festival pushes view=edit', async () => {
+    render(<AdminFestivals />);
+    await userEvent.click(await screen.findByRole('button', { name: 'New festival' }));
+    expect(setAdminSearch).toHaveBeenCalledWith({ tab: 'festivals', view: 'edit' });
+  });
+
+  it('says so when the festival does not exist', async () => {
+    initialSearch = { tab: 'festivals', festival: 'gone', view: 'edit' };
+    fetchAdminFestival.mockRejectedValue(new ApiClientError('Festival not found', 404, 'NOT_FOUND'));
+    render(<AdminFestivals />);
+    expect(await screen.findByText("This festival doesn't exist or was deleted.")).toBeInTheDocument();
   });
 });

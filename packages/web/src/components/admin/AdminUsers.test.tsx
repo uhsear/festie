@@ -101,6 +101,13 @@ describe('AdminUsers', () => {
     expect(loadMore).toHaveBeenCalled();
   });
 
+  it('q from the URL filters the list', () => {
+    searchParams = { q: 'sam' };
+    render(<AdminUsers />);
+    expect(setSearch).toHaveBeenCalledWith('sam');
+    expect(screen.getByLabelText('Search users by username or email')).toHaveValue('sam');
+  });
+
   it('selecting a user shows the selection bar', async () => {
     render(<AdminUsers />);
     await userEvent.click(screen.getByLabelText('Select bob'));

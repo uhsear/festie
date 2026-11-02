@@ -21,6 +21,7 @@
  */
 
 import crypto from 'crypto';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
 import {
   artistsNeedingLinks,
@@ -209,7 +210,7 @@ export default function createLineupImportRoute(deps: any) {
         warnings: result.warnings.length,
         ip: getRequestIp(req),
       });
-      await writeAuditRow(req, res, 'lineup_import', festivalId, {
+      await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORTED, festivalId, {
         importId: result.importId,
         created: result.created,
         updated: result.updated,
@@ -261,7 +262,7 @@ export default function createLineupImportRoute(deps: any) {
         }
         invalidateFestivalCache();
         log.info('lineup import undone', { festivalId, importId, ...outcome.result, kept: outcome.result.kept.length });
-        await writeAuditRow(req, res, 'lineup_import_undo', festivalId, {
+        await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORT_UNDONE, festivalId, {
           importId,
           removed: outcome.result.removed,
           restored: outcome.result.restored,

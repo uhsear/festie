@@ -169,11 +169,11 @@ describe('Integration — admin user detail and support routes', { skip, concurr
     await server.request.get(`/api/v1/admin/users/${dave.user.id}`).set('x-user-token', adminToken).expect(200);
 
     const res = await server.request
-      .get('/api/v1/admin/audit?action=role_')
+      .get('/api/v1/admin/audit?action=user.role.*')
       .set('x-user-token', adminToken)
       .expect(200);
     const actions = new Set(res.body.data.map((row: any) => row.action));
-    assert.deepEqual([...actions].sort(), ['role_grant', 'role_revoke']);
+    assert.deepEqual([...actions].sort(), ['user.role.granted', 'user.role.revoked']);
   });
 
   test('crew member routes block owner removal and audit add and remove', async () => {
@@ -215,7 +215,7 @@ describe('Integration — admin user detail and support routes', { skip, concurr
       .set('x-user-token', adminToken)
       .expect(200);
     const removedRows = await server.request
-      .get('/api/v1/admin/audit?action=crew_remove_member')
+      .get('/api/v1/admin/audit?action=crew.member.removed')
       .set('x-user-token', adminToken)
       .expect(200);
     assert.equal(removedRows.body.data.length, 1);
@@ -227,11 +227,11 @@ describe('Integration — admin user detail and support routes', { skip, concurr
       .send({ userId: added.user.id })
       .expect(200);
     await settle();
-    const addRows = await auditRows(server.databaseUrl, 'action = $1', ['crew_add_member']);
+    const addRows = await auditRows(server.databaseUrl, 'action = $1', ['crew.member.added']);
     assert.equal(addRows.length, 1);
-    assert.equal(addRows[0].target_type, 'crew_member');
-    assert.equal(addRows[0].target_id, `${crew.id}:${added.user.id}`);
-    const genericRows = await auditRows(server.databaseUrl, 'action = $1', ['create:members']);
+    assert.equal(addRows[0].target_type, 'user');
+    assert.equal(addRows[0].target_id, added.user.id);
+    const genericRows = await auditRows(server.databaseUrl, 'action = $1', ['members.created']);
     assert.equal(genericRows.length, 0);
   });
 

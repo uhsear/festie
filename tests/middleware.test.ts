@@ -234,7 +234,7 @@ describe('middleware: audit-middleware', () => {
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.target_type, 'festivals');
     assert.equal(entry.target_id, 'fest-1');
-    assert.equal(entry.action, 'replace:festivals');
+    assert.equal(entry.action, 'festivals.replaced');
   });
 
   it('extracts target and action for nested crew sub-routes', async () => {
@@ -252,7 +252,7 @@ describe('middleware: audit-middleware', () => {
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.target_type, 'polls');
     assert.equal(entry.target_id, 'crew-1');
-    assert.equal(entry.action, 'create:polls');
+    assert.equal(entry.action, 'polls.created');
   });
 
   it('handles missing route in extractTarget', async () => {
@@ -280,7 +280,7 @@ describe('middleware: audit-middleware', () => {
     res._emit('finish');
     await new Promise((r) => setTimeout(r, 50));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
-    assert.equal(entry.action, 'update:unknown');
+    assert.equal(entry.action, 'unknown.updated');
   });
 
   it('captures failure status for 4xx responses', async () => {
