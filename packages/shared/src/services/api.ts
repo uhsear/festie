@@ -243,7 +243,14 @@ async function maybeQueueOffline<T>(path: string, method: string, options: ApiOp
   }
   if (!offline) return NOT_QUEUED;
 
-  return enqueueOfflineMutation<T>(path, method, options);
+  try {
+    return await enqueueOfflineMutation<T>(path, method, options);
+  } catch (err) {
+    // A storage failure must not escape raw: send online instead. Offline, that
+    // fetch fails and surfaces the normal network error callers already map.
+    console.warn('offline enqueue failed; sending online', err);
+    return NOT_QUEUED;
+  }
 }
 
 export class ApiClientError extends Error implements ApiError {

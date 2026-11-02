@@ -20,6 +20,8 @@ import type {
   CrewStatusUpdatedPayload,
 } from '@festie/shared/types/socket-events';
 
+const RECONNECT_FESTIVAL_RELOAD_GAP_MS = 60_000;
+
 export interface UseRealtimeSyncReturn {
   connected: boolean;
   onlineUsers: OnlineUser[];
@@ -199,15 +201,30 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
         );
     };
 
+    // Events sent while the socket was down are lost (the server keeps no
+    // buffer), so a reconnect re-reads picks and crews. The full festival reload
+    // is the heaviest call and lineup edits are rare: only after a long gap.
+    let connectedBefore = socket.connected;
+    let disconnectedAt: number | null = null;
     const handleConnect = () => {
       setConnected(true);
       if (currentFestivalId) {
         socket.emit('join:festival', currentFestivalId, { _v: 1 }, () => {});
       }
+      if (connectedBefore) {
+        reloadProfiles();
+        reloadCrews();
+        if (disconnectedAt !== null && Date.now() - disconnectedAt >= RECONNECT_FESTIVAL_RELOAD_GAP_MS) {
+          reloadFestival();
+        }
+      }
+      connectedBefore = true;
+      disconnectedAt = null;
     };
 
     const handleDisconnect = () => {
       setConnected(false);
+      disconnectedAt ??= Date.now();
     };
 
     // Register listeners

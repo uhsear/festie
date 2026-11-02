@@ -130,12 +130,15 @@ describe('noteBatteryLevel', () => {
     assert.deepEqual(Object.keys(meta).sort(), ['crewId', 'error']);
   });
 
-  test('a failing activity store does not throw', async () => {
+  test('a failing activity store does not throw and logs the feed failure', async () => {
     const deps = makeDeps();
     deps.stores.activity.log = mock.fn(async () => {
       throw new Error('db down');
     });
     assert.equal(await noteBatteryLevel(deps, fix(5), NOW), true);
+    const [msg, meta] = (deps.log.warn.mock.calls as any[])[0].arguments;
+    assert.equal(msg, 'crew activity log failed');
+    assert.equal(meta.type, 'battery-low');
   });
 });
 

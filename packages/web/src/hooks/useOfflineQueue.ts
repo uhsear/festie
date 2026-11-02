@@ -1,6 +1,12 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { MAX_RETRIES, MAX_QUEUE_AGE_MS } from '@festie/shared/services';
+import {
+  MAX_RETRIES,
+  MAX_QUEUE_AGE_MS,
+  extractRealId,
+  hydrateFailedSync,
+  surfaceFailedSync,
+} from '@festie/shared/services';
 
 const DB_NAME = 'festie-offline-queue';
 const DB_VERSION = 1;
@@ -138,7 +144,7 @@ function deriveFailedLabel(method: string | undefined, url: string | undefined):
 /**
  * Surface a stale offline write that is being discarded (older than 24h) so it
  * is NEVER silently dropped — the "no silent drops" contract. Routes the entry
- * to the PendingSyncSheet via addFailedSync (coalesced by clientId, so the
+ * to the PendingSyncSheet via surfaceFailedSync (coalesced by clientId, so the
  * getAll + pruneStaleEntries double-pass is harmless) and logs a warning with
  * the clientId + url for diagnostics. Only pending entries are surfaced;
  * completed/failed ones have already been handled.
@@ -153,7 +159,7 @@ function surfaceStaleDrop(entry: QueuedMutation): void {
     createdAt: entry.createdAt,
   });
   try {
-    useUIStore.getState().addFailedSync({
+    surfaceFailedSync({
       clientId: entry.clientId,
       label: deriveFailedLabel(entry.method, entry.url),
       method: entry.method ?? entry.event ?? 'POST',
@@ -236,8 +242,8 @@ function removeMutationByClientId(clientId: string): void {
     const queue: QueuedMutation[] = JSON.parse(localStorage.getItem('festie-offline-queue') || '[]');
     const filtered = queue.filter((m) => m.clientId !== clientId);
     localStorage.setItem('festie-offline-queue', JSON.stringify(filtered));
-  } catch {
-    // Ignore localStorage errors
+  } catch (err) {
+    console.warn('Offline queue: removeMutationByClientId failed', err);
   }
 }
 
@@ -253,8 +259,8 @@ function updateMutationByClientId(clientId: string, updates: Partial<QueuedMutat
       queue[idx] = { ...queue[idx]!, ...updates };
       localStorage.setItem('festie-offline-queue', JSON.stringify(queue));
     }
-  } catch {
-    // Ignore localStorage errors
+  } catch (err) {
+    console.warn('Offline queue: updateMutationByClientId failed', err);
   }
 }
 
@@ -271,8 +277,41 @@ async function updateMutation(id: number, updates: Partial<QueuedMutation>): Pro
       abortTx(tx);
       throw err;
     }
+  } catch (err) {
+    console.warn('Offline queue: updateMutation failed', err);
+  }
+}
+
+/**
+ * Point queued child writes at a parent's real server id once its create has
+ * replayed (e.g. a vote queued against an offline poll's optimistic clientId).
+ * One readwrite tx on IDB, aborted on error; localStorage fallback otherwise.
+ */
+async function rewritePendingUrls(fromId: string, toId: string): Promise<void> {
+  try {
+    await openDB();
+    const { tx, store } = openTx('readwrite');
+    try {
+      const all = await idbRequest<QueuedMutation[]>(store.getAll());
+      for (const m of all) {
+        if (m.status === 'pending' && m.url?.includes(fromId)) {
+          await idbRequest(store.put({ ...m, url: m.url.replace(fromId, toId) }));
+        }
+      }
+    } catch (err) {
+      abortTx(tx);
+      throw err;
+    }
   } catch {
-    // Ignore
+    try {
+      const queue: QueuedMutation[] = JSON.parse(localStorage.getItem('festie-offline-queue') || '[]');
+      const patched = queue.map((m) =>
+        m.status === 'pending' && m.url?.includes(fromId) ? { ...m, url: m.url.replace(fromId, toId) } : m,
+      );
+      localStorage.setItem('festie-offline-queue', JSON.stringify(patched));
+    } catch (err) {
+      console.warn('Offline queue: child URL rewrite failed', err);
+    }
   }
 }
 
@@ -350,6 +389,8 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
   useEffect(() => {
     pruneStaleEntries().catch(console.error);
     getPendingCount().then(setPendingCount).catch(console.error);
+    // Failed writes are persisted, so the "couldn't sync" sheet survives a reload.
+    hydrateFailedSync().catch(console.error);
   }, []);
 
   // Update pending count whenever it changes
@@ -426,7 +467,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
           // (no silent drop) instead of only logging to the console.
           console.error('Failed to queue mutation:', err);
           try {
-            useUIStore.getState().addFailedSync({
+            surfaceFailedSync({
               clientId,
               label: deriveFailedLabel(mutation.method, mutation.url),
               method: mutation.method ?? 'POST',
@@ -461,14 +502,20 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
       try {
         const mutations = await getAll();
         const pending = mutations.filter((m) => m.status === 'pending').sort((a, b) => a.createdAt - b.createdAt);
+        // Parent clientId -> real id for creates replayed in this pass. The snapshot
+        // above predates the storage rewrite, so its children are patched here too.
+        const realIds = new Map<string, string>();
 
         for (const mutation of pending) {
+          if (mutation.url) {
+            for (const [fromId, toId] of realIds) mutation.url = mutation.url.replace(fromId, toId);
+          }
           try {
             if (mutation.type === 'api' && mutation.url) {
               if (!apiFn || typeof apiFn !== 'function') {
                 throw new Error('apiFn not provided');
               }
-              await apiFn(mutation.url, {
+              const result = await apiFn(mutation.url, {
                 method: mutation.method || 'POST',
                 body: mutation.body,
                 // Dedup a replay across tabs: same clientId → server no-ops the
@@ -482,6 +529,13 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
                 await removeMutation(mutation.id);
               } else {
                 removeMutationByClientId(mutation.clientId);
+              }
+              if ((mutation.method || 'POST').toUpperCase() === 'POST') {
+                const realId = extractRealId(result);
+                if (realId && realId !== mutation.clientId) {
+                  realIds.set(mutation.clientId, realId);
+                  await rewritePendingUrls(mutation.clientId, realId);
+                }
               }
               // Post-send hook: lets the caller refresh lists showing this write as pending.
               // Never let it affect the queue outcome.
@@ -521,6 +575,17 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
               }
             }
           } catch (err: unknown) {
+            // Dead network: keep the entry untouched (same clientId, so the same
+            // Idempotency-Key next time; same retries and createdAt, so MAX_RETRIES
+            // and the 24h prune still apply) and stop. The next good response drains.
+            if ((err as { isNetworkError?: boolean } | null)?.isNetworkError === true) {
+              try {
+                useUIStore.getState().setOfflineMode(true);
+              } catch {
+                /* store not ready */
+              }
+              break;
+            }
             const retries = (mutation.retries || 0) + 1;
             const status =
               err instanceof Error && 'status' in err ? (err as Error & { status: number }).status : undefined;
@@ -539,7 +604,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
                   ? err.message
                   : 'Sync failed';
               try {
-                useUIStore.getState().addFailedSync({
+                surfaceFailedSync({
                   clientId: mutation.clientId,
                   label: deriveFailedLabel(mutation.method, mutation.url),
                   method: mutation.method ?? 'POST',

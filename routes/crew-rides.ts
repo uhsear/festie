@@ -88,7 +88,7 @@ export default function createCrewRidesRoutes(deps: any) {
         await stores.activity
           .log(activity)
           .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+          .catch((err: any) => log.warn('ride-created activity log failed', { crewId, error: err.message }));
         return sendSuccess(res, { offer });
       } catch (err: any) {
         log.error('create ride offer error', { error: err.message });

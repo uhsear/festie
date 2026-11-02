@@ -69,7 +69,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         await stores.activity
           .log(activity)
           .then((id: unknown) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+          .catch((err: Error) => log.warn('home-base-updated activity log failed', { crewId, error: err.message }));
         return sendSuccess(res, { crew: updated });
       } catch (err) {
         log.error('set home base failed', { error: (err as Error).message });
@@ -103,7 +103,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         await stores.activity
           .log(activity)
           .then((id: unknown) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+          .catch((err: Error) => log.warn('photo-album-updated activity log failed', { crewId, error: err.message }));
         return sendSuccess(res, { crew: updated });
       } catch (err) {
         log.error('set photo album failed', { error: (err as Error).message });

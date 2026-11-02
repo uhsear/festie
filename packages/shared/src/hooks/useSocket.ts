@@ -46,7 +46,7 @@ export function useSocket(festivalId?: string): UseSocketReturn {
             socketRef.current.connect();
           }
         })
-        .catch(() => {});
+        .catch((e) => console.warn('socket token refresh failed; realtime paused until the next request', e));
     });
     const joinedFestivalId = festivalId || currentFestivalId;
     // Sync the ref BEFORE wiring handlers so handleConnect reads the

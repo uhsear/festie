@@ -35,6 +35,8 @@ import type {
 } from '@festie/shared/types/socket-events';
 import { setLiveSocket, useLiveSocket } from '../lib/liveSocket';
 
+const RECONNECT_FESTIVAL_RELOAD_GAP_MS = 60_000;
+
 export interface UseRealtimeSyncReturn {
   connected: boolean;
   onlineUsers: OnlineUser[];
@@ -128,7 +130,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
             socketRef.current.connect();
           }
         })
-        .catch(() => {});
+        .catch((e) => console.warn('socket token refresh failed; realtime paused until the next request', e));
     });
     socketRef.current = socket;
     // Expose this socket to the Live Location publisher (crew screen) which emits
@@ -242,6 +244,12 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       }
     };
 
+    // Events sent while the socket was down are lost (the server keeps no
+    // buffer), so a reconnect re-reads picks and crews. The debounce coalesces
+    // these with the foreground backfill. The full festival reload is the
+    // heaviest call and lineup edits are rare: only after a long gap.
+    let connectedBefore = socket.connected;
+    let disconnectedAt: number | null = null;
     const handleConnect = () => {
       setConnected(true);
       const festivalId = useFestivalDataStore.getState().currentFestivalId;
@@ -251,10 +259,20 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       // The active crew room join is owned by useCrewRealtime (joinRoom: true),
       // which registers its own 'connect' handler and emits join:crew — so it is
       // deliberately NOT emitted here (doing both would double-join per connect).
+      if (connectedBefore) {
+        reloadProfiles();
+        reloadCrews();
+        if (disconnectedAt !== null && Date.now() - disconnectedAt >= RECONNECT_FESTIVAL_RELOAD_GAP_MS) {
+          reloadFestival();
+        }
+      }
+      connectedBefore = true;
+      disconnectedAt = null;
     };
 
     const handleDisconnect = () => {
       setConnected(false);
+      disconnectedAt ??= Date.now();
     };
 
     // ── Register listeners ─────────────────────────────────────────────

@@ -17,7 +17,11 @@ import { sentry } from './sentry.js';
 
 /**
  * Idempotency-Key middleware: caches the JSON response per `${userId||ip}:${key}`
- * and replays it for a repeat of the same key within `ttl`.
+ * and replays it for a repeat of the same key within `ttl`. The user id comes
+ * from `resolveUserId` (the session), because this runs before any route's
+ * userAuth sets req.user; the IP comes from `clientIp` (getRequestIp in the
+ * mount), never a forgeable req.ip. A 5xx is never cached, so a retry of a
+ * passing server error re-executes.
  *
  * The cache slot is RESERVED synchronously, before next(). That reservation is
  * the whole point: the response body is only known at res.json time — i.e. after
@@ -26,7 +30,17 @@ import { sentry } from './sentry.js';
  * mutation (double-write). A concurrent duplicate now finds the pending
  * reservation, awaits the first request's outcome, and replays its response.
  */
-function createIdempotencyMiddleware({ ttl, maxEntries }: { ttl: number; maxEntries: number }) {
+function createIdempotencyMiddleware({
+  ttl,
+  maxEntries,
+  resolveUserId,
+  clientIp = (req: any) => req.ip,
+}: {
+  ttl: number;
+  maxEntries: number;
+  resolveUserId?: (req: any) => Promise<string | null>;
+  clientIp?: (req: any) => string;
+}) {
   const cache = new Map<string, any>();
   const timer = setInterval(() => {
     const now = Date.now();
@@ -40,69 +54,89 @@ function createIdempotencyMiddleware({ ttl, maxEntries }: { ttl: number; maxEntr
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
     const key = req.headers['idempotency-key'];
     if (!key || typeof key !== 'string' || key.length > 128) return next();
-    const userId = req.user?.userId || req.ip;
-    const cacheKey = `${userId}:${key}`;
+    if (!resolveUserId) return handle(clientIp(req));
+    // A resolver failure falls back to the IP; the route's own auth answers 401.
+    return Promise.resolve()
+      .then(() => resolveUserId(req))
+      .catch(() => null)
+      .then((userId) => handle(userId || clientIp(req)));
 
-    const run = () => {
-      // Reserve the slot synchronously, before next(): a concurrent duplicate
-      // that arrives while this request's handler is still running finds a
-      // pending reservation and waits on `settled` instead of re-executing.
-      let resolveSettled: (v: any) => void;
-      const settled = new Promise<any>((r) => { resolveSettled = r; });
-      const reservation = { pending: true, ts: Date.now(), settled };
-      cache.set(cacheKey, reservation);
+    // Runs synchronously from here on, so check-then-reserve stays atomic.
+    function handle(principal: string) {
+      const cacheKey = `${principal}:${key}`;
 
-      let done = false;
-      const release = (value: any) => {
-        if (done) return;
-        done = true;
-        resolveSettled(value);
+      const run = () => {
+        // Reserve the slot synchronously, before next(): a concurrent duplicate
+        // that arrives while this request's handler is still running finds a
+        // pending reservation and waits on `settled` instead of re-executing.
+        let resolveSettled: (v: any) => void;
+        const settled = new Promise<any>((r) => {
+          resolveSettled = r;
+        });
+        const reservation = { pending: true, ts: Date.now(), settled };
+        cache.set(cacheKey, reservation);
+
+        let done = false;
+        const release = (value: any) => {
+          if (done) return;
+          done = true;
+          resolveSettled(value);
+        };
+
+        const originalJson = res.json.bind(res);
+        res.json = (body: any) => {
+          if (res.statusCode >= 500) {
+            if (cache.get(cacheKey) === reservation) cache.delete(cacheKey);
+            release(null);
+            return originalJson(body);
+          }
+          if (cache.size >= maxEntries) {
+            const oldestKey = cache.keys().next().value;
+            if (oldestKey) cache.delete(oldestKey);
+          }
+          const record = { status: res.statusCode, body, ts: Date.now() };
+          cache.set(cacheKey, record);
+          release(record);
+          return originalJson(body);
+        };
+
+        // The handler ended without producing a JSON body (client disconnect or
+        // error mid-flight): drop the reservation so it neither blocks a later
+        // retry nor leaves a waiter hanging past the request-timeout backstop.
+        const onEnd = () => {
+          if (done) return;
+          if (cache.get(cacheKey) === reservation) cache.delete(cacheKey);
+          release(null);
+        };
+        res.on('finish', onEnd);
+        res.on('close', onEnd);
+
+        next();
       };
 
-      const originalJson = res.json.bind(res);
-      res.json = (body: any) => {
-        if (cache.size >= maxEntries) {
-          const oldestKey = cache.keys().next().value;
-          if (oldestKey) cache.delete(oldestKey);
-        }
-        const record = { status: res.statusCode, body, ts: Date.now() };
-        cache.set(cacheKey, record);
-        release(record);
-        return originalJson(body);
-      };
-
-      // The handler ended without producing a JSON body (client disconnect or
-      // error mid-flight): drop the reservation so it neither blocks a later
-      // retry nor leaves a waiter hanging past the request-timeout backstop.
-      const onEnd = () => {
-        if (done) return;
-        if (cache.get(cacheKey) === reservation) cache.delete(cacheKey);
-        release(null);
-      };
-      res.on('finish', onEnd);
-      res.on('close', onEnd);
-
-      next();
-    };
-
-    const cached = cache.get(cacheKey);
-    if (!cached) return run();
-
-    // Completed response already cached -> replay synchronously.
-    if (!cached.pending) {
-      res.setHeader('X-Idempotency-Replayed', 'true');
-      return res.status(cached.status).json(cached.body);
-    }
-
-    // A same-key request is still in flight -> wait for its outcome, then
-    // replay it. If it ended without a response, this request executes now.
-    cached.settled.then((value: any) => {
-      if (value) {
-        res.setHeader('X-Idempotency-Replayed', 'true');
-        return res.status(value.status).json(value.body);
+      let cached = cache.get(cacheKey);
+      if (cached && !cached.pending && Date.now() - cached.ts > ttl) {
+        cache.delete(cacheKey);
+        cached = undefined;
       }
-      return run();
-    });
+      if (!cached) return run();
+
+      // Completed response already cached -> replay synchronously.
+      if (!cached.pending) {
+        res.setHeader('X-Idempotency-Replayed', 'true');
+        return res.status(cached.status).json(cached.body);
+      }
+
+      // A same-key request is still in flight -> wait for its outcome, then
+      // replay it. If it ended without a response, this request executes now.
+      cached.settled.then((value: any) => {
+        if (value) {
+          res.setHeader('X-Idempotency-Replayed', 'true');
+          return res.status(value.status).json(value.body);
+        }
+        return run();
+      });
+    }
   }
 
   return { middleware, cache, timer };
@@ -124,6 +158,8 @@ function configureMiddleware(app: Application, ctx: any) {
     isAllowedOrigin,
     setNoStore,
     getRequestIp,
+    validateUserSession,
+    resolveRequestToken,
     rateLimit,
     authRateLimit,
     sendError,
@@ -514,13 +550,21 @@ function configureMiddleware(app: Application, ctx: any) {
   app.use('/api/v1/crews', rateLimit(config.OVERLAP_RATE_LIMIT_MAX, 'crews', { anonIpCap: false }));
 
   // ── Idempotency key middleware ────────────────────────────────────────
-  // ponytail: values stay the literals they were — lib/config.ts already defines
-  // env-overridable IDEMPOTENCY_TTL/IDEMPOTENCY_MAX_ENTRIES that this block has
-  // never read. The {ttl,maxEntries} params are the seam to wire them, but that
-  // drift is a separate audit finding with its own review; keep behavior
-  // byte-identical here.
-  const { middleware: idempotencyMiddleware, timer: _idempotencyCleanup } =
-    createIdempotencyMiddleware({ ttl: 5 * 60 * 1000, maxEntries: 5000 });
+  // Keyed by the session's user id when the request carries one, so two people
+  // behind one NAT never share a slot. Test harnesses without session helpers
+  // key by IP only.
+  const resolveUserId =
+    validateUserSession && resolveRequestToken
+      ? async (req: any) =>
+          (await validateUserSession(resolveRequestToken(req, 'x-user-token', config.USER_SESSION_COOKIE).token))
+            ?.userId ?? null
+      : undefined;
+  const { middleware: idempotencyMiddleware, timer: _idempotencyCleanup } = createIdempotencyMiddleware({
+    ttl: config.IDEMPOTENCY_TTL,
+    maxEntries: config.IDEMPOTENCY_MAX_ENTRIES,
+    resolveUserId,
+    clientIp: getRequestIp,
+  });
   state.timers.push(_idempotencyCleanup);
   app.use('/api/v1', idempotencyMiddleware);
 

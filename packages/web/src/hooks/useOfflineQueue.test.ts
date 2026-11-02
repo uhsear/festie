@@ -10,19 +10,39 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-// Mock @festie/shared/stores/uiStore — useOfflineQueue calls addFailedSync/setPendingSync
-vi.mock('@festie/shared/stores/uiStore', () => ({
-  useUIStore: (selector: (s: unknown) => unknown) =>
-    selector({
-      setPendingSync: vi.fn(),
-      addFailedSync: vi.fn(),
-    }),
-}));
+// A small stateful uiStore: the queue (and the shared failed-sync helpers it
+// calls) read and write failedSync / offlineMode through getState().
+type FailedItem = { clientId: string } & Record<string, unknown>;
+const ui = vi.hoisted(() => {
+  const state = {
+    failedSync: [] as FailedItem[],
+    offlineMode: false,
+    setPendingSync: () => {},
+    setOfflineMode: (offline: boolean) => {
+      state.offlineMode = offline;
+    },
+    addFailedSync: (item: FailedItem) => {
+      state.failedSync = [...state.failedSync.filter((f) => f.clientId !== item.clientId), item];
+    },
+    dismissFailedSync: (clientId: string) => {
+      state.failedSync = state.failedSync.filter((f) => f.clientId !== clientId);
+    },
+  };
+  return state;
+});
+vi.mock('@festie/shared/stores/uiStore', () => {
+  const useUIStore = (selector: (s: typeof ui) => unknown) => selector(ui);
+  useUIStore.getState = () => ui;
+  return { useUIStore };
+});
 
 // Import AFTER mocks are set up
+import { MAX_RETRIES } from '@festie/shared/services';
 import { useOfflineQueue } from './useOfflineQueue';
 
 const LS_KEY = 'festie-offline-queue';
+const FAILED_KEY = 'festie-offline-failed';
+const networkError = () => Object.assign(new Error('Network request failed'), { status: 0, isNetworkError: true });
 
 /**
  * Make indexedDB.open always fire onerror so openDB() rejects and every
@@ -53,13 +73,71 @@ function makeIDBUnavailable() {
 beforeEach(() => {
   // Clear localStorage before every test
   localStorage.removeItem(LS_KEY);
+  localStorage.removeItem(FAILED_KEY);
+  ui.failedSync = [];
+  ui.offlineMode = false;
   makeIDBUnavailable();
   vi.clearAllMocks();
 });
 
 afterEach(() => {
   localStorage.removeItem(LS_KEY);
+  localStorage.removeItem(FAILED_KEY);
 });
+
+/** In-memory IndexedDB with just the calls useOfflineQueue makes. Returns the rows. */
+function installFakeIDB(): Map<number, Record<string, unknown>> {
+  const rows = new Map<number, Record<string, unknown>>();
+  let nextId = 1;
+  const copy = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
+  const request = <T>(run: () => T) => {
+    const req: { result?: T; error?: unknown; onsuccess?: () => void; onerror?: () => void } = {};
+    queueMicrotask(() => {
+      try {
+        req.result = run();
+        req.onsuccess?.();
+      } catch (e) {
+        req.error = e;
+        req.onerror?.();
+      }
+    });
+    return req;
+  };
+  const store = {
+    getAll: () => request(() => [...rows.values()].map(copy)),
+    get: (id: number) => request(() => copy(rows.get(id))),
+    add: (v: Record<string, unknown>) =>
+      request(() => {
+        const id = nextId++;
+        rows.set(id, { ...copy(v), id });
+        return id;
+      }),
+    put: (v: Record<string, unknown>) =>
+      request(() => {
+        rows.set(v.id as number, copy(v));
+        return v.id;
+      }),
+    delete: (id: number) => request(() => void rows.delete(id)),
+    clear: () => request(() => rows.clear()),
+    index: () => ({ count: () => request(() => [...rows.values()].filter((r) => r.status === 'pending').length) }),
+  };
+  const db = {
+    objectStoreNames: { contains: () => true },
+    transaction: () => ({ objectStore: () => store, abort: () => {} }),
+  };
+  Object.defineProperty(window, 'indexedDB', {
+    configurable: true,
+    writable: true,
+    value: {
+      open: () => {
+        const req: { result: unknown; onsuccess?: () => void } = { result: db };
+        queueMicrotask(() => req.onsuccess?.());
+        return req;
+      },
+    },
+  });
+  return rows;
+}
 
 describe('useOfflineQueue — localStorage fallback', () => {
   it('queues a mutation in localStorage when IDB is unavailable', async () => {
@@ -217,5 +295,111 @@ describe('useOfflineQueue — localStorage fallback', () => {
     expect(queue).toHaveLength(1);
     // Latest body wins
     expect(queue[0].body?.priority).toBe('want-to-see');
+  });
+  it('a network error keeps the entry with the same clientId, retries and createdAt, flips offline and stops the pass', async () => {
+    const { result } = renderHook(() => useOfflineQueue());
+    await act(async () => {
+      await result.current.queueMutation({ clientId: 'net-1', type: 'api', url: '/crews/abc/expenses', method: 'POST', body: { amount: 5 } });
+      await result.current.queueMutation({ clientId: 'net-2', type: 'api', url: '/crews/abc/polls', method: 'POST', body: { question: 'x' } });
+    });
+    const before = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+
+    const apiFn = vi.fn().mockRejectedValue(networkError());
+    await act(async () => {
+      await result.current.processQueue(apiFn);
+    });
+
+    expect(apiFn).toHaveBeenCalledTimes(1);
+    expect(apiFn).toHaveBeenCalledWith('/crews/abc/expenses', expect.objectContaining({ idempotencyKey: 'net-1' }));
+    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')).toEqual(before);
+    expect(ui.offlineMode).toBe(true);
+    expect(ui.failedSync).toEqual([]);
+  });
+
+  it('a 5xx still retries with backoff and surfaces after MAX_RETRIES', async () => {
+    const { result } = renderHook(() => useOfflineQueue());
+    await act(async () => {
+      await result.current.queueMutation({ clientId: 'srv-1', type: 'api', url: '/crews/abc/polls', method: 'POST', body: {} });
+    });
+    const apiFn = vi.fn().mockRejectedValue(Object.assign(new Error('Server error'), { status: 503 }));
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      for (let i = 1; i < MAX_RETRIES; i++) {
+        await act(async () => {
+          const pass = result.current.processQueue(apiFn);
+          await vi.runAllTimersAsync();
+          await pass;
+        });
+        expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')[0]).toMatchObject({ clientId: 'srv-1', retries: i });
+      }
+      await act(async () => {
+        await result.current.processQueue(apiFn);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(apiFn).toHaveBeenCalledTimes(MAX_RETRIES);
+    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')).toHaveLength(0);
+    expect(ui.failedSync).toEqual([expect.objectContaining({ clientId: 'srv-1', error: 'Server error' })]);
+  });
+
+  it('a surfaced failure is in storage and comes back after hydrate', async () => {
+    const { result } = renderHook(() => useOfflineQueue());
+    await act(async () => {
+      await result.current.queueMutation({ clientId: 'bad-1', type: 'api', url: '/crews/abc/polls', method: 'POST', body: {} });
+    });
+    await act(async () => {
+      await result.current.processQueue(vi.fn().mockRejectedValue(Object.assign(new Error('Bad request'), { status: 400 })));
+    });
+    expect(ui.failedSync).toEqual([expect.objectContaining({ clientId: 'bad-1' })]);
+    await vi.waitFor(() =>
+      expect(JSON.parse(localStorage.getItem(FAILED_KEY) || '[]')).toEqual([expect.objectContaining({ clientId: 'bad-1' })]),
+    );
+
+    // A reload empties the in-memory store; mounting the queue hydrates it again.
+    ui.dismissFailedSync('bad-1');
+    expect(ui.failedSync).toEqual([]);
+    renderHook(() => useOfflineQueue());
+    await vi.waitFor(() => expect(ui.failedSync).toEqual([expect.objectContaining({ clientId: 'bad-1', error: 'Bad request' })]));
+  });
+
+  it('after a POST replay returns { id: real-1 }, a queued child URL that contains the parent clientId is sent with real-1', async () => {
+    const { result } = renderHook(() => useOfflineQueue());
+    await act(async () => {
+      await result.current.queueMutation({ clientId: 'tmp-poll-1', type: 'api', url: '/crews/abc/polls', method: 'POST', body: {} });
+      await result.current.queueMutation({ clientId: 'vote-1', type: 'api', url: '/crews/abc/polls/tmp-poll-1/vote', method: 'POST', body: {} });
+    });
+    // The child then hits a dead network, so it stays queued and its stored URL is checkable.
+    const apiFn = vi.fn().mockResolvedValueOnce({ id: 'real-1' }).mockRejectedValueOnce(networkError());
+    await act(async () => {
+      await result.current.processQueue(apiFn);
+    });
+    expect(apiFn).toHaveBeenNthCalledWith(2, '/crews/abc/polls/real-1/vote', expect.objectContaining({ idempotencyKey: 'vote-1' }));
+    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')).toEqual([
+      expect.objectContaining({ clientId: 'vote-1', url: '/crews/abc/polls/real-1/vote' }),
+    ]);
+  });
+});
+
+describe('useOfflineQueue — IndexedDB path', () => {
+  it('after a POST replay returns { id: real-1 }, a queued child URL that contains the parent clientId is sent with real-1', async () => {
+    const rows = installFakeIDB();
+    // Fresh module: the IDB handle is cached at module level.
+    vi.resetModules();
+    const { useOfflineQueue: useQueue } = await import('./useOfflineQueue');
+    const { result } = renderHook(() => useQueue());
+    await act(async () => {
+      await result.current.queueMutation({ clientId: 'tmp-poll-1', type: 'api', url: '/crews/abc/polls', method: 'POST', body: {} });
+      await result.current.queueMutation({ clientId: 'vote-1', type: 'api', url: '/crews/abc/polls/tmp-poll-1/vote', method: 'POST', body: {} });
+    });
+    expect(rows.size).toBe(2);
+    expect(localStorage.getItem(LS_KEY)).toBeNull();
+
+    const apiFn = vi.fn().mockResolvedValueOnce({ id: 'real-1' }).mockRejectedValueOnce(networkError());
+    await act(async () => {
+      await result.current.processQueue(apiFn);
+    });
+    expect(apiFn).toHaveBeenNthCalledWith(2, '/crews/abc/polls/real-1/vote', expect.objectContaining({ idempotencyKey: 'vote-1' }));
+    expect([...rows.values()]).toEqual([expect.objectContaining({ clientId: 'vote-1', url: '/crews/abc/polls/real-1/vote' })]);
   });
 });
