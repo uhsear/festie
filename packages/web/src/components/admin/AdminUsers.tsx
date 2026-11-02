@@ -138,7 +138,9 @@ function AdminUsersList() {
       confirmLabel: copy.confirmLabel,
       run: async () => {
         try {
-          const { resetUrl, username, expiresAt } = await createResetLink(user.id);
+          const result = await withReauth(() => createResetLink(user.id), askPassword);
+          if (!result) return;
+          const { resetUrl, username, expiresAt } = result;
           try {
             await navigator.clipboard.writeText(resetUrl);
             toast(`Reset link copied. ${resetLinkReadyMessage(username, expiresAt)}`, 'success');

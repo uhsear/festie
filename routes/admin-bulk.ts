@@ -370,6 +370,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     '/crews/:id',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     validateParams(schemas.genericIdParams),
     async (req: any, res: any) => {
       try {

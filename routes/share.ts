@@ -8,9 +8,8 @@
  * No auth required. Profile must exist and have a non-null userId.
  *
  * The share id is the profile's revocable share_token (POST /account/share-link).
- * A legacy profile-id link still resolves until the owner resets their links
- * (POST /account/sharing/reset). Pages are `private, no-cache` so a reset takes
- * effect at once, even behind the CDN.
+ * Legacy profile-id links no longer resolve (T57). Pages are `private, no-cache`
+ * so a reset (POST /account/sharing/reset) takes effect at once, even behind the CDN.
  *
  * GET /s/:shareId/og.png and /s/u/:username/og.png render the link-preview
  * image; GET /s/:shareId/json and /s/u/:username/json feed the compare page.

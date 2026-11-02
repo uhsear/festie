@@ -350,6 +350,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     '/users/:id/reset-link',
     adminAuth,
     adminWriteLimit,
+    requireRecentAuth,
     passwordResetRateLimit,
     validateParams(schemas.genericIdParams),
     async (req: any, res: any) => {
