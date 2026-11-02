@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { FestivalSet, Priority, Stage, Festival } from '@festie/shared/types';
-import { artistDisplayName, getAvatarColor, getInitials } from '@festie/shared/utils';
-import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
-import StageBadge from '../ui/StageBadge';
+import { artistDisplayName, getAvatarColor, getInitials, groupUntimedByStage } from '@festie/shared/utils';
+import { PRIORITY_SYMBOLS, COPY } from '@festie/shared/constants';
 import PriorityIcon from '../ui/PriorityIcon';
 import { cn } from '../../lib/utils';
 import { avatarInk } from '../../lib/avatarInk';
@@ -18,6 +17,8 @@ export interface TBASectionProps {
   getStageColor: (stageId: string) => string;
   onSavePick: (setId: string, priority: string | null) => void;
   onOpenDetail: (set: FestivalSet) => void;
+  /** True when no set on the day has a time: swaps the heading for the "times aren't out yet" copy. */
+  allTba?: boolean;
 }
 
 export default function TBASection({
@@ -31,7 +32,12 @@ export default function TBASection({
   getStageColor,
   onSavePick,
   onOpenDetail,
+  allTba,
 }: TBASectionProps) {
+  const groups = useMemo(
+    () => groupUntimedByStage(sets, stages, currentFestival?.b2bSeparator),
+    [sets, stages, currentFestival?.b2bSeparator],
+  );
   return (
     <div
       className={cn(
@@ -43,11 +49,31 @@ export default function TBASection({
         'motion-reduce:!animate-none',
       )}
     >
-      <div className="text-[length:var(--font-size-12)] font-bold text-[var(--color-text-muted)] uppercase tracking-[0.5px] mb-3">
-        TBA — Times Not Yet Announced
-      </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-[var(--space-4)]">
-        {sets.map((s, idx) => {
+      {allTba ? (
+        <div className="mb-3">
+          <h2 className="text-[length:var(--font-size-16)] font-bold text-[var(--color-text-primary)]">
+            {COPY.grid.tbaTitle}
+          </h2>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{COPY.grid.tbaBody}</p>
+        </div>
+      ) : (
+        <div className="text-[length:var(--font-size-12)] font-bold text-[var(--color-text-muted)] uppercase tracking-[0.5px] mb-3">
+          TBA — Times Not Yet Announced
+        </div>
+      )}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-[var(--space-4)]">
+        {groups.map((g) => (
+          <div key={g.stage?.id ?? 'unknown-stage'}>
+            <div
+              data-stage-header
+              className="mb-2 border-t-[3px] pt-1.5 text-[length:var(--font-size-12)] font-bold text-[var(--color-text-primary)]"
+              style={{ borderTopColor: g.stage ? getStageColor(g.stage.id) : 'var(--color-border)' }}
+            >
+              {g.stage?.name ?? COPY.grid.stageUnknown}{' '}
+              <span className="font-normal text-[var(--color-text-muted)]">· {g.sets.length}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+        {g.sets.map((s, idx) => {
           const myPick = getMyPick(s.id);
           const others = getOtherPicks(s.id);
           const stage = stages.find((st) => st.id === s.stageId);
@@ -89,14 +115,6 @@ export default function TBASection({
                 onClick={() => onOpenDetail(s)}
               />
               <div className="relative z-[2] pointer-events-none font-semibold text-sm mb-1">{dn}</div>
-              {stage && stageColor && (
-                <StageBadge
-                  variant="pick"
-                  stageName={stage.name}
-                  stageColor={stageColor}
-                  className="relative z-[2] text-[length:var(--font-size-12)]"
-                />
-              )}
 
               {/* Priority pick buttons */}
               {canPick && (
@@ -183,6 +201,9 @@ export default function TBASection({
             </div>
           );
         })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

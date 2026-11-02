@@ -8,6 +8,7 @@
  *   POST   /:crewId/polls/:pollId/nudge   one reminder to the members who have not voted
  */
 import { Router } from 'express';
+import { MAX_OPEN_POLLS_PER_CREW } from '../lib/constants';
 import { createPollCloser } from '../lib/poll-close';
 
 export default function createCrewPollRoutes(deps: any) {
@@ -74,7 +75,14 @@ export default function createCrewPollRoutes(deps: any) {
         if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const activePollCount = await stores.polls.countActiveByCrew(crewId);
-        if (activePollCount >= 3) return sendError(res, 409, 'Max 3 active polls per crew', ErrorCodes.CONFLICT);
+        if (activePollCount >= MAX_OPEN_POLLS_PER_CREW) {
+          return sendError(
+            res,
+            409,
+            `This crew already has ${MAX_OPEN_POLLS_PER_CREW} open polls. Close one to start another.`,
+            ErrorCodes.CONFLICT,
+          );
+        }
 
         const poll = await stores.polls.create({
           crewId,

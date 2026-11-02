@@ -15,8 +15,10 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 let mockUser: { id: string; username: string } | null = null;
+const mockFestival = { scheduleView: null as string | null, sets: [], days: [], currentFestival: null };
 vi.mock('@festie/shared', () => ({
   useAuthStore: (selector: (s: { user: typeof mockUser }) => unknown) => selector({ user: mockUser }),
+  useFestivalStore: (selector: (s: typeof mockFestival) => unknown) => selector(mockFestival),
 }));
 
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
@@ -28,6 +30,7 @@ describe('BottomNav', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUser = null;
+    mockFestival.scheduleView = null;
     mockLocation.pathname = '/cards';
   });
 
@@ -44,6 +47,12 @@ describe('BottomNav', () => {
       'View More',
     ]);
     expect(links.map((l) => l.getAttribute('href'))).toEqual(['/cards', '/picks', '/crew', '/map', '/account']);
+  });
+
+  it('points Lineup at the remembered view', () => {
+    mockFestival.scheduleView = 'grid';
+    render(<BottomNav />);
+    expect(screen.getByLabelText('View Lineup')).toHaveAttribute('href', '/grid');
   });
 
   it('shows all five slots for guests, with Sign in in the More slot', () => {

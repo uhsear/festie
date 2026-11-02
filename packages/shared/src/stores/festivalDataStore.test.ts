@@ -58,6 +58,8 @@ function resetStores() {
     selectedDay: 0,
     activeStages: [],
     searchQuery: '',
+    prefsFestivalId: null,
+    byFestival: {},
   });
 }
 
@@ -155,7 +157,7 @@ describe('festivalDataStore', () => {
       expect(state.sets[0]!.date).toBe('2026-06-01');
     });
 
-    it('resets activeStages to [] (all-selected) in the UI store', async () => {
+    it("restores the festival's remembered filters", async () => {
       const detailResponse = {
         ...mockFestival,
         stages: [
@@ -172,6 +174,32 @@ describe('festivalDataStore', () => {
       // all-selected → []); [] keeps a fresh load filter-free.
       expect(useFestivalUIStore.getState().activeStages).toEqual([]);
       expect(useFestivalUIStore.getState().selectedDay).toBe(0);
+    });
+
+    it('restores saved activeStages for the festival', async () => {
+      useFestivalUIStore.setState({
+        byFestival: {
+          'fest-1': {
+            view: null,
+            activeStages: ['s1'],
+            onlyMine: false,
+            searchQuery: '',
+            hiddenDays: [],
+            dismissedPhase: null,
+            groupBy: null,
+          },
+        },
+      });
+      vi.mocked(api.get).mockResolvedValueOnce({
+        ...mockFestival,
+        stages: [
+          { id: 's1', name: 'Main', festivalId: 'fest-1', createdAt: '', updatedAt: '' },
+          { id: 's2', name: 'Side', festivalId: 'fest-1', createdAt: '', updatedAt: '' },
+        ],
+        days: [],
+      });
+      await useFestivalDataStore.getState().selectFestival('fest-1');
+      expect(useFestivalUIStore.getState().activeStages).toEqual(['s1']);
     });
 
     it('defaults selectedDay to the logical festival day in the festival zone', async () => {
@@ -191,7 +219,9 @@ describe('festivalDataStore', () => {
         await useFestivalDataStore.getState().selectFestival('fest-1');
         expect(useFestivalUIStore.getState().selectedDay).toBe(0);
 
-        // 01:00 PDT on day 2's calendar date is day 1, not day 2.
+        // 01:00 PDT on day 2's calendar date is day 1, not day 2. A same-id reselect is a
+        // refresh that keeps the live day, so forget the festival to test a fresh open.
+        useFestivalUIStore.setState({ prefsFestivalId: null });
         vi.setSystemTime(Date.UTC(2026, 5, 3, 8, 0));
         vi.mocked(api.get).mockResolvedValueOnce(detailResponse);
         await useFestivalDataStore.getState().selectFestival('fest-1');
@@ -273,6 +303,38 @@ describe('festivalDataStore', () => {
       vi.mocked(api.get).mockRejectedValueOnce(new Error('404'));
       await expect(useFestivalDataStore.getState().selectFestival('bad')).rejects.toThrow();
       expect(useFestivalDataStore.getState().error).toBe('404');
+    });
+
+    it('restores remembered filters from cached data when the fetch fails', async () => {
+      const stage = (id: string) => ({ id, name: id, festivalId: 'fest-1', createdAt: '', updatedAt: '' });
+      const day = (id: string, date: string) => ({ id, festivalId: 'fest-1', date, createdAt: '', updatedAt: '' });
+      useFestivalDataStore.setState({
+        currentFestival: mockFestival,
+        stages: [stage('s1'), stage('s2')],
+        days: [day('d1', '2026-06-01'), day('d2', '2026-06-02')],
+      });
+      useFestivalUIStore.setState({
+        byFestival: {
+          'fest-1': {
+            view: 'timeline',
+            activeStages: ['s2'],
+            onlyMine: true,
+            searchQuery: '',
+            hiddenDays: [],
+            dismissedPhase: null,
+            groupBy: null,
+          },
+        },
+      });
+      vi.mocked(api.get).mockRejectedValueOnce(new Error('404'));
+      await expect(useFestivalDataStore.getState().selectFestival('fest-1')).rejects.toThrow();
+      const ui = useFestivalUIStore.getState();
+      expect(ui.prefsFestivalId).toBe('fest-1');
+      expect(ui.activeStages).toEqual(['s2']);
+      expect(ui.scheduleView).toBe('timeline');
+      // A change made while offline is saved for this festival.
+      ui.setSearchQuery('garden');
+      expect(useFestivalUIStore.getState().byFestival['fest-1']?.searchQuery).toBe('garden');
     });
 
     it('handles non-Error thrown values', async () => {

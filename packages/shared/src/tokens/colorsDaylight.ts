@@ -77,6 +77,14 @@ export const colorsDaylight = {
     warning: '#6b4100',
     error: '#a3001f',
   },
+  /**
+   * Clash = two of the user's picks overlap. Alias of status.warning (amber means warning; coral is danger only).
+   * Never colour alone: pair with the warning icon, the hatching or the word Clash.
+   */
+  clash: {
+    mark: '#6b4100',
+    tint: 'rgba(107, 65, 0, 0.12)',
+  },
   confidence: {
     live: '#175800',
     aging: '#6b4100',

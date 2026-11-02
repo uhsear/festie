@@ -11,9 +11,15 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 const mockDeleteAccount = vi.fn();
+const mockLoadCrews = vi.fn().mockResolvedValue(undefined);
+let mockCrews: unknown[] = [];
+vi.mock('@festie/shared/stores/crewStore', () => ({
+  useCrewStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ crews: mockCrews, loadCrews: mockLoadCrews }),
+}));
 vi.mock('@festie/shared/stores/authStore', () => ({
   useAuthStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ deleteAccount: mockDeleteAccount }),
+    selector({ deleteAccount: mockDeleteAccount, user: { id: 'me' } }),
   ACCOUNT_DELETION_EXPLAINER: 'explainer',
   accountDeletionNotice: (d: string | null) =>
     `Your account will be deleted on ${d}. Sign in before then to keep it.`,
@@ -34,6 +40,8 @@ vi.mock('@festie/shared/services/api', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockCrews = [];
+  mockLoadCrews.mockResolvedValue(undefined);
   // Default: export succeeds with a clean GDPR object
   mockApiGet.mockResolvedValue({ profile: {} });
 
@@ -148,7 +156,7 @@ describe('DangerZone', () => {
     await user.click(screen.getByText('Confirm Delete'));
 
     await waitFor(() => {
-      expect(mockDeleteAccount).toHaveBeenCalledWith('mypassword');
+      expect(mockDeleteAccount).toHaveBeenCalledWith('mypassword', []);
     });
     expect(mockToast).toHaveBeenCalledWith(
       expect.stringContaining('Sign in before then to keep it.'),
@@ -184,5 +192,67 @@ describe('DangerZone', () => {
     form.dispatchEvent(new Event('submit', { bubbles: true }));
 
     expect(mockDeleteAccount).not.toHaveBeenCalled();
+  });
+
+  // --- Crew hand-over ---
+
+  const ownedCrew = (members: Array<{ userId: string; name?: string; username: string; joinedAt?: string }>) => ({
+    id: 'c1',
+    name: 'Night Owls',
+    role: 'owner',
+    members: [{ userId: 'me', username: 'me' }, ...members],
+  });
+
+  it('lists owned crews with the first joiner preselected and submits the choice', async () => {
+    const user = userEvent.setup();
+    mockCrews = [
+      ownedCrew([
+        { userId: 'u2', name: 'Bea', username: 'bea', joinedAt: '2026-01-02T00:00:00Z' },
+        { userId: 'u3', name: 'Cal', username: 'cal', joinedAt: '2026-01-01T00:00:00Z' },
+      ]),
+    ];
+    mockDeleteAccount.mockResolvedValue({ deletionDate: 'x' });
+
+    render(<DangerZone />);
+    await user.click(screen.getByText('Delete My Account'));
+
+    expect(screen.getByText('Crews you own')).toBeInTheDocument();
+    const select = screen.getByLabelText('New owner for Night Owls') as HTMLSelectElement;
+    expect(select.value).toBe('u3');
+
+    await user.selectOptions(select, 'u2');
+    await user.type(screen.getByPlaceholderText('Password'), 'pw');
+    await user.click(screen.getByText('Confirm Delete'));
+
+    await waitFor(() => {
+      expect(mockDeleteAccount).toHaveBeenCalledWith('pw', [{ crewId: 'c1', newOwnerId: 'u2' }]);
+    });
+  });
+
+  it('says solo crews are deleted with the account', async () => {
+    const user = userEvent.setup();
+    mockCrews = [ownedCrew([])];
+    render(<DangerZone />);
+    await user.click(screen.getByText('Delete My Account'));
+
+    expect(screen.getByText(/only member of 1 crew/)).toBeInTheDocument();
+    expect(screen.queryByText('Crews you own')).not.toBeInTheDocument();
+  });
+
+  it('shows no owned-crews block for a user who owns no crew', async () => {
+    const user = userEvent.setup();
+    mockCrews = [{ ...ownedCrew([{ userId: 'u2', username: 'bea' }]), role: 'member', owner: 'u2' }];
+    render(<DangerZone />);
+    await user.click(screen.getByText('Delete My Account'));
+
+    expect(screen.queryByText('Crews you own')).not.toBeInTheDocument();
+    expect(screen.queryByText(/only member of/)).not.toBeInTheDocument();
+  });
+
+  it('loads crews when the store has none', async () => {
+    const user = userEvent.setup();
+    render(<DangerZone />);
+    await user.click(screen.getByText('Delete My Account'));
+    expect(mockLoadCrews).toHaveBeenCalledTimes(1);
   });
 });

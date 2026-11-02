@@ -7,6 +7,7 @@ import {
   useFestivalDataStore,
   writeOutcomeOf,
   writeOutcomeMessage,
+  openPollState,
   splitPolls,
   nextVoteIndexes,
   tallyPoll,
@@ -220,6 +221,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     vote.mutate({ pollId, optionIndexes: nextVoteIndexes(poll, mine, optionIndex) });
   }
 
+  const pollState = openPollState(polls);
   const { open: openPolls, decided } = splitPolls(polls);
 
   if (isLoading)
@@ -256,15 +258,38 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
         />
       ) : !showForm ? (
         <div className="space-y-2">
-          <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
+          <Button
+            variant="primary"
+            onClick={() => setShowForm(true)}
+            disabled={pollState.atCap}
+            aria-describedby={pollState.atCap ? 'poll-cap-note' : undefined}
+            className="w-full min-h-11"
+          >
             <Plus className="w-4 h-4" aria-hidden="true" /> Create Poll
           </Button>
-          <Button variant="secondary" onClick={() => setShowSchedule(true)} className="w-full min-h-11">
+          <Button
+            variant="secondary"
+            onClick={() => setShowSchedule(true)}
+            disabled={pollState.atCap}
+            aria-describedby={pollState.atCap ? 'poll-cap-note' : undefined}
+            className="w-full min-h-11"
+          >
             <CalendarClock className="w-4 h-4" aria-hidden="true" /> Which set? (from the lineup)
           </Button>
-          <Button variant="secondary" onClick={startMeetWhere} className="w-full min-h-11">
+          <Button
+            variant="secondary"
+            onClick={startMeetWhere}
+            disabled={pollState.atCap}
+            aria-describedby={pollState.atCap ? 'poll-cap-note' : undefined}
+            className="w-full min-h-11"
+          >
             <MapPin className="w-4 h-4" aria-hidden="true" /> Meet where?
           </Button>
+          {pollState.text && (
+            <p id="poll-cap-note" className="text-sm text-text-muted">
+              {pollState.text}
+            </p>
+          )}
         </div>
       ) : (
         <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">

@@ -45,10 +45,10 @@ describe('FreshnessChip', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders "Synced N ago" when online with a crew cache timestamp', () => {
+  it('renders "Updated N ago" when online with a crew cache timestamp', () => {
     setCrewCachedAt(Date.now() - 5 * 60_000); // 5 minutes ago
     render(<FreshnessChip surface="crew" />);
-    expect(screen.getByText(/Synced 5m ago/)).toBeInTheDocument();
+    expect(screen.getByText(/Updated 5m ago/)).toBeInTheDocument();
     expect(screen.queryByText(/offline data/)).not.toBeInTheDocument();
   });
 
@@ -56,7 +56,7 @@ describe('FreshnessChip', () => {
     setUI({ offlineMode: true });
     setCrewCachedAt(Date.now() - 2 * 60_000);
     render(<FreshnessChip surface="crew" />);
-    expect(screen.getByText(/Showing offline data · synced 2m ago/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing offline data · updated 2m ago/)).toBeInTheDocument();
   });
 
   it('shows a "N queued" badge driven by pendingSync', () => {
@@ -77,6 +77,6 @@ describe('FreshnessChip', () => {
     setCrewCachedAt(null);
     setFestivalCachedAt(Date.now() - 60 * 60_000); // 1 hour ago
     render(<FreshnessChip surface="schedule" />);
-    expect(screen.getByText(/Synced 1h ago/)).toBeInTheDocument();
+    expect(screen.getByText(/Updated 1h ago/)).toBeInTheDocument();
   });
 });

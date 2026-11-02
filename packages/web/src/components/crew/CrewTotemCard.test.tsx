@@ -54,7 +54,8 @@ describe('CrewTotemCard', () => {
 
   it('lets an owner with no totem open the editor', () => {
     render(<CrewTotemCard crewId="c1" totemName={null} totemEmoji={null} isOwner />);
-    expect(screen.getByText('Tap to set your crew totem')).toBeInTheDocument();
+    expect(screen.getByText('Add a crew totem')).toBeInTheDocument();
+    expect(screen.getByText(/flag or sign you hold up/)).toBeInTheDocument();
   });
 
   it('saves totemName + totemEmoji via updateCrew when an owner edits', async () => {

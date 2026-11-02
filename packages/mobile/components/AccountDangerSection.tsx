@@ -1,8 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, ACCOUNT_DELETION_EXPLAINER, accountDeletionNotice } from '@festie/shared/stores';
-import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import {
+  useAuthStore,
+  useCrewStore,
+  ACCOUNT_DELETION_EXPLAINER,
+  accountDeletionNotice,
+} from '@festie/shared/stores';
+import type { CrewMember } from '@festie/shared/types';
+import { crewCopy, ownedCrewsForDeletion, type OwnedCrewHandover } from '@festie/shared/utils';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 
 interface AccountDangerSectionProps {
@@ -14,8 +21,9 @@ interface AccountDangerSectionProps {
 /**
  * Danger-zone (account deletion) for the Account screen.
  *
- * Wired to the shared authStore.deleteAccount(password) → DELETE /account/
- * with { password }. The server schedules deletion for 30 days out and keeps
+ * Wired to the shared authStore.deleteAccount(password, crewHandover) → DELETE /account/
+ * with { password, crewHandover }. Owners pick who takes over each crew with
+ * other members; the server falls back to the first joiner. The server schedules deletion for 30 days out and keeps
  * picks and notes until then; signing in before that cancels it. The shared
  * action calls logout() on success (clearing the token + resetting all stores)
  * and returns the deletion date. This component shows that date, then invokes
@@ -30,24 +38,48 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
   const styles = useStyles();
   const haptics = useHaptics();
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const user = useAuthStore((s) => s.user);
+  const crews = useCrewStore((s) => s.crews);
+  const loadCrews = useCrewStore((s) => s.loadCrews);
 
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // crewId -> chosen new owner; a crew with no entry uses its default (first joiner).
+  const [chosenOwners, setChosenOwners] = useState<Record<string, string>>({});
+
+  const { handover, soloCount } = useMemo(
+    () => (user ? ownedCrewsForDeletion(crews, user.id) : { handover: [], soloCount: 0 }),
+    [crews, user],
+  );
+  const ownerFor = (h: OwnedCrewHandover) => chosenOwners[h.crew.id] ?? h.defaultOwnerId;
+  const memberLabel = (m: CrewMember) => m.name || m.username || 'Member';
 
   const reset = () => {
     setPassword('');
     setError(null);
+    setChosenOwners({});
   };
 
   const toggle = () => {
     setOpen((prev) => {
-      if (!prev) haptics.warning();
-      else reset();
+      if (!prev) {
+        haptics.warning();
+        if (crews.length === 0) loadCrews().catch(() => {});
+      } else reset();
       return !prev;
     });
   };
+
+  const pickOwner = (h: OwnedCrewHandover) =>
+    Alert.alert(crewCopy.newOwnerFor(h.crew.name), undefined, [
+      ...h.candidates.slice(0, 10).map((m) => ({
+        text: memberLabel(m),
+        onPress: () => setChosenOwners((prev) => ({ ...prev, [h.crew.id]: m.userId })),
+      })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
 
   const confirmDelete = () => {
     if (!password) {
@@ -74,7 +106,10 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
     setSubmitting(true);
     setError(null);
     try {
-      const { deletionDate } = await deleteAccount(password);
+      const { deletionDate } = await deleteAccount(
+        password,
+        handover.map((h) => ({ crewId: h.crew.id, newOwnerId: ownerFor(h) })),
+      );
       // deleteAccount → logout already cleared token + reset stores.
       Alert.alert('Account deletion scheduled', accountDeletionNotice(deletionDate));
       onDeleted();
@@ -116,6 +151,34 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
               <Text style={styles.calloutText}>{ACCOUNT_DELETION_EXPLAINER}</Text>
             </View>
           </View>
+
+          {handover.length > 0 ? (
+            <View style={styles.owned}>
+              <Text style={styles.calloutTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteOwnedTitle}</Text>
+              <Text style={styles.calloutText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteOwnedBody}</Text>
+              {handover.map((h) => {
+                const owner = h.candidates.find((m) => m.userId === ownerFor(h));
+                return (
+                  <TouchableOpacity
+                    key={h.crew.id}
+                    style={styles.ownedRow}
+                    onPress={() => pickOwner(h)}
+                    disabled={submitting}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${h.crew.name}. New owner: ${owner ? memberLabel(owner) : 'none'}. Change`}
+                  >
+                    <View style={styles.rowBody}>
+                      <Text style={styles.rowTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>{h.crew.name}</Text>
+                      <Text style={styles.rowHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>New owner: {owner ? memberLabel(owner) : 'None'}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={t.colors.text.secondary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+          {soloCount > 0 ? <Text style={styles.calloutText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteSolo(soloCount)}</Text> : null}
 
           <TextInput
             style={styles.input}
@@ -234,6 +297,20 @@ const useStyles = makeStyles((t) => ({
   calloutText: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  owned: {
+    gap: t.spacing[2],
+  },
+  ownedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+    minHeight: 56,
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.primary,
   },
   input: {
     ...typeStyle('body'),

@@ -1,8 +1,8 @@
 import { useMemo, useState, useCallback } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, festivalStartMinutes } from '@festie/shared/utils';
-import { AlertTriangle } from 'lucide-react';
-import { clashPromptCopy } from '@festie/shared/constants';
+import { AlertTriangle, TriangleAlert } from 'lucide-react';
+import { clashPromptCopy, clashesWith } from '@festie/shared/constants';
 import Button from '../ui/Button';
 
 interface Props {
@@ -22,16 +22,16 @@ interface Props {
    */
   getPriority?: (setId: string) => Priority | null | undefined;
   /**
-   * Demote/clear one side of a clash. Maps to usePicks().savePick(fid,id,null),
-   * which is offline-queued — resolving a clash works on dead signal.
+   * Demote/clear one side of a clash. Maps to usePickClear, which is
+   * offline-queued and shows an Undo toast; `label` is the cleared act's name.
    */
-  onClear: (setId: string) => void;
+  onClear: (setId: string, label: string) => void;
 }
 
 /**
  * Stable, order-independent key for a clash pair so a resolved/dismissed pair
- * never re-nags within a session (the passive DetailConflictWarning badge stays
- * as the ambient marker — this is the one-shot actionable nudge).
+ * never re-nags within a session (the quiet "Clashes with" line stays as the
+ * ambient marker — the box is the one-shot actionable nudge).
  */
 function pairKey(a: string, b: string): string {
   return ['festie-clash', ...[a, b].sort()].join(':');
@@ -53,7 +53,7 @@ function overlapStartLabel(a: FestivalSet, b: FestivalSet): string {
  * Inline clash prompt (M1). For each overlapping PICKED pair through the open
  * set, names both acts and lets the user keep one — clearing the other via
  * savePick(...,null). Shows once per pair per session; once resolved or
- * dismissed the ambient badge (DetailConflictWarning) carries the signal.
+ * dismissed, one quiet "Clashes with" line carries the signal.
  */
 export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPriority, onClear }: Props) {
   // Session-dismissed pairs (resolve or "keep both"). Seeded from sessionStorage
@@ -86,8 +86,11 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
     [conflicts, dismissed, currentSet.id],
   );
 
-  if (active.length === 0) return null;
+  if (conflicts.length === 0) return null;
 
+  const quietNames = conflicts
+    .filter((c) => dismissed.has(pairKey(currentSet.id, c.id)))
+    .map((c) => artistDisplayName(c, b2bSeparator));
   const currentName = artistDisplayName(currentSet, b2bSeparator);
 
   return (
@@ -117,7 +120,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
                 type="button"
                 aria-label={`Keep ${currentName}, clear ${otherName}`}
                 onClick={() => {
-                  onClear(c.id);
+                  onClear(c.id, otherName);
                   dismissPair(key);
                 }}
               >
@@ -129,7 +132,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
                 type="button"
                 aria-label={`Keep ${otherName}, clear ${currentName}`}
                 onClick={() => {
-                  onClear(currentSet.id);
+                  onClear(currentSet.id, currentName);
                   dismissPair(key);
                 }}
               >
@@ -148,6 +151,12 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
           </div>
         );
       })}
+      {quietNames.length > 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-text-muted">
+          <TriangleAlert className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+          <span>{clashesWith(quietNames)}</span>
+        </div>
+      )}
     </div>
   );
 }

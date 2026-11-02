@@ -2,10 +2,12 @@ import React, { memo, useRef, useState, useMemo } from 'react';
 import { Play, AlertTriangle, StickyNote, Clock } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
-import { usePicks, usePickSync } from '@festie/shared/hooks';
+import { usePicks, usePickSync, usePickClear } from '@festie/shared/hooks';
 import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { useSetStatus } from '@/hooks/useSetStatus';
+import { useUndoNotifier } from '@/lib/useUndoNotifier';
 import { useHaptics } from '@/hooks/useHaptics';
 import { cn } from '@/lib/utils';
 import LiveBadge from './LiveBadge';
@@ -60,6 +62,7 @@ function SetCard({
   // already persisted (Foundations F1), so the cluster renders offline.
   const allProfiles = useFestivalStore((state) => state.allProfiles);
   const crewMembers = useCrewStore((state) => state.crewMembers);
+  const clearPick = usePickClear(useUndoNotifier());
   const { tap, select, warning } = useHaptics();
   const [saving, setSaving] = useState(false);
   const setStatus = useSetStatus(set);
@@ -129,10 +132,14 @@ function SetCard({
     // already optimistic (see festivalStore.savePick) so the star fills
     // instantly either way — haptic just reinforces the state change.
     select();
+    if (currentlyActive) {
+      clearPick(set.id, artistName);
+      return;
+    }
     setSaving(true);
     try {
       if (currentFestival) {
-        await savePick(currentFestival.id, set.id, currentlyActive ? null : (priority as Priority));
+        await savePick(currentFestival.id, set.id, priority as Priority);
       }
     } catch {
       // The failed-pick chip under the priority row is the visible error.
@@ -299,12 +306,12 @@ function SetCard({
             className={cn(
               'inline-flex items-center gap-1',
               'text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight',
-              'bg-[var(--color-coral-ring)] text-accent-coral',
-              'border border-[var(--color-coral-a3)]',
+              'bg-[var(--color-clash-tint)] text-text-primary',
+              'border border-[var(--color-clash)]',
               'tracking-[0.5px] uppercase',
             )}
           >
-            <AlertTriangle className="w-3 h-3" aria-hidden="true" /> Conflict
+            <AlertTriangle className="w-3 h-3 text-[var(--color-clash)]" aria-hidden="true" /> {COPY.clash.badge}
           </span>
         )}
       </div>

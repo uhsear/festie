@@ -29,4 +29,14 @@ describe('PhaseHomeActions', () => {
     expect(screen.getByText('Pick your first sets below')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('renders a dismiss button only when onDismiss is given', () => {
+    const onDismiss = vi.fn();
+    const actions = [{ key: 'crew', kind: 'link', label: 'Invite your crew', a11y: 'Open crew' }] as const;
+    const { rerender } = render(<PhaseHomeActions actions={[...actions]} />);
+    expect(screen.queryByRole('button', { name: 'Hide these shortcuts' })).toBeNull();
+    rerender(<PhaseHomeActions actions={[...actions]} onDismiss={onDismiss} />);
+    screen.getByRole('button', { name: 'Hide these shortcuts' }).click();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
 });

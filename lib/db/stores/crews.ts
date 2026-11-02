@@ -1,6 +1,9 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
 import { sanitizeString } from '../../helpers/sanitize.js';
+import { createLogger } from '../../logger.js';
+
+const log = createLogger('db:crews');
 
 /**
  * H3 (defense-in-depth, audit 2026-06-06): meeting-point label/location are user
@@ -484,6 +487,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     /**
      * Transfer crew ownership atomically: demote current owner, promote target.
      * Prevents inconsistent state where both or neither are owner.
+     * crews.created_by moves too: the API's `owner` field and the heir logic in
+     * users.hardDelete and retention_cleanup() read it. When the new owner already
+     * runs a reform of the same source in this festival, crews_reform_idem_uidx
+     * raises 23505 and the whole transfer rolls back.
      */
     async transferOwnership(crewId: string, fromUserId: string, toUserId: string) {
       return withTransaction(pool, async (client) => {
@@ -497,7 +504,60 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           crewId,
           toUserId,
         ]);
+        await client.query('UPDATE crews SET created_by = $1, updated_at = NOW() WHERE id = $2', [toUserId, crewId]);
       });
+    },
+
+    /**
+     * Before an account is soft-deleted, hand each crew it owns to another active
+     * member. A valid choice wins; otherwise the earliest-joined active member
+     * takes over. A candidate whose transfer clashes on crews_reform_idem_uidx
+     * (23505) is skipped. A crew with no usable candidate is left as it is: the
+     * 30-day purge deletes a sole-member crew.
+     */
+    async handOverOwnedCrews(userId: string, choices: Array<{ crewId: string; newOwnerId: string }> = []) {
+      const handedOver: Array<{ crewId: string; newOwnerId: string }> = [];
+      const owned = await pool.query("SELECT crew_id FROM crew_members WHERE user_id = $1 AND role = 'owner'", [
+        userId,
+      ]);
+      for (const { crew_id: crewId } of owned.rows) {
+        const result = await pool.query(
+          `
+          SELECT
+            cm.user_id
+          FROM
+            crew_members cm
+            JOIN users u ON u.id = cm.user_id
+            AND u.deleted_at IS NULL
+          WHERE
+            cm.crew_id = $1
+            AND cm.user_id <> $2
+          ORDER BY
+            cm.joined_at ASC,
+            cm.user_id ASC
+        `,
+          [crewId, userId],
+        );
+        const candidates: string[] = result.rows.map((r: any) => r.user_id);
+        const choice = choices.find((c) => c.crewId === crewId)?.newOwnerId;
+        if (choice && candidates.includes(choice)) {
+          candidates.splice(candidates.indexOf(choice), 1);
+          candidates.unshift(choice);
+        }
+        let newOwnerId: string | null = null;
+        for (const candidate of candidates) {
+          try {
+            await crews.transferOwnership(crewId, userId, candidate);
+            newOwnerId = candidate;
+            break;
+          } catch (err: any) {
+            if (err?.code !== '23505') throw err;
+          }
+        }
+        if (newOwnerId) handedOver.push({ crewId, newOwnerId });
+        else log.warn('crew:handover-skipped', { crewId, candidates: candidates.length });
+      }
+      return handedOver;
     },
 
     async getCrewPickOverlap(festivalId: string, crewId: string) {
@@ -778,6 +838,47 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
         [crewId],
       );
       return result.rows[0].count;
+    },
+
+    // The updated_at >= expires_at test tells a swept point from one a user removed before its time.
+    async listRecentlyExpired(crewId: string) {
+      const result = await pool.query(
+        `
+        SELECT
+          mp.id,
+          mp.crew_id,
+          mp.created_by,
+          mp.label,
+          mp.location,
+          mp.type,
+          mp.meet_at,
+          mp.stage_reference,
+          mp.expires_at,
+          mp.latitude,
+          mp.longitude,
+          mp.recurs_daily,
+          mp.active,
+          mp.created_at,
+          mp.updated_at,
+          u.username AS creator_name
+        FROM
+          crew_meeting_points mp
+          JOIN users u ON u.id = mp.created_by
+          AND u.deleted_at IS NULL
+        WHERE
+          mp.crew_id = $1
+          AND mp.active = FALSE
+          AND mp.recurs_daily IS NOT TRUE
+          AND mp.expires_at IS NOT NULL
+          AND mp.expires_at > NOW() - INTERVAL '12 hours'
+          AND mp.updated_at >= mp.expires_at
+        ORDER BY
+          mp.meet_at DESC NULLS LAST
+        LIMIT 20
+      `,
+        [crewId],
+      );
+      return result.rows;
     },
 
     async expireStale() {

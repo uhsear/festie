@@ -174,7 +174,7 @@ env:
 - takeScreenshot: 08-timeline
 - openLink: "festie://grid"
 - extendedWaitUntil:
-    visible: "Schedule grid"
+    visible: ".*· Grid"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
@@ -215,7 +215,7 @@ env:
     id: "map-sos-fab"
 - extendedWaitUntil:
     visible:
-      text: "Drop pin|Map needs the festival downloaded for offline.*"
+      text: "Add meeting point|Map needs the festival downloaded for offline.*"
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 6000
@@ -233,9 +233,10 @@ env:
 - takeScreenshot: 17-compass
 - openLink: "festie://plan-share"
 - extendedWaitUntil:
-    visible: "Share offline"
+    visible: "Share picks"
     timeout: 30000
-- tapOn: "Text crew"
+- tapOn:
+    id: "plan-share-tab-text"
 - assertVisible:
     id: "plan-share-tab-text"
     selected: true

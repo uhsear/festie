@@ -19,6 +19,8 @@ import {
   buildOverlapBreakdown,
   festivalPhase,
   primarySpotifyArtist,
+  reminderLeadLabel,
+  reminderLeadA11y,
 } from '@festie/shared/utils';
 import { useCrewStore, useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
 import { usePickSync } from '@festie/shared/hooks';
@@ -68,6 +70,8 @@ interface SetCardMobileProps {
   hasConflict?: boolean;
   /** When true, shows a small "has note" indicator next to the time. */
   hasNote?: boolean;
+  /** Lead time in minutes of this set's reminder; shows a bell with the lead. */
+  reminderMinutes?: number;
   /**
    * Crew members (other than the current user) who have this set picked.
    * Renders an overlapping avatar cluster + "+N" overflow in the footer,
@@ -198,6 +202,7 @@ function SetCardMobileImpl({
   onPress,
   hasConflict = false,
   hasNote = false,
+  reminderMinutes,
   friendProfiles,
   b2bSeparator,
   onListen,
@@ -220,9 +225,11 @@ function SetCardMobileImpl({
   // Spell out how far through a live set we are so the body's accessible name
   // carries the same "now" context the visual progress bar does for sighted users.
   const livePct = isLive ? Math.round(setStatus.progress * 100) : 0;
-  const a11yBody = isLive
-    ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
-    : `${artistName}, ${stageName}, ${timeLabel}`;
+  const reminderA11y = reminderMinutes != null ? `Reminder ${reminderLeadA11y(reminderMinutes)} before` : null;
+  const a11yBody =
+    (isLive
+      ? `${artistName}, ${stageName}, ${timeLabel}, live, ${livePct}% through`
+      : `${artistName}, ${stageName}, ${timeLabel}`) + (reminderA11y ? `, ${reminderA11y.toLowerCase()}` : '');
 
   // Ended sets dim only while the festival is on, mirroring web SetCard.
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
@@ -275,9 +282,17 @@ function SetCardMobileImpl({
               accessibilityLabel="Has note"
             />
           ) : null}
+          {reminderMinutes != null ? (
+            <View style={styles.reminderMark} accessibilityLabel={reminderA11y ?? undefined}>
+              <Ionicons name="notifications-outline" size={12} color={t.colors.text.muted} />
+              <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {reminderLeadLabel(reminderMinutes)}
+              </Text>
+            </View>
+          ) : null}
           {hasConflict ? (
             <View style={styles.conflictBadge}>
-              <Ionicons name="warning" size={12} color={t.colors.accent.coral} />
+              <Ionicons name="warning" size={12} color={t.colors.clash.mark} />
               <Text style={styles.conflictText}>{COPY.clash.badge}</Text>
             </View>
           ) : null}
@@ -389,7 +404,8 @@ function areEqual(prev: SetCardMobileProps, next: SetCardMobileProps): boolean {
     prev.hasConflict !== next.hasConflict ||
     prev.hasNote !== next.hasNote ||
     prev.b2bSeparator !== next.b2bSeparator ||
-    !!prev.onListen !== !!next.onListen
+    !!prev.onListen !== !!next.onListen ||
+    prev.reminderMinutes !== next.reminderMinutes
   ) {
     return false;
   }
@@ -555,6 +571,15 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
+  reminderMark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
+  },
+  reminderText: {
+    ...typeStyle('micro'),
+    color: t.colors.text.muted,
+  },
   conflictBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -562,13 +587,13 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     borderRadius: t.radii.default,
-    backgroundColor: t.colors.ring.coral,
+    backgroundColor: t.colors.clash.tint,
     borderWidth: 1,
-    borderColor: t.colors.accent.coral,
+    borderColor: t.colors.clash.mark,
   },
   conflictText: {
     ...typeStyle('micro'),
-    color: t.colors.accent.coral,
+    color: t.colors.text.primary,
   },
   footer: {
     flexDirection: 'row',

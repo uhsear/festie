@@ -28,7 +28,10 @@ vi.mock('./SosRaiseButton', () => ({
 }));
 
 // constants (SESSION_MINUTES is derived from MAX_SESSION_MS).
-vi.mock('@festie/shared/constants', () => ({ LIVE_LOCATION: { MAX_SESSION_MS: 3_600_000 } }));
+vi.mock('@festie/shared/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/constants')>()),
+  LIVE_LOCATION: { MAX_SESSION_MS: 3_600_000 },
+}));
 
 // utils — formatStaleness is the only one used by this component.
 vi.mock('@festie/shared/utils', () => ({ formatStaleness: () => 'as of just now' }));

@@ -23,6 +23,8 @@ const TARGETS: Record<Exclude<HomeActionKey, 'first-pick'>, ActionTarget> = {
 
 interface PhaseHomeActionsProps {
   actions: HomeAction[];
+  /** When set, a close button hides the band for this festival and phase. */
+  onDismiss?: () => void;
 }
 
 /**
@@ -32,7 +34,7 @@ interface PhaseHomeActionsProps {
  * not empty. Tab destinations are not repeated here: the tab bar already
  * carries them. A `hint` renders as a plain chip, not a button.
  */
-export default function PhaseHomeActions({ actions }: PhaseHomeActionsProps) {
+export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeActionsProps) {
   const t = useTokens();
   const styles = useStyles();
   const router = useRouter();
@@ -75,6 +77,17 @@ export default function PhaseHomeActions({ actions }: PhaseHomeActionsProps) {
             </TouchableOpacity>
           );
         })}
+        {onDismiss ? (
+          <TouchableOpacity
+            style={styles.dismissButton}
+            onPress={onDismiss}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Hide these shortcuts"
+          >
+            <Ionicons name="close" size={18} color={t.colors.text.muted} />
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -86,6 +99,13 @@ const useStyles = makeStyles((t) => ({
     // Separate the band from the controls above it.
     marginTop: t.spacing[3],
     paddingBottom: t.spacing[2],
+  },
+  dismissButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    // WCAG 2.5.5 / 2.5.8 minimum 44px touch target.
+    minWidth: 44,
+    minHeight: 44,
   },
   row: {
     gap: t.spacing[2],

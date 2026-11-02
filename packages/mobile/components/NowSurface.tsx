@@ -9,6 +9,7 @@ import {
   fmtTimeLeft,
   fmtZonedClock,
   fmtZonedDayClock,
+  settleUpLine,
   timeAgo,
   type ActiveMeet,
   type CrewWhereabout,
@@ -344,6 +345,34 @@ export function CrewPrompt({ title, body, cta, onPress }: { title: string; body:
         </View>
       </View>
       <Button label={cta} onPress={onPress} />
+    </View>
+  );
+}
+
+export function CrewWrapUp({
+  crewName,
+  balance,
+  onSettle,
+  onReform,
+}: {
+  crewName: string;
+  balance: number;
+  onSettle: () => void;
+  onReform: () => void;
+}) {
+  const t = useTokens();
+  const s = useStyles();
+  return (
+    <View style={[s.card, s.section]}>
+      <View style={s.quietRow}>
+        <Ionicons name="people-outline" size={iconSize.md} color={t.colors.accent.aqua} />
+        <View style={s.flex}>
+          <Text style={s.quietTitle}>Wrap up with {crewName}</Text>
+          <Text style={s.secondary}>{settleUpLine(balance)}</Text>
+        </View>
+      </View>
+      <Button label={Math.abs(balance) > 0.01 ? 'Settle up' : 'See expenses'} onPress={onSettle} />
+      <Button label="Reform this crew for another festival" variant="secondary" onPress={onReform} />
     </View>
   );
 }

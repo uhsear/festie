@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
+import { FESTIVAL_DAY_START_HOUR } from '../time-zone.js';
+
 /**
  * Shared ICS (RFC 5545) calendar generation utilities.
  * Used by both the one-off export route and the subscribable calendar feed.
@@ -45,19 +47,28 @@ export function foldIcsLine(line: any) {
 /**
  * Build a single VEVENT block from an event descriptor.
  */
-export function buildVEvent({ uid, summary, dtstart, dtend, location, description, dtstamp, sequence }: any) {
+export function buildVEvent({ uid, summary, dtstart, dtend, location, description, dtstamp, sequence, allDay, alarmMinutes }: any) {
   const stamp = dtstamp || new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const lines = [
     'BEGIN:VEVENT',
     `DTSTAMP:${stamp}`,
-    `DTSTART:${dtstart}`,
-    `DTEND:${dtend}`,
+    allDay ? `DTSTART;VALUE=DATE:${dtstart}` : `DTSTART:${dtstart}`,
+    allDay ? `DTEND;VALUE=DATE:${dtend}` : `DTEND:${dtend}`,
     foldIcsLine(`SUMMARY:${escIcs(summary)}`),
   ];
   if (location) lines.push(foldIcsLine(`LOCATION:${escIcs(location)}`));
   if (description) lines.push(foldIcsLine(`DESCRIPTION:${escIcs(description)}`));
   lines.push(`UID:${uid}`);
   lines.push('STATUS:CONFIRMED');
+  if (alarmMinutes && alarmMinutes > 0) {
+    lines.push(
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      foldIcsLine(`DESCRIPTION:${escIcs(`${summary} starts in ${alarmMinutes} minutes`)}`),
+      `TRIGGER:-PT${alarmMinutes}M`,
+      'END:VALARM',
+    );
+  }
   if (sequence !== undefined) lines.push(`SEQUENCE:${sequence}`);
   lines.push('END:VEVENT');
   return lines;
@@ -89,6 +100,17 @@ export function buildVCalendar(events: any, { calendarName, prodId, extraHeaders
   return lines.join('\r\n');
 }
 
+// The backend cannot import @festie/shared; tests/ics-parity.test.ts guards drift.
+const PRIORITY_LABELS: Record<string, string> = { must: 'Must See', 'want-to-see': 'Want to See', maybe: 'Maybe' };
+const DEFAULT_SET_MINUTES = 60;
+
+/** `YYYY-MM-DD` plus `days`, as `YYYYMMDD` (UTC math, so no DST drift). */
+function addDaysCompact(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
 /**
  * Transform a festival + profile into an array of ICS event descriptors
  * suitable for `buildVCalendar`. Shared by the one-off export route and the
@@ -102,30 +124,61 @@ export function buildIcsEventsFromPicks(festival: any, profile: any, origin: str
   );
   const stageMap = new Map<string, any>((festival.stages || []).map((s: any) => [s.id, s]));
 
-  const events = [];
+  const reminders = profile.reminders || {};
+
+  const events: any[] = [];
   for (const set of sets) {
-    if (!set.date || !/^\d{4}-\d{2}-\d{2}$/.test(set.date) || !set.startTime || !set.endTime) continue;
-    const startTime = validateIcsTime(set.startTime);
-    const endTime = validateIcsTime(set.endTime);
-    if (!startTime || !endTime) continue;
+    if (!set.date || !/^\d{4}-\d{2}-\d{2}$/.test(set.date)) continue;
 
     const stage = stageMap.get(set.stageId);
-    const dtstart = set.date.replace(/-/g, '') + 'T' + startTime.replace(':', '') + '00';
-    const dtend = set.date.replace(/-/g, '') + 'T' + endTime.replace(':', '') + '00';
+    const dateStr = set.date.replace(/-/g, '');
     const priority = picks[set.id] || '';
     const note = notes[set.id] || '';
-    const description = [priority && `Priority: ${priority}`, note].filter(Boolean).join('\n');
-    const location = stage
-      ? stage.name + (festival.location ? ' - ' + festival.location : '')
-      : undefined;
+    const description = [priority && `Priority: ${PRIORITY_LABELS[priority] ?? priority}`, note]
+      .filter(Boolean)
+      .join('\n');
+    const base = {
+      uid: `${set.id}-${festival.id}@${origin}`,
+      location: stage ? stage.name + (festival.location ? ' - ' + festival.location : '') : undefined,
+      description: description || undefined,
+    };
+
+    const startTime = validateIcsTime(set.startTime);
+    if (!startTime) {
+      events.push({
+        ...base,
+        summary: `${set.artist} (time TBA)`,
+        dtstart: dateStr,
+        dtend: addDaysCompact(set.date, 1),
+        allDay: true,
+      });
+      continue;
+    }
+
+    const [sh, sm] = startTime.split(':').map(Number) as [number, number];
+    // A start before 06:00 is the night of the festival day: the next calendar date (as getSetTimeBounds).
+    const startOffset = sh < FESTIVAL_DAY_START_HOUR ? 1 : 0;
+    const startDateStr = addDaysCompact(set.date, startOffset);
+    const endTime = validateIcsTime(set.endTime);
+    let endDateStr = startDateStr;
+    let endHhmm: string;
+    if (endTime) {
+      if (endTime < startTime) endDateStr = addDaysCompact(set.date, startOffset + 1);
+      endHhmm = endTime.replace(':', '');
+    } else {
+      const total = sh * 60 + sm + DEFAULT_SET_MINUTES;
+      if (total >= 1440) endDateStr = addDaysCompact(set.date, startOffset + 1);
+      const m = total % 1440;
+      endHhmm = String(Math.floor(m / 60)).padStart(2, '0') + String(m % 60).padStart(2, '0');
+    }
+    const reminder = reminders[set.id];
 
     events.push({
-      uid: `${set.id}-${festival.id}@${origin}`,
+      ...base,
       summary: set.artist,
-      dtstart,
-      dtend,
-      location,
-      description: description || undefined,
+      dtstart: startDateStr + 'T' + startTime.replace(':', '') + '00',
+      dtend: endDateStr + 'T' + endHhmm + '00',
+      ...(Number.isInteger(reminder) && reminder > 0 ? { alarmMinutes: reminder } : {}),
     });
   }
   return events;

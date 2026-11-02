@@ -70,6 +70,20 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
     }
   };
 
+  const handleRemove = async () => {
+    if (saving) return;
+    setTimeError(null);
+    setSaving(true);
+    try {
+      await updateHomeBase(crewId, { location: null, time: null });
+      setEditing(false);
+    } catch {
+      // Error is surfaced via the crew store.
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (editing) {
     return (
       <View style={styles.editBox}>
@@ -127,6 +141,9 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
           onPress={handleSave}
           accessibilityLabel="Save Home Base"
         />
+        {hasHomeBase ? (
+          <Button variant="ghost" label="Remove Home Base" onPress={handleRemove} accessibilityLabel="Remove Home Base" />
+        ) : null}
       </View>
     );
   }

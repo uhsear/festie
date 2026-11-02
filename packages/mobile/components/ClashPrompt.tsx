@@ -4,7 +4,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, festivalStartMinutes } from '@festie/shared/utils';
-import { clashPromptCopy } from '@festie/shared/constants';
+import { clashPromptCopy, clashesWith } from '@festie/shared/constants';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -27,10 +27,11 @@ interface Props {
    */
   getPriority?: (setId: string) => Priority | null | undefined;
   /**
-   * Demote/clear one side of a clash. Maps to usePicks().savePick(fid,id,null),
-   * which is offline-queued — resolving a clash works on dead signal.
+   * Demote/clear one side of a clash, with the display name of the act being
+   * cleared for the undo toast. Maps to usePickClear(), which is offline-queued —
+   * resolving a clash works on dead signal.
    */
-  onClear: (setId: string) => void;
+  onClear: (setId: string, label: string) => void;
 }
 
 /** Stable, order-independent key so a resolved/dismissed pair never re-nags. */
@@ -50,8 +51,8 @@ function overlapStartLabel(a: FestivalSet, b: FestivalSet): string {
  * Inline clash prompt (M1, mobile parity of the web ClashPrompt). For each
  * overlapping PICKED pair through the open set, names both acts and lets the
  * user keep one — clearing the other via savePick(...,null). Shows once per
- * pair (in-memory for the screen's lifetime); the ambient conflict box in the
- * detail screen carries the lasting signal so we don't double-nag.
+ * pair (in-memory for the screen's lifetime); after "Keep both" one quiet
+ * "Clashes with" line stays as the lasting signal so we don't double-nag.
  */
 export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPriority, onClear }: Props) {
   const t = useTokens();
@@ -89,9 +90,9 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
   // Resolve a clash: clear the chosen-against side, dismiss the pair, and confirm
   // with a success buzz — clearing a conflict is a real "decision made" moment.
   const resolve = useCallback(
-    (clearId: string, key: string) => {
+    (clearId: string, label: string, key: string) => {
       haptics.success();
-      onClear(clearId);
+      onClear(clearId, label);
       dismissPair(key);
     },
     [haptics, onClear, dismissPair],
@@ -105,9 +106,10 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
     [haptics, dismissPair],
   );
 
-  if (active.length === 0) return null;
+  if (conflicts.length === 0) return null;
 
   const currentName = artistDisplayName(currentSet, b2bSeparator);
+  const quiet = conflicts.filter((c) => dismissed.has(pairKey(currentSet.id, c.id)));
 
   return (
     <View style={styles.wrap}>
@@ -138,7 +140,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
             <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.keepButton}
-                onPress={() => resolve(c.id, key)}
+                onPress={() => resolve(c.id, otherName, key)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel={`Keep ${currentName}, clear ${otherName}`}
@@ -148,7 +150,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.keepButton}
-                onPress={() => resolve(currentSet.id, key)}
+                onPress={() => resolve(currentSet.id, currentName, key)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel={`Keep ${otherName}, clear ${currentName}`}
@@ -180,6 +182,14 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
           </Animated.View>
         );
       })}
+      {quiet.length > 0 ? (
+        <View style={styles.quiet}>
+          <Ionicons name="warning" size={14} color={t.colors.text.muted} />
+          <Text style={styles.quietText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            {clashesWith(quiet.map((c) => artistDisplayName(c, b2bSeparator)))}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -196,6 +206,16 @@ const useStyles = makeStyles((t) => ({
   summaryText: {
     ...typeStyle('label'),
     color: t.colors.accent.coral,
+    flexShrink: 1,
+  },
+  quiet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  quietText: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
     flexShrink: 1,
   },
   card: {

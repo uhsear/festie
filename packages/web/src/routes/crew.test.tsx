@@ -30,6 +30,11 @@ const h = vi.hoisted(() => ({
   prompts: {} as Record<string, { description?: string; placeholder?: string; maxLength?: number; parsePaste?: unknown; onConfirm: (v: string) => void }>,
   toast: vi.fn(),
   search: {} as Record<string, unknown>,
+  status: undefined as string | undefined,
+  retry: vi.fn(),
+  confirms: {} as Record<string, { open: boolean; onConfirm: () => void }>,
+  handOver: null as null | { open: boolean; candidates: { userId: string }[]; onConfirm: (id: string) => void },
+  members: null as null | { onLeaveCrew?: () => void; onDeleteCrew?: () => void; onKick?: (m: unknown) => void },
 }));
 
 vi.mock('@festie/shared/stores', () => ({
@@ -99,8 +104,15 @@ vi.mock('../components/features/FreshnessChip', () => ({
   default: () => <div data-testid="freshness-chip" />,
 }));
 
-vi.mock('../components/features/LastSyncedBadge', () => ({
-  default: () => <div data-testid="last-synced-badge" />,
+vi.mock('../components/ui/skeletons/CrewSkeleton', () => ({
+  default: () => <div data-testid="crew-skeleton" />,
+}));
+
+vi.mock('@festie/shared/hooks', () => ({
+  useActiveCrew: () => ({
+    status: h.status ?? (storeState.activeCrew ? 'ready' : 'none'),
+    retry: h.retry,
+  }),
 }));
 
 vi.mock('../components/crew/CrewInviteBar', () => ({
@@ -116,7 +128,21 @@ vi.mock('../components/crew/CrewTabBar', () => ({
 }));
 
 // CrewTabContent stays real; stub only the tab bodies it composes.
-vi.mock('../components/crew/MembersTab', () => ({ default: () => <div data-testid="MembersTab" /> }));
+vi.mock('../components/crew/MembersTab', () => ({
+  default: (props: NonNullable<typeof h.members>) => {
+    h.members = props;
+    return <div data-testid="MembersTab" />;
+  },
+}));
+vi.mock('../components/crew/CreateCrewDialog', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div data-testid="create-crew-dialog" /> : null),
+}));
+vi.mock('../components/crew/HandOverDialog', () => ({
+  default: (props: NonNullable<typeof h.handOver>) => {
+    h.handOver = props;
+    return props.open ? <div data-testid="handover-dialog" /> : null;
+  },
+}));
 vi.mock('../components/crew/MeetingPointsTab', () => ({ default: () => <div data-testid="MeetingPointsTab" /> }));
 vi.mock('../components/crew/PollsTab', () => ({ default: () => <div data-testid="PollsTab" /> }));
 vi.mock('../components/crew/PackingTab', () => ({ default: () => <div data-testid="PackingTab" /> }));
@@ -143,6 +169,7 @@ vi.mock('../lib/toastContext', () => ({
   useToast: vi.fn(() => ({ toast: h.toast, toastError: vi.fn() })),
 }));
 
+
 vi.mock('../components/ui/PromptDialog', () => ({
   default: (props: { open: boolean; title: string } & (typeof h.prompts)[string]) => {
     h.prompts[props.title] = props;
@@ -155,7 +182,10 @@ vi.mock('../components/crew/JoinCrewSheet', () => ({
 }));
 
 vi.mock('../components/ui/ConfirmDialog', () => ({
-  default: () => null,
+  default: (props: { open: boolean; title: string; onConfirm: () => void }) => {
+    h.confirms[props.title] = props;
+    return null;
+  },
 }));
 
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
@@ -164,6 +194,7 @@ vi.mock('../components/layout/RouteErrorBoundary', () => ({
 
 vi.mock('lucide-react', () => ({
   Users: () => <span data-testid="users-icon" />,
+  Pencil: () => <span data-testid="pencil-icon" />,
   Columns3: () => <span data-testid="columns-icon" />,
   CalendarClock: () => <span data-testid="calendar-clock-icon" />,
   ChevronRight: () => <span data-testid="chevron-right-icon" />,
@@ -187,6 +218,9 @@ function setStoreState(overrides: Record<string, unknown> = {}) {
     createCrew: vi.fn().mockResolvedValue(undefined),
     joinByCode: vi.fn().mockResolvedValue(undefined),
     reformCrew: vi.fn().mockResolvedValue(undefined),
+    handOverAndLeave: vi.fn().mockResolvedValue('left'),
+    kickMember: vi.fn().mockResolvedValue(undefined),
+    updateCrew: vi.fn().mockResolvedValue(undefined),
     currentFestival: { id: 'f1', name: 'Bonnaroo' },
     // useFestivalDataStore selectors (ReformCrewButton)
     festivals: [],
@@ -199,6 +233,10 @@ describe('CrewView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.search = {};
+    h.status = undefined;
+    h.confirms = {};
+    h.handOver = null;
+    h.members = null;
     setStoreState();
   });
 
@@ -217,12 +255,28 @@ describe('CrewView', () => {
     expect(screen.getByText(/Make a crew, or join one with a code/)).toBeInTheDocument();
   });
 
+  it('renders the skeleton while the crew loads', () => {
+    h.status = 'loading';
+    render(<CrewView />);
+    expect(screen.getByTestId('crew-skeleton')).toBeInTheDocument();
+    expect(screen.queryByText('No crew yet')).not.toBeInTheDocument();
+  });
+
+  it('renders a Try again card on error and retries', () => {
+    h.status = 'error';
+    render(<CrewView />);
+    expect(screen.getByText("Couldn't load your crew")).toBeInTheDocument();
+    expect(screen.queryByText('No crew yet')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(h.retry).toHaveBeenCalledTimes(1);
+  });
+
   it('shows Create crew and Join with code inside the empty state and opens their prompts', () => {
     setStoreState({ crews: [], activeCrew: null });
     render(<CrewView />);
     const empty = screen.getByTestId('empty-state');
     fireEvent.click(within(empty).getByText('Create crew'));
-    expect(screen.getByTestId('prompt-open')).toHaveTextContent('New crew');
+    expect(screen.getByTestId('create-crew-dialog')).toBeInTheDocument();
     fireEvent.click(within(empty).getByText('Join with code'));
     expect(screen.getByText('Join crew')).toBeInTheDocument();
   });
@@ -267,6 +321,8 @@ describe('CrewView', () => {
     expect(screen.getByTestId('crew-invite-bar')).toBeInTheDocument();
     expect(screen.getByTestId('crew-tab-bar')).toBeInTheDocument();
     expect(screen.getByRole('tabpanel')).toBeInTheDocument();
+    expect(screen.queryByTestId('last-synced-badge')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Squad' })).toBeInTheDocument();
   });
 
   it('renders crew selector when crews exist', () => {
@@ -310,6 +366,13 @@ describe('CrewView', () => {
     expect(within(footer).queryByText('Compare schedules')).not.toBeInTheDocument();
   });
 
+  it('opens Members from the header faces', () => {
+    crewWithActive();
+    render(<CrewView />);
+    fireEvent.click(screen.getByRole('button', { name: /See all \d+ members/ }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'members' }, replace: true });
+  });
+
   it('puts the tab in the URL when a tab is clicked', () => {
     crewWithActive();
     render(<CrewView />);
@@ -322,5 +385,75 @@ describe('CrewView', () => {
     crewWithActive();
     render(<CrewView />);
     expect(screen.getByTestId('crew-tab-bar')).toHaveAttribute('data-active', 'find');
+  });
+
+  const ownerCrew = (members: Array<Record<string, unknown>>) =>
+    setStoreState({
+      crews: [{ id: 'c1', name: 'Squad', owner: 'u1' }],
+      activeCrew: { id: 'c1', name: 'Squad', inviteCode: 'ABC123', owner: 'u1', members },
+    });
+  const me = { userId: 'u1', role: 'owner', username: 'testuser' };
+  const bob = { userId: 'u2', role: 'member', username: 'bob', name: 'Bob' };
+
+  it('owner leave with other members opens the hand-over dialog', () => {
+    h.search = { tab: 'members' };
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    act(() => h.members!.onLeaveCrew!());
+    expect(screen.getByTestId('handover-dialog')).toBeInTheDocument();
+    expect(h.handOver!.candidates.map((c) => c.userId)).toEqual(['u2']);
+    expect(h.confirms['Leave crew']!.open).toBe(false);
+  });
+
+  it('solo owner leave opens the delete confirm', () => {
+    h.search = { tab: 'members' };
+    ownerCrew([me]);
+    render(<CrewView />);
+    act(() => h.members!.onLeaveCrew!());
+    expect(screen.queryByTestId('handover-dialog')).not.toBeInTheDocument();
+    expect(h.confirms['Delete crew']!.open).toBe(true);
+  });
+
+  it('a member leave opens the leave confirm', () => {
+    h.search = { tab: 'members' };
+    setStoreState({
+      user: { id: 'u2', username: 'bob' },
+      crews: [{ id: 'c1', name: 'Squad', owner: 'u1' }],
+      activeCrew: { id: 'c1', name: 'Squad', owner: 'u1', members: [me, bob] },
+    });
+    render(<CrewView />);
+    act(() => h.members!.onLeaveCrew!());
+    expect(h.confirms['Leave crew']!.open).toBe(true);
+  });
+
+  it('hand-over confirm leaves and toasts the new owner', async () => {
+    h.search = { tab: 'members' };
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    await act(async () => h.handOver!.onConfirm('u2'));
+    expect(storeState.handOverAndLeave).toHaveBeenCalledWith('c1', 'u2');
+    expect(h.toast).toHaveBeenCalledWith('You left Squad. Bob owns it now.', 'success');
+  });
+
+  it('kick success shows the Removed toast', async () => {
+    h.search = { tab: 'members' };
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    act(() => h.members!.onKick!(bob));
+    await act(async () => h.confirms['Remove member']!.onConfirm());
+    expect(storeState.kickMember).toHaveBeenCalledWith('c1', 'u2');
+    expect(h.toast).toHaveBeenCalledWith('Removed Bob', 'success');
+  });
+
+  it('shows the invite card for a one-member crew and hides it for two', () => {
+    ownerCrew([me]);
+    const { unmount } = render(<CrewView />);
+    expect(screen.getByText('Invite your crew')).toBeInTheDocument();
+    expect(screen.getAllByTestId('crew-invite-bar')).toHaveLength(1);
+    unmount();
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    expect(screen.queryByText('Invite your crew')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('crew-invite-bar')).toHaveLength(1);
   });
 });

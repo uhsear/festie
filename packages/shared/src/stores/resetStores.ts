@@ -28,6 +28,12 @@ export function resetAllStores(): void {
     activeStages: [],
     searchQuery: '',
     onlyMine: false,
+    scheduleView: null,
+    hiddenDays: [],
+    dismissedPhase: null,
+    scheduleGroupBy: null,
+    prefsFestivalId: null,
+    byFestival: {},
   });
   useCrewStore.setState({
     crews: [],

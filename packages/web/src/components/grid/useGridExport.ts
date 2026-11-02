@@ -19,46 +19,16 @@ export function useGridExport(gridRef: RefObject<HTMLDivElement | null>, selecte
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') || `day-${selectedDay + 1}`;
     const el = gridRef.current;
-    const body = el.querySelector<HTMLElement>('[data-grid-body]');
-    const cols = el.querySelector<HTMLElement>('[data-grid-cols]');
-    const head = el.querySelector<HTMLElement>('[data-grid-head]');
-    if (!body || !cols || !head) {
-      setExporting(false);
-      return;
-    }
-
     const dpr = Math.min(Math.max(Math.ceil(window.devicePixelRatio || 1), 2), 3);
-    const saved = {
-      elOverflow: el.style.overflow,
-      elHeight: el.style.height,
-      bodyOverflow: body.style.overflow,
-      bodyHeight: body.style.height,
-      bodyWidth: body.style.width,
-      headWidth: head.style.width,
-      colsMinWidth: cols.style.minWidth,
-    };
     try {
-      const gutterW = el.querySelector<HTMLElement>('[data-grid-gutter]')?.offsetWidth || 0;
-      const fullW = Math.max(cols.scrollWidth + gutterW, el.clientWidth);
-      const fullH = Math.max(cols.scrollHeight + head.offsetHeight, el.clientHeight);
-
-      el.style.overflow = 'visible';
-      el.style.height = fullH + 'px';
-      body.style.overflow = 'visible';
-      body.style.height = cols.scrollHeight + 'px';
-      body.style.width = fullW + 'px';
-      head.style.width = fullW + 'px';
-      cols.style.minWidth = fullW - gutterW + 'px';
-
-      await new Promise((r) => setTimeout(r, 50));
       if (document.fonts?.ready) await document.fonts.ready;
 
       const { toBlob } = await import('html-to-image');
       const blob = await toBlob(el, {
         backgroundColor: '#080810',
         pixelRatio: dpr,
-        width: fullW,
-        height: fullH,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
         cacheBust: true,
       });
       if (!blob) throw new Error('Capture failed');
@@ -77,13 +47,6 @@ export function useGridExport(gridRef: RefObject<HTMLDivElement | null>, selecte
       const isAbort = e instanceof DOMException && e.name === 'AbortError';
       if (!isAbort) console.error('Export failed', e);
     } finally {
-      el.style.overflow = saved.elOverflow;
-      el.style.height = saved.elHeight;
-      body.style.overflow = saved.bodyOverflow;
-      body.style.height = saved.bodyHeight;
-      body.style.width = saved.bodyWidth;
-      head.style.width = saved.headWidth;
-      cols.style.minWidth = saved.colsMinWidth;
       setExporting(false);
     }
   }, [gridRef, selectedDay, dayLabel, exporting]);

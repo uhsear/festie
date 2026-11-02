@@ -25,6 +25,7 @@ import { useFestivalDataStore, useAuthStore, useUIStore, useNotificationPrefsSto
 import {
   usePicks,
   usePickSync,
+  usePickClear,
   useFestival,
   useCrew,
   useDebouncedNote,
@@ -65,6 +66,7 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
+import { undoNotifier } from '../../lib/undoNotifier';
 
 const REMINDER_ASK_DISMISSED_KEY = 'festie-reminder-ask-dismissed';
 
@@ -341,21 +343,26 @@ export default function SetDetailScreen() {
   }, [listen, spotifyStatus]);
 
   // ---- Actions. ------------------------------------------------------------
+  const clearPick = usePickClear(undoNotifier);
   const handlePriority = useCallback(
     (priority: Priority | null) => {
       if (!set || !currentFestival) return;
       // F34: selection haptic, matching SetCardMobile's priority toggle and the
       // reminder chips below — the same gesture class should always buzz.
       haptics.select();
+      if (priority === null) {
+        clearPick(set.id, artistDisplayName(set, b2bSeparator));
+        return;
+      }
       savePick(currentFestival.id, set.id, priority).catch((err) => {
         haptics.warning();
         useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), { kind: 'error' });
       });
     },
-    [set, currentFestival, savePick, haptics],
+    [set, currentFestival, savePick, haptics, clearPick, b2bSeparator],
   );
 
-  // A failed reminder save shows inline: on iOS the root toast sits behind this native sheet.
+  // A failed reminder save also shows inline, beside the chip that failed.
   const [reminderFailed, setReminderFailed] = useState<{ minutes: number | null } | null>(null);
   const handleReminder = useCallback(
     (minutes: number | null) => {
@@ -372,18 +379,14 @@ export default function SetDetailScreen() {
     [set, currentFestival, saveReminder, haptics, artistName],
   );
 
-  // Clash-prompt clear — demote one side of a clash to null. savePick is
-  // offline-queued, so resolving a clash works on dead signal.
+  // Clash-prompt clear — demote one side of a clash to null, with an undo
+  // toast. The write is offline-queued, so resolving a clash works on dead signal.
   const handleClashClear = useCallback(
-    (clearSetId: string) => {
-      if (!currentFestival) return;
+    (clearSetId: string, label: string) => {
       haptics.select();
-      savePick(currentFestival.id, clearSetId, null).catch((err) => {
-        haptics.warning();
-        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't clear your pick. Try again."), { kind: 'error' });
-      });
+      clearPick(clearSetId, label);
     },
-    [currentFestival, savePick, haptics],
+    [clearPick, haptics],
   );
 
   const user = useAuthStore((s) => s.user);
@@ -731,7 +734,8 @@ export default function SetDetailScreen() {
               card — it names both acts and offers per-pair Keep/Switch actions
               ("Keep {other}" clears the current pick = a Switch). The passive
               "N scheduling conflicts" box that used to sit below was the
-              duplicate coral surface and has been removed. */}
+              duplicate coral surface and has been removed. ClashPrompt also keeps a
+              quiet "Clashes with" line after "Keep both". */}
         {currentProfile && conflicts.length > 0 ? (
           <ClashPrompt
             currentSet={set}
