@@ -26,6 +26,7 @@ import PlanNotesList from '../components/features/PlanNotesList';
 // picks bundle until the user actually opens the share modal.
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
 const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
+const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
 import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -122,6 +123,7 @@ function PicksViewInner() {
     <Suspense fallback={null}>
       <SharePicksDialog />
       <CalendarDialog />
+      <ScheduleImageDialog />
     </Suspense>
   ) : null;
 

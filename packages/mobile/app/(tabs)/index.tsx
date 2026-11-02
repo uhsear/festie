@@ -14,6 +14,7 @@ import {
   type ListRenderItem,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -24,7 +25,7 @@ import {
   useUIStore,
   selectMyPicks,
 } from '@festie/shared/stores';
-import { usePicks, useCanPick, useFestival, usePickClear } from '@festie/shared/hooks';
+import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady } from '@festie/shared/hooks';
 import {
   artistDisplayName,
   detectConflicts,
@@ -66,6 +67,7 @@ import { useReduceMotion } from '../../hooks/useReduceMotion';
 import SegmentedControl from '../../components/SegmentedControl';
 import NowNextStrip from '../../components/NowNextStrip';
 import PhaseHomeActions from '../../components/PhaseHomeActions';
+import FestivalReadyCard from '../../components/FestivalReadyCard';
 import ScheduleDayChips from '../../components/ScheduleDayChips';
 import ScheduleResultsRow from '../../components/ScheduleResultsRow';
 import FestivalList from '../../components/FestivalList';
@@ -288,6 +290,18 @@ export default function TimelineScreen() {
   const pickCount = Object.keys(myPicks ?? {}).length;
   const hasCrew = crews.some((c) => !c.festivalId || c.festivalId === currentFestival?.id);
   const homeActions = getHomeActions({ phase, signedIn: !!user, pickCount, hasCrew });
+
+  // Device notification permission for the Festival ready checklist. Re-read on
+  // focus so it updates after the user comes back from system settings.
+  const [notificationsAllowed, setNotificationsAllowed] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      Notifications.getPermissionsAsync()
+        .then((p) => setNotificationsAllowed(p.status === 'granted'))
+        .catch(() => setNotificationsAllowed(false));
+    }, []),
+  );
+  const ready = useFestivalReady(notificationsAllowed);
 
   // The person's remembered view for this festival wins; otherwise Timeline on a
   // live day with timed sets, Cards. A stored 'grid' never reaches here because
@@ -765,12 +779,20 @@ export default function TimelineScreen() {
   // focus across keystroke re-renders.
   const controls = (
     <>
-      {/* Next-step band from shared getHomeActions (picks and crew before the
-          festival, find the crew during it, wrap and settle-up after). It is
-          empty, and so hidden, when there is nothing left to do. It rides in the
-          controls so it scrolls with the Cards list. The close button hides it
-          for this festival and phase. */}
-      {homeActions.length > 0 && phase && dismissedPhase !== phase ? (
+      {/* Before the festival the Festival ready checklist takes the band's place
+          until it is done or hidden. It covers the band's pre-festival rows
+          (first pick, crew), so the two are never shown together. It is
+          first-run guidance, so it is not gated on the filters.
+          Otherwise: next-step band from shared getHomeActions (picks and crew
+          before the festival, find the crew during it, wrap and settle-up
+          after). It is empty, and so hidden, when there is nothing left to do. It
+          rides in the controls so it scrolls with the Cards list. The close
+          button hides it for this festival and phase. */}
+      {ready.visible ? (
+        <View style={{ paddingHorizontal: hPad }}>
+          <FestivalReadyCard ready={ready} />
+        </View>
+      ) : homeActions.length > 0 && phase && dismissedPhase !== phase ? (
         <View style={{ paddingHorizontal: hPad }}>
           <PhaseHomeActions actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
         </View>

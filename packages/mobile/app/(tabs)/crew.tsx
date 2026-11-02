@@ -15,6 +15,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   type ScrollViewInstance,
+  type TextInputInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -154,6 +155,7 @@ export default function CrewScreen() {
   const router = useRouter();
 
   const [inviteCode, setInviteCode] = useState('');
+  const inviteInputRef = useRef<TextInputInstance>(null);
   // Owner-only totem editor (in the Manage footer). Opens prefilled from the
   // active crew; `null` while closed so we can re-seed on open.
   const [totemEditOpen, setTotemEditOpen] = useState(false);
@@ -192,7 +194,8 @@ export default function CrewScreen() {
     tab: tabParam,
     joined: joinedParam,
     sheet: sheetParam,
-  } = useLocalSearchParams<{ tab?: string; joined?: string; sheet?: string }>();
+    start: startParam,
+  } = useLocalSearchParams<{ tab?: string; joined?: string; sheet?: string; start?: string }>();
 
   // Plan index: each chip scrolls its section label to the top of the Plan pane.
   const reduceMotion = useReduceMotion();
@@ -273,6 +276,22 @@ export default function CrewScreen() {
     setSwitcherOpen(true);
     router.setParams({ sheet: undefined });
   }, [sheetParam, hasActiveCrew, router]);
+
+  // /(tabs)/crew?start=create|join (from the intro) focuses the matching no-crew field,
+  // once per link. The param is latched first because the first render can show
+  // "No crew yet" before the crew load swaps in the skeleton and unmounts the form.
+  const [pendingStart, setPendingStart] = useState<'create' | 'join' | null>(null);
+  useEffect(() => {
+    if (!user || (startParam !== 'create' && startParam !== 'join')) return;
+    setPendingStart(startParam);
+    router.setParams({ start: undefined });
+  }, [user, startParam, router]);
+  useEffect(() => {
+    if (!pendingStart || status === 'loading' || status === 'error') return;
+    // Create focuses via CreateCrewForm's autoFocus prop, which reads pendingStart.
+    if (pendingStart === 'join' && status === 'none') inviteInputRef.current?.focus();
+    setPendingStart(null);
+  }, [pendingStart, status]);
 
   // Load polls + meeting points for the active crew (best-effort). These five
   // loaders all write the SAME shared store `error` field, so firing them
@@ -707,7 +726,7 @@ export default function CrewScreen() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <CreateCrewForm />
+          <CreateCrewForm autoFocus={pendingStart === 'create'} />
 
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Join by code</Text>
@@ -715,6 +734,7 @@ export default function CrewScreen() {
               6-character code, or paste the invite link
             </Text>
             <TextInput
+              ref={inviteInputRef}
               style={styles.input}
               placeholder="K7XQ2M"
               placeholderTextColor={t.colors.text.placeholder}

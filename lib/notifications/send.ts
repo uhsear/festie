@@ -90,6 +90,8 @@ export const PREF_MAP: Record<string, string> = {
   crew_poll: 'crewPolls',
   crew_money: 'crewMoney',
   crew_ride: 'crewRides',
+  // Admin announcements share the "Schedule changes" switch: no own preference column.
+  festival_announcement: 'scheduleChanges',
 };
 
 /**

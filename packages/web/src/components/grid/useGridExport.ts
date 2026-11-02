@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { RefObject } from 'react';
+import { captureAndShareImage } from '../../lib/shareImage';
+import { useToast } from '../../lib/toastContext';
 
 /**
  * Encapsulates the grid-to-image export logic. Dynamically imports
@@ -7,6 +9,7 @@ import type { RefObject } from 'react';
  */
 export function useGridExport(gridRef: RefObject<HTMLDivElement | null>, selectedDay: number, dayLabel: string) {
   const [exporting, setExporting] = useState(false);
+  const { toast } = useToast();
 
   const exportGrid = useCallback(async () => {
     if (!gridRef.current || exporting) return;
@@ -21,35 +24,20 @@ export function useGridExport(gridRef: RefObject<HTMLDivElement | null>, selecte
     const el = gridRef.current;
     const dpr = Math.min(Math.max(Math.ceil(window.devicePixelRatio || 1), 2), 3);
     try {
-      if (document.fonts?.ready) await document.fonts.ready;
-
-      const { toBlob } = await import('html-to-image');
-      const blob = await toBlob(el, {
-        backgroundColor: '#080810',
-        pixelRatio: dpr,
+      await captureAndShareImage(el, {
         width: el.scrollWidth,
         height: el.scrollHeight,
-        cacheBust: true,
+        filename: `festie-${daySlug}-grid.png`,
+        title: `${dayLabel} Grid`,
+        pixelRatio: dpr,
       });
-      if (!blob) throw new Error('Capture failed');
-
-      const filename = `festie-${daySlug}-grid.png`;
-      const file = new File([blob], filename, { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: `${dayLabel} Grid` });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = Object.assign(document.createElement('a'), { href: url, download: filename });
-        a.click();
-        URL.revokeObjectURL(url);
-      }
     } catch (e: unknown) {
-      const isAbort = e instanceof DOMException && e.name === 'AbortError';
-      if (!isAbort) console.error('Export failed', e);
+      console.error('Export failed', e);
+      toast("Couldn't make the grid image. Try again.", 'error');
     } finally {
       setExporting(false);
     }
-  }, [gridRef, selectedDay, dayLabel, exporting]);
+  }, [gridRef, selectedDay, dayLabel, exporting, toast]);
 
   return { exporting, exportGrid };
 }

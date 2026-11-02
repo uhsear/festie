@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useState } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Alert, RefreshControl, Modal, Linking, Platform } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, Alert, RefreshControl, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
@@ -14,6 +14,7 @@ import {
   ACCOUNT_COPY,
   ACCOUNT_SECTIONS,
   COPY,
+  INTRO_REPLAY_COPY,
   SUPPORT_EMAIL,
   SUPPORT_URL_TERMS,
   THEME_MODE_OPTIONS,
@@ -34,7 +35,6 @@ import AccountPasswordSection from '../../components/AccountPasswordSection';
 import AccountEmailVerifySection from '../../components/AccountEmailVerifySection';
 import AccountEmailSection from '../../components/AccountEmailSection';
 import AccountDevicesSection from '../../components/AccountDevicesSection';
-import FirstRunIntro from '../../components/FirstRunIntro';
 import AccountNotificationsSection from '../../components/AccountNotificationsSection';
 import AccountNotificationPrefsSection from '../../components/AccountNotificationPrefsSection';
 import AccountHistorySection from '../../components/AccountHistorySection';
@@ -99,7 +99,6 @@ export default function AccountScreen() {
   const offlineMode = useUIStore((s) => s.offlineMode);
 
   const [loggingOut, setLoggingOut] = useState(false);
-  const [showIntro, setShowIntro] = useState(false);
   // Pull-to-refresh: a bump signal re-pulls the History card, and we reload
   // notification prefs in parallel so a swipe refreshes everything live.
   const [refreshing, setRefreshing] = useState(false);
@@ -273,13 +272,13 @@ export default function AccountScreen() {
       <View style={styles.card}>
         <LinkRow
           icon="play-circle-outline"
-          title={ACCOUNT_COPY.howFestieWorks}
-          hint={ACCOUNT_COPY.howFestieWorksHint}
+          title={INTRO_REPLAY_COPY.title}
+          hint={INTRO_REPLAY_COPY.hint}
           onPress={() => {
             haptics.tap();
-            setShowIntro(true);
+            useUIStore.getState().setIntroReplay(true);
           }}
-          accessibilityLabel={ACCOUNT_COPY.howFestieWorks}
+          accessibilityLabel={INTRO_REPLAY_COPY.a11y}
         />
         <LinkRow
           icon="mail-outline"
@@ -405,9 +404,6 @@ export default function AccountScreen() {
       </ScrollView>
 
       {/* Replays the intro only; the stored first-run flag stays as it is. */}
-      <Modal visible={showIntro} animationType="fade" onRequestClose={() => setShowIntro(false)}>
-        <FirstRunIntro onDone={() => setShowIntro(false)} />
-      </Modal>
     </View>
   );
 }

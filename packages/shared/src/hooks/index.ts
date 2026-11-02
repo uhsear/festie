@@ -34,3 +34,4 @@ export * from './useCreateCrew';
 export * from './useAdminUserList';
 export * from './useFestivalWeather';
 export * from './useSignedInDevices';
+export * from './useFestivalReady';

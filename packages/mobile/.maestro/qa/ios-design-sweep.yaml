@@ -15,7 +15,7 @@ env:
 - launchApp
 - extendedWaitUntil:
     visible:
-      text: "Plan your whole weekend|Select a Festival"
+      text: "Plan your weekend|Select a Festival"
     timeout: 90000
 - extendedWaitUntil:
     visible: "__wait_for_ota_download__"
@@ -25,12 +25,12 @@ env:
 - launchApp
 - extendedWaitUntil:
     visible:
-      text: "Plan your whole weekend|Select a Festival"
+      text: "Plan your weekend|Select a Festival"
     timeout: 90000
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/00-intro
 - runFlow:
     when:
-      visible: "Plan your whole weekend"
+      visible: "Plan your weekend"
     commands:
       - tapOn: "Skip intro"
 - extendedWaitUntil:

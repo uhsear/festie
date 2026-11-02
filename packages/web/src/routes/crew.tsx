@@ -76,7 +76,7 @@ function CrewViewInner() {
   const navigate = useNavigate();
   // /crew?tab=<key> keeps the tab across reloads and shared links.
   // /crew?sos=<userId> (SOS banner) opens Find with the map aimed at that raiser.
-  const { sos: focusSosUserId, tab: tabParam } = useSearch({ from: '/crew' });
+  const { sos: focusSosUserId, tab: tabParam, start } = useSearch({ from: '/crew' });
   const tab: CrewTabKey = focusSosUserId ? 'find' : (tabParam ?? DEFAULT_CREW_TAB);
   const handleTabChange = (next: CrewTabKey) => {
     navigate({ to: '/crew', search: { tab: next }, replace: true });
@@ -135,6 +135,14 @@ function CrewViewInner() {
     enabled: !!activeCrewId,
     select: (balances) => Math.abs(balances.find((b) => b.userId === userId)?.balance ?? 0) > 0.01,
   });
+
+  // /crew?start=create|join (from the intro) opens that prompt once, then drops the param.
+  useEffect(() => {
+    if (!user || !start) return;
+    if (start === 'create') setCreateOpen(true);
+    else setJoinOpen(true);
+    navigate({ from: '/crew', to: '/crew', search: (prev) => ({ ...prev, start: undefined }), replace: true });
+  }, [user?.id, start]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!user) return <GuestTeaser mode="crew" />;
 

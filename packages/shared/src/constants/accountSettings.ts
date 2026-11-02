@@ -65,8 +65,6 @@ export const ACCOUNT_COPY = {
   devicesLoadFailed: "Couldn't load your devices. Try again.",
   signOutFailed: "Couldn't sign that device out. Try again.",
   helpTitle: 'Help and legal',
-  howFestieWorks: 'How Festie works',
-  howFestieWorksHint: 'Replay the welcome walkthrough',
   contactSupport: 'Contact support',
   contactSupportNoMail: (email: string) => `Write to ${email}.`,
   terms: 'Terms of service',

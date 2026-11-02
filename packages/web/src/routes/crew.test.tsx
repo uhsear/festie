@@ -251,6 +251,29 @@ describe('CrewView', () => {
     expect(screen.getByTestId('guest-teaser')).toHaveTextContent('crew');
   });
 
+  it('?start=create opens the create dialog for a signed-in user and clears the param', () => {
+    h.search = { start: 'create', tab: 'plan' };
+    render(<CrewView />);
+    expect(screen.getByTestId('create-crew-dialog')).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    const { search } = mockNavigate.mock.calls[0][0] as { search: (prev: Record<string, unknown>) => Record<string, unknown> };
+    expect(search({ start: 'create', tab: 'plan' })).toEqual({ start: undefined, tab: 'plan' });
+  });
+
+  it('?start=join opens the Join crew prompt', () => {
+    h.search = { start: 'join' };
+    render(<CrewView />);
+    expect(screen.getByText('Join crew')).toBeInTheDocument();
+  });
+
+  it('?start=create opens nothing for a guest', () => {
+    h.search = { start: 'create' };
+    setStoreState({ user: null });
+    render(<CrewView />);
+    expect(screen.queryByTestId('create-crew-dialog')).not.toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it('renders empty state when no crews and no active crew', () => {
     setStoreState({ crews: [], activeCrew: null });
     render(<CrewView />);

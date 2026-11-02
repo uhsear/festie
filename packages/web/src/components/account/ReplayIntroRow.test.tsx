@@ -9,7 +9,7 @@ describe('ReplayIntroRow', () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });
     render(<ReplayIntroRow />);
-    await userEvent.click(screen.getByRole('button', { name: 'How Festie works' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Replay the Festie intro' }));
     expect(localStorage.getItem('festie_onboarding_completed')).toBeNull();
     expect(assign).toHaveBeenCalledWith('/');
     vi.unstubAllGlobals();

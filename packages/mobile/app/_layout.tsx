@@ -28,6 +28,7 @@ import OfflineBanner from '../components/OfflineBanner';
 import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
 import LiveSharePublisher from '../components/LiveSharePublisher';
+import AnnouncementBanner from '../components/AnnouncementBanner';
 import FirstRunIntro from '../components/FirstRunIntro';
 import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -194,6 +195,8 @@ function AuthGate() {
   // The app-wide SOS banner sits under the OfflineBanner and takes the inset
   // only when the OfflineBanner is not showing.
   const [sosActive, setSosActive] = useState(false);
+  // The announcement banner sits under the SOS banner and takes the inset last.
+  const [announceActive, setAnnounceActive] = useState(false);
 
   // Ensure Android notification channels exist BEFORE any notification is
   // scheduled. useLocalReminders targets channelId 'updates' which must exist
@@ -269,8 +272,10 @@ function AuthGate() {
       .catch(() => setIntroSeen(true)); // on error, don't block with the intro
   }, []);
 
+  const introReplay = useUIStore((s) => s.introReplay);
   const dismissIntro = () => {
     setIntroSeen(true);
+    useUIStore.getState().setIntroReplay(false);
     AsyncStorage.setItem(INTRO_KEY, 'true').catch(() => {});
   };
 
@@ -392,7 +397,8 @@ function AuthGate() {
       {!loading && <OfflineBanner onActiveChange={setBannerActive} />}
       {!loading && <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />}
       {!loading && <LiveSharePublisher />}
-      <TopBannerContext.Provider value={bannerActive || sosActive}>
+      {!loading && <AnnouncementBanner padTop={!bannerActive && !sosActive} onActiveChange={setAnnounceActive} />}
+      <TopBannerContext.Provider value={bannerActive || sosActive || announceActive}>
         <View style={styles.appShell}>
           {/* Use expo-router's global router singleton (not the local useRouter
               instance): the root boundary sits OUTSIDE the Stack, so it must
@@ -493,7 +499,7 @@ function AuthGate() {
           <ActivityIndicator size="large" color={colors.accent.aqua} />
         </View>
       )}
-      {!loading && introSeen === false && !skipIntro && <FirstRunIntro onDone={dismissIntro} />}
+      {!loading && (introReplay || (introSeen === false && !skipIntro)) && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );
 }

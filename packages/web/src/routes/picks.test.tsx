@@ -77,6 +77,11 @@ vi.mock('../components/features/SharePicksDialog', () => ({
   default: () => <button type="button" aria-label="Share my picks">Share picks</button>,
 }));
 
+// ScheduleImageDialog has its own test (it needs the capture and export mocks).
+vi.mock('../components/features/ScheduleImageDialog', () => ({
+  default: () => <button type="button" aria-label="Save my picks as an image">Save image</button>,
+}));
+
 const mockToast = vi.fn();
 vi.mock('../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast, toastError: vi.fn(), toastUndo: vi.fn() }),
@@ -343,5 +348,11 @@ describe('PicksView', () => {
     setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
     render(<PicksView />);
     expect(await screen.findByRole('button', { name: 'Share my picks' })).toBeInTheDocument();
+  });
+
+  it('renders the Save image button when the profile has picks', async () => {
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    expect(await screen.findByRole('button', { name: 'Save my picks as an image' })).toBeInTheDocument();
   });
 });

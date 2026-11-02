@@ -252,4 +252,17 @@ describe('uiStore', () => {
       useUIStore.getState().setTheme('stage');
     });
   });
+
+  describe('introReplay', () => {
+    it('defaults to false, sets, and is never persisted', () => {
+      expect(useUIStore.getState().introReplay).toBe(false);
+      useUIStore.getState().setIntroReplay(true);
+      expect(useUIStore.getState().introReplay).toBe(true);
+      useUIStore.getState().setTheme('daylight');
+      const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
+      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true });
+      useUIStore.getState().setTheme('stage');
+      useUIStore.getState().setIntroReplay(false);
+    });
+  });
 });
