@@ -1,8 +1,9 @@
+import { safeReturnPath } from '@festie/shared/utils';
 import { RootRoute, Route, Router, lazyRouteComponent, redirect } from '@tanstack/react-router';
 import { Suspense, type ComponentType, type ReactElement } from 'react';
 import AppShell from './components/layout/AppShell';
 import RouteErrorBoundary from './components/layout/RouteErrorBoundary';
-import { authReady, isAuthenticated, isAdmin } from './routes/auth-guard';
+import { authReady, isAuthenticated, isAdmin, redirectIfSignedIn } from './routes/auth-guard';
 import NotFoundPage from './routes/not-found';
 import CardsSkeleton from './components/ui/skeletons/CardsSkeleton';
 import TimelineSkeleton from './components/ui/skeletons/TimelineSkeleton';
@@ -13,6 +14,7 @@ import CrewSkeleton from './components/ui/skeletons/CrewSkeleton';
 import CrewPlanSkeleton from './components/ui/skeletons/CrewPlanSkeleton';
 import AccountSkeleton from './components/ui/skeletons/AccountSkeleton';
 import WrapSkeleton from './components/ui/skeletons/WrapSkeleton';
+import { parseCrewTab, type CrewTabKey } from '@festie/shared/utils';
 
 // Wrap a lazy component so React.Suspense shows a layout-matched skeleton
 // while the chunk downloads — this replaces the previous single "Loading..."
@@ -44,10 +46,12 @@ const loadAdmin = () => import('./routes/admin');
 const loadLogin = () => import('./routes/login');
 const loadRegister = () => import('./routes/register');
 const loadForgot = () => import('./routes/forgot-password');
+const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
 const loadPlanSnapshot = () => import('./routes/plan-snapshot');
+const loadMap = () => import('./routes/map');
 
 // Generic minimal fallback for auth/admin routes — these chunks are tiny and
 // a layout-matched skeleton isn't worth the bytes. Main-tab routes below get
@@ -57,7 +61,10 @@ const MinimalFallback = () => (
     className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-[var(--space-8)] px-6 py-4"
     aria-busy="true"
     aria-label="Loading"
+    role="status"
+    aria-live="polite"
   >
+    <span className="sr-only">Loading…</span>
     <div className="skeleton-shimmer h-[200px] m-6 rounded-xl" />
   </div>
 );
@@ -86,10 +93,12 @@ const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
 const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton);
 const PlanSnapshotView = withSkeleton(lazyRouteComponent(loadPlanSnapshot), MinimalFallback);
+const MapView = withSkeleton(lazyRouteComponent(loadMap), MinimalFallback);
 const AdminPanel = withSkeleton(lazyRouteComponent(loadAdmin), MinimalFallback);
 const LoginPage = withSkeleton(lazyRouteComponent(loadLogin), MinimalFallback);
 const RegisterPage = withSkeleton(lazyRouteComponent(loadRegister), MinimalFallback);
 const ForgotPasswordPage = withSkeleton(lazyRouteComponent(loadForgot), MinimalFallback);
+const ResetPasswordPage = withSkeleton(lazyRouteComponent(loadReset), MinimalFallback);
 
 /**
  * Prefetch all authenticated main-tab chunks. Called from AppShell on idle
@@ -155,10 +164,8 @@ const wrapRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/wrap',
   component: WrapView,
-  beforeLoad: async () => {
-    await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
-  },
+  // No guest guard: /wrap renders <GuestTeaser mode="wrap"/> in place for
+  // unauthenticated visitors. The wrap queries wait for a user, so a guest sends no request.
 });
 
 // ── Auth routes ─────────────────────────────────────────────────────
@@ -166,18 +173,42 @@ const loginRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/login',
   component: LoginPage,
+  validateSearch: (s: Record<string, unknown>): { next?: string; reset?: true } => {
+    const next = safeReturnPath(s.next);
+    return {
+      ...(next ? { next } : {}),
+      ...(s.reset === 1 || s.reset === '1' || s.reset === true ? { reset: true as const } : {}),
+    };
+  },
+  beforeLoad: redirectIfSignedIn,
 });
 
 const registerRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/register',
   component: RegisterPage,
+  validateSearch: (s: Record<string, unknown>): { next?: string } => {
+    const next = safeReturnPath(s.next);
+    return next ? { next } : {};
+  },
+  beforeLoad: redirectIfSignedIn,
 });
 
 const forgotPasswordRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/forgot-password',
   component: ForgotPasswordPage,
+  validateSearch: (s: Record<string, unknown>): { expired?: true } =>
+    s.expired === 1 || s.expired === '1' || s.expired === true ? { expired: true } : {},
+});
+
+// Signed-in users may open this: the reset link works from any session.
+const resetPasswordRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/reset-password',
+  component: ResetPasswordPage,
+  validateSearch: (s: Record<string, unknown>): { token?: string } =>
+    typeof s.token === 'string' ? { token: s.token } : {},
 });
 
 // ── Protected routes (redirect to /login if not authenticated) ──────
@@ -185,10 +216,23 @@ const crewRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/crew',
   component: CrewView,
-  validateSearch: (search: Record<string, unknown>): { sos?: string } =>
-    typeof search.sos === 'string' ? { sos: search.sos } : {},
+  validateSearch: (search: Record<string, unknown>): { sos?: string; tab?: CrewTabKey } => {
+    const out: { sos?: string; tab?: CrewTabKey } = {};
+    if (typeof search.sos === 'string') out.sos = search.sos;
+    const tab = parseCrewTab(search.tab);
+    if (tab) out.tab = tab;
+    return out;
+  },
   // No guest guard: /crew renders <GuestTeaser mode="crew"/> in place for
   // unauthenticated visitors (parity with the always-visible nav tabs).
+});
+
+// /map — full-page map. Public: guests see stages and amenities; crew layers
+// render inside the route only for a signed-in user with an active crew.
+const mapRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/map',
+  component: MapView,
 });
 
 // /crew-plan — one-screen offline-native "what's my crew's plan" digest.
@@ -196,9 +240,9 @@ const crewPlanRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/crew-plan',
   component: CrewPlanView,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
   },
 });
 
@@ -206,9 +250,9 @@ const accountRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/account',
   component: AccountPage,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
   },
 });
 
@@ -218,9 +262,9 @@ const compareRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/compare',
   component: CompareView,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
   },
 });
 
@@ -256,9 +300,9 @@ const adminRoute = new Route({
   component: AdminPanel,
   validateSearch: (search: Record<string, unknown>): { tab?: string } =>
     typeof search.tab === 'string' ? { tab: search.tab } : {},
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     await authReady();
-    if (!isAuthenticated()) throw redirect({ to: '/login' });
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
     if (!isAdmin()) throw redirect({ to: '/' });
   },
 });
@@ -269,11 +313,13 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   registerRoute,
   forgotPasswordRoute,
+  resetPasswordRoute,
   cardsRoute,
   timelineRoute,
   picksRoute,
   crewRoute,
   crewPlanRoute,
+  mapRoute,
   gridRoute,
   festivalModeRoute,
   wrapRoute,

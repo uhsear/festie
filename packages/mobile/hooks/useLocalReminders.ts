@@ -7,6 +7,7 @@ import {
   artistDisplayName,
   buildReminderPlan,
   diffReminderPlan,
+  effectiveReminders,
   MAX_LOCAL_REMINDERS,
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
@@ -37,7 +38,7 @@ import { reportLocalRemindersFestival } from './useMobilePush';
  * - Gated on the user's set-reminders preference (`notificationPrefs.setReminders`,
  *   the existing pref that controls schedule alerts). When off, all local
  *   reminders are cancelled.
- * - Requests notification permission once, gracefully — a denial just no-ops.
+ * - Only reads notification permission (the set sheet asks) — no permission just no-ops.
  *
  * The `expo-notifications` calls live here (mobile); the diff/cap/priority math
  * is in `@festie/shared/utils/reminderSchedule` so it stays testable and shared.
@@ -55,11 +56,11 @@ export function useLocalReminders(): void {
   const festivalId = useFestivalDataStore((s) => s.currentFestival?.id);
 
   const setRemindersPref = useNotificationPrefsStore((s) => s.prefs.setReminders);
+  const mustSeeReminderMinutes = useNotificationPrefsStore((s) => s.prefs.mustSeeReminderMinutes);
   const loadPrefs = useNotificationPrefsStore((s) => s.loadPrefs);
 
-  // Track whether we've already requested permission so we ask at most once per
-  // mount, and whether permission was granted.
-  const permissionRef = useRef<{ requested: boolean; granted: boolean }>({ requested: false, granted: false });
+  // Whether permission was granted. The set sheet asks; this hook only reads it.
+  const permissionRef = useRef<{ granted: boolean }>({ granted: false });
 
   // Pull the latest server prefs once so gating reflects the real value even if
   // the user never opened the account screen. Best-effort — defaults to enabled.
@@ -67,20 +68,18 @@ export function useLocalReminders(): void {
     loadPrefs().catch(() => {});
   }, [loadPrefs]);
 
-  /** Request notification permission at most once; returns whether granted. */
+  useEffect(() => {
+    ensureReminderCategory().catch((e) => Sentry.captureException(e));
+  }, []);
+
+  /** Read notification permission (never asks: the set sheet does); returns whether granted. */
   // Defined before the reconcile effect that calls it (avoids a TDZ/forward ref).
   // Depends only on the stable permissionRef, so the identity is stable.
   const ensurePermission = useCallback(async (): Promise<boolean> => {
     if (permissionRef.current.granted) return true;
     try {
       const existing = await Notifications.getPermissionsAsync();
-      let status = existing.status;
-      if (status !== 'granted' && !permissionRef.current.requested) {
-        permissionRef.current.requested = true;
-        const req = await Notifications.requestPermissionsAsync();
-        status = req.status;
-      }
-      const granted = status === 'granted';
+      const granted = existing.status === 'granted';
       permissionRef.current.granted = granted;
       return granted;
     } catch (e) {
@@ -100,7 +99,8 @@ export function useLocalReminders(): void {
         return;
       }
 
-      const plan = buildReminderPlan({ reminders, picks, sets, days, timeZone: festivalTimeZone });
+      const merged = effectiveReminders(reminders, picks, mustSeeReminderMinutes);
+      const plan = buildReminderPlan({ reminders: merged, picks, sets, days, timeZone: festivalTimeZone });
 
       // Nothing to schedule and (likely) nothing scheduled — still reconcile so
       // un-reminded sets get cancelled. But avoid prompting for permission when
@@ -141,7 +141,7 @@ export function useLocalReminders(): void {
 
       // Above the iOS slot cap, or after a failed schedule, some reminders are not on
       // the phone, so the server push must stay on.
-      const fullyLocal = Object.keys(reminders ?? {}).length <= MAX_LOCAL_REMINDERS && results.every(Boolean);
+      const fullyLocal = Object.keys(merged).length <= MAX_LOCAL_REMINDERS && results.every(Boolean);
       await reportLocalRemindersFestival(permissionRef.current.granted && fullyLocal && festivalId ? festivalId : null);
     }
 
@@ -158,7 +158,47 @@ export function useLocalReminders(): void {
       sub.remove();
     };
     // permissionRef is a ref (stable); intentionally excluded.
-  }, [reminders, picks, sets, days, b2bSeparator, setRemindersPref, festivalTimeZone, festivalId, ensurePermission]);
+  }, [reminders, picks, sets, days, b2bSeparator, setRemindersPref, mustSeeReminderMinutes, festivalTimeZone, festivalId, ensurePermission]);
+}
+
+const REMINDER_CATEGORY = 'set-reminder';
+const SNOOZE_ACTION = 'snooze-5';
+const SNOOZE_MS = 5 * 60_000;
+
+/** Register the "Snooze 5 min" button for reminder notifications. */
+export function ensureReminderCategory(): Promise<unknown> {
+  // shortcut: snooze opens the app, because a background action needs expo-task-manager (a native build); upgrade with the tranche 41 native build.
+  return Notifications.setNotificationCategoryAsync(REMINDER_CATEGORY, [
+    { identifier: SNOOZE_ACTION, buttonTitle: 'Snooze 5 min', options: { opensAppToForeground: true } },
+  ]);
+}
+
+/** Re-fire a tapped reminder five minutes later. The `festie-snooze-` id stays out of the reconcile cancel list. */
+export async function snoozeReminder(content: Notifications.NotificationContent): Promise<void> {
+  const data = (content.data ?? {}) as { setId?: unknown; startMs?: unknown; name?: unknown };
+  if (typeof data.setId !== 'string') return;
+  const fireAt = Date.now() + SNOOZE_MS;
+  const name = typeof data.name === 'string' && data.name ? data.name : 'Your set';
+  const minutes = typeof data.startMs === 'number' ? Math.round((data.startMs - fireAt) / 60000) : 0;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `festie-snooze-${data.setId}`,
+      content: {
+        title: minutes > 0 ? `${name} starts in ${minutes} min` : `${name} is starting now`,
+        body: content.body ?? '',
+        sound: true,
+        categoryIdentifier: REMINDER_CATEGORY,
+        data: content.data,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(fireAt),
+        channelId: 'set-reminders',
+      },
+    });
+  } catch (e) {
+    Sentry.captureException(e);
+  }
 }
 
 /**
@@ -190,7 +230,8 @@ async function scheduleReminder(entry: ReminderPlanEntry, b2bSeparator?: string,
         title: `${name} in ${leadText}`,
         body: `Starts at ${startLabel}. Heads up from your Festie picks.`,
         sound: true,
-        data: { kind: 'local-set-reminder', setId: entry.setId },
+        categoryIdentifier: REMINDER_CATEGORY,
+        data: { kind: 'local-set-reminder', setId: entry.setId, startMs: entry.startMs, name },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,

@@ -3,6 +3,12 @@ import { render, screen } from '@testing-library/react';
 import FestivalModeSkeleton from './FestivalModeSkeleton';
 
 describe('FestivalModeSkeleton', () => {
+  it('announces loading as a status with sr-only text', () => {
+    render(<FestivalModeSkeleton />);
+    expect(screen.getByRole('status', { name: 'Loading Now & Next' })).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('Loading Now & Next…')).toBeInTheDocument();
+  });
+
   it('renders with aria-busy for loading state', () => {
     render(<FestivalModeSkeleton />);
     expect(screen.getByLabelText('Loading Now & Next')).toHaveAttribute('aria-busy', 'true');

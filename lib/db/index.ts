@@ -18,6 +18,7 @@ import { createActivityStore } from './stores/activity.js';
 import { createCalendarTokensStore } from './stores/calendar-tokens.js';
 import { createShareLinksStore } from './stores/share-links.js';
 import { createEmailTokensStore } from './stores/email-tokens.js';
+import { createLineupImportsStore } from './stores/lineup-imports.js';
 import { createDbLatencyTracker } from './latency.js';
 import { createLogger } from '../logger.js';
 import type { Pool } from 'pg';
@@ -80,6 +81,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
   const calendarTokens = createCalendarTokensStore(pool);
   const shareLinks = createShareLinksStore(pool);
   const emailTokens = createEmailTokensStore(pool);
+  const lineupImports = createLineupImportsStore(pool, { festivals });
 
   return {
     pool,
@@ -109,6 +111,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
     loginFailures,
     metricsRollups,
     emailTokens,
+    lineupImports,
 
     async counts() {
       const result = await pool.query('SELECT COUNT(*) AS count FROM festivals WHERE deleted_at IS NULL');

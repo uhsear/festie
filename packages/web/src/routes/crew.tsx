@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearch } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
 import { useCrewStore } from '@festie/shared/stores';
@@ -25,15 +25,15 @@ import { useToast } from '../lib/toastContext';
 import PromptDialog from '../components/ui/PromptDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { Columns3, CalendarClock, ChevronRight } from 'lucide-react';
 import {
+  DEFAULT_CREW_TAB,
   deleteCrewConfirmMessage,
   leaveCrewConfirmMessage,
   parseInviteCode,
   removeMemberConfirmMessage,
 } from '@festie/shared/utils';
 import type { Crew, CrewMember } from '@festie/shared/types';
-import type { TabKey } from '../components/crew/CrewTabBar';
+import type { CrewTabKey } from '@festie/shared/utils';
 
 interface CrewWithHomeBase extends Crew {
   createdBy?: string;
@@ -58,14 +58,15 @@ function CrewViewInner() {
   const kickMember = useCrewStore((state) => state.kickMember);
   const transferOwnership = useCrewStore((state) => state.transferOwnership);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
-  // Day-of first: the Meet tab (status, live location, SOS, meeting points).
-  const [tab, setTab] = useState<TabKey>('meeting');
   const { toast, toastError } = useToast();
-  // /crew?sos=<userId> (SOS banner): open the Meet tab with the map aimed at that raiser.
-  const { sos: focusSosUserId } = useSearch({ from: '/crew' });
-  useEffect(() => {
-    if (focusSosUserId) setTab('meeting');
-  }, [focusSosUserId]);
+  const navigate = useNavigate();
+  // /crew?tab=<key> keeps the tab across reloads and shared links.
+  // /crew?sos=<userId> (SOS banner) opens Find with the map aimed at that raiser.
+  const { sos: focusSosUserId, tab: tabParam } = useSearch({ from: '/crew' });
+  const tab: CrewTabKey = focusSosUserId ? 'find' : (tabParam ?? DEFAULT_CREW_TAB);
+  const handleTabChange = (next: CrewTabKey) => {
+    navigate({ to: '/crew', search: { tab: next }, replace: true });
+  };
 
   const { isAdmin, adminOpen, setAdminOpen, adminAddBusy, submitForceAdd, handleForceAdd } = useCrewAdmin(
     user,
@@ -242,8 +243,8 @@ function CrewViewInner() {
 
           <CrewTabBar
             activeTab={tab}
-            onTabChange={setTab}
-            badges={{ polls: openPollCount, expenses: hasUnsettledBalance }}
+            onTabChange={handleTabChange}
+            badges={{ plan: openPollCount, money: hasUnsettledBalance }}
           />
 
           <CrewTabContent
@@ -276,26 +277,6 @@ function CrewViewInner() {
                 expiresAt={activeCrew.inviteExpiresAt}
               />
             )}
-
-            <Link
-              to="/crew-plan"
-              aria-label="View your crew's plan"
-              className="flex items-center gap-2 py-2 px-4 min-h-11 rounded-full bg-accent-aqua text-[var(--text-on-light-accent)] hover:bg-[var(--color-accent-aqua-hover)] transition-colors duration-[var(--duration-med)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
-            >
-              <CalendarClock className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-              <span className="text-sm font-semibold">Crew plan</span>
-              <ChevronRight className="w-4 h-4 ml-auto flex-shrink-0" aria-hidden="true" />
-            </Link>
-
-            <Link
-              to="/compare"
-              aria-label="Compare crew schedules"
-              className="flex items-center gap-2 py-2 px-4 min-h-11 rounded-full bg-transparent border border-accent-aqua/50 text-accent-aqua hover:bg-[var(--color-aqua-a08)] transition-colors duration-[var(--duration-med)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
-            >
-              <Columns3 className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-              <span className="text-sm font-semibold">Compare schedules</span>
-              <ChevronRight className="w-4 h-4 ml-auto flex-shrink-0" aria-hidden="true" />
-            </Link>
 
             <CrewTotemCard
               crewId={activeCrew.id}

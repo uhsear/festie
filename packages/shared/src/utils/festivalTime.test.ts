@@ -7,7 +7,9 @@ import {
   hasSetStarted,
   isValidTimeZone,
   listTimeZones,
+  pickDefaultFestival,
   resolveFestivalTimeZone,
+  sortFestivalsForPicker,
   timeZoneCity,
 } from './festivalTime';
 import type { Festival } from '../types/domain';
@@ -238,5 +240,31 @@ describe('listTimeZones', () => {
     } finally {
       intl.supportedValuesOf = original;
     }
+  });
+});
+
+describe('sortFestivalsForPicker / pickDefaultFestival', () => {
+  const now = new Date(2026, 8, 5, 12, 0); // 2026-09-05 12:00 local
+  const live = fest({ id: 'live', startDate: '2026-09-04', endDate: '2026-09-06' });
+  const soon = fest({ id: 'soon', startDate: '2026-10-01', endDate: '2026-10-02' });
+  const later = fest({ id: 'later', startDate: '2026-11-01', endDate: '2026-11-02' });
+  const oldPast = fest({ id: 'old', startDate: '2026-05-01', endDate: '2026-05-02' });
+  const recentPast = fest({ id: 'recent', startDate: '2026-08-01', endDate: '2026-08-02' });
+
+  it('orders live, then soonest upcoming, then most recent past', () => {
+    const sorted = sortFestivalsForPicker([oldPast, later, recentPast, live, soon], now);
+    expect(sorted.map((f) => f.id)).toEqual(['live', 'soon', 'later', 'recent', 'old']);
+  });
+
+  it('picks the live festival by default', () => {
+    expect(pickDefaultFestival([oldPast, soon, live], now)?.id).toBe('live');
+  });
+
+  it('returns undefined for an empty list', () => {
+    expect(pickDefaultFestival([], now)).toBeUndefined();
+  });
+
+  it('returns the most recent festival when all are past', () => {
+    expect(pickDefaultFestival([oldPast, recentPast], now)?.id).toBe('recent');
   });
 });

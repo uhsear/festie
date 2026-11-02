@@ -12,6 +12,7 @@ import {
   buildPlanQrUrl,
   MAX_ENCODED_LENGTH,
 } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
 import type { CrewMeetingPoint, Priority } from '@festie/shared/types';
 import { makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -127,7 +128,7 @@ export default function PlanQRShare() {
 
       <Text style={styles.instructions}>Point any phone camera here to open these picks in a browser.</Text>
       <Text style={styles.instructions}>
-        Friends with Festie can scan it in Share picks › Scan QR, then choose which picks to add. Works offline —
+        Friends with Festie can scan it in {COPY.picks.share} › Scan QR, then choose which picks to add. Works offline —
         nothing is sent over the internet. It's a snapshot, not a live link.
       </Text>
     </ScrollView>

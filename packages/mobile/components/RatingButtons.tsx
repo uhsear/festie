@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, mapErrorToUserMessage } from '@festie/shared/services';
-import { RATING_SCALE_DATA } from '@festie/shared/constants';
+import { RATING_SCALE_DATA, ratingCaption } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import PressableScale from './PressableScale';
@@ -146,20 +146,29 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
         {RATINGS.map((r) => {
           const active = current === r.n;
           return (
-            <PressableScale
-              key={r.n}
-              style={[styles.button, active && styles.buttonActive]}
-              onPress={() => handlePress(r.n)}
-              disabled={busy || !loaded}
-              hitSlop={6}
-              accessibilityRole="radio"
-              // radio/checkbox roles announce on/off via `checked` (TalkBack
-              // ignores `selected` for radios); keep `selected` for iOS parity (F44).
-              accessibilityState={{ checked: active, selected: active, disabled: busy || !loaded }}
-              accessibilityLabel={`${r.label} (${r.n} of 5)`}
-            >
-              <Ionicons name={r.icon} size={22} color={active ? t.colors.accent.amber : t.colors.text.secondary} />
-            </PressableScale>
+            <View key={r.n} style={styles.option}>
+              <PressableScale
+                style={[styles.button, active && styles.buttonActive]}
+                onPress={() => handlePress(r.n)}
+                disabled={busy || !loaded}
+                hitSlop={6}
+                accessibilityRole="radio"
+                // radio/checkbox roles announce on/off via `checked` (TalkBack
+                // ignores `selected` for radios); keep `selected` for iOS parity (F44).
+                accessibilityState={{ checked: active, selected: active, disabled: busy || !loaded }}
+                accessibilityLabel={`${r.label} (${r.n} of 5)`}
+              >
+                <Ionicons name={r.icon} size={22} color={active ? t.colors.accent.amber : t.colors.text.secondary} />
+              </PressableScale>
+              <Text
+                style={[styles.optionLabel, active && styles.captionActive]}
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              >
+                {r.label}
+              </Text>
+            </View>
           );
         })}
       </View>
@@ -181,9 +190,7 @@ export default function RatingButtons({ setId, festivalId }: RatingButtonsProps)
           ? 'Loading…'
           : saveError
             ? saveError
-            : currentLabel
-              ? `You rated this: ${currentLabel}`
-              : 'Tap to rate this set'}
+            : ratingCaption(current)}
       </Text>
     </View>
   );
@@ -210,10 +217,20 @@ const useStyles = makeStyles((t) => ({
   captionError: {
     color: t.colors.accent.coral,
   },
-  button: {
+  option: {
     flex: 1,
-    aspectRatio: 1,
     maxWidth: 56,
+    alignItems: 'center',
+    gap: t.spacing[1],
+  },
+  optionLabel: {
+    ...typeStyle('micro'),
+    color: t.colors.text.secondary,
+    textAlign: 'center',
+  },
+  button: {
+    width: '100%',
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: t.radii.pill,

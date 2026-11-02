@@ -4,9 +4,11 @@ import userEvent from '@testing-library/user-event';
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
+let mockSearch: { next?: string; reset?: true } = {};
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
-  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
+  useSearch: () => mockSearch,
+  Link: ({ to, children, search: _search, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
     <a href={to} {...rest}>
       {children}
     </a>
@@ -36,6 +38,7 @@ import { useAuth } from '@festie/shared';
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearch = {};
     vi.mocked(useAuth).mockReturnValue({
       login: vi.fn(),
       register: vi.fn(),
@@ -136,6 +139,36 @@ describe('LoginPage', () => {
     expect(mockLogin).toHaveBeenCalledWith({ username: 'alice', password: 'secret123' });
   });
 
+  async function submitLogin() {
+    const user = userEvent.setup();
+    vi.mocked(useAuth).mockReturnValue({
+      login: vi.fn().mockResolvedValue(undefined),
+      register: vi.fn(),
+      logout: vi.fn(),
+      forgotPassword: vi.fn(),
+      changePassword: vi.fn(),
+      uploadAvatar: vi.fn(),
+      removeAvatar: vi.fn(),
+      isLoading: false,
+      error: null,
+    });
+    render(<LoginPage />);
+    await user.type(screen.getByLabelText('Username'), 'alice');
+    await user.type(screen.getByLabelText('Password'), 'secret123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+  }
+
+  it('returns to the next path after sign-in', async () => {
+    mockSearch = { next: '/set/abc' };
+    await submitLogin();
+    expect(mockNavigate).toHaveBeenCalledWith({ href: '/set/abc' });
+  });
+
+  it('goes to /cards after sign-in without a next path', async () => {
+    await submitLogin();
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' });
+  });
+
   it('shows the server error thrown by login, not the stale hook error', async () => {
     const mockLogin = vi.fn().mockRejectedValue(new Error('Invalid username or password'));
     vi.mocked(useAuth).mockReturnValue({
@@ -156,6 +189,22 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('shows the password-changed message when arriving from a reset', () => {
+    mockSearch = { reset: true };
+    render(<LoginPage />);
+    expect(screen.getByRole('status')).toHaveTextContent('Password changed. Sign in with your new password.');
+  });
+
+  it('hides the password-changed message otherwise', () => {
+    render(<LoginPage />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('links to the schedule for guests', () => {
+    render(<LoginPage />);
+    expect(screen.getByRole('link', { name: 'Browse without an account' })).toHaveAttribute('href', '/cards');
   });
 
   it('shows the reactivated toast when login cancelled a deletion', async () => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Linking,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@festie/shared/stores';
+import { AUTH_COPY } from '@festie/shared/constants';
 import { isValidEmail } from '@festie/shared/utils';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
@@ -22,7 +24,7 @@ import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '
  * Forgot-password screen — mobile mirror of the web /forgot-password page.
  * Collects an email and calls the shared authStore.forgotPassword, then shows
  * a "check your email" confirmation. The reset link itself is completed via the
- * emailed link (the backend handles the reset); this screen only requests it.
+ * emailed link (the app's reset-password screen, or the web SPA route); this screen only requests it.
  */
 
 const useStyles = makeStyles((t) => ({
@@ -38,13 +40,19 @@ const useStyles = makeStyles((t) => ({
   title: {
     // display-lg = Clash Display 700 — brand wordmark, first impression screen.
     ...typeStyle('display-lg'),
-    color: t.colors.text.primary,
+    color: t.colors.accent.coral,
     textAlign: 'center',
     marginBottom: t.spacing[1],
   },
   subtitle: {
     ...typeStyle('body'),
     color: t.colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: t.spacing[2],
+  },
+  screenLine: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.primary,
     textAlign: 'center',
     marginBottom: t.spacing[8],
   },
@@ -113,6 +121,16 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'center' as const,
     minHeight: 44,
   },
+  supportHint: {
+    ...typeStyle('label'),
+    color: t.colors.text.muted,
+    textAlign: 'center',
+    marginTop: t.spacing[5],
+  },
+  supportLink: {
+    ...typeStyle('label', 600),
+    color: t.colors.accent.aqua,
+  },
   linkTextAccent: {
     ...typeStyle('label', 600),
     color: t.colors.accent.aqua,
@@ -131,6 +149,13 @@ export default function ForgotPasswordScreen() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
   const setError = useAuthStore((s) => s.setError);
+
+  // Drop an error left over from another auth screen (the store is shared).
+  useFocusEffect(
+    useCallback(() => {
+      setError(null);
+    }, [setError]),
+  );
 
   const handleSubmit = async () => {
     Keyboard.dismiss();
@@ -164,8 +189,9 @@ export default function ForgotPasswordScreen() {
         showsVerticalScrollIndicator={false}
       >
         <BrandMark />
-        <Text style={styles.title} maxFontSizeMultiplier={typeScaleCap('display-lg')}>Festie</Text>
-        <Text style={styles.subtitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>Reset your password</Text>
+        <Text style={styles.title} maxFontSizeMultiplier={typeScaleCap('display-lg')}>{AUTH_COPY.wordmark}</Text>
+        <Text style={styles.subtitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>{AUTH_COPY.tagline}</Text>
+        <Text style={styles.screenLine} maxFontSizeMultiplier={MAX_FONT_SCALE}>{AUTH_COPY.resetTitle}</Text>
 
         {!submitted ? (
           <>
@@ -201,7 +227,7 @@ export default function ForgotPasswordScreen() {
             <Text style={styles.helper}>We'll send you a link to reset your password.</Text>
 
             <Button
-              label="Send reset link"
+              label={AUTH_COPY.sendResetLink}
               onPress={handleSubmit}
               loading={isLoading}
               accessibilityState={{ disabled: isLoading, busy: isLoading }}
@@ -211,24 +237,33 @@ export default function ForgotPasswordScreen() {
           <View style={styles.successBox} accessibilityLiveRegion="polite">
             <Ionicons name="checkmark-circle" size={48} color={t.colors.accent.aqua} />
             <Text style={styles.successTitle}>Check your email</Text>
-            <Text style={styles.successBody}>We've sent a password reset link to {email.trim()}.</Text>
-            <Text style={styles.successHint}>
-              The link expires in 1 hour. If you don't see it, check your spam folder.
-            </Text>
+            <Text style={styles.successBody}>{AUTH_COPY.forgotSent(email.trim())}</Text>
+            <Text style={styles.successHint}>{AUTH_COPY.forgotSentHint}</Text>
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => {
                 setSubmitted(false);
-                setEmail('');
               }}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Try a different email"
+              accessibilityLabel={AUTH_COPY.useDifferentEmail}
             >
-              <Text style={styles.secondaryButtonText}>Try a different email</Text>
+              <Text style={styles.secondaryButtonText}>{AUTH_COPY.useDifferentEmail}</Text>
             </TouchableOpacity>
           </View>
         )}
+
+        <Text style={styles.supportHint}>
+          {AUTH_COPY.noEmailHint.split(AUTH_COPY.supportEmail)[0]}
+          <Text
+            style={styles.supportLink}
+            accessibilityRole="link"
+            onPress={() => Linking.openURL(`mailto:${AUTH_COPY.supportEmail}`)}
+          >
+            {AUTH_COPY.supportEmail}
+          </Text>
+          {AUTH_COPY.noEmailHint.split(AUTH_COPY.supportEmail)[1]}
+        </Text>
 
         <Link href="/(auth)/login" asChild>
           <TouchableOpacity

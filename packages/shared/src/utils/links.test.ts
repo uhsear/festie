@@ -11,6 +11,7 @@ import {
   buildPlanQrUrl,
   extractPlanSnapshotText,
   buildCalendarLinks,
+  safeReturnPath,
 } from './links';
 import { encodePlanSnapshot, decodePlanSnapshot } from './planSnapshot';
 
@@ -128,5 +129,34 @@ describe('links - buildCalendarLinks', () => {
         `https://calendar.google.com/calendar/render?cid=${encodeURIComponent('webcal://festie.us/cal/tok.ics')}`,
       );
     }
+  });
+});
+
+describe('links — safeReturnPath', () => {
+  it.each(['/set/abc', '/picks?day=2', '/(tabs)/picks'])('accepts the in-app path %s', (path) => {
+    expect(safeReturnPath(path)).toBe(path);
+  });
+
+  it.each([
+    '//evil.com',
+    '/\\evil.com',
+    'https://evil.com',
+    'javascript:alert(1)',
+    '',
+    42,
+    undefined,
+    '/login',
+    '/register?next=/x',
+    '/forgot-password',
+    '/(auth)/login',
+    '/set/a\nb',
+    `/${'a'.repeat(512)}`,
+  ])('rejects %j', (raw) => {
+    expect(safeReturnPath(raw)).toBeNull();
+  });
+
+  it('accepts a path of exactly 512 characters', () => {
+    const path = `/${'a'.repeat(511)}`;
+    expect(safeReturnPath(path)).toBe(path);
   });
 });

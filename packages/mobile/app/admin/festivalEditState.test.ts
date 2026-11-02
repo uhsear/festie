@@ -11,6 +11,8 @@ import {
   addSet,
   removeSet,
   setSetField,
+  setSetArtistNames,
+  withoutIndex,
   type FormState,
   type SetRow,
   type DayRow,
@@ -22,7 +24,7 @@ function stage(over: Partial<StageRow>): StageRow {
 }
 
 function set(over: Partial<SetRow>): SetRow {
-  return { id: 's1', artist: '', stageId: '', startTime: '', endTime: '', linkUrl: '', ...over };
+  return { id: 's1', artist: '', stageId: '', startTime: '', endTime: '', linkUrl: '', artists: [], ...over };
 }
 
 function day(over: Partial<DayRow>): DayRow {
@@ -30,7 +32,7 @@ function day(over: Partial<DayRow>): DayRow {
 }
 
 function form(over: Partial<FormState>): FormState {
-  return { name: '', location: '', timeZone: '', stages: [], days: [], mapConfig: null, ...over };
+  return { name: '', location: '', timeZone: '', b2bSeparator: 'b2b', stages: [], days: [], mapConfig: null, ...over };
 }
 
 describe('stage reducers', () => {
@@ -148,5 +150,43 @@ describe('setSetField — edits the right one across duplicated setIds', () => {
   it('updates an arbitrary SetRow field', () => {
     const f = form({ days: [day({ id: 'A', sets: [set({ id: 's1', stageId: '' })] })] });
     expect(setSetField(f, 'A', 's1', 'stageId', 'stage-7').days[0].sets[0].stageId).toBe('stage-7');
+  });
+});
+
+describe('setSetArtistNames', () => {
+  const origin = [
+    { name: 'A', links: { spotify: 'https://a' } },
+    { name: 'B', links: { spotify: 'https://b' } },
+    { name: 'C', links: { spotify: 'https://c' } },
+  ];
+  const base = () =>
+    form({
+      b2bSeparator: 'vs',
+      days: [
+        day({ id: 'd1', sets: [set({ id: 's1', artists: origin }), set({ id: 's2', artist: 'Z' })] }),
+        day({ id: 'd2', sets: [set({ id: 's1', artist: 'Other' })] }),
+      ],
+    });
+
+  it('changes only the target set and joins with the festival separator', () => {
+    const f = base();
+    const next = setSetArtistNames(f, 'd1', 's1', origin, ['A', 'B2', 'C']);
+    expect(next.days[0].sets[0].artist).toBe('A vs B2 vs C');
+    expect(next.days[0].sets[1]).toBe(f.days[0].sets[1]);
+    expect(next.days[1]).toBe(f.days[1]);
+  });
+
+  it('keeps the third artist links when the middle name is blank', () => {
+    const next = setSetArtistNames(base(), 'd1', 's1', origin, ['A', '', 'C']);
+    expect(next.days[0].sets[0].artists).toEqual([origin[0], origin[2]]);
+  });
+
+  it('keeps the third artist links when the middle artist is removed, and gives a new artist none', () => {
+    const spliced = withoutIndex(origin, 1);
+    let next = setSetArtistNames(base(), 'd1', 's1', spliced, ['A', 'C']);
+    expect(next.days[0].sets[0].artists).toEqual([origin[0], origin[2]]);
+    expect(next.days[0].sets[0].artist).toBe('A vs C');
+    next = setSetArtistNames(next, 'd1', 's1', spliced, ['A', 'C', 'D']);
+    expect(next.days[0].sets[0].artists[2]).toEqual({ name: 'D', links: {} });
   });
 });

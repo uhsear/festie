@@ -101,6 +101,12 @@ export interface FestivalDataActions {
   loadFestivals: () => Promise<void>;
   selectFestival: (festivalId: string) => Promise<void>;
   loadProfiles: (festivalId: string) => Promise<void>;
+  /**
+   * Create the signed-in user's profile for a festival (POST /profiles, which
+   * is idempotent server-side), then reload profiles so `currentProfile` is set.
+   * Concurrent calls for one festival share a single in-flight request.
+   */
+  joinFestival: (festivalId: string) => Promise<void>;
   setCurrentProfile: (profile: Profile) => void;
   /**
    * Patch a single profile's picks in place from a realtime socket payload,
@@ -186,6 +192,28 @@ function rollbackKeys<T>(
 }
 
 let _lastSelectFestivalId: string | null = null;
+
+// One in-flight join per festival, so two quick taps send one POST (the
+// profile-join rate limit is 10 a minute).
+const _joinsInFlight = new Map<string, Promise<void>>();
+
+// shortcut: the first pick needs a connection to create the profile; queue POST /profiles if offline first-picks become common
+/**
+ * Create the missing profile before a profile write. A signed-in user on the
+ * selected festival joins it; anyone else gets the usual error. Callers skip
+ * it when a profile exists, so the optimistic update stays synchronous.
+ */
+async function joinBeforeWrite(get: () => FestivalDataStore, festivalId: string | null): Promise<void> {
+  if (!canJoin(get, festivalId)) {
+    throw new Error('No active profile -- select a festival first');
+  }
+  await get().joinFestival(festivalId);
+}
+
+/** A signed-in user may join only the selected festival. */
+function canJoin(get: () => FestivalDataStore, festivalId: string | null): festivalId is string {
+  return !!useAuthStore.getState().user && !!festivalId && festivalId === get().currentFestivalId;
+}
 
 /**
  * Send one profile write and track it for the save-state chip: counts it in
@@ -420,6 +448,19 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
     }
   },
 
+  joinFestival: (festivalId: string) => {
+    const pending = _joinsInFlight.get(festivalId);
+    if (pending) return pending;
+    const join = (async () => {
+      await api.post('/profiles', { festivalId });
+      await get().loadProfiles(festivalId);
+    })().finally(() => {
+      _joinsInFlight.delete(festivalId);
+    });
+    _joinsInFlight.set(festivalId, join);
+    return join;
+  },
+
   setCurrentProfile: (profile: Profile) => {
     set({ currentProfile: profile });
   },
@@ -442,6 +483,19 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   // FIX: PUT /profiles/:profileId with full picks map.
   //      Was incorrectly hitting PUT /profiles/:festivalId/picks.
   savePick: async (request: SavePickRequest) => {
+    // Join first: a server profile can already hold picks, so snapshot after it.
+    if (!get().currentProfile) {
+      try {
+        await joinBeforeWrite(get, request.festivalId);
+      } catch (err) {
+        set({ error: mapErrorToUserMessage(err, 'Failed to save pick') });
+        // A failed join shows the failed-pick chip; its Retry joins again. A guest gets no chip.
+        if (canJoin(get, request.festivalId)) {
+          set({ pickSync: { ...get().pickSync, [request.setId]: { state: 'failed', priority: request.priority } } });
+        }
+        throw err;
+      }
+    }
     // Snapshot only the ONE key this call owns, not the whole profile (see rollbackKeys).
     const prevPriority = get().currentProfile?.picks[request.setId];
     const syncEntry: PickSyncEntry = { state: 'saving', priority: request.priority };
@@ -499,6 +553,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   // the write entirely rather than queue a redundant replay. Returns the real
   // count of sets changed so the caller never reports "Added N" on 0 changes.
   bulkSavePicks: async (setIds: string[], priority: Priority): Promise<number> => {
+    if (!get().currentProfile) await joinBeforeWrite(get, get().currentFestivalId);
     // Snapshot only the picks this call actually changes (filled in the loop
     // below), not the whole profile (see rollbackKeys).
     const prevValues: Record<string, Priority | undefined> = {};
@@ -640,6 +695,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   // The reminder backend (scheduler/FCM/DND) is live; this is the write path
   // no client previously exercised. minutes=null clears the set's reminder.
   saveReminder: async (request: SaveReminderRequest) => {
+    if (!get().currentProfile) await joinBeforeWrite(get, request.festivalId);
     // Snapshot only this set's reminder, not the whole profile (see rollbackKeys).
     const prevReminder = get().currentProfile?.reminders?.[request.setId];
     set({ error: null });

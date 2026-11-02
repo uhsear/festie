@@ -8,7 +8,8 @@ const TAB_COUNT = 7;
 
 export default function CrewSkeleton() {
   return (
-    <div className="crew-page space-y-4 pb-24" aria-busy="true" aria-label="Loading crew">
+    <div className="crew-page space-y-4 pb-24" aria-busy="true" aria-label="Loading crew" role="status" aria-live="polite">
+      <span className="sr-only">Loading crew…</span>
       {/* crew selector */}
       <div className="px-4">
         <div className="skeleton-shimmer h-10 w-full rounded-lg" />

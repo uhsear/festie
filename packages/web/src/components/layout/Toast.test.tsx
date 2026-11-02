@@ -118,6 +118,14 @@ describe('Toast', () => {
     expect(undoFn).toHaveBeenCalledOnce();
   });
 
+  it('styles Undo as a full-opacity 14px control', () => {
+    setupMockToast([{ id: '1', message: 'Removed', type: 'info', onUndo: vi.fn() }]);
+    render(<Toast />);
+    const cls = screen.getByRole('button', { name: 'Undo: Removed' }).className;
+    expect(cls).not.toContain('opacity-75');
+    expect(cls).toContain('text-sm');
+  });
+
   it('closes the toast when Undo is tapped', async () => {
     setupMockToast([{ id: 'u1', message: 'Removed', type: 'info', onUndo: vi.fn() }]);
     const user = userEvent.setup();

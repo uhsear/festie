@@ -42,9 +42,9 @@ env:
     text: "Skip"
     optional: true
 
-# Reach the Account tab to log in.
+# Reach the More tab to log in.
 - tapOn:
-    text: "Account"
+    text: "More|Sign in"
     optional: true
 - waitForAnimationToEnd:
     timeout: 3000
@@ -134,7 +134,7 @@ env:
 
 # Log in as account B.
 - tapOn:
-    text: "Account"
+    text: "More|Sign in"
     optional: true
 - waitForAnimationToEnd:
     timeout: 3000

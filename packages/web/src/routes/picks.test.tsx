@@ -151,10 +151,10 @@ describe('PicksView', () => {
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
   });
 
-  it('shows "Join this festival first" when no profile', () => {
+  it('shows "No picks yet" when no profile', () => {
     setStoreState({ currentProfile: null });
     render(<PicksView />);
-    expect(screen.getByText('Join this festival first')).toBeInTheDocument();
+    expect(screen.getByText('No picks yet')).toBeInTheDocument();
   });
 
   it('shows empty state when user has zero picks for the day', () => {
