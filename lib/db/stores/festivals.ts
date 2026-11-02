@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
+import { planMoveMarks } from '../../set-moves';
 
 /**
  * Build a multi-row VALUES clause with parameterized placeholders.
@@ -204,12 +205,76 @@ async function restoreRatingsBatch(
   );
 }
 
+/** Old days and set slots with their marks, read before the delete. Null for a draft, which gets no marks. */
+async function readPriorSlots(client: any, festivalId: string) {
+  const fest = await client.query('SELECT published_at FROM festivals WHERE id = $1', [festivalId]);
+  if (!fest.rows[0]?.published_at) return null;
+  const days = await client.query(
+    'SELECT day_index AS "dayIndex", label, date FROM festival_days WHERE festival_id = $1',
+    [festivalId],
+  );
+  const sets = await client.query(
+    `
+  SELECT
+    id,
+    day_index AS "dayIndex",
+    stage_id AS "stageId",
+    start_time AS "start",
+    end_time AS "end",
+    moved_at AS "movedAt",
+    moved_from AS "movedFrom"
+  FROM
+    festival_sets
+  WHERE
+    festival_id = $1
+`,
+    [festivalId],
+  );
+  return { days: days.rows, sets: sets.rows };
+}
+
+/** Compute and write the "moved" marks for sets that survive the save, in one statement. */
+async function writeMoveMarks(client: any, festivalId: string, prior: any, children: any) {
+  if (!prior) return;
+  const newDays = children.dayRows.map((r: any[]) => ({ dayIndex: r[1], label: r[2], date: r[3] }));
+  const newSets = children.setRows.map((r: any[]) => ({
+    id: r[0],
+    dayIndex: r[2],
+    stageId: r[4],
+    start: r[5],
+    end: r[6],
+  }));
+  const marks = planMoveMarks(prior.days, prior.sets, newDays, newSets, new Date());
+  if (marks.length === 0) return;
+  await client.query(
+    `
+  UPDATE festival_sets AS fs
+  SET
+    moved_at = m.moved_at,
+    moved_from = m.moved_from
+  FROM
+    unnest($2::text[], $3::timestamptz[], $4::jsonb[]) AS m (id, moved_at, moved_from)
+  WHERE
+    fs.festival_id = $1
+    AND fs.id = m.id
+`,
+    [
+      festivalId,
+      marks.map((m) => m.id),
+      marks.map((m) => m.movedAt.toISOString()),
+      marks.map((m) => JSON.stringify(m.movedFrom)),
+    ],
+  );
+}
+
 /**
  * Preserve picks, ratings, notes, and caught marks, delete old child rows,
- * batch-insert new days/sets, then restore them. Used by replaceAll and update.
+ * batch-insert new days/sets, then restore them and write "moved" marks.
+ * Used by replaceAll and update.
  */
 async function replaceChildRows(client: any, festivalId: string, children: any) {
   const { dayRows, setRows, newSetIds, setIdentityMap } = children;
+  const priorSlots = await readPriorSlots(client, festivalId);
 
   // Preserve picks before deleting sets
   const existingPicks = await client.query(
@@ -296,6 +361,7 @@ async function replaceChildRows(client: any, festivalId: string, children: any) 
   await restorePicksBatch(client, existingPicks.rows, newSetIds);
   await restoreRatingsBatch(client, existingRatings.rows, newSetIds, setIdentityMap);
   await restoreNotesAndCaughtBatch(client, keptNotesAndCaught, newSetIds);
+  await writeMoveMarks(client, festivalId, priorSlots, children);
 }
 
 export default function createFestivalsStore(pool: Pool, utils: any) {
@@ -494,7 +560,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
                  COALESCE(d.date, '') AS date,
                  COALESCE(
                    (SELECT json_agg(
-                     json_build_object(
+                     (json_build_object(
                        'id', fs.id,
                        'artist', fs.artist,
                        'artists', COALESCE(fs.artists, '[]'::jsonb),
@@ -502,7 +568,9 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
                        'startTime', fs.start_time,
                        'endTime', fs.end_time,
                        'linkUrl', fs.link_url
-                     )
+                     )::jsonb
+                       || CASE WHEN fs.moved_at IS NULL THEN '{}'::jsonb
+                               ELSE jsonb_build_object('movedAt', fs.moved_at, 'movedFrom', fs.moved_from) END)
                      ORDER BY fs.sort_order ASC
                    )
                    FROM festival_sets fs

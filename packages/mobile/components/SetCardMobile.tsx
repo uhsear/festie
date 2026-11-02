@@ -23,7 +23,7 @@ import {
   reminderLeadA11y,
 } from '@festie/shared/utils';
 import { useCrewStore, useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
-import { usePickSync } from '@festie/shared/hooks';
+import { usePickSync, useSetMove } from '@festie/shared/hooks';
 import { duration, easing } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useSetStatus } from '../hooks/useSetStatus';
@@ -213,6 +213,7 @@ function SetCardMobileImpl({
   const t = useTokens();
   const styles = useStyles();
   const setStatus = useSetStatus(set);
+  const move = useSetMove(set);
   const { sync, retry } = usePickSync(set.id);
   const pickPending = sync?.state === 'saving' || sync?.state === 'queued' ? sync.state : null;
 
@@ -234,7 +235,8 @@ function SetCardMobileImpl({
     : `${artistName}, ${stageName}, ${timeLabel}`;
   const a11yBody =
     (hasConflict ? `${a11yBase}, ${clashLabel ?? 'clash'}` : a11yBase) +
-    (reminderA11y ? `, ${reminderA11y.toLowerCase()}` : '');
+    (reminderA11y ? `, ${reminderA11y.toLowerCase()}` : '') +
+    (move ? `, ${move.a11y}` : '');
 
   // Ended sets dim only while the festival is on, mirroring web SetCard.
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
@@ -292,6 +294,14 @@ function SetCardMobileImpl({
               <Ionicons name="notifications-outline" size={12} color={t.colors.text.muted} />
               <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {reminderLeadLabel(reminderMinutes)}
+              </Text>
+            </View>
+          ) : null}
+          {move ? (
+            <View style={styles.movedMark} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Ionicons name="swap-horizontal" size={12} color={t.colors.text.muted} />
+              <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {move.chip}
               </Text>
             </View>
           ) : null}
@@ -580,6 +590,11 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.secondary,
   },
   reminderMark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
+  },
+  movedMark: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[1],

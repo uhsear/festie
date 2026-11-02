@@ -37,3 +37,4 @@ export * from './useFestivalWeather';
 export * from './useSignedInDevices';
 export * from './useAlsoPicked';
 export * from './useFestivalReady';
+export * from './useSetMove';

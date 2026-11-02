@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist } from '@festie/shared/utils';
-import { useDebouncedNote, useSpotifyPreview, usePickClear, useCanPick } from '@festie/shared/hooks';
+import { useDebouncedNote, useSpotifyPreview, usePickClear, useCanPick, useSetMove } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useAuthStore } from '@festie/shared/stores';
@@ -67,6 +67,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   const { select: selectHaptic, success: successHaptic, warning: warningHaptic } = useHaptics();
   const { toast } = useToast();
   const clearPick = usePickClear(useUndoNotifier());
+  const move = useSetMove(set);
 
   const personal = useDebouncedNote({
     festivalId: currentFestival?.id,
@@ -263,6 +264,11 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               <div className="text-base text-text-secondary tabular-nums" data-testid="set-when">
                 {formatSetWhen(set, festivalDays, status)}
               </div>
+              {move && (
+                <div data-testid="set-moved" className="type-caption text-text-secondary" aria-label={move.a11y}>
+                  {move.line}
+                </div>
+              )}
             </div>
 
             {canPick && (
