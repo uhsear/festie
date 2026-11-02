@@ -21,8 +21,10 @@ const picksApi = {
   savePick,
 };
 vi.mock('@festie/shared/hooks', () => ({
-  usePicks: () => picksApi,
-  useFestival: () => ({ getStageColor: () => '#ccc', getStageName: () => 'Main Stage' }),
+  useMyPick: (id: string) => picksApi.getMyPick(id),
+  useMyNote: (id: string) => picksApi.getMyNote(id),
+  useMyReminder: (id: string) => picksApi.getMyReminder(id),
+  usePickActions: () => ({ savePick: picksApi.savePick }),
   usePickClear: () => clearPick,
   useSetMove: () => moveMock.value,
 }));
@@ -53,7 +55,10 @@ describe('PicksPlanRow', () => {
     vi.clearAllMocks();
     moveMock.value = null;
     Object.keys(festivalState).forEach((k) => delete festivalState[k]);
-    Object.assign(festivalState, { currentFestival: { id: 'f1', name: 'Bonnaroo' } });
+    Object.assign(festivalState, {
+      currentFestival: { id: 'f1', name: 'Bonnaroo' },
+      stages: [{ id: 'st1', name: 'Main Stage', color: '#ccc' }],
+    });
     Object.keys(uiState).forEach((k) => delete uiState[k]);
     Object.assign(uiState, { setDetailSet: vi.fn() });
     picksApi.getMyPick.mockReturnValue('must');

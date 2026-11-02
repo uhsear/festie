@@ -365,7 +365,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     redisPresence,
     redis,
     log,
-    getUserMap,
+    stores,
     buildAvatarUrl,
   });
 
@@ -385,7 +385,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     removeProfileSockets,
   } = presenceManager;
 
-  const emitProfileIdentityWrapped = (user: any, io: any) => emitProfileIdentity(user, io, getProfiles);
+  const emitProfileIdentityWrapped = (user: any, io: any) => emitProfileIdentity(user, io);
 
   // ── Session / auth (extracted to ./session) ───────────────────────────
   const sessionHelpers = createSessionHelpers({

@@ -61,14 +61,15 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
 
     async listByUsers(userIds: string[]) {
       if (!userIds || userIds.length === 0) return [];
-      const placeholders = userIds.map((_: any, i: number) => `$${i + 1}`).join(',');
       const result = await pool.query(
         `
-        SELECT id, user_id AS "userId", token, platform
+        SELECT id, user_id AS "userId", token, platform, device_name AS "deviceName", created_at AS "createdAt", last_used_at AS "lastUsedAt",
+          local_reminders_festival_id AS "localRemindersFestivalId"
         FROM device_tokens
-        WHERE user_id IN (${placeholders}) AND (expires_at IS NULL OR expires_at > NOW())
+        WHERE user_id = ANY($1) AND (expires_at IS NULL OR expires_at > NOW())
+        ORDER BY user_id, last_used_at DESC
       `,
-        userIds,
+        [userIds],
       );
       return result.rows;
     },
@@ -89,46 +90,58 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
     },
   };
 
+  const PREFS_SELECT =
+    'SELECT user_id AS "userId", crew_updates AS "crewUpdates", set_reminders AS "setReminders", schedule_changes AS "scheduleChanges", lineup_drops AS "lineupDrops", crew_reformed AS "crewReformed", wrap_ready AS "wrapReady", dnd_start AS "dndStart", dnd_end AS "dndEnd", dnd_time_zone AS "dndTimeZone", crew_meeting_points AS "crewMeetingPoints", crew_polls AS "crewPolls", crew_money AS "crewMoney", crew_rides AS "crewRides", must_see_reminder_minutes AS "mustSeeReminderMinutes" FROM notification_preferences';
+
+  // Shared by get and getMany so the single and batched reads cannot drift.
+  function prefsFromRow(userId: string, row: any) {
+    if (!row) {
+      // No saved prefs → everything opted-in (mirrors DEFAULT 1 columns).
+      return {
+        userId,
+        crewUpdates: 1,
+        setReminders: 1,
+        scheduleChanges: 1,
+        lineupDrops: 1,
+        crewReformed: 1,
+        wrapReady: 1,
+        crewMeetingPoints: 1,
+        crewPolls: 1,
+        crewMoney: 1,
+        crewRides: 1,
+        mustSeeReminderMinutes: null,
+        dndStart: null,
+        dndEnd: null,
+        dndTimeZone: null,
+      };
+    }
+    // A row written before migration 048 (or 069) has NULL for the newer columns;
+    // treat NULL as opted-in (1), matching DEFAULT 1.
+    return {
+      ...row,
+      lineupDrops: row.lineupDrops == null ? 1 : row.lineupDrops,
+      crewReformed: row.crewReformed == null ? 1 : row.crewReformed,
+      wrapReady: row.wrapReady == null ? 1 : row.wrapReady,
+      crewMeetingPoints: row.crewMeetingPoints == null ? 1 : row.crewMeetingPoints,
+      crewPolls: row.crewPolls == null ? 1 : row.crewPolls,
+      crewMoney: row.crewMoney == null ? 1 : row.crewMoney,
+      crewRides: row.crewRides == null ? 1 : row.crewRides,
+      mustSeeReminderMinutes: row.mustSeeReminderMinutes ?? null,
+    };
+  }
+
   const notificationPrefs = {
     async get(userId: string) {
-      const result = await pool.query(
-        'SELECT user_id AS "userId", crew_updates AS "crewUpdates", set_reminders AS "setReminders", schedule_changes AS "scheduleChanges", lineup_drops AS "lineupDrops", crew_reformed AS "crewReformed", wrap_ready AS "wrapReady", dnd_start AS "dndStart", dnd_end AS "dndEnd", dnd_time_zone AS "dndTimeZone", crew_meeting_points AS "crewMeetingPoints", crew_polls AS "crewPolls", crew_money AS "crewMoney", crew_rides AS "crewRides", must_see_reminder_minutes AS "mustSeeReminderMinutes" FROM notification_preferences WHERE user_id = $1',
-        [userId],
-      );
-      const row = result.rows[0];
-      if (!row) {
-        // No saved prefs → everything opted-in (mirrors DEFAULT 1 columns).
-        return {
-          userId,
-          crewUpdates: 1,
-          setReminders: 1,
-          scheduleChanges: 1,
-          lineupDrops: 1,
-          crewReformed: 1,
-          wrapReady: 1,
-          crewMeetingPoints: 1,
-          crewPolls: 1,
-          crewMoney: 1,
-          crewRides: 1,
-          mustSeeReminderMinutes: null,
-          dndStart: null,
-          dndEnd: null,
-          dndTimeZone: null,
-        };
-      }
-      // A row written before migration 048 (or 069) has NULL for the newer columns;
-      // treat NULL as opted-in (1), matching DEFAULT 1.
-      return {
-        ...row,
-        lineupDrops: row.lineupDrops == null ? 1 : row.lineupDrops,
-        crewReformed: row.crewReformed == null ? 1 : row.crewReformed,
-        wrapReady: row.wrapReady == null ? 1 : row.wrapReady,
-        crewMeetingPoints: row.crewMeetingPoints == null ? 1 : row.crewMeetingPoints,
-        crewPolls: row.crewPolls == null ? 1 : row.crewPolls,
-        crewMoney: row.crewMoney == null ? 1 : row.crewMoney,
-        crewRides: row.crewRides == null ? 1 : row.crewRides,
-        mustSeeReminderMinutes: row.mustSeeReminderMinutes ?? null,
-      };
+      const result = await pool.query(`${PREFS_SELECT} WHERE user_id = $1`, [userId]);
+      return prefsFromRow(userId, result.rows[0]);
+    },
+
+    /** Prefs for many users in one query; a user with no row gets the same defaults as get. */
+    async getMany(userIds: string[]): Promise<Map<string, ReturnType<typeof prefsFromRow>>> {
+      if (!userIds || userIds.length === 0) return new Map();
+      const result = await pool.query(`${PREFS_SELECT} WHERE user_id = ANY($1)`, [userIds]);
+      const rowsByUser = new Map(result.rows.map((row: any) => [row.userId, row]));
+      return new Map(userIds.map((userId) => [userId, prefsFromRow(userId, rowsByUser.get(userId))]));
     },
 
     async upsert({
@@ -333,6 +346,16 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
         [userId],
       );
       return result.rows;
+    },
+
+    /** Unread update totals across festivals, per user. Users with no row are absent. */
+    async unreadTotals(userIds: string[]): Promise<Map<string, number>> {
+      if (!userIds || userIds.length === 0) return new Map();
+      const result = await pool.query(
+        'SELECT user_id AS "userId", SUM(unread_updates)::int AS total FROM notification_counts WHERE user_id = ANY($1) GROUP BY user_id',
+        [userIds],
+      );
+      return new Map(result.rows.map((r: any) => [r.userId, r.total]));
     },
 
     async increment(userId: string, festivalId: string, field: string) {

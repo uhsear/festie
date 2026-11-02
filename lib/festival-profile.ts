@@ -23,7 +23,7 @@ export async function ensureFestivalProfile(
   if (profile) {
     const user = await getUserById(profile.userId);
     if (!user) return { error: 'user-missing' };
-    emitter.profileCreated({ festivalId, profile, user });
+    // No profileCreated: the profile already existed, so nothing appeared.
     return { profile, user };
   }
 

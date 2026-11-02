@@ -167,7 +167,6 @@ export default function setupSocketHandlers(deps: any) {
     emitter,
     stores,
     removeSocketPresence,
-    getPresenceList,
     clearSocketSession,
     leaveFestivalRealtime,
     disconnectSocket,
@@ -238,17 +237,13 @@ export default function setupSocketHandlers(deps: any) {
     socket.data.userSessionToken = sessionToken;
     socket.authenticated = true;
 
-    // Update presence — guard against duplicates on reconnect
-    const presenceList = await getPresenceList(festivalId);
-    const existingPresence = presenceList.find((p: any) => p.userId === session.userId && p.socketId === socket.id);
-    if (!existingPresence) {
-      setSocketPresence(festivalId, session.userId, session.username, socket.id).catch((err: any) =>
-        // A failed presence write means emitPresence below runs on a stale set
-        // and the user is silently absent from who's-online — warn so it's
-        // visible in prod, not buried at debug.
-        log.warn('setSocketPresence error', { error: err.message, festivalId, userId: session.userId }),
-      );
-    }
+    // setSocketPresence is idempotent per socket id, so a reconnect adds no duplicate.
+    setSocketPresence(festivalId, session.userId, session.username, socket.id).catch((err: any) =>
+      // A failed presence write means emitPresence below runs on a stale set
+      // and the user is silently absent from who's-online — warn so it's
+      // visible in prod, not buried at debug.
+      log.warn('setSocketPresence error', { error: err.message, festivalId, userId: session.userId }),
+    );
     emitPresence(festivalId, io);
 
     return { ok: true, session, profile };

@@ -9,10 +9,13 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
-import { afterEach, describe, test } from 'node:test';
+import { afterEach, describe, mock, test } from 'node:test';
+import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import createProfilesRoutes from '../routes/profiles.js';
+import { serializeProfileForViewer } from '../lib/helpers/export-utils.js';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -578,5 +581,80 @@ describe('profiles: admin soft-delete', { concurrency: 1 }, () => {
       .set('x-user-token', adminToken)
       .set(TRUSTED_MUTATION_HEADER, '1');
     assert.equal(res.status, 404);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Festival list read (T58): picks-only list, viewer row from the full profile
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('profiles: festival list reads picks only', () => {
+  const own = {
+    id: 'p-own', festivalId: 'f1', userId: 'u-own', name: 'Own',
+    picks: { s1: 'must' }, notes: { s1: 'front left' }, reminders: { s1: 15 },
+  };
+  const listed = [
+    { ...own, notes: {}, reminders: {} },
+    { id: 'p-other', festivalId: 'f1', userId: 'u-other', name: 'Other', picks: { s1: 'maybe' }, notes: {}, reminders: {} },
+  ];
+
+  function buildApp(list: any[]) {
+    const stores = {
+      profiles: {
+        listPicksByFestival: mock.fn(async () => list),
+        getByFestival: mock.fn(async () => []),
+      },
+      users: { getByIds: mock.fn(async () => new Map()) },
+      crews: {
+        listByUserAndFestival: mock.fn(async () => []),
+        getMembersForCrews: mock.fn(async () => new Map()),
+      },
+    };
+    const pass = () => (_req: any, _res: any, next: any) => next();
+    const router = createProfilesRoutes({
+      express,
+      log: { error: () => {}, warn: () => {}, info: () => {} },
+      userAuth: (req: any, _res: any, next: any) => { req.user = { userId: 'u-own' }; next(); },
+      adminAuth: pass(),
+      setNoStore: () => {},
+      getFestivalById: async (id: string) => ({ id }),
+      getUserFestivalProfile: async () => own,
+      serializeProfileForViewer,
+      sendSuccess: (res: any, data: any, meta: any) => res.json({ data, meta }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ error: message }),
+      ErrorCodes: {},
+      rateLimit: pass,
+      schemas: {},
+      validate: pass,
+      validateParams: () => (req: any, _res: any, next: any) => { req.validatedParams = req.params; next(); },
+      validateQuery: () => (req: any, _res: any, next: any) => { req.validatedQuery = req.query; next(); },
+      stores,
+    });
+    const app = express();
+    app.use('/profiles', router);
+    return { app, stores };
+  }
+
+  test('calls listPicksByFestival once, getByFestival never, and keeps the viewer notes', async () => {
+    const { app, stores } = buildApp(listed);
+    const res = await request(app).get('/profiles/f1');
+    assert.equal(res.status, 200);
+    assert.equal(stores.profiles.listPicksByFestival.mock.callCount(), 1);
+    assert.equal(stores.profiles.getByFestival.mock.callCount(), 0);
+    const mine = res.body.data.find((p: any) => p.id === 'p-own');
+    const other = res.body.data.find((p: any) => p.id === 'p-other');
+    assert.deepEqual(mine.notes, { s1: 'front left' });
+    assert.deepEqual(mine.reminders, { s1: 15 });
+    assert.equal('notes' in other, false);
+    assert.equal('reminders' in other, false);
+    assert.deepEqual(other.picks, {});
+    assert.deepEqual(res.body.meta.pickCounts, { s1: 1 });
+  });
+
+  test('a viewer row missing from the list is not added back', async () => {
+    const { app } = buildApp(listed.slice(1));
+    const res = await request(app).get('/profiles/f1');
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.map((p: any) => p.id), ['p-other']);
   });
 });

@@ -29,12 +29,18 @@ export default function createProfilesRoutes(deps: any) {
       const festival = await getFestivalById(festivalId);
       if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       const { getUserFestivalProfile } = deps;
-      if (!await getUserFestivalProfile(req.user.userId, festivalId)) {
+      const ownProfile = await getUserFestivalProfile(req.user.userId, festivalId);
+      if (!ownProfile) {
         return sendError(res, 403, 'Join this festival to view crew plans', ErrorCodes.FORBIDDEN);
       }
-      const rawProfiles = stores.profiles.getByFestival
-        ? await stores.profiles.getByFestival(festivalId)
-        : (await getProfiles()).filter((profile: any) => profile.festivalId === festivalId);
+      // listPicksByFestival leaves out notes and reminders, so the viewer's own row
+      // comes from ownProfile. A row missing from the list (a delete race) stays missing.
+      const rawProfiles = stores.profiles.listPicksByFestival
+        ? (await stores.profiles.listPicksByFestival(festivalId)).map((profile: any) =>
+          profile.id === ownProfile.id ? ownProfile : profile)
+        : stores.profiles.getByFestival
+          ? await stores.profiles.getByFestival(festivalId)
+          : (await getProfiles()).filter((profile: any) => profile.festivalId === festivalId);
       const userIds = [...new Set(rawProfiles.map((p: any) => p.userId).filter(Boolean))];
       const usersById = stores.users.getByIds
         ? await stores.users.getByIds(userIds)
