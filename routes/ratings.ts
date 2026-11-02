@@ -128,8 +128,8 @@ export function createRatingsRoutes({
   );
 
   // Get aggregate ratings for a festival (public — intentionally unauthenticated).
-  // This endpoint returns read-only aggregate data (average rating, count per set)
-  // with no PII. Keeping it public allows share pages and unauthenticated festival
+  // Returns only per-set counts and averages. No user ids and no notes.
+  // Keeping it public allows share pages and unauthenticated festival
   // browsers to display community sentiment without requiring login.
   router.get(
     '/festival/:festivalId/all',

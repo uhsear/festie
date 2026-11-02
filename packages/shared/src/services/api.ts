@@ -33,6 +33,8 @@ interface ApiOptions {
   _bypassOfflineQueue?: boolean;
   /** Return the whole `{ data, meta }` body instead of unwrapping `data`. */
   _envelope?: boolean;
+  /** Return the response body as text instead of parsing JSON (e.g. the HTML export). */
+  asText?: boolean;
 }
 
 let _apiBase = API_BASE;
@@ -318,10 +320,11 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const { asText, ...fetchOptions } = options;
     const response = await fetch(`${_apiBase}${path}`, {
       credentials: _authMode === 'cookie' ? 'same-origin' : 'omit',
       signal: controller.signal,
-      ...options,
+      ...fetchOptions,
       method,
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -357,6 +360,8 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
     // Reachability confirmed (from the network) — recover from a prior
     // false-offline and drain. Guards inside reject cached/offline false 200s.
     markOnlineAndDrain(path);
+
+    if (asText) return (await response.text()) as T;
 
     const body = await response.json();
     if (options._envelope) return body as T;

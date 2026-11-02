@@ -4,8 +4,8 @@
 //
 // M3 Re-engagement: durable fan-out queue (issue #20).
 //
-// The re-engagement triggers (sendWrapReady / sendLineupDrop / sendCrewReformed)
-// already reach EVERY eligible recipient via bounded-concurrency chunks, so the
+// The re-engagement triggers (sendWrapReady / sendLineupDrop / sendCrewReformed /
+// sendSetTimesOut) already reach EVERY eligible recipient via bounded-concurrency chunks, so the
 // old MAX_PUSH_BATCH tail-drop is gone. What this module adds is DURABILITY:
 // rather than fanning out on the web process's event loop inside the triggering
 // request (where a large lineup import or attendee sweep competes with request
@@ -51,7 +51,7 @@ const QUEUE_NAME = 'reengagement';
 // the durability this module exists to provide was never actually active. It
 // failed silently because the fallback is correct: the notification still sends,
 // just on the request's event loop instead of a background worker.
-type JobName = 'wrap_ready' | 'lineup_drop' | 'crew_reformed' | 'rate_prompt';
+type JobName = 'wrap_ready' | 'lineup_drop' | 'crew_reformed' | 'rate_prompt' | 'set_times_out';
 
 // Bound worker.close() so a long-running fan-out job can't hold up shutdown past
 // the process shutdown timeout; on timeout we force-close.
@@ -62,6 +62,7 @@ export interface ReengagementExecutor {
   sendLineupDrop: (festivalId: string) => Promise<any>;
   sendCrewReformed: (args: any) => Promise<any>;
   sendRatePrompt: (festivalId: string) => Promise<any>;
+  sendSetTimesOut: (festivalId: string) => Promise<any>;
 }
 
 export interface ReengagementQueueDeps {
@@ -157,6 +158,7 @@ export function createReengagementQueue(deps: ReengagementQueueDeps) {
         if (name === 'lineup_drop') return executor.sendLineupDrop(data.festivalId);
         if (name === 'crew_reformed') return executor.sendCrewReformed(data);
         if (name === 'rate_prompt') return executor.sendRatePrompt(data.festivalId);
+        if (name === 'set_times_out') return executor.sendSetTimesOut(data.festivalId);
         throw new Error(`reengagement-queue: unknown job name ${name}`);
       },
       { connection: workerConn, prefix: bullPrefix, concurrency },
@@ -211,6 +213,8 @@ export function createReengagementQueue(deps: ReengagementQueueDeps) {
       enqueue('crew_reformed', `reform-${args?.newCrewId}`, args, () => executor.sendCrewReformed(args)),
     sendRatePrompt: (festivalId: string) =>
       enqueue('rate_prompt', 'rate-' + festivalId, { festivalId }, () => executor.sendRatePrompt(festivalId)),
+    sendSetTimesOut: (festivalId: string) =>
+      enqueue('set_times_out', `times-${festivalId}`, { festivalId }, () => executor.sendSetTimesOut(festivalId)),
     async close() {
       // worker.close() waits for in-flight jobs to finish, which is unbounded —
       // a large fan-out can keep one job busy for minutes. Bound it and force a

@@ -5,6 +5,7 @@ import { useFestivalUIStore } from './festivalUIStore';
 import { useFestivalModeStore } from './festivalModeStore';
 import { useLiveLocationStore } from './liveLocationStore';
 import { useOfflineReadinessStore } from './offlineReadinessStore';
+import { useFollowStore } from './followStore';
 import { useNotificationPrefsStore, DEFAULT_NOTIFICATION_PREFS } from './notificationPrefsStore';
 import { clearPersistedFailed, clearQueue } from '../services/offlineQueue';
 
@@ -22,10 +23,12 @@ export function resetAllStores(): void {
     pickSync: {},
     savesInFlight: 0,
     lastSavedAt: null,
+    guestPicks: {},
   });
   useFestivalUIStore.setState({
     selectedDay: 0,
     activeStages: [],
+    activeGenres: [],
     searchQuery: '',
     onlyMine: false,
     scheduleView: null,
@@ -77,6 +80,7 @@ export function resetAllStores(): void {
     isLoading: false,
     error: null,
   });
+  useFollowStore.setState({ festivalIds: [], loaded: false });
   void clearPersistedFailed();
   // Drop any pending offline writes so user A's unsynced mutations can't replay
   // under user B's session on a shared device (the RN queue; web clears its own

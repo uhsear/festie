@@ -12,6 +12,8 @@ export type JoinOutcome = { kind: 'joined' | 'already'; crew: Crew } | { kind: '
  */
 export function useJoinCrewByInvite(): (code: string) => Promise<JoinOutcome> {
   return useCallback(async (code: string): Promise<JoinOutcome> => {
+    // Finish the guest-pick merge first: its POST /profiles must not race the join's ensureFestivalProfile.
+    await useFestivalDataStore.getState().mergeGuestPicks().catch(() => {});
     const crew = await useCrewStore.getState().joinByCode({ inviteCode: code });
     if (!crew) return { kind: 'queued' };
 

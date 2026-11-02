@@ -31,6 +31,7 @@ const dayFallback = { title: 'Day empty', description: 'Try another day.' };
 const setSearchQuery = vi.fn();
 const setOnlyMine = vi.fn();
 const setActiveStages = vi.fn();
+const setActiveGenres = vi.fn();
 
 function setStore(overrides: Record<string, unknown> = {}) {
   Object.keys(storeState).forEach((k) => delete storeState[k]);
@@ -38,6 +39,7 @@ function setStore(overrides: Record<string, unknown> = {}) {
     searchQuery: '',
     onlyMine: false,
     activeStages: [],
+    activeGenres: [],
     stages: [
       { id: 'a', name: 'A' },
       { id: 'b', name: 'B' },
@@ -48,6 +50,7 @@ function setStore(overrides: Record<string, unknown> = {}) {
     setSearchQuery,
     setOnlyMine,
     setActiveStages,
+    setActiveGenres,
     ...overrides,
   });
 }
@@ -103,6 +106,15 @@ describe('ScheduleEmptyState', () => {
     expect(screen.getByText('Nothing on these stages on Sunday')).toBeInTheDocument();
     screen.getByText('All stages').click();
     expect(setActiveStages).toHaveBeenCalledWith([]);
+  });
+
+  it('genres: names the day and offers All genres', () => {
+    setStore({ activeGenres: ['house'] });
+    render(<ScheduleEmptyState dayLabel="Sunday" dayFallback={dayFallback} />);
+    expect(screen.getByText('Nothing in these genres on Sunday')).toBeInTheDocument();
+    screen.getByText('All genres').click();
+    expect(setActiveGenres).toHaveBeenCalledWith([]);
+    expect(setActiveStages).not.toHaveBeenCalled();
   });
 
   it('day: uses the fallback and has no button', () => {

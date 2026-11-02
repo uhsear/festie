@@ -208,6 +208,20 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     state.timers.push(_pollExpiryTimer);
   }
 
+  // Festival announcements: send scheduled rows when due (lib/announcements.ts).
+  if (ctx.announcer) {
+    const _announcementTimer = setInterval(async () => {
+      try {
+        const count = await ctx.announcer.deliverDue();
+        if (count > 0) log.debug('delivered festival announcements', { count });
+      } catch (err: any) {
+        log.warn('announcement sweep failed', { error: err.message });
+      }
+    }, 60 * 1000);
+    _announcementTimer.unref();
+    state.timers.push(_announcementTimer);
+  }
+
   // M3 wrap_ready sweep — there is no in-request "festival became over" event, so
   // a leader-only periodic sweep is the clearest available trigger (see roadmap
   // M3: "wire it where a festival transitions to over OR expose it for a

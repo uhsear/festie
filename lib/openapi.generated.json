@@ -2696,6 +2696,178 @@
         }
       }
     },
+    "/api/v1/festivals/follows": {
+      "get": {
+        "tags": [
+          "Festivals"
+        ],
+        "summary": "Festivals I follow (published, not deleted), newest first",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Followed festivals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "festivalIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in"
+          }
+        }
+      }
+    },
+    "/api/v1/festivals/{id}/follow": {
+      "put": {
+        "tags": [
+          "Festivals"
+        ],
+        "summary": "Follow a festival (idempotent)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Following",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "festivalId": {
+                      "type": "string"
+                    },
+                    "following": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Festival not found (missing, deleted or draft)"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Festivals"
+        ],
+        "summary": "Stop following a festival (idempotent)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Not following",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "festivalId": {
+                      "type": "string"
+                    },
+                    "following": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/festivals/{festivalId}/sets/{setId}/also-picked": {
+      "get": {
+        "tags": [
+          "Festivals"
+        ],
+        "summary": "Sets that people who picked this set also picked (anonymous, 20-user floor, max 8)",
+        "parameters": [
+          {
+            "name": "festivalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "setId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Set ids, best first. Never counts or users.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "setIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Set not found"
+          }
+        }
+      }
+    },
     "/api/v1/profiles/{festivalId}": {
       "get": {
         "tags": [
@@ -3361,24 +3533,6 @@
         }
       }
     },
-    "/api/v1/festivals/{festivalId}/calendar": {
-      "get": {
-        "tags": [
-          "Export"
-        ],
-        "summary": "Calendar events JSON for native integration",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Calendar events"
-          }
-        }
-      }
-    },
     "/api/v1/notifications/tokens": {
       "post": {
         "tags": [
@@ -3848,6 +4002,188 @@
           },
           "404": {
             "description": "Festival not found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/festivals/{id}/announcements": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List the announcements of a festival (newest 20) and its audience size",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ festivalName, recipients, announcements }"
+          },
+          "404": {
+            "description": "Festival not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Send or schedule an announcement to everyone who joined the festival",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "info",
+                      "urgent"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "screen": {
+                    "default": "home",
+                    "type": "string",
+                    "enum": [
+                      "home",
+                      "map",
+                      "timeline",
+                      "picks",
+                      "festival-mode",
+                      "crew"
+                    ]
+                  },
+                  "sendAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  }
+                },
+                "required": [
+                  "severity",
+                  "title",
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "{ announcement, recipients }"
+          },
+          "400": {
+            "description": "Invalid body, or sendAt not in the next 14 days"
+          },
+          "404": {
+            "description": "Festival not found"
+          },
+          "409": {
+            "description": "The festival is a draft"
+          },
+          "429": {
+            "description": "The festival already has 3 announcements within an hour of that time"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/festivals/{id}/announcements/{announcementId}": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Cancel a scheduled announcement, or take down the banner of a sent one",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ announcement }"
+          },
+          "404": {
+            "description": "Announcement not found"
+          }
+        }
+      }
+    },
+    "/api/v1/festivals/{id}/announcements": {
+      "get": {
+        "tags": [
+          "Festivals"
+        ],
+        "summary": "Active announcements for the banner (sent in the last 24 hours, newest 3)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "FestivalAnnouncement[]; [] for a missing or draft festival"
           }
         }
       }

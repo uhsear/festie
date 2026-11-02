@@ -354,6 +354,15 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       return result.rows;
     },
 
+    /** When the "set times are out" alert went out (migration 089), or null if it has not. */
+    async getSetTimesOutAt(festivalId: string): Promise<string | null> {
+      const result = await pool.query('SELECT set_times_out_at AS "setTimesOutAt" FROM festivals WHERE id = $1', [
+        festivalId,
+      ]);
+      const value = result.rows[0]?.setTimesOutAt;
+      return value ? new Date(value).toISOString() : null;
+    },
+
     /** The id of the admin who last saved, published or restored the festival. */
     async getEditor(festivalId: string) {
       const result = await pool.query('SELECT updated_by AS "updatedBy" FROM festivals WHERE id = $1', [festivalId]);

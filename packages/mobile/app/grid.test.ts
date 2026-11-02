@@ -19,6 +19,10 @@ describe('mobile Grid screen', () => {
       expect(src).toContain(needle);
     }
   });
+  it('counts and clears the genre filter in the results row', () => {
+    expect(src).toMatch(/const clearAllFilters = \(\) => \{[^}]*setActiveGenres\(\[\]\)/);
+    expect(src).toContain('activeGenreCount: activeGenres.length');
+  });
   it('drops the fixed column width and scale', () => {
     expect(src).not.toContain('const COL_W = 132');
     expect(src).not.toContain('const PX_PER_MIN = 1.6');

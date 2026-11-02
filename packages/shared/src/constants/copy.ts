@@ -10,7 +10,8 @@ export const COPY = {
   jumpToNow: { label: 'Jump to now', a11y: 'Scroll to the current time', icon: 'jumpToNow' },
   picks: {
     tab: 'Picks', title: 'My picks', filterA11y: 'Show only my picks',
-    share: 'Share picks', shareByQr: 'Share by QR', shareOffline: 'Share offline', icon: 'picks',
+    share: 'Share picks', shareByQr: 'Share by QR', shareOffline: 'Share offline',
+    saveImage: 'Save image', printable: 'Download printable page', icon: 'picks',
   },
   wrap: {
     tab: 'Wrap', name: 'Festival Wrap', crewName: 'Crew Wrap', open: 'See your Festival Wrap',
@@ -76,3 +77,42 @@ export const MEETING_POINT_KINDS = [
 export function meetingPointKind(type: string) {
   return type === 'emergency' ? MEETING_POINT_KINDS[1] : MEETING_POINT_KINDS[0];
 }
+
+/** Discover the lineup (T42): co-picks, genre chips, the Discover row, follow and the set-times banner. */
+export const DISCOVER_COPY = {
+  alsoPicked: { heading: 'People who picked this also picked' },
+  genres: {
+    groupA11y: 'Filter by genre',
+    clear: 'All genres',
+    emptyTitle: (dayLabel: string): string => `Nothing in these genres on ${dayLabel}`,
+    emptyMessage: 'Your genre filter hides every set on this day.',
+  },
+  row: {
+    heading: 'More like your picks',
+    sub: (genres: readonly string[]): string => {
+      const [a, b, c] = genres;
+      if (!a) return '';
+      const list = !b ? a : !c ? `${a} and ${b}` : `${a}, ${b} and ${c}`;
+      return `From the genres you pick most: ${list}`;
+    },
+  },
+  follow: {
+    follow: 'Follow',
+    following: 'Following',
+    followA11y: (festivalName: string): string => `Follow ${festivalName}`,
+    unfollowA11y: (festivalName: string): string => `Stop following ${festivalName}`,
+    followedToast: (festivalName: string): string =>
+      `We'll tell you when ${festivalName} posts its lineup or set times.`,
+    unfollowedToast: (festivalName: string): string => `Stopped following ${festivalName}.`,
+    error: "Couldn't update. Try again.",
+    notNow: 'Not now',
+  },
+  banner: {
+    title: 'Set times are not out yet',
+    joined: "We'll tell you when they are.",
+    guest: 'Follow to hear when they are.',
+  },
+} as const;
+
+/** First letter upper-case, the rest as stored. */
+export const genreChipLabel = (genre: string): string => genre.charAt(0).toLocaleUpperCase() + genre.slice(1);

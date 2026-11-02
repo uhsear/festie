@@ -29,6 +29,10 @@ function makeExecutor() {
       calls.push(['rate', festivalId]);
       return { sent: 4, eventKey: `rate:${festivalId}:0` };
     },
+    sendSetTimesOut: async (festivalId: string) => {
+      calls.push(['times', festivalId]);
+      return { sent: 4, eventKey: `times:${festivalId}` };
+    },
   };
 }
 
@@ -223,6 +227,29 @@ describe('createReengagementQueue', () => {
       ['lineup', 'f2'],
       ['reform', { newCrewId: 'c3' }],
     ]);
+  });
+
+  it('enqueues set_times_out with job id times-<id> and the worker routes it', async () => {
+    const fakes = makeFakes();
+    const executor = makeExecutor();
+    const q = createReengagementQueue({ executor: executor as any, log, ...fakes });
+    assert.ok(q);
+
+    const r = await q!.sendSetTimesOut('edc-2027');
+    assert.deepEqual(r, { queued: true, jobId: 'times-edc-2027' });
+    assert.deepEqual(fakes.added, [
+      { name: 'set_times_out', data: { festivalId: 'edc-2027' }, jobOpts: { jobId: 'times-edc-2027' } },
+    ]);
+    assert.deepEqual(executor.calls, []);
+
+    const done = await fakes.getProcessor()({
+      name: 'set_times_out',
+      data: { festivalId: 'edc-2027' },
+      id: 'times-edc-2027',
+      attemptsMade: 0,
+    });
+    assert.equal(done.sent, 4);
+    assert.deepEqual(executor.calls, [['times', 'edc-2027']]);
   });
 
   it('worker throws on an unknown job name (so BullMQ retries/surfaces it)', async () => {

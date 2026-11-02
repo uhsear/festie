@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail } from '../lib/email.js';
+import { sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendSetTimesOutEmail } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -336,6 +336,7 @@ describe('email: re-engagement senders', () => {
     ['wrap ready', sendWrapReadyEmail, 'Wrap-up ready'],
     ['lineup drop', sendLineupDropEmail, 'New lineups'],
     ['crew reform', sendCrewReformEmail, 'Crew re-forms'],
+    ['set times out', sendSetTimesOutEmail, 'New lineups and set times'],
   ];
   for (const [name, fn, label] of cases) {
     it(`${name}: https List-Unsubscribe header and settings footer`, async () => {
@@ -350,4 +351,28 @@ describe('email: re-engagement senders', () => {
       assert.ok(msg.text.endsWith(`${sentence} Turn it off: https://festie.test/account`));
     });
   }
+});
+
+describe('email: sendSetTimesOutEmail', () => {
+  it('uses the set-times copy, links the festival and escapes the name', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    const ok = await sendSetTimesOutEmail({
+      to: 'u@example.com',
+      username: '<b>u</b>',
+      festivalName: 'EDC <Las Vegas>',
+      festivalId: 'edc 27',
+      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }),
+      log: createMockLog(),
+      _client: createMockClient(send),
+    });
+    assert.equal(ok, true);
+    const msg = (send.mock.calls as any[])[0].arguments[0];
+    assert.equal(msg.subject, 'EDC <Las Vegas> set times are out');
+    assert.ok(msg.html.includes('The set times for <strong style="color:#e4e4e7">EDC &lt;Las Vegas&gt;</strong> are out.'));
+    assert.ok(msg.html.includes('Pick your sets and spot clashes before the weekend.'));
+    assert.ok(msg.html.includes('See the schedule'));
+    assert.ok(msg.html.includes('https://festie.test/?festival=edc%2027'));
+    assert.ok(!msg.html.includes('<b>u</b>'));
+    assert.ok(msg.text.includes('The set times for EDC <Las Vegas> are out.'));
+  });
 });

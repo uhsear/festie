@@ -6,7 +6,11 @@
 //
 // Four event-gated push/email notifications:
 //   • lineup_drop    — a recurring (same-named) festival publishes its lineup →
-//                      notify users who attended a PRIOR edition of that festival.
+//                      notify users who attended a PRIOR edition of that festival
+//                      and users who follow it.
+//   • set_times_out  — a published festival gets its first set times → notify its
+//                      followers and everyone with a profile in it, once per
+//                      festival (festivals.set_times_out_at marks it sent).
 //   • crew_reformed  — a prior crew is reformed for a new festival → notify the
 //                      INVITED prior members (handed in by the reform route).
 //   • wrap_ready     — a festival is over → notify its attendees that the recap
@@ -29,7 +33,7 @@
 // push provider. Email is best-effort and degrades when RESEND_API_KEY is unset.
 
 import crypto from 'crypto';
-import { sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail } from '../email.js';
+import { sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendSetTimesOutEmail } from '../email.js';
 import { PREF_MAP } from './send.js';
 import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
 import { appLink, appOrigin } from './links.js';
@@ -266,8 +270,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   //
   // Fires from the admin "Announce lineup" action (routes/lineup-announce.ts). Targets PRIOR-year attendees of the
   // SAME-NAMED recurring festival (the inverse of getAttendedFestivals: users
-  // who attended an earlier edition but NOT the new one). Deduped per user on
-  // eventKey `lineup:<festivalId>`.
+  // who attended an earlier edition but NOT the new one), plus followers of the
+  // festival who have not joined it. Deduped per user on eventKey `lineup:<festivalId>`.
   async function resolveLineupDropRecipients(
     festivalId: string,
   ): Promise<{ festivalName: string; priorIds: string[]; fresh: string[] } | { reason: string }> {
@@ -285,7 +289,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
     // Prior-edition attendees: users with a profile in an EARLIER festival whose
     // name matches once a trailing year is ignored, who do NOT already have a
-    // profile in THIS one. Excludes deleted.
+    // profile in THIS one. Followers of THIS festival who have not joined it are
+    // added. Excludes deleted.
     let priorIds: string[];
     try {
       // shortcut: name-minus-year match, replace with a festivals.series_id when editions need explicit links
@@ -302,6 +307,15 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
           AND NOT EXISTS (
             SELECT 1 FROM festival_profiles cur
             WHERE cur.user_id = p.user_id AND cur.festival_id = $1 AND cur.deleted_at IS NULL
+          )
+        UNION
+        SELECT ff.user_id
+        FROM festival_follows ff
+        JOIN users u ON u.id = ff.user_id AND u.deleted_at IS NULL
+        WHERE ff.festival_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM festival_profiles cur
+            WHERE cur.user_id = ff.user_id AND cur.festival_id = $1 AND cur.deleted_at IS NULL
           )
         `,
         [festivalId],
@@ -347,6 +361,94 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
     log?.info?.('sendLineupDrop: done', { festivalId, priorAttendees: priorIds.length, pushSent, emailSent });
     return { sent: pushSent, emailSent, eventKey, priorAttendees: priorIds.length };
+  }
+
+  // ── set_times_out ───────────────────────────────────────────────────────
+  //
+  // Fires after an admin save, an import commit or a publish (routes/festivals.ts,
+  // routes/lineup-import.ts). It sends only for a published festival that has
+  // timed sets and has not sent before. It sends first and marks after: a crash
+  // between the two retries, and the per-user dedup on eventKey `times:<festivalId>`
+  // stops repeat sends. The marker makes it once per festival, so blanking the
+  // times and adding them again sends nothing, even to people who followed since.
+  async function sendSetTimesOut(festivalId: string) {
+    if (!festivalId || !db) return { sent: 0, reason: 'no_festival' };
+
+    const { rows } = await db.query(
+      `
+  SELECT
+    name,
+    published_at AS "publishedAt",
+    set_times_out_at AS "setTimesOutAt",
+    EXISTS (
+      SELECT
+        1
+      FROM
+        festival_sets
+      WHERE
+        festival_id = $1
+        AND start_time IS NOT NULL
+        AND start_time <> ''
+    ) AS "hasTimes"
+  FROM
+    festivals
+  WHERE
+    id = $1
+    AND deleted_at IS NULL
+`,
+      [festivalId],
+    );
+    const festival = rows[0];
+    if (!festival) return { sent: 0, reason: 'festival_not_found' };
+    if (!festival.publishedAt) return { sent: 0, reason: 'draft' };
+    if (festival.setTimesOutAt) return { sent: 0, reason: 'already_sent' };
+    if (!festival.hasTimes) return { sent: 0, reason: 'no_times' };
+
+    const { rows: recipientRows } = await db.query(
+      `
+  SELECT
+    f.user_id AS "userId"
+  FROM
+    festival_follows f
+    JOIN users u ON u.id = f.user_id
+    AND u.deleted_at IS NULL
+  WHERE
+    f.festival_id = $1
+  UNION
+  SELECT
+    p.user_id
+  FROM
+    festival_profiles p
+    JOIN users u ON u.id = p.user_id
+    AND u.deleted_at IS NULL
+  WHERE
+    p.festival_id = $1
+    AND p.deleted_at IS NULL
+    AND p.user_id IS NOT NULL
+`,
+      [festivalId],
+    );
+    const userIds: string[] = recipientRows.map((r: any) => r.userId).filter(Boolean);
+    const festivalName = festival.name || 'Your festival';
+    const eventKey = `times:${festivalId}`;
+    const fresh = await filterFresh(userIds, 'set_times_out', eventKey);
+
+    const deepLink = appLink(config, '/?festival=' + encodeURIComponent(festivalId));
+    const pushSent = await pushFanout(fresh, () => ({
+      type: 'set_times_out',
+      title: `${festivalName} set times are out`,
+      body: 'See who plays when and build your plan.',
+      data: { festivalId, eventKey, deepLink },
+    }));
+    const emailSent = await emailFanout(fresh, 'set_times_out', eventKey, async (user) =>
+      sendSetTimesOutEmail({ to: user.email, username: user.username, festivalName, festivalId, config, log }),
+    );
+
+    await db.query('UPDATE festivals SET set_times_out_at = NOW() WHERE id = $1 AND set_times_out_at IS NULL', [
+      festivalId,
+    ]);
+    log?.info?.('sendSetTimesOut: done', { festivalId, recipients: userIds.length, pushSent, emailSent });
+    return { sent: pushSent, emailSent, eventKey, recipients: userIds.length };
   }
 
   // ── crew_reformed ─────────────────────────────────────────────────────────
@@ -481,5 +583,5 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return sent;
   }
 
-  return { sendWrapReady, sendLineupDrop, countLineupDrop, sendCrewReformed, sendRatePrompt };
+  return { sendWrapReady, sendLineupDrop, countLineupDrop, sendCrewReformed, sendRatePrompt, sendSetTimesOut };
 }

@@ -84,6 +84,8 @@ export const PREF_MAP: Record<string, string> = {
   set_reminder: 'setReminders',
   // M3 re-engagement triggers — each has its own per-type opt-out column.
   lineup_drop: 'lineupDrops',
+  // "New lineups and set times" covers both announcements; no column of its own.
+  set_times_out: 'lineupDrops',
   crew_reformed: 'crewReformed',
   wrap_ready: 'wrapReady',
   // The Wrap toggle covers the morning rate prompt too (no own column).
@@ -92,6 +94,8 @@ export const PREF_MAP: Record<string, string> = {
   crew_poll: 'crewPolls',
   crew_money: 'crewMoney',
   crew_ride: 'crewRides',
+  // Admin announcements share the "Schedule changes" switch: no own preference column.
+  festival_announcement: 'scheduleChanges',
 };
 
 /**

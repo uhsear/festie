@@ -49,6 +49,7 @@ const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
+const loadFriendPicks = () => import('./routes/friend-picks');
 const loadPlanSnapshot = () => import('./routes/plan-snapshot');
 const loadMap = () => import('./routes/map');
 
@@ -89,6 +90,7 @@ const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
 const RateView = withSkeleton(lazyRouteComponent(loadRate), MinimalFallback);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
+const FriendPicksView = withSkeleton(lazyRouteComponent(loadFriendPicks), MinimalFallback);
 const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton);
 const PlanSnapshotView = withSkeleton(lazyRouteComponent(loadPlanSnapshot), MinimalFallback);
 const MapView = withSkeleton(lazyRouteComponent(loadMap), MinimalFallback);
@@ -234,9 +236,10 @@ const crewRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/crew',
   component: CrewView,
-  validateSearch: (search: Record<string, unknown>): { sos?: string; tab?: CrewTabKey } => {
-    const out: { sos?: string; tab?: CrewTabKey } = {};
+  validateSearch: (search: Record<string, unknown>): { sos?: string; tab?: CrewTabKey; start?: 'create' | 'join' } => {
+    const out: { sos?: string; tab?: CrewTabKey; start?: 'create' | 'join' } = {};
     if (typeof search.sos === 'string') out.sos = search.sos;
+    if (search.start === 'create' || search.start === 'join') out.start = search.start;
     const tab = parseCrewTab(search.tab);
     if (tab) out.tab = tab;
     return out;
@@ -312,6 +315,17 @@ const planSnapshotRoute = new Route({
   component: PlanSnapshotView,
 });
 
+// /friend-picks?from=<ref> - compare a shared picks link with your own and add from it. Public:
+// signed-out visitors see the friend's list with a log-in banner (routes/friend-picks.tsx).
+const friendPicksRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/friend-picks',
+  component: FriendPicksView,
+  validateSearch: (s: Record<string, unknown>): { from?: string } => ({
+    from: typeof s.from === 'string' ? s.from : undefined,
+  }),
+});
+
 const adminRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/admin',
@@ -347,6 +361,7 @@ const routeTree = rootRoute.addChildren([
   compareRoute,
   setRoute,
   planSnapshotRoute,
+  friendPicksRoute,
   adminRoute,
 ]);
 

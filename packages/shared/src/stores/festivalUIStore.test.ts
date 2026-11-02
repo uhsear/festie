@@ -7,6 +7,7 @@ describe('festivalUIStore', () => {
     useFestivalUIStore.setState({
       selectedDay: 0,
       activeStages: [],
+      activeGenres: [],
       searchQuery: '',
       onlyMine: false,
       scheduleView: null,
@@ -210,6 +211,30 @@ describe('festivalUIStore', () => {
         await hydrate();
         expect(ui().activeStages).toEqual(['s1']);
       });
+    });
+  });
+
+  describe('activeGenres', () => {
+    const scope = { stageIds: ['s1', 's2'], dayCount: 3, todayIdx: 1 };
+
+    it('resets when another festival is restored and is not persisted', () => {
+      const ui = () => useFestivalUIStore.getState();
+      ui().restoreForFestival('A', scope);
+      ui().setActiveGenres(['house']);
+      expect(ui().activeGenres).toEqual(['house']);
+      const persisted = useFestivalUIStore.persist.getOptions().partialize?.(ui());
+      expect(Object.keys(persisted ?? {})).toEqual(['byFestival']);
+      ui().restoreForFestival('B', scope);
+      expect(ui().activeGenres).toEqual([]);
+    });
+
+    // A refetch of the open festival restores it again; the chips the user set must survive that.
+    it('survives a refresh of the same festival', () => {
+      const ui = () => useFestivalUIStore.getState();
+      ui().restoreForFestival('A', scope);
+      ui().setActiveGenres(['house']);
+      ui().restoreForFestival('A', scope);
+      expect(ui().activeGenres).toEqual(['house']);
     });
   });
 });

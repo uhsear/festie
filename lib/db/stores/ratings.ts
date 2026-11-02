@@ -282,10 +282,7 @@ export function createRatingsStore(pool: Pool) {
         `
         SELECT r.set_id AS "setId",
                COUNT(*)::int AS "totalRatings",
-               ROUND(AVG(r.rating), 1)::float AS "avgRating",
-               json_agg(json_build_object(
-                 'userId', r.user_id, 'rating', r.rating, 'note', r.note
-               ) ORDER BY r.rating DESC) AS ratings
+               ROUND(AVG(r.rating), 1)::float AS "avgRating"
         FROM set_ratings r
         JOIN festival_sets s ON s.id = r.set_id
         WHERE s.festival_id = $1

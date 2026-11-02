@@ -110,6 +110,7 @@ import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
 import { createCrewNotifier } from './lib/notifications/crew-notify';
 import { createPollCloser } from './lib/poll-close';
+import { createAnnouncer } from './lib/announcements';
 import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
 import createPageRoutes from './routes/pages';
@@ -134,8 +135,10 @@ import createNotificationRoutes from './routes/notifications';
 import createCrewRoutes from './routes/crews';
 import createLineupImportRoutes from './routes/lineup-import';
 import createLineupAnnounceRoutes from './routes/lineup-announce';
+import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from './routes/festival-announcements';
 import createShareRoutes from './routes/share';
 import { createRatingsRoutes } from './routes/ratings';
+import { createFestivalDiscoveryRoutes } from './routes/festival-discovery';
 import { createWeatherRoutes } from './routes/weather';
 import createExpenseRoutes from './routes/expenses';
 import createActivityRoutes from './routes/activity';
@@ -251,6 +254,9 @@ async function createFestieApp(overrides: any = {}) {
   ctx.crewNotify = crewNotify;
   deps.pollCloser = pollCloser;
   ctx.pollCloser = pollCloser;
+  const announcer = createAnnouncer({ stores: ctx.stores, notificationService, config, log });
+  deps.announcer = announcer;
+  ctx.announcer = announcer;
   // Venue geocoding (OpenStreetMap Nominatim). Off under test so suites make no network calls.
   if (config.NODE_ENV !== 'test') deps.geocodeVenue = createVenueGeocoder({ log }).geocodeVenue;
 
@@ -260,12 +266,15 @@ async function createFestieApp(overrides: any = {}) {
   const accountRoutes = createAccountRoutes(deps);
   const adminRoutes = createAdminRoutes(deps);
   const festivalRoutes = createFestivalRoutes(deps);
+  const festivalDiscoveryRoutes = createFestivalDiscoveryRoutes(deps);
   const profileRoutes = createProfileRoutes(deps);
   const exportRoutes = createExportRoutes(deps);
   const notificationRoutes = createNotificationRoutes(deps);
   const crewRoutes = createCrewRoutes(deps);
   const lineupImportRoutes = createLineupImportRoutes(deps);
   const lineupAnnounceRoutes = createLineupAnnounceRoutes(deps);
+  const adminAnnouncementRoutes = createAdminAnnouncementRoutes(deps);
+  const publicAnnouncementRoutes = createPublicAnnouncementRoutes(deps);
   const shareRoutes = createShareRoutes(deps);
   const ratingsRoutes = createRatingsRoutes(deps);
   const weatherRoutes = createWeatherRoutes(deps);
@@ -287,6 +296,9 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);
+  app.use('/api/v1/festivals', festivalDiscoveryRoutes);
+  app.use('/api/v1/admin/festivals', deps.adminAuth, adminAnnouncementRoutes);
+  app.use('/api/v1/festivals', publicAnnouncementRoutes);
   app.use('/api/v1/festivals', festivalRoutes);
   app.use('/api/v1/profiles', profileRoutes);
   app.use('/api/v1', exportRoutes);

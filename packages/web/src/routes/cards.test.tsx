@@ -9,11 +9,14 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (sel: (s: Record<string, unknown>) => unknown) => sel(festivalState),
   useAuthStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ user: null }),
   useCrewStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ crews: [] }),
+  selectMyPicks: () => null,
 }));
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ setDetailSet: vi.fn(), setDetailAutoSpotify: vi.fn() }),
 }));
 vi.mock('@festie/shared/hooks', () => ({
+  useFestivalReady: () => ({ visible: false, items: [], doneCount: 0, total: 4, progressLabel: '', hide: vi.fn() }),
+  useCanPick: () => true,
   usePicks: () => ({ getMyPick: () => null, getOtherPicks: () => [] }),
   useFestival: () => ({
     getStageColor: () => '#ccc',
@@ -31,6 +34,8 @@ vi.mock('../components/features/SetCard', () => ({
 vi.mock('../components/features/PhaseHomeActions', () => ({ default: () => <div data-testid="band" /> }));
 vi.mock('../components/features/OtherDayMatches', () => ({ default: () => null }));
 vi.mock('../components/features/ScheduleEmptyState', () => ({ default: () => <div data-testid="empty-state" /> }));
+vi.mock('../components/features/SetTimesBanner', () => ({ default: () => null }));
+vi.mock('../components/features/DiscoverRow', () => ({ default: () => null }));
 vi.mock('../components/ui/skeletons/CardsSkeleton', () => ({ default: () => <div /> }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,

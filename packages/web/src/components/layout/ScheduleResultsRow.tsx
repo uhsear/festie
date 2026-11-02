@@ -9,17 +9,19 @@ export default function ScheduleResultsRow() {
   const { pathname } = useLocation();
   const stages = useFestivalStore((s) => s.stages);
   const activeStages = useFestivalStore((s) => s.activeStages);
+  const activeGenres = useFestivalStore((s) => s.activeGenres);
   const searchQuery = useFestivalStore((s) => s.searchQuery);
   const onlyMine = useFestivalStore((s) => s.onlyMine);
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
+  const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
   const { getFilteredSets } = useFestival();
 
   const mineActive = onlyMine && hasAnyPick(picks);
   const stageActive = isStageFilterActive(activeStages, stages.length);
-  if (searchQuery.trim() === '' && !mineActive && !stageActive) return null;
+  if (searchQuery.trim() === '' && !mineActive && !stageActive && activeGenres.length === 0) return null;
 
   const sets = getFilteredSets();
   const timedView = pathname === '/timeline' || pathname === '/grid';
@@ -28,6 +30,7 @@ export default function ScheduleResultsRow() {
     count: sets.length,
     onlyMine: mineActive,
     activeStageCount: stageActive ? activeStages.length : 0,
+    activeGenreCount: activeGenres.length,
     tbaCount,
   });
 
@@ -41,6 +44,7 @@ export default function ScheduleResultsRow() {
           setSearchQuery('');
           setOnlyMine(false);
           setActiveStages([]);
+          setActiveGenres([]);
         }}
         className={cn(
           'min-h-[44px] px-2 cursor-pointer font-semibold text-accent-aqua',

@@ -196,6 +196,157 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/festivals/{id}/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the announcements of a festival (newest 20) and its audience size */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { festivalName, recipients, announcements } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Send or schedule an announcement to everyone who joined the festival */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        body: string;
+                        /**
+                         * @default home
+                         * @enum {string}
+                         */
+                        screen?: "home" | "map" | "timeline" | "picks" | "festival-mode" | "crew";
+                        /** Format: date-time */
+                        sendAt?: string;
+                        /** @enum {string} */
+                        severity: "info" | "urgent";
+                        title: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description { announcement, recipients } */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid body, or sendAt not in the next 14 days */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The festival is a draft */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The festival already has 3 announcements within an hour of that time */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/announcements/{announcementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel a scheduled announcement, or take down the banner of a sent one */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    announcementId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { announcement } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Announcement not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/festivals/{id}/impact": {
         parameters: {
             query?: never;
@@ -1492,25 +1643,39 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/festivals/{festivalId}/calendar": {
+    "/api/v1/festivals/{festivalId}/sets/{setId}/also-picked": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Calendar events JSON for native integration */
+        /** Sets that people who picked this set also picked (anonymous, 20-user floor, max 8) */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    festivalId: string;
+                    setId: string;
+                };
                 cookie?: never;
             };
             requestBody?: never;
             responses: {
-                /** @description Calendar events */
+                /** @description Set ids, best first. Never counts or users. */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            setIds?: string[];
+                        };
+                    };
+                };
+                /** @description Set not found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1555,6 +1720,160 @@ export type paths = {
                     content: {
                         "application/json": components["schemas"]["Festival"];
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/festivals/{id}/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active announcements for the banner (sent in the last 24 hours, newest 3) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description FestivalAnnouncement[]; [] for a missing or draft festival */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/festivals/{id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Follow a festival (idempotent) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Following */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            festivalId?: string;
+                            following?: boolean;
+                        };
+                    };
+                };
+                /** @description Festival not found (missing, deleted or draft) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** Stop following a festival (idempotent) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Not following */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            festivalId?: string;
+                            following?: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/festivals/follows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Festivals I follow (published, not deleted), newest first */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Followed festivals */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            festivalIds?: string[];
+                        };
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };

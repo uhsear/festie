@@ -10,6 +10,7 @@ import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
 import { Skeleton } from './Skeleton';
+import FollowButton from './FollowButton';
 
 // Status pill styling. The list endpoint now provides startDate/endDate, so a
 // festival classifies as upcoming/ongoing/past. Returns null when undetermined.
@@ -159,6 +160,10 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label'),
     color: t.colors.text.secondary,
   },
+  followButton: {
+    alignSelf: 'flex-start' as const,
+    marginTop: t.spacing[2],
+  },
 }));
 
 function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
@@ -183,7 +188,10 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
   // "<name>, <status>, <dates>, <location>" as a single button instead of fragments.
   const a11yLabel = [festival.name, badgeSpec?.label, dateRange, festival.location].filter(Boolean).join(', ');
 
+  const followable = status === 'upcoming' || status === null;
+
   return (
+    <View>
     <TouchableOpacity
       testID={`festival-card-${festival.id}`}
       style={[styles.card, isPast && styles.cardPast, largeText && { padding: t.spacing[3] }]}
@@ -245,6 +253,10 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
         importantForAccessibility="no-hide-descendants"
       />
     </TouchableOpacity>
+    {followable ? (
+      <FollowButton festivalId={festival.id} festivalName={festival.name} style={styles.followButton} />
+    ) : null}
+    </View>
   );
 }
 

@@ -14,10 +14,19 @@ import {
   type ListRenderItem,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFestivalDataStore, useFestivalStore, useAuthStore, useCrewStore, useUIStore } from '@festie/shared/stores';
-import { usePicks, useFestival, usePickClear } from '@festie/shared/hooks';
+import {
+  useFestivalDataStore,
+  useFestivalStore,
+  useAuthStore,
+  useCrewStore,
+  useUIStore,
+  selectMyPicks,
+} from '@festie/shared/stores';
+import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady } from '@festie/shared/hooks';
+import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
 import {
   artistDisplayName,
   getConflictingSetIds,
@@ -37,6 +46,8 @@ import {
   hasAnyPick,
   isStageFilterActive,
   toggleStageFilter,
+  toggleGenreFilter,
+  festivalGenres,
   toggleHiddenDay,
   scheduleEmptyCopy,
   scheduleEmptyReason,
@@ -58,6 +69,7 @@ import { useReduceMotion } from '../../hooks/useReduceMotion';
 import SegmentedControl from '../../components/SegmentedControl';
 import NowNextStrip from '../../components/NowNextStrip';
 import PhaseHomeActions from '../../components/PhaseHomeActions';
+import FestivalReadyCard from '../../components/FestivalReadyCard';
 import ScheduleDayChips from '../../components/ScheduleDayChips';
 import ScheduleResultsRow from '../../components/ScheduleResultsRow';
 import FestivalList from '../../components/FestivalList';
@@ -70,6 +82,8 @@ import ScreenHeader from '../../components/ScreenHeader';
 import { Skeleton } from '../../components/Skeleton';
 import TimelineView from '../../components/TimelineView';
 import TBASection from '../../components/TBASection';
+import SetTimesBanner from '../../components/SetTimesBanner';
+import DiscoverRow from '../../components/DiscoverRow';
 
 const SLOT_MINUTES = 15;
 const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
@@ -134,6 +148,8 @@ export default function TimelineScreen() {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const loadProfiles = useFestivalDataStore((s) => s.loadProfiles);
   const user = useAuthStore((s) => s.user);
+  const canPick = useCanPick();
+  const myPicks = useFestivalDataStore(selectMyPicks);
   const crews = useCrewStore((s) => s.crews);
   const isLoading = useFestivalDataStore((s) => s.isLoading);
   const error = useFestivalDataStore((s) => s.error);
@@ -147,6 +163,8 @@ export default function TimelineScreen() {
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const activeStages = useFestivalStore((s) => s.activeStages);
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
+  const activeGenres = useFestivalStore((s) => s.activeGenres);
+  const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
   const onlyMine = useFestivalStore((s) => s.onlyMine);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const scheduleView = useFestivalStore((s) => s.scheduleView);
@@ -274,9 +292,21 @@ export default function TimelineScreen() {
   // Feeds the next-step band (`getHomeActions`); null when the festival has no
   // usable dates, in which case the band is empty.
   const phase = useMemo(() => festivalPhase(currentFestival, days), [currentFestival, days]);
-  const pickCount = Object.keys(currentProfile?.picks ?? {}).length;
+  const pickCount = Object.keys(myPicks ?? {}).length;
   const hasCrew = crews.some((c) => !c.festivalId || c.festivalId === currentFestival?.id);
   const homeActions = getHomeActions({ phase, signedIn: !!user, pickCount, hasCrew });
+
+  // Device notification permission for the Festival ready checklist. Re-read on
+  // focus so it updates after the user comes back from system settings.
+  const [notificationsAllowed, setNotificationsAllowed] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      Notifications.getPermissionsAsync()
+        .then((p) => setNotificationsAllowed(p.status === 'granted'))
+        .catch(() => setNotificationsAllowed(false));
+    }, []),
+  );
+  const ready = useFestivalReady(notificationsAllowed);
 
   // The person's remembered view for this festival wins; otherwise Timeline on a
   // live day with timed sets, Cards. A stored 'grid' never reaches here because
@@ -285,10 +315,12 @@ export default function TimelineScreen() {
     scheduleView === 'cards' || scheduleView === 'timeline'
       ? scheduleView
       : defaultScheduleView({ hasTimedSets: festivalHasTimedSets, phase });
-  const picks = currentProfile?.picks;
+  const picks = myPicks ?? undefined;
   const canFilterMine = hasAnyPick(picks);
   const mineActive = onlyMine && canFilterMine;
   const stageFilterActive = isStageFilterActive(activeStages, stages.length);
+  const genreFilterActive = activeGenres.length > 0;
+  const genreChips = useMemo(() => festivalGenres(allSets), [allSets]);
   const visibleDays = visibleDayIndexes(days.length, hiddenDays, selectedDay);
 
   // Day + stage + My picks + search filtering lives in the shared hook
@@ -340,8 +372,15 @@ export default function TimelineScreen() {
   // its sets. Ended sets of today sit behind one "Earlier today (n)" row first.
   const rows = useMemo<ListRow[]>(
     () => [
-      ...(earlierSets.length > 0 ? [{ kind: 'earlier' as const, key: 'earlier' as const, count: earlierSets.length }] : []),
-      ...groupScheduleSets(earlierOpen ? filteredSets : restSets, groupBy, stages, currentFestival?.b2bSeparator).flatMap((g) => [
+      ...(earlierSets.length > 0
+        ? [{ kind: 'earlier' as const, key: 'earlier' as const, count: earlierSets.length }]
+        : []),
+      ...groupScheduleSets(
+        earlierOpen ? filteredSets : restSets,
+        groupBy,
+        stages,
+        currentFestival?.b2bSeparator,
+      ).flatMap((g) => [
         {
           kind: 'groupHeader' as const,
           key: `group-${g.key}`,
@@ -411,10 +450,6 @@ export default function TimelineScreen() {
   const handlePickChange = useCallback(
     (setId: string, priority: Priority | null) => {
       if (!currentFestival) return;
-      if (!user) {
-        router.push(`/set/${setId}`);
-        return;
-      }
       if (priority === null) {
         const found = useFestivalStore.getState().sets.find((s) => s.id === setId);
         clearPick(setId, found ? artistDisplayName(found, currentFestival.b2bSeparator) : 'pick');
@@ -423,7 +458,7 @@ export default function TimelineScreen() {
       // The card shows the Retry chip on failure.
       savePick(currentFestival.id, setId, priority).catch(() => haptics.warning());
     },
-    [currentFestival, user, router, savePick, clearPick, haptics],
+    [currentFestival, savePick, clearPick, haptics],
   );
 
   // One-tap reset for every active schedule filter (search text, my-picks, stage
@@ -433,7 +468,8 @@ export default function TimelineScreen() {
     setSearchQuery('');
     setOnlyMine(false);
     setActiveStages([]);
-  }, [haptics, setSearchQuery, setOnlyMine, setActiveStages]);
+    setActiveGenres([]);
+  }, [haptics, setSearchQuery, setOnlyMine, setActiveStages, setActiveGenres]);
 
   // Cards scroll tracking: reveal the scroll-to-top FAB once the user is well
   // past the fold. Guarded so the setState only fires on an actual transition.
@@ -482,11 +518,7 @@ export default function TimelineScreen() {
             <Text style={styles.earlierText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               Earlier today ({item.count})
             </Text>
-            <Ionicons
-              name={earlierOpen ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={t.colors.text.secondary}
-            />
+            <Ionicons name={earlierOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
           </TouchableOpacity>
         );
       }
@@ -547,7 +579,7 @@ export default function TimelineScreen() {
       <TBASection
         sets={timelessSets}
         stages={stages}
-        canPick={!!user}
+        canPick={canPick}
         currentFestival={currentFestival}
         getMyPick={getMyPick}
         getOtherPicks={getOtherPicks}
@@ -631,10 +663,16 @@ export default function TimelineScreen() {
     onlyMine,
     hasAnyPick: canFilterMine,
     stageFilterActive,
+    genreFilterActive,
   });
-  const filterEmptyState = (reason: 'picks' | 'stages') => {
+  const filterEmptyState = (reason: 'picks' | 'stages' | 'genres') => {
     const copy = scheduleEmptyCopy(reason, selectedDayLabel ?? 'this day');
-    const undo = reason === 'picks' ? () => setOnlyMine(false) : () => setActiveStages([]);
+    const undo =
+      reason === 'picks'
+        ? () => setOnlyMine(false)
+        : reason === 'genres'
+          ? () => setActiveGenres([])
+          : () => setActiveStages([]);
     return (
       <EmptyState
         icon={reason === 'picks' ? 'star-outline' : 'filter-outline'}
@@ -651,7 +689,7 @@ export default function TimelineScreen() {
   const emptyScheduleState =
     emptyReason === 'search' ? (
       searchEmptyState
-    ) : (emptyReason === 'picks' || emptyReason === 'stages') && timelessSets.length === 0 ? (
+    ) : (emptyReason === 'picks' || emptyReason === 'stages' || emptyReason === 'genres') && timelessSets.length === 0 ? (
       filterEmptyState(emptyReason)
     ) : (
       <EmptyState
@@ -679,7 +717,7 @@ export default function TimelineScreen() {
     errorScheduleState
   ) : emptyReason === 'search' ? (
     searchEmptyState
-  ) : emptyReason === 'picks' || emptyReason === 'stages' ? (
+  ) : emptyReason === 'picks' || emptyReason === 'stages' || emptyReason === 'genres' ? (
     filterEmptyState(emptyReason)
   ) : (
     <EmptyState
@@ -732,7 +770,7 @@ export default function TimelineScreen() {
   // user can always see (and clear) a filter that's shrinking the schedule,
   // even though both default to collapsed.
   // Hidden days are a preference, not a filter, so they never force the panel open.
-  const filtersActive = mineActive || stageFilterActive;
+  const filtersActive = mineActive || stageFilterActive || genreFilterActive;
   const searchOpen = showSearch || searchQuery.length > 0;
   const filtersOpen = showFilters || filtersActive;
   // Any narrowing in effect (search OR my-picks OR a stage subset) — gates the
@@ -748,12 +786,20 @@ export default function TimelineScreen() {
   // focus across keystroke re-renders.
   const controls = (
     <>
-      {/* Next-step band from shared getHomeActions (picks and crew before the
-          festival, find the crew during it, wrap and settle-up after). It is
-          empty, and so hidden, when there is nothing left to do. It rides in the
-          controls so it scrolls with the Cards list. The close button hides it
-          for this festival and phase. */}
-      {homeActions.length > 0 && phase && dismissedPhase !== phase ? (
+      {/* Before the festival the Festival ready checklist takes the band's place
+          until it is done or hidden. It covers the band's pre-festival rows
+          (first pick, crew), so the two are never shown together. It is
+          first-run guidance, so it is not gated on the filters.
+          Otherwise: next-step band from shared getHomeActions (picks and crew
+          before the festival, find the crew during it, wrap and settle-up
+          after). It is empty, and so hidden, when there is nothing left to do. It
+          rides in the controls so it scrolls with the Cards list. The close
+          button hides it for this festival and phase. */}
+      {ready.visible ? (
+        <View style={{ paddingHorizontal: hPad }}>
+          <FestivalReadyCard ready={ready} />
+        </View>
+      ) : homeActions.length > 0 && phase && dismissedPhase !== phase ? (
         <View style={{ paddingHorizontal: hPad }}>
           <PhaseHomeActions actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
         </View>
@@ -866,7 +912,11 @@ export default function TimelineScreen() {
                   accessibilityState={canFilterMine ? { selected: onlyMine } : { disabled: true, selected: false }}
                   accessibilityLabel="Show only my picks"
                 >
-                  <Ionicons name={CONCEPT_IONICON.picks} size={12} color={mineActive ? t.colors.accent.aqua : t.colors.text.muted} />
+                  <Ionicons
+                    name={CONCEPT_IONICON.picks}
+                    size={12}
+                    color={mineActive ? t.colors.accent.aqua : t.colors.text.muted}
+                  />
                   <Text
                     style={[
                       styles.filterChipText,
@@ -931,6 +981,54 @@ export default function TimelineScreen() {
                   })}
                 </>
               ) : null}
+              {stages.length > 1 && genreChips.length > 0 ? (
+                <View style={styles.genreGroup} accessibilityRole="toolbar" accessibilityLabel={DISCOVER_COPY.genres.groupA11y}>
+                  <TouchableOpacity
+                    style={[styles.filterChip, !genreFilterActive && styles.filterChipActiveTinted]}
+                    onPress={() => {
+                      haptics.select();
+                      setActiveGenres([]);
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: !genreFilterActive }}
+                    accessibilityLabel={DISCOVER_COPY.genres.clear}
+                  >
+                    <Text
+                      style={[styles.filterChipText, !genreFilterActive && styles.filterChipTextTinted]}
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    >
+                      {DISCOVER_COPY.genres.clear}
+                    </Text>
+                  </TouchableOpacity>
+                  {genreChips.map((g) => {
+                    const on = activeGenres.some((a) => a.toLocaleLowerCase() === g.toLocaleLowerCase());
+                    return (
+                      <TouchableOpacity
+                        key={g}
+                        style={[styles.filterChip, on && styles.filterChipActiveTinted]}
+                        onPress={() => {
+                          haptics.select();
+                          setActiveGenres(toggleGenreFilter(activeGenres, g));
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        accessibilityLabel={genreChipLabel(g)}
+                      >
+                        <Text
+                          style={[styles.filterChipText, on && styles.filterChipTextTinted]}
+                          numberOfLines={1}
+                          maxFontSizeMultiplier={MAX_FONT_SCALE}
+                        >
+                          {genreChipLabel(g)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : null}
             </ScrollView>
           ) : null}
           {days.length > 1 ? (
@@ -988,6 +1086,7 @@ export default function TimelineScreen() {
             count: filteredSets.length,
             onlyMine: mineActive,
             activeStageCount: stageFilterActive ? activeStages.length : 0,
+            activeGenreCount: activeGenres.length,
             tbaCount: viewMode === 'timeline' ? timelessSets.length : 0,
           })}
           onClearAll={clearAllFilters}
@@ -1125,6 +1224,11 @@ export default function TimelineScreen() {
             ListHeaderComponent={
               <>
                 {controls}
+                <SetTimesBanner hPad={hPad} />
+                <DiscoverRow
+                  hPad={hPad}
+                  hidden={phase === 'post' || searchQuery.trim() !== '' || stageFilterActive || genreFilterActive}
+                />
                 {filteredSets.length > 0 ? (
                   <View style={[styles.groupByRow, { paddingHorizontal: hPad }]}>
                     <Text style={styles.groupByLabel}>Group by</Text>
@@ -1190,7 +1294,7 @@ export default function TimelineScreen() {
               onSetPress={handleSetPress}
               days={days}
               allSets={allSets}
-              picks={currentProfile?.picks ?? null}
+              picks={myPicks}
             />
             {/* Dock the TBA list below the timeline in its own bounded scroll so
                 it's always reachable. A ScrollView with a fixed maxHeight stays
@@ -1450,6 +1554,11 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.muted,
     paddingTop: t.spacing[2],
+  },
+  genreGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
   },
   stageDotSmall: {
     width: 10,

@@ -18,6 +18,9 @@ const storeState = {
   ],
   selectedDay: 0,
   activeStages: [] as string[],
+  activeGenres: [] as string[],
+  setActiveGenres: vi.fn(),
+  sets: [] as unknown[],
   searchQuery: '',
   setSelectedDay: vi.fn(),
   setActiveStages: vi.fn(),
@@ -341,5 +344,52 @@ describe('SubHeader phone fold', () => {
     render(<SubHeader dayOnly={true} festivalOnly={false} />);
     expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Filters/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('SubHeader genre chips', () => {
+  const genreSet = (id: string, genres: string[]) => ({ id, artists: [{ name: id, genres }] });
+  const richSets = [
+    genreSet('a', ['house', 'techno']),
+    genreSet('b', ['house', 'techno']),
+    genreSet('c', ['house', 'techno']),
+  ];
+
+  afterEach(() => {
+    mockPathname = '/cards';
+    storeState.sets = [];
+    storeState.activeGenres = [];
+  });
+
+  it('hides the group when the festival has no genre data', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('group', { name: 'Filter by genre' })).not.toBeInTheDocument();
+  });
+
+  it('shows chips, toggles a genre and clears with All genres', () => {
+    storeState.sets = richSets;
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const group = screen.getByRole('group', { name: 'Filter by genre' });
+    expect(group).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'House' }));
+    expect(storeState.setActiveGenres).toHaveBeenCalledWith(['house']);
+    fireEvent.click(screen.getByRole('button', { name: 'All genres' }));
+    expect(storeState.setActiveGenres).toHaveBeenCalledWith([]);
+  });
+
+  it('marks active genres pressed and counts them in Filters', () => {
+    storeState.sets = richSets;
+    storeState.activeGenres = ['house', 'techno'];
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('button', { name: 'House' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'All genres' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Filters (1)' })).toBeInTheDocument();
+  });
+
+  it('hides the group on day-only routes where the stage chips hide', () => {
+    storeState.sets = richSets;
+    mockPathname = '/picks';
+    render(<SubHeader dayOnly={true} festivalOnly={false} />);
+    expect(screen.queryByRole('group', { name: 'Filter by genre' })).not.toBeInTheDocument();
   });
 });

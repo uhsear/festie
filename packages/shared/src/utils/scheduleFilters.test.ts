@@ -11,6 +11,7 @@ import {
   scheduleResultsSummary,
   searchEmptyCopy,
   searchHiddenByFilters,
+  toggleGenreFilter,
   toggleHiddenDay,
   toggleStageFilter,
   visibleDayIndexes,
@@ -57,9 +58,9 @@ describe('filterScheduleSets', () => {
 });
 
 describe('scheduleEmptyReason', () => {
-  const f = { query: '', onlyMine: false, hasAnyPick: false, stageFilterActive: false };
+  const f = { query: '', onlyMine: false, hasAnyPick: false, stageFilterActive: false, genreFilterActive: false };
   it('orders search, picks, stages, day', () => {
-    expect(scheduleEmptyReason({ query: 'x', onlyMine: true, hasAnyPick: true, stageFilterActive: true })).toBe(
+    expect(scheduleEmptyReason({ ...f, query: 'x', onlyMine: true, hasAnyPick: true, stageFilterActive: true })).toBe(
       'search',
     );
     expect(scheduleEmptyReason({ ...f, onlyMine: true, hasAnyPick: true, stageFilterActive: true })).toBe('picks');
@@ -97,6 +98,9 @@ describe('scheduleResultsSummary', () => {
       '12 sets · my picks · 2 stages · 3 TBA',
     );
     expect(scheduleResultsSummary({ count: 2, onlyMine: false, activeStageCount: 1 })).toBe('2 sets · 1 stage');
+    expect(scheduleResultsSummary({ count: 3, onlyMine: false, activeStageCount: 0, activeGenreCount: 2 })).toBe(
+      '3 sets · 2 genres',
+    );
   });
 });
 
@@ -183,5 +187,33 @@ describe('defaultScheduleView', () => {
     expect(defaultScheduleView({ hasTimedSets: true, phase: 'pre' })).toBe('cards');
     expect(defaultScheduleView({ hasTimedSets: true, phase: 'post' })).toBe('cards');
     expect(defaultScheduleView({ hasTimedSets: true, phase: null })).toBe('cards');
+  });
+});
+
+describe('genre filter', () => {
+  const g = (id: string, genres: string[]) =>
+    set(id, 'A', id, { artists: [{ name: id, genres }] as FestivalSet['artists'] });
+  const gs = [g('h', ['House']), g('t', ['Techno']), g('d', ['Deep House']), set('n', 'A', 'none')];
+  it('keeps sets that share a genre, case-insensitively, never by substring', () => {
+    expect(filterScheduleSets(gs, { ...base, genres: ['house'] }).map((s) => s.id)).toEqual(['h']);
+    expect(filterScheduleSets(gs, { ...base, genres: ['house', 'techno'] }).map((s) => s.id)).toEqual(['h', 't']);
+  });
+  it('treats empty or missing as off', () => {
+    expect(filterScheduleSets(gs, { ...base, genres: [] })).toHaveLength(4);
+    expect(filterScheduleSets(gs, base)).toHaveLength(4);
+  });
+  it('toggles a genre on and off', () => {
+    expect(toggleGenreFilter([], 'house')).toEqual(['house']);
+    expect(toggleGenreFilter(['house', 'techno'], 'House')).toEqual(['techno']);
+  });
+  it('has an empty reason after stages, and its copy', () => {
+    const f = { query: '', onlyMine: false, hasAnyPick: false, stageFilterActive: false };
+    expect(scheduleEmptyReason({ ...f, genreFilterActive: true })).toBe('genres');
+    expect(scheduleEmptyReason({ ...f, stageFilterActive: true, genreFilterActive: true })).toBe('stages');
+    expect(scheduleEmptyCopy('genres', 'Sunday')).toEqual({
+      title: 'Nothing in these genres on Sunday',
+      message: 'Your genre filter hides every set on this day.',
+      actionLabel: 'All genres',
+    });
   });
 });

@@ -5,12 +5,14 @@ import ScheduleResultsRow from './ScheduleResultsRow';
 const storeState = {
   stages: [{ id: 's1' }, { id: 's2' }, { id: 's3' }],
   activeStages: [] as string[],
+  activeGenres: [] as string[],
   searchQuery: '',
   onlyMine: false,
   currentProfile: { picks: {} as Record<string, string> },
   setSearchQuery: vi.fn(),
   setOnlyMine: vi.fn(),
   setActiveStages: vi.fn(),
+  setActiveGenres: vi.fn(),
   setHiddenDays: vi.fn(),
 };
 
@@ -33,6 +35,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 afterEach(() => {
   storeState.activeStages = [];
+  storeState.activeGenres = [];
   vi.clearAllMocks();
 });
 
@@ -51,5 +54,13 @@ describe('ScheduleResultsRow', () => {
     expect(storeState.setOnlyMine).toHaveBeenCalledWith(false);
     expect(storeState.setActiveStages).toHaveBeenCalledWith([]);
     expect(storeState.setHiddenDays).not.toHaveBeenCalled();
+  });
+
+  it('shows for a genre filter alone and Clear all clears genres', () => {
+    storeState.activeGenres = ['house'];
+    render(<ScheduleResultsRow />);
+    expect(screen.getByText('2 sets · 1 genre')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
+    expect(storeState.setActiveGenres).toHaveBeenCalledWith([]);
   });
 });

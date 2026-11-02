@@ -68,6 +68,8 @@ export interface UIState {
   hapticsEnabled: boolean;
   /** Persisted device preference. Not reset on logout. Shows @handle on Wrap posters. */
   wrapShowHandle: boolean;
+  /** Mobile: asks AuthGate to replay the first-run intro. Not persisted. */
+  introReplay: boolean;
 }
 
 export interface UIActions {
@@ -91,6 +93,7 @@ export interface UIActions {
   setTheme: (theme: ThemePreference) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setWrapShowHandle: (v: boolean) => void;
+  setIntroReplay: (v: boolean) => void;
 }
 
 export type UIStore = UIState & UIActions;
@@ -107,6 +110,7 @@ const uiStore: StateCreator<UIStore> = (set) => ({
   theme: 'stage',
   hapticsEnabled: true,
   wrapShowHandle: true,
+  introReplay: false,
 
   setDetailSet: (detailSet: FestivalSet | null) => {
     set({ detailSet });
@@ -189,6 +193,10 @@ const uiStore: StateCreator<UIStore> = (set) => ({
 
   setWrapShowHandle: (wrapShowHandle: boolean) => {
     set({ wrapShowHandle });
+  },
+
+  setIntroReplay: (introReplay: boolean) => {
+    set({ introReplay });
   },
 });
 

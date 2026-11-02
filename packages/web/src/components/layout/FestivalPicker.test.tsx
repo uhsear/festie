@@ -25,6 +25,16 @@ const state = {
 
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (selector: (s: typeof state) => unknown) => selector(state),
+  useAuthStore: (selector: (s: { user: null }) => unknown) => selector({ user: null }),
+  useFollowStore: Object.assign(
+    (selector: (s: { festivalIds: string[]; loaded: boolean }) => unknown) =>
+      selector({ festivalIds: [], loaded: true }),
+    { getState: () => ({ load: vi.fn(async () => {}), setFollowing: vi.fn(async () => {}) }) },
+  ),
+}));
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+  useLocation: () => ({ href: '/' }),
 }));
 vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
