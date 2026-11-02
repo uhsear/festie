@@ -2,7 +2,7 @@ import { memo, useCallback } from 'react';
 import { Bell, FileText, TriangleAlert, ArrowRightLeft } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { usePicks, useFestival, usePickClear, useSetMove } from '@festie/shared/hooks';
+import { useMyPick, useMyNote, useMyReminder, usePickActions, usePickClear, useSetMove } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { COPY, PRIORITY_OPTIONS } from '@festie/shared/constants';
@@ -33,20 +33,22 @@ interface PicksPlanRowProps {
 function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
-  const { getMyPick, getMyNote, getMyReminder, savePick } = usePicks();
-  const { getStageColor: getStageColorRaw, getStageName } = useFestival();
+  const current = useMyPick(set.id);
+  const myNote = useMyNote(set.id);
+  const reminder = useMyReminder(set.id);
+  const { savePick } = usePickActions();
+  // Not useFestival(): it subscribes to the whole profile, so every pick write would re-render each row.
+  const stage = useFestivalStore((s) => s.stages.find((st) => st.id === set.stageId));
   const { toast } = useToast();
   const clearPick = usePickClear(useUndoNotifier());
   const move = useSetMove(set);
 
   const b2bSeparator = currentFestival?.b2bSeparator;
   const artist = artistDisplayName(set, b2bSeparator);
-  const stageName = getStageName(set.stageId) || '';
-  const stageColor = resolveStageColor(getStageColorRaw(set.stageId), 'var(--text-muted)');
+  const stageName = stage?.name || '';
+  const stageColor = resolveStageColor(stage?.color, 'var(--text-muted)');
   const time = formatSetTimeRange(set) || 'TBA';
-  const current = getMyPick(set.id);
-  const hasNote = !!getMyNote(set.id);
-  const reminder = getMyReminder(set.id);
+  const hasNote = !!myNote;
   const hasReminder = reminder != null;
 
   const onPriority = useCallback(

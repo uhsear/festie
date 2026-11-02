@@ -7,7 +7,6 @@ import { useRevocationRealtime } from '@festie/shared/hooks';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import type { OnlineUser } from '@festie/shared/types';
 import { useToast } from '../lib/toastContext';
 import { useCrewQuerySink } from './useCrewQuerySink';
 import type {
@@ -24,7 +23,6 @@ const RECONNECT_FESTIVAL_RELOAD_GAP_MS = 60_000;
 
 export interface UseRealtimeSyncReturn {
   connected: boolean;
-  onlineUsers: OnlineUser[];
   /** The single shared socket, exposed so feature UIs (Live Location) can emit. */
   socket: Socket | null;
 }
@@ -39,9 +37,10 @@ export interface UseRealtimeSyncReturn {
  *   - pick:updated / pick:removed / note:saved  -> festivalStore.loadProfiles
  *   - profile:updated / profile:joined / profile:left -> festivalStore.loadProfiles
  *   - crew:updated / crew:member-joined / crew:member-left -> crewStore
- *   - festival:updated / festival:set-added / festival:set-updated
- *       -> festivalStore.selectFestival (full reload of festival + sets + stages)
- *   - presence:update -> uiStore (no refetch)
+ *   - festival:updated (only for the current festival id) / festival:set-added /
+ *       festival:set-updated -> festivalStore.selectFestival (full reload of festival + sets + stages)
+ *   - presence:update -> uiStore (no refetch; not returned, so the shell does not
+ *       re-render on each join or leave)
  *
  * Bursty events (festival/set bulk edits, rapid pick toggles) are
  * debounced with a 300ms trailing guard so we issue one reload per burst.
@@ -51,7 +50,6 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
   const currentFestivalId = useFestivalStore((state) => state.currentFestivalId);
   const connected = useUIStore((state) => state.connected);
   const setConnected = useUIStore((state) => state.setConnected);
-  const onlineUsers = useUIStore((state) => state.onlineUsers);
   const setOnlineUsers = useUIStore((state) => state.setOnlineUsers);
 
   // Debounce timers keyed by refetch path. setTimeout ids are numbers in
@@ -189,7 +187,9 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     };
 
     // --- Festival / sets (festivalStore selectFestival reloads everything) ---
-    const handleFestivalUpdated = (_data: FestivalIdPayload) => reloadFestival();
+    const handleFestivalUpdated = (data: FestivalIdPayload) => {
+      if (data?.id === currentFestivalId) reloadFestival();
+    };
     const handleSetAdded = (_data: FestivalIdPayload) => reloadFestival();
     const handleSetUpdated = (_data: FestivalIdPayload) => reloadFestival();
 
@@ -283,7 +283,6 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
 
   return {
     connected,
-    onlineUsers,
     socket,
   };
 }

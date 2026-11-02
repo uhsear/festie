@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 
-import { createSocketEmitter } from '../lib/emitter';
+import { createSocketEmitter, SILENT_SYNC_COALESCE_MS } from '../lib/emitter';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -264,11 +264,61 @@ describe('emitter: profileUpdated', () => {
       changedFields: { picks: true },
     });
 
+    assert.equal(sendSilentSync.mock.callCount(), 0, 'silent sync waits for the coalesce window');
+    t.mock.timers.tick(SILENT_SYNC_COALESCE_MS);
+    assert.equal(sendSilentSync.mock.callCount(), 1, 'silent sync still runs');
     t.mock.timers.tick(5 * 60 * 1000);
     for (let i = 0; i < 20; i++) await Promise.resolve();
     assert.equal(send.mock.callCount(), 0);
-    assert.equal(sendSilentSync.mock.callCount(), 1, 'silent sync still runs');
+    assert.equal(sendSilentSync.mock.callCount(), 1);
     emitter.flushAll();
+  });
+
+  it('coalesces pick changes into one silent sync per festival per window', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const sendSilentSync = mock.fn(async (_a: any) => {});
+    const emitter = createSocketEmitter(
+      defaultDeps({ notificationService: { isConfigured: true, sendSilentSync }, stores: crewStores({}) }),
+    );
+    const pick = (festivalId: string, userId: string) =>
+      emitter.profileUpdated({
+        profile: { festivalId, id: `prof-${userId}`, name: userId, userId, picks: {} },
+        user: {},
+        changedFields: { picks: true },
+      });
+
+    for (let i = 0; i < 10; i++) pick('fest-1', ['u1', 'u2', 'u3'][i % 3]!);
+    t.mock.timers.tick(SILENT_SYNC_COALESCE_MS - 1);
+    assert.equal(sendSilentSync.mock.callCount(), 0);
+    t.mock.timers.tick(1);
+    assert.equal(sendSilentSync.mock.callCount(), 1);
+    assert.deepEqual(sendSilentSync.mock.calls[0]!.arguments[0], { festivalId: 'fest-1', syncType: 'profiles' });
+
+    pick('fest-1', 'u1');
+    pick('fest-2', 'u4');
+    pick('fest-2', 'u5');
+    t.mock.timers.tick(SILENT_SYNC_COALESCE_MS);
+    assert.deepEqual(
+      sendSilentSync.mock.calls.slice(1).map((c: any) => c.arguments[0].festivalId).sort(),
+      ['fest-1', 'fest-2'],
+    );
+    emitter.flushAll();
+  });
+
+  it('flushAll cancels a pending silent sync', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const sendSilentSync = mock.fn(async () => {});
+    const emitter = createSocketEmitter(
+      defaultDeps({ notificationService: { isConfigured: true, sendSilentSync }, stores: crewStores({}) }),
+    );
+    emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', name: 'Alice', userId: 'user-1', picks: {} },
+      user: {},
+      changedFields: { picks: true },
+    });
+    emitter.flushAll();
+    t.mock.timers.tick(SILENT_SYNC_COALESCE_MS);
+    assert.equal(sendSilentSync.mock.callCount(), 0);
   });
 
   it('logs and never throws when the crew lookup fails', async (t) => {

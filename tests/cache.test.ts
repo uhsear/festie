@@ -22,6 +22,7 @@ function makeStores(data: any = {}) {
   return {
     users: {
       readAll: async () => [...users],
+      getById: async (id: string) => users.find((u: any) => u.id === id && !u.deletedAt) || null,
     },
     festivals: {
       readAll: async () => [...festivals],
@@ -130,6 +131,72 @@ describe('cache: user cache', () => {
     cache.invalidateUserCache();
     await cache.getUserMap();
     assert.equal(fetchCount, 2);
+  });
+});
+
+describe('cache: getUserById per-id cache', () => {
+  function countingStores(data: any = {}) {
+    const stores = makeStores(data);
+    const calls = { readAll: 0, getById: 0 };
+    const { readAll, getById } = stores.users;
+    stores.users.readAll = async () => { calls.readAll++; return readAll(); };
+    stores.users.getById = async (id: string) => { calls.getById++; return getById(id); };
+    return { stores, calls };
+  }
+
+  it('reads one row by primary key after invalidation, then serves it from cache', async () => {
+    const { stores, calls } = countingStores();
+    const cache = createCacheHelpers({ stores, redis: null, log: noopLog });
+    cache.invalidateUserCache();
+    const first = await cache.getUserById('u1');
+    assert.equal(first.username, 'Alice');
+    assert.equal(calls.readAll, 0);
+    assert.equal(calls.getById, 1);
+    await cache.getUserById('u1');
+    assert.equal(calls.readAll, 0);
+    assert.equal(calls.getById, 1);
+  });
+
+  it('reads the new row after invalidateUserCache', async () => {
+    const users = [{ id: 'u1', username: 'Alice' }];
+    const { stores, calls } = countingStores({ users });
+    const cache = createCacheHelpers({ stores, redis: null, log: noopLog });
+    await cache.getUserById('u1');
+    users[0] = { id: 'u1', username: 'Alicia' };
+    cache.invalidateUserCache();
+    assert.equal((await cache.getUserById('u1')).username, 'Alicia');
+    assert.equal(calls.getById, 2);
+  });
+
+  it('returns null for a soft-deleted id and does not cache null', async () => {
+    const users = [{ id: 'gone', username: 'Gone', deletedAt: '2026-01-01' }];
+    const { stores, calls } = countingStores({ users });
+    const cache = createCacheHelpers({ stores, redis: null, log: noopLog });
+    assert.equal(await cache.getUserById('gone'), null);
+    assert.equal(await cache.getUserById('gone'), null);
+    assert.equal(calls.getById, 2);
+  });
+
+  it('finds a new account at once after a miss', async () => {
+    const users: any[] = [];
+    const { stores } = countingStores({ users });
+    const cache = createCacheHelpers({ stores, redis: null, log: noopLog });
+    assert.equal(await cache.getUserById('new'), null);
+    users.push({ id: 'new', username: 'Newbie' });
+    assert.equal((await cache.getUserById('new')).username, 'Newbie');
+  });
+
+  it('never holds more than 5000 entries', async () => {
+    const stores = makeStores();
+    let getByIdCalls = 0;
+    stores.users.getById = async (id: string) => { getByIdCalls++; return { id, username: id }; };
+    const cache = createCacheHelpers({ stores, redis: null, log: noopLog });
+    for (let i = 0; i < 5001; i++) await cache.getUserById(`id-${i}`);
+    // id-5000 cleared the full map, so id-0 is a miss again; id-5000 is still cached.
+    await cache.getUserById('id-5000');
+    assert.equal(getByIdCalls, 5001);
+    await cache.getUserById('id-0');
+    assert.equal(getByIdCalls, 5002);
   });
 });
 

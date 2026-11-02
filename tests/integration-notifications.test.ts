@@ -1,5 +1,5 @@
 import { afterEach, describe, test } from 'node:test';
-import { assert, startServer, registerUser } from './_integration-helpers';
+import { assert, startServer, registerUser, Pool } from './_integration-helpers';
 
 const servers: any[] = [];
 
@@ -281,5 +281,50 @@ describe('Integration — Notifications', { concurrency: 1 }, () => {
         platform: 'web',
       });
     assert.equal(evil.status, 400);
+  });
+
+  test('batched fan-out reads: getMany defaults and NULL-to-1, unreadTotals sums festivals, listByUsers', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const { stores } = server.planner.state;
+    const alice = (await registerUser(server, 'alice')).user.id;
+    const bob = (await registerUser(server, 'bob')).user.id;
+    const carol = (await registerUser(server, 'carol')).user.id;
+
+    const pool = new Pool({ connectionString: server.databaseUrl, statement_timeout: 5000 });
+    try {
+      // A pre-048 style row: the newer columns are NULL, not their DEFAULT 1.
+      await pool.query(
+        'INSERT INTO notification_preferences (user_id, crew_updates, lineup_drops, crew_polls) VALUES ($1, 0, NULL, NULL)',
+        [bob],
+      );
+      await pool.query("INSERT INTO festivals (id, name, location) VALUES ('fest-2', 'Second Fest', 'Elsewhere')");
+    } finally {
+      await pool.end();
+    }
+
+    const prefs = await stores.notificationPrefs.getMany([alice, bob, bob]);
+    assert.deepEqual(prefs.get(alice), await stores.notificationPrefs.get(alice));
+    assert.equal(prefs.get(alice).crewUpdates, 1);
+    assert.deepEqual(prefs.get(bob), await stores.notificationPrefs.get(bob));
+    assert.equal(prefs.get(bob).crewUpdates, 0);
+    assert.equal(prefs.get(bob).lineupDrops, 1);
+    assert.equal(prefs.get(bob).crewPolls, 1);
+    assert.equal((await stores.notificationPrefs.getMany([])).size, 0);
+
+    await stores.notificationCounts.increment(alice, 'fest-1', 'updates');
+    await stores.notificationCounts.increment(alice, 'fest-1', 'updates');
+    await stores.notificationCounts.increment(alice, 'fest-2', 'updates');
+    const totals = await stores.notificationCounts.unreadTotals([alice, carol]);
+    assert.equal(totals.get(alice), 3);
+    assert.equal(totals.has(carol), false);
+
+    await stores.deviceTokens.register({ id: 'dt-1', userId: alice, token: 'a'.repeat(40), platform: 'android', deviceName: 'Pixel' });
+    await stores.deviceTokens.register({ id: 'dt-2', userId: carol, token: 'c'.repeat(40), platform: 'ios' });
+    const tokens = await stores.deviceTokens.listByUsers([alice, bob, carol]);
+    assert.deepEqual(tokens.map((t: any) => t.userId).sort(), [alice, carol].sort());
+    const aliceToken = tokens.find((t: any) => t.userId === alice);
+    assert.deepEqual(Object.keys(aliceToken).sort(), Object.keys((await stores.deviceTokens.listByUser(alice))[0]).sort());
+    assert.equal(aliceToken.deviceName, 'Pixel');
   });
 });

@@ -900,7 +900,7 @@ describe('createNotificationsStore — deviceTokens', () => {
     assert.deepStrictEqual(await deviceTokens.listByUsers(undefined as any), []);
   });
 
-  it('listByUsers builds IN clause for multiple ids', async () => {
+  it('listByUsers passes every id as one array parameter', async () => {
     const pool = mockPool([
       {
         rows: [{ id: 'dt1', userId: 'u1', token: 't1', platform: 'ios' }],
@@ -911,10 +911,9 @@ describe('createNotificationsStore — deviceTokens', () => {
     const result = await deviceTokens.listByUsers(['u1', 'u2', 'u3']);
 
     assert.strictEqual(result.length, 1);
-    assert.ok(pool.queries[0].sql.includes('$1'));
-    assert.ok(pool.queries[0].sql.includes('$2'));
-    assert.ok(pool.queries[0].sql.includes('$3'));
-    assert.deepStrictEqual(pool.queries[0].params, ['u1', 'u2', 'u3']);
+    assert.ok(pool.queries[0].sql.includes('user_id = ANY($1)'));
+    assert.ok(!pool.queries[0].sql.includes('$2'));
+    assert.deepStrictEqual(pool.queries[0].params, [['u1', 'u2', 'u3']]);
   });
 
   it('deleteByUser removes all tokens for user', async () => {

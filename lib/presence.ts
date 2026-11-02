@@ -2,7 +2,7 @@
  * Socket presence management — tracks online users per festival room.
  * Supports Redis-backed cross-worker presence with in-memory fallback.
  */
-export function createPresenceManager({ state, redisPresence, redis, log, getUserMap, buildAvatarUrl }: any) {
+export function createPresenceManager({ state, redisPresence, redis, log, stores, buildAvatarUrl }: any) {
   function removeSocketPresence(socket: any) {
     const festivalId = socket.data?.festivalId;
     if (!festivalId) return null;
@@ -40,7 +40,7 @@ export function createPresenceManager({ state, redisPresence, redis, log, getUse
     if (redisPresence) {
       try {
         const entries = await redisPresence.getOnline(festivalId);
-        const usersById = await getUserMap();
+        const usersById = await stores.users.getByIds([...new Set(entries.map((e: any) => e.userId))]);
         return entries.map(({ userId, username }: any) => ({
           userId,
           username,
@@ -52,15 +52,15 @@ export function createPresenceManager({ state, redisPresence, redis, log, getUse
     }
     const room = state.onlineUsers.get(festivalId);
     if (!room) return [];
-    const usersById = await getUserMap();
     const seen = new Set();
-    const online: any[] = [];
+    const entries: any[] = [];
     for (const { userId, username } of room.values()) {
       if (seen.has(userId)) continue;
       seen.add(userId);
-      online.push({ userId, username, avatarUrl: buildAvatarUrl(usersById.get(userId)) });
+      entries.push({ userId, username });
     }
-    return online;
+    const usersById = await stores.users.getByIds([...seen]);
+    return entries.map(({ userId, username }) => ({ userId, username, avatarUrl: buildAvatarUrl(usersById.get(userId)) }));
   }
 
   const _presenceDebounce = new Map();
@@ -88,10 +88,9 @@ export function createPresenceManager({ state, redisPresence, redis, log, getUse
     _presenceDebounce.clear();
   }
 
-  async function emitProfileIdentity(user: any, io: any, getProfiles: any) {
+  async function emitProfileIdentity(user: any, io: any) {
     const avatarUrl = buildAvatarUrl(user);
-    const allProfiles = await getProfiles();
-    const profiles = allProfiles.filter((profile: any) => profile.userId === user.id);
+    const profiles = await stores.profiles.getByUserId(user.id);
     const festivals = new Set();
     for (const profile of profiles) {
       festivals.add(profile.festivalId);
