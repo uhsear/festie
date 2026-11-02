@@ -2,11 +2,15 @@ import { z } from 'zod';
 import { api, ApiClientError, getApiBase } from './api';
 import type { FestivalSet, Priority, Stage } from '../types/domain';
 import { buildPicksShareUrl, buildCalendarLinks } from '../utils/links';
+import { useLiveLocationStore } from '../stores/liveLocationStore';
+import type { User } from '../types';
 
 export interface SharingStatus {
   publicSchedule: boolean;
   publicFestival: { id: string; name: string } | null;
   linksResetAt: string | null;
+  /** Crews that can see where I was. Absent on an old server. */
+  statusLocations?: Array<{ crewId: string; crewName: string; capturedAt: string | null }>;
 }
 
 /** Get (or create) the revocable picks-share token for a festival, with its public URL. */
@@ -28,6 +32,30 @@ export function fetchSharingStatus(): Promise<SharingStatus> {
 /** Stop every picks link and calendar feed the user has sent. */
 export function resetShareLinks(): Promise<{ linksResetAt: string }> {
   return api.post<{ linksResetAt: string }>('/account/sharing/reset');
+}
+
+/**
+ * Stop live location on this device, turn off the public page and clear my status
+ * locations. Live location ends first: it is local and cannot fail, so a server
+ * error never leaves GPS running. Errors from the POST propagate (callers show PRIVACY_COPY.error).
+ */
+export async function stopAllSharing(): Promise<{ clearedStatusLocations: number }> {
+  useLiveLocationStore.getState().endShare('user');
+  const res = await api.post<{ user: User; clearedStatusLocations: number }>('/account/stop-sharing', {});
+  // Loaded lazily: a static import pulls the whole store graph into the services barrel.
+  const [{ useAuthStore }, { useCrewStore }] = await Promise.all([
+    import('../stores/authStore'),
+    import('../stores/crewStore'),
+  ]);
+  const current = useAuthStore.getState().user;
+  if (current) useAuthStore.getState().setUser({ ...current, ...res.user });
+  const myId = res.user?.id ?? current?.id;
+  useCrewStore.setState((state) => ({
+    crewStatuses: state.crewStatuses.map((s) =>
+      s.user_id === myId ? { ...s, latitude: null, longitude: null, location_captured_at: null } : s,
+    ),
+  }));
+  return { clearedStatusLocations: res.clearedStatusLocations };
 }
 
 const lenientObject = z.object({ id: z.string() }).passthrough();

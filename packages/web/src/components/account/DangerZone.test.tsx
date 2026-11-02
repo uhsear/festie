@@ -35,6 +35,14 @@ vi.mock('@festie/shared/services/api', () => ({
     (err as { code?: string }).code ? (err as Error).message : fallback,
 }));
 
+const mockDownload = vi.fn();
+vi.mock('../../lib/downloadExport', () => ({
+  downloadExport: () => mockDownload(),
+}));
+vi.mock('@festie/shared/services/account', () => ({
+  exportErrorMessage: () => 'export failed',
+}));
+
 let mockHasPassword: boolean | undefined;
 vi.mock('../../lib/useIdentities', () => ({
   useIdentities: () => ({ data: mockHasPassword === undefined ? undefined : { hasPassword: mockHasPassword, identities: [] } }),
@@ -64,6 +72,17 @@ beforeEach(() => {
 
 describe('DangerZone', () => {
   // --- Delete account section ---
+
+  it('offers Download my data first without submitting the form', async () => {
+    const user = userEvent.setup();
+    mockDownload.mockResolvedValue(undefined);
+    render(<DangerZone />);
+    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByRole('button', { name: 'Download my data first' }));
+    await waitFor(() => expect(mockDownload).toHaveBeenCalledTimes(1));
+    expect(mockToast).toHaveBeenCalledWith('Your data is downloaded.', 'success');
+    expect(mockDeleteAccount).not.toHaveBeenCalled();
+  });
 
   it('renders the Delete Account section', () => {
     render(<DangerZone />);

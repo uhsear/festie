@@ -3021,7 +3021,7 @@
         "tags": [
           "Profiles"
         ],
-        "summary": "List profiles for festival",
+        "summary": "List profiles for festival (picks of other users only for crew mates; meta.pickCounts holds anonymous per-set counts of other attendees)",
         "security": [
           {
             "bearerAuth": []

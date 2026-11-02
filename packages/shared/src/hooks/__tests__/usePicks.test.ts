@@ -26,6 +26,7 @@ function resetStore() {
     days: [],
     currentProfile: null,
     allProfiles: [],
+    pickCounts: {},
     isLoading: false,
     error: null,
   });
@@ -148,6 +149,21 @@ describe('usePicks hook', () => {
       });
       const { result } = renderHook(() => usePicks());
       expect(result.current.getMyNote('set-1')).toBeUndefined();
+    });
+  });
+
+  describe('getPickCount', () => {
+    it('reads the anonymous server count and is 0 for an unknown set', () => {
+      useFestivalStore.setState({ pickCounts: { 'set-1': 4 } });
+      const { result } = renderHook(() => usePicks());
+      expect(result.current.getPickCount('set-1')).toBe(4);
+      expect(result.current.getPickCount('set-2')).toBe(0);
+    });
+
+    it('is 0 when a rehydrated client has no pickCounts', () => {
+      useFestivalStore.setState({ pickCounts: undefined as unknown as Record<string, number> });
+      const { result } = renderHook(() => usePicks());
+      expect(result.current.getPickCount('set-1')).toBe(0);
     });
   });
 

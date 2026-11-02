@@ -279,7 +279,7 @@ export function generateOpenAPISpec(config: any) {
         get: { tags: ['Festivals'], summary: 'Sets that people who picked this set also picked (anonymous, 20-user floor, max 8)', parameters: [{ name: 'festivalId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'setId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Set ids, best first. Never counts or users.', ...jsonResponseWrapper({ setIds: { type: 'array', items: { type: 'string' } } }) }, 404: { description: 'Set not found' } } },
       },
       '/api/v1/profiles/{festivalId}': {
-        get: { tags: ['Profiles'], summary: 'List profiles for festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'festivalId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Profile list', ...jsonResponseArrayRef('Profile') } } },
+        get: { tags: ['Profiles'], summary: 'List profiles for festival (picks of other users only for crew mates; meta.pickCounts holds anonymous per-set counts of other attendees)', security: [{ bearerAuth: [] }], parameters: [{ name: 'festivalId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Profile list', ...jsonResponseArrayRef('Profile') } } },
       },
       '/api/v1/profiles/{festivalId}/join': {
         post: { tags: ['Profiles'], summary: 'Join festival', security: [{ bearerAuth: [] }], responses: { 201: { description: 'Profile created', ...jsonResponseRef('Profile') } } },
