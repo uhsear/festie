@@ -427,6 +427,9 @@ export default function setupSocketHandlers(deps: any) {
 
         // The socket must already be joined to this crew room (join:crew set it).
         if (socket.data?.crewId !== crewId) return respond({ ok: false, code: 'NOT_IN_CREW_ROOM' });
+        if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
+          return respond({ ok: false, code: 'RATE_LIMITED' });
+        }
 
         // Re-validate session + membership: sharing live GPS is more sensitive
         // than viewing, and a user who left the crew must not be able to share.
@@ -659,6 +662,9 @@ export default function setupSocketHandlers(deps: any) {
 
         // Must already be joined to this crew room (join:crew gated membership).
         if (socket.data?.crewId !== crewId) return respond({ ok: false, peers: [] });
+        if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
+          return respond({ ok: false, peers: [] });
+        }
 
         // Re-validate session + membership: the snapshot reveals peers' last-known
         // GPS, so a user who left the crew must not be able to pull positions.

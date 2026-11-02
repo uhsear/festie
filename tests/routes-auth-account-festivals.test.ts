@@ -863,11 +863,13 @@ describe('routes/auth.js — createAuthRoutes', () => {
     });
 
     test('rotates tokens on valid refresh', async () => {
-      const rotateFn = mock.fn(async () => {});
+      const claimFn = mock.fn(async () => ({ userId: 'u-1' }));
+      const createFn = mock.fn(async () => {});
       const deps = makeMockDeps();
       deps.stores.refreshTokens = {
         validate: mock.fn(async () => ({ userId: 'u-1' })),
-        rotate: rotateFn,
+        claim: claimFn,
+        create: createFn,
       };
       deps.stores.roles = { getUserRoles: mock.fn(async () => []) };
       const router = createAuthRoutes(deps);
@@ -879,7 +881,26 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.equal(res.body.error, null);
       assert.ok(res.body.data.token);
       assert.ok(res.body.data.refreshToken);
-      assert.equal(rotateFn.mock.calls.length, 1);
+      assert.equal(claimFn.mock.calls.length, 1);
+      assert.equal(createFn.mock.calls.length, 1);
+    });
+
+    test('returns 401 and mints nothing when the claim is lost to a concurrent call', async () => {
+      const createFn = mock.fn(async () => {});
+      const deps = makeMockDeps();
+      deps.stores.refreshTokens = {
+        validate: mock.fn(async () => ({ userId: 'u-1' })),
+        claim: mock.fn(async () => null),
+        create: createFn,
+      };
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app).post('/refresh-token').send({ refreshToken: 'rt-raced' });
+
+      assert.equal(res.status, 401);
+      assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+      assert.equal(createFn.mock.calls.length, 0);
+      assert.equal(res.headers['set-cookie'], undefined);
     });
   });
 
