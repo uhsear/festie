@@ -9,6 +9,10 @@ import {
   writeOutcomeOf,
   writeOutcomeMessage,
   isPending,
+  fetchPastMeetingPoints,
+  splitMeetingPoints,
+  meetingPointDirectionsUrl,
+  MEETING_POINT_PAST_HINT,
 } from '@festie/shared';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useFestivalStore } from '@festie/shared/stores';
@@ -69,9 +73,11 @@ interface Props {
   currentUserId: string;
   /** Raiser to aim the map at; opens Map view. */
   focusSosUserId?: string;
+  /** Crew owner may edit and remove any point. */
+  isOwner?: boolean;
 }
 
-export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId }: Props) {
+export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId, isOwner = false }: Props) {
   const { toast, toastError } = useToast();
   const qc = useQueryClient();
   // Festival timezone + days so recurring-point badges render the meet time in
@@ -87,6 +93,15 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     [currentFestival, festivalStages],
   );
   const [showForm, setShowForm] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const labelInputRef = useRef<HTMLInputElement>(null);
+  // Minute tick so a point moves to Past without a reload.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [location, setLocation] = useState('');
@@ -144,6 +159,14 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     },
     enabled: !!crewId,
   });
+
+  // A failed past query shows nothing; the active list owns the error state.
+  const { data: pastPoints = [] } = useQuery<CrewMeetingPoint[]>({
+    queryKey: ['meeting-points-past', crewId],
+    queryFn: () => fetchPastMeetingPoints(crewId) as Promise<CrewMeetingPoint[]>,
+    enabled: !!crewId,
+  });
+  const { current, past } = splitMeetingPoints(points, pastPoints, nowMs);
 
   const createPoint = useMutation({
     mutationFn: (payload: MeetingPointPayload) => api.post(`/crews/${crewId}/meeting-points`, payload),
@@ -212,6 +235,23 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     setShowForm(false);
   }
 
+  function startCreateAt({ latitude, longitude }: { latitude: number; longitude: number }) {
+    setLabel('');
+    setLocation('');
+    setStageRef('');
+    setType('during');
+    setMeetAt('');
+    setRecursDaily(false);
+    setEditingId(null);
+    setCoords({ lat: latitude, lng: longitude });
+    setShowForm(true);
+    setPlacing(false);
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ block: 'nearest' });
+      labelInputRef.current?.focus();
+    });
+  }
+
   function startEdit(p: CrewMeetingPoint) {
     setEditingId(p.id);
     setLabel(p.label);
@@ -243,8 +283,8 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     }
   }
 
-  function openDirections(loc: string) {
-    window.open(`https://maps.google.com/?q=${encodeURIComponent(loc)}`, '_blank', 'noopener,noreferrer');
+  function openDirections(p: CrewMeetingPoint) {
+    window.open(meetingPointDirectionsUrl(p), '_blank', 'noopener,noreferrer');
   }
 
   function submit(e: React.FormEvent) {
@@ -305,7 +345,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       {/* M5: last-synced "on my way / ETA to [point]" — honest staleness, never
           live. ETA targets are the meeting points below; coord-bearing points
           enable a geo-computed ETA. */}
-      <CrewStatus crewId={crewId} currentUserId={currentUserId} meetingPoints={points} />
+      <CrewStatus crewId={crewId} currentUserId={currentUserId} meetingPoints={current} />
 
       {/* List/Map toggle. Map lazy-loads MapLibre only when selected. */}
       <div className="flex flex-wrap items-center gap-2">
@@ -348,8 +388,160 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       </Link>
       </div>
 
+      {showForm && (
+        <form ref={formRef} onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-text-primary">
+              {editingId ? COPY.meetingPoint.edit : COPY.meetingPoint.add}
+            </h3>
+            <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />
+          </div>
+
+          <div className="crew-type-grid grid grid-cols-2 gap-2" role="radiogroup" aria-label="Meeting point type">
+            {MEETING_POINT_KINDS.map((k) => {
+              const KindIcon = CONCEPT_ICON[k.icon];
+              return (
+                <button
+                  key={k.type}
+                  type="button"
+                  role="radio"
+                  aria-checked={type === k.type}
+                  onClick={() => setType(k.type)}
+                  className={`px-2 py-2 rounded-lg border text-xs font-medium min-h-11 flex flex-col items-center gap-1 transition-colors ${
+                    type === k.type
+                      ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
+                      : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
+                  }`}
+                >
+                  <KindIcon className="w-4 h-4" aria-hidden="true" />
+                  <span>{k.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <input
+            className={`${inputBase} min-h-11`}
+            placeholder="Label (e.g. 'Main entrance')"
+            aria-label="Label"
+            ref={labelInputRef}
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            maxLength={100}
+            required
+          />
+          <input
+            className={`${inputBase} min-h-11`}
+            placeholder="Location (e.g. 'Near the food court')"
+            aria-label="Location"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            maxLength={200}
+            required
+          />
+          <input
+            className={`${inputBase} min-h-11`}
+            placeholder="Near stage (optional, e.g. 'Main Stage')"
+            aria-label="Near stage"
+            value={stageRef}
+            onChange={(e) => setStageRef(e.target.value)}
+            maxLength={100}
+          />
+          <input
+            type="datetime-local"
+            className={`${inputBase} min-h-11`}
+            placeholder="Meet at (optional)"
+            aria-label={festivalTimeZone ? 'Meet at time, festival time' : 'Meet at time'}
+            value={meetAt}
+            onChange={(e) => setMeetAt(e.target.value)}
+          />
+          {festivalTimeZone && <p className="text-xs text-text-muted -mt-1">Festival time</p>}
+          {meetAt && !recursDaily && <p className="text-xs text-text-muted">{MEETING_POINT_PAST_HINT}</p>}
+
+          {/* 055: daily-recurrence toggle — only meaningful for a timed point.
+              Aqua = selected (accent discipline); 44px target. */}
+          {meetAt && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={recursDaily}
+              onClick={() => setRecursDaily((v) => !v)}
+              className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium min-h-11 transition-colors ${
+                recursDaily
+                  ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
+                  : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
+              }`}
+            >
+              <Repeat className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-left">Repeats daily</span>
+              {recursDaily && <Check className="w-4 h-4 shrink-0" aria-hidden="true" />}
+            </button>
+          )}
+
+          {/* F4: optional GPS capture. Falls back to free-text on denial. */}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={captureLocation}
+              isLoading={locating}
+              className="min-h-11"
+            >
+              <LocateFixed className="w-4 h-4" aria-hidden="true" /> Use my location
+            </Button>
+            {coords && (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent-aqua/15 text-accent-aqua text-xs font-medium"
+                title={`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`}
+              >
+                <Check className="w-3 h-3" aria-hidden="true" />
+                {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                <button
+                  type="button"
+                  aria-label="Clear captured location"
+                  onClick={() => setCoords(null)}
+                  className="ml-0.5 hover:text-accent-coral"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+          </div>
+
+          <Button
+            type="submit"
+            variant="primary"
+            isLoading={submitting}
+            className="w-full min-h-11"
+            disabled={!label.trim() || !location.trim()}
+          >
+            {editingId ? 'Save' : 'Add'}
+          </Button>
+        </form>
+      )}
+
       <div id="meeting-points-panel">
       {view === 'map' && (
+        <>
+        <Button
+          variant="secondary"
+          aria-pressed={placing}
+          onClick={() => setPlacing((v) => !v)}
+          className="w-full min-h-11"
+        >
+          {placing ? (
+            'Cancel'
+          ) : (
+            <>
+              <MapPin className="w-4 h-4" aria-hidden="true" /> Add meeting point here
+            </>
+          )}
+        </Button>
+        {placing && (
+          <p role="status" className="text-xs text-text-secondary">
+            Click the map where you want to meet.
+          </p>
+        )}
         <Suspense
           fallback={
             <div className="h-72 rounded-lg border border-border bg-bg-secondary flex items-center justify-center text-sm text-text-secondary">
@@ -357,150 +549,25 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
             </div>
           }
         >
-          <CrewMap meetingPoints={points} peers={peers} activeSosList={sosList} festival={mapFestival} focusSosUserId={focusSosUserId} />
+          <CrewMap meetingPoints={current} peers={peers} activeSosList={sosList} festival={mapFestival} focusSosUserId={focusSosUserId}
+            onMapClick={placing ? startCreateAt : undefined}
+            authoring={placing}
+            draftPoints={showForm && !editingId && coords ? [{ latitude: coords.lat, longitude: coords.lng }] : undefined}
+          />
         </Suspense>
+        </>
       )}
 
       {view === 'list' && (
         <>
-          {!showForm ? (
-            // With no points the empty state carries the only Add button.
-            points.length > 0 && (
-              <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
-                <Plus className="w-4 h-4" aria-hidden="true" /> Add Meeting Point
-              </Button>
-            )
-          ) : (
-            <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-text-primary">
-                  {editingId ? COPY.meetingPoint.edit : COPY.meetingPoint.add}
-                </h3>
-                <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />
-              </div>
-
-              <div className="crew-type-grid grid grid-cols-2 gap-2" role="radiogroup" aria-label="Meeting point type">
-                {MEETING_POINT_KINDS.map((k) => {
-                  const KindIcon = CONCEPT_ICON[k.icon];
-                  return (
-                    <button
-                      key={k.type}
-                      type="button"
-                      role="radio"
-                      aria-checked={type === k.type}
-                      onClick={() => setType(k.type)}
-                      className={`px-2 py-2 rounded-lg border text-xs font-medium min-h-11 flex flex-col items-center gap-1 transition-colors ${
-                        type === k.type
-                          ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
-                          : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
-                      }`}
-                    >
-                      <KindIcon className="w-4 h-4" aria-hidden="true" />
-                      <span>{k.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <input
-                className={`${inputBase} min-h-11`}
-                placeholder="Label (e.g. 'Main entrance')"
-                aria-label="Label"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                maxLength={100}
-                required
-              />
-              <input
-                className={`${inputBase} min-h-11`}
-                placeholder="Location (e.g. 'Near the food court')"
-                aria-label="Location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                maxLength={200}
-                required
-              />
-              <input
-                className={`${inputBase} min-h-11`}
-                placeholder="Near stage (optional, e.g. 'Main Stage')"
-                aria-label="Near stage"
-                value={stageRef}
-                onChange={(e) => setStageRef(e.target.value)}
-                maxLength={100}
-              />
-              <input
-                type="datetime-local"
-                className={`${inputBase} min-h-11`}
-                placeholder="Meet at (optional)"
-                aria-label={festivalTimeZone ? 'Meet at time, festival time' : 'Meet at time'}
-                value={meetAt}
-                onChange={(e) => setMeetAt(e.target.value)}
-              />
-              {festivalTimeZone && <p className="text-xs text-text-muted -mt-1">Festival time</p>}
-
-              {/* 055: daily-recurrence toggle — only meaningful for a timed point.
-                  Aqua = selected (accent discipline); 44px target. */}
-              {meetAt && (
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={recursDaily}
-                  onClick={() => setRecursDaily((v) => !v)}
-                  className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium min-h-11 transition-colors ${
-                    recursDaily
-                      ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
-                      : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
-                  }`}
-                >
-                  <Repeat className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  <span className="flex-1 text-left">Repeats daily</span>
-                  {recursDaily && <Check className="w-4 h-4 shrink-0" aria-hidden="true" />}
-                </button>
-              )}
-
-              {/* F4: optional GPS capture. Falls back to free-text on denial. */}
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={captureLocation}
-                  isLoading={locating}
-                  className="min-h-11"
-                >
-                  <LocateFixed className="w-4 h-4" aria-hidden="true" /> Use my location
-                </Button>
-                {coords && (
-                  <span
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent-aqua/15 text-accent-aqua text-xs font-medium"
-                    title={`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`}
-                  >
-                    <Check className="w-3 h-3" aria-hidden="true" />
-                    {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
-                    <button
-                      type="button"
-                      aria-label="Clear captured location"
-                      onClick={() => setCoords(null)}
-                      className="ml-0.5 hover:text-accent-coral"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                variant="primary"
-                isLoading={submitting}
-                className="w-full min-h-11"
-                disabled={!label.trim() || !location.trim()}
-              >
-                {editingId ? 'Save' : 'Add'}
-              </Button>
-            </form>
+          {/* With no points the empty state carries the only Add button. */}
+          {!showForm && (current.length > 0 || past.length > 0) && (
+            <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
+              <Plus className="w-4 h-4" aria-hidden="true" /> Add Meeting Point
+            </Button>
           )}
 
-          {points.length === 0 ? (
+          {current.length === 0 && past.length === 0 ? (
             !showForm && <EmptyState
               illustration="emptyList"
               title="No meeting points yet"
@@ -508,12 +575,13 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
               cta={{ label: 'Add meeting point', onClick: () => setShowForm(true) }}
             />
           ) : (
+            <>
             <div className="space-y-2">
-              {points.filter((p) => !hiddenIds.has(p.id)).map((p) => {
+              {current.filter((p) => !hiddenIds.has(p.id)).map((p) => {
                 const meta = meetingPointKind(p.type);
                 const KindIcon = CONCEPT_ICON[meta.icon];
                 // A queued create has no server id yet, so it cannot be edited or removed.
-                const mine = p.created_by === currentUserId && !isPending(p);
+                const canEdit = !isPending(p) && (p.created_by === currentUserId || isOwner);
                 const isEmergency = p.type === 'emergency';
                 return (
                   <div
@@ -554,9 +622,9 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
                         <IconButton
                           label={`Directions to ${p.label}`}
                           icon={<Navigation className="w-4 h-4" />}
-                          onClick={() => openDirections(p.location)}
+                          onClick={() => openDirections(p)}
                         />
-                        {mine && (
+                        {canEdit && (
                           <>
                             <IconButton
                               label="Edit meeting point"
@@ -577,6 +645,35 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
                 );
               })}
             </div>
+            {past.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Past</h4>
+                {past.map((p) => {
+                  const meta = meetingPointKind(p.type);
+                  const KindIcon = CONCEPT_ICON[meta.icon];
+                  return (
+                    <div key={p.id} className="p-3 rounded-lg bg-bg-card border border-border opacity-60">
+                      <div className="flex items-start gap-3">
+                        <KindIcon className="w-5 h-5 shrink-0 mt-0.5 text-text-secondary" aria-hidden="true" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-text-primary">{p.label}</span>
+                            <span className="text-xs text-text-muted uppercase tracking-wide">{meta.label}</span>
+                          </div>
+                          <div className="text-sm text-text-secondary mt-0.5">{p.location}</div>
+                        </div>
+                        <IconButton
+                          label={`Directions to ${p.label}`}
+                          icon={<Navigation className="w-4 h-4" />}
+                          onClick={() => openDirections(p)}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            </>
           )}
         </>
       )}

@@ -998,7 +998,9 @@ export type PackingUpdateInput = z.infer<typeof packingUpdateSchema>;
 // A last-synced, degraded-sync snapshot the member set (often offline) — NOT
 // live GPS. All fields optional/nullable so a member can post just a status,
 // just an ETA, or clear it. `status` is a small enum: 'on-my-way' | 'here' |
-// 'delayed' | null (clear). etaMinutes is bounded (0–1440 = up to a day).
+// 'delayed' | 'at-camp' | 'at-stage' | 'break' | 'lost' | null (clear).
+// 'at-stage' stores the stage name in `note`. The list must match
+// `CrewStatusKey` in packages/shared/src/types/domain.ts. etaMinutes is bounded (0–1440 = up to a day).
 // 055: optional last-known LOCATION breadcrumb the member captured (often
 // OFFLINE) and that delivers on the next signal blip. NOT live GPS — the UI
 // renders it with honest staleness ("last seen near X, as of N ago"). lat/lng
@@ -1015,7 +1017,7 @@ const crewStatusPosition = z
 
 export const crewStatusSchema = z
   .object({
-    status: z.enum(['on-my-way', 'here', 'delayed']).optional().nullable(),
+    status: z.enum(['on-my-way', 'here', 'delayed', 'at-camp', 'at-stage', 'break', 'lost']).optional().nullable(),
     targetMeetingPointId: z.string().trim().max(100).optional().nullable(),
     etaMinutes: z.number().int().min(0).max(1440).optional().nullable(),
     note: z.string().trim().max(280).optional().nullable(),

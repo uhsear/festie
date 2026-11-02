@@ -389,6 +389,57 @@ describe('routes/crew-meeting-points.js -- GET /:crewId/meeting-points', () => {
   });
 });
 
+describe('routes/crew-meeting-points.js -- GET /:crewId/meeting-points/past', () => {
+  test('returns recently expired points for a crew member', async () => {
+    const listRecentlyExpired = mock.fn(async () => [{ ...DEFAULT_MEETING_POINT, id: 'mp-old' }]);
+    const { app } = await buildApp({
+      stores: {
+        crews: {
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          meetingPoints: { listRecentlyExpired },
+        },
+      },
+    });
+
+    const res = await request(app).get('/crew-1/meeting-points/past');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.meetingPoints.length, 1);
+    assert.equal(res.body.data.meetingPoints[0].id, 'mp-old');
+    assert.equal((listRecentlyExpired.mock.calls as any[])[0].arguments[0], 'crew-1');
+  });
+
+  test('returns 403 when user is not a crew member', async () => {
+    const { app } = await buildApp({
+      stores: { crews: { getMember: mock.fn(async () => null) } },
+    });
+
+    const res = await request(app).get('/crew-1/meeting-points/past');
+
+    assert.equal(res.status, 403);
+  });
+
+  test('returns 500 on store error', async () => {
+    const { app } = await buildApp({
+      stores: {
+        crews: {
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          meetingPoints: {
+            listRecentlyExpired: mock.fn(async () => {
+              throw new Error('db down');
+            }),
+          },
+        },
+      },
+    });
+
+    const res = await request(app).get('/crew-1/meeting-points/past');
+
+    assert.equal(res.status, 500);
+    assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+  });
+});
+
 // =====================================================================
 //  POST /:crewId/meeting-points -- create meeting point
 // =====================================================================

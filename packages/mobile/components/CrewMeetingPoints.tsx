@@ -13,12 +13,17 @@ import {
   resolveFestivalTimeZone,
   isPending,
   QUEUED_WRITE_MESSAGE,
+  splitMeetingPoints,
+  meetingPointDirectionsUrl,
+  MEETING_POINT_PAST_HINT,
 } from '@festie/shared/utils';
+import { fetchPastMeetingPoints } from '@festie/shared/services';
 import type { CrewMeetingPoint, Festival, FestivalDay } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { useHaptics } from '../hooks/useHaptics';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
+import { useNow } from '../hooks/useNow';
 import Button from './Button';
 import EmptyState from './EmptyState';
 import CrewSyncMarker from './CrewSyncMarker';
@@ -44,6 +49,10 @@ interface CrewMeetingPointsProps {
    * still fills the label and confirms "Add", so no write happens automatically.
    */
   prefillCoords?: { lat: number; lng: number } | null;
+  /** Render only the create form (the map's meeting-point sheet): no toggle, list or Past group. */
+  formOnly?: boolean;
+  /** Called when the form closes (saved or cancelled) in `formOnly` mode. */
+  onDone?: () => void;
 }
 
 /** A meeting point is navigable by the compass only if it carries finite coords. */
@@ -68,6 +77,8 @@ export default function CrewMeetingPoints({
   festival,
   days = [],
   prefillCoords = null,
+  formOnly = false,
+  onDone,
 }: CrewMeetingPointsProps) {
   const t = useTokens();
   const router = useRouter();
@@ -88,7 +99,7 @@ export default function CrewMeetingPoints({
     "Couldn't remove the meeting point. Try again.",
   );
 
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(formOnly);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [location, setLocation] = useState('');
@@ -108,6 +119,21 @@ export default function CrewMeetingPoints({
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [focusedField, setFocusedField] = useState<'label' | 'location' | 'stage' | null>(null);
+  const nowMs = useNow(60_000);
+  // A one-shot point moves to Past 30 minutes after its time; the server lists the last 12 hours.
+  const [pastPoints, setPastPoints] = useState<CrewMeetingPoint[]>([]);
+  useEffect(() => {
+    if (formOnly || !crewId) return;
+    let cancelled = false;
+    fetchPastMeetingPoints(crewId)
+      .then((rows) => {
+        if (!cancelled) setPastPoints(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [crewId, meetingPoints.length, formOnly]);
 
   const reset = () => {
     setLabel('');
@@ -123,6 +149,7 @@ export default function CrewMeetingPoints({
     setLocating(false);
     setShowForm(false);
     setEditingId(null);
+    if (formOnly) onDone?.();
   };
 
   const startEdit = (point: CrewMeetingPoint) => {
@@ -197,17 +224,8 @@ export default function CrewMeetingPoints({
     }
   };
 
-  // Prefer the point's saved GPS coords (q=lat,lng routes to the exact pin) over
-  // the free-text location string, which a maps search can geocode wrongly.
   const openDirections = (point: CrewMeetingPoint) => {
-    const q =
-      typeof point.latitude === 'number' &&
-      typeof point.longitude === 'number' &&
-      Number.isFinite(point.latitude) &&
-      Number.isFinite(point.longitude)
-        ? `${point.latitude},${point.longitude}`
-        : point.location;
-    Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(q)}`).catch(() => {});
+    Linking.openURL(meetingPointDirectionsUrl(point)).catch(() => {});
   };
 
   const timePickerValue = () => {
@@ -288,7 +306,99 @@ export default function CrewMeetingPoints({
   };
 
   const visiblePoints = meetingPoints.filter((p) => !hiddenIds.has(p.id));
+  const { current, past } = splitMeetingPoints(visiblePoints, pastPoints, nowMs);
   const canCreate = !!label.trim() && !!location.trim();
+
+  const renderRow = (point: CrewMeetingPoint, isPast: boolean) => {
+    // A queued create has no server id yet, so it cannot be edited or removed.
+    const canRemove = !isPast && !isPending(point) && (point.created_by === currentUserId || isOwner);
+    const isEmergency = point.type === 'emergency';
+    // 055: resolve the point's display time honoring daily recurrence.
+    // Recurring → "daily 3:00 PM"; one-shot → "Sat 3:00 PM"; no meetAt → ''.
+    const timeDisplay = meetingTimeDisplay(point.meet_at, point.recurs_daily, days, new Date(), timeZone);
+    return (
+      <View
+        key={point.id}
+        style={[styles.pointRow, isEmergency && styles.pointRowEmergency, isPast && styles.pointRowPast]}
+      >
+        <View style={styles.pointInfo}>
+          <View style={styles.pointTitleRow}>
+            <Text style={styles.pointLabel} numberOfLines={1}>
+              {point.label}
+            </Text>
+            <Text style={styles.pointType}>{meetingPointKind(point.type).label}</Text>
+            {point.recurs_daily ? (
+              <View style={styles.recurBadge} accessibilityLabel="Repeats daily">
+                <Ionicons name="repeat" size={t.iconSize.xs} color={t.colors.accent.aqua} />
+                <Text style={styles.recurBadgeText}>Daily</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.pointLocation} numberOfLines={1}>
+            {point.location}
+          </Text>
+          <CrewSyncMarker item={point} />
+          {point.stage_reference ? (
+            <Text style={styles.pointStage} numberOfLines={1}>
+              Near {point.stage_reference}
+            </Text>
+          ) : null}
+          {timeDisplay.label ? (
+            <View style={styles.pointTimeRow}>
+              <Ionicons name="time-outline" size={12} color={t.colors.accent.aqua} />
+              <Text style={styles.pointTime} numberOfLines={1}>
+                {timeDisplay.label}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.rowActions}>
+          {!isPast && hasCoords(point) ? (
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: '/compass', params: { mpId: point.id } })}
+              style={styles.iconButton}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Point the compass to ${point.label}`}
+            >
+              <Ionicons name="compass-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            onPress={() => openDirections(point)}
+            style={styles.iconButton}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`Directions to ${point.label}`}
+          >
+            <Ionicons name="navigate-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
+          </TouchableOpacity>
+          {canRemove ? (
+            <>
+              <TouchableOpacity
+                onPress={() => startEdit(point)}
+                style={styles.iconButton}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit meeting point ${point.label}`}
+              >
+                <Ionicons name="create-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleRemove(point)}
+                style={styles.iconButton}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove meeting point ${point.label}`}
+              >
+                <Ionicons name="trash-outline" size={t.iconSize.action} color={t.colors.text.danger} />
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -418,6 +528,9 @@ export default function CrewMeetingPoints({
                   <Text style={styles.timeFieldText}>{timeLabel ?? 'Pick a time'}</Text>
                 </TouchableOpacity>
               ) : null}
+              {dayIndex !== null && time && !recursDaily ? (
+                <Text style={styles.pastHint}>{MEETING_POINT_PAST_HINT}</Text>
+              ) : null}
               {dayIndex !== null && Platform.OS === 'ios' && showIosTimePicker ? (
                 <DateTimePicker
                   value={timePickerValue()}
@@ -498,7 +611,7 @@ export default function CrewMeetingPoints({
             accessibilityLabel="Add meeting point"
           />
         </View>
-      ) : (
+      ) : formOnly ? null : (
         <TouchableOpacity
           style={styles.toggle}
           onPress={() => setShowForm(true)}
@@ -512,7 +625,7 @@ export default function CrewMeetingPoints({
         </TouchableOpacity>
       )}
 
-      {visiblePoints.length === 0 ? (
+      {formOnly ? null : current.length === 0 && past.length === 0 ? (
         <EmptyState
           illustration="emptyList"
           title="No meeting points yet"
@@ -520,94 +633,14 @@ export default function CrewMeetingPoints({
           action={{ label: 'Add meeting point', onPress: () => setShowForm(true) }}
         />
       ) : (
-        visiblePoints.map((point) => {
-          // A queued create has no server id yet, so it cannot be edited or removed.
-          const canRemove = !isPending(point) && (point.created_by === currentUserId || isOwner);
-          const isEmergency = point.type === 'emergency';
-          // 055: resolve the point's display time honoring daily recurrence.
-          // Recurring → "daily 3:00 PM"; one-shot → "Sat 3:00 PM"; no meetAt → ''.
-          const timeDisplay = meetingTimeDisplay(point.meet_at, point.recurs_daily, days, new Date(), timeZone);
-          return (
-            <View key={point.id} style={[styles.pointRow, isEmergency && styles.pointRowEmergency]}>
-              <View style={styles.pointInfo}>
-                <View style={styles.pointTitleRow}>
-                  <Text style={styles.pointLabel} numberOfLines={1}>
-                    {point.label}
-                  </Text>
-                  <Text style={styles.pointType}>{meetingPointKind(point.type).label}</Text>
-                  {point.recurs_daily ? (
-                    <View style={styles.recurBadge} accessibilityLabel="Repeats daily">
-                      <Ionicons name="repeat" size={t.iconSize.xs} color={t.colors.accent.aqua} />
-                      <Text style={styles.recurBadgeText}>Daily</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text style={styles.pointLocation} numberOfLines={1}>
-                  {point.location}
-                </Text>
-                <CrewSyncMarker item={point} />
-                {point.stage_reference ? (
-                  <Text style={styles.pointStage} numberOfLines={1}>
-                    Near {point.stage_reference}
-                  </Text>
-                ) : null}
-                {timeDisplay.label ? (
-                  <View style={styles.pointTimeRow}>
-                    <Ionicons name="time-outline" size={12} color={t.colors.accent.aqua} />
-                    <Text style={styles.pointTime} numberOfLines={1}>
-                      {timeDisplay.label}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              <View style={styles.rowActions}>
-                {hasCoords(point) ? (
-                  <TouchableOpacity
-                    onPress={() => router.push({ pathname: '/compass', params: { mpId: point.id } })}
-                    style={styles.iconButton}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Point the compass to ${point.label}`}
-                  >
-                    <Ionicons name="compass-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
-                  </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity
-                  onPress={() => openDirections(point)}
-                  style={styles.iconButton}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Directions to ${point.label}`}
-                >
-                  <Ionicons name="navigate-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
-                </TouchableOpacity>
-                {canRemove ? (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => startEdit(point)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Edit meeting point ${point.label}`}
-                    >
-                      <Ionicons name="create-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleRemove(point)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove meeting point ${point.label}`}
-                    >
-                      <Ionicons name="trash-outline" size={t.iconSize.action} color={t.colors.text.danger} />
-                    </TouchableOpacity>
-                  </>
-                ) : null}
-              </View>
-            </View>
-          );
-        })
+        current.map((point) => renderRow(point, false))
       )}
+      {!formOnly && past.length > 0 ? (
+        <>
+          <Text style={styles.pastHeading}>Past</Text>
+          {past.map((point) => renderRow(point, true))}
+        </>
+      ) : null}
     </View>
   );
 }
@@ -758,6 +791,17 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.light,
     backgroundColor: t.colors.bg.secondary,
+  },
+  pointRowPast: {
+    opacity: 0.6,
+  },
+  pastHint: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
+  },
+  pastHeading: {
+    ...typeStyle('label'),
+    color: t.colors.text.muted,
   },
   pointRowEmergency: {
     borderColor: t.colors.accent.coral,

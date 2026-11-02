@@ -780,6 +780,47 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       return result.rows[0].count;
     },
 
+    // The updated_at >= expires_at test tells a swept point from one a user removed before its time.
+    async listRecentlyExpired(crewId: string) {
+      const result = await pool.query(
+        `
+        SELECT
+          mp.id,
+          mp.crew_id,
+          mp.created_by,
+          mp.label,
+          mp.location,
+          mp.type,
+          mp.meet_at,
+          mp.stage_reference,
+          mp.expires_at,
+          mp.latitude,
+          mp.longitude,
+          mp.recurs_daily,
+          mp.active,
+          mp.created_at,
+          mp.updated_at,
+          u.username AS creator_name
+        FROM
+          crew_meeting_points mp
+          JOIN users u ON u.id = mp.created_by
+          AND u.deleted_at IS NULL
+        WHERE
+          mp.crew_id = $1
+          AND mp.active = FALSE
+          AND mp.recurs_daily IS NOT TRUE
+          AND mp.expires_at IS NOT NULL
+          AND mp.expires_at > NOW() - INTERVAL '12 hours'
+          AND mp.updated_at >= mp.expires_at
+        ORDER BY
+          mp.meet_at DESC NULLS LAST
+        LIMIT 20
+      `,
+        [crewId],
+      );
+      return result.rows;
+    },
+
     async expireStale() {
       return pool.query(
         'UPDATE crew_meeting_points SET active = FALSE, updated_at = NOW() WHERE active = TRUE AND expires_at IS NOT NULL AND expires_at < NOW()',

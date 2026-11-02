@@ -25,3 +25,4 @@ export * from './useBulkAddPicks';
 export * from './useActiveCrew';
 export * from './useCrewHub';
 export * from './useCrewCompare';
+export * from './useAutoArrive';

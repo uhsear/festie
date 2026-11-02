@@ -9,10 +9,17 @@ vi.mock('@tanstack/react-router', () => ({
 
 let state: Record<string, unknown> = {};
 let authUser: { id: string } | null = null;
+let balances: Array<{ userId: string; username: string; balance: number }> = [];
+const mockLoadExpenses = vi.fn().mockResolvedValue(undefined);
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (selector: (s: Record<string, unknown>) => unknown) => selector(state),
   useAuthStore: (selector: (s: { user: unknown }) => unknown) => selector({ user: authUser }),
+  useCrewStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ expenseBalances: balances }),
+    { getState: () => ({ loadExpenses: mockLoadExpenses }) },
+  ),
 }));
+vi.mock('../components/crew/ReformCrewButton', () => ({ default: () => <div data-testid="reform-crew" /> }));
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: Object.assign((selector: (s: Record<string, unknown>) => unknown) => selector({ setDetailSet: vi.fn() }), { subscribe: vi.fn() }),
 }));
@@ -62,6 +69,7 @@ describe('FestivalModeView (Now surface)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-12T17:30:00Z'));
     crewDayOf = { crew: null, whereabouts: [], meet: null };
+    balances = [];
   });
   afterEach(() => vi.useRealTimers());
 
@@ -130,6 +138,25 @@ describe('FestivalModeView (Now surface)', () => {
     expect(screen.getByTestId('sos-raise')).toHaveTextContent('c1');
     fireEvent.click(screen.getByTestId('fm-find-crew'));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew' });
+  });
+
+  it('after the festival: swaps the crew list for a wrap-up with the balance and Settle up', () => {
+    vi.setSystemTime(new Date('2026-06-14T12:00:00Z'));
+    setup({ user: true, picks: { s1: 'must' } });
+    crewDayOf = {
+      crew: { id: 'c1', name: 'Night Owls', owner: 'me', members: [], createdAt: '', updatedAt: '' },
+      whereabouts: [],
+      meet: null,
+    };
+    balances = [{ userId: 'me', username: 'me', balance: -24 }];
+    render(<FestivalModeView />);
+    expect(screen.getByText('Wrap up with Night Owls')).toBeInTheDocument();
+    expect(screen.getByText('You owe $24.00')).toBeInTheDocument();
+    expect(screen.queryByTestId('fm-crew')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fm-meet')).not.toBeInTheDocument();
+    expect(mockLoadExpenses).toHaveBeenCalledWith('c1');
+    fireEvent.click(screen.getByRole('button', { name: 'Settle up' }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'money' } });
   });
 
   it('guest or no crew: shows no SOS button', () => {
