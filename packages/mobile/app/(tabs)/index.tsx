@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFestivalDataStore, useFestivalStore, useAuthStore, useUIStore } from '@festie/shared/stores';
-import { usePicks, useFestival } from '@festie/shared/hooks';
+import { usePicks, useFestival, usePickClear } from '@festie/shared/hooks';
 import {
   artistDisplayName,
   getSetHotness,
@@ -39,6 +39,7 @@ import { safeStageColor } from '../../lib/stageColor';
 import { useUI, type ViewMode } from '../../contexts/UIContext';
 import type { TimeBounds } from '../../hooks/useNowIndicator';
 import { useHaptics } from '../../hooks/useHaptics';
+import { undoNotifier } from '../../lib/undoNotifier';
 import { useNow } from '../../hooks/useNow';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import SegmentedControl from '../../components/SegmentedControl';
@@ -135,7 +136,8 @@ export default function TimelineScreen() {
   const setActiveStages = useFestivalStore((s) => s.setActiveStages);
 
   const { getDays, getFilteredSets, getStageColor, getStageName } = useFestival();
-  const { getMyPick, getOtherPicks, getMyNote, savePick } = usePicks();
+  const { getMyPick, getOtherPicks, getMyNote, getMyReminder, savePick } = usePicks();
+  const clearPick = usePickClear(undoNotifier);
 
   const [search, setSearch] = useState(searchQuery);
   // "My picks only" filter — on-site you mostly want to read your own day.
@@ -399,10 +401,15 @@ export default function TimelineScreen() {
         router.push(`/set/${setId}`);
         return;
       }
+      if (priority === null) {
+        const found = useFestivalStore.getState().sets.find((s) => s.id === setId);
+        clearPick(setId, found ? artistDisplayName(found, currentFestival.b2bSeparator) : 'pick');
+        return;
+      }
       // The card shows the Retry chip on failure.
       savePick(currentFestival.id, setId, priority).catch(() => haptics.warning());
     },
-    [currentFestival, user, router, savePick, haptics],
+    [currentFestival, currentProfile, user, router, savePick, clearPick, haptics],
   );
 
   // One-tap reset for every active schedule filter (search text, my-picks, stage
@@ -452,6 +459,7 @@ export default function TimelineScreen() {
           friendProfiles={getOtherPicks(set.id)}
           hasConflict={conflictIds.has(set.id)}
           hasNote={!!getMyNote(set.id)}
+          reminderMinutes={getMyReminder(set.id)}
           onPickChange={(priority) => handlePickChange(set.id, priority)}
           onPress={() => router.push(`/set/${set.id}`)}
         />
@@ -464,6 +472,7 @@ export default function TimelineScreen() {
       getMyPick,
       getOtherPicks,
       getMyNote,
+      getMyReminder,
       conflictIds,
       handlePickChange,
       router,

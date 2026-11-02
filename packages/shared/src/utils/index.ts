@@ -39,6 +39,7 @@ export * from './planImport';
 export * from './reminderDelivery';
 export * from './saveStatus';
 export * from './crewActivity';
+export * from './picksPlan';
 export * from './lineupImport';
 export * from './setArtists';
 export * from './navigation';

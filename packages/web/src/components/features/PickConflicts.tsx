@@ -41,9 +41,12 @@ function fmtDuration(min: number): string {
  * crew's member ids — but only when there's an active crew; otherwise the shared
  * util leaves `crewCount` undefined and the card simply omits it.
  *
+ * Pass `groups` to render a ready-made list (the Picks page spans every day);
+ * without it the component builds today's day-scoped groups itself.
+ *
  * Renders nothing when there are no clashes.
  */
-export default function PickConflicts() {
+export default function PickConflicts({ groups: groupsProp }: { groups?: ConflictGroup[] } = {}) {
   const sets = useFestivalStore((state) => state.sets);
   const days = useFestivalStore((state) => state.days);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
@@ -64,8 +67,8 @@ export default function PickConflicts() {
   const myPicks = currentProfile?.picks;
   const timeZone = currentFestival?.timeZone;
 
-  const groups = useMemo<ConflictGroup[]>(() => {
-    if (!myPicks) return [];
+  const ownGroups = useMemo<ConflictGroup[]>(() => {
+    if (groupsProp || !myPicks) return [];
     // Crew context only when there's an active crew (mirrors useCrewNudges); the
     // shared util gates on all three being present before populating crewCount.
     const wantCrew = !!activeCrew && !!myUserId;
@@ -83,7 +86,8 @@ export default function PickConflicts() {
           }
         : {}),
     });
-  }, [sets, myPicks, selectedDay, days, timeZone, activeCrew, myUserId, allProfiles, crewMembers]);
+  }, [groupsProp, sets, myPicks, selectedDay, days, timeZone, activeCrew, myUserId, allProfiles, crewMembers]);
+  const groups = groupsProp ?? ownGroups;
 
   if (groups.length === 0) return null;
 
@@ -119,6 +123,9 @@ export default function PickConflicts() {
           }
         }
 
+        const dayIndex = group.picks[0]?.set.dayIndex ?? 0;
+        const dayLabel = days.length > 1 ? days[dayIndex]?.label || days[dayIndex]?.date : undefined;
+
         return (
           <article
             key={`${group.recommendedKeepId}-${gi}`}
@@ -126,7 +133,9 @@ export default function PickConflicts() {
           >
             <div className="mb-2 flex items-center gap-2">
               <TriangleAlert className="h-4 w-4 shrink-0 text-priority-must" aria-hidden="true" />
-              <h3 className="text-sm font-bold text-text-primary">Schedule clash</h3>
+              <h3 className="text-sm font-bold text-text-primary">
+                Schedule clash{dayLabel ? ` · ${dayLabel}` : ''}
+              </h3>
               {overlapMin > 0 && (
                 <span className="ml-auto text-xs font-semibold text-text-muted tabular-nums">
                   {fmtDuration(overlapMin)} overlap

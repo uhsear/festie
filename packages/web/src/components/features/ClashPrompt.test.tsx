@@ -44,7 +44,7 @@ describe('ClashPrompt', () => {
     const conflict = makeSet({ id: 'c1', artist: 'DJ Snake', startTime: '20:30', endTime: '21:30' });
     render(<ClashPrompt currentSet={current} conflicts={[conflict]} onClear={onClear} />);
     await user.click(screen.getByLabelText('Keep Headliner, clear DJ Snake'));
-    expect(onClear).toHaveBeenCalledWith('c1');
+    expect(onClear).toHaveBeenCalledWith('c1', 'DJ Snake');
   });
 
   it('clears the CURRENT set when keeping the other set', async () => {
@@ -53,23 +53,26 @@ describe('ClashPrompt', () => {
     const conflict = makeSet({ id: 'c1', artist: 'DJ Snake', startTime: '20:30', endTime: '21:30' });
     render(<ClashPrompt currentSet={current} conflicts={[conflict]} onClear={onClear} />);
     await user.click(screen.getByLabelText('Keep DJ Snake, clear Headliner'));
-    expect(onClear).toHaveBeenCalledWith('current');
+    expect(onClear).toHaveBeenCalledWith('current', 'Headliner');
   });
 
   it('dismisses the pair after a choice so it does not re-nag (one-shot)', async () => {
     const user = userEvent.setup();
     const conflict = makeSet({ id: 'c1', artist: 'DJ Snake', startTime: '20:30', endTime: '21:30' });
-    const { container } = render(<ClashPrompt currentSet={current} conflicts={[conflict]} onClear={vi.fn()} />);
+    render(<ClashPrompt currentSet={current} conflicts={[conflict]} onClear={vi.fn()} />);
     await user.click(screen.getByLabelText('Keep both acts'));
-    expect(container.firstChild).toBeNull();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Clashes with DJ Snake')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/conflict/i);
   });
 
   it('does not re-show a pair already dismissed this session on remount', () => {
     const conflict = makeSet({ id: 'c1', artist: 'DJ Snake', startTime: '20:30', endTime: '21:30' });
     // Seed the session-dismissed marker for the pair key (prefix + sorted ids).
     sessionStorage.setItem(`festie-clash:${['c1', 'current'].sort().join(':')}`, '1');
-    const { container } = render(<ClashPrompt currentSet={current} conflicts={[conflict]} onClear={vi.fn()} />);
-    expect(container.firstChild).toBeNull();
+    render(<ClashPrompt currentSet={current} conflicts={[conflict]} onClear={vi.fn()} />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Clashes with DJ Snake')).toBeInTheDocument();
   });
 
   it('renders one prompt per conflicting pair', () => {

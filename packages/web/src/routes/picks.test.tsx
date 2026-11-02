@@ -7,45 +7,15 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-// Track store state that selectors read from
-const storeState: Record<string, unknown> = {};
-
-vi.mock('@festie/shared/stores', () => ({
-  useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
-  useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+vi.mock('@festie/shared/services/api', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }));
 
-vi.mock('@festie/shared/stores/uiStore', () => ({
-  useUIStore: Object.assign(vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)), { subscribe: vi.fn() }),
-}));
-
-vi.mock('@festie/shared/hooks', () => ({
-  usePicks: vi.fn(() => ({
-    getMyPick: vi.fn(() => null),
-    savePick: vi.fn(),
-    getMyNote: vi.fn(() => ''),
-  })),
-  useFestival: vi.fn(() => ({
-    getStageColor: vi.fn(() => '#ccc'),
-    getStageName: vi.fn(() => 'Main Stage'),
-  })),
-  useCrewNudges: vi.fn(() => []),
-}));
-
-vi.mock('@festie/shared/utils', () => ({
-  formatTime: vi.fn((t: string) => t),
-  artistDisplayName: vi.fn((set: { artist?: string }) => set.artist || 'Unknown'),
+vi.mock('@festie/shared/utils', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
   buildPicksIcs: vi.fn(() => 'BEGIN:VCALENDAR\r\nEND:VCALENDAR'),
   buildPicksShareUrl: vi.fn((profileId: string) => `https://festie.us/s/${profileId}`),
-  resolveStageColor: (c: string | null | undefined, fallback: string) => c || fallback,
-  // Mirrors the real @festie/shared/utils/setStatus.isSetScheduled: a set is
-  // scheduled only when dayIndex resolves to a real position in `days`.
-  isSetScheduled: (set: { dayIndex?: number }, days: unknown[]) =>
-    typeof set.dayIndex === 'number' && set.dayIndex >= 0 && set.dayIndex < days.length,
-}));
-
-vi.mock('../components/ui/StageBadge', () => ({
-  default: ({ stageName }: { stageName: string }) => <span data-testid="stage-badge">{stageName}</span>,
 }));
 
 vi.mock('../components/ui/EmptyState', () => ({
@@ -70,16 +40,19 @@ vi.mock('../components/layout/RefreshableView', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="refreshable-view">{children}</div>,
 }));
 
-// OfflineReadinessCard (F5) has its own render test; stub it here so PicksView
-// tests stay focused and don't need its store mocks / lucide icons.
+// OfflineReadinessCard, PickBulkActions, CrewSuggestionStrip, PicksPlanRow and
+// PickConflicts have their own tests; stub them so PicksView tests stay focused
+// on the plan (real stores + the real usePicksPlan drive the rows).
 vi.mock('../components/features/OfflineReadinessCard', () => ({
   default: () => <div data-testid="offline-readiness-card" />,
 }));
-
-// PickConflicts has its own render test; stub it so PicksView tests don't need
-// its crew-store mocks / extra lucide icons / shared buildPickConflicts mock.
+vi.mock('../components/features/CrewSuggestionStrip', () => ({ default: () => null }));
+vi.mock('../components/PickBulkActions', () => ({ default: () => <div data-testid="bulk-actions" /> }));
+vi.mock('../components/features/PicksPlanRow', () => ({
+  default: ({ set }: { set: { artist: string } }) => <div data-testid="plan-row">{set.artist}</div>,
+}));
 vi.mock('../components/features/PickConflicts', () => ({
-  default: () => <div data-testid="pick-conflicts" />,
+  default: ({ groups }: { groups?: unknown[] }) => <div data-testid="pick-conflicts">{groups?.length ?? 0}</div>,
 }));
 
 // Guests get the in-place teaser instead of a redirect; stub it so this suite
@@ -88,41 +61,62 @@ vi.mock('../components/features/GuestTeaser', () => ({
   default: ({ mode }: { mode: string }) => <div data-testid="guest-teaser">{mode}</div>,
 }));
 
-vi.mock('lucide-react', () => ({
-  Star: () => <span data-testid="star-icon" />,
-  Heart: () => <span data-testid="heart-icon" />,
-  Circle: () => <span data-testid="circle-icon" />,
-  CalendarX: () => <span data-testid="calendar-x-icon" />,
-  UserPlus: () => <span data-testid="user-plus-icon" />,
-  CalendarPlus: () => <span data-testid="calendar-plus-icon" />,
-  Share2: () => <span data-testid="share-icon" />,
-  Sparkles: () => <span data-testid="sparkles-icon" />,
-  Layers: () => <span data-testid="layers-icon" />,
-  ChevronDown: () => <span data-testid="chevron-down-icon" />,
-}));
-
 const mockToast = vi.fn();
 vi.mock('../lib/toastContext', () => ({
-  useToast: () => ({ toast: mockToast, toastError: vi.fn() }),
+  useToast: () => ({ toast: mockToast, toastError: vi.fn(), toastUndo: vi.fn() }),
 }));
 
 import PicksView from './picks';
-import { usePicks } from '@festie/shared/hooks';
+import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { buildPicksIcs } from '@festie/shared/utils';
 
-function setStoreState(overrides: Record<string, unknown> = {}) {
-  // Clear and repopulate the shared state object
-  Object.keys(storeState).forEach((k) => delete storeState[k]);
-  Object.assign(storeState, {
-    user: { id: 'u1', username: 'testuser' },
-    currentFestival: { id: 'f1', name: 'Bonnaroo', b2bSeparator: undefined },
-    currentProfile: { picks: {}, notes: {} },
-    sets: [],
-    stages: [],
-    days: [{ date: '2026-06-10', label: 'Day 1' }],
-    selectedDay: 0,
-    setDetailSet: vi.fn(),
-    ...overrides,
+const DAYS = [
+  { id: 'd0', festivalId: 'f1', date: '2026-06-10', label: 'Day 1', createdAt: '', updatedAt: '' },
+  { id: 'd1', festivalId: 'f1', date: '2026-06-11', label: 'Day 2', createdAt: '', updatedAt: '' },
+];
+const STAGES = [
+  { id: 'st1', name: 'Main Stage' },
+  { id: 'st2', name: 'Sahara' },
+];
+
+function makeSet(id: string, artist: string, extra: Record<string, unknown> = {}) {
+  return {
+    id,
+    festivalId: 'f1',
+    artist,
+    stageId: 'st1',
+    startTime: '14:00',
+    endTime: '15:00',
+    dayIndex: 0,
+    createdAt: '',
+    updatedAt: '',
+    ...extra,
+  };
+}
+
+const picksOf = (picks: Record<string, string>) => ({ id: 'p1', userId: 'u1', picks, notes: {} });
+
+interface StateOpts {
+  user?: unknown;
+  festival?: unknown;
+  profile?: unknown;
+  sets?: unknown[];
+  selectedDay?: number;
+}
+
+function setStoreState(opts: StateOpts = {}) {
+  const has = (k: keyof StateOpts) => k in opts;
+  useAuthStore.setState({
+    user: (has('user') ? opts.user : { id: 'u1', username: 'testuser' }) as never,
+  });
+  useFestivalStore.setState({
+    currentFestival: (has('festival') ? opts.festival : { id: 'f1', name: 'Bonnaroo', timeZone: 'UTC' }) as never,
+    currentFestivalId: 'f1',
+    currentProfile: (has('profile') ? opts.profile : picksOf({})) as never,
+    sets: (opts.sets ?? []) as never,
+    stages: STAGES as never,
+    days: DAYS as never,
+    selectedDay: opts.selectedDay ?? 0,
   });
 }
 
@@ -135,104 +129,135 @@ describe('PicksView', () => {
   it('renders the guest teaser when no user', () => {
     setStoreState({ user: null });
     render(<PicksView />);
-    // Guests see <GuestTeaser mode="picks"/> in place of the picks UI.
     expect(screen.getByTestId('guest-teaser')).toHaveTextContent('picks');
   });
 
   it('shows "No festival selected" when no festival', () => {
-    setStoreState({ currentFestival: null });
+    setStoreState({ festival: null });
     render(<PicksView />);
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
   });
 
   it('shows "No picks yet" when no profile', () => {
-    setStoreState({ currentProfile: null });
+    setStoreState({ profile: null });
     render(<PicksView />);
     expect(screen.getByText('No picks yet')).toBeInTheDocument();
   });
 
-  it('shows empty state when user has zero picks for the day', () => {
-    setStoreState();
+  it('shows "No picks yet" with no day name when the user has zero picks', () => {
     render(<PicksView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
-    expect(screen.getByText(/No picks yet/)).toBeInTheDocument();
+    expect(screen.getByText('No picks yet')).toBeInTheDocument();
+    expect(screen.queryByText(/Day 1/)).toBeNull();
   });
 
   it('"Browse the lineup" CTA in empty state navigates to the schedule', () => {
-    setStoreState();
     render(<PicksView />);
     fireEvent.click(screen.getByText('Browse the lineup'));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' });
   });
 
-  it('renders pick sections when user has picks', () => {
-    const sets = [
-      { id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 },
-      { id: 's2', artist: 'Odesza', stageId: 'st2', startTime: '16:00', dayIndex: 0 },
-    ];
-    setStoreState({ sets });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn((id: string) => {
-        if (id === 's1') return 'must';
-        if (id === 's2') return 'maybe';
-        return null;
-      }),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
+  it('renders both day headers while the selected day is the other one', () => {
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Odesza', { dayIndex: 1 })],
+      profile: picksOf({ s1: 'must', s2: 'maybe' }),
+      selectedDay: 1,
     });
     render(<PicksView />);
-    expect(screen.getByText('Must See')).toBeInTheDocument();
-    expect(screen.getByText('Want to See')).toBeInTheDocument();
-    expect(screen.getByText('Maybe')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Day 1, 1 pick' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Day 2, 1 pick' })).toBeInTheDocument();
+    expect(screen.getByText('Daft Punk')).toBeInTheDocument();
+    expect(screen.getByText('Odesza')).toBeInTheDocument();
+    expect(screen.queryByText(/No picks yet/)).toBeNull();
   });
 
-  it('shows the heart glyph, not the word diamond, in an empty Want bucket', () => {
+  it('renders a pick on an unscheduled (TBA) set under Unscheduled', () => {
     setStoreState({
-      sets: [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }],
-    });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn((id: string) => (id === 's1' ? 'must' : null)),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
-    });
-    const { container } = render(<PicksView />);
-    const hint = screen.getByText(/on sets you'd like to catch/).closest('p')!;
-    expect(within(hint).getByTestId('heart-icon')).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/diamond/i);
-  });
-
-  it('renders a pick on an unscheduled (TBA) set regardless of the selected day', () => {
-    // s2 has no dayIndex (schedule not yet announced) — it must never be
-    // filtered out by the `dayIndex === selectedDay` day check, or the pick
-    // becomes permanently invisible/unremovable on every day tab.
-    const sets = [
-      { id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 },
-      { id: 's2', artist: 'Four Tet', stageId: 'st2' },
-    ];
-    setStoreState({ sets, selectedDay: 0, days: [{ date: '2026-06-10', label: 'Day 1' }] });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn((id: string) => {
-        if (id === 's1') return 'must';
-        if (id === 's2') return 'want-to-see';
-        return null;
-      }),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
+      sets: [
+        makeSet('s1', 'Daft Punk'),
+        makeSet('s2', 'Four Tet', { dayIndex: undefined, startTime: undefined, endTime: undefined }),
+      ],
+      profile: picksOf({ s1: 'must', s2: 'want-to-see' }),
     });
     render(<PicksView />);
     expect(screen.getByText('Four Tet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unscheduled, 1 pick' })).toBeInTheDocument();
   });
 
-  it('renders pick items with artist names', () => {
-    const sets = [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }];
-    setStoreState({ sets });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn(() => 'must'),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
+  it('the Must chip filters rows and toggles back to all', () => {
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Odesza', { startTime: '16:00', endTime: '17:00' })],
+      profile: picksOf({ s1: 'must', s2: 'maybe' }),
     });
     render(<PicksView />);
+    const group = screen.getByRole('group', { name: 'Filter picks' });
+    fireEvent.click(within(group).getByRole('button', { name: /Must/ }));
     expect(screen.getByText('Daft Punk')).toBeInTheDocument();
+    expect(screen.queryByText('Odesza')).toBeNull();
+    fireEvent.click(within(group).getByRole('button', { name: /Must/ }));
+    expect(screen.getByText('Odesza')).toBeInTheDocument();
+  });
+
+  it('Headliners first lists the latest set first and Openers first restores it', () => {
+    localStorage.clear();
+    setStoreState({
+      sets: [
+        makeSet('s1', 'Early', { startTime: '22:00', endTime: '23:00' }),
+        makeSet('s2', 'Late', { startTime: '01:00', endTime: '02:00' }),
+      ],
+      profile: picksOf({ s1: 'must', s2: 'must' }),
+    });
+    render(<PicksView />);
+    const names = () => screen.getAllByTestId('plan-row').map((r) => r.textContent);
+    expect(names()).toEqual(['Early', 'Late']);
+    const order = screen.getByRole('radiogroup', { name: 'Order sets' });
+    fireEvent.click(within(order).getByRole('radio', { name: 'Headliners first' }));
+    expect(names()).toEqual(['Late', 'Early']);
+    fireEvent.click(within(order).getByRole('radio', { name: 'Openers first' }));
+    expect(names()).toEqual(['Early', 'Late']);
+  });
+
+  it('shows the clash chip only when picks overlap', () => {
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Odesza', { startTime: '14:30', endTime: '15:30' })],
+      profile: picksOf({ s1: 'must', s2: 'maybe' }),
+    });
+    const { unmount } = render(<PicksView />);
+    expect(screen.getByRole('button', { name: /Clashes/ })).toBeInTheDocument();
+    expect(screen.getByTestId('pick-conflicts')).toHaveTextContent('1');
+    unmount();
+
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Odesza', { startTime: '16:00', endTime: '17:00' })],
+      profile: picksOf({ s1: 'must', s2: 'maybe' }),
+    });
+    render(<PicksView />);
+    expect(screen.queryByRole('button', { name: /Clashes/ })).toBeNull();
+  });
+
+  it('the search input filters by stage name', () => {
+    setStoreState({
+      sets: [
+        makeSet('s1', 'Daft Punk'),
+        makeSet('s2', 'Odesza', { stageId: 'st2', startTime: '16:00', endTime: '17:00' }),
+      ],
+      profile: picksOf({ s1: 'must', s2: 'must' }),
+    });
+    render(<PicksView />);
+    fireEvent.change(screen.getByLabelText('Filter my picks'), { target: { value: 'sahara' } });
+    expect(screen.getByText('Odesza')).toBeInTheDocument();
+    expect(screen.queryByText('Daft Punk')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Filter my picks'), { target: { value: 'zzz' } });
+    expect(screen.getByText('No matching picks')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Clear filters'));
+    expect(screen.getByText('Daft Punk')).toBeInTheDocument();
+  });
+
+  it('folding a day group hides its rows', () => {
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Day 1, 1 pick' }));
+    expect(screen.queryByText('Daft Punk')).toBeNull();
   });
 
   it('renders the region with aria-label "My picks"', () => {
@@ -241,30 +266,12 @@ describe('PicksView', () => {
   });
 
   it('hides the calendar export button when the profile has no picks', () => {
-    // hasAnyPicks reads currentProfile.picks directly — empty map → no button.
-    setStoreState();
     render(<PicksView />);
     expect(screen.queryByRole('button', { name: 'Add picks to calendar' })).toBeNull();
   });
 
   it('shows the calendar export button and downloads an .ics when clicked', () => {
-    const sets = [
-      {
-        id: 's1',
-        artist: 'Daft Punk',
-        stageId: 'st1',
-        startTime: '14:00',
-        endTime: '15:00',
-        date: '2026-06-10',
-        dayIndex: 0,
-      },
-    ];
-    setStoreState({ sets, currentProfile: { picks: { s1: 'must' }, notes: {} } });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn(() => 'must'),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
-    });
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
 
     // jsdom lacks URL.createObjectURL/revokeObjectURL; stub them and the anchor
     // click so the download path runs without a real navigation.
@@ -287,16 +294,9 @@ describe('PicksView', () => {
   });
 
   it('shares picks via navigator.share when available', async () => {
-    const sets = [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }];
     setStoreState({
-      sets,
-      currentFestival: { id: 'f1', name: 'Bonnaroo', b2bSeparator: undefined },
-      currentProfile: { id: 'p1', picks: { s1: 'must' }, notes: {} },
-    });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn(() => 'must'),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
+      sets: [makeSet('s1', 'Daft Punk')],
+      profile: picksOf({ s1: 'must' }),
     });
 
     const shareSpy = vi.fn().mockResolvedValue(undefined);
@@ -321,16 +321,9 @@ describe('PicksView', () => {
   });
 
   it('falls back to clipboard + toast when navigator.share is undefined', async () => {
-    const sets = [{ id: 's1', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', dayIndex: 0 }];
     setStoreState({
-      sets,
-      currentFestival: { id: 'f1', name: 'Bonnaroo', b2bSeparator: undefined },
-      currentProfile: { id: 'p1', picks: { s1: 'must' }, notes: {} },
-    });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn(() => 'must'),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
+      sets: [makeSet('s1', 'Daft Punk')],
+      profile: picksOf({ s1: 'must' }),
     });
 
     // Ensure no native share is present so we exercise the desktop fallback.

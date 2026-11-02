@@ -2,12 +2,13 @@ import React, { memo, useRef, useState, useEffect, useMemo } from 'react';
 import { Play, Square, AlertTriangle, StickyNote, Clock } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
-import { usePicks, usePickSync } from '@festie/shared/hooks';
+import { usePicks, usePickSync, usePickClear } from '@festie/shared/hooks';
 import { formatTime, artistDisplayName, artistSubtitle, festivalPhase, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { api } from '@festie/shared/services/api';
 import { useSetStatus } from '@/hooks/useSetStatus';
 import { useToast } from '@/lib/toastContext';
+import { useUndoNotifier } from '@/lib/useUndoNotifier';
 import { useHaptics } from '@/hooks/useHaptics';
 import { cn } from '@/lib/utils';
 import LiveBadge from './LiveBadge';
@@ -68,6 +69,7 @@ function SetCard({
   const allProfiles = useFestivalStore((state) => state.allProfiles);
   const crewMembers = useCrewStore((state) => state.crewMembers);
   const { toast } = useToast();
+  const clearPick = usePickClear(useUndoNotifier());
   const { tap, select, warning } = useHaptics();
   const [saving, setSaving] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -159,10 +161,14 @@ function SetCard({
     // already optimistic (see festivalStore.savePick) so the star fills
     // instantly either way — haptic just reinforces the state change.
     select();
+    if (currentlyActive) {
+      clearPick(set.id, artistName);
+      return;
+    }
     setSaving(true);
     try {
       if (currentFestival) {
-        await savePick(currentFestival.id, set.id, currentlyActive ? null : (priority as Priority));
+        await savePick(currentFestival.id, set.id, priority as Priority);
       }
     } catch {
       // The failed-pick chip under the priority row is the visible error.

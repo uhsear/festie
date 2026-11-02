@@ -103,9 +103,17 @@ vi.mock('./DetailArtistHeader', () => ({
 vi.mock('./DetailSpotifySection', () => ({
   default: () => <div data-testid="spotify-section" />,
 }));
-vi.mock('./DetailConflictWarning', () => ({
-  default: () => <div data-testid="conflict-warning" />,
+vi.mock('./ClashPrompt', () => ({
+  default: ({ onClear }: { onClear: (id: string, label: string) => void }) => (
+    <button onClick={() => onClear('other-1', 'Other Act')}>Clash Clear</button>
+  ),
 }));
+const mockClearPick = vi.fn();
+vi.mock('@festie/shared/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/hooks')>()),
+  usePickClear: () => mockClearPick,
+}));
+vi.mock('../../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 vi.mock('./DetailPriorityPicker', () => ({
   default: ({ onPriorityClick }: { onPriorityClick: (p: Priority | null) => void }) => (
     <div data-testid="priority-picker">
@@ -267,9 +275,19 @@ describe('DetailPanel', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login', search: { next: '/set/set-1' } });
   });
 
-  it('renders the conflict warning section', () => {
+  it('routes a ClashPrompt clear through usePickClear with the set id and label', async () => {
+    const user = userEvent.setup();
     render(<DetailPanel {...defaultProps} />);
-    expect(screen.getByTestId('conflict-warning')).toBeInTheDocument();
+    await user.click(screen.getByText('Clash Clear'));
+    expect(mockClearPick).toHaveBeenCalledWith('other-1', 'Other Act');
+  });
+
+  it('clears a pick through usePickClear when the priority is cleared', async () => {
+    const user = userEvent.setup();
+    render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByText('Clear Pick'));
+    expect(mockClearPick).toHaveBeenCalledWith('set-1', 'Daft Punk');
+    expect(mockSavePick).not.toHaveBeenCalled();
   });
 
   it('renders the crew section', () => {
