@@ -1,11 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { useCrewStore, useFestivalModeStore } from '@festie/shared/stores';
-import { timeAgoFromIso, describeCrewActivity } from '@festie/shared/utils';
+import { useCrewStore, useFestivalModeStore, useFestivalStore } from '@festie/shared/stores';
+import { useActiveSos } from '@festie/shared/hooks';
+import {
+  timeAgoFromIso,
+  describeCrewActivity,
+  visibleCrewActivity,
+  resolveFestivalTimeZone,
+} from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { CREW_MEET_HREF } from '../lib/dayOfRoutes';
+import { festivalForCrew } from '../lib/crewFestival';
 
 interface CrewActivityProps {
   crewId: string;
@@ -26,6 +35,13 @@ const ACTIVITY_VISUAL: Record<string, { icon: IconName; tint: Tint }> = {
   'member-joined': { icon: 'person-add', tint: 'green' },
   'member-left': { icon: 'exit-outline', tint: 'muted' },
   'member-kicked': { icon: 'person-remove', tint: 'coral' },
+  'owner-changed': { icon: 'ribbon-outline', tint: 'amber' },
+  'poll-closed': { icon: 'checkmark-done', tint: 'green' },
+  'meeting-point-updated': { icon: 'location', tint: 'aqua' },
+  expense_settled: { icon: 'checkmark-done', tint: 'green' },
+  'packing-created': { icon: 'bag-outline', tint: 'aqua' },
+  'ride-created': { icon: 'car-outline', tint: 'aqua' },
+  'photo-album-updated': { icon: 'images-outline', tint: 'aqua' },
   'poll-created': { icon: 'bar-chart', tint: 'aqua' },
   'poll-voted': { icon: 'checkmark-circle-outline', tint: 'aqua' },
   'expense-added': { icon: 'cash-outline', tint: 'aqua' },
@@ -58,6 +74,14 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
   const reduceMotion = useReduceMotion();
   const activity = useCrewStore((s) => s.activity);
   const loadActivity = useCrewStore((s) => s.loadActivity);
+  const loadOlderActivity = useCrewStore((s) => s.loadOlderActivity);
+  const activityNextCursor = useCrewStore((s) => s.activityNextCursor);
+  const members = useCrewStore((s) => s.crewMembers);
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const currentFestival = useFestivalStore((s) => s.currentFestival);
+  const timeZone = resolveFestivalTimeZone(festivalForCrew(activeCrew, currentFestival));
+  const sosEntries = useActiveSos();
+  const activeSosUserIds = useMemo(() => new Set(sosEntries.map((e) => e.userId)), [sosEntries]);
   // Festival low-power mode slows the background refresh to save battery; the
   // feed still loads once on mount / crew-change, just polls far less often.
   const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
@@ -85,7 +109,7 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
 
   // Deduplicate by id — the polling interval can produce duplicate entries if the
   // server returns overlapping pages or the store accumulates repeated loads.
-  const dedupedActivity = Array.from(new Map(activity.map((a) => [a.id, a])).values());
+  const dedupedActivity = visibleCrewActivity(Array.from(new Map(activity.map((a) => [a.id, a])).values()));
 
   if (dedupedActivity.length === 0) {
     return (
@@ -109,7 +133,7 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
   return (
     <View style={styles.container}>
       {visible.map((it, idx) => {
-        const { verb, detail } = describeCrewActivity(it);
+        const { verb, detail, action } = describeCrewActivity(it, timeZone, { members, activeSosUserIds });
         const visual = ACTIVITY_VISUAL[it.type] ?? FALLBACK_VISUAL;
         const color = tintColor[visual.tint];
         // R22 staggered reveal — cap the stagger so a full page never feels slow;
@@ -126,6 +150,15 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
                 {detail ? <Text style={styles.verb}>: {detail}</Text> : null}
               </Text>
               <Text style={styles.time}>{timeAgoFromIso(it.created_at)}</Text>
+              {action === 'show-sos' ? (
+                <TouchableOpacity
+                  onPress={() => router.push(CREW_MEET_HREF)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show SOS on map"
+                >
+                  <Text style={styles.sosLink}>Show on map</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </Animated.View>
         );
@@ -145,6 +178,18 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
             {expanded ? 'Show less' : `Show ${dedupedActivity.length - COLLAPSED_LIMIT} more`}
           </Text>
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={t.iconSize.compact} color={t.colors.accent.aqua} />
+        </TouchableOpacity>
+      ) : null}
+
+      {!hasMore && activityNextCursor ? (
+        <TouchableOpacity
+          style={styles.moreButton}
+          onPress={() => loadOlderActivity(crewId).catch(() => {})}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Show older activity events"
+        >
+          <Text style={styles.moreText}>Show older</Text>
         </TouchableOpacity>
       ) : null}
     </View>
@@ -223,6 +268,10 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.secondary,
+  },
+  sosLink: {
+    ...typeStyle('caption', 700),
+    color: t.colors.accent.aqua,
   },
   moreText: {
     ...typeStyle('caption', 700),

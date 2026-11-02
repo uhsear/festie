@@ -616,7 +616,9 @@ describe('crewStore', () => {
 
       await useCrewStore.getState().closePoll('crew-1', 'poll-1', { festivalId: 'fest-1', seedReminder });
 
-      expect(useCrewStore.getState().polls).toHaveLength(0);
+      // The poll stays in state, marked closed, for the Decided group.
+      expect(useCrewStore.getState().polls).toHaveLength(1);
+      expect(useCrewStore.getState().polls[0]!.closed).toBe(true);
       expect(useCrewStore.getState().meetingPoints[0]!.label).toBe('Fisher');
       expect(seedReminder).toHaveBeenCalledWith('set-9pm', 'fest-1');
       expect(api.post).not.toHaveBeenCalled();
@@ -641,7 +643,7 @@ describe('crewStore', () => {
 
       await useCrewStore.getState().closePoll('crew-1', 'poll-1', { festivalId: 'fest-1', seedReminder });
 
-      expect(useCrewStore.getState().polls).toHaveLength(0);
+      expect(useCrewStore.getState().polls[0]!.closed).toBe(true);
       expect(seedReminder).not.toHaveBeenCalled();
     });
 
@@ -653,7 +655,7 @@ describe('crewStore', () => {
       await expect(
         useCrewStore.getState().closePoll('crew-1', 'poll-1', { festivalId: 'fest-1', seedReminder }),
       ).resolves.toBeUndefined();
-      expect(useCrewStore.getState().polls).toHaveLength(0);
+      expect(useCrewStore.getState().polls[0]!.closed).toBe(true);
     });
   });
 
@@ -747,6 +749,89 @@ describe('crewStore', () => {
       await expect(useCrewStore.getState().loadActivity('crew-1')).rejects.toThrow('nope');
       expect(useCrewStore.getState().error).toBe('nope');
     });
+
+    it('loadOlderActivity appends page 2 and a later loadActivity keeps it', async () => {
+      const row = (id: string, at: string) => ({ id, created_at: at });
+      const page1 = [row('a3', '2026-01-03T00:00:00Z'), row('a2', '2026-01-02T00:00:00Z')];
+      const page2 = [row('a1', '2026-01-01T00:00:00Z')];
+      useCrewStore.setState({ activity: [], activityNextCursor: null });
+      vi.mocked(api.get).mockResolvedValueOnce({ items: page1, nextCursor: 'c1' });
+      await useCrewStore.getState().loadActivity('crew-1');
+      expect(useCrewStore.getState().activityNextCursor).toBe('c1');
+
+      vi.mocked(api.get).mockResolvedValueOnce({ items: page2, nextCursor: null });
+      await useCrewStore.getState().loadOlderActivity('crew-1');
+      expect(api.get).toHaveBeenLastCalledWith('/crews/crew-1/activity?cursor=c1');
+      expect(useCrewStore.getState().activity.map((a) => a.id)).toEqual(['a3', 'a2', 'a1']);
+      expect(useCrewStore.getState().activityNextCursor).toBeNull();
+
+      vi.mocked(api.get).mockResolvedValueOnce({ items: page1, nextCursor: 'c1' });
+      await useCrewStore.getState().loadActivity('crew-1');
+      expect(useCrewStore.getState().activity.map((a) => a.id)).toEqual(['a3', 'a2', 'a1']);
+      expect(useCrewStore.getState().activityNextCursor).toBeNull();
+    });
+
+    it('loadOlderActivity does nothing without a cursor', async () => {
+      useCrewStore.setState({ activityNextCursor: null });
+      vi.mocked(api.get).mockClear();
+      await useCrewStore.getState().loadOlderActivity('crew-1');
+      expect(api.get).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('multi-answer votes, nudge', () => {
+    const basePoll = (votes: CrewPoll['votes']): CrewPoll => ({
+      id: 'poll-1',
+      crew_id: 'crew-1',
+      created_by: 'user-1',
+      question: 'Q',
+      options: ['A', 'B', 'C'],
+      votes,
+      closes_at: null,
+      closed: false,
+      multi_answer: true,
+      created_at: '2026-01-01T00:00:00Z',
+    });
+
+    it('writes one entry per index and rolls back to my prior entries', async () => {
+      useAuthStore.setState({ user: { id: 'user-1' } as never });
+      useCrewStore.setState({ polls: [basePoll([{ option: 2, user_id: 'user-1' }])] });
+      vi.mocked(api.post).mockImplementationOnce(async () => {
+        expect(useCrewStore.getState().polls[0]!.votes.filter((v) => v.user_id === 'user-1')).toHaveLength(2);
+        throw new Error('nope');
+      });
+      await expect(useCrewStore.getState().votePoll('crew-1', 'poll-1', [0, 1])).rejects.toThrow('nope');
+      expect(api.post).toHaveBeenLastCalledWith('/crews/crew-1/polls/poll-1/vote', { optionIndexes: [0, 1] });
+      expect(useCrewStore.getState().polls[0]!.votes).toEqual([{ option: 2, user_id: 'user-1' }]);
+    });
+
+    it('an empty array removes my entries', async () => {
+      useAuthStore.setState({ user: { id: 'user-1' } as never });
+      useCrewStore.setState({
+        polls: [basePoll([{ option: 1, user_id: 'user-1' }, { option: 0, user_id: 'user-2' }])],
+      });
+      vi.mocked(api.post).mockImplementationOnce(async () => {
+        expect(useCrewStore.getState().polls[0]!.votes).toEqual([{ option: 0, user_id: 'user-2' }]);
+        return { voted: true };
+      });
+      vi.mocked(api.get).mockResolvedValueOnce({ polls: [] });
+      await useCrewStore.getState().votePoll('crew-1', 'poll-1', []);
+    });
+
+    it('nudgePoll sets nudged_at and returns the count', async () => {
+      useCrewStore.setState({ polls: [basePoll([])] });
+      vi.mocked(api.post).mockResolvedValueOnce({ nudged: 3 });
+      await expect(useCrewStore.getState().nudgePoll('crew-1', 'poll-1')).resolves.toBe(3);
+      expect(api.post).toHaveBeenLastCalledWith('/crews/crew-1/polls/poll-1/nudge', {}, { _bypassOfflineQueue: true });
+      expect(useCrewStore.getState().polls[0]!.nudged_at).toBeTruthy();
+    });
+
+    it('nudgePoll sets error and re-throws on failure', async () => {
+      useCrewStore.setState({ polls: [basePoll([])] });
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('A reminder was already sent for this poll.'));
+      await expect(useCrewStore.getState().nudgePoll('crew-1', 'poll-1')).rejects.toThrow();
+      expect(useCrewStore.getState().error).toBeTruthy();
+    });
   });
 
   // WF4: both votePoll and updateMyStatus write optimistically, await a round-
@@ -773,11 +858,11 @@ describe('crewStore', () => {
       // The in-flight POST: a peer's vote lands via the socket setter, THEN the
       // write rejects — modelling a concurrent update during the round-trip.
       vi.mocked(api.post).mockImplementationOnce(async () => {
-        useCrewStore.getState().applyPollVote('poll-1', 'user-2', 0);
+        useCrewStore.getState().applyPollVote('poll-1', 'user-2', [0]);
         throw new Error('poll closed');
       });
 
-      await expect(useCrewStore.getState().votePoll('crew-1', 'poll-1', 1)).rejects.toThrow('poll closed');
+      await expect(useCrewStore.getState().votePoll('crew-1', 'poll-1', [1])).rejects.toThrow('poll closed');
 
       const votes = useCrewStore.getState().polls[0]!.votes;
       // Peer's concurrent vote survived the rollback (the bug clobbered it).

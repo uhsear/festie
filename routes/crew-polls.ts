@@ -1,5 +1,14 @@
+/**
+ * Crew polls.
+ *
+ *   GET    /:crewId/polls                 open polls plus the 10 most recently ended
+ *   POST   /:crewId/polls                 create (optional end time, multi-answer, set links)
+ *   POST   /:crewId/polls/:pollId/vote    vote, change a vote, or take it back (empty optionIndexes)
+ *   DELETE /:crewId/polls/:pollId         end a poll (creator or owner) and announce the result
+ *   POST   /:crewId/polls/:pollId/nudge   one reminder to the members who have not voted
+ */
 import { Router } from 'express';
-import { MAX_MEETING_POINTS_PER_CREW } from '../lib/constants';
+import { createPollCloser } from '../lib/poll-close';
 
 export default function createCrewPollRoutes(deps: any) {
   const {
@@ -17,7 +26,11 @@ export default function createCrewPollRoutes(deps: any) {
     validateParams,
     io,
     emitter,
+    crewNotify,
   } = deps;
+  const pollCloser = deps.pollCloser ?? createPollCloser({ stores, io, emitter, crewNotify, createOpaqueId, log });
+
+  const isEnded = (poll: any) => poll.closed || (poll.closes_at && new Date(poll.closes_at) <= new Date());
 
   const router = Router({ mergeParams: true });
 
@@ -52,8 +65,10 @@ export default function createCrewPollRoutes(deps: any) {
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const { question, options, closesAt, setRefs } = req.validatedBody;
+        const { question, options, closesAt, setRefs, multiAnswer } = req.validatedBody;
         const userId = req.user.userId;
+        if (closesAt && new Date(closesAt).getTime() <= Date.now())
+          return sendError(res, 400, 'Pick an end time in the future.', ErrorCodes.INVALID_INPUT);
 
         const membership = await stores.crews.getMember(crewId, userId);
         if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
@@ -68,6 +83,7 @@ export default function createCrewPollRoutes(deps: any) {
           options,
           closesAt: closesAt ? new Date(closesAt) : null,
           setRefs: setRefs ?? null,
+          multiAnswer: multiAnswer === true,
         });
 
         io.to('crew:' + crewId).emit('crew:poll-created', {
@@ -81,6 +97,7 @@ export default function createCrewPollRoutes(deps: any) {
           .log(activity)
           .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
           .catch(() => {});
+        crewNotify?.queue({ crewId, actorId: userId, kind: 'poll', text: 'New poll: ' + poll.question.slice(0, 80) });
         return sendSuccess(res, { poll });
       } catch (err: any) {
         log.error('create poll error', { error: err.message });
@@ -100,26 +117,30 @@ export default function createCrewPollRoutes(deps: any) {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const pollId = sanitizeIdentifier(req.validatedParams.pollId);
-        const { optionIndex } = req.validatedBody;
+        const { optionIndex, optionIndexes } = req.validatedBody;
         const userId = req.user.userId;
+        // Old clients send one optionIndex; an empty optionIndexes takes the vote back.
+        const indexes: number[] = [...new Set<number>(optionIndexes ?? [optionIndex])].sort((a, b) => a - b);
 
         const membership = await stores.crews.getMember(crewId, userId);
         if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const poll = await stores.polls.getById(pollId);
         if (!poll || poll.crew_id !== crewId) return sendError(res, 404, 'Poll not found', ErrorCodes.NOT_FOUND);
-        if (optionIndex >= poll.options.length)
+        if (indexes.some((i) => i >= poll.options.length))
           return sendError(res, 400, 'Invalid option index', ErrorCodes.INVALID_INPUT);
-        if (poll.closed || (poll.closes_at && new Date(poll.closes_at) <= new Date()))
-          return sendError(res, 409, 'Poll is closed', ErrorCodes.CONFLICT);
+        if (indexes.length > 1 && !poll.multi_answer)
+          return sendError(res, 400, 'This poll takes one answer.', ErrorCodes.INVALID_INPUT);
+        if (isEnded(poll)) return sendError(res, 409, 'Poll is closed', ErrorCodes.CONFLICT);
 
-        await stores.polls.vote(pollId, userId, optionIndex);
-        io.to('crew:' + crewId).emit('crew:poll-voted', { pollId, userId, optionIndex });
-        const activity = { crewId, userId, type: 'poll-voted', detail: poll.options[optionIndex] || null };
-        await stores.activity
-          .log(activity)
-          .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+        if (indexes.length) await stores.polls.vote(pollId, userId, indexes);
+        else await stores.polls.removeVote(pollId, userId);
+        io.to('crew:' + crewId).emit('crew:poll-voted', {
+          pollId,
+          userId,
+          optionIndex: indexes[0] ?? -1,
+          optionIndexes: indexes,
+        });
         return sendSuccess(res, { voted: true });
       } catch (err: any) {
         log.error('vote error', { error: err.message });
@@ -149,51 +170,55 @@ export default function createCrewPollRoutes(deps: any) {
           return sendError(res, 403, 'Only creator or owner can close poll', ErrorCodes.FORBIDDEN);
         }
 
-        // close() is a no-op (undefined) when the poll was already closed, so a racing close creates nothing.
+        // close() is a no-op (undefined) when the poll was already closed, so a racing close announces nothing.
         const closed = await stores.polls.close(pollId);
-        let point: any = null;
-        let ref: any = null;
-        if (closed) {
-          io.to('crew:' + crewId).emit('crew:poll-closed', { pollId });
-          const setRefs = Array.isArray(poll.set_refs) ? poll.set_refs : [];
-          if (setRefs.some((r: any) => r)) {
-            try {
-              const counts: number[] = await stores.polls.tallyVotes(pollId);
-              let winner = -1;
-              counts.forEach((n, i) => {
-                if (n > 0 && (winner < 0 || n > counts[winner]!)) winner = i;
-              });
-              ref = winner >= 0 ? (setRefs[winner] ?? null) : null;
-              if (ref) {
-                const count = await stores.crews.meetingPoints.countByCrew(crewId);
-                if (count < MAX_MEETING_POINTS_PER_CREW) {
-                  const meetAt = ref.meetAt ?? null;
-                  point = await stores.crews.meetingPoints.create({
-                    id: createOpaqueId('mp'),
-                    crewId,
-                    createdBy: userId,
-                    label: String(ref.label).slice(0, 100),
-                    location: ref.stageReference || ref.label,
-                    type: 'set',
-                    meetAt,
-                    stageReference: ref.stageReference ?? null,
-                    expiresAt: meetAt ? new Date(new Date(meetAt).getTime() + 30 * 60_000).toISOString() : null,
-                    latitude: null,
-                    longitude: null,
-                    recursDaily: false,
-                  });
-                  io.to('crew:' + crewId).emit('crew:meeting-point-created', point);
-                }
-              }
-            } catch (mpErr: any) {
-              log.warn('poll close meeting point failed', { error: mpErr.message, pollId });
-            }
-          }
-        }
-        return sendSuccess(res, { closed: closed ?? null, meetingPoint: point ?? null, winningSetId: ref?.setId ?? null });
+        const { meetingPoint, winningSetId } = closed
+          ? await pollCloser.announce(closed, userId)
+          : { meetingPoint: null, winningSetId: null };
+        return sendSuccess(res, { closed: closed ?? null, meetingPoint, winningSetId });
       } catch (err: any) {
         log.error('close poll error', { error: err.message });
         return sendError(res, 500, 'Failed to close poll', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // ── POST /:crewId/polls/:pollId/nudge — one reminder to non-voters ──
+  router.post(
+    '/:crewId/polls/:pollId/nudge',
+    userAuth,
+    rateLimit(10, 'crew-poll-nudge'),
+    validateParams(schemas.crewIdPollIdParams),
+    async (req: any, res: any) => {
+      try {
+        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const pollId = sanitizeIdentifier(req.validatedParams.pollId);
+        const userId = req.user.userId;
+
+        const membership = await stores.crews.getMember(crewId, userId);
+        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
+
+        const poll = await stores.polls.getById(pollId);
+        if (!poll || poll.crew_id !== crewId) return sendError(res, 404, 'Poll not found', ErrorCodes.NOT_FOUND);
+        if (poll.created_by !== userId && membership.role !== 'owner')
+          return sendError(res, 403, 'Only the poll creator or crew owner can send a reminder.', ErrorCodes.FORBIDDEN);
+        if (isEnded(poll)) return sendError(res, 409, 'This poll has ended.', ErrorCodes.CONFLICT);
+
+        const userIds = (await stores.polls.nonVoterIds(pollId, crewId)).filter((id: string) => id !== userId);
+        if (!userIds.length) return sendError(res, 409, 'Everyone has voted.', ErrorCodes.CONFLICT);
+        if (!(await stores.polls.markNudged(pollId)))
+          return sendError(res, 409, 'A reminder was already sent for this poll.', ErrorCodes.CONFLICT);
+
+        await crewNotify?.toUsers({
+          crewId,
+          userIds,
+          kind: 'poll',
+          text: `${req.user.username} is waiting for your vote: ${poll.question.slice(0, 80)}`,
+        });
+        return sendSuccess(res, { nudged: userIds.length });
+      } catch (err: any) {
+        log.error('nudge poll error', { error: err.message });
+        return sendError(res, 500, 'Failed to send reminder', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );

@@ -108,6 +108,8 @@ import { configureSocketIO } from './lib/socket-setup';
 import { createBackgroundTasks, createCloseHandler } from './lib/shutdown';
 import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
+import { createCrewNotifier } from './lib/notifications/crew-notify';
+import { createPollCloser } from './lib/poll-close';
 import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
 import createPageRoutes from './routes/pages';
@@ -236,6 +238,19 @@ async function createFestieApp(overrides: any = {}) {
   });
   ctx.reminderScheduler = reminderScheduler;
   deps.emitter = emitter;
+  const crewNotify = createCrewNotifier({ stores: ctx.stores, notificationService, log });
+  const pollCloser = createPollCloser({
+    stores: ctx.stores,
+    io,
+    emitter,
+    crewNotify,
+    createOpaqueId: ctx.createOpaqueId,
+    log,
+  });
+  deps.crewNotify = crewNotify;
+  ctx.crewNotify = crewNotify;
+  deps.pollCloser = pollCloser;
+  ctx.pollCloser = pollCloser;
   // Venue geocoding (OpenStreetMap Nominatim). Off under test so suites make no network calls.
   if (config.NODE_ENV !== 'test') deps.geocodeVenue = createVenueGeocoder({ log }).geocodeVenue;
 
@@ -460,6 +475,7 @@ async function createFestieApp(overrides: any = {}) {
     redis,
     cacheBus,
     emitter,
+    crewNotify,
     clearPresenceTimers: ctx.clearPresenceTimers,
     avatarPool,
     inFlightRequests,

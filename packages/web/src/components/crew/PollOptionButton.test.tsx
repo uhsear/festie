@@ -12,6 +12,7 @@ describe('PollOptionButton', () => {
     isMine: false,
     isWinning: false,
     isPending: false,
+    voterLine: '',
     onVote: vi.fn(),
   };
 
@@ -82,5 +83,16 @@ describe('PollOptionButton', () => {
     const bar = container.querySelector('.crew-poll-bar');
     expect(bar).toBeInTheDocument();
     expect(bar!.getAttribute('style')).toContain('width: 42%');
+  });
+
+  it('renders the voter line and includes it in the accessible name', () => {
+    render(<PollOptionButton {...defaultProps} voterLine="Ana, Ben" />);
+    expect(screen.getByText('Ana, Ben')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Option A, 60 percent, Ana, Ben' })).toBeInTheDocument();
+  });
+
+  it('is disabled when disabled is true', () => {
+    render(<PollOptionButton {...defaultProps} disabled />);
+    expect(screen.getByRole('button')).toBeDisabled();
   });
 });

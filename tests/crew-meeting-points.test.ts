@@ -122,6 +122,7 @@ function makeDeps(overrides: any = {}) {
     },
     io: overrides.io !== undefined ? overrides.io : ioObj,
     emitter: { crewActivityLogged: mock.fn(() => {}) },
+    crewNotify: overrides.crewNotify,
     stores,
   };
 
@@ -1107,5 +1108,111 @@ describe('routes/crew-meeting-points.js -- DELETE /:crewId/meeting-points/:mpId'
 
     assert.equal(res.status, 500);
     assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+  });
+});
+
+describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
+  const member = { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) };
+  const mkNotify = () => ({ now: mock.fn(async () => {}) });
+  const mkLog = () => mock.fn(async () => 'act-1');
+
+  test('create writes meeting-point-added and pushes now with key mp:<id>', async () => {
+    const log = mkLog();
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({ crewNotify, stores: { crews: member, activity: { log } } });
+    const res = await request(app)
+      .post('/crew-1/meeting-points')
+      .send({ label: 'Main Stage', location: 'Left', meetAt: '2026-05-08T20:00:00.000Z' });
+    assert.equal(res.status, 201);
+    assert.equal((log.mock.calls as any[])[0].arguments[0].type, 'meeting-point-added');
+    assert.equal((log.mock.calls as any[])[0].arguments[0].detail, 'Main Stage');
+    const push = (crewNotify.now.mock.calls as any[])[0].arguments[0];
+    assert.equal(push.key, 'mp:mp-new-1');
+    assert.equal(push.actorId, 'user-1');
+    assert.equal(push.text, 'testuser set a meeting point: Main Stage');
+  });
+
+  test('update of only the label writes a row and does not push', async () => {
+    const log = mkLog();
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: {
+        crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
+        activity: { log },
+      },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ label: 'New name' });
+    assert.equal(res.status, 200);
+    assert.equal((log.mock.calls as any[])[0].arguments[0].type, 'meeting-point-updated');
+    assert.equal((log.mock.calls as any[])[0].arguments[0].detail, 'New name');
+    assert.equal(crewNotify.now.mock.calls.length, 0);
+  });
+
+  test('update that resends the same meetAt (stored as a Date) does not push', async () => {
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: {
+        crews: {
+          ...member,
+          meetingPoints: {
+            getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, meet_at: new Date('2026-05-08T21:00:00.000Z') })),
+          },
+        },
+      },
+    });
+    const res = await request(app)
+      .put('/crew-1/meeting-points/mp-1')
+      .send({ label: 'New name', meetAt: '2026-05-08T21:00:00.000Z' });
+    assert.equal(res.status, 200);
+    assert.equal(crewNotify.now.mock.calls.length, 0);
+  });
+
+  test('update that changes meetAt pushes', async () => {
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: {
+        crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
+      },
+    });
+    const res = await request(app)
+      .put('/crew-1/meeting-points/mp-1')
+      .send({ meetAt: '2026-05-08T21:00:00.000Z' });
+    assert.equal(res.status, 200);
+    const push = (crewNotify.now.mock.calls as any[])[0].arguments[0];
+    assert.equal(push.key, 'mp:mp-1');
+    assert.equal(push.meetAt, '2026-05-08T21:00:00.000Z');
+    assert.match(push.text, /^testuser moved .+ to$/);
+  });
+
+  test('delete writes meeting-point-removed', async () => {
+    const log = mkLog();
+    const { app } = await buildApp({
+      stores: {
+        crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
+        activity: { log },
+      },
+    });
+    const res = await request(app).delete('/crew-1/meeting-points/mp-1');
+    assert.equal(res.status, 200);
+    const row = (log.mock.calls as any[])[0].arguments[0];
+    assert.equal(row.type, 'meeting-point-removed');
+    assert.equal(row.detail, DEFAULT_MEETING_POINT.label);
+  });
+
+  test('missing crewNotify still returns 201 and 200', async () => {
+    const { app } = await buildApp({
+      stores: {
+        crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
+      },
+    });
+    const created = await request(app)
+      .post('/crew-1/meeting-points')
+      .send({ label: 'A', location: 'B', meetAt: '2026-05-08T20:00:00.000Z' });
+    assert.equal(created.status, 201);
+    const updated = await request(app).put('/crew-1/meeting-points/mp-1').send({ location: 'Elsewhere' });
+    assert.equal(updated.status, 200);
   });
 });

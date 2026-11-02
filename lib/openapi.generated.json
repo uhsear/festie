@@ -1793,6 +1793,17 @@
               ],
               "additionalProperties": false
             }
+          },
+          "multi_answer": {
+            "type": "boolean"
+          },
+          "closed_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "nudged_at": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [

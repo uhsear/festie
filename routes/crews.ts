@@ -66,6 +66,7 @@ export default function createCrewRoutes(deps: any) {
     validateQuery,
     validateParams,
     io,
+    crewNotify,
   } = deps;
 
   const router = express.Router();
@@ -649,7 +650,13 @@ export default function createCrewRoutes(deps: any) {
         if (!resolved) return;
         const { crew } = resolved;
 
-        if (io) io.to(`crew:${crewId}`).emit('crew:deleted', { crewId, festivalId: crew.festivalId });
+        const members = await stores.crews.getMembers(crewId);
+        if (io)
+          io.to(`crew:${crewId}`).emit('crew:deleted', {
+            crewId,
+            festivalId: crew.festivalId,
+            deletedBy: req.user.userId,
+          });
         // H1: force every remaining member's still-connected socket(s) out of the
         // crew room so they stop receiving live location/SOS/status broadcasts for
         // a crew that's about to vanish and can no longer inject into it. Mirrors
@@ -659,6 +666,14 @@ export default function createCrewRoutes(deps: any) {
         await evictAllFromCrewRoom(crewId);
 
         await stores.crews.delete(crewId);
+
+        crewNotify?.toUsers({
+          crewId,
+          crewName: crew.name,
+          userIds: members.map((m: any) => m.userId).filter((id: string) => id !== req.user.userId),
+          kind: 'member',
+          text: `${crew.name} was deleted by its owner.`,
+        });
 
         log.info('crew:deleted', { crewId, festivalId: crew.festivalId, userId: req.user.userId });
         return sendSuccess(res, { success: true });

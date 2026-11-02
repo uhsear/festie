@@ -1,32 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, AccessibilityInfo } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeOut,
-  LinearTransition,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { useMemo, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, AccessibilityInfo, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalStore, useFestivalDataStore } from '@festie/shared/stores';
-import { duration as motionDuration } from '@festie/shared/tokens';
 import type { CrewPoll, FestivalDay, FestivalSet, PollSetRef, Stage } from '@festie/shared/types';
 import {
   artistDisplayName,
   formatTime,
   getSetTimeBounds,
   isPending,
+  meetWherePollOptions,
+  nextVoteIndexes,
+  pollClosesAt,
+  POLL_END_CHOICES,
   resolveFestivalTimeZone,
+  splitPolls,
+  tallyPoll,
   QUEUED_WRITE_MESSAGE,
 } from '@festie/shared/utils';
+import type { PollEndChoice } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
-import { useReduceMotion } from '../hooks/useReduceMotion';
 import Button from './Button';
 import EmptyState from './EmptyState';
-import CrewSyncMarker from './CrewSyncMarker';
+import CrewPollCard from './CrewPollCard';
 import { festivalForCrew } from '../lib/crewFestival';
 
 // Lead time (minutes) for the reminder seeded when a schedule poll closes.
@@ -48,83 +44,24 @@ interface CrewPollsProps {
   isOwner: boolean;
 }
 
-/** Tally votes per option and find the current user's vote (if any). */
-function tally(poll: CrewPoll, userId: string) {
-  const counts = new Array<number>(poll.options.length).fill(0);
-  let myVote: number | null = null;
-  for (const v of poll.votes) {
-    if (v.option >= 0 && v.option < counts.length) {
-      counts[v.option] = (counts[v.option] ?? 0) + 1;
-    }
-    if (v.user_id === userId) myVote = v.option;
-  }
-  const total = counts.reduce((a, b) => a + b, 0);
-  const maxCount = Math.max(0, ...counts);
-  return { counts, myVote, total, maxCount };
-}
-
-/**
- * R26: Animated result bar — width transitions via Reanimated withTiming (400ms).
- * Instant when reduce-motion is on. Only the fill bar is animated; option row
- * border / gestures are untouched.
- */
-function PollBarFill({
-  pct,
-  isMine,
-  isWinning,
-  reduceMotion,
-  barStyle,
-  winningStyle,
-}: {
-  pct: number;
-  isMine: boolean;
-  isWinning: boolean;
-  reduceMotion: boolean;
-  barStyle: object;
-  winningStyle: object;
-}) {
-  const t = useTokens();
-  const widthPct = useSharedValue(pct);
-  const isFirstRender = useRef(true);
-
-  useEffect(() => {
-    if (isFirstRender.current) {
-      // Snap to initial value without animation on mount.
-      isFirstRender.current = false;
-      widthPct.value = pct;
-      return;
-    }
-    widthPct.value = reduceMotion ? pct : withTiming(pct, { duration: 400 });
-    // widthPct is a useSharedValue (stable ref); listed to satisfy exhaustive-deps
-    // without changing when the effect re-runs (only pct / reduceMotion drive it).
-  }, [pct, reduceMotion, widthPct]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    width: `${widthPct.value}%` as unknown as number,
-  }));
-
-  return (
-    <Animated.View
-      style={[barStyle, isWinning && winningStyle, isMine && { backgroundColor: t.colors.aquaAlpha[30] }, animStyle]}
-    />
-  );
-}
-
 /**
  * Crew polls — list active polls with live vote bars, vote on an option, create
- * a poll (2–4 options, matching the server schema), and close one (creator or
+ * a poll (2–4 options, matching the server schema), and end one (creator or
  * owner). Hits the shared crewStore actions; the screen owns loading.
  */
 export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsProps) {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
-  const reduceMotion = useReduceMotion();
 
   const polls = useCrewStore((s) => s.polls);
   const createPoll = useCrewStore((s) => s.createPoll);
   const votePoll = useCrewStore((s) => s.votePoll);
   const closePoll = useCrewStore((s) => s.closePoll);
+  const nudgePoll = useCrewStore((s) => s.nudgePoll);
+  const members = useCrewStore((s) => s.crewMembers);
+  const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  const picks = useFestivalDataStore((s) => s.currentProfile?.picks);
 
   // Festival lineup (from the persisted festival cache — works offline) powers
   // the schedule-aware composer + the close-time meeting point / reminder.
@@ -148,6 +85,10 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
   const [createBusy, setCreateBusy] = useState(false);
+  const [endChoice, setEndChoice] = useState<PollEndChoice>('none');
+  const [multiAnswer, setMultiAnswer] = useState(false);
+  const [decidedOpen, setDecidedOpen] = useState(false);
+  const [meetHint, setMeetHint] = useState(false);
   // Per-poll in-flight set (keyed by poll id) so voting on one poll only
   // disables that poll's options — a single global flag froze every poll.
   const [votingPollIds, setVotingPollIds] = useState<Set<string>>(() => new Set());
@@ -212,6 +153,9 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
     setShowSchedule(false);
     setSlotKey(null);
     setPicked({});
+    setEndChoice('none');
+    setMultiAnswer(false);
+    setMeetHint(false);
   };
 
   const handleCreateSchedule = async () => {
@@ -228,7 +172,16 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
           meetAt: bounds ? new Date(bounds.startMs).toISOString() : null,
         };
       });
-      const created = await createPoll(crewId, { question: question.trim(), options: opts }, setRefs);
+      const setStartMs = setRefs.reduce<number | null>((min, r) => {
+        const ms = r?.meetAt ? Date.parse(r.meetAt) : NaN;
+        return Number.isNaN(ms) ? min : min === null ? ms : Math.min(min, ms);
+      }, null);
+      const closesAt = pollClosesAt(endChoice, Date.now(), setStartMs);
+      const created = await createPoll(
+        crewId,
+        { question: question.trim(), options: opts, closesAt, multiAnswer },
+        setRefs,
+      );
       // Queued offline: the card shows "Not sent yet"; never celebrate it as sent.
       if (isPending(created)) AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
       else haptics.success();
@@ -252,7 +205,12 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
     if (!q || opts.length < 2 || opts.length > 4 || createBusy) return;
     setCreateBusy(true);
     try {
-      const created = await createPoll(crewId, { question: q, options: opts });
+      const created = await createPoll(crewId, {
+        question: q,
+        options: opts,
+        closesAt: pollClosesAt(endChoice, Date.now()),
+        multiAnswer,
+      });
       if (isPending(created)) AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
       else haptics.success();
       reset();
@@ -263,12 +221,13 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
     }
   };
 
-  const handleVote = async (pollId: string, optionIndex: number) => {
+  const handleVote = async (poll: CrewPoll, optionIndex: number) => {
+    const pollId = poll.id;
     if (votingPollIds.has(pollId)) return;
     haptics.select();
     setVotingPollIds((prev) => new Set(prev).add(pollId));
     try {
-      await votePoll(crewId, pollId, optionIndex);
+      await votePoll(crewId, pollId, nextVoteIndexes(poll, tallyPoll(poll, currentUserId).myIndexes, optionIndex));
     } catch {
       // Error surfaced via the crew store.
     } finally {
@@ -285,12 +244,12 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
     // from the server on close, plus a reminder seeded here; surface that in the confirm copy.
     const isSchedule = !!poll.set_refs?.some((r) => r != null);
     const message = isSchedule
-      ? `Close "${poll.question}"? The winning set becomes a meeting point for the whole crew, and you get a reminder 15 min before.`
-      : `Close "${poll.question}"? This can't be undone.`;
-    Alert.alert('Close poll', message, [
+      ? `End "${poll.question}"? Voting stops and everyone sees the result. The winning set becomes a meeting point for the whole crew, and you get a reminder 15 min before.`
+      : `End "${poll.question}"? Voting stops and everyone sees the result.`;
+    Alert.alert('End poll', message, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Close',
+        text: 'End poll',
         style: 'destructive',
         onPress: () => {
           closePoll(crewId, poll.id, {
@@ -306,6 +265,93 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
       },
     ]);
   };
+
+  const handleNudge = async (pollId: string) => {
+    try {
+      const n = await nudgePoll(crewId, pollId);
+      AccessibilityInfo.announceForAccessibility(`Reminder sent to ${n} ${n === 1 ? 'person' : 'people'}`);
+      haptics.success();
+    } catch (err) {
+      Alert.alert('Reminder not sent', err instanceof Error ? err.message : 'Try again in a moment.');
+    }
+  };
+
+  const handleAddToPicks = async (setId: string) => {
+    if (!festivalId) return;
+    try {
+      await useFestivalDataStore.getState().savePick({ festivalId, setId, priority: 'want-to-see' });
+      AccessibilityInfo.announceForAccessibility('Added to your picks');
+      haptics.success();
+    } catch {
+      // Error surfaced via the festival data store.
+    }
+  };
+
+  const startMeetWhere = () => {
+    const filled = meetWherePollOptions({ homeBase: activeCrew?.homeBaseLocation, meetingPoints, stages });
+    setQuestion('Meet where?');
+    setOptions(filled.length >= 2 ? filled : [...filled, ...Array<string>(2 - filled.length).fill('')]);
+    setMeetHint(filled.length < 2);
+    setShowForm(true);
+  };
+
+  const { open, decided } = splitPolls(polls);
+  const renderCard = (poll: CrewPoll) => (
+    <CrewPollCard
+      key={poll.id}
+      poll={poll}
+      currentUserId={currentUserId}
+      canEnd={poll.created_by === currentUserId || isOwner}
+      members={members}
+      timeZone={timeZone}
+      picks={picks}
+      voting={votingPollIds.has(poll.id)}
+      onVote={(i) => handleVote(poll, i)}
+      onEnd={() => handleClose(poll)}
+      onNudge={() => handleNudge(poll.id)}
+      onAddToPicks={festivalId ? handleAddToPicks : undefined}
+    />
+  );
+
+  const endChips = (choices: typeof POLL_END_CHOICES) => (
+    <>
+      <Text style={styles.optionsLabel}>Ends</Text>
+      <View style={styles.chipRow} accessibilityRole="radiogroup">
+        {choices.map((c) => {
+          const checked = endChoice === c.id;
+          return (
+            <TouchableOpacity
+              key={c.id}
+              style={[styles.chip, checked && styles.chipOn]}
+              onPress={() => {
+                haptics.select();
+                setEndChoice(c.id);
+              }}
+              activeOpacity={0.8}
+              accessibilityRole="radio"
+              accessibilityState={{ checked }}
+              accessibilityLabel={c.label}
+            >
+              <Text style={[styles.chipText, checked && styles.chipTextOn]}>{c.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </>
+  );
+
+  const multiAnswerRow = (
+    <View style={styles.switchRow}>
+      <Text style={styles.switchLabel}>Allow more than one answer</Text>
+      <Switch
+        value={multiAnswer}
+        onValueChange={setMultiAnswer}
+        trackColor={{ true: t.colors.accent.aqua }}
+        ios_backgroundColor={t.colors.text.muted}
+        accessibilityLabel="Allow more than one answer"
+      />
+    </View>
+  );
 
   const canCreate = !!question.trim() && options.map((o) => o.trim()).filter(Boolean).length >= 2;
 
@@ -418,6 +464,8 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
                   </TouchableOpacity>
                 );
               })}
+              {endChips(POLL_END_CHOICES)}
+              {multiAnswerRow}
               <Button
                 label={createBusy ? 'Creating…' : 'Create schedule poll'}
                 onPress={handleCreateSchedule}
@@ -491,6 +539,9 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
               <Text style={styles.addOptionText}>Add option</Text>
             </TouchableOpacity>
           ) : null}
+          {meetHint ? <Text style={styles.helperText}>Add a meeting point or home base to fill this in.</Text> : null}
+          {endChips(POLL_END_CHOICES.filter((c) => c.id !== 'setStart'))}
+          {multiAnswerRow}
           <Button
             label={createBusy ? 'Creating…' : 'Create'}
             onPress={handleCreate}
@@ -519,7 +570,18 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
             accessibilityLabel="Create a schedule poll"
           >
             <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.toggleText}>Schedule poll (which set?)</Text>
+            <Text style={styles.toggleText}>Which set? (from the lineup)</Text>
+            <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.toggle}
+            onPress={startMeetWhere}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Create a meet where poll"
+          >
+            <Ionicons name="location-outline" size={16} color={t.colors.accent.aqua} />
+            <Text style={styles.toggleText}>Meet where?</Text>
             <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
           </TouchableOpacity>
         </>
@@ -533,96 +595,29 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
           action={{ label: 'Create poll', onPress: () => setShowForm(true) }}
         />
       ) : (
-        polls.map((poll) => {
-          const { counts, myVote, total, maxCount } = tally(poll, currentUserId);
-          const canClose = poll.created_by === currentUserId || isOwner;
-          // Closed polls are results-only: no voting, a "Closed" badge, and the
-          // close row is hidden. `voting` is this poll's own in-flight flag.
-          const isClosed = !!poll.closed;
-          const voting = votingPollIds.has(poll.id);
-          // DC8: polls fade/reflow in and out as they're created/closed; gated
-          // on Reduce Motion (a plain View = instant).
-          const PollContainer = reduceMotion ? View : Animated.View;
-          const motionProps = reduceMotion
-            ? {}
-            : {
-                entering: FadeIn.duration(motionDuration.med),
-                exiting: FadeOut.duration(motionDuration.fast),
-                layout: LinearTransition.duration(motionDuration.med),
-              };
-          return (
-            <PollContainer key={poll.id} style={styles.pollCard} {...motionProps}>
-              <View style={styles.pollHeader}>
-                <Text style={styles.pollQuestion}>{poll.question}</Text>
-                {isClosed ? (
-                  <View style={styles.closedBadge} accessibilityLabel="Poll closed">
-                    <Text style={styles.closedBadgeText}>Closed</Text>
-                  </View>
-                ) : null}
-                <Text style={styles.pollVotes}>
-                  {total} {total === 1 ? 'vote' : 'votes'}
-                </Text>
-              </View>
-              <CrewSyncMarker item={poll} />
-              {poll.options.map((text, i) => {
-                const votes = counts[i] ?? 0;
-                const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
-                const isMine = myVote === i;
-                const isWinning = votes === maxCount && votes > 0;
-                // R22: stagger poll options on initial reveal; cap at index 9.
-                const optionEntering = reduceMotion ? undefined : FadeInDown.delay(Math.min(i, 9) * 40).duration(250);
-                return (
-                  <Animated.View key={`${poll.id}-${i}`} entering={optionEntering}>
-                    <TouchableOpacity
-                      style={[styles.optionButton, isMine && styles.optionButtonMine]}
-                      onPress={() => handleVote(poll.id, i)}
-                      disabled={voting || isClosed}
-                      activeOpacity={0.8}
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: isClosed }}
-                      accessibilityLabel={
-                        isClosed ? `${text}, ${pct} percent (poll closed)` : `Vote for ${text}, ${pct} percent`
-                      }
-                    >
-                      {/* R26: animated width bar */}
-                      <PollBarFill
-                        pct={pct}
-                        isMine={isMine}
-                        isWinning={isWinning}
-                        reduceMotion={reduceMotion}
-                        barStyle={styles.optionFill}
-                        winningStyle={styles.optionFillWinning}
-                      />
-                      <View style={styles.optionContent}>
-                        <View style={styles.optionTextRow}>
-                          {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
-                          {isMine ? <Ionicons name="checkmark-circle" size={16} color={t.colors.accent.aqua} /> : null}
-                          <Text style={styles.optionText} numberOfLines={1}>
-                            {text}
-                          </Text>
-                        </View>
-                        <Text style={styles.optionPct}>{pct}%</Text>
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
-                );
-              })}
-              {canClose && !isClosed ? (
-                <TouchableOpacity
-                  onPress={() => handleClose(poll)}
-                  style={styles.closeRow}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close poll"
-                >
-                  <Ionicons name="trash-outline" size={t.iconSize.compact} color={t.colors.accent.coral} />
-                  <Text style={styles.closeText}>Close poll</Text>
-                </TouchableOpacity>
-              ) : null}
-            </PollContainer>
-          );
-        })
+        <>
+          {open.map(renderCard)}
+          {decided.length > 0 ? (
+            <>
+              <TouchableOpacity
+                style={styles.decidedHeader}
+                onPress={() => setDecidedOpen((v) => !v)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: decidedOpen }}
+                accessibilityLabel={`Decided (${decided.length})`}
+              >
+                <Text style={styles.decidedHeaderText}>Decided ({decided.length})</Text>
+                <Ionicons
+                  name={decidedOpen ? 'chevron-up' : 'chevron-down'}
+                  size={t.iconSize.compact}
+                  color={t.colors.text.secondary}
+                />
+              </TouchableOpacity>
+              {decidedOpen ? decided.map(renderCard) : null}
+            </>
+          ) : null}
+        </>
       )}
     </View>
   );
@@ -770,94 +765,50 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.muted,
     paddingHorizontal: t.spacing[2],
   },
-  pollCard: {
-    gap: t.spacing[2],
-    padding: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    // R2 hairline: neutral white 0.08 separator (was border.light 0.1).
-    borderColor: t.colors.glass.border,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  pollHeader: {
+  chipRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexWrap: 'wrap',
     gap: t.spacing[2],
   },
-  pollQuestion: {
-    ...typeStyle('label'),
-    color: t.colors.text.primary,
-    flex: 1,
-  },
-  pollVotes: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-  },
-  closedBadge: {
-    paddingHorizontal: t.spacing[2],
-    paddingVertical: 2,
+  chip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: t.spacing[3],
     borderRadius: t.radii.pill,
-    backgroundColor: t.colors.bg.input,
     borderWidth: 1,
     borderColor: t.colors.border.default,
-  },
-  closedBadgeText: {
-    ...typeStyle('micro'),
-    color: t.colors.text.muted,
-    textTransform: 'uppercase',
-  },
-  optionButton: {
-    position: 'relative',
-    overflow: 'hidden',
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    // R2 hairline: neutral white 0.08 separator (was border.default 0.06).
-    borderColor: t.colors.glass.border,
     backgroundColor: t.colors.bg.input,
   },
-  optionButtonMine: {
+  chipOn: {
     borderColor: t.colors.accent.aqua,
   },
-  optionFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: t.colors.ring.aqua,
-  },
-  optionFillWinning: {
-    backgroundColor: t.colors.ring.coral,
-  },
-  optionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[2],
-  },
-  optionTextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    flex: 1,
-  },
-  optionText: {
-    ...typeStyle('body'),
-    color: t.colors.text.primary,
-    flexShrink: 1,
-  },
-  optionPct: {
+  chipText: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
-  closeRow: {
+  chipTextOn: {
+    color: t.colors.accent.aqua,
+  },
+  switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: t.spacing[1],
-    paddingVertical: t.spacing[1],
+    gap: t.spacing[2],
+    minHeight: 44,
   },
-  closeText: {
-    ...typeStyle('caption'),
-    color: t.colors.accent.coral,
+  switchLabel: {
+    ...typeStyle('body'),
+    color: t.colors.text.primary,
+    flex: 1,
+  },
+  decidedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    paddingHorizontal: t.spacing[1],
+  },
+  decidedHeaderText: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
   },
 }));

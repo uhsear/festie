@@ -164,6 +164,36 @@ export interface AppContext {
   [key: string]: any;
 }
 
+/** Crew push notifier (lib/notifications/crew-notify.ts). Never throws into a route. */
+export interface CrewNotify {
+  queue(item: { crewId: string; actorId: string | null; kind: 'member' | 'poll'; text: string }): void;
+  now(item: {
+    crewId: string;
+    actorId: string | null;
+    kind: 'meeting-point';
+    text: string;
+    key: string;
+    meetAt?: string | null;
+  }): Promise<void>;
+  toUsers(item: {
+    crewId: string;
+    crewName?: string;
+    userIds: string[];
+    text: string;
+    kind: 'member' | 'poll';
+  }): Promise<void>;
+  flushAll(): Promise<void>;
+}
+
+/** Poll closer (lib/poll-close.ts): shared by the manual end route and the expiry sweep. */
+export interface PollCloser {
+  announce(
+    poll: Record<string, unknown>,
+    actorId: string | null,
+  ): Promise<{ meetingPoint: unknown; winningSetId: string | null }>;
+  sweepExpired(): Promise<number>;
+}
+
 /**
  * What route factories actually receive: the context plus the runtime-injected
  * Socket.IO server and the domain event emitter (attached in server.ts).
@@ -171,4 +201,6 @@ export interface AppContext {
 export type RouteDeps = AppContext & {
   io: Server;
   emitter: SocketEmitter;
+  crewNotify?: CrewNotify;
+  pollCloser?: PollCloser;
 };

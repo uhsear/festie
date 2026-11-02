@@ -963,6 +963,7 @@ export const pollCreateSchema = z
     options: z.array(z.string().trim().min(1).max(200)).min(2).max(4),
     closesAt: z.string().datetime().optional().nullable(),
     setRefs: z.array(pollSetRefSchema.nullable()).max(4).optional(),
+    multiAnswer: z.boolean().optional(),
   })
   .refine((d) => d.setRefs === undefined || d.setRefs.length === d.options.length, {
     message: 'setRefs must match options',
@@ -970,9 +971,16 @@ export const pollCreateSchema = z
   });
 export type PollCreateInput = z.infer<typeof pollCreateSchema>;
 
-export const pollVoteSchema = z.object({
-  optionIndex: z.number().int().min(0).max(3),
-});
+// Exactly one field: optionIndex (old clients) or optionIndexes (an empty array takes the vote back).
+export const pollVoteSchema = z
+  .object({
+    optionIndex: z.number().int().min(0).max(3).optional(),
+    optionIndexes: z.array(z.number().int().min(0).max(3)).max(4).optional(),
+  })
+  .refine((b) => (b.optionIndex === undefined) !== (b.optionIndexes === undefined), {
+    message: 'Send optionIndex or optionIndexes',
+    path: ['optionIndexes'],
+  });
 export type PollVoteInput = z.infer<typeof pollVoteSchema>;
 
 // ── Crew packing-board schemas (M2 logistics) ───────────────────────
