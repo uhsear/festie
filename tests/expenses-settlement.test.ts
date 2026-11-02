@@ -48,6 +48,7 @@ function buildDeps(overrides: { expense?: any; members?: any[] } = {}) {
         create: mock.fn(async (data: any) => ({ id: 'exp-new', ...data })),
         getById: mock.fn(async () => overrides.expense ?? null),
         delete: mock.fn(async () => {}),
+        getCurrency: mock.fn(async () => 'USD'),
       },
       activity: { log: mock.fn(async () => 'act-1') },
     },

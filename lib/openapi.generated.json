@@ -1887,6 +1887,33 @@
           },
           "paid_by_name": {
             "type": "string"
+          },
+          "split_amounts": {
+            "nullable": true,
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "created_by": {
+            "nullable": true,
+            "type": "string"
+          },
+          "updated_by": {
+            "nullable": true,
+            "type": "string"
+          },
+          "updated_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "confirmed_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "disputed_at": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -1986,6 +2013,9 @@
               ],
               "additionalProperties": false
             }
+          },
+          "currency": {
+            "type": "string"
           }
         },
         "required": [

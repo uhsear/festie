@@ -32,6 +32,8 @@ export interface CrewStoreSinkApi {
     applyPollClosed: (pollId: string) => void;
     loadPolls: (crewId: string) => Promise<void>;
     loadExpenses: (crewId: string) => Promise<void>;
+    loadPacking: (crewId: string) => Promise<void>;
+    loadRides: (crewId: string) => Promise<void>;
     loadActivity: (crewId: string) => Promise<void>;
   };
 }
@@ -73,6 +75,8 @@ export interface CrewRealtimeSink {
   onPollVoted: (crewId: string, pollId: string, userId: string, optionIndexes: number[]) => void;
   onPollClosed: (crewId: string, pollId: string) => void;
   onExpensesChanged: (crewId: string) => void;
+  onPackingChanged: (crewId: string) => void;
+  onRidesChanged: (crewId: string) => void;
   onActivityLogged: (crewId: string) => void;
   // ── Live Location + SOS (full payloads; applied immediately, no debounce) ──
   onLocationPeerUpdate: (crewId: string, peer: PeerLocation) => void;
@@ -130,6 +134,20 @@ export function createStoreSink(
       void crewStoreApi
         .getState()
         .loadExpenses(crewId)
+        .catch(() => {});
+    },
+    onPackingChanged: (crewId) => {
+      if (!stillActive(crewId)) return;
+      void crewStoreApi
+        .getState()
+        .loadPacking(crewId)
+        .catch(() => {});
+    },
+    onRidesChanged: (crewId) => {
+      if (!stillActive(crewId)) return;
+      void crewStoreApi
+        .getState()
+        .loadRides(crewId)
         .catch(() => {});
     },
     onActivityLogged: (crewId) => {

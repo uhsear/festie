@@ -177,6 +177,8 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     sink.onPollClosed(crewId, 'p');
     sink.onExpensesChanged(crewId);
     sink.onActivityLogged(crewId);
+    sink.onPackingChanged(crewId);
+    sink.onRidesChanged(crewId);
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['meeting-points', crewId] });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['polls', crewId] });
@@ -205,5 +207,29 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     expect(loadPolls).toHaveBeenCalledTimes(3);
     expect(loadPolls).toHaveBeenCalledWith('c1');
     spy.mockRestore();
+  });
+});
+
+describe('buildCrewQuerySink packing and rides', () => {
+  const { loadPacking: realLoadPacking, loadRides: realLoadRides } = useCrewStore.getState();
+  afterEach(() => {
+    useCrewStore.setState({ activeCrew: null, loadPacking: realLoadPacking, loadRides: realLoadRides });
+  });
+
+  it('reloads the store lists for the active crew only', () => {
+    const loadPacking = vi.fn().mockResolvedValue(undefined);
+    const loadRides = vi.fn().mockResolvedValue(undefined);
+    useCrewStore.setState({ activeCrew: { id: 'c1' } as never, loadPacking, loadRides });
+    const sink = buildCrewQuerySink(new QueryClient());
+
+    sink.onPackingChanged('c1');
+    sink.onRidesChanged('c1');
+    expect(loadPacking).toHaveBeenCalledWith('c1');
+    expect(loadRides).toHaveBeenCalledWith('c1');
+
+    sink.onPackingChanged('other');
+    sink.onRidesChanged('other');
+    expect(loadPacking).toHaveBeenCalledTimes(1);
+    expect(loadRides).toHaveBeenCalledTimes(1);
   });
 });

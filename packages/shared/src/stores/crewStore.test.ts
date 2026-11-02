@@ -38,6 +38,9 @@ function resetStore() {
     meetingPoints: [],
     expenses: [],
     expenseBalances: [],
+    expenseCurrency: 'USD',
+    packingItems: [],
+    rideOffers: [],
     activity: [],
     crewLoading: false,
     error: null,
@@ -578,6 +581,103 @@ describe('crewStore', () => {
         toUserId: 'user-2',
         amount: 10,
       });
+    });
+  });
+
+  describe('expense edit, currency, confirm and remind', () => {
+    const request = { description: 'Gas', amount: 60, splitWith: ['user-1', 'user-2'], category: 'transport' };
+
+    it('updateExpense sends PUT then reloads', async () => {
+      vi.mocked(api.put).mockResolvedValueOnce({ id: 'e1' });
+      vi.mocked(api.get).mockResolvedValueOnce([{ id: 'e1' }]).mockResolvedValueOnce({ balances: [], settlements: [] });
+      await expect(useCrewStore.getState().updateExpense('crew-1', 'e1', request)).resolves.toBe('sent');
+      expect(api.put).toHaveBeenCalledWith('/crews/crew-1/expenses/e1', request);
+      expect(api.get).toHaveBeenCalledWith('/crews/crew-1/expenses');
+      expect(useCrewStore.getState().expenses).toEqual([{ id: 'e1' }]);
+    });
+
+    it('loadBalances sets expenseCurrency from the plan, USD when absent', async () => {
+      vi.mocked(api.get)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce({ balances: [], settlements: [], currency: 'EUR' });
+      await useCrewStore.getState().loadExpenses('crew-1');
+      expect(useCrewStore.getState().expenseCurrency).toBe('EUR');
+      vi.mocked(api.get).mockResolvedValueOnce([]).mockResolvedValueOnce({ balances: [], settlements: [] });
+      await useCrewStore.getState().loadExpenses('crew-1');
+      expect(useCrewStore.getState().expenseCurrency).toBe('USD');
+    });
+
+    it('setExpenseCurrency sets at once and rolls back on error', async () => {
+      useCrewStore.setState({ expenseCurrency: 'USD' });
+      vi.mocked(api.put).mockResolvedValueOnce({ currency: 'EUR' });
+      await expect(useCrewStore.getState().setExpenseCurrency('crew-1', 'EUR')).resolves.toBe('sent');
+      expect(useCrewStore.getState().expenseCurrency).toBe('EUR');
+      expect(api.put).toHaveBeenCalledWith('/crews/crew-1/expenses/currency', { currency: 'EUR' });
+
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('403'));
+      await expect(useCrewStore.getState().setExpenseCurrency('crew-1', 'GBP')).rejects.toThrow('403');
+      expect(useCrewStore.getState().expenseCurrency).toBe('EUR');
+    });
+
+    it('confirmPayment sets the local flag', async () => {
+      const row = { id: 'p1', crew_id: 'crew-1', category: 'settlement' };
+      useCrewStore.setState({ expenses: [row as never] });
+      vi.mocked(api.post).mockResolvedValueOnce({});
+      vi.mocked(api.get).mockRejectedValueOnce(new Error('offline refetch'));
+      await expect(useCrewStore.getState().confirmPayment('crew-1', 'p1', false)).resolves.toBe('sent');
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/expenses/p1/confirm', { received: false });
+      const after = useCrewStore.getState().expenses[0]!;
+      expect(after.disputed_at).toEqual(expect.any(String));
+      expect(after.confirmed_at).toBeUndefined();
+    });
+
+    it('remindPayment rethrows the 409 so the caller can show its message', async () => {
+      const conflict = Object.assign(new Error('You already reminded Sam today. Try again tomorrow.'), { status: 409 });
+      vi.mocked(api.post).mockRejectedValueOnce(conflict);
+      await expect(useCrewStore.getState().remindPayment('crew-1', 'user-2')).rejects.toBe(conflict);
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/expenses/remind', { userId: 'user-2' });
+    });
+  });
+
+  describe('packing batch and ride seats', () => {
+    const offer = (passenger_ids: string[]) =>
+      ({ id: 'r1', crew_id: 'crew-1', created_by: 'user-2', seats: 2, passenger_ids }) as never;
+
+    it('addPackingItems prepends the returned items', async () => {
+      useCrewStore.setState({ packingItems: [{ id: 'old' } as never] });
+      vi.mocked(api.post).mockResolvedValueOnce({ items: [{ id: 'a' }, { id: 'b' }] });
+      await expect(useCrewStore.getState().addPackingItems('crew-1', ['Tent', 'Cooler'])).resolves.toBe('sent');
+      expect(api.post).toHaveBeenCalledWith(
+        '/crews/crew-1/packing/batch',
+        { labels: ['Tent', 'Cooler'] },
+        expect.objectContaining({ onOptimisticCreate: expect.any(Function) }),
+      );
+      expect(useCrewStore.getState().packingItems.map((i) => i.id)).toEqual(['a', 'b', 'old']);
+    });
+
+    it('takeRideSeat adds me, then replaces the offer with the server copy', async () => {
+      useCrewStore.setState({ rideOffers: [offer([])] });
+      vi.mocked(api.post).mockResolvedValueOnce({ offer: { ...offer(['user-1']), seats: 3 } });
+      await expect(useCrewStore.getState().takeRideSeat('crew-1', 'r1', 'user-1')).resolves.toBe('sent');
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/rides/r1/seat');
+      expect(useCrewStore.getState().rideOffers[0]!.seats).toBe(3);
+    });
+
+    it('takeRideSeat rolls back on 409 and keeps a concurrent rider', async () => {
+      useCrewStore.setState({ rideOffers: [offer([])] });
+      vi.mocked(api.post).mockImplementationOnce(async () => {
+        useCrewStore.setState({ rideOffers: [offer(['user-1', 'user-3'])] });
+        throw new Error('This ride is full.');
+      });
+      await expect(useCrewStore.getState().takeRideSeat('crew-1', 'r1', 'user-1')).rejects.toThrow('full');
+      expect(useCrewStore.getState().rideOffers[0]!.passenger_ids).toEqual(['user-3']);
+    });
+
+    it('leaveRideSeat removes me and rolls back on error', async () => {
+      useCrewStore.setState({ rideOffers: [offer(['user-1'])] });
+      vi.mocked(api.delete).mockRejectedValueOnce(new Error('boom'));
+      await expect(useCrewStore.getState().leaveRideSeat('crew-1', 'r1', 'user-1')).rejects.toThrow('boom');
+      expect(useCrewStore.getState().rideOffers[0]!.passenger_ids).toEqual(['user-1']);
     });
   });
 

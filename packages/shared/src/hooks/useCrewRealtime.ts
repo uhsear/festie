@@ -27,6 +27,8 @@ import {
   routePollVoted,
   routePollClosed,
   routeExpensesChanged,
+  routePackingChanged,
+  routeRidesChanged,
   routeActivityLogged,
   routeLocationPeerUpdate,
   routeLocationPeerStopped,
@@ -43,6 +45,9 @@ import type {
   CrewPollClosedPayload,
   CrewExpensePayload,
   CrewExpenseDeletedPayload,
+  CrewExpenseUpdatedPayload,
+  CrewPackingChangedPayload,
+  CrewRidesChangedPayload,
   CrewActivityPayload,
   LocationPeerUpdatePayload,
   LocationPeerStoppedPayload,
@@ -137,11 +142,27 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       if (intent) sink.onPollClosed(intent.crewId, intent.pollId);
     };
 
-    const handleExpensesChanged = (data: CrewExpensePayload | CrewExpenseDeletedPayload) => {
+    const handleExpensesChanged = (data: CrewExpensePayload | CrewExpenseDeletedPayload | CrewExpenseUpdatedPayload) => {
       const intent = routeExpensesChanged(data, getActiveCrewId());
       if (!intent) return;
       schedule(`crew-expenses:${intent.crewId}`, () => {
         sink.onExpensesChanged(intent.crewId);
+      });
+    };
+
+    const handlePackingChanged = (data: CrewPackingChangedPayload) => {
+      const intent = routePackingChanged(data, getActiveCrewId());
+      if (!intent) return;
+      schedule(`crew-packing:${intent.crewId}`, () => {
+        sink.onPackingChanged(intent.crewId);
+      });
+    };
+
+    const handleRidesChanged = (data: CrewRidesChangedPayload) => {
+      const intent = routeRidesChanged(data, getActiveCrewId());
+      if (!intent) return;
+      schedule(`crew-rides:${intent.crewId}`, () => {
+        sink.onRidesChanged(intent.crewId);
       });
     };
 
@@ -191,6 +212,13 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     socket.on('crew:poll-closed', handlePollClosed);
     socket.on('crew:expense-added', handleExpensesChanged);
     socket.on('crew:expense-deleted', handleExpensesChanged);
+    socket.on('crew:expense-updated', handleExpensesChanged);
+    socket.on('crew:packing-created', handlePackingChanged);
+    socket.on('crew:packing-updated', handlePackingChanged);
+    socket.on('crew:packing-deleted', handlePackingChanged);
+    socket.on('crew:ride-created', handleRidesChanged);
+    socket.on('crew:ride-updated', handleRidesChanged);
+    socket.on('crew:ride-deleted', handleRidesChanged);
     socket.on('crew:activity', handleActivityLogged);
     socket.on('location:peer-update', handleLocationPeerUpdate);
     socket.on('location:peer-stopped', handleLocationPeerStopped);
@@ -226,6 +254,13 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
       socket.off('crew:poll-closed', handlePollClosed);
       socket.off('crew:expense-added', handleExpensesChanged);
       socket.off('crew:expense-deleted', handleExpensesChanged);
+      socket.off('crew:expense-updated', handleExpensesChanged);
+      socket.off('crew:packing-created', handlePackingChanged);
+      socket.off('crew:packing-updated', handlePackingChanged);
+      socket.off('crew:packing-deleted', handlePackingChanged);
+      socket.off('crew:ride-created', handleRidesChanged);
+      socket.off('crew:ride-updated', handleRidesChanged);
+      socket.off('crew:ride-deleted', handleRidesChanged);
       socket.off('crew:activity', handleActivityLogged);
       socket.off('location:peer-update', handleLocationPeerUpdate);
       socket.off('location:peer-stopped', handleLocationPeerStopped);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Share, useWindowDimensions, type HostInstance } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Share, Switch, useWindowDimensions, type HostInstance } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '@festie/shared/services';
 import { useFestivalDataStore, useCrewStore } from '@festie/shared/stores';
 import { useFestival } from '@festie/shared/hooks';
-import { isFestivalOver } from '@festie/shared/utils';
+import { isFestivalOver, formatAmount } from '@festie/shared/utils';
 import { COPY, RATING_LABEL } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import DisplayWords from '../components/DisplayWords';
@@ -571,8 +571,6 @@ function PosterPreview({ children }: { children: React.ReactNode }) {
   );
 }
 
-const money = (n: number) =>
-  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
 
 interface CrewWrapResponse {
   wrap: CrewWrapData;
@@ -603,6 +601,7 @@ function CrewWrapTab({
   const [sharing, setSharing] = useState(false);
   // Bumped by the error-state "Try again" action to re-run the fetch (F40).
   const [reloadKey, setReloadKey] = useState(0);
+  const [showMoney, setShowMoney] = useState(false);
   const posterRef = useRef<HostInstance>(null);
 
   useEffect(() => {
@@ -704,7 +703,7 @@ function CrewWrapTab({
         <Hero
           value={wrap.setsSeenTogether.length}
           label="sets seen together"
-          detail={[`${wrap.memberCount} in the crew`, wrap.totalSplit > 0 ? `${money(wrap.totalSplit)} split` : null]
+          detail={[`${wrap.memberCount} in the crew`, wrap.totalSplit > 0 ? `${formatAmount(wrap.totalSplit, wrap.currency)} split` : null]
             .filter(Boolean)
             .join(' · ')}
         />
@@ -727,7 +726,7 @@ function CrewWrapTab({
             {wrap.biggestSpender ? wrap.biggestSpender.name : 'No expenses yet'}
           </Text>
           {wrap.biggestSpender ? (
-            <Text style={styles.superSub}>fronted {money(wrap.biggestSpender.amount)}</Text>
+            <Text style={styles.superSub}>fronted {formatAmount(wrap.biggestSpender.amount, wrap.currency)}</Text>
           ) : null}
         </View>
 
@@ -765,8 +764,25 @@ function CrewWrapTab({
 
         {hasData ? (
           <View style={styles.shareBlock}>
+            <View style={styles.moneySwitchRow}>
+              <View style={styles.moneySwitchBody}>
+                <Text style={styles.moneySwitchTitle}>Show money on poster</Text>
+                <Text style={styles.moneySwitchHint}>
+                  Off by default. When on, the poster shows the crew&apos;s total and who fronted the most.
+                </Text>
+              </View>
+              <Switch
+                value={showMoney}
+                onValueChange={setShowMoney}
+                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
+                ios_backgroundColor={t.colors.text.muted}
+                thumbColor={t.colors.text.onAccent}
+                accessibilityLabel="Show money on poster"
+                accessibilityState={{ checked: showMoney }}
+              />
+            </View>
             <PosterPreview>
-              <CrewWrapPoster crewName={crewName} festivalName={festivalName} wrap={wrap} />
+              <CrewWrapPoster crewName={crewName} festivalName={festivalName} wrap={wrap} showMoney={showMoney} />
             </PosterPreview>
             <TouchableOpacity
               style={[styles.shareButton, sharing && styles.shareButtonBusy]}
@@ -797,7 +813,7 @@ function CrewWrapTab({
           style={{ position: 'absolute', left: -99999, top: 0, width: 1080, height: 1920 }}
           pointerEvents="none"
         >
-          <CrewWrapPoster crewName={crewName} festivalName={festivalName} wrap={wrap} />
+          <CrewWrapPoster crewName={crewName} festivalName={festivalName} wrap={wrap} showMoney={showMoney} />
         </View>
       ) : null}
     </View>
@@ -910,6 +926,20 @@ const useStyles = makeStyles((t) => ({
   },
   shareBlock: {
     gap: t.spacing[3],
+  },
+  moneySwitchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+  },
+  moneySwitchBody: { flex: 1, gap: t.spacing[1] },
+  moneySwitchTitle: {
+    ...typeStyle('body'),
+    color: t.colors.text.primary,
+  },
+  moneySwitchHint: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
   },
   previewWrap: {
     alignItems: 'center',

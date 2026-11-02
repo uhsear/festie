@@ -538,7 +538,10 @@ export type CrewJoinInput = z.infer<typeof crewJoinSchema>;
 
 // Public join-preview path param: same alphanumeric 4-12 shape the invite page enforces.
 export const crewInviteCodeParams = z.object({
-  inviteCode: z.string().trim().regex(/^[a-zA-Z0-9]{4,12}$/, 'Invalid invite code'),
+  inviteCode: z
+    .string()
+    .trim()
+    .regex(/^[a-zA-Z0-9]{4,12}$/, 'Invalid invite code'),
 });
 export type CrewInviteCodeParams = z.infer<typeof crewInviteCodeParams>;
 
@@ -1035,11 +1038,17 @@ export const packingUpdateSchema = z
     label: z.string().trim().min(1).max(200).optional(),
     broughtBy: z.string().trim().max(100).optional().nullable(),
     claimed: z.boolean().optional(),
+    packed: z.boolean().optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
   });
 export type PackingUpdateInput = z.infer<typeof packingUpdateSchema>;
+
+export const packingBatchSchema = z.object({
+  labels: z.array(z.string().trim().min(1).max(200)).min(1).max(30),
+});
+export type PackingBatchInput = z.infer<typeof packingBatchSchema>;
 
 // ── Crew member status schema (M5: on-my-way / ETA) ─────────────────
 // A last-synced, degraded-sync snapshot the member set (often offline) — NOT
@@ -1200,6 +1209,8 @@ export const rideCreateSchema = z.object({
   departFrom: z.string().trim().max(200).optional().nullable(),
   departAt: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
+  direction: z.enum(['to_festival', 'home']).optional().nullable(),
+  departTime: z.string().datetime().optional().nullable(),
 });
 export type RideCreateInput = z.infer<typeof rideCreateSchema>;
 
@@ -1210,6 +1221,8 @@ export const rideUpdateSchema = z
     departFrom: z.string().trim().max(200).optional().nullable(),
     departAt: z.string().trim().max(100).optional().nullable(),
     note: z.string().trim().max(500).optional().nullable(),
+    direction: z.enum(['to_festival', 'home']).optional().nullable(),
+    departTime: z.string().datetime().optional().nullable(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
@@ -1230,18 +1243,88 @@ export const ratingCreateSchema = z.object({
 export type RatingCreateInput = z.infer<typeof ratingCreateSchema>;
 
 // ── Expense schemas ─────────────────────────────────────────────
-export const expenseCreateSchema = z.object({
-  description: z.string().min(1).max(200),
-  amount: z.number().positive(),
-  // User IDs are TEXT (e.g. "user-<uuid>"), not integers — clients send strings.
-  // Typing these as numbers 400'd every real expense create/settle.
-  splitWith: z.array(z.string().min(1)).min(1),
-  category: z.string().max(50).optional(),
-  // Budget = planned expenses. A planned row is a forecast and is EXCLUDED from
-  // the balance ledger / settle-up (see getBalances). Defaults to actual (false).
-  planned: z.boolean().optional(),
+// Keep in sync with CREW_CURRENCIES in packages/shared/src/constants/config.ts
+// (the backend cannot import @festie/shared, see lib/time-zone.ts). Every code
+// has 2 decimal places, so integer-cent ledger math stays valid.
+export const CREW_CURRENCIES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'CAD',
+  'AUD',
+  'NZD',
+  'MXN',
+  'CHF',
+  'SEK',
+  'NOK',
+  'DKK',
+  'PLN',
+  'CZK',
+  'BRL',
+] as const;
+
+export const expenseShareSchema = z.object({
+  userId: z.string().min(1).max(100),
+  cents: z.number().int().positive().max(9_999_999_999),
 });
+export type ExpenseShareInput = z.infer<typeof expenseShareSchema>;
+
+export const expenseCreateSchema = z
+  .object({
+    description: z.string().min(1).max(200),
+    amount: z.number().positive(),
+    // User IDs are TEXT (e.g. "user-<uuid>"), not integers — clients send strings.
+    // Typing these as numbers 400'd every real expense create/settle.
+    splitWith: z.array(z.string().min(1)).min(1),
+    category: z.string().max(50).optional(),
+    // Budget = planned expenses. A planned row is a forecast and is EXCLUDED from
+    // the balance ledger / settle-up (see getBalances). Defaults to actual (false).
+    planned: z.boolean().optional(),
+    // The member who paid. Defaults to the caller on the server.
+    paidBy: z.string().min(1).max(100).optional(),
+    // Uneven split in integer cents. Absent = equal split across splitWith.
+    shares: z.array(expenseShareSchema).min(1).max(30).optional(),
+  })
+  .superRefine((d, ctx) => {
+    // Payments come only from POST /expenses/settle; this blocks forged "A paid B" rows and edits into a payment.
+    if (d.category === 'settlement') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['category'],
+        message: 'Record a payment with Settle up, not as an expense.',
+      });
+    }
+    if (!d.shares) return;
+    const shareIds = d.shares.map((s) => s.userId);
+    const shareSet = new Set(shareIds);
+    if (shareSet.size !== shareIds.length) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Each person can appear once in the shares.' });
+    }
+    const splitSet = new Set(d.splitWith);
+    if (shareSet.size !== splitSet.size || [...shareSet].some((id) => !splitSet.has(id))) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Shares must list the same people as the split.' });
+    }
+    const sum = d.shares.reduce((acc, s) => acc + s.cents, 0);
+    if (sum !== Math.round(d.amount * 100)) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Shares must add up to the total.' });
+    }
+  });
 export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
+
+// PUT is a full replacement: the edit form sends every field, so it reuses the
+// create schema (one validation path, last-write-wins offline replay).
+export const expenseUpdateSchema = expenseCreateSchema;
+export type ExpenseUpdateInput = z.infer<typeof expenseUpdateSchema>;
+
+export const expenseCurrencySchema = z.object({ currency: z.enum(CREW_CURRENCIES) });
+export type ExpenseCurrencyInput = z.infer<typeof expenseCurrencySchema>;
+
+export const expenseConfirmSchema = z.object({ received: z.boolean() });
+export type ExpenseConfirmInput = z.infer<typeof expenseConfirmSchema>;
+
+// `userId` is the member who owes the caller.
+export const expenseRemindSchema = z.object({ userId: z.string().min(1).max(100) });
+export type ExpenseRemindInput = z.infer<typeof expenseRemindSchema>;
 
 // ── Admin bulk schemas ──────────────────────────────────────────
 export const adminBulkDeactivateSchema = z.object({
@@ -1425,6 +1508,7 @@ export const schemas = {
   pollVote: pollVoteSchema,
   packingCreate: packingCreateSchema,
   packingUpdate: packingUpdateSchema,
+  packingBatch: packingBatchSchema,
   crewStatus: crewStatusSchema,
   locationShare: locationShareSchema,
   locationUpdate: locationUpdateSchema,
@@ -1441,6 +1525,10 @@ export const schemas = {
   refreshToken: refreshTokenSchema,
   ratingCreate: ratingCreateSchema,
   expenseCreate: expenseCreateSchema,
+  expenseUpdate: expenseUpdateSchema,
+  expenseCurrency: expenseCurrencySchema,
+  expenseConfirm: expenseConfirmSchema,
+  expenseRemind: expenseRemindSchema,
   adminBulkDeactivate: adminBulkDeactivateSchema,
   adminBulkArchive: adminBulkArchiveSchema,
   adminAddRole: adminAddRoleSchema,

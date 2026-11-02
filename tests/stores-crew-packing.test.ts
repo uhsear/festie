@@ -190,4 +190,69 @@ describe('lib/db/stores/crews.ts — crewPacking sub-store', () => {
       assert.deepStrictEqual((call.arguments as any[])[1], ['crew-1']);
     });
   });
+
+  // =========================================================================
+  // T30: packed column and createMany()
+  // =========================================================================
+  describe('packed', () => {
+    it('every SELECT reads the packed column', async () => {
+      const { store, pool } = makeStore([{ rows: [] }, { rows: [] }, { rows: [] }, { rows: [] }, { rows: [] }]);
+      await store.create({ id: 'pack-1', crewId: 'crew-1', createdBy: 'user-1', label: 'Tent' });
+      await store.listByCrew('crew-1');
+      await store.getById('pack-1');
+      const selects = (pool.query.mock.calls as any[])
+        .map((c) => c.arguments[0])
+        .filter((sql: string) => sql.includes('SELECT'));
+      assert.strictEqual(selects.length, 3);
+      for (const sql of selects) assert.match(sql, /\bpacked\b/);
+    });
+
+    it('update maps packed to the packed column', async () => {
+      const { store, pool } = makeStore([{ rows: [] }, { rows: [{ id: 'pack-1', packed: true }] }]);
+      const result = await store.update('pack-1', { packed: true });
+      assert.deepStrictEqual(result, { id: 'pack-1', packed: true });
+      const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+      assert.strictEqual(sql, 'UPDATE crew_packing_items SET packed = $1 WHERE id = $2');
+      assert.deepStrictEqual(params, [true, 'pack-1']);
+      assert.match((pool.query.mock.calls[1]!.arguments as any[])[0], /\bpacked\b/);
+    });
+  });
+
+  describe('createMany', () => {
+    it('inserts every label in one parameterized query and returns the rows', async () => {
+      const rows = [
+        { id: 'pack-a', label: 'Tent' },
+        { id: 'pack-b', label: 'Cooler' },
+      ];
+      const { store, pool } = makeStore([{ rows }]);
+
+      const result = await store.createMany('crew-1', 'user-1', ['Tent', 'Cooler']);
+
+      assert.deepStrictEqual(result, rows);
+      assert.strictEqual(pool.query.mock.calls.length, 1);
+      const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+      assert.ok(sql.includes('INSERT INTO'));
+      assert.ok(sql.includes('crew_packing_items'));
+      assert.ok(sql.includes('($3, $1, $2, $4, NULL, false, false, NOW())'));
+      assert.ok(sql.includes('($5, $1, $2, $6, NULL, false, false, NOW())'));
+      assert.ok(sql.includes('RETURNING'));
+      assert.match(sql, /\bpacked\b/);
+      // Labels never reach the SQL text; they travel as parameters.
+      assert.ok(!sql.includes('Tent') && !sql.includes('Cooler'));
+      assert.strictEqual(params.length, 6);
+      assert.strictEqual(params[0], 'crew-1');
+      assert.strictEqual(params[1], 'user-1');
+      assert.match(params[2], /^pack-[0-9a-f-]{36}$/);
+      assert.strictEqual(params[3], 'Tent');
+      assert.match(params[4], /^pack-[0-9a-f-]{36}$/);
+      assert.notStrictEqual(params[2], params[4]);
+      assert.strictEqual(params[5], 'Cooler');
+    });
+
+    it('returns an empty list and issues no query for no labels', async () => {
+      const { store, pool } = makeStore([]);
+      assert.deepStrictEqual(await store.createMany('crew-1', 'user-1', []), []);
+      assert.strictEqual(pool.query.mock.calls.length, 0);
+    });
+  });
 });

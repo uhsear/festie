@@ -3,6 +3,7 @@ import {
   QUEUED_WRITE_MESSAGE,
   UNDO_WINDOW_MS,
   createSettleUpFlow,
+  payOptionsFor,
   isPending,
   rowSyncState,
   scheduleUndoable,
@@ -102,5 +103,29 @@ describe('createSettleUpFlow', () => {
     await expect(flow.confirmPaid()).resolves.toBe('queued');
     expect(record).toHaveBeenCalledTimes(1);
     expect(record).toHaveBeenCalledWith({ toUserId: 'sam', amount: 12.5 });
+  });
+});
+
+describe('payOptionsFor currency', () => {
+  const settlement: CrewSettlement = {
+    fromUserId: 'me',
+    fromName: 'Me',
+    toUserId: 'sam',
+    toName: 'Sam',
+    amountCents: 1240,
+    amount: 12.4,
+    payeeHandles: { venmo: '@sam', cashapp: '$sam', paypal: 'sam' },
+  };
+
+  it('offers only PayPal, with the currency code, outside USD', () => {
+    const options = payOptionsFor(settlement, 'EUR');
+    expect(options.map((o) => o.label)).toEqual(['PayPal']);
+    expect(options[0]!.link.web.endsWith('12.40EUR')).toBe(true);
+    expect(payOptionsFor(settlement).map((o) => o.label)).toEqual(['Venmo', 'Cash App', 'PayPal']);
+  });
+
+  it('createSettleUpFlow passes the currency through', () => {
+    const flow = createSettleUpFlow(settlement, vi.fn(), 'EUR');
+    expect(flow.options.map((o) => o.label)).toEqual(['PayPal']);
   });
 });

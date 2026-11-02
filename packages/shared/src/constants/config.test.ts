@@ -4,6 +4,8 @@ import {
   PRIORITY_OPTIONS,
   PRIORITY_SYMBOLS,
   CREW_ACTIVITY_LABELS,
+  CREW_CURRENCIES,
+  PACKING_TEMPLATES,
   EXPENSE_CATEGORIES,
   expenseCategoryFor,
   RATING_SCALE_DATA,
@@ -191,5 +193,26 @@ describe('LIVE_SHARE_DURATIONS', () => {
   it('has only numeric bounds', () => {
     expect(LIVE_SHARE_DURATIONS.map((d) => d.id)).toEqual(['1h', '2h', '4h']);
     for (const d of LIVE_SHARE_DURATIONS) expect(typeof d.ms).toBe('number');
+  });
+});
+
+describe('crew money and packing constants', () => {
+  it('lists 14 unique three-letter currencies starting with USD', () => {
+    expect(CREW_CURRENCIES).toHaveLength(14);
+    expect(new Set(CREW_CURRENCIES).size).toBe(14);
+    expect(CREW_CURRENCIES[0]).toBe('USD');
+    for (const c of CREW_CURRENCIES) expect(c).toMatch(/^[A-Z]{3}$/);
+  });
+
+  it('has the camping and day-trip templates with unique items', () => {
+    expect(PACKING_TEMPLATES.map((t) => t.id)).toEqual(['camping', 'day-trip']);
+    expect(PACKING_TEMPLATES.map((t) => t.items.length)).toEqual([12, 8]);
+    for (const t of PACKING_TEMPLATES) expect(new Set(t.items).size).toBe(t.items.length);
+  });
+
+  it('labels the new activity types', () => {
+    for (const k of ['expense-edited', 'payment-confirmed', 'payment-disputed', 'currency-changed', 'expense_settled']) {
+      expect(CREW_ACTIVITY_LABELS[k]).toBeTruthy();
+    }
   });
 });
