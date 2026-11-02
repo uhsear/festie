@@ -3,7 +3,7 @@
 -- announcement. send_at is when it goes out; sent_at is set when a worker claims
 -- it, so a row is sent at most once. cancelled_at hides the banner and stops an
 -- unsent row. created_by has no foreign key: deleting that admin must not block.
--- Additive and idempotent. Plain CREATE INDEX (not CONCURRENTLY) because the
+-- Additive and idempotent. Plain index builds (not CONCURRENTLY) because the
 -- runner may wrap migrations in a transaction (see 057).
 CREATE TABLE IF NOT EXISTS festival_announcements (
   id              TEXT PRIMARY KEY,
