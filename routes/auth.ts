@@ -369,7 +369,15 @@ export default function createAuthRoutes(deps: any): Router {
           return sendError(res, 401, 'Invalid or expired refresh token', ErrorCodes.TOKEN_EXPIRED);
         }
 
-        const user = await getUserById(stored.userId);
+        // Spend the old token atomically before minting anything: of two
+        // concurrent calls with one token, only one wins the claim.
+        const claimed = await stores.refreshTokens.claim(hashedToken);
+        if (!claimed) {
+          log.warn('auth:refresh-race', { userId: stored.userId });
+          return sendError(res, 401, 'Invalid or expired refresh token', ErrorCodes.TOKEN_EXPIRED);
+        }
+
+        const user = await getUserById(claimed.userId);
         if (!user) {
           return sendError(res, 401, 'User not found', ErrorCodes.AUTH_REQUIRED);
         }
@@ -378,15 +386,13 @@ export default function createAuthRoutes(deps: any): Router {
         const newSessionToken = await createUserSession(user.id, user.username, deviceOf(req));
         setUserSessionCookie(res, newSessionToken);
 
-        // Rotate refresh token (old one marked revoked, new one issued)
         const newRefreshToken = createOpaqueId('rt');
-        const newRefreshHash = hashToken(newRefreshToken);
-        await stores.refreshTokens.rotate(
-          hashedToken,
-          newRefreshHash,
-          hashToken(newSessionToken),
-          new Date(Date.now() + config.REFRESH_TOKEN_TTL),
-        );
+        await stores.refreshTokens.create({
+          token: hashToken(newRefreshToken),
+          userId: user.id,
+          sessionToken: hashToken(newSessionToken),
+          expiresAt: new Date(Date.now() + config.REFRESH_TOKEN_TTL),
+        });
 
         const { serializePublicUser } = deps;
         const _roles = await stores.roles.getUserRoles(user.id);

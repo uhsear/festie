@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { describe, it, beforeEach, mock } from 'node:test';
 
 import {
@@ -450,5 +451,82 @@ describe('rate-limiting: SOS active state', () => {
     assert.deepEqual(await clearSosActive(redis, 'crew-1', 'user-a'), { wasActive: true });
     assert.deepEqual(await clearSosActive(redis, 'crew-1', 'user-b'), { wasActive: false });
     assert.deepEqual((redis.hdel.mock.calls as any[])[0].arguments, ['sos:raisers:crew-1', 'user-a']);
+  });
+});
+
+describe('rate-limiting: scoped rateLimit with unvalidated tokens', () => {
+  const tokenDeps = () =>
+    makeDeps({ resolveRequestToken: (req: any) => ({ token: req.headers['x-user-token'] || null }) });
+  const tokenReq = (token: string) => mockReq({ headers: { 'x-user-token': token } });
+  const freshToken = () => crypto.randomUUID();
+
+  it('caps one IP that sends a new random token on every request', async () => {
+    const max = 5;
+    const middleware = createRateLimiters(tokenDeps()).rateLimit(max, 'join-preview');
+    const statuses: any[] = [];
+    for (let i = 0; i < 11 * max; i++) {
+      const res = mockRes();
+      await middleware(tokenReq(freshToken()), res, () => {});
+      statuses.push(res._status);
+    }
+    assert.ok(statuses.slice(-max).every((s) => s === 429), 'last max requests are limited');
+    assert.equal(statuses.slice(0, 10 * max).filter((s) => s === 429).length, 0);
+  });
+
+  it('keeps per-token buckets for many guests behind one IP', async () => {
+    const max = 10;
+    const middleware = createRateLimiters(tokenDeps()).rateLimit(max, 'join-preview');
+    const tokens = Array.from({ length: 20 }, freshToken);
+    let passed = 0;
+    let lastRes: any = null;
+    for (let round = 0; round < max / 2; round++) {
+      for (const token of tokens) {
+        lastRes = mockRes();
+        await middleware(tokenReq(token), lastRes, () => { passed += 1; });
+      }
+    }
+    assert.equal(passed, tokens.length * (max / 2));
+    // The IP bucket (100 of 100 used) is closer to its limit than any token bucket.
+    assert.equal(lastRes._headers['X-RateLimit-Limit'], String(max * 10));
+    assert.equal(lastRes._headers['X-RateLimit-Remaining'], '0');
+  });
+
+  it('still limits a single token at max', async () => {
+    const middleware = createRateLimiters(tokenDeps()).rateLimit(2, 'join-preview');
+    const token = freshToken();
+    for (let i = 0; i < 2; i++) await middleware(tokenReq(token), mockRes(), () => {});
+    const res = mockRes();
+    await middleware(tokenReq(token), res, () => {});
+    assert.equal(res._status, 429);
+    assert.equal(res._headers['X-RateLimit-Limit'], '2');
+  });
+
+  it('keys a signed-in user by user id, ignoring the IP ceiling', async () => {
+    const deps = tokenDeps();
+    const middleware = createRateLimiters(deps).rateLimit(2, 'join-preview');
+    const req = () => mockReq({ user: { userId: 'u1' }, headers: { 'x-user-token': freshToken() } });
+    for (let i = 0; i < 2; i++) await middleware(req(), mockRes(), () => {});
+    const res = mockRes();
+    await middleware(req(), res, () => {});
+    assert.equal(res._status, 429);
+    assert.deepEqual([...deps.state.routeRateLimits.keys()], ['join-preview:user:u1']);
+  });
+
+  it('skips the IP ceiling at an app-level mount, where signed-in sessions arrive without req.user', async () => {
+    const max = 3;
+    const deps = tokenDeps();
+    // Mounted as lib/middleware.ts mounts /api/v1/crews: before userAuth, so req.user is unset.
+    const middleware = createRateLimiters(deps).rateLimit(max, 'crews', { anonIpCap: false });
+    const tokens = Array.from({ length: 12 }, freshToken);
+    let passed = 0;
+    for (let round = 0; round < max; round++) {
+      for (const token of tokens) await middleware(tokenReq(token), mockRes(), () => { passed += 1; });
+    }
+    assert.equal(passed, tokens.length * max);
+    assert.ok(passed > 10 * max);
+    assert.ok(![...deps.state.routeRateLimits.keys()].some((k: string) => k.startsWith('crews:ip:')));
+    const res = mockRes();
+    await middleware(tokenReq(tokens[0]!), res, () => {});
+    assert.equal(res._status, 429, 'each session keeps its own max');
   });
 });
