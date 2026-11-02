@@ -152,6 +152,27 @@ describe('routes/crew-nudge.ts — POST /:crewId/members/:userId/nudge', () => {
     assertNoPush(deps);
   });
 
+  test('a recipient with 6 nudges from the crew in the last hour gets no more', async () => {
+    const redis = makeFakeRedis();
+    const now = Date.now();
+    for (let i = 0; i < 6; i++) await redis.zadd('nudge-in:user-2', now - i * 60_000, `other-${i}:${now}`);
+    const { app, deps } = await buildApp({ redis });
+    const res = await request(app).post(URL).send({});
+    assert.equal(res.status, 429);
+    assert.equal(res.body.error.code, 'RATE_LIMITED');
+    assert.equal(await redis.get('nudge:crew-1:user-1:user-2'), null);
+    assertNoPush(deps);
+  });
+
+  test('nudges older than an hour do not count toward the recipient cap', async () => {
+    const redis = makeFakeRedis();
+    const old = Date.now() - 61 * 60_000;
+    for (let i = 0; i < 6; i++) await redis.zadd('nudge-in:user-2', old, `other-${i}:${old}`);
+    const { app } = await buildApp({ redis });
+    const res = await request(app).post(URL).send({});
+    assert.equal(res.status, 200);
+  });
+
   test('a Redis set that throws is 503, logged at warn, and sends nothing', async () => {
     const redis = makeFakeRedis();
     redis.set = async () => {

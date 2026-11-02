@@ -9,6 +9,9 @@ import type { RouteDeps } from '../lib/types';
 import type { crewIdUserIdParams } from '../lib/schemas';
 
 const LIMIT_MS = 5 * 60_000;
+// Nudges skip quiet hours (owner decision 2026-11-02), so cap what one person can receive from the whole crew.
+const RECIPIENT_WINDOW_MS = 60 * 60_000;
+const RECIPIENT_MAX = 6;
 
 /**
  * "Looking for you": one crew member tells another, by push, that they are
@@ -73,10 +76,21 @@ export default function createCrewNudgeRoutes(deps: RouteDeps) {
         }
 
         const key = `nudge:${crewId}:${fromId}:${toId}`;
+        const inboxKey = `nudge-in:${toId}`;
+        const now = Date.now();
         let ok: unknown;
         let pttl = 0;
         try {
+          const recent = await redis.zrangebyscore(inboxKey, now - RECIPIENT_WINDOW_MS, '+inf');
+          if (recent.length >= RECIPIENT_MAX) {
+            res.set('Retry-After', '600');
+            return sendError(res, 429, "They've had several of these in the last hour. Try a message instead.", ErrorCodes.RATE_LIMITED);
+          }
           ok = await redis.set(key, '1', 'PX', LIMIT_MS, 'NX');
+          if (ok === 'OK') {
+            await redis.zadd(inboxKey, now, `${fromId}:${now}`);
+            await redis.pexpire(inboxKey, RECIPIENT_WINDOW_MS);
+          }
           if (ok !== 'OK') pttl = Number(await redis.pttl(key));
         } catch (err) {
           log.warn('crew nudge limit failed', { error: (err as Error).message, crewId });
