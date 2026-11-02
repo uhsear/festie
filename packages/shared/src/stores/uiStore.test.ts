@@ -260,7 +260,7 @@ describe('uiStore', () => {
       expect(useUIStore.getState().introReplay).toBe(true);
       useUIStore.getState().setTheme('daylight');
       const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
-      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true });
+      expect(parsed.state).toEqual({ theme: 'daylight', followSystemTheme: false, hapticsEnabled: true });
       useUIStore.getState().setTheme('stage');
       useUIStore.getState().setIntroReplay(false);
     });
