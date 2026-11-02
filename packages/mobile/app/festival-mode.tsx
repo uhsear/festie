@@ -21,6 +21,7 @@ import EmptyState from '../components/EmptyState';
 import FreshnessChip from '../components/FreshnessChip';
 import OfflineStatusChip from '../components/OfflineStatusChip';
 import WeatherStrip from '../components/WeatherStrip';
+import CaughtNowCard from '../components/CaughtNowCard';
 import { DaylightToggle, LowPowerToggle, LowPowerIndicator } from '../components/LowPowerControls';
 import { CrewNow, CrewPrompt, CrewWrapUp, MeetNow, NowHero, UpNext } from '../components/NowSurface';
 import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref } from '../lib/dayOfRoutes';
@@ -138,6 +139,17 @@ export default function FestivalModeScreen() {
           />
 
           <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
+
+          {user ? (
+            <CaughtNowCard
+              key={currentFestival.id}
+              festivalId={currentFestival.id}
+              nowMs={nowMs}
+              timeZone={timeZone}
+              getStageName={getStageName}
+              b2bSeparator={currentFestival.b2bSeparator}
+            />
+          ) : null}
 
           {!user ? (
             <CrewPrompt

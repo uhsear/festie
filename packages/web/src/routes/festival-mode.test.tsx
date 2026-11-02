@@ -35,6 +35,7 @@ vi.mock('../components/crew/SosRaiseButton', () => ({
 }));
 vi.mock('../components/features/LowPowerToggle', () => ({ default: () => <div data-testid="low-power-toggle" /> }));
 vi.mock('../components/festival-mode/WeatherStrip', () => ({ default: () => <div data-testid="weather-strip" /> }));
+vi.mock('../components/festival-mode/CaughtNowCard', () => ({ default: () => <div data-testid="caught-now" /> }));
 vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => <div data-testid="offline-chip" /> }));
 vi.mock('../components/features/LowPowerIndicator', () => ({ default: () => null }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({

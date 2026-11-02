@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
+import type { WrapCaughtSet, WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
 import { buildWrapCards, isWrapUnlocked, selectSetsToRate, summarizePlan, wrapByline, wrapCardShareText } from './wrap';
 
 const festival: WrapFestival = {
@@ -323,5 +323,39 @@ describe('wrapCardShareText', () => {
     expect(wrapCardShareText({ kind: 'plan', kicker: 'YOUR PLAN', headline: 'h' }, 'F')).toBe(
       'My F wrap\nYour plan: h\nfestie.us',
     );
+  });
+});
+
+describe('added caught sets (caughtExtra)', () => {
+  const extra = (over: Partial<WrapCaughtSet> & { setId: string }): WrapCaughtSet => ({
+    artist: over.setId.toUpperCase(),
+    stageId: 'st9',
+    stageName: 'Forest',
+    dayIndex: 1,
+    startTime: '20:00',
+    endTime: '22:00',
+    rating: null,
+    note: null,
+    caught: true,
+    ...over,
+  });
+
+  it('adds hours and stages from added sets', () => {
+    const s = summarizePlan([planned({ setId: 'a', caught: true })], [extra({ setId: 'x' })]);
+    expect(s).toMatchObject({ planned: 1, hours: 3, stages: 2 });
+  });
+
+  it('keeps every existing result when called with one argument', () => {
+    expect(summarizePlan([planned({ setId: 'a' })])).toMatchObject({ hours: 1, stages: 1 });
+  });
+
+  it('emits the summary card for a wrap with only caughtExtra', () => {
+    const cards = buildWrapCards(wrap({ caughtExtra: [extra({ setId: 'x' })] }));
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ kind: 'summary', headline: '2.0 hours of music' });
+  });
+
+  it('behaves as before when caughtExtra is undefined', () => {
+    expect(buildWrapCards(wrap({ caughtExtra: undefined }))).toEqual([]);
   });
 });

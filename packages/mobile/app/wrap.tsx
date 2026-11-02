@@ -199,6 +199,15 @@ export default function WrapScreen() {
           </View>
         ) : null}
 
+        <TouchableOpacity
+          onPress={() => router.push({ pathname: '/caught', params: { festival: festivalId } })}
+          style={styles.momentLink}
+          accessibilityRole="link"
+          accessibilityLabel="What you caught"
+        >
+          <Text style={styles.momentLinkText}>What you caught</Text>
+        </TouchableOpacity>
+
         <Hero value={heroValue} label={heroLabel} />
 
         <View style={styles.shareBlock}>

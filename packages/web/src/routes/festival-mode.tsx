@@ -20,6 +20,7 @@ import { useLastKnownFix } from '../hooks/useLastKnownFix';
 import NowHero from '../components/festival-mode/NowHero';
 import UpNextList from '../components/festival-mode/UpNextList';
 import WeatherStrip from '../components/festival-mode/WeatherStrip';
+import CaughtNowCard from '../components/festival-mode/CaughtNowCard';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
 import { CrewNowSection, CrewPrompt, CrewWrapUpCard, MeetNowCard } from '../components/festival-mode/CrewNow';
@@ -139,6 +140,18 @@ function FestivalModeViewInner() {
           <div className="order-1">
             <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
           </div>
+          {user ? (
+            <div className="order-1">
+              <CaughtNowCard
+                key={currentFestival.id}
+                festivalId={currentFestival.id}
+                nowMs={nowMs}
+                timeZone={timeZone}
+                getStageName={getStageName}
+                b2bSeparator={currentFestival.b2bSeparator}
+              />
+            </div>
+          ) : null}
           <div className="order-4">
             <UpNextList
               items={upNext}

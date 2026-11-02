@@ -1,7 +1,7 @@
 import { isGuestBlocked } from './authRoutes';
 
 describe('isGuestBlocked', () => {
-  it.each([['wrap'], ['rate'], ['crew-plan'], ['crew-compare'], ['admin'], ['(tabs)', 'account']])(
+  it.each([['wrap'], ['rate'], ['caught'], ['crew-plan'], ['crew-compare'], ['admin'], ['(tabs)', 'account']])(
     'blocks %j',
     (...segments) => {
       expect(isGuestBlocked(segments)).toBe(true);

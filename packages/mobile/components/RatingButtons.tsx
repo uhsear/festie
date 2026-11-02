@@ -43,6 +43,10 @@ interface RatingButtonsProps {
   onRated?: (rating: number) => void;
   /** Show the one-line memory field once a rating exists. Default true. */
   showMemory?: boolean;
+  /** Seed the existing rating and note, and skip the per-instance GET. For lists that already hold them. */
+  initial?: { rating: number | null; note: string | null };
+  /** Hide the crowd and crew rating lines (a list row would otherwise fetch them per row). */
+  compact?: boolean;
 }
 
 const MEMORY_MAX = 140;
@@ -55,13 +59,14 @@ const MEMORY_MAX = 140;
  * optimistic local useState that rolls back on error. CONFIRMED endpoints:
  * GET /ratings/festival/:festivalId (api.get unwraps the success envelope to
  * the { ratings } object), POST /ratings/:setId { rating }, DELETE
- * /ratings/:setId.
+ * /ratings/:setId. Pass `initial` to skip the GET and `compact` to hide the
+ * crowd/crew summary when rendering many rows.
  */
-export default function RatingButtons({ setId, festivalId, onRated, showMemory = true }: RatingButtonsProps) {
+export default function RatingButtons({ setId, festivalId, onRated, showMemory = true, initial, compact = false }: RatingButtonsProps) {
   const styles = useStyles();
   const t = useTokens();
   const haptics = useHaptics();
-  const [current, setCurrent] = useState<number | null>(null);
+  const [current, setCurrent] = useState<number | null>(initial?.rating ?? null);
   const [busy, setBusy] = useState(false);
   // Set when an optimistic write rolls back, so the failure is VISIBLE (not just
   // a haptic, which is silent for users with haptics disabled). Mobile ratings
@@ -71,8 +76,8 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
   // Until the initial GET resolves we don't know if there's an existing rating,
   // so we hold the controls at a slightly reduced opacity and show "Loading…"
   // rather than flashing the "Tap to rate" hint and then a filled state.
-  const [loaded, setLoaded] = useState(false);
-  const [note, setNote] = useState('');
+  const [loaded, setLoaded] = useState(initial !== undefined);
+  const [note, setNote] = useState(initial?.note ?? '');
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [memorySaved, setMemorySaved] = useState(false);
@@ -87,7 +92,9 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
   }, [memorySaved]);
 
   // Fetch the current rating for this set on mount.
+  const seeded = initial !== undefined;
   useEffect(() => {
+    if (seeded) return;
     let cancelled = false;
     (async () => {
       // No festival id → nothing to fetch; just release the loading affordance
@@ -114,7 +121,7 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
     return () => {
       cancelled = true;
     };
-  }, [festivalId, setId]);
+  }, [festivalId, setId, seeded]);
 
   const handlePress = useCallback(
     async (n: number) => {
@@ -311,7 +318,7 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
           ) : null}
         </View>
       ) : null}
-      <SetRatingSummary setId={setId} festivalId={festivalId} />
+      {compact ? null : <SetRatingSummary setId={setId} festivalId={festivalId} />}
     </View>
   );
 }

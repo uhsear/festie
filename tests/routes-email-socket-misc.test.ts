@@ -1426,6 +1426,7 @@ describe('routes/ratings', () => {
           getWrapStats: mock.fn(async () => ({ total: 5, avgRating: 4.2 })),
           getWrapFestival: mock.fn(async () => ({ id: 'fest-1', name: 'Test Fest', timeZone: null, days: [] })),
           getPlannedForWrap: mock.fn(async () => []),
+          getCaughtExtraForWrap: mock.fn(async () => []),
           setCaught: mock.fn(async (_userId, setId, caught) => ({ setId, caught })),
         },
         crews: {
@@ -1556,8 +1557,10 @@ describe('routes/ratings', () => {
     assert.ok(Array.isArray(res.body.data.allRatings));
     assert.deepEqual(res.body.data.festival, { id: 'fest-1', name: 'Test Fest', timeZone: null, days: [] });
     assert.deepEqual(res.body.data.planned, []);
+    assert.deepEqual(res.body.data.caughtExtra, []);
     assert.equal(res.body.data.crew, null);
     assert.equal(deps.stores.ratings.getPlannedForWrap.mock.calls[0].arguments[2], null);
+    assert.deepEqual(deps.stores.ratings.getCaughtExtraForWrap.mock.calls[0].arguments, ['user-1', 'fest-1']);
   });
 
   test('GET /wrap/:festivalId — 404 for an unknown festival', async () => {

@@ -41,6 +41,8 @@ interface LifetimeResponse {
   totals: LifetimeTotals;
   byFestival: FestivalRow[];
   topArtists: TopArtist[];
+  /** Absent on an older server. */
+  seenMost?: { artist: string; festivals: number }[];
 }
 
 interface AccountHistorySectionProps {
@@ -151,9 +153,37 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
   const totals = data?.totals;
   const byFestival = data?.byFestival ?? [];
   const topArtists = data?.topArtists ?? [];
+  const seenMost = (data?.seenMost ?? []).slice(0, 5);
+
+  const seenMostCard =
+    seenMost.length > 0 ? (
+      <View style={styles.card}>
+        <View style={styles.cardHead}>
+          <Ionicons name="repeat-outline" size={14} color={t.colors.text.secondary} style={styles.cardHeadIcon} />
+          <Text style={styles.cardLabel} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Artists you&apos;ve seen most
+          </Text>
+        </View>
+        {seenMost.map((r, i) => (
+          <View
+            key={r.artist}
+            accessible
+            accessibilityLabel={`${r.artist}, ${r.festivals} festivals`}
+            style={[styles.artistRow, i === seenMost.length - 1 && styles.lastRow]}
+          >
+            <Text style={styles.artistName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {r.artist}
+            </Text>
+            <Text style={styles.artistMeta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {r.festivals} festivals
+            </Text>
+          </View>
+        ))}
+      </View>
+    ) : null;
 
   if (!totals || totals.totalRated === 0) {
-    return (
+    const empty = (
       <View style={[styles.card, styles.centered]}>
         <View style={styles.emptyIcon}>
           <Ionicons name="time-outline" size={26} color={t.colors.accent.aqua} />
@@ -168,6 +198,13 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
             onPress={() => router.push({ pathname: '/rate', params: { festival: currentFestival.id } })}
           />
         ) : null}
+      </View>
+    );
+    if (!seenMostCard) return empty;
+    return (
+      <View style={styles.wrap}>
+        {empty}
+        {seenMostCard}
       </View>
     );
   }
@@ -247,6 +284,8 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
           ))}
         </View>
       ) : null}
+
+      {seenMostCard}
     </Wrapper>
   );
 }
