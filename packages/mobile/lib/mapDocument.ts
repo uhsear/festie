@@ -307,6 +307,9 @@ export function buildMapHtml(
     // appears, not on every position tick (which would yank the camera as peers
     // move). RN owns the one-shot SOS framing separately (__festieFlyTo).
     var FRAMED_LIVE = false;
+    // Camera padding: the right side clears the find-me and Drop pin column, the
+    // top clears the chip bar.
+    var FIT_PADDING = { top: 72, bottom: 72, left: 40, right: 72 };
 
     function post(msg) {
       if (window.ReactNativeWebView) {
@@ -331,8 +334,15 @@ export function buildMapHtml(
         el.setAttribute('role', 'button');
         el.setAttribute('aria-label', aLabel);
         el.setAttribute('title', aLabel);
+        // shortcut: the name popup stays until the RN place card handles
+        // place-select (T27 P7); then drop setPopup and stop propagation here.
         var popupHtml = '<strong>' + escapeHtml(p.label) + '</strong>' +
           (p.sublabel ? '<br/>' + escapeHtml(p.sublabel) : '');
+        (function (pin) {
+          el.addEventListener('click', function () {
+            post({ type: 'place-select', id: pin.id, kind: 'meeting-point' });
+          });
+        })(p);
         var marker = new maplibregl.Marker({ element: el })
           .setLngLat([p.longitude, p.latitude])
           .setPopup(new maplibregl.Popup({ offset: 16 }).setHTML(popupHtml))
@@ -345,7 +355,7 @@ export function buildMapHtml(
         }
       });
       if (bounds && pins.length > 1) {
-        map.fitBounds(bounds, { padding: 48, maxZoom: 16, duration: 0 });
+        map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 16, duration: 0 });
       }
     }
 
@@ -422,7 +432,7 @@ export function buildMapHtml(
       // on every position tick as peers move.
       if (bounds && !HAD_PINS && !FRAMED_LIVE && items.length > 0) {
         FRAMED_LIVE = true;
-        map.fitBounds(bounds, { padding: 64, maxZoom: 16, duration: 300 });
+        map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 16, duration: 300 });
       }
     }
 
@@ -453,7 +463,14 @@ export function buildMapHtml(
         el.setAttribute('role', 'button');
         el.setAttribute('aria-label', aLabel);
         el.setAttribute('title', aLabel);
+        // shortcut: the name popup stays until the RN place card handles
+        // place-select (T27 P7); then drop setPopup and stop propagation here.
         var popupHtml = '<strong>' + escapeHtml(p.label) + '</strong>';
+        (function (pin) {
+          el.addEventListener('click', function () {
+            post({ type: 'place-select', id: pin.id, kind: pin.kind === 'stage' ? 'stage' : 'amenity' });
+          });
+        })(p);
         var marker = new maplibregl.Marker({ element: el })
           .setLngLat([p.longitude, p.latitude])
           .setPopup(new maplibregl.Popup({ offset: 14 }).setHTML(popupHtml))
@@ -701,7 +718,7 @@ export function buildMapHtml(
         // checked on the RN side before injection.
         window.__festieFitBounds = function (west, south, east, north) {
           try {
-            map.fitBounds([[west, south], [east, north]], { padding: 48, maxZoom: 17, duration: 0 });
+            map.fitBounds([[west, south], [east, north]], { padding: FIT_PADDING, maxZoom: 17, duration: 0 });
             post({ type: 'fitted' });
           } catch (err) { post({ type: 'error', reason: 'fitbounds' }); }
         };

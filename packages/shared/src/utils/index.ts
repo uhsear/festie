@@ -19,6 +19,7 @@ export * from './mapZones';
 export * from './mapSiteplan';
 export * from './mapStyle';
 export * from './mapAuthoring';
+export * from './mapPlace';
 export * from './ongoingNotification';
 export * from './crewNudges';
 export * from './pickConflicts';
