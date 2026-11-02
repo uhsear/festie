@@ -17,7 +17,8 @@ describe('identities store (database)', { skip }, () => {
   let identities: ReturnType<typeof createIdentitiesStore>;
 
   const mkUser = (id: string, passwordHash: string | null) =>
-    pool.query('INSERT INTO users (id, username, password_hash, created_at) VALUES ($1, $1, $2, NOW())', [
+    pool.query('INSERT INTO users (id, username, password_hash, created_at) VALUES ($1, $2, $3, NOW())', [
+      id,
       id,
       passwordHash,
     ]);

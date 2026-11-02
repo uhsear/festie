@@ -68,6 +68,7 @@ after(async () => {
   await withPool(async (pool) => {
     const like = [`${RUN}%`];
     const ids = '(SELECT id FROM users WHERE username LIKE $1)';
+    await pool.query(`DELETE FROM email_verification_tokens WHERE user_id IN ${ids}`, like);
     await pool.query(`DELETE FROM refresh_tokens WHERE user_id IN ${ids}`, like);
     await pool.query(`DELETE FROM user_sessions WHERE user_id IN ${ids}`, like);
     await pool.query(`DELETE FROM user_roles WHERE user_id IN ${ids}`, like);
