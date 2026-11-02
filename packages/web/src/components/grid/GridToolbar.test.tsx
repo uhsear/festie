@@ -5,6 +5,8 @@ import GridToolbar from './GridToolbar';
 function renderToolbar(overrides: Partial<React.ComponentProps<typeof GridToolbar>> = {}) {
   const props = {
     clashCount: 0,
+    pickedCount: 0,
+    viewAsOn: false,
     onShowClash: vi.fn(),
     zoom: 1,
     onZoom: vi.fn(),
@@ -24,7 +26,7 @@ describe('GridToolbar', () => {
 
   it('labels the chip for one and for several clashes', () => {
     const { onShowClash } = renderToolbar({ clashCount: 1 });
-    const one = screen.getByRole('button', { name: 'You have 1 schedule clash. Show it.' });
+    const one = screen.getByRole('button', { name: 'You have 1 schedule clash. Open it in Picks.' });
     expect(one).toHaveTextContent('1 clash');
     fireEvent.click(one);
     expect(onShowClash).toHaveBeenCalledOnce();
@@ -32,8 +34,24 @@ describe('GridToolbar', () => {
 
   it('labels the chip for three clashes', () => {
     renderToolbar({ clashCount: 3 });
-    const three = screen.getByRole('button', { name: 'You have 3 schedule clashes. Show the first one.' });
+    const three = screen.getByRole('button', { name: 'You have 3 schedule clashes. Open them in Picks.' });
     expect(three).toHaveTextContent('3 clashes');
+  });
+
+  it('says No clashes on a day with picks and no clash, as text', () => {
+    renderToolbar({ pickedCount: 2 });
+    expect(screen.getByText('No clashes')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /No clashes/ })).not.toBeInTheDocument();
+  });
+
+  it('says nothing with no picks or while View as is on', () => {
+    renderToolbar({ pickedCount: 0 });
+    expect(screen.queryByText('No clashes')).not.toBeInTheDocument();
+  });
+
+  it('hides No clashes while View as is on', () => {
+    renderToolbar({ pickedCount: 2, viewAsOn: true });
+    expect(screen.queryByText('No clashes')).not.toBeInTheDocument();
   });
 
   it('steps zoom by one level from the middle', () => {

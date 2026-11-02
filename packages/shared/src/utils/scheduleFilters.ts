@@ -1,4 +1,4 @@
-import type { FestivalSet, Stage, Priority } from '../types/domain';
+import type { FestivalSet, Stage, Priority, Profile } from '../types/domain';
 import type { FestivalPhase } from './festivalTime';
 import { setMatchesSearch } from './setSearch';
 import { byStartTime } from './scheduleFormat';
@@ -148,7 +148,25 @@ export function toggleGenreFilter(active: readonly string[], genre: string): str
     : [...active, genre];
 }
 
-/** Stage, genre, then "My picks" (only when a pick exists), then search. Does not filter by day. */
+/** The viewed crew member, or null when the id is gone or the person is not in the active crew. */
+export function viewAsTarget(
+  profiles: ReadonlyArray<Pick<Profile, 'id' | 'userId' | 'name' | 'picks'>>,
+  profileId: string | null,
+  crewUserIds: ReadonlySet<string>,
+): { profileId: string; name: string; picks: Record<string, Priority> } | null {
+  if (!profileId) return null;
+  const profile = profiles.find((p) => p.id === profileId);
+  if (!profile || !crewUserIds.has(profile.userId)) return null;
+  return { profileId: profile.id, name: profile.name?.trim() || 'Crew member', picks: profile.picks ?? {} };
+}
+
+export const viewAsButtonLabel = (name: string): string => `View as ${name}`;
+export const viewAsPicksLabel = (name: string): string => `${name}'s picks`;
+
+/**
+ * Stage, genre, then "My picks" (only when a pick exists), then search. Does not filter by day.
+ * `viewAsPicks` always filters, even when empty, and replaces "My picks".
+ */
 export function filterScheduleSets(
   sets: readonly FestivalSet[],
   o: {
@@ -159,20 +177,24 @@ export function filterScheduleSets(
     query: string;
     /** Empty or missing means off. */
     genres?: readonly string[];
+    /** A crew mate's picks ("View as"). Undefined means off. */
+    viewAsPicks?: Picks;
   },
 ): FestivalSet[] {
   const wantedGenres = new Set((o.genres ?? []).map((g) => g.toLocaleLowerCase()));
   const stageOn = isStageFilterActive(o.activeStages, o.stages.length);
-  const mineOn = o.onlyMine && hasAnyPick(o.picks);
+  const viewAsOn = o.viewAsPicks !== undefined;
+  const mineOn = !viewAsOn && o.onlyMine && hasAnyPick(o.picks);
   return sets.filter((set) => {
     if (stageOn && !o.activeStages.includes(set.stageId)) return false;
     if (wantedGenres.size > 0 && !setGenres(set).some((g) => wantedGenres.has(g.toLocaleLowerCase()))) return false;
+    if (viewAsOn && !o.viewAsPicks?.[set.id]) return false;
     if (mineOn && !o.picks?.[set.id]) return false;
     return setMatchesSearch(set, o.query, o.stages as Stage[]);
   });
 }
 
-export type ScheduleEmptyReason = 'search' | 'picks' | 'stages' | 'genres' | 'day';
+export type ScheduleEmptyReason = 'search' | 'viewAs' | 'picks' | 'stages' | 'genres' | 'day';
 
 export function scheduleEmptyReason(o: {
   query: string;
@@ -180,8 +202,10 @@ export function scheduleEmptyReason(o: {
   hasAnyPick: boolean;
   stageFilterActive: boolean;
   genreFilterActive: boolean;
+  viewAsName?: string;
 }): ScheduleEmptyReason {
   if (o.query.trim() !== '') return 'search';
+  if (o.viewAsName !== undefined) return 'viewAs';
   if (o.onlyMine && o.hasAnyPick) return 'picks';
   if (o.stageFilterActive) return 'stages';
   if (o.genreFilterActive) return 'genres';
@@ -191,8 +215,15 @@ export function scheduleEmptyReason(o: {
 export function scheduleEmptyCopy(
   reason: Exclude<ScheduleEmptyReason, 'search'>,
   dayLabel: string,
+  name?: string,
 ): { title: string; message: string; actionLabel?: string } {
   switch (reason) {
+    case 'viewAs':
+      return {
+        title: `${name ?? 'Crew member'} has no picks on ${dayLabel}`,
+        message: "Show everyone's sets, or pick another day.",
+        actionLabel: 'Show everyone',
+      };
     case 'picks':
       return {
         title: 'No picks for this day yet',
@@ -260,9 +291,11 @@ export function scheduleResultsSummary(o: {
   activeStageCount: number;
   activeGenreCount?: number;
   tbaCount?: number;
+  viewAsName?: string;
 }): string {
   let text = `${o.count} ${o.count === 1 ? 'set' : 'sets'}`;
-  if (o.onlyMine) text += ' · my picks';
+  if (o.viewAsName !== undefined) text += ` · ${viewAsPicksLabel(o.viewAsName)}`;
+  else if (o.onlyMine) text += ' · my picks';
   if (o.activeStageCount > 0) text += ` · ${o.activeStageCount} ${o.activeStageCount === 1 ? 'stage' : 'stages'}`;
   if (o.activeGenreCount) text += ` · ${o.activeGenreCount} ${o.activeGenreCount === 1 ? 'genre' : 'genres'}`;
   if (o.tbaCount && o.tbaCount > 0) text += ` · ${o.tbaCount} TBA`;

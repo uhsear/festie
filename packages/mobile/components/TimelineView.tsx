@@ -17,7 +17,6 @@ import {
   fmtShort,
   formatTime,
   artistDisplayName,
-  pickClashTarget,
   type ClashMark,
   resolveFestivalTimeZone,
   selectNowNext,
@@ -342,7 +341,7 @@ export default function TimelineView({
     festivalTimeZone,
   );
   const reduceMotion = useReduceMotion();
-  const { count, marks, groups } = useDayClashes();
+  const { count, marks, picked } = useDayClashes();
   const { getOtherPicks } = usePicks();
   const { holdToPick } = useQuickPick();
   const crewCountBySet = useMemo(() => {
@@ -547,23 +546,6 @@ export default function TimelineView({
 
   const keyExtractor = useCallback((s: Stage) => s.id, []);
 
-  const showFirstClash = useCallback(() => {
-    const target = pickClashTarget(groups, new Set(visibleStages.map((st) => st.id)));
-    if (!target) return;
-    if (!target.visible) {
-      onSetPress(target.set);
-      return;
-    }
-    const stageId = target.set.stageId;
-    const index = visibleStages.findIndex((st) => st.id === stageId);
-    const y = Math.max(0, blockTop(target.set, timeBounds!.minMin) - ROW_HEIGHT);
-    // The map entry covers a column that FlatList windowing mounts later.
-    scrollYByStage.current.set(stageId, y);
-    handleUserScroll();
-    jumpToStage(index);
-    requestAnimationFrame(() => columnRefs.current.get(index)?.scrollTo({ y, animated: !reduceMotion }));
-  }, [groups, visibleStages, onSetPress, timeBounds, handleUserScroll, jumpToStage, reduceMotion]);
-
   if (!timeBounds) return null;
 
   return (
@@ -575,11 +557,9 @@ export default function TimelineView({
         </Text>
       </View>
 
-      {count > 0 ? (
-        <View style={styles.chipRow}>
-          <ClashChip count={count} onPress={showFirstClash} />
-        </View>
-      ) : null}
+      <View style={styles.chipRow}>
+        <ClashChip count={count} picked={picked} />
+      </View>
 
       {nextPickLabel ? (
         <View
