@@ -169,7 +169,7 @@ export interface AuditCsvEntry {
   requestId?: string | null;
 }
 
-function csvCell(value: string): string {
+export function csvCell(value: string): string {
   const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return /[",\r\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }

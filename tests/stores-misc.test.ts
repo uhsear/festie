@@ -332,6 +332,28 @@ describe('AuditStore', () => {
 
       assert.equal(result.nextCursor, '2026-07-16T09:00:00.000Z|r2');
     });
+
+    it('passes action lists as arrays in $2 and $10', async () => {
+      const pool = mockPool([{ rows: [] }]);
+      const store = createAuditStore(pool, mockUtils);
+      await store.query({ actions: ['a'], actionPrefixes: ['b.'] });
+
+      assert.deepEqual(pool.queries[0].params[1], ['a']);
+      assert.deepEqual(pool.queries[0].params[9], ['b.']);
+      const sql = normSql(pool.queries[0].sql);
+      assert.ok(sql.includes('unnest('));
+      assert.ok(sql.includes('starts_with(action'));
+      assert.ok(!/LIKE ANY/i.test(sql), '_ is a LIKE wildcard; prefixes must use starts_with');
+    });
+
+    it('turns empty action lists into null', async () => {
+      const pool = mockPool([{ rows: [] }]);
+      const store = createAuditStore(pool, mockUtils);
+      await store.query({ actions: [], actionPrefixes: [] });
+
+      assert.equal(pool.queries[0].params[1], null);
+      assert.equal(pool.queries[0].params[9], null);
+    });
   });
 
   describe('count()', () => {
@@ -350,6 +372,27 @@ describe('AuditStore', () => {
       const count = await store.count();
 
       assert.equal(count, 0);
+    });
+
+    it('passes action lists as arrays in $2 and $7', async () => {
+      const pool = mockPool([{ rows: [{ total: '0' }] }]);
+      const store = createAuditStore(pool, mockUtils);
+      await store.count({ actions: ['a'], actionPrefixes: ['b.'] });
+
+      assert.deepEqual(pool.queries[0].params[1], ['a']);
+      assert.deepEqual(pool.queries[0].params[6], ['b.']);
+      const sql = normSql(pool.queries[0].sql);
+      assert.ok(sql.includes('unnest('));
+      assert.ok(sql.includes('starts_with(action'));
+    });
+
+    it('turns empty action lists into null', async () => {
+      const pool = mockPool([{ rows: [{ total: '0' }] }]);
+      const store = createAuditStore(pool, mockUtils);
+      await store.count({ actions: [], actionPrefixes: [] });
+
+      assert.equal(pool.queries[0].params[1], null);
+      assert.equal(pool.queries[0].params[6], null);
     });
   });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { api, ApiClientError } from '../api';
-import { fetchAuditPage, exportAuditCsv, fetchAdminUsers, fetchAdminUserDetail, withReauth, describeRemovals, formatImportCounts, removalFromError } from '../admin';
+import { fetchAdminPickInsight, fetchAuditPage, exportAuditCsv, fetchAdminUsers, fetchAdminUserDetail, withReauth, describeRemovals, formatImportCounts, removalFromError } from '../admin';
 
 const jsonResponse = (status: number, body: unknown) =>
   ({
@@ -189,5 +189,15 @@ describe('ApiClientError.details', () => {
     const err = await api.put('/admin/festivals/f1', {}).catch((e: unknown) => e);
     expect((err as ApiClientError).details?.removal).toEqual({ days: 1, sets: 2, picks: 3, ratings: 0 });
     expect(removalFromError(err)).toEqual({ days: 1, sets: 2, picks: 3, ratings: 0 });
+  });
+});
+
+describe('fetchAdminPickInsight', () => {
+  it('encodes the festival id in the path', async () => {
+    const fixture = { festivalId: 'a b', sets: [], clashes: [] };
+    const fetchSpy = vi.fn(async () => jsonResponse(200, { data: fixture, error: null }));
+    vi.stubGlobal('fetch', fetchSpy);
+    expect(await fetchAdminPickInsight('a b')).toEqual(fixture);
+    expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toContain('/admin/analytics/festivals/a%20b/picks');
   });
 });
