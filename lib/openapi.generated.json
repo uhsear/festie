@@ -1541,6 +1541,13 @@
             "nullable": true,
             "type": "string"
           },
+          "inviteLocked": {
+            "type": "boolean"
+          },
+          "homeBasePlanB": {
+            "nullable": true,
+            "type": "string"
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -1621,6 +1628,8 @@
           "photoAlbumUrl",
           "totem_name",
           "totem_emoji",
+          "inviteLocked",
+          "homeBasePlanB",
           "members",
           "memberCount"
         ],
@@ -1728,6 +1737,32 @@
             "items": {
               "type": "string"
             }
+          },
+          "edited_by": {
+            "nullable": true,
+            "type": "string"
+          },
+          "edited_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "edit_was": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string"
+              },
+              "meetAt": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "editor_name": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -3182,6 +3217,9 @@
         "responses": {
           "200": {
             "description": "Joined crew"
+          },
+          "403": {
+            "description": "CREW_LOCKED: the crew is not taking new members"
           }
         }
       }
@@ -4837,11 +4875,47 @@
           "200": {
             "description": "Invite page with crew-specific Open Graph tags"
           },
+          "403": {
+            "description": "CREW_LOCKED: the crew is not taking new members"
+          },
           "404": {
             "description": "No crew has this code"
           },
           "410": {
             "description": "The invite code has expired"
+          }
+        }
+      }
+    },
+    "/join/{code}/save.ics": {
+      "get": {
+        "tags": [
+          "Deep Links"
+        ],
+        "summary": "Save a crew invite for later (one all-day calendar event for the festival dates)",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Calendar file",
+            "content": {
+              "text/calendar": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Redirect to the invite page when the invite cannot be saved"
           }
         }
       }

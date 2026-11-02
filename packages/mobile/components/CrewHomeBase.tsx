@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
 import { formatTime } from '@festie/shared/utils';
-import { COPY } from '@festie/shared/constants';
+import { COPY, planBLine } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { parseHomeBaseTime } from '../lib/homeBaseTime';
@@ -28,19 +28,23 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
   const styles = useStyles();
   const updateHomeBase = useCrewStore((s) => s.updateHomeBase);
 
+  const storedPlanB = useCrewStore((s) => (s.activeCrew?.id === crewId ? s.activeCrew.homeBasePlanB ?? '' : ''));
+
   const [editing, setEditing] = useState(false);
   const [loc, setLoc] = useState(location ?? '');
   const [timeValue, setTimeValue] = useState(time ?? '');
+  const [planB, setPlanB] = useState(storedPlanB);
   const [saving, setSaving] = useState(false);
   const [timeError, setTimeError] = useState<string | null>(null);
-  const [focusedField, setFocusedField] = useState<'location' | 'time' | null>(null);
+  const [focusedField, setFocusedField] = useState<'location' | 'time' | 'planB' | null>(null);
 
   // Keep the form in sync when the crew's stored values change underneath us.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- seed the editable form drafts from the store when another member updates the home base; can't be pure derived state because the user edits these locally before saving back.
     setLoc(location ?? '');
     setTimeValue(time ?? '');
-  }, [location, time]);
+    setPlanB(storedPlanB);
+  }, [location, time, storedPlanB]);
 
   const hasHomeBase = !!location;
   const timeDisplay = time && /^\d{2}:\d{2}$/.test(time) ? formatTime(time) : time;
@@ -61,6 +65,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
       await updateHomeBase(crewId, {
         location: trimmed,
         time: parsedTime,
+        planB: planB.trim() || null,
       });
       setEditing(false);
     } catch {
@@ -75,7 +80,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
     setTimeError(null);
     setSaving(true);
     try {
-      await updateHomeBase(crewId, { location: null, time: null });
+      await updateHomeBase(crewId, { location: null, time: null, planB: null });
       setEditing(false);
     } catch {
       // Error is surfaced via the crew store.
@@ -128,6 +133,19 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
           onBlur={() => setFocusedField((f) => (f === 'time' ? null : f))}
           accessibilityLabel="Home Base time"
         />
+        <TextInput
+          style={[styles.input, focusedField === 'planB' && styles.inputFocused]}
+          placeholder={COPY.homeBase.planBPlaceholder}
+          placeholderTextColor={t.colors.text.placeholder}
+          value={planB}
+          onChangeText={setPlanB}
+          maxLength={140}
+          returnKeyType="done"
+          onSubmitEditing={handleSave}
+          onFocus={() => setFocusedField('planB')}
+          onBlur={() => setFocusedField((f) => (f === 'planB' ? null : f))}
+          accessibilityLabel={COPY.homeBase.planBLabel}
+        />
         {timeError ? (
           <Text style={styles.errorText} accessibilityRole="alert">
             {timeError}
@@ -162,6 +180,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
         ) : (
           <Text style={styles.cardPlaceholder}>{COPY.homeBase.empty}</Text>
         )}
+        {hasHomeBase && storedPlanB ? <Text style={styles.hint}>{planBLine(storedPlanB)}</Text> : null}
         {hasHomeBase ? <Text style={styles.hint}>{COPY.homeBase.hint}</Text> : null}
       </View>
       {isOwner ? <Ionicons name="pencil" size={t.iconSize.compact} color={t.colors.text.secondary} /> : null}

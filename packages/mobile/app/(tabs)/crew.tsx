@@ -62,6 +62,7 @@ import CrewPhotoLink from '../../components/CrewPhotoLink';
 import CrewPolls from '../../components/CrewPolls';
 import CrewMeetingPoints from '../../components/CrewMeetingPoints';
 import CrewMyDays from '../../components/CrewMyDays';
+import CrewLockRow from '../../components/CrewLockRow';
 import MemberDayChips from '../../components/MemberDayChips';
 import CrewStatus from '../../components/CrewStatus';
 import { festivalForCrew } from '../../lib/crewFestival';
@@ -1077,6 +1078,7 @@ export default function CrewScreen() {
                       </TouchableOpacity>
                     ) : null}
                   </View>
+                  <CrewLockRow crewId={crew.id} isOwner={isOwner} />
                 </View>
               ) : null}
               {crewFestival ? (

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useCrewStore } from '@festie/shared/stores';
 
-vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }) }));
+const { toastMock, toastErrorMock } = vi.hoisted(() => ({ toastMock: vi.fn(), toastErrorMock: vi.fn() }));
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: toastMock, toastError: toastErrorMock }) }));
 vi.mock('./InviteQRDialog', () => ({ default: () => null }));
 
 import CrewInviteBar from './CrewInviteBar';
@@ -68,5 +70,47 @@ describe('CrewInviteBar', () => {
   it('keeps the plain Expired text for the owner', () => {
     renderBar({ expiresAt: past(), isOwner: true });
     expect(screen.getByText('Expired')).toBeInTheDocument();
+  });
+
+  describe('lock crew', () => {
+    const setCrewLocked = vi.fn();
+    const seed = (inviteLocked: boolean) => {
+      setCrewLocked.mockReset().mockResolvedValue({});
+      toastMock.mockClear();
+      useCrewStore.setState({ activeCrew: { id: 'c1', inviteLocked } as never, setCrewLocked });
+    };
+    afterEach(() => useCrewStore.setState({ activeCrew: null }));
+
+    it('shows the switch only to the owner, with an accessible name', () => {
+      seed(false);
+      const { unmount } = renderBar();
+      expect(screen.queryByRole('switch')).toBeNull();
+      unmount();
+      renderBar({ isOwner: true });
+      expect(screen.getByRole('switch', { name: 'Lock crew' })).toBeInTheDocument();
+    });
+
+    it('locks through the store and toasts', async () => {
+      seed(false);
+      renderBar({ isOwner: true });
+      await userEvent.setup().click(screen.getByRole('switch', { name: 'Lock crew' }));
+      expect(setCrewLocked).toHaveBeenCalledWith('c1', true);
+      await vi.waitFor(() => expect(toastMock).toHaveBeenCalledWith('Crew locked', 'success'));
+    });
+
+    it('toasts the failure fallback when the change fails', async () => {
+      seed(false);
+      const err = new Error('offline');
+      setCrewLocked.mockRejectedValue(err);
+      renderBar({ isOwner: true });
+      await userEvent.setup().click(screen.getByRole('switch', { name: 'Lock crew' }));
+      await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(err, "Couldn't change the lock. Try again."));
+    });
+
+    it('tells members the crew is locked', () => {
+      seed(true);
+      renderBar();
+      expect(screen.getByRole('status')).toHaveTextContent('Locked. Not taking new members.');
+    });
   });
 });

@@ -105,7 +105,7 @@ const PRIORITY_LABELS: Record<string, string> = { must: 'Must See', 'want-to-see
 const DEFAULT_SET_MINUTES = 60;
 
 /** `YYYY-MM-DD` plus `days`, as `YYYYMMDD` (UTC math, so no DST drift). */
-function addDaysCompact(date: string, days: number): string {
+export function addDaysCompact(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10).replace(/-/g, '');

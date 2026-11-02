@@ -35,6 +35,8 @@ export const ErrorCodes = {
   LAST_SIGN_IN_METHOD: 'LAST_SIGN_IN_METHOD',
   SIGNUP_EXPIRED: 'SIGNUP_EXPIRED',
   PASSWORD_ALREADY_SET: 'PASSWORD_ALREADY_SET',
+  // T54: an invite join or preview of a crew whose owner locked it. 403, not 423 (423 is account lockout).
+  CREW_LOCKED: 'CREW_LOCKED',
 } as const;
 
 // Errors that are safe to retry (transient failures)

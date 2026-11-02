@@ -292,7 +292,7 @@ export function generateOpenAPISpec(config: any) {
         post: { tags: ['Crews'], summary: 'Create crew', security: [{ bearerAuth: [] }], responses: { 201: { description: 'Crew created', ...jsonResponseRef('Crew') } } },
       },
       '/api/v1/crews/join/{code}': {
-        post: { tags: ['Crews'], summary: 'Join crew by invite code', security: [{ bearerAuth: [] }], parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Joined crew' } } },
+        post: { tags: ['Crews'], summary: 'Join crew by invite code', security: [{ bearerAuth: [] }], parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Joined crew' }, 403: { description: 'CREW_LOCKED: the crew is not taking new members' } } },
       },
       '/api/v1/crews/{crewId}/overlap': {
         get: { tags: ['Crews'], summary: 'Get crew pick overlap analysis', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Overlap data' } } },
@@ -397,7 +397,10 @@ export function generateOpenAPISpec(config: any) {
         get: { tags: ['Health'], summary: 'Health check with metrics', responses: { 200: { description: 'Health status' } } },
       },
       '/join/{code}': {
-        get: { tags: ['Deep Links'], summary: 'Crew invite page (HTML with share preview)', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Invite page with crew-specific Open Graph tags' }, 404: { description: 'No crew has this code' }, 410: { description: 'The invite code has expired' } } },
+        get: { tags: ['Deep Links'], summary: 'Crew invite page (HTML with share preview)', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Invite page with crew-specific Open Graph tags' }, 403: { description: 'CREW_LOCKED: the crew is not taking new members' }, 404: { description: 'No crew has this code' }, 410: { description: 'The invite code has expired' } } },
+      },
+      '/join/{code}/save.ics': {
+        get: { tags: ['Deep Links'], summary: 'Save a crew invite for later (one all-day calendar event for the festival dates)', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Calendar file', content: { 'text/calendar': { schema: { type: 'string' } } } }, 302: { description: 'Redirect to the invite page when the invite cannot be saved' } } },
       },
     },
     tags: [

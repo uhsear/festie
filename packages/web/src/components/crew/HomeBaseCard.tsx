@@ -4,7 +4,8 @@ import { api, formatTime, writeOutcomeOf, writeOutcomeMessage } from '@festie/sh
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import { X, Clock } from 'lucide-react';
-import { COPY } from '@festie/shared/constants';
+import { COPY, planBLine } from '@festie/shared/constants';
+import { useCrewStore } from '@festie/shared/stores';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import IconButton from '../ui/IconButton';
 import { inputBase } from '../../lib/styles';
@@ -34,16 +35,19 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
   const [editing, setEditing] = useState(false);
   const [loc, setLoc] = useState(currentLocation || '');
   const [time, setTime] = useState(currentTime && HHMM.test(currentTime) ? currentTime : '');
+  const homeBasePlanB = useCrewStore((s) => (s.activeCrew?.id === crewId ? s.activeCrew.homeBasePlanB ?? null : null));
+  const [planB, setPlanB] = useState(homeBasePlanB || '');
 
   // Keep form in sync if the parent-supplied values change (e.g. after another
   // user/tab saves a home base via socket).
   useEffect(() => {
     setLoc(currentLocation || '');
     setTime(currentTime && HHMM.test(currentTime) ? currentTime : '');
-  }, [currentLocation, currentTime]);
+    setPlanB(homeBasePlanB || '');
+  }, [currentLocation, currentTime, homeBasePlanB]);
 
   const save = useMutation({
-    mutationFn: (payload: { location: string | null; time: string | null }) => api.put(`/crews/${crewId}/home-base`, payload),
+    mutationFn: (payload: { location: string | null; time: string | null; planB: string | null }) => api.put(`/crews/${crewId}/home-base`, payload),
     onSuccess: async (result, payload) => {
       qc.invalidateQueries({ queryKey: ['crews'] });
       qc.invalidateQueries({ queryKey: ['crew', crewId] });
@@ -93,6 +97,17 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
           value={time}
           onChange={(e) => setTime(e.target.value)}
         />
+        <label className="block text-xs text-text-muted">
+          {COPY.homeBase.planBLabel}
+          <input
+            className={`${inputBase} min-h-11 mt-1`}
+            placeholder={COPY.homeBase.planBPlaceholder}
+            aria-label={COPY.homeBase.planBLabel}
+            value={planB}
+            onChange={(e) => setPlanB(e.target.value)}
+            maxLength={140}
+          />
+        </label>
         <Button
           variant="primary"
           isLoading={save.isPending}
@@ -101,6 +116,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
             save.mutate({
               location: loc.trim(),
               time: time || (currentTime && !HHMM.test(currentTime) ? currentTime : null),
+              planB: planB.trim() || null,
             })
           }
           className="w-full min-h-11"
@@ -111,7 +127,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
           <Button
             variant="ghost"
             isLoading={save.isPending}
-            onClick={() => save.mutate({ location: null, time: null })}
+            onClick={() => save.mutate({ location: null, time: null, planB: null })}
             className="w-full min-h-11"
           >
             Remove Home Base
@@ -140,6 +156,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
               )}
             </div>
             <p className="text-xs text-text-muted mt-0.5">{COPY.homeBase.hint}</p>
+            {homeBasePlanB && <p className="text-xs text-text-secondary mt-0.5 break-words">{planBLine(homeBasePlanB)}</p>}
             </>
           ) : (
             <span className="text-xs text-text-secondary">{COPY.homeBase.empty}</span>

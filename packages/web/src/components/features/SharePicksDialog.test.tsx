@@ -97,6 +97,22 @@ describe('SharePicksDialog', () => {
     );
   });
 
+  it('encodes the Plan B of a crew in this festival, never one from another festival', () => {
+    const planBOf = () => {
+      const decoded = decodePlanSnapshot(extractPlanSnapshotText(lastQRValue));
+      return decoded.ok && 'planB' in decoded.data ? decoded.data.planB : undefined;
+    };
+    Object.assign(crewState, { activeCrew: { festivalId: 'f1', homeBasePlanB: 'Top of the hour' } });
+    const first = render(<SharePicksDialog />);
+    open();
+    expect(planBOf()).toBe('Top of the hour');
+    first.unmount();
+    Object.assign(crewState, { activeCrew: { festivalId: 'f2', homeBasePlanB: 'Top of the hour' } });
+    render(<SharePicksDialog />);
+    open();
+    expect(planBOf()).toBeUndefined();
+  });
+
   it('puts a /p# URL in the QR that round-trips to the snapshot', () => {
     render(<SharePicksDialog />);
     open();

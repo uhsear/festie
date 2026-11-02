@@ -94,4 +94,26 @@ describe('PlanSnapshotPage', () => {
     render(<PlanSnapshotPage />);
     await waitFor(() => expect(screen.getByText('2 picks are no longer in the lineup.')).toBeInTheDocument());
   });
+
+  it('renders the Plan B line from a v2 code', async () => {
+    apiGet.mockResolvedValue(festival);
+    setHash(
+      encodePlanSnapshot({
+        festivalId: 'fest-1',
+        festivalName: 'Snap Fest',
+        picks: [{ setId: 'set-1', priority: 'must' }],
+        planB: 'Top of the hour',
+      }),
+    );
+    render(<PlanSnapshotPage />);
+    expect(await screen.findByText('If we lose each other: Top of the hour')).toBeInTheDocument();
+  });
+
+  it('renders a v1 code without a Plan B line', async () => {
+    apiGet.mockResolvedValue(festival);
+    setHash(snapshotHash([{ setId: 'set-1', priority: 'must' }]));
+    render(<PlanSnapshotPage />);
+    expect(await screen.findByText('Aurora')).toBeInTheDocument();
+    expect(screen.queryByText(/If we lose each other/)).toBeNull();
+  });
 });

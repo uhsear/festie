@@ -51,6 +51,18 @@ describe('crewRealtimeSink: sos:cleared clears only the raiser it names', () => 
   });
 });
 
+describe('crewRealtimeSink: onHomeBaseUpdated', () => {
+  it('passes planB through and omits it when the payload has none', () => {
+    const applyHomeBaseUpdate = vi.fn();
+    const api = { getState: () => ({ applyHomeBaseUpdate }) } as never;
+    const sink = createStoreSink(api);
+    sink.onHomeBaseUpdated('c1', { location: 'Gate', time: null, planB: 'Top of the hour' });
+    expect(applyHomeBaseUpdate).toHaveBeenLastCalledWith('c1', { location: 'Gate', time: null, planB: 'Top of the hour' });
+    sink.onHomeBaseUpdated('c1', { location: 'Gate', time: null });
+    expect(applyHomeBaseUpdate.mock.calls.at(-1)?.[1]).not.toHaveProperty('planB');
+  });
+});
+
 describe('crewRealtimeSink: onDaysUpdated', () => {
   it('reaches applyCrewDays', () => {
     const applyCrewDays = vi.fn();

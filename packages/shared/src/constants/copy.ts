@@ -21,8 +21,20 @@ export const COPY = {
   homeBase: {
     name: 'Home Base', set: 'Set Home Base', empty: "Tap to set your crew's Home Base",
     hint: "Your crew's main meeting spot. Only the crew owner can change it.", icon: 'homeBase',
+    planBLabel: 'Plan B (optional)', planBPlaceholder: 'Here at the top of each hour',
   },
-  meetingPoint: { one: 'Meeting point', many: 'Meeting points', add: 'New meeting point', edit: 'Edit meeting point' },
+  crewLock: {
+    label: 'Lock crew',
+    hint: "New people can't join with the invite. Unlock to let them in with the same code.",
+    lockedLine: 'Locked. Not taking new members.',
+    locked: 'Crew locked',
+    unlocked: 'Crew unlocked',
+    failed: "Couldn't change the lock. Try again.",
+  },
+  meetingPoint: {
+    one: 'Meeting point', many: 'Meeting points', add: 'New meeting point', edit: 'Edit meeting point',
+    noTime: 'no time',
+  },
   auth: {
     signIn: 'Sign in', signingIn: 'Signing in…', createAccount: 'Create account',
     creatingAccount: 'Creating account…', signOut: 'Sign out',
@@ -69,6 +81,9 @@ export const clashCount = (n: number): string => (n === 1 ? COPY.clash.one : `${
 export const clashChip = (n: number): string => (n === 1 ? '1 clash' : `${n} clashes`);
 export const clashChipA11y = (n: number): string =>
   n === 1 ? 'You have 1 schedule clash. Show it.' : `You have ${n} schedule clashes. Show the first one.`;
+export const planBLine = (text: string): string => `If we lose each other: ${text}`;
+export const meetingPointEditedBy = (name: string, was: string): string => `Edited by ${name}, was ${was}`;
+export const meetingPointEditedNoName = (was: string): string => `Edited, was ${was}`;
 export const clashesWith = (names: string[]): string => `Clashes with ${names.join(', ')}`;
 
 /** Inline clash prompt copy, shared by web and mobile ClashPrompt. */

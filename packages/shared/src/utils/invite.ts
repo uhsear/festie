@@ -58,13 +58,19 @@ export function formatInviteExpiry(expiresAt: string | null | undefined, now = D
   return h < 24 ? `Expires in ${h}h` : `Expires in ${Math.floor(h / 24)}d`;
 }
 
-export type InviteStatus = 'loading' | 'ready' | 'invalid' | 'expired' | 'unreachable';
+export type InviteStatus = 'loading' | 'ready' | 'invalid' | 'expired' | 'locked' | 'unreachable';
 
-/** 404 is an unknown code, 410 an expired one; anything else (network, 5xx, 429) is unreachable. */
-export function inviteErrorStatus(err: unknown): 'invalid' | 'expired' | 'unreachable' {
+/** True when the invite can never be used as-is (unknown, expired or locked). */
+export function inviteIsDead(status: InviteStatus): boolean {
+  return status === 'invalid' || status === 'expired' || status === 'locked';
+}
+
+/** 404 is an unknown code, 410 an expired one, 403 a locked crew; anything else (network, 5xx, 429) is unreachable. */
+export function inviteErrorStatus(err: unknown): 'invalid' | 'expired' | 'locked' | 'unreachable' {
   const status = (err as { status?: unknown } | null)?.status;
   if (status === 404) return 'invalid';
   if (status === 410) return 'expired';
+  if (status === 403) return 'locked';
   return 'unreachable';
 }
 
@@ -74,6 +80,8 @@ export function inviteStatusMessage(status: InviteStatus, signedIn: boolean): st
       return "We couldn't find a crew with this code. Check the link or ask for a new one.";
     case 'expired':
       return 'This invite has expired. Ask someone in the crew for a new link.';
+    case 'locked':
+      return "This crew isn't taking new members.";
     case 'unreachable':
       return signedIn
         ? "Can't check this invite right now. You can still join, and we'll finish when you're back online."

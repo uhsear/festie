@@ -688,3 +688,133 @@ describe('routes/crews.ts -- DELETE /:crewId feed push (mocked deps)', () => {
     assert.equal(push.text, 'Desert Rats was deleted by its owner.');
   });
 });
+
+// T54: owner lock and Plan B on the serialized crew. Mock-based, no database.
+describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
+  async function buildApp(opts: { role?: string; previewCrew?: any } = {}) {
+    const { schemas } = await import('../lib/schemas.js');
+    const { ErrorCodes } = await import('../lib/response.js');
+    const emit = mock.fn();
+    const io = { to: mock.fn(() => ({ emit })) };
+    const crew: any = {
+      id: 'crew-1',
+      festivalId: 'fest-1',
+      name: 'Desert Rats',
+      createdBy: 'owner-1',
+      maxMembers: 10,
+      inviteCode: 'ABC123',
+      inviteExpiresAt: '2026-12-01T00:00:00.000Z',
+      inviteLocked: false,
+      homeBasePlanB: 'Here at the top of each hour',
+    };
+    const update = mock.fn(async (data: any) => {
+      for (const key of ['name', 'maxMembers', 'totemName', 'totemEmoji', 'inviteLocked']) {
+        if (data[key] !== undefined) crew[key] = data[key];
+      }
+      return { ...crew };
+    });
+    const info = mock.fn();
+    const deps: any = {
+      express,
+      log: { info, warn() {}, error() {}, debug() {} },
+      userAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'owner-1', username: 'boss' };
+        next();
+      },
+      sanitizeIdentifier: (v: any) => v,
+      sanitizeString: (v: any) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: any, message: any, code: any) =>
+        res.status(status).json({ data: null, error: { message, code } }),
+      ErrorCodes,
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      validate: (schema: any) => (req: any, res: any, next: any) => {
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ data: null, error: { code: 'VALIDATION_ERROR' } });
+        req.validatedBody = parsed.data;
+        next();
+      },
+      validateQuery: () => (_req: any, _res: any, next: any) => next(),
+      validateParams: () => (req: any, _res: any, next: any) => {
+        req.validatedParams = req.params;
+        next();
+      },
+      getFestivalById: async () => null,
+      schemas,
+      io,
+      stores: {
+        crews: {
+          getById: mock.fn(async () => ({ ...crew })),
+          getByInviteCode: mock.fn(async () => opts.previewCrew ?? null),
+          getExpiredByInviteCode: mock.fn(async () => null),
+          getMember: mock.fn(async () => ({ userId: 'owner-1', role: opts.role ?? 'owner' })),
+          getMembers: mock.fn(async () => [{ userId: 'owner-1', username: 'boss', role: 'owner' }]),
+          update,
+        },
+      },
+    };
+    const { default: createCrewRoutes } = await import('../routes/crews.js');
+    const app = express();
+    app.use(express.json());
+    app.use('/', createCrewRoutes(deps));
+    return { app, emit, update, info, crew };
+  }
+
+  test('the owner locks and unlocks without changing the invite code or expiry', async () => {
+    const { app, emit, update, info } = await buildApp();
+
+    const locked = await request(app).put('/crew-1').send({ inviteLocked: true });
+    assert.equal(locked.status, 200);
+    assert.equal(locked.body.data.inviteLocked, true);
+    assert.equal(locked.body.data.inviteCode, 'ABC123');
+    assert.equal(locked.body.data.inviteExpiresAt, '2026-12-01T00:00:00.000Z');
+    assert.equal((update.mock.calls as any[])[0].arguments[0].inviteLocked, true);
+    assert.ok(!('inviteCode' in (update.mock.calls as any[])[0].arguments[0]), 'the lock never writes the code');
+    assert.ok(
+      (info.mock.calls as any[]).some(
+        (c) => c.arguments[0] === 'crew:lock-changed' && c.arguments[1].inviteLocked === true,
+      ),
+    );
+
+    const [event, payload] = (emit.mock.calls as any[])[0].arguments;
+    assert.equal(event, 'crew:updated');
+    assert.equal(payload.inviteLocked, true);
+    assert.ok(!('inviteCode' in payload), 'the broadcast never carries the code');
+
+    const unlocked = await request(app).put('/crew-1').send({ inviteLocked: false });
+    assert.equal(unlocked.status, 200, '{ inviteLocked: false } alone passes the one-field refine');
+    assert.equal(unlocked.body.data.inviteLocked, false);
+    assert.equal(unlocked.body.data.inviteCode, 'ABC123');
+    assert.equal(unlocked.body.data.inviteExpiresAt, '2026-12-01T00:00:00.000Z');
+  });
+
+  test('a member cannot lock the crew', async () => {
+    const { app, update } = await buildApp({ role: 'member' });
+    const res = await request(app).put('/crew-1').send({ inviteLocked: true });
+    assert.equal(res.status, 403);
+    assert.equal(update.mock.callCount(), 0);
+  });
+
+  test('an update without inviteLocked leaves the lock alone', async () => {
+    const { app, update, info } = await buildApp();
+    await request(app).put('/crew-1').send({ name: 'Renamed' }).expect(200);
+    assert.ok(!('inviteLocked' in (update.mock.calls as any[])[0].arguments[0]));
+    assert.ok(!(info.mock.calls as any[]).some((c) => c.arguments[0] === 'crew:lock-changed'));
+  });
+
+  test('the serialized crew carries inviteLocked and homeBasePlanB', async () => {
+    const { app } = await buildApp();
+    const res = await request(app).put('/crew-1').send({ name: 'Renamed' }).expect(200);
+    assert.equal(res.body.data.inviteLocked, false);
+    assert.equal(res.body.data.homeBasePlanB, 'Here at the top of each hour');
+  });
+
+  test('GET /join-preview of a locked crew is 403 CREW_LOCKED with no crew data', async () => {
+    const { app } = await buildApp({ previewCrew: { id: 'crew-1', name: 'Desert Rats', inviteLocked: true } });
+    const res = await request(app).get('/join-preview/ABC123');
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'CREW_LOCKED');
+    assert.equal(res.body.error.message, "This crew isn't taking new members.");
+    assert.equal(res.body.data, null);
+  });
+});
