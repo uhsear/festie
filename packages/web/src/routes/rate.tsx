@@ -19,6 +19,9 @@ const ADVANCE_DELAY_MS = 300;
 const chipClass =
   'min-h-11 px-4 rounded-full border border-border text-sm font-semibold text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
+const listLinkClass =
+  'inline-flex min-h-11 items-center text-sm font-semibold text-accent-aqua underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+
 const linkClass =
   'inline-flex min-h-11 items-center justify-center rounded-full bg-accent-aqua px-5 text-sm font-semibold text-bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
@@ -106,11 +109,18 @@ function RateFlow({ festivalId }: { festivalId: string }) {
   }
   if (queue.length === 0) {
     return (
-      <EmptyState
-        icon={<Music className="w-9 h-9" aria-hidden="true" />}
-        title="Nothing to rate right now"
-        description="Sets you picked show up here after they end."
-      />
+      <>
+        <EmptyState
+          icon={<Music className="w-9 h-9" aria-hidden="true" />}
+          title="Nothing to rate right now"
+          description="Sets you picked show up here after they end."
+        />
+        <div className="flex justify-center">
+          <Link to="/caught" search={{ festival: festivalId }} className={listLinkClass}>
+            See the full list
+          </Link>
+        </div>
+      </>
     );
   }
 
@@ -121,6 +131,9 @@ function RateFlow({ festivalId }: { festivalId: string }) {
         <CheckCircle2 className="w-10 h-10 text-accent-aqua" aria-hidden="true" />
         <h1 className="text-xl font-bold text-text-primary">All rated</h1>
         <p className="text-sm text-text-secondary">Thanks. Your ratings go into your wrap.</p>
+        <Link to="/caught" search={{ festival: festivalId }} className={listLinkClass}>
+          See the full list
+        </Link>
         {unlocked ? (
           <Link to="/wrap" search={{ festival: festivalId }} className={linkClass}>
             See your wrap
@@ -142,6 +155,9 @@ function RateFlow({ festivalId }: { festivalId: string }) {
   return (
     <div className="max-w-[480px] mx-auto w-full py-4">
       <h1 className="text-lg font-bold text-text-primary">Rate your night</h1>
+      <Link to="/caught" search={{ festival: festivalId }} className={listLinkClass}>
+        See the full list
+      </Link>
       <p className="text-xs text-text-secondary mt-1" aria-live="polite">
         {index + 1} of {queue.length}
       </p>

@@ -222,7 +222,7 @@ function WrapPageInner() {
     );
   }
 
-  const plan = summarizePlan(data.planned);
+  const plan = summarizePlan(data.planned, data.caughtExtra ?? []);
   const hasPlan = plan.planned > 0;
   const stats = data.stats;
   const heroStages = hasPlan ? plan.stages : stats.stagesVisited;
@@ -280,6 +280,14 @@ function WrapPageInner() {
             </Link>
           </div>
         )}
+
+        <Link
+          to="/caught"
+          search={{ festival: festivalId }}
+          className="inline-flex min-h-11 items-center self-start rounded-full border border-border px-5 text-sm font-semibold text-text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        >
+          What you caught
+        </Link>
 
         <WrapHero
           value={hasPlan ? plan.planned : stats.totalRated}
