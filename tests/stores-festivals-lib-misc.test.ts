@@ -469,7 +469,7 @@ describe('lib/shutdown.js — additional coverage', async () => {
     it('memory monitor timer is created and pushes to state.timers', () => {
       createBackgroundTasks(ctx, { io: ioStub });
       // Timer index 4 = memory check (after session, avatar, token, audit)
-      assert.equal(ctx.state.timers.length, 6);
+      assert.equal(ctx.state.timers.length, 7);
     });
   });
 
@@ -517,19 +517,19 @@ describe('lib/shutdown.js — additional coverage', async () => {
 
     it('creates meeting point expiry timer even when crews store lacks meetingPoints', () => {
       createBackgroundTasks(ctx, { io: ioStub });
-      assert.equal(ctx.state.timers.length, 6);
+      assert.equal(ctx.state.timers.length, 7);
     });
 
     it('handles crews without meetingPoints sub-store gracefully', () => {
       ctx.stores.crews = {};
       createBackgroundTasks(ctx, { io: ioStub });
-      assert.equal(ctx.state.timers.length, 6);
+      assert.equal(ctx.state.timers.length, 7);
     });
 
     it('handles no crews store at all', () => {
       delete ctx.stores.crews;
       createBackgroundTasks(ctx, { io: ioStub });
-      assert.equal(ctx.state.timers.length, 6);
+      assert.equal(ctx.state.timers.length, 7);
     });
   });
 
