@@ -76,7 +76,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
   // ── POST /forgot-password — request password reset email ─────────────
   router.post(
     '/forgot-password',
-    rateLimit(3, 'forgot-password'),
+    rateLimit(3, 'forgot-password', { keyFromBody: (req: any) => req.body?.email }),
     passwordResetRateLimit,
     validate(schemas.forgotPassword),
     async (req: any, res: any) => {
