@@ -357,7 +357,8 @@ function SetCard({
                   key={p}
                   className={cn(
                     'card-priority-btn',
-                    'h-11 min-w-11 min-h-11 px-3 gap-1.5 rounded-full',
+                    // Below 360px the single-column card is too narrow for px-3 on all three.
+                    'h-11 min-w-11 min-h-11 px-3 max-[359px]:px-2 gap-1.5 rounded-full',
                     'flex items-center justify-center',
                     'bg-[var(--color-overlay-3)] border border-border-light',
                     'text-sm text-text-muted cursor-pointer',
