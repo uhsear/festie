@@ -159,8 +159,8 @@ const picksRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/picks',
   component: PicksView,
-  // No guest guard: /picks renders <GuestTeaser mode="picks"/> in place for
-  // unauthenticated visitors (parity with the always-visible nav tabs).
+  // No guest guard: guests pick on this device, and /picks shows them
+  // <GuestPicksBanner/> to sign up (parity with the always-visible nav tabs).
 });
 
 const gridRoute = new Route({

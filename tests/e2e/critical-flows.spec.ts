@@ -64,11 +64,12 @@ test.describe('critical flows', () => {
     await page.getByLabel(/^Meet at time/).fill(meetAt);
     await page.getByRole('button', { name: 'Add', exact: true }).click();
 
-    await expect(page.getByText(label)).toBeVisible();
+    // Exact: the crew activity feed also echoes the label as ": <label>".
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
     await expect(page.getByText('By the ticket booth')).toBeVisible();
 
     await page.reload();
-    await expect(page.getByText(label)).toBeVisible();
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
 
     const res = await page.context().request.get(`${app.baseUrl}/api/v1/crews/${crew.id}/meeting-points`);
     expect(res.ok()).toBe(true);

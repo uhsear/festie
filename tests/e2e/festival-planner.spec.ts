@@ -115,9 +115,10 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
     await openSet(page, 'Alpha');
-    // Guests see the sign-in prompt with both auth buttons, never a Join Festival button.
+    // Guests pick on this device (T39), so the panel prompts sign-up for the account-only
+    // extras with both auth buttons, never a Join Festival button.
     const panel = page.locator('[aria-label="Set detail panel"]');
-    await expect(panel).toContainText('Sign in to save picks');
+    await expect(panel).toContainText('Create a free account to keep private notes');
     await expect(panel.getByRole('button', { name: 'Create account' })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Sign in' })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Join Festival' })).toHaveCount(0);
@@ -267,10 +268,17 @@ test.describe('festival planner browser regression', () => {
   });
 
   test('guests see an in-place sign-up teaser on protected tabs', async ({ app, page }) => {
-    // /picks no longer redirects; it renders <GuestTeaser mode="picks"/> in place.
+    // Guests can pick on this device (T39), so /picks shows the sign-up banner over their local picks.
     await page.goto(`${app.baseUrl}/picks`);
     await expect(page).toHaveURL(/\/picks$/);
-    await expect(page.getByRole('heading', { name: 'Save your festival picks' })).toBeVisible();
+    const banner = page.getByRole('region', { name: 'Save your picks' });
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole('button', { name: 'Create free account' })).toBeVisible();
+
+    // /crew still renders <GuestTeaser mode="crew"/> in place instead of redirecting.
+    await page.goto(`${app.baseUrl}/crew`);
+    await expect(page).toHaveURL(/\/crew$/);
+    await expect(page.getByRole('heading', { name: 'Plan with your crew' })).toBeVisible();
   });
 });
 
