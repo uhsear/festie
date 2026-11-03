@@ -76,7 +76,8 @@ function TimelineGridCell({
     <div
       key={set.id}
       className={cn(
-        'relative top-px left-0.5 right-0.5 self-start',
+        // Margins inset the block 2px per side; relative left + right only shifted it 2px past its column.
+        'relative top-px mx-0.5 self-start',
         // Set block base
         'px-2 py-1 rounded-sm',
         'overflow-hidden',
