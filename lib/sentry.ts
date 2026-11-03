@@ -52,6 +52,8 @@ function initSentry(options: any = {}) {
       environment: options.environment || _cfg.NODE_ENV || 'production',
       release: options.release || _cfg.APP_VERSION || 'dev',
       tracesSampleRate: Number(_cfg.SENTRY_TRACES_RATE ?? 0.05),
+      // SDK 11 defaults to streamed v2 spans, which Performance and Transactions do not show.
+      traceLifecycle: 'static',
       profilesSampleRate: Number(_cfg.SENTRY_PROFILES_RATE ?? 0),
       // @sentry/node 11 replaced sendDefaultPii with dataCollection, and an unset
       // dataCollection now collects cookies, request/response bodies and query data.
