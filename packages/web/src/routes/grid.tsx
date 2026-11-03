@@ -24,6 +24,7 @@ import TimelineLegend from '../components/timeline/TimelineLegend';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
 import GridToolbar from '../components/grid/GridToolbar';
+import ScheduleImageDialog from '../components/features/ScheduleImageDialog';
 import { useGridExport } from '../components/grid/useGridExport';
 import { useTimelineFilters } from '../hooks/useTimelineFilters';
 import { useTimelineViewport } from '../hooks/useTimelineViewport';
@@ -288,6 +289,7 @@ function GridViewInner() {
                   exporting={exporting}
                   onExport={exportGrid}
                 />
+                <ScheduleImageDialog initialMode="full" />
                 <LowPowerIndicator />
                 <LastSyncedBadge surface="schedule" />
               </div>

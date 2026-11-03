@@ -4,6 +4,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 const festivalState: Record<string, unknown> = {};
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(festivalState)),
+  useCrewStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ activeCrew: null, crewOverlap: {} }),
+  useAuthStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ user: null }),
 }));
 
 const mockFetchPrintable = vi.fn();
@@ -12,7 +14,10 @@ vi.mock('@festie/shared/services', () => ({
 }));
 
 const mockCapture = vi.fn();
-vi.mock('../../lib/shareImage', () => ({ captureAndShareImage: (...a: unknown[]) => mockCapture(...a) }));
+vi.mock('../../lib/shareImage', () => ({
+  captureAndShareImage: (...a: unknown[]) => mockCapture(...a),
+  captureAndShareImages: vi.fn(),
+}));
 
 const mockToast = vi.fn();
 const mockToastError = vi.fn();
@@ -31,7 +36,7 @@ const set = (id: string, dayIndex: number, startTime: string) => ({
   endTime: '23:00',
 });
 
-function setup(sets: unknown[], picks: Record<string, string>) {
+function setup(sets: unknown[], picks: Record<string, string>, initialMode?: 'full') {
   Object.keys(festivalState).forEach((k) => delete festivalState[k]);
   Object.assign(festivalState, {
     currentFestival: { id: 'f1', name: 'Bonnaroo' },
@@ -44,8 +49,8 @@ function setup(sets: unknown[], picks: Record<string, string>) {
     ],
     selectedDay: 0,
   });
-  render(<ScheduleImageDialog />);
-  fireEvent.click(screen.getByRole('button', { name: 'Save my picks as an image' }));
+  render(<ScheduleImageDialog initialMode={initialMode} />);
+  fireEvent.click(screen.getByRole('button', { name: initialMode ? 'Lock screen image' : 'Save my picks as an image' }));
 }
 
 describe('ScheduleImageDialog', () => {
@@ -62,12 +67,12 @@ describe('ScheduleImageDialog', () => {
     expect(screen.getByLabelText('Day')).toBeInTheDocument();
   });
 
-  it('shows the lock-screen hint when selected', () => {
+  it('swaps in the lock-screen options when Lock screen is selected', () => {
     setup([set('s1', 0, '20:00')], { s1: 'must' });
-    const hint = 'Leaves room for the clock. Save the image, then set it as your wallpaper from your Photos app.';
-    expect(screen.queryByText(hint)).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Show' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Lock screen' }));
-    expect(screen.getByText(hint)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Show' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My picks' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('disables a day with only TBA picks', () => {
@@ -123,5 +128,11 @@ describe('ScheduleImageDialog', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save image' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Download printable page' })).toBeInTheDocument();
+  });
+
+  it('opens the lock-screen options on Full lineup from the schedule entry, even with no picks', () => {
+    setup([set('s1', 0, '20:00')], {}, 'full');
+    expect(screen.getByRole('button', { name: 'Full lineup' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('group', { name: 'Shape' })).toBeNull();
   });
 });

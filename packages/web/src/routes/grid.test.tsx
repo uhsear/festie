@@ -11,6 +11,8 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
+vi.mock('../components/features/ScheduleImageDialog', () => ({ default: () => null }));
+
 vi.mock('../lib/useUndoNotifier', () => ({
   useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
 }));

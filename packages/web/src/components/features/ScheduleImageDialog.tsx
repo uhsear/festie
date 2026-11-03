@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ImageDown } from 'lucide-react';
+import { ImageDown, Smartphone } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { fetchPrintableSchedule } from '@festie/shared/services';
 import { COPY } from '@festie/shared/constants';
@@ -10,9 +10,10 @@ import {
   defaultScheduleImageDay,
   scheduleImageFilename,
 } from '@festie/shared/utils';
-import type { ScheduleImageFormat } from '@festie/shared/utils';
+import type { LockscreenMode, ScheduleImageFormat } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import Dialog from '../ui/Dialog';
+import LockscreenPanel from './LockscreenPanel';
 import ScheduleImagePoster from './ScheduleImagePoster';
 import { captureAndShareImage } from '../../lib/shareImage';
 import { useToast } from '../../lib/toastContext';
@@ -36,8 +37,11 @@ const optionClass = (active: boolean) =>
     active ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover' : 'border-border text-text-secondary'
   }`;
 
-/** "Save image" chooser: story or lock-screen poster for one day, plus the printable HTML page. */
-export default function ScheduleImageDialog() {
+/**
+ * "Save image" chooser: story or lock-screen poster for one day, plus the printable HTML page.
+ * With `initialMode` it is the schedule's "Lock screen image" entry: lock-screen options only.
+ */
+export default function ScheduleImageDialog({ initialMode }: { initialMode?: LockscreenMode } = {}) {
   const [open, setOpen] = useState(false);
   const [format, setFormat] = useState<ScheduleImageFormat>('story');
   const [dayChoice, setDayChoice] = useState<number | null>(null);
@@ -69,6 +73,24 @@ export default function ScheduleImageDialog() {
   );
 
   if (!festival || !profile) return null;
+  if (initialMode) {
+    return (
+      <>
+        <Button variant="secondary" size="sm" type="button" onClick={() => setOpen(true)}>
+          <Smartphone className="w-4 h-4" aria-hidden="true" />
+          Lock screen image
+        </Button>
+        <Dialog
+          open={open}
+          onOpenChange={setOpen}
+          title="Lock screen image"
+          description="Make a wallpaper of the schedule, sized for your phone."
+        >
+          <LockscreenPanel initialMode={initialMode} />
+        </Dialog>
+      </>
+    );
+  }
   const layout = SCHEDULE_IMAGE_LAYOUT[format];
   const scale = PREVIEW_WIDTH / layout.width;
   // Option labels reuse the model's day label so the picker matches the image.
@@ -150,55 +172,56 @@ export default function ScheduleImageDialog() {
                 </button>
               ))}
             </div>
-            {format === 'lockscreen' && (
-              <p className="text-xs text-text-muted">
-                Leaves room for the clock. Save the image, then set it as your wallpaper from your Photos app.
-              </p>
-            )}
-            <label className="flex items-center gap-2 text-sm text-text-secondary">
-              Day
-              <select
-                value={dayIndex}
-                onChange={(e) => setDayChoice(Number(e.target.value))}
-                className="min-h-9 rounded-lg border border-border bg-bg-card px-2 text-sm text-text-primary"
-              >
-                {Array.from({ length: dayCount }, (_, i) => (
-                  <option key={i} value={i} disabled={!timedDays.has(i)}>
-                    {dayLabels[i] ?? `Day ${i + 1}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div
-              aria-hidden="true"
-              className="mx-auto overflow-hidden rounded-xl border border-border pointer-events-none"
-              style={{ width: PREVIEW_WIDTH, height: layout.height * scale }}
-            >
+            {format === 'lockscreen' ? (
+              <LockscreenPanel initialMode="picks" />
+            ) : (
+              <>
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
+                Day
+                <select
+                  value={dayIndex}
+                  onChange={(e) => setDayChoice(Number(e.target.value))}
+                  className="min-h-9 rounded-lg border border-border bg-bg-card px-2 text-sm text-text-primary"
+                >
+                  {Array.from({ length: dayCount }, (_, i) => (
+                    <option key={i} value={i} disabled={!timedDays.has(i)}>
+                      {dayLabels[i] ?? `Day ${i + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div
-                style={{ width: layout.width, height: layout.height, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+                aria-hidden="true"
+                className="mx-auto overflow-hidden rounded-xl border border-border pointer-events-none"
+                style={{ width: PREVIEW_WIDTH, height: layout.height * scale }}
               >
-                <div ref={posterRef}>
-                  <ScheduleImagePoster model={model} format={format} />
+                <div
+                  style={{ width: layout.width, height: layout.height, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+                >
+                  <div ref={posterRef}>
+                    <ScheduleImagePoster model={model} format={format} />
+                  </div>
                 </div>
               </div>
-            </div>
-            {format === 'print' ? (
-              <>
-                <Button variant="primary" size="sm" type="button" fullWidth onClick={() => window.print()}>
-                  Print
+              {format === 'print' ? (
+                <>
+                  <Button variant="primary" size="sm" type="button" fullWidth onClick={() => window.print()}>
+                    Print
+                  </Button>
+                  <style>{PRINT_CSS}</style>
+                  {createPortal(
+                    <div className="festie-print-poster" aria-hidden="true">
+                      <ScheduleImagePoster model={model} format="print" />
+                    </div>,
+                    document.body,
+                  )}
+                </>
+              ) : (
+                <Button variant="primary" size="sm" type="button" fullWidth onClick={save} disabled={busy}>
+                  {busy ? 'Making image…' : 'Save image'}
                 </Button>
-                <style>{PRINT_CSS}</style>
-                {createPortal(
-                  <div className="festie-print-poster" aria-hidden="true">
-                    <ScheduleImagePoster model={model} format="print" />
-                  </div>,
-                  document.body,
-                )}
+              )}
               </>
-            ) : (
-              <Button variant="primary" size="sm" type="button" fullWidth onClick={save} disabled={busy}>
-                {busy ? 'Making image…' : 'Save image'}
-              </Button>
             )}
           </div>
         ) : (

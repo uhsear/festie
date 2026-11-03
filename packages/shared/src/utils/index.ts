@@ -77,6 +77,8 @@ export * from './crewLogistics';
 export * from './crewWrapPoster';
 export * from './discover';
 export * from './scheduleImage';
+export * from './lockscreen';
+export * from './lockscreenModel';
 export * from './sharedPicks';
 export * from './ratingSummary';
 export * from './announcements';
