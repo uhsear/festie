@@ -137,7 +137,13 @@ root.render(
   <React.StrictMode>
     <GlobalErrorBoundary>
       <LazyMotion features={() => import('motion/react').then((m) => m.domAnimation)} strict>
-        <PersistQueryClientProvider client={queryClient} persistOptions={buildPersistOptions()}>
+        <PersistQueryClientProvider
+          client={queryClient}
+          persistOptions={buildPersistOptions()}
+          // The snapshot is for offline reads. It can predate the last write (the persister
+          // throttles) and still look fresh, so refetch it once restored; offline the refetch waits.
+          onSuccess={() => void queryClient.invalidateQueries()}
+        >
           <ToastProvider>
             <RouterProvider router={router} />
             <Toast />
