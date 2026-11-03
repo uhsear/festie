@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { scrubSensitiveUrl } from '@festie/shared/utils';
 import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
 import {
@@ -21,6 +22,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UIProvider } from '../contexts/UIContext';
 import OfflineBanner from '../components/OfflineBanner';
@@ -77,6 +79,22 @@ if (SENTRY_DSN && !isExpoGo) {
   Sentry.init({
     dsn: SENTRY_DSN,
     tracesSampleRate: Number(process.env.EXPO_PUBLIC_SENTRY_TRACES_RATE ?? 0.05),
+    environment: Updates.channel || (__DEV__ ? 'development' : 'production'),
+    sendDefaultPii: false,
+    // Reset links carry ?token=: keep tokens and invite codes out of Sentry.
+    beforeSend(event) {
+      if (event.request) event.request.url = scrubSensitiveUrl(event.request.url);
+      return event;
+    },
+    beforeBreadcrumb(breadcrumb) {
+      const d = breadcrumb.data;
+      if (d) {
+        if (d.url) d.url = scrubSensitiveUrl(d.url);
+        if (d.from) d.from = scrubSensitiveUrl(d.from);
+        if (d.to) d.to = scrubSensitiveUrl(d.to);
+      }
+      return breadcrumb;
+    },
   });
 }
 

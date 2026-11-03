@@ -38,6 +38,14 @@ function initSentry(options: any = {}) {
     return null;
   }
 
+  // dist/instrument.js (the --import preload) and dist/server.js each bundle their
+  // own copy of this module but share one @sentry/node, so adopt its client.
+  // A caller that passes client overrides (`extra`, e.g. a test transport) still gets its own.
+  if (!options.extra && Sentry.getClient?.()) {
+    noop = false;
+    return Sentry;
+  }
+
   try {
     Sentry.init({
       dsn,

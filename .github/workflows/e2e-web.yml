@@ -13,13 +13,15 @@ on:
         type: boolean
 
 # Non-blocking by nature: scheduled workflow, not wired into branch protection.
-# Failures surface in the Actions tab and notification emails only.
+# A failed run opens (or comments on) a "Nightly E2E failing" issue labelled
+# e2e-nightly; the next green run closes it.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   e2e-web:
@@ -96,7 +98,7 @@ jobs:
           TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/festie_test
         run: |
           for migration in migrations/*.sql; do
-            PGPASSWORD=test_password psql -h localhost -U test_user -d festie_test -f "$migration"
+            PGPASSWORD=test_password psql -v ON_ERROR_STOP=1 -h localhost -U test_user -d festie_test -f "$migration"
           done
 
       - name: Build web frontend
@@ -115,6 +117,15 @@ jobs:
           tests/e2e/festival-planner.spec.ts
           tests/e2e/accessibility.spec.ts
           tests/e2e/reduced-motion.spec.ts
+
+      - name: Run critical-flow E2E (chromium)
+        # Runs even when the matrix step failed, so a red matrix cannot hide a critical-flow regression.
+        if: ${{ !cancelled() && !inputs.update_snapshots }}
+        env:
+          DATABASE_URL: postgres://test_user:test_password@localhost:5432/festie_test
+          TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/festie_test
+          PLAYWRIGHT_ARTIFACT_DIR: output/playwright/critical-flows
+        run: npx playwright test --project=chromium tests/e2e/critical-flows.spec.ts
 
       - name: Run responsive visual regression (chromium)
         if: always()
@@ -146,3 +157,83 @@ jobs:
           path: tests/__snapshots__/responsive-design.spec.ts/*.png
           if-no-files-found: error
           retention-days: 7
+
+      # ── Alert management (same pattern as uptime.yml) ───────────────────
+      # On SUCCESS: close any open "Nightly E2E failing" issue. Housekeeping
+      # only, so a GitHub API blip here must not turn a green run red.
+      - name: Close any open failing issue (nightly is green)
+        # Only the scheduled run on main owns the alert; a dispatch on a branch must not close or open it.
+        if: success() && github.event_name == 'schedule'
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'Nightly E2E failing';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'e2e-nightly',
+              per_page: 10,
+            });
+            for (const issue of issues.filter(i => i.title === title)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Nightly E2E passed again at ${new Date().toUTCString()}.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+              });
+              core.info(`Closed issue #${issue.number}`);
+            }
+
+      # On FAILURE: open an issue, or comment on the one already open.
+      - name: Open or update failing issue (nightly is red)
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'Nightly E2E failing';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const now = new Date().toUTCString();
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'e2e-nightly',
+              per_page: 10,
+            });
+            const existing = issues.find(i => i.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `Still failing at ${now}.\n\n[Run details](${runUrl})`,
+              });
+              core.info(`Updated existing issue #${existing.number}`);
+            } else {
+              const { data: newIssue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                labels: ['e2e-nightly'],
+                body: [
+                  '## Nightly E2E is failing',
+                  '',
+                  `The E2E Web (nightly) run failed at **${now}**.`,
+                  '',
+                  `[View failing run](${runUrl})`,
+                  '',
+                  '_This issue closes automatically when the next nightly run passes._',
+                ].join('\n'),
+              });
+              core.info(`Opened new issue #${newIssue.number}`);
+            }

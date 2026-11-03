@@ -40,6 +40,9 @@ if (import.meta.env.VITE_SENTRY_DSN) {
         breadcrumb.data.from = scrubToken(breadcrumb.data.from);
         breadcrumb.data.to = scrubToken(breadcrumb.data.to);
       }
+      if ((breadcrumb.category === 'fetch' || breadcrumb.category === 'xhr') && breadcrumb.data) {
+        breadcrumb.data.url = scrubToken(breadcrumb.data.url);
+      }
       return breadcrumb;
     },
   });

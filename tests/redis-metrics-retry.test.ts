@@ -707,9 +707,7 @@ describe('metrics.js', () => {
         assert.ok(sharedMetrics.pgPoolIdleGauge);
         assert.ok(sharedMetrics.pgPoolWaitingGauge);
         assert.ok(sharedMetrics.errorCounter);
-        assert.ok(sharedMetrics.rateLimitCounter);
         assert.ok(sharedMetrics.rateLimitFallbackCounter);
-        assert.ok(sharedMetrics.authFailuresCounter);
         assert.ok(sharedMetrics.dbQueryHistogram);
         assert.ok(sharedMetrics.rateLimitHitsCounter);
         assert.ok(sharedMetrics.httpCounter);

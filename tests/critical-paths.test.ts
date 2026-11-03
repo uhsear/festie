@@ -7,12 +7,12 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import fs from 'fs';
 import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema } from './_test-schema';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,8 +29,6 @@ const AVATAR_FIXTURE = Buffer.from(
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 if (!TEST_DATABASE_URL) { console.error('ERROR: TEST_DATABASE_URL env var required. Set it in .env. (Never falls back to DATABASE_URL to protect production data.)'); process.exit(1); }
 if (!TEST_DATABASE_URL.includes('_test')) { console.error('SAFETY: TEST_DATABASE_URL must contain "_test" in the database name to prevent accidental production wipe.'); process.exit(1); }
-
-let testDbReady = false;
 
 function createFestivalFixture() {
   return [
@@ -62,36 +60,6 @@ function createFestivalFixture() {
       ],
     },
   ];
-}
-
-async function ensureTestSchema() {
-  if (testDbReady) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    const { rows } = await pool.query(
-      "SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1"
-    );
-    if (rows.length === 0) {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS citext');
-      const schema = fs.readFileSync(
-        path.join(__dirname, '..', 'migrations', '004_postgresql_baseline.sql'),
-        'utf8'
-      );
-      await pool.query(schema);
-    }
-    // Apply incremental migrations (005+) idempotently
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    const migrationFiles = fs.readdirSync(migrationsDir)
-      .filter(f => f.endsWith('.sql') && !f.startsWith('004_'))
-      .sort();
-    for (const file of migrationFiles) {
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      await pool.query(sql).catch(() => {}); // Idempotent — IF NOT EXISTS used in all migrations
-    }
-    testDbReady = true;
-  } finally {
-    await pool.end();
-  }
 }
 
 async function truncateAllTables() {
@@ -148,7 +116,7 @@ async function seedTestData(festivals: any[] = createFestivalFixture()) {
 }
 
 async function startServer(overrides: Record<string, any> = {}) {
-  await ensureTestSchema();
+  await ensureTestSchema(TEST_DATABASE_URL!);
   await truncateAllTables();
   await seedTestData();
   const planner = await createFestivalPlanner({

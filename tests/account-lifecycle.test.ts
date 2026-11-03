@@ -9,12 +9,12 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import fs from 'fs';
 import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema } from './_test-schema';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,8 +32,6 @@ const FESTIVAL_ID = `fest-${RUN_TAG}`;
 const STAGE_ID = `stage-${RUN_TAG}`;
 const SET_ID = `set-${RUN_TAG}`;
 
-let testDbReady = false;
-
 async function withPool<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
   try {
@@ -41,23 +39,6 @@ async function withPool<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
   } finally {
     await pool.end();
   }
-}
-
-async function ensureTestSchema() {
-  if (testDbReady) return;
-  await withPool(async (pool) => {
-    const { rows } = await pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1");
-    if (rows.length === 0) {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS citext');
-      await pool.query(fs.readFileSync(path.join(__dirname, '..', 'migrations', '004_postgresql_baseline.sql'), 'utf8'));
-    }
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql') && !f.startsWith('004_')).sort();
-    for (const file of files) {
-      await pool.query(fs.readFileSync(path.join(migrationsDir, file), 'utf8')).catch(() => {});
-    }
-  });
-  testDbReady = true;
 }
 
 async function resetData() {
@@ -96,7 +77,7 @@ async function resetData() {
 }
 
 async function startServer() {
-  await ensureTestSchema();
+  await ensureTestSchema(TEST_DATABASE_URL!);
   await resetData();
   const planner = await createFestivalPlanner({
     DATABASE_URL: TEST_DATABASE_URL,

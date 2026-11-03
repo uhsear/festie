@@ -8,13 +8,13 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import fs from 'fs';
 import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import express from 'express';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema } from './_test-schema';
 import createAccountRoutes from '../routes/account';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -35,33 +35,7 @@ const AVATAR_FIXTURE = Buffer.from(
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
-let testDbReady = false;
 const RUN_TAG = `acct-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-
-async function ensureTestSchema() {
-  if (testDbReady) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    const { rows } = await pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1");
-    if (rows.length === 0) {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS citext');
-      const schema = fs.readFileSync(path.join(__dirname, '..', 'migrations', '004_postgresql_baseline.sql'), 'utf8');
-      await pool.query(schema);
-    }
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    const migrationFiles = fs
-      .readdirSync(migrationsDir)
-      .filter((f: string) => f.endsWith('.sql') && !f.startsWith('004_'))
-      .sort();
-    for (const file of migrationFiles) {
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      await pool.query(sql).catch(() => {});
-    }
-    testDbReady = true;
-  } finally {
-    await pool.end();
-  }
-}
 
 async function truncateAllTables() {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
@@ -94,7 +68,7 @@ async function seedTestData() {
 }
 
 async function startServer(overrides: any = {}) {
-  await ensureTestSchema();
+  await ensureTestSchema(TEST_DATABASE_URL!);
   await truncateAllTables();
   await seedTestData();
   const planner = await createFestivalPlanner({

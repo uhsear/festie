@@ -85,20 +85,17 @@ validateStartupConfig(_bootConfig);
 // Sentry. Position of this call is NOT what it looks like: this package is
 // "type": "module", so every import in this file is hoisted and evaluated
 // before any statement here runs. initSentry() therefore always runs AFTER
-// express has been imported, and Sentry logs on every boot:
-//   [Sentry] express is not instrumented …
+// express has been imported. @sentry/node 11 injects its tracing channels only
+// into modules that load after Sentry.init, so this call alone records no
+// Express spans. Error capture still works: setupExpressErrorHandler (below) is
+// a plain express error middleware.
 //
-// Measured 2026-08-18, so nobody re-derives it:
-//   * Error capture still WORKS. setupExpressErrorHandler (see below) is a plain
-//     express error middleware; a probe confirmed both route exceptions and
-//     direct captureException produce events. Sentry is NOT blind.
-//   * What is missing is the OpenTelemetry layer: tracing spans and per-request
-//     isolation/context on those events.
-//   * Sentry's documented ESM fix is `node --import ./instrument.mjs`. Both
-//     moving init into an early-imported module AND `tsx --import ./instrument.ts`
-//     were tried and neither silenced the warning — tsx installs its own ESM
-//     loader, which appears to defeat Sentry's import-in-the-middle hooks. Do not
-//     re-attempt either without new evidence; the blocker is tsx, not ordering.
+// Production runs the esbuild bundle (dist/server.js) under plain node, not tsx.
+// When PM2 passes `--import ./dist/instrument.js`, that preload initializes
+// Sentry before express loads and Express tracing works. Without it, the call
+// below is the fallback and behaves as before. initSentry is idempotent across
+// the two bundles: this copy adopts the preload's client instead of calling
+// Sentry.init again. tests/sentry-preload.test.ts proves both cases.
 import { initSentry, sentry } from './lib/sentry';
 initSentry({ release: _bootConfig.APP_VERSION || 'dev' });
 
@@ -379,6 +376,7 @@ async function createFestieApp(overrides: any = {}) {
     const status = error.status || error.statusCode || 500;
 
     if (status >= 500) {
+      metrics.errorCounter?.inc({ kind: 'http_5xx' });
       const fingerprint = `${status}:${error.message || 'unknown'}`;
       const existing = _errorFingerprints.get(fingerprint);
       if (existing) {
@@ -412,8 +410,9 @@ async function createFestieApp(overrides: any = {}) {
           reqId: (req as any).id,
           traceId: (req as any).traceId,
           status,
+          // First occurrence of each 5xx fingerprint carries its stack in every environment.
+          stack: error.stack,
         };
-        if (config.NODE_ENV !== 'production') meta.stack = error.stack;
         log.error('unhandled request error', meta);
       }
     } else {
