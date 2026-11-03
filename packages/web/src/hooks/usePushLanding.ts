@@ -9,6 +9,8 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
  */
 export function usePushLanding(): void {
   useEffect(() => {
+    // On /admin, ?festival= is the festival being edited, not a push landing.
+    if (window.location.pathname.startsWith('/admin')) return;
     const params = new URLSearchParams(window.location.search);
     const id = params.get('festival');
     if (!id || !ID_PATTERN.test(id)) return;
