@@ -159,8 +159,8 @@ const picksRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/picks',
   component: PicksView,
-  // No guest guard: /picks renders <GuestTeaser mode="picks"/> in place for
-  // unauthenticated visitors (parity with the always-visible nav tabs).
+  // No guest guard: guests pick on this device, and /picks shows them
+  // <GuestPicksBanner/> to sign up (parity with the always-visible nav tabs).
 });
 
 const gridRoute = new Route({
@@ -427,13 +427,21 @@ export const router = new Router({
 // startup) doesn't yank focus to #main-content — only genuine in-app
 // navigations, where nextPath differs from the seeded path, move focus.
 let lastPath = router.state.location.pathname;
+let focusedBefore: Element | null = null;
+router.subscribe('onBeforeNavigate', () => {
+  focusedBefore = document.activeElement;
+});
 router.subscribe('onResolved', () => {
   const nextPath = router.state.location.pathname;
   if (nextPath === lastPath) return;
   lastPath = nextPath;
+  const before = focusedBefore;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const main = document.getElementById('main-content');
+      // The new page already placed focus itself (for example /picks#clashes): keep it.
+      const placed = document.activeElement;
+      if (main && placed !== before && placed !== document.body && main.contains(placed)) return;
       if (main) {
         // tabIndex=-1 allows focus without adding to tab order
         if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useCrewRealtime } from './useCrewRealtime';
+import { useCrewStore } from '../stores/crewStore';
 import type { Socket } from '../services/socket';
 import type { CrewRealtimeSink } from '../realtime/crewRealtimeSink';
 
@@ -45,5 +46,26 @@ describe('useCrewRealtime reconnect resync', () => {
     const { fire, sink } = render(true);
     fire('connect');
     expect(sink.onReconnectResync).toHaveBeenCalledWith('c1');
+  });
+});
+
+describe('useCrewRealtime crew room join', () => {
+  it('joins the room as soon as a crew opens, without waiting for another render', () => {
+    useCrewStore.setState({ activeCrew: null });
+    const fake = makeFakeSocket(true);
+    const sink = { onSosResync: vi.fn(), onReconnectResync: vi.fn() } as unknown as CrewRealtimeSink;
+    renderHook(() =>
+      useCrewRealtime({
+        socket: fake.socket,
+        getActiveCrewId: () => useCrewStore.getState().activeCrew?.id ?? null,
+        sink,
+      }),
+    );
+    expect(fake.socket.emit).not.toHaveBeenCalledWith('join:crew', expect.anything(), expect.anything());
+
+    act(() => {
+      useCrewStore.setState({ activeCrew: { id: 'c2' } as never });
+    });
+    expect(fake.socket.emit).toHaveBeenCalledWith('join:crew', { _v: 1, crewId: 'c2' }, expect.any(Function));
   });
 });

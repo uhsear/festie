@@ -20,6 +20,7 @@ import { useEffect } from 'react';
 import type { Socket } from '../services/socket';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
 import { useAuthStore } from '../stores/authStore';
+import { useCrewStore } from '../stores/crewStore';
 import {
   routeHomeBaseUpdated,
   routeMeetingPointUpsert,
@@ -81,6 +82,9 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
   // Re-run when the socket identity or the active crew id changes so we leave
   // the old crew room and join the new one. getActiveCrewId is read both for
   // the dependency snapshot and live inside handlers.
+  // Subscribe to the open crew so a crew change re-renders this hook. The getter
+  // alone is a snapshot, so the room join waited for an unrelated render.
+  useCrewStore((s) => s.activeCrew?.id);
   const activeCrewId = getActiveCrewId();
 
   useEffect(() => {

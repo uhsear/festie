@@ -209,6 +209,12 @@ function assertSpaBuilt() {
   }
 }
 
+// The fixture festivals are dated June 2026. Once both are past, the picker opens the
+// newest one (fest-2), so every page starts its clock before them to keep fest-1 the
+// default. setSystemTime shifts the clock but lets it run, so timers, retry backoff and
+// relative times still advance.
+export const FIXTURE_NOW = new Date('2026-06-01T12:00:00');
+
 export const test = base.extend<{ app: Awaited<ReturnType<typeof startServer>> }>({
   app: async ({}, use) => {
     assertSpaBuilt();
@@ -221,6 +227,7 @@ export const test = base.extend<{ app: Awaited<ReturnType<typeof startServer>> }
   // clicks the app. Pre-mark it completed so specs exercise the real flows;
   // onboarding itself gets dedicated coverage by clearing this key.
   page: async ({ page }, use) => {
+    await page.clock.setSystemTime(FIXTURE_NOW);
     await page.addInitScript(() => {
       try {
         localStorage.setItem('festie_onboarding_completed', 'true');
@@ -276,10 +283,11 @@ export async function createCrewViaApi(context: BrowserContext, app: AppRef, nam
   return { id: data.id, inviteCode: data.inviteCode };
 }
 
-// A second browser context for a second user. It carries the same pre-set
+// A second browser context for a second user. It carries the same clock, pre-set
 // onboarding flag and service-worker block as the default `page` fixture.
 export async function openUserContext(browser: Browser) {
   const context = await browser.newContext({ serviceWorkers: 'block' });
+  await context.clock.setSystemTime(FIXTURE_NOW);
   await context.addInitScript(() => {
     try {
       localStorage.setItem('festie_onboarding_completed', 'true');
