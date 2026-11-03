@@ -75,8 +75,10 @@ export interface LockscreenHeader {
   pageChip: string | null;
   /** "EDC Orlando · Nov 6" */
   metaTop: string;
-  /** "My picks · 9", with " · until 7:00 PM" appended on a split series. */
+  /** "My picks · 9", with " · to 7 PM" appended on a split series. */
   metaBottom: string;
+  /** Font size in u for metaTop and metaBottom, shrunk so each stays on one line. */
+  metaSizeU: number;
   y: number;
   height: number;
 }
@@ -154,7 +156,7 @@ export interface LockscreenGridBlock {
   maxLines: number;
   /** 'name' under two lines of height, 'none' under 4.5u. */
   textMode: 'full' | 'name' | 'none';
-  /** Wrapped artist lines (with visible hyphens at the type floor), clamped to `maxLines`. */
+  /** Wrapped artist lines (never split inside a word; an overlong word ends in an ellipsis), clamped to `maxLines`. */
   artistLines: string[];
   /** True when the name was clamped; the last line ends with an ellipsis. */
   ellipsis: boolean;
@@ -191,6 +193,8 @@ export interface LockscreenGridPage {
   hours: { label: string; y: number; dashed: boolean }[];
   blocks: LockscreenGridBlock[];
   legend: string;
+  /** Right of the hour gutter, so the legend never covers the last hour label. */
+  legendX: number;
   legendY: number;
 }
 

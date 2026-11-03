@@ -114,7 +114,7 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
             </span>
           )}
         </div>
-        <div style={{ textAlign: 'right', fontSize: px(2.9), lineHeight: 1.25, minWidth: 0 }}>
+        <div style={{ textAlign: 'right', fontSize: px(header.metaSizeU), lineHeight: 1.25, minWidth: 0, whiteSpace: 'nowrap' }}>
           <div style={{ color: c.text2, fontWeight: 500 }}>{header.metaTop}</div>
           <div style={{ color: c.text, fontWeight: 700 }}>{header.metaBottom}</div>
         </div>
@@ -364,8 +364,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
                     fontSize: px(b.artistSizeU),
                     lineHeight: 1.04,
                     overflow: 'hidden',
-                    overflowWrap: 'break-word',
-                    hyphens: 'auto',
+                    whiteSpace: 'nowrap',
                     ...(b.textMode === 'full' &&
                       b.maxLines > 0 && {
                         display: '-webkit-box',
@@ -375,7 +374,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
                   }}
                 >
                   {b.artistLines.map((line, n) => (
-                    <div key={n}>{line}</div>
+                    <div key={n} style={{ overflow: 'hidden' }}>{line}</div>
                   ))}
                 </div>
               </>
@@ -390,7 +389,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
           </div>
         );
       })}
-      <div style={{ ...abs(sideU, body.legendY), fontSize: px(2.4), color: c.text2, fontWeight: 500, whiteSpace: 'nowrap' }}>
+      <div style={{ ...abs(body.legendX, body.legendY), fontSize: px(2.4), color: c.text2, fontWeight: 500, whiteSpace: 'nowrap' }}>
         {body.legend}
       </div>
     </>

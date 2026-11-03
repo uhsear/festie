@@ -23,7 +23,8 @@ const HHMM = /^\d{1,2}:\d{2}$/;
 const HEADER_H = 11;
 const HEADER_GAP = 1.5;
 const STAGE_ROW_H = 4;
-const LEGEND_H = 3;
+/** The last hour label and the legend share this line: the legend sits right of the label, in the columns area. */
+const LEGEND_H = 3.3;
 const DIVIDER_H = 4;
 const GUTTER_W = 5;
 const COL_GAP = 0.8;
@@ -101,33 +102,36 @@ export const inkOn = (fill: string) =>
 // ---- text fitting -------------------------------------------------------
 
 // shortcut: width table, not measured text; replace with per-platform measuring if a name clips in QA.
-const charWidthU = (sizeU: number) => sizeU * 0.56 * 1.08;
+// Calibrated on Clash Display 600-700, measured on staging and local renders: capitals run wider than lowercase.
+const glyphEm = (ch: string) => (ch === ' ' ? 0.3 : ch !== ch.toLowerCase() ? 0.76 : 0.6);
+const wordWidthU = (word: string, sizeU: number) => [...word].reduce((sum, ch) => sum + glyphEm(ch), 0) * sizeU;
 
 /** Largest size from `startU` down to `floorU` (steps of 0.2u) at which the longest word fits `widthU`. */
 export function fitArtistU(text: string, startU: number, floorU: number, widthU: number): number {
-  const longest = Math.max(0, ...text.split(/\s+/).map((w) => w.length));
+  const words = text.split(/\s+/);
   for (let size = startU; size > floorU; size = Math.round((size - 0.2) * 10) / 10) {
-    if (longest * charWidthU(size) <= widthU) return size;
+    if (words.every((w) => wordWidthU(w, size) <= widthU)) return size;
   }
   return floorU;
 }
 
-/** Greedy word wrap using the width table. A word wider than a line breaks with a visible hyphen. */
+/** Cuts `word` to fit `widthU` and ends it with an ellipsis. Never returns an empty string. */
+function ellipsizeWord(word: string, sizeU: number, widthU: number): string {
+  if (wordWidthU(word, sizeU) <= widthU) return word;
+  const chars = [...word];
+  let n = chars.length - 1;
+  while (n > 1 && wordWidthU(`${chars.slice(0, n).join('')}…`, sizeU) > widthU) n--;
+  return `${chars.slice(0, n).join('')}…`;
+}
+
+/** Greedy word wrap using the width table. Lines break only between words; a word wider than a line is ellipsized. */
 export function wrapArtist(text: string, sizeU: number, widthU: number): string[] {
-  const perLine = Math.max(2, Math.floor(widthU / charWidthU(sizeU)));
   const lines: string[] = [];
   let line = '';
-  for (let word of text.split(/\s+/).filter(Boolean)) {
-    while (word.length > perLine) {
-      if (line) {
-        lines.push(line);
-        line = '';
-      }
-      lines.push(`${word.slice(0, perLine - 1)}-`);
-      word = word.slice(perLine - 1);
-    }
-    if (!line) line = word;
-    else if (line.length + 1 + word.length <= perLine) line += ` ${word}`;
+  for (const raw of text.split(/\s+/).filter(Boolean)) {
+    const word = ellipsizeWord(raw, sizeU, widthU);
+    const joined = line ? `${line} ${word}` : word;
+    if (!line || wordWidthU(joined, sizeU) <= widthU) line = joined;
     else {
       lines.push(line);
       line = word;
@@ -140,7 +144,7 @@ export function wrapArtist(text: string, sizeU: number, widthU: number): string[
 function clampLines(lines: string[], max: number): { lines: string[]; clamped: boolean } {
   if (lines.length <= max) return { lines, clamped: false };
   const kept = lines.slice(0, Math.max(1, max));
-  kept[kept.length - 1] = `${kept[kept.length - 1]!.replace(/-$/, '')}…`;
+  kept[kept.length - 1] = `${kept[kept.length - 1]!.replace(/[-…]$/, '')}…`;
   return { lines: kept, clamped: true };
 }
 
@@ -351,12 +355,16 @@ function buildHeader(ctx: Ctx, dayIndex: number, chip: string | null, metaBottom
   const availW = 100 - 2 * ctx.sideU - 38 - (chip ? 10 : 0);
   const daySizeU = Math.max(6, Math.min(7.4, availW / (word.length * 0.66)));
   const festName = input.festival.name.replace(/\s+\d{4}$/, '');
+  const metaTop = dayChip?.date ? `${festName} · ${dayChip.date}` : festName;
+  // Room left of the day word and chip; the meta lines shrink to fit it on one line each.
+  const metaAvail = 100 - 2 * ctx.sideU - word.length * 0.66 * daySizeU - (chip ? 9 : 0) - 2;
   return {
     day: word,
     daySizeU: Math.round(daySizeU * 10) / 10,
     pageChip: chip,
-    metaTop: dayChip?.date ? `${festName} · ${dayChip.date}` : festName,
+    metaTop,
     metaBottom,
+    metaSizeU: Math.round(Math.max(2.2, Math.min(2.9, metaAvail / (Math.max(metaTop.length, metaBottom.length) * 0.58))) * 10) / 10,
     y: ctx.contentTopU,
     height: HEADER_H,
   };
@@ -587,7 +595,8 @@ function gridPageModels(items: Item[], ctx: Ctx): { page: LockscreenGridPage; it
       hours,
       blocks,
       legend: LEGEND,
-      legendY: gridY + hoursInPage * hourU + 0.8,
+      legendX: ctx.sideU + GUTTER_W,
+      legendY: gridY + hoursInPage * hourU + 0.3,
     };
     return { page, items: inPage.filter((i) => i.start >= p.startMinute), span: spanLabel(p.startMinute, p.endMinute) };
   });
@@ -623,7 +632,7 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
             const ids = items.slice(at, at + p.rows.length);
             at += p.rows.length;
             const lastEnd = ids.reduce((a, b) => (b.end > a.end ? b : a));
-            const tail = pages.length > 1 ? `until ${formatTime(lastEnd.set.endTime)}` : '';
+            const tail = pages.length > 1 ? `to ${formatTime(lastEnd.set.endTime).replace(':00', '')}` : '';
             return { body: p as LockscreenPageModel['body'], ids, tail };
           });
         })();
