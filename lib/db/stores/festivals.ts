@@ -364,6 +364,56 @@ async function replaceChildRows(client: any, festivalId: string, children: any) 
   await writeMoveMarks(client, festivalId, priorSlots, children);
 }
 
+/** Deletes one festival and every row that references it. Runs inside the caller's transaction. */
+async function deleteFestivalRows(client: any, festivalId: string) {
+  // Crew grandchild rows (FK CASCADE from crews, but crews FK is RESTRICT from festivals)
+  await client.query(
+    'DELETE FROM crew_poll_votes WHERE poll_id IN (SELECT id FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1))',
+    [festivalId],
+  );
+  await client.query('DELETE FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
+    festivalId,
+  ]);
+  await client.query(
+    'DELETE FROM crew_meeting_points WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)',
+    [festivalId],
+  );
+  await client.query('DELETE FROM crew_expenses WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
+    festivalId,
+  ]);
+  await client.query('DELETE FROM crew_activity WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
+    festivalId,
+  ]);
+  await client.query('DELETE FROM crew_members WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
+    festivalId,
+  ]);
+  // Crews (FK RESTRICT from festivals)
+  await client.query('DELETE FROM crews WHERE festival_id = $1', [festivalId]);
+  // Child rows of festival_sets (FK RESTRICT — must delete before sets)
+  await client.query(
+    'DELETE FROM set_ratings WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
+    [festivalId],
+  );
+  await client.query(
+    'DELETE FROM festival_profile_picks WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
+    [festivalId],
+  );
+  await client.query(
+    'DELETE FROM festival_profile_notes WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
+    [festivalId],
+  );
+  // Festival child tables
+  await client.query('DELETE FROM festival_sets WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM festival_stages WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM festival_days WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM festival_profiles WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM calendar_tokens WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM notification_counts WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM notification_topic_subs WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM lineup_imports WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM festivals WHERE id = $1', [festivalId]);
+}
+
 export default function createFestivalsStore(pool: Pool, utils: any) {
   const { buildFestivalRecords } = utils;
 
@@ -374,16 +424,13 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
 
     async replaceAll(nextFestivals: any[]) {
       return withTransaction(pool, async (client) => {
-        if (nextFestivals.length === 0) {
-          await client.query('DELETE FROM festivals');
-          return;
-        }
-
+        // Unlisted festivals go through the same cascade as hardDelete; a bare DELETE fails on their days.
         const festivalIds = nextFestivals.map((festival: any) => festival.id);
-        await client.query(
-          `DELETE FROM festivals WHERE id NOT IN (${festivalIds.map((_: any, i: number) => `$${i + 1}`).join(',')})`,
+        const { rows: unlisted } = await client.query('SELECT id FROM festivals WHERE NOT (id = ANY($1::text[]))', [
           festivalIds,
-        );
+        ]);
+        for (const row of unlisted) await deleteFestivalRows(client, row.id);
+        if (nextFestivals.length === 0) return;
 
         for (const festival of nextFestivals) {
           const createdAt = festival.createdAt || new Date().toISOString();
@@ -647,54 +694,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
     },
 
     async hardDelete(festivalId: string) {
-      return withTransaction(pool, async (client) => {
-        // Crew grandchild rows (FK CASCADE from crews, but crews FK is RESTRICT from festivals)
-        await client.query(
-          'DELETE FROM crew_poll_votes WHERE poll_id IN (SELECT id FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1))',
-          [festivalId],
-        );
-        await client.query('DELETE FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
-          festivalId,
-        ]);
-        await client.query(
-          'DELETE FROM crew_meeting_points WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)',
-          [festivalId],
-        );
-        await client.query('DELETE FROM crew_expenses WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
-          festivalId,
-        ]);
-        await client.query('DELETE FROM crew_activity WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
-          festivalId,
-        ]);
-        await client.query('DELETE FROM crew_members WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
-          festivalId,
-        ]);
-        // Crews (FK RESTRICT from festivals)
-        await client.query('DELETE FROM crews WHERE festival_id = $1', [festivalId]);
-        // Child rows of festival_sets (FK RESTRICT — must delete before sets)
-        await client.query(
-          'DELETE FROM set_ratings WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
-          [festivalId],
-        );
-        await client.query(
-          'DELETE FROM festival_profile_picks WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
-          [festivalId],
-        );
-        await client.query(
-          'DELETE FROM festival_profile_notes WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
-          [festivalId],
-        );
-        // Festival child tables
-        await client.query('DELETE FROM festival_sets WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM festival_stages WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM festival_days WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM festival_profiles WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM calendar_tokens WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM notification_counts WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM notification_topic_subs WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM lineup_imports WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM festivals WHERE id = $1', [festivalId]);
-      });
+      return withTransaction(pool, (client) => deleteFestivalRows(client, festivalId));
     },
 
     async create(festival: any) {

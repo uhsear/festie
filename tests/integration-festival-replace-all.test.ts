@@ -23,6 +23,7 @@ const STAGE = `main-${RUN_ID}`;
 const OLD_STAGE = `old-${RUN_ID}`;
 const SET_ID = `set-${RUN_ID}`;
 const PROFILE_ID = `prof-${RUN_ID}`;
+const GONE_ID = `fest-${RUN_ID}-gone`;
 const USER_ID = `user-${RUN_ID}`;
 
 /**
@@ -38,7 +39,7 @@ function savepointPool(client: any): any {
   return {
     connect: async () => ({
       query: (sql: any, params: any[] = []) =>
-        typeof sql === 'string' && sql.startsWith('DELETE FROM festivals WHERE id NOT IN')
+        typeof sql === 'string' && sql.startsWith('SELECT id FROM festivals WHERE NOT (id = ANY(')
           ? client.query(`${sql} AND id LIKE $${params.length + 1}`, [...params, `fest-${RUN_ID}%`])
           : client.query(map[sql] ?? sql, params),
       release: () => {},
@@ -47,6 +48,13 @@ function savepointPool(client: any): any {
 }
 
 async function seed(client: any) {
+  // An unlisted festival with a day: before T62 the prune failed on festival_days_festival_id_fkey.
+  await client.query(`INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ($1, 'Gone', '', NOW(), NOW())`, [
+    GONE_ID,
+  ]);
+  await client.query(`INSERT INTO festival_days (festival_id, day_index, label, date) VALUES ($1, 0, 'Friday', '2026-08-21')`, [
+    GONE_ID,
+  ]);
   await client.query(`INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ($1, 'RA', '', NOW(), NOW())`, [
     FEST_ID,
   ]);
@@ -110,6 +118,10 @@ describe('festivals.replaceAll keeps per-set user data', { skip }, () => {
       assert.deepEqual(notes.rows, [{ set_id: SET_ID, text: 'bring earplugs' }]);
       const stages = await client.query('SELECT id FROM festival_stages WHERE festival_id = $1', [FEST_ID]);
       assert.deepEqual(stages.rows, [{ id: STAGE }]);
+      const gone = await client.query('SELECT id FROM festivals WHERE id = $1', [GONE_ID]);
+      assert.equal(gone.rows.length, 0, 'an unlisted festival with days is removed');
+      const goneDays = await client.query('SELECT 1 FROM festival_days WHERE festival_id = $1', [GONE_ID]);
+      assert.equal(goneDays.rows.length, 0);
     } finally {
       await client.query('ROLLBACK');
       client.release();
