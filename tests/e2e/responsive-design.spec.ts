@@ -160,9 +160,15 @@ test.describe('responsive design', () => {
     await expect(drawer).toBeVisible();
     expect(await drawer.evaluate((el) => getComputedStyle(el, '::after').display)).toBe('none');
 
+    // Visible fires on the first frame, while vaul can still hold the panel at its off-screen start.
+    await expect
+      .poll(async () => {
+        const b = await drawer.boundingBox();
+        return b && Math.round(b.x + b.width);
+      })
+      .toBe(1440);
     const box = await drawer.boundingBox();
     expect(box).not.toBeNull();
-    expect(Math.round(box!.x + box!.width)).toBe(1440);
     expect(Math.round(box!.y)).toBe(0);
     expect(Math.round(box!.height)).toBe(900);
   });
