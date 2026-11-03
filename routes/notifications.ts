@@ -16,6 +16,7 @@ const BOOLEAN_PREF_KEYS = [
   'crewPolls',
   'crewMoney',
   'crewRides',
+  'crewNudges',
 ] as const;
 
 export default function createNotificationRoutes(deps: any) {

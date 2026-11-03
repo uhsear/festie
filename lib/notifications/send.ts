@@ -94,8 +94,8 @@ export const PREF_MAP: Record<string, string> = {
   crew_poll: 'crewPolls',
   crew_money: 'crewMoney',
   crew_ride: 'crewRides',
-  // T52 "Looking for you". Shares the crewUpdates switch until it has a preference column of its own.
-  crew_nudge: 'crewUpdates',
+  // T52 "Looking for you".
+  crew_nudge: 'crewNudges',
   // Admin announcements share the "Schedule changes" switch: no own preference column.
   festival_announcement: 'scheduleChanges',
 };

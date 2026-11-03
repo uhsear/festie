@@ -1232,14 +1232,18 @@ describe('festivalDataStore', () => {
       });
       const cachedProfiles = [mockProfile];
       useFestivalDataStore.setState({ allProfiles: cachedProfiles, _cachedFestivalId: 'fest-1' });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const detailResponse = { ...mockFestival, stages: [], days: [] };
+      const offline = new Error('Network request failed');
       vi.mocked(api.get)
         .mockResolvedValueOnce(detailResponse)
-        .mockRejectedValueOnce(new Error('Network request failed')); // /profiles offline
+        .mockRejectedValueOnce(offline); // /profiles offline
 
       await useFestivalDataStore.getState().selectFestival('fest-1');
       expect(useFestivalDataStore.getState().allProfiles).toEqual(cachedProfiles);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('profiles fetch failed'), 'fest-1', offline);
+      warn.mockRestore();
     });
 
     it('DROPS a persisted allProfiles snapshot from a DIFFERENT festival (staleness guard)', async () => {

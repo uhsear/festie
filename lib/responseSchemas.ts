@@ -608,6 +608,7 @@ export const notificationPrefsResponseSchema = z.object({
   crewPolls: z.number(),
   crewMoney: z.number(),
   crewRides: z.number(),
+  crewNudges: z.number(),
   mustSeeReminderMinutes: z.number().nullable(),
   dndStart: z.string().nullable(),
   dndEnd: z.string().nullable(),

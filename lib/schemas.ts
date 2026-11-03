@@ -224,6 +224,7 @@ export const notificationPrefsSchema = z
     crewPolls: z.boolean().optional(),
     crewMoney: z.boolean().optional(),
     crewRides: z.boolean().optional(),
+    crewNudges: z.boolean().optional(),
     mustSeeReminderMinutes: z
       .union([z.literal(5), z.literal(10), z.literal(15), z.literal(30), z.literal(60)])
       .nullable()

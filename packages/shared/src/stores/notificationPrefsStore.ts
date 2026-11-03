@@ -25,6 +25,8 @@ export interface NotificationPreferences {
   crewPolls: boolean;
   crewMoney: boolean;
   crewRides: boolean;
+  /** "Looking for you" nudges from a crewmate. */
+  crewNudges: boolean;
   /** Lead minutes for reminders on every Must-see pick; null = off. */
   mustSeeReminderMinutes: 5 | 10 | 15 | 30 | 60 | null;
   dndStart: string | null;
@@ -44,6 +46,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
   crewPolls: true,
   crewMoney: true,
   crewRides: true,
+  crewNudges: true,
   mustSeeReminderMinutes: null,
   dndStart: null,
   dndEnd: null,
@@ -74,6 +77,7 @@ function normalize(raw: Record<string, unknown> | null | undefined): Notificatio
     crewPolls: toBool(r.crewPolls, true),
     crewMoney: toBool(r.crewMoney, true),
     crewRides: toBool(r.crewRides, true),
+    crewNudges: toBool(r.crewNudges, true),
     mustSeeReminderMinutes: toMustSeeMinutes(r.mustSeeReminderMinutes),
     dndStart: (r.dndStart as string) ?? null,
     dndEnd: (r.dndEnd as string) ?? null,

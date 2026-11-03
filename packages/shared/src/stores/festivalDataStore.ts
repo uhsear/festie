@@ -395,9 +395,10 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       if (useAuthStore.getState().user) {
         try {
           ({ profiles, pickCounts } = await fetchProfiles(festivalId));
-        } catch (_) {
+        } catch (err) {
           // Offline (the /profiles endpoint is not service-worker-cached) or a
           // session blip. Don't trust the empty list — see currentProfile below.
+          console.warn('festival load: profiles fetch failed; keeping cached profiles', festivalId, err);
           profilesFetchFailed = true;
         }
       }

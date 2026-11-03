@@ -43,6 +43,7 @@ const ROW_ICONS: Record<NotificationBoolKey, keyof typeof Ionicons.glyphMap> = {
   crewPolls: 'stats-chart-outline',
   crewMoney: 'wallet-outline',
   crewRides: 'car-outline',
+  crewNudges: 'hand-left-outline',
   lineupDrops: 'megaphone-outline',
   crewReformed: 'refresh-outline',
   wrapReady: 'sparkles-outline',

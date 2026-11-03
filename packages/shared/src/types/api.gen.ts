@@ -2885,6 +2885,7 @@ export type components = {
         NotificationPrefs: {
             crewMeetingPoints: number;
             crewMoney: number;
+            crewNudges: number;
             crewPolls: number;
             crewReformed: number;
             crewRides: number;
