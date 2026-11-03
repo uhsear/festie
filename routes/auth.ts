@@ -151,7 +151,7 @@ export default function createAuthRoutes(deps: any): Router {
 
   router.post(
     '/register',
-    rateLimit(5, 'register'),
+    rateLimit(5, 'register', { keyFromBody: (req: any) => req.body?.username }),
     validate(schemas.register),
     async (req: Request, res: Response) => {
       try {
@@ -221,7 +221,7 @@ export default function createAuthRoutes(deps: any): Router {
     return false;
   }
 
-  router.post('/login', rateLimit(10, 'login'), validate(schemas.login), async (req: Request, res: Response) => {
+  router.post('/login', rateLimit(10, 'login', { keyFromBody: (req: any) => req.body?.username }), validate(schemas.login), async (req: Request, res: Response) => {
     try {
       const { username, password } = req.validatedBody as any;
       if (!username || !password) {
