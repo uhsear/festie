@@ -289,7 +289,6 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                     )}
                     type="button"
                     aria-pressed={isActive}
-                    aria-label={`Day: ${chip.a11y}${isToday ? ' (today)' : ''}`}
                     onClick={() => handleDaySelect(i)}
                   >
                     {isToday && (
@@ -302,7 +301,13 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                       />
                     )}
                     {chip.label}
-                    {chip.date && <span className="font-medium opacity-75">{chip.date}</span>}
+                    {chip.date && (
+                      <>
+                        {' '}
+                        <span className="font-medium opacity-75">{chip.date}</span>
+                      </>
+                    )}
+                    {isToday && <span className="sr-only">, today</span>}
                   </button>
                 );
               })}
@@ -315,7 +320,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                     'bg-bg-card border border-border-light text-text-secondary',
                     'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                   )}
-                  aria-label={`Show ${hiddenDays.length} hidden ${hiddenDays.length === 1 ? 'day' : 'days'}`}
+                  aria-label={`+${hiddenDays.length} hidden ${hiddenDays.length === 1 ? 'day' : 'days'}, show all`}
                   onClick={() => {
                     selectHaptic();
                     setHiddenDays([]);
