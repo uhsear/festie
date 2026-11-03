@@ -84,12 +84,20 @@ export const PREF_MAP: Record<string, string> = {
   set_reminder: 'setReminders',
   // M3 re-engagement triggers — each has its own per-type opt-out column.
   lineup_drop: 'lineupDrops',
+  // "New lineups and set times" covers both announcements; no column of its own.
+  set_times_out: 'lineupDrops',
   crew_reformed: 'crewReformed',
   wrap_ready: 'wrapReady',
+  // The Wrap toggle covers the morning rate prompt too (no own column).
+  rate_prompt: 'wrapReady',
   crew_meeting_point: 'crewMeetingPoints',
   crew_poll: 'crewPolls',
   crew_money: 'crewMoney',
   crew_ride: 'crewRides',
+  // T52 "Looking for you".
+  crew_nudge: 'crewNudges',
+  // Admin announcements share the "Schedule changes" switch: no own preference column.
+  festival_announcement: 'scheduleChanges',
 };
 
 /**
@@ -98,6 +106,18 @@ export const PREF_MAP: Record<string, string> = {
  * must reach people. They also route to a dedicated high-priority push channel.
  */
 const CRITICAL_TYPES = new Set(['crew_sos']);
+
+/** Types that keep their opt-out but skip quiet hours: "Looking for you" is useless once the night is over. */
+const DND_EXEMPT_TYPES = new Set(['crew_nudge']);
+/** At most this many pushes reach one user in a rolling hour. */
+export const PUSH_BUDGET_PER_HOUR = 6;
+/**
+ * Never held by the budget and never counted: an emergency, reminders the user asked
+ * for, meeting points and the "Looking for you" nudge (owner decision 2026-11-02), and
+ * set-time changes, so crew chatter cannot use up a person's budget and hold back news
+ * that one of their sets moved. The nudge has its own per-recipient cap in crew-nudge.ts.
+ */
+export const PUSH_BUDGET_EXEMPT = new Set(['crew_sos', 'set_reminder', 'crew_meeting_point', 'schedule_change', 'crew_nudge']);
 
 /** Per-type push channel/category overrides for critical alerts. */
 const CRITICAL_CHANNEL: Record<string, { channelId: string; category: string }> = {
@@ -117,12 +137,13 @@ const TYPE_CHANNEL_MAP: Record<string, string> = {
   crew_poll: 'crew',
   crew_money: 'crew',
   crew_ride: 'crew',
+  crew_nudge: 'crew',
   // Exists on every build since DC7 (useMobilePush.ts); 'updates' was the legacy fallback.
   set_reminder: 'set-reminders',
 };
 
 /** Time-sensitive types: a browser should show them soon or not at all. */
-const URGENT_WEB_TYPES = new Set(['set_reminder', 'crew_sos']);
+const URGENT_WEB_TYPES = new Set(['set_reminder', 'crew_sos', 'crew_nudge']);
 
 /** Check if a stale token error code signals the device is no longer registered */
 function isStaleTokenError(code: any) {
@@ -210,6 +231,68 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
       log.debug('notification log failed', { error: err.message });
       return null;
     }
+  }
+
+  /** Counted pushes in the last hour per user. A missing or failing count is 0: better a push than a drop. */
+  async function recentPushCounts(userIds: string[]): Promise<Map<string, number>> {
+    if (!stores.notificationLog?.countRecentPushes) return new Map();
+    try {
+      return await stores.notificationLog.countRecentPushes(userIds, [...PUSH_BUDGET_EXEMPT]);
+    } catch (err: any) {
+      log.warn('push budget count failed', { error: err.message });
+      return new Map();
+    }
+  }
+
+  // Batched reads for the fan-out paths. Each falls back to the per-user read when a store
+  // (a test double) lacks the batched method, so both paths read the same data.
+  /** Prefs per user. A failed read throws, as notificationPrefs.get does. */
+  async function prefsByUser(userIds: string[]): Promise<Map<string, any>> {
+    if (stores.notificationPrefs.getMany) return stores.notificationPrefs.getMany(userIds);
+    const byUser = new Map<string, any>();
+    for (const userId of userIds) byUser.set(userId, await stores.notificationPrefs.get(userId));
+    return byUser;
+  }
+
+  /** Device tokens per user, every requested user present. A failed read throws, as listByUser does. */
+  async function tokensByUser(userIds: string[]): Promise<Map<string, any[]>> {
+    const byUser = new Map<string, any[]>(userIds.map((userId) => [userId, []]));
+    if (!stores.deviceTokens.listByUsers) {
+      for (const userId of userIds) byUser.set(userId, await stores.deviceTokens.listByUser(userId));
+      return byUser;
+    }
+    for (const device of await stores.deviceTokens.listByUsers(userIds)) byUser.get(device.userId)?.push(device);
+    return byUser;
+  }
+
+  /** Badge count per user: the unread total, or 1 when it is zero, missing or unreadable (as getUnreadCount). */
+  async function badgeCounts(userIds: string[]): Promise<Map<string, number>> {
+    const byUser = new Map<string, number>();
+    if (!stores.notificationCounts?.unreadTotals) {
+      for (const userId of userIds) byUser.set(userId, await getUnreadCount(userId));
+      return byUser;
+    }
+    let totals = new Map<string, number>();
+    try {
+      totals = await stores.notificationCounts.unreadTotals(userIds);
+    } catch (err: any) {
+      log.debug('unread totals failed', { error: err.message });
+    }
+    for (const userId of userIds) byUser.set(userId, totals.get(userId) || 1);
+    return byUser;
+  }
+
+  /** One inbox row per user per notification; 'held' when quiet hours or the budget stopped the push. */
+  function logInboxRow({ userId, type, safeTitle, safeBody, safeData, held }: any) {
+    return logNotification({
+      userId,
+      type,
+      title: safeTitle,
+      body: safeBody,
+      data: safeData,
+      status: held ? 'held' : 'inbox',
+      platform: 'inbox',
+    });
   }
 
   /**
@@ -442,10 +525,17 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     // window — an emergency must reach people. prefKey is undefined for these
     // (omitted from PREF_MAP), but guard explicitly so intent is unmistakable.
     if (!isCritical && prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
-    // One inbox row per user per notification, before quiet hours and the device check,
-    // so a held or undeliverable push still shows in the in-app inbox.
-    await logNotification({ userId, type, title: safeTitle, body: safeBody, data: safeData, status: 'inbox', platform: 'inbox' });
-    if (!isCritical && isInDndWindow(prefs)) return { sent: 0, reason: 'dnd_active' };
+    // shortcut: count-then-send is not atomic, so concurrent sends can pass the cap by one or two; use a Redis counter if that matters.
+    let held: string | null = null;
+    if (!isCritical && !DND_EXEMPT_TYPES.has(type) && isInDndWindow(prefs)) held = 'dnd_active';
+    else if (!isCritical && !PUSH_BUDGET_EXEMPT.has(type)) {
+      const count = (await recentPushCounts([userId])).get(userId) ?? 0;
+      if (count >= PUSH_BUDGET_PER_HOUR) held = 'budget';
+    }
+    // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
+    // status 'held' means quiet hours or the hourly budget stopped the push; the push budget counts only 'inbox' rows.
+    await logInboxRow({ userId, type, safeTitle, safeBody, safeData, held });
+    if (held) return { sent: 0, reason: held };
 
     const tokens = await stores.deviceTokens.listByUser(userId);
     if (tokens.length === 0) return { sent: 0, reason: 'no_tokens' };
@@ -560,6 +650,7 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
 
   const MAX_PUSH_BATCH = 200;
   const FCM_BATCH_SIZE = 500;
+  const INBOX_INSERT_CONCURRENCY = 20;
 
   async function sendBatch(messages: any) {
     if (!messaging || messages.length === 0) return { successCount: 0, failureCount: 0, staleTokens: [] };
@@ -655,14 +746,41 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     // Browser subscriptions routed to per-device Web Push (no multicast either).
     const webSends: any[] = [];
 
-    for (const userId of batch) {
-      const prefs = await stores.notificationPrefs.get(userId);
-      if (prefs && prefKey && !prefs[prefKey]) continue;
-      await logNotification({ userId, type, title: safeTitle, body: safeBody, data: safeData, status: 'inbox', platform: 'inbox' });
-      if (isInDndWindow(prefs)) continue;
+    // shortcut: count-then-send is not atomic, so concurrent sends can pass the cap by one or two; use a Redis counter if that matters.
+    const [prefsMap, tokensMap, badgeMap, pushCounts] = await Promise.all([
+      prefsByUser(batch),
+      tokensByUser(batch),
+      badgeCounts(batch),
+      PUSH_BUDGET_EXEMPT.has(type) ? new Map<string, number>() : recentPushCounts(batch),
+    ]);
 
-      const tokens = await stores.deviceTokens.listByUser(userId);
-      const badgeCount = await getUnreadCount(userId);
+    const recipients: { userId: string; held: string | null }[] = [];
+    for (const userId of batch) {
+      const prefs = prefsMap.get(userId);
+      if (prefs && prefKey && !prefs[prefKey]) continue;
+      const held = isInDndWindow(prefs)
+        ? 'dnd_active'
+        : (pushCounts.get(userId) ?? 0) >= PUSH_BUDGET_PER_HOUR
+          ? 'budget'
+          : null;
+      recipients.push({ userId, held });
+    }
+
+    // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
+    // The inserts run INBOX_INSERT_CONCURRENCY at a time in batch order, all before the device step.
+    for (let i = 0; i < recipients.length; i += INBOX_INSERT_CONCURRENCY) {
+      await Promise.all(
+        recipients
+          .slice(i, i + INBOX_INSERT_CONCURRENCY)
+          .map(({ userId, held }) => logInboxRow({ userId, type, safeTitle, safeBody, safeData, held })),
+      );
+    }
+
+    for (const { userId, held } of recipients) {
+      if (held) continue;
+
+      const tokens = tokensMap.get(userId) ?? [];
+      const badgeCount = badgeMap.get(userId) ?? 1;
 
       for (const device of tokens) {
         if (!isValidDeviceToken(device)) continue;
@@ -829,8 +947,8 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
 
     const apns = getApns();
     let totalSent = 0;
-    for (const userId of targetUserIds) {
-      const tokens = await stores.deviceTokens.listByUser(userId);
+    const tokensMap = await tokensByUser(targetUserIds);
+    for (const [userId, tokens] of tokensMap) {
       for (const device of tokens) {
         if (!isValidDeviceToken(device)) continue;
 

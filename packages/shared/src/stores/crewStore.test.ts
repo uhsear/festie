@@ -38,6 +38,9 @@ function resetStore() {
     meetingPoints: [],
     expenses: [],
     expenseBalances: [],
+    expenseCurrency: 'USD',
+    packingItems: [],
+    rideOffers: [],
     activity: [],
     crewLoading: false,
     error: null,
@@ -75,6 +78,29 @@ describe('crewStore', () => {
 
     it('starts with null error', () => {
       expect(useCrewStore.getState().error).toBeNull();
+    });
+  });
+
+  describe('crew lock and Plan B', () => {
+    it('setCrewLocked merges inviteLocked into activeCrew and crews', async () => {
+      useCrewStore.setState({ crews: [mockCrew], activeCrew: mockCrew });
+      vi.mocked(api.put).mockResolvedValueOnce({ ...mockCrew, inviteLocked: true });
+      const crew = await useCrewStore.getState().setCrewLocked('crew-1', true);
+      expect(api.put).toHaveBeenCalledWith('/crews/crew-1', { inviteLocked: true });
+      expect(crew.inviteLocked).toBe(true);
+      expect(useCrewStore.getState().activeCrew?.inviteLocked).toBe(true);
+      expect(useCrewStore.getState().crews[0]?.inviteLocked).toBe(true);
+    });
+
+    it('applyHomeBaseUpdate keeps Plan B without a planB key and clears it on null', () => {
+      const withPlanB = { ...mockCrew, homeBasePlanB: 'Top of the hour' };
+      useCrewStore.setState({ crews: [withPlanB], activeCrew: withPlanB });
+      useCrewStore.getState().applyHomeBaseUpdate('crew-1', { location: 'Gate', time: null });
+      expect(useCrewStore.getState().activeCrew?.homeBasePlanB).toBe('Top of the hour');
+      expect(useCrewStore.getState().crews[0]?.homeBasePlanB).toBe('Top of the hour');
+      useCrewStore.getState().applyHomeBaseUpdate('crew-1', { location: 'Gate', time: null, planB: null });
+      expect(useCrewStore.getState().activeCrew?.homeBasePlanB).toBeNull();
+      expect(useCrewStore.getState().crews[0]?.homeBasePlanB).toBeNull();
     });
   });
 
@@ -581,6 +607,103 @@ describe('crewStore', () => {
     });
   });
 
+  describe('expense edit, currency, confirm and remind', () => {
+    const request = { description: 'Gas', amount: 60, splitWith: ['user-1', 'user-2'], category: 'transport' };
+
+    it('updateExpense sends PUT then reloads', async () => {
+      vi.mocked(api.put).mockResolvedValueOnce({ id: 'e1' });
+      vi.mocked(api.get).mockResolvedValueOnce([{ id: 'e1' }]).mockResolvedValueOnce({ balances: [], settlements: [] });
+      await expect(useCrewStore.getState().updateExpense('crew-1', 'e1', request)).resolves.toBe('sent');
+      expect(api.put).toHaveBeenCalledWith('/crews/crew-1/expenses/e1', request);
+      expect(api.get).toHaveBeenCalledWith('/crews/crew-1/expenses');
+      expect(useCrewStore.getState().expenses).toEqual([{ id: 'e1' }]);
+    });
+
+    it('loadBalances sets expenseCurrency from the plan, USD when absent', async () => {
+      vi.mocked(api.get)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce({ balances: [], settlements: [], currency: 'EUR' });
+      await useCrewStore.getState().loadExpenses('crew-1');
+      expect(useCrewStore.getState().expenseCurrency).toBe('EUR');
+      vi.mocked(api.get).mockResolvedValueOnce([]).mockResolvedValueOnce({ balances: [], settlements: [] });
+      await useCrewStore.getState().loadExpenses('crew-1');
+      expect(useCrewStore.getState().expenseCurrency).toBe('USD');
+    });
+
+    it('setExpenseCurrency sets at once and rolls back on error', async () => {
+      useCrewStore.setState({ expenseCurrency: 'USD' });
+      vi.mocked(api.put).mockResolvedValueOnce({ currency: 'EUR' });
+      await expect(useCrewStore.getState().setExpenseCurrency('crew-1', 'EUR')).resolves.toBe('sent');
+      expect(useCrewStore.getState().expenseCurrency).toBe('EUR');
+      expect(api.put).toHaveBeenCalledWith('/crews/crew-1/expenses/currency', { currency: 'EUR' });
+
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('403'));
+      await expect(useCrewStore.getState().setExpenseCurrency('crew-1', 'GBP')).rejects.toThrow('403');
+      expect(useCrewStore.getState().expenseCurrency).toBe('EUR');
+    });
+
+    it('confirmPayment sets the local flag', async () => {
+      const row = { id: 'p1', crew_id: 'crew-1', category: 'settlement' };
+      useCrewStore.setState({ expenses: [row as never] });
+      vi.mocked(api.post).mockResolvedValueOnce({});
+      vi.mocked(api.get).mockRejectedValueOnce(new Error('offline refetch'));
+      await expect(useCrewStore.getState().confirmPayment('crew-1', 'p1', false)).resolves.toBe('sent');
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/expenses/p1/confirm', { received: false });
+      const after = useCrewStore.getState().expenses[0]!;
+      expect(after.disputed_at).toEqual(expect.any(String));
+      expect(after.confirmed_at).toBeUndefined();
+    });
+
+    it('remindPayment rethrows the 409 so the caller can show its message', async () => {
+      const conflict = Object.assign(new Error('You already reminded Sam today. Try again tomorrow.'), { status: 409 });
+      vi.mocked(api.post).mockRejectedValueOnce(conflict);
+      await expect(useCrewStore.getState().remindPayment('crew-1', 'user-2')).rejects.toBe(conflict);
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/expenses/remind', { userId: 'user-2' });
+    });
+  });
+
+  describe('packing batch and ride seats', () => {
+    const offer = (passenger_ids: string[]) =>
+      ({ id: 'r1', crew_id: 'crew-1', created_by: 'user-2', seats: 2, passenger_ids }) as never;
+
+    it('addPackingItems prepends the returned items', async () => {
+      useCrewStore.setState({ packingItems: [{ id: 'old' } as never] });
+      vi.mocked(api.post).mockResolvedValueOnce({ items: [{ id: 'a' }, { id: 'b' }] });
+      await expect(useCrewStore.getState().addPackingItems('crew-1', ['Tent', 'Cooler'])).resolves.toBe('sent');
+      expect(api.post).toHaveBeenCalledWith(
+        '/crews/crew-1/packing/batch',
+        { labels: ['Tent', 'Cooler'] },
+        expect.objectContaining({ onOptimisticCreate: expect.any(Function) }),
+      );
+      expect(useCrewStore.getState().packingItems.map((i) => i.id)).toEqual(['a', 'b', 'old']);
+    });
+
+    it('takeRideSeat adds me, then replaces the offer with the server copy', async () => {
+      useCrewStore.setState({ rideOffers: [offer([])] });
+      vi.mocked(api.post).mockResolvedValueOnce({ offer: { ...offer(['user-1']), seats: 3 } });
+      await expect(useCrewStore.getState().takeRideSeat('crew-1', 'r1', 'user-1')).resolves.toBe('sent');
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/rides/r1/seat');
+      expect(useCrewStore.getState().rideOffers[0]!.seats).toBe(3);
+    });
+
+    it('takeRideSeat rolls back on 409 and keeps a concurrent rider', async () => {
+      useCrewStore.setState({ rideOffers: [offer([])] });
+      vi.mocked(api.post).mockImplementationOnce(async () => {
+        useCrewStore.setState({ rideOffers: [offer(['user-1', 'user-3'])] });
+        throw new Error('This ride is full.');
+      });
+      await expect(useCrewStore.getState().takeRideSeat('crew-1', 'r1', 'user-1')).rejects.toThrow('full');
+      expect(useCrewStore.getState().rideOffers[0]!.passenger_ids).toEqual(['user-3']);
+    });
+
+    it('leaveRideSeat removes me and rolls back on error', async () => {
+      useCrewStore.setState({ rideOffers: [offer(['user-1'])] });
+      vi.mocked(api.delete).mockRejectedValueOnce(new Error('boom'));
+      await expect(useCrewStore.getState().leaveRideSeat('crew-1', 'r1', 'user-1')).rejects.toThrow('boom');
+      expect(useCrewStore.getState().rideOffers[0]!.passenger_ids).toEqual(['user-1']);
+    });
+  });
+
   describe('closePoll — server-side meeting point', () => {
     const meetingPoint = {
       id: 'mp-1',
@@ -616,7 +739,9 @@ describe('crewStore', () => {
 
       await useCrewStore.getState().closePoll('crew-1', 'poll-1', { festivalId: 'fest-1', seedReminder });
 
-      expect(useCrewStore.getState().polls).toHaveLength(0);
+      // The poll stays in state, marked closed, for the Decided group.
+      expect(useCrewStore.getState().polls).toHaveLength(1);
+      expect(useCrewStore.getState().polls[0]!.closed).toBe(true);
       expect(useCrewStore.getState().meetingPoints[0]!.label).toBe('Fisher');
       expect(seedReminder).toHaveBeenCalledWith('set-9pm', 'fest-1');
       expect(api.post).not.toHaveBeenCalled();
@@ -641,7 +766,7 @@ describe('crewStore', () => {
 
       await useCrewStore.getState().closePoll('crew-1', 'poll-1', { festivalId: 'fest-1', seedReminder });
 
-      expect(useCrewStore.getState().polls).toHaveLength(0);
+      expect(useCrewStore.getState().polls[0]!.closed).toBe(true);
       expect(seedReminder).not.toHaveBeenCalled();
     });
 
@@ -653,7 +778,7 @@ describe('crewStore', () => {
       await expect(
         useCrewStore.getState().closePoll('crew-1', 'poll-1', { festivalId: 'fest-1', seedReminder }),
       ).resolves.toBeUndefined();
-      expect(useCrewStore.getState().polls).toHaveLength(0);
+      expect(useCrewStore.getState().polls[0]!.closed).toBe(true);
     });
   });
 
@@ -747,6 +872,89 @@ describe('crewStore', () => {
       await expect(useCrewStore.getState().loadActivity('crew-1')).rejects.toThrow('nope');
       expect(useCrewStore.getState().error).toBe('nope');
     });
+
+    it('loadOlderActivity appends page 2 and a later loadActivity keeps it', async () => {
+      const row = (id: string, at: string) => ({ id, created_at: at });
+      const page1 = [row('a3', '2026-01-03T00:00:00Z'), row('a2', '2026-01-02T00:00:00Z')];
+      const page2 = [row('a1', '2026-01-01T00:00:00Z')];
+      useCrewStore.setState({ activity: [], activityNextCursor: null });
+      vi.mocked(api.get).mockResolvedValueOnce({ items: page1, nextCursor: 'c1' });
+      await useCrewStore.getState().loadActivity('crew-1');
+      expect(useCrewStore.getState().activityNextCursor).toBe('c1');
+
+      vi.mocked(api.get).mockResolvedValueOnce({ items: page2, nextCursor: null });
+      await useCrewStore.getState().loadOlderActivity('crew-1');
+      expect(api.get).toHaveBeenLastCalledWith('/crews/crew-1/activity?cursor=c1');
+      expect(useCrewStore.getState().activity.map((a) => a.id)).toEqual(['a3', 'a2', 'a1']);
+      expect(useCrewStore.getState().activityNextCursor).toBeNull();
+
+      vi.mocked(api.get).mockResolvedValueOnce({ items: page1, nextCursor: 'c1' });
+      await useCrewStore.getState().loadActivity('crew-1');
+      expect(useCrewStore.getState().activity.map((a) => a.id)).toEqual(['a3', 'a2', 'a1']);
+      expect(useCrewStore.getState().activityNextCursor).toBeNull();
+    });
+
+    it('loadOlderActivity does nothing without a cursor', async () => {
+      useCrewStore.setState({ activityNextCursor: null });
+      vi.mocked(api.get).mockClear();
+      await useCrewStore.getState().loadOlderActivity('crew-1');
+      expect(api.get).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('multi-answer votes, nudge', () => {
+    const basePoll = (votes: CrewPoll['votes']): CrewPoll => ({
+      id: 'poll-1',
+      crew_id: 'crew-1',
+      created_by: 'user-1',
+      question: 'Q',
+      options: ['A', 'B', 'C'],
+      votes,
+      closes_at: null,
+      closed: false,
+      multi_answer: true,
+      created_at: '2026-01-01T00:00:00Z',
+    });
+
+    it('writes one entry per index and rolls back to my prior entries', async () => {
+      useAuthStore.setState({ user: { id: 'user-1' } as never });
+      useCrewStore.setState({ polls: [basePoll([{ option: 2, user_id: 'user-1' }])] });
+      vi.mocked(api.post).mockImplementationOnce(async () => {
+        expect(useCrewStore.getState().polls[0]!.votes.filter((v) => v.user_id === 'user-1')).toHaveLength(2);
+        throw new Error('nope');
+      });
+      await expect(useCrewStore.getState().votePoll('crew-1', 'poll-1', [0, 1])).rejects.toThrow('nope');
+      expect(api.post).toHaveBeenLastCalledWith('/crews/crew-1/polls/poll-1/vote', { optionIndexes: [0, 1] });
+      expect(useCrewStore.getState().polls[0]!.votes).toEqual([{ option: 2, user_id: 'user-1' }]);
+    });
+
+    it('an empty array removes my entries', async () => {
+      useAuthStore.setState({ user: { id: 'user-1' } as never });
+      useCrewStore.setState({
+        polls: [basePoll([{ option: 1, user_id: 'user-1' }, { option: 0, user_id: 'user-2' }])],
+      });
+      vi.mocked(api.post).mockImplementationOnce(async () => {
+        expect(useCrewStore.getState().polls[0]!.votes).toEqual([{ option: 0, user_id: 'user-2' }]);
+        return { voted: true };
+      });
+      vi.mocked(api.get).mockResolvedValueOnce({ polls: [] });
+      await useCrewStore.getState().votePoll('crew-1', 'poll-1', []);
+    });
+
+    it('nudgePoll sets nudged_at and returns the count', async () => {
+      useCrewStore.setState({ polls: [basePoll([])] });
+      vi.mocked(api.post).mockResolvedValueOnce({ nudged: 3 });
+      await expect(useCrewStore.getState().nudgePoll('crew-1', 'poll-1')).resolves.toBe(3);
+      expect(api.post).toHaveBeenLastCalledWith('/crews/crew-1/polls/poll-1/nudge', {}, { _bypassOfflineQueue: true });
+      expect(useCrewStore.getState().polls[0]!.nudged_at).toBeTruthy();
+    });
+
+    it('nudgePoll sets error and re-throws on failure', async () => {
+      useCrewStore.setState({ polls: [basePoll([])] });
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('A reminder was already sent for this poll.'));
+      await expect(useCrewStore.getState().nudgePoll('crew-1', 'poll-1')).rejects.toThrow();
+      expect(useCrewStore.getState().error).toBeTruthy();
+    });
   });
 
   // WF4: both votePoll and updateMyStatus write optimistically, await a round-
@@ -754,6 +962,52 @@ describe('crewStore', () => {
   // clobbers a sibling change (another member's vote/status) that a socket
   // setter applied while the write was in flight; the rollback must scope to
   // only the row this action touched, against the LATEST state.
+  describe('handOverAndLeave', () => {
+    it('transfers then leaves and returns left', async () => {
+      vi.mocked(api.put).mockResolvedValueOnce({});
+      vi.mocked(api.delete).mockResolvedValueOnce({});
+      await expect(useCrewStore.getState().handOverAndLeave('crew-1', 'user-2')).resolves.toBe('left');
+      expect(api.put).toHaveBeenCalledWith('/crews/crew-1/transfer', { userId: 'user-2' });
+      expect(api.delete).toHaveBeenCalledWith('/crews/crew-1/leave');
+    });
+
+    it('returns owner-changed when leave rejects', async () => {
+      vi.mocked(api.put).mockResolvedValueOnce({});
+      vi.mocked(api.delete).mockRejectedValueOnce(new Error('boom'));
+      await expect(useCrewStore.getState().handOverAndLeave('crew-1', 'user-2')).resolves.toBe('owner-changed');
+      expect(useCrewStore.getState().error).toBeTruthy();
+    });
+
+    it('throws when transfer rejects and never leaves', async () => {
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('Transfer denied'));
+      await expect(useCrewStore.getState().handOverAndLeave('crew-1', 'user-2')).rejects.toThrow('Transfer denied');
+      expect(api.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forceAddByUsername', () => {
+    it('strips @, matches exactly ignoring case, and returns the matched username', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce([
+        { id: 'u-9', username: 'asirhelper' },
+        { id: 'u-2', username: 'Asir' },
+      ]);
+      vi.mocked(api.post).mockResolvedValueOnce({ ...mockCrew, members: [] });
+      const name = await useCrewStore.getState().forceAddByUsername('crew-1', ' @asir ');
+      expect(name).toBe('Asir');
+      expect(api.get).toHaveBeenCalledWith('/crews/search-users?q=asir');
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/members', { userId: 'u-2' });
+    });
+
+    it('throws and sets the error when there is no exact match', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce([{ id: 'u-9', username: 'asirhelper' }]);
+      await expect(useCrewStore.getState().forceAddByUsername('crew-1', 'x')).rejects.toThrow(
+        'No user called "x". Check the spelling.',
+      );
+      expect(useCrewStore.getState().error).toBe('No user called "x". Check the spelling.');
+      expect(api.post).not.toHaveBeenCalled();
+    });
+  });
+
   describe('optimistic rollback preserves concurrent socket updates', () => {
     it('votePoll rolls back only my vote, keeping a concurrent peer vote', async () => {
       useAuthStore.setState({ user: { id: 'user-1' } as never });
@@ -773,17 +1027,97 @@ describe('crewStore', () => {
       // The in-flight POST: a peer's vote lands via the socket setter, THEN the
       // write rejects — modelling a concurrent update during the round-trip.
       vi.mocked(api.post).mockImplementationOnce(async () => {
-        useCrewStore.getState().applyPollVote('poll-1', 'user-2', 0);
+        useCrewStore.getState().applyPollVote('poll-1', 'user-2', [0]);
         throw new Error('poll closed');
       });
 
-      await expect(useCrewStore.getState().votePoll('crew-1', 'poll-1', 1)).rejects.toThrow('poll closed');
+      await expect(useCrewStore.getState().votePoll('crew-1', 'poll-1', [1])).rejects.toThrow('poll closed');
 
       const votes = useCrewStore.getState().polls[0]!.votes;
       // Peer's concurrent vote survived the rollback (the bug clobbered it).
       expect(votes.find((v) => v.user_id === 'user-2')?.option).toBe(0);
       // My optimistic vote rolled back to my PRIOR vote (option 2), not dropped.
       expect(votes.find((v) => v.user_id === 'user-1')?.option).toBe(2);
+    });
+
+    it('setMyDays updates optimistically and sends the deterministic clientId', async () => {
+      useCrewStore.setState({ crewDays: [{ userId: 'user-2', dayIndex: 0, answer: 'no' }] });
+      vi.mocked(api.put).mockResolvedValueOnce({ days: [{ userId: 'user-1', dayIndex: 1, answer: 'going' }] });
+      const outcome = await useCrewStore.getState().setMyDays('crew-1', 'user-1', {
+        days: [{ dayIndex: 1, answer: 'going' }],
+      });
+      expect(outcome).toBe('sent');
+      expect(vi.mocked(api.put).mock.calls[0]![2]).toMatchObject({
+        clientId: 'PUT:/crews/crew-1/days:days-crew-1-user-1',
+        offlineLabel: 'Update my days',
+      });
+      expect(useCrewStore.getState().crewDays).toHaveLength(2);
+    });
+
+    it('setMyDays rolls back only my rows on an online reject', async () => {
+      useCrewStore.setState({
+        crewDays: [
+          { userId: 'user-1', dayIndex: 0, answer: 'going' },
+          { userId: 'user-2', dayIndex: 0, answer: 'no' },
+        ],
+      });
+      vi.mocked(api.put).mockImplementationOnce(async () => {
+        useCrewStore.getState().applyCrewDays({
+          crewId: 'crew-1',
+          userId: 'user-3',
+          days: [{ userId: 'user-3', dayIndex: 1, answer: 'maybe' }],
+        });
+        throw new Error('rejected');
+      });
+      useCrewStore.setState({ activeCrew: mockCrew });
+      await expect(
+        useCrewStore.getState().setMyDays('crew-1', 'user-1', { days: [{ dayIndex: 0, answer: 'no' }] }),
+      ).rejects.toThrow('rejected');
+      const rows = useCrewStore.getState().crewDays;
+      expect(rows.find((d) => d.userId === 'user-1')).toMatchObject({ dayIndex: 0, answer: 'going' });
+      expect(rows.find((d) => d.userId === 'user-3')).toBeDefined();
+      expect(rows.find((d) => d.userId === 'user-2')).toBeDefined();
+    });
+
+    it('setMeetingPointComing adds my id, then rolls it back on reject', async () => {
+      useCrewStore.setState({ meetingPoints: [{ id: 'mp1', coming: ['user-2'] } as never] });
+      vi.mocked(api.put).mockRejectedValueOnce(new Error('rejected'));
+      await expect(useCrewStore.getState().setMeetingPointComing('crew-1', 'mp1', 'user-1', true)).rejects.toThrow(
+        'rejected',
+      );
+      expect(useCrewStore.getState().meetingPoints[0]!.coming).toEqual(['user-2']);
+      expect(vi.mocked(api.put).mock.calls[0]![2]).toMatchObject({
+        clientId: 'PUT:/crews/crew-1/meeting-points/mp1/coming:coming-mp1-user-1',
+        offlineLabel: "Update I'll be there",
+      });
+    });
+
+    it('setMeetingPointComing replaces the row with the server row', async () => {
+      useCrewStore.setState({ meetingPoints: [{ id: 'mp1', coming: [] } as never] });
+      vi.mocked(api.put).mockResolvedValueOnce({ meetingPoint: { id: 'mp1', coming: ['user-1', 'user-2'] } });
+      await useCrewStore.getState().setMeetingPointComing('crew-1', 'mp1', 'user-1', true);
+      expect(useCrewStore.getState().meetingPoints[0]!.coming).toEqual(['user-1', 'user-2']);
+    });
+
+    it('loadCrewDays treats a 404 as no answers', async () => {
+      useCrewStore.setState({ activeCrew: mockCrew, crewDays: [{ userId: 'u', dayIndex: 0, answer: 'no' }] });
+      vi.mocked(api.get).mockRejectedValueOnce(Object.assign(new Error('Not found'), { status: 404 }));
+      await expect(useCrewStore.getState().loadCrewDays(mockCrew.id)).resolves.toBeUndefined();
+      expect(useCrewStore.getState().crewDays).toEqual([]);
+    });
+
+    it('applyCrewDays replaces that user rows and ignores another crew', () => {
+      useCrewStore.setState({
+        activeCrew: mockCrew,
+        crewDays: [
+          { userId: 'u1', dayIndex: 0, answer: 'no' },
+          { userId: 'u2', dayIndex: 0, answer: 'no' },
+        ],
+      });
+      useCrewStore.getState().applyCrewDays({ crewId: 'other', userId: 'u1', days: [] });
+      expect(useCrewStore.getState().crewDays).toHaveLength(2);
+      useCrewStore.getState().applyCrewDays({ crewId: mockCrew.id, userId: 'u1', days: [] });
+      expect(useCrewStore.getState().crewDays).toEqual([{ userId: 'u2', dayIndex: 0, answer: 'no' }]);
     });
 
     it('updateMyStatus rolls back only my row, keeping a concurrent peer status', async () => {

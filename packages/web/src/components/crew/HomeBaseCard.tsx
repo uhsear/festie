@@ -3,7 +3,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, formatTime, writeOutcomeOf, writeOutcomeMessage } from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
-import { MapPin, X, Clock } from 'lucide-react';
+import { X, Clock } from 'lucide-react';
+import { COPY, planBLine } from '@festie/shared/constants';
+import { useCrewStore } from '@festie/shared/stores';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import IconButton from '../ui/IconButton';
 import { inputBase } from '../../lib/styles';
 
@@ -24,6 +27,7 @@ interface Props {
 // Legacy free-text values ("6pm") are not valid for <input type="time">, so they stay
 // out of the field and are kept on save instead.
 const HHMM = /^\d{2}:\d{2}$/;
+const HomeIcon = CONCEPT_ICON.homeBase;
 
 export default function HomeBaseCard({ crewId, currentLocation, currentTime, isOwner, onSaved }: Props) {
   const { toast, toastError } = useToast();
@@ -31,21 +35,24 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
   const [editing, setEditing] = useState(false);
   const [loc, setLoc] = useState(currentLocation || '');
   const [time, setTime] = useState(currentTime && HHMM.test(currentTime) ? currentTime : '');
+  const homeBasePlanB = useCrewStore((s) => (s.activeCrew?.id === crewId ? s.activeCrew.homeBasePlanB ?? null : null));
+  const [planB, setPlanB] = useState(homeBasePlanB || '');
 
   // Keep form in sync if the parent-supplied values change (e.g. after another
   // user/tab saves a home base via socket).
   useEffect(() => {
     setLoc(currentLocation || '');
     setTime(currentTime && HHMM.test(currentTime) ? currentTime : '');
-  }, [currentLocation, currentTime]);
+    setPlanB(homeBasePlanB || '');
+  }, [currentLocation, currentTime, homeBasePlanB]);
 
   const save = useMutation({
-    mutationFn: (payload: { location: string; time: string | null }) => api.put(`/crews/${crewId}/home-base`, payload),
-    onSuccess: async (result) => {
+    mutationFn: (payload: { location: string | null; time: string | null; planB: string | null }) => api.put(`/crews/${crewId}/home-base`, payload),
+    onSuccess: async (result, payload) => {
       qc.invalidateQueries({ queryKey: ['crews'] });
       qc.invalidateQueries({ queryKey: ['crew', crewId] });
       const outcome = writeOutcomeOf(result);
-      toast(writeOutcomeMessage(outcome, 'Home base updated'), outcome === 'queued' ? 'info' : 'success');
+      toast(writeOutcomeMessage(outcome, payload.location ? 'Home Base updated' : 'Home Base removed'), outcome === 'queued' ? 'info' : 'success');
       setEditing(false);
       try {
         await onSaved?.();
@@ -68,8 +75,8 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
       <div className="p-3 rounded-lg bg-bg-card border border-accent-aqua/40 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-text-primary flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
-            Set Home Base
+            <HomeIcon className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
+            {COPY.homeBase.set}
           </h3>
           <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={() => setEditing(false)} />
         </div>
@@ -81,6 +88,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
           onChange={(e) => setLoc(e.target.value)}
           maxLength={200}
         />
+        <p className="text-xs text-text-muted -mt-1">{COPY.homeBase.hint}</p>
         <input
           type="time"
           className={`${inputBase} min-h-11`}
@@ -89,6 +97,17 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
           value={time}
           onChange={(e) => setTime(e.target.value)}
         />
+        <label className="block text-xs text-text-muted">
+          {COPY.homeBase.planBLabel}
+          <input
+            className={`${inputBase} min-h-11 mt-1`}
+            placeholder={COPY.homeBase.planBPlaceholder}
+            aria-label={COPY.homeBase.planBLabel}
+            value={planB}
+            onChange={(e) => setPlanB(e.target.value)}
+            maxLength={140}
+          />
+        </label>
         <Button
           variant="primary"
           isLoading={save.isPending}
@@ -97,24 +116,36 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
             save.mutate({
               location: loc.trim(),
               time: time || (currentTime && !HHMM.test(currentTime) ? currentTime : null),
+              planB: planB.trim() || null,
             })
           }
           className="w-full min-h-11"
         >
           Save
         </Button>
+        {hasHomeBase && (
+          <Button
+            variant="ghost"
+            isLoading={save.isPending}
+            onClick={() => save.mutate({ location: null, time: null, planB: null })}
+            className="w-full min-h-11"
+          >
+            Remove Home Base
+          </Button>
+        )}
       </div>
     );
   }
 
   const body = (
     <div className="flex items-center gap-2">
-        <MapPin
+        <HomeIcon
           className={`w-4 h-4 flex-shrink-0 ${hasHomeBase ? 'text-accent-aqua' : 'text-text-muted'}`}
           aria-hidden="true"
         />
         <div className="flex-1 min-w-0">
           {hasHomeBase ? (
+            <>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-text-primary truncate">{currentLocation}</span>
               {currentTime && (
@@ -124,8 +155,11 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
                 </span>
               )}
             </div>
+            <p className="text-xs text-text-muted mt-0.5">{COPY.homeBase.hint}</p>
+            {homeBasePlanB && <p className="text-xs text-text-secondary mt-0.5 break-words">{planBLine(homeBasePlanB)}</p>}
+            </>
           ) : (
-            <span className="text-xs text-text-secondary">Tap to set your crew's Home Base</span>
+            <span className="text-xs text-text-secondary">{COPY.homeBase.empty}</span>
           )}
         </div>
     </div>

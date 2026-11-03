@@ -6,7 +6,7 @@ describe('LiveBadge', () => {
   it('renders LIVE status with coralStrong styling', () => {
     render(<LiveBadge status="live" label="LIVE" />);
     expect(screen.getByText('LIVE')).toBeInTheDocument();
-    const wrapper = screen.getByLabelText('Live');
+    const wrapper = screen.getByLabelText('Playing now');
     // R6: live uses the coralStrong fill token (not plain coral)
     expect(wrapper.className).toContain('bg-accent-coral-strong');
   });
@@ -29,6 +29,17 @@ describe('LiveBadge', () => {
     expect(screen.getByText('Ended')).toBeInTheDocument();
   });
 
+  it('styles past and tba from theme tokens, not fixed greys', () => {
+    for (const status of ['past', 'tba'] as const) {
+      const { container, unmount } = render(<LiveBadge status={status} label="x" />);
+      const cls = (container.firstChild as HTMLElement).className;
+      expect(cls).toContain('bg-bg-secondary');
+      expect(cls).toContain('text-text-muted');
+      expect(cls).not.toContain('#');
+      unmount();
+    }
+  });
+
   it('renders tba status', () => {
     render(<LiveBadge status="tba" label="TBA" />);
     expect(screen.getByText('TBA')).toBeInTheDocument();
@@ -41,7 +52,7 @@ describe('LiveBadge', () => {
 
   it('applies custom className', () => {
     render(<LiveBadge status="live" label="LIVE" className="my-class" />);
-    const wrapper = screen.getByLabelText('Live');
+    const wrapper = screen.getByLabelText('Playing now');
     expect(wrapper.className).toContain('my-class');
   });
 

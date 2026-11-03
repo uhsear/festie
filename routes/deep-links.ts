@@ -15,12 +15,8 @@ export default function createDeepLinkRoutes(deps: any) {
   const router = Router();
 
   // Apple App Site Association for universal links (iOS deep linking)
-  // NOTE: iOS configuration incomplete — APPLE_TEAM_ID must be set to a real value
-  // once an iOS build is created. To set up:
-  //   1. Build iOS app in Xcode with bundle ID matching appIDs below
-  //   2. Extract Team ID from Apple Developer account
-  //   3. Set environment variable: APPLE_TEAM_ID=10ABCDEFGH
-  //   4. Verify universal links work on iOS device: Settings > Developer > App Links
+  // APPLE_TEAM_ID comes from the Apple Developer account (for example 10ABCDEFGH).
+  // While it is unset, this route returns 503 and iOS universal links stay off.
   router.get('/apple-app-site-association', (req: any, res: any) => {
     // SECURITY: Validate that APPLE_TEAM_ID is configured (not placeholder/default)
     if (!config.APPLE_TEAM_ID || config.APPLE_TEAM_ID === 'TEAMID' || config.APPLE_TEAM_ID.trim() === '') {

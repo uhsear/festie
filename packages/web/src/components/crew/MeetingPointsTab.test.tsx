@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // --- Mocks ---
@@ -18,13 +18,13 @@ vi.mock('lucide-react', () => ({
   List: () => <span data-testid="list-icon" />,
   // 055: daily-recurrence toggle + badge.
   Repeat: () => <span data-testid="repeat-icon" />,
-  // Meeting-point category icons (replaced emoji).
-  Tent: () => <span data-testid="tent-icon" />,
-  Crosshair: () => <span data-testid="crosshair-icon" />,
+  // Meeting-point kind icons, via CONCEPT_ICON (lib/conceptIcons.ts, which imports all eight).
   Flag: () => <span data-testid="flag-icon" />,
-  Moon: () => <span data-testid="moon-icon" />,
   AlertTriangle: () => <span data-testid="alert-triangle-icon" />,
-  Bookmark: () => <span data-testid="bookmark-icon" />,
+  Home: () => <span data-testid="home-icon" />,
+  Gift: () => <span data-testid="gift-icon" />,
+  ListChecks: () => <span data-testid="list-checks-icon" />,
+  Zap: () => <span data-testid="zap-icon" />,
   Clock: () => <span data-testid="clock-icon" />,
   // CrewStatus (rendered by MeetingPointsTab) pulls these too.
   LocateFixed: () => <span data-testid="locate-fixed-icon" />,
@@ -59,7 +59,7 @@ const { festivalZone } = vi.hoisted(() => ({ festivalZone: { value: undefined as
 
 vi.mock('@festie/shared', async () => {
   // Real wall-clock helpers: the zoned save/edit round-trip is what these tests check.
-  const { meetAtFromWallInput, meetAtToWallInput } =
+  const { meetAtFromWallInput, meetAtToWallInput, splitMeetingPoints, meetingPointDirectionsUrl, MEETING_POINT_PAST_HINT } =
     await vi.importActual<typeof import('@festie/shared/utils')>('@festie/shared/utils');
   const crewState = {
     crewStatuses: [] as unknown[],
@@ -78,6 +78,10 @@ vi.mock('@festie/shared', async () => {
     resolveFestivalTimeZone: () => festivalZone.value,
     meetAtFromWallInput,
     meetAtToWallInput,
+    splitMeetingPoints,
+    meetingPointDirectionsUrl,
+    MEETING_POINT_PAST_HINT,
+    fetchPastMeetingPoints: vi.fn(),
     writeOutcomeOf: (r: { _optimistic?: boolean } | undefined) => (r?._optimistic ? 'queued' : 'sent'),
     writeOutcomeMessage: (_o: string, m: string) => m,
     isPending: (i: { _optimistic?: boolean } | undefined) => i?._optimistic === true,
@@ -90,6 +94,39 @@ vi.mock('@festie/shared', async () => {
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (selector: (s: { currentFestival: unknown; days: unknown[] }) => unknown) =>
     selector({ currentFestival: null, days: [] }),
+}));
+
+const { setComing } = vi.hoisted(() => ({ setComing: vi.fn(() => Promise.resolve('sent')) }));
+vi.mock('@festie/shared/stores/crewStore', () => ({
+  useCrewStore: { getState: () => ({ setMeetingPointComing: setComing }) },
+}));
+
+// P4 adds imports to CrewStatus; it is not under test here.
+vi.mock('./CrewStatus', () => ({ default: () => null }));
+
+// CrewMap is lazy (maplibre); stand in a button that fires a map click.
+vi.mock('./CrewMap', () => ({
+  default: ({
+    onMapClick,
+    onSetMeetingPoint,
+  }: {
+    onMapClick?: (c: { latitude: number; longitude: number }) => void;
+    onSetMeetingPoint?: (p: { id: string; kind: 'stage'; name: string; kindLabel: string; coord: { latitude: number; longitude: number } }) => void;
+  }) => (
+    <>
+      <button type="button" onClick={() => onMapClick?.({ latitude: 1, longitude: 2 })}>
+        fake map click
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onSetMeetingPoint?.({ id: 's1', kind: 'stage', name: 'Mainstage', kindLabel: 'Stage', coord: { latitude: 3, longitude: 4 } })
+        }
+      >
+        fake set meeting point
+      </button>
+    </>
+  ),
 }));
 
 const { mockToastUndo } = vi.hoisted(() => ({ mockToastUndo: vi.fn() }));
@@ -117,13 +154,17 @@ const { mockInvalidateQueries, createMutate, updateMutate, mockRefetch, rq } = v
 });
 
 let queryState: { data: unknown; isLoading: boolean; isError: boolean };
+let pastData: unknown[] = [];
 
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => {
     rq.idx = 0;
     return { invalidateQueries: mockInvalidateQueries };
   },
-  useQuery: () => ({ ...queryState, refetch: mockRefetch }),
+  useQuery: (opts: { queryKey: string[] }) =>
+    opts.queryKey[0] === 'meeting-points-past'
+      ? { data: pastData, isLoading: false, isError: false }
+      : { ...queryState, refetch: mockRefetch },
   useMutation: () => {
     const mutate = rq.fns[rq.idx % rq.fns.length];
     rq.idx += 1;
@@ -154,7 +195,10 @@ function setQuery(overrides: Partial<typeof queryState> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   festivalZone.value = undefined;
+  pastData = [];
   setQuery();
+  // jsdom has no scrollIntoView; the form scrolls into view on a map click.
+  Element.prototype.scrollIntoView = vi.fn();
 });
 
 describe('MeetingPointsTab', () => {
@@ -186,9 +230,23 @@ describe('MeetingPointsTab', () => {
     expect(screen.getByRole('link', { name: 'Open full map' })).toHaveAttribute('href', '/map');
   });
 
+  it('offers exactly two kinds: Meet-up and Emergency spot', async () => {
+    const user = userEvent.setup();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getAllByRole('button', { name: /add meeting point/i })[0]!);
+    expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['Meet-up', 'Emergency spot']);
+  });
+
+  it('shows a legacy pre-show point as Meet-up', () => {
+    setQuery({ data: [{ ...POINT, type: 'pre-show' }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText('Meet-up')).toBeInTheDocument();
+    expect(screen.queryByText(/pre-show/i)).not.toBeInTheDocument();
+  });
+
   it('leaving the tab keeps sharing, so the full-map link carries no stop-sharing note', () => {
     useLiveLocationStore.getState().setActiveCrew('c1');
-    useLiveLocationStore.getState().requestSharing('c1');
+    useLiveLocationStore.getState().beginShare('c1', new Date(Date.now() + 3_600_000).toISOString(), false);
     useLiveLocationStore.getState().startSharing('c1');
     const { unmount } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     const link = screen.getByRole('link', { name: 'Open full map' });
@@ -197,7 +255,7 @@ describe('MeetingPointsTab', () => {
     expect(screen.queryByText(/stops sharing your location/)).not.toBeInTheDocument();
     unmount();
     expect(useLiveLocationStore.getState().sharingCrewId).toBe('c1');
-    expect(useLiveLocationStore.getState().shareIntentCrewId).toBe('c1');
+    expect(useLiveLocationStore.getState().shareIntent?.crewId).toBe('c1');
     useLiveLocationStore.getState().reset();
   });
 
@@ -211,9 +269,125 @@ describe('MeetingPointsTab', () => {
     expect(screen.getByTestId('live-share-toggle')).toBeInTheDocument();
   });
 
+  it('shows Edit on a point by another member only for the crew owner', () => {
+    setQuery({ data: [{ ...POINT, created_by: 'u2' }] });
+    const { unmount } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" isOwner />);
+    expect(screen.getByRole('button', { name: 'Edit meeting point' })).toBeInTheDocument();
+    unmount();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.queryByRole('button', { name: 'Edit meeting point' })).not.toBeInTheDocument();
+  });
+
+  it('sends only the label on a rename-only edit', async () => {
+    const user = userEvent.setup();
+    const meetAt = '2026-06-01T15:00:00.000Z';
+    setQuery({ data: [{ ...POINT, meet_at: meetAt, latitude: 1, longitude: 2 }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" isOwner />);
+    await user.click(screen.getByRole('button', { name: 'Edit meeting point' }));
+    await user.clear(screen.getByLabelText('Label'));
+    await user.type(screen.getByLabelText('Label'), 'Renamed');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(updateMutate).toHaveBeenCalledWith({ id: 'mp1', payload: { label: 'Renamed' } });
+  });
+
+  it('sends nothing when an edit is saved untouched', async () => {
+    const user = userEvent.setup();
+    setQuery({ data: [{ ...POINT, meet_at: '2026-06-01T15:00:00.000Z' }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" isOwner />);
+    await user.click(screen.getByRole('button', { name: 'Edit meeting point' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(updateMutate).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Label')).not.toBeInTheDocument();
+  });
+
+  it('shows the edit line with and without an editor name', () => {
+    setQuery({
+      data: [
+        { ...POINT, id: 'a', edit_was: { location: 'North gate' }, editor_name: 'ana' },
+        { ...POINT, id: 'b', label: 'Other', edit_was: { location: 'South gate' }, editor_name: null },
+      ],
+    });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText('Edited by ana, was North gate')).toBeInTheDocument();
+    expect(screen.getByText('Edited, was South gate')).toBeInTheDocument();
+  });
+
+  it('Directions opens the coordinate URL for a pinned point', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    setQuery({ data: [{ ...POINT, latitude: 28.5, longitude: -81.4 }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Directions to Main Entrance' }));
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('28.5'), '_blank', 'noopener,noreferrer');
+    open.mockRestore();
+  });
+
+  it('renders past points under a Past heading without Edit', () => {
+    pastData = [
+      { ...POINT, id: 'mp2', label: 'Old Spot', active: false, expires_at: new Date(Date.now() - 3_600_000).toISOString() },
+    ];
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByRole('heading', { name: 'Past' })).toBeInTheDocument();
+    expect(screen.getByText('Old Spot')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit meeting point' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add Meeting Point/ })).toBeInTheDocument();
+  });
+
+  it('shows the Past hint once a meet time is entered', async () => {
+    const user = userEvent.setup();
+    setQuery({ data: [POINT] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('button', { name: 'Add Meeting Point' }));
+    expect(screen.queryByText('Moves to Past 30 minutes after the meet time.')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Meet at time'), { target: { value: '2026-06-01T15:00' } });
+    expect(screen.getByText('Moves to Past 30 minutes after the meet time.')).toBeInTheDocument();
+  });
+
+  it('adds a meeting point from a map click', async () => {
+    const user = userEvent.setup();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('tab', { name: /Map/ }));
+    await user.click(screen.getByRole('button', { name: 'Add meeting point here' }));
+    await user.click(await screen.findByRole('button', { name: 'fake map click' }));
+    expect(screen.getByText('New meeting point')).toBeInTheDocument();
+    expect(screen.getByText(/1\.0000, 2\.0000/)).toBeInTheDocument();
+  });
+
+  it('prefills the form from a place card Set as meeting point', async () => {
+    const user = userEvent.setup();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('tab', { name: /Map/ }));
+    await user.click(await screen.findByRole('button', { name: 'fake set meeting point' }));
+    expect(screen.getByText('New meeting point')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Meet at Mainstage')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('Mainstage')).toHaveLength(2);
+    expect(screen.getByText(/3\.0000, 4\.0000/)).toBeInTheDocument();
+  });
+
   it('scopes the live-location store to the open crew so peer guards filter', () => {
     setQuery({ data: [POINT] });
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     expect(useLiveLocationStore.getState().crewId).toBe('c1');
+  });
+
+  it("shows the I'll be there button, the count, and toggles through the store", async () => {
+    const user = userEvent.setup();
+    setQuery({ data: [{ ...POINT, coming: ['u2', 'u3'] }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText('2 coming')).toBeInTheDocument();
+    const btn = screen.getByRole('button', { name: "I'll be there: Main Entrance" });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    await user.click(btn);
+    expect(setComing).toHaveBeenCalledWith('c1', 'mp1', 'u1', true);
+  });
+
+  it('reads Coming when tapped and undoes on the next tap', async () => {
+    const user = userEvent.setup();
+    setQuery({ data: [{ ...POINT, coming: ['u1'] }] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    const btn = screen.getByRole('button', { name: "I'll be there: Main Entrance" });
+    expect(btn).toHaveTextContent('Coming');
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    await user.click(btn);
+    expect(setComing).toHaveBeenCalledWith('c1', 'mp1', 'u1', false);
   });
 });

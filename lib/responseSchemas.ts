@@ -109,6 +109,16 @@ export const festivalSetResponseSchema = z.object({
   startTime: z.string().nullable(),
   endTime: z.string().nullable(),
   linkUrl: z.string().nullable(),
+  // T46: present only for 48 hours after an admin moved the set (see lib/set-moves.ts).
+  movedAt: z.string().optional(),
+  movedFrom: z
+    .object({
+      dayIndex: z.number().int(),
+      stageId: z.string().nullable(),
+      start: z.string().nullable(),
+      end: z.string().nullable(),
+    })
+    .optional(),
 });
 export type FestivalSetResponse = z.infer<typeof festivalSetResponseSchema>;
 
@@ -144,8 +154,11 @@ export const festivalDepth1ResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
   location: z.string(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalDepth1DaySchema),
+  slug: z.string().nullable().optional(),
   mapConfig: festivalMapConfigSchema.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -163,11 +176,14 @@ export const festivalResponseSchema = z.object({
   location: z.string(),
   b2bSeparator: z.string(),
   timeZone: z.string().nullable(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
   mapConfig: festivalMapConfigSchema.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalFullDaySchema),
+  slug: z.string().nullable().optional(),
 });
 export type FestivalResponse = z.infer<typeof festivalResponseSchema>;
 
@@ -217,6 +233,9 @@ export const crewResponseSchema = z.object({
   photoAlbumUrl: z.string().nullable(),
   totem_name: z.string().nullable(),
   totem_emoji: z.string().nullable(),
+  // T54: owner lock and the Home Base Plan B line.
+  inviteLocked: z.boolean(),
+  homeBasePlanB: z.string().nullable(),
   // Membership-conditional (present when the requester is a member):
   role: z.enum(['owner', 'member']).optional(),
   joinedAt: z.string().optional(),
@@ -258,6 +277,16 @@ export const meetingPointResponseSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   creator_name: z.string().optional(),
+  // 090: user ids who tapped "I'll be there", oldest first. Absent on the `/past` list.
+  coming: z.array(z.string()).optional(),
+  // T54: last time or place edit. Absent on the `/past` list.
+  edited_by: z.string().nullable().optional(),
+  edited_at: z.string().nullable().optional(),
+  edit_was: z
+    .object({ location: z.string().optional(), meetAt: z.string().nullable().optional() })
+    .nullable()
+    .optional(),
+  editor_name: z.string().nullable().optional(),
 });
 export type MeetingPointResponse = z.infer<typeof meetingPointResponseSchema>;
 
@@ -281,6 +310,7 @@ export const festivalListItemResponseSchema = z.object({
   dayCount: z.number(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
+  slug: z.string().nullable().optional(),
 });
 export type FestivalListItemResponse = z.infer<typeof festivalListItemResponseSchema>;
 
@@ -300,8 +330,9 @@ export type PickPriorityResponse = z.infer<typeof pickPriorityResponseSchema>;
 /**
  * A festival participation profile as serialized to a CLIENT. Models the VIEWER
  * superset (`serializeProfileForViewer`): identity, `avatarUrl` (null until the
- * owner has both avatarKey + avatarVersion), the public `picks` map (setId →
- * priority), and timestamps. `userId` is nullable because an unclaimed orphan
+ * owner has both avatarKey + avatarVersion), the `picks` map (setId →
+ * priority; empty on GET /profiles/:festivalId unless the viewer owns the
+ * profile or shares a crew with its owner on that festival), and timestamps. `userId` is nullable because an unclaimed orphan
  * profile (imported lineup, no account yet) carries `user_id = NULL`.
  *
  * `notes` (setId → free text, the "Note" entity) and `reminders` (setId →
@@ -331,9 +362,10 @@ export type ProfileResponse = z.infer<typeof profileResponseSchema>;
 
 /**
  * One vote inside a poll's `votes` array as emitted by `polls.listByCrew`
- * (`json_agg(json_build_object('option', v.option_index, 'user_id', v.user_id))`).
- * Because the underlying join is a LEFT JOIN, a poll with NO votes still emits a
- * single element with BOTH fields null — hence both are `.nullable()`.
+ * (one `{ option, user_id }` per chosen option, from `option_indexes` or the
+ * legacy `option_index`). A multi-answer voter has one entry per option, and
+ * `votes` is `[]` when nobody voted. Both fields stay `.nullable()` for clients
+ * that still read the old single null element.
  */
 export const crewPollVoteResponseSchema = z.object({
   option: z.number().nullable(),
@@ -361,6 +393,9 @@ export const crewPollResponseSchema = z.object({
   created_at: z.string(),
   vote_count: z.string().optional(),
   votes: z.array(crewPollVoteResponseSchema).optional(),
+  multi_answer: z.boolean().optional(),
+  closed_at: z.string().nullable().optional(),
+  nudged_at: z.string().nullable().optional(),
 });
 export type CrewPollResponse = z.infer<typeof crewPollResponseSchema>;
 
@@ -388,6 +423,17 @@ export const crewExpenseResponseSchema = z.object({
   planned: z.boolean(),
   created_at: z.string(),
   paid_by_name: z.string().optional(),
+  // T30 money fields. Optional so rows and fixtures from before migration 079
+  // still parse. `split_amounts` is the uneven split in integer cents by user id
+  // (null = equal split); `created_by` is who added the row, which can differ
+  // from `paid_by`; `confirmed_at`/`disputed_at` are the payee's answer on a
+  // payment row.
+  split_amounts: z.record(z.string(), z.number()).nullable().optional(),
+  created_by: z.string().nullable().optional(),
+  updated_by: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  confirmed_at: z.string().nullable().optional(),
+  disputed_at: z.string().nullable().optional(),
 });
 export type CrewExpenseResponse = z.infer<typeof crewExpenseResponseSchema>;
 
@@ -430,6 +476,8 @@ export type CrewSettlementResponse = z.infer<typeof crewSettlementResponseSchema
 export const crewSettlementPlanResponseSchema = z.object({
   balances: z.array(crewBalanceResponseSchema),
   settlements: z.array(crewSettlementResponseSchema),
+  /** The crew's currency label (ISO 4217, default USD). Optional for old servers. */
+  currency: z.string().optional(),
 });
 export type CrewSettlementPlanResponse = z.infer<typeof crewSettlementPlanResponseSchema>;
 
@@ -560,6 +608,7 @@ export const notificationPrefsResponseSchema = z.object({
   crewPolls: z.number(),
   crewMoney: z.number(),
   crewRides: z.number(),
+  crewNudges: z.number(),
   mustSeeReminderMinutes: z.number().nullable(),
   dndStart: z.string().nullable(),
   dndEnd: z.string().nullable(),

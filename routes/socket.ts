@@ -39,7 +39,13 @@ import { z } from 'zod';
 import { generateTraceId, propagateTraceId } from '../lib/tracing.js';
 import { schemas } from '../lib/schemas.js';
 import { LOCATION_UPDATE_LIMIT, registerSharingSocket, unregisterSharingSocket } from '../lib/rate-limiting.js';
-import { writeLivePosition, dropLivePosition, readLiveSnapshot } from '../lib/live-location-cache.js';
+import {
+  writeLivePosition,
+  dropLivePosition,
+  readLiveSnapshot,
+  clampCapturedAt,
+} from '../lib/live-location-cache.js';
+import { noteBatteryLevel } from '../lib/battery-low.js';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket Event Validation Schemas
@@ -129,33 +135,14 @@ function withAckTimeout(respond: any, log: any, connectionId: any, timeoutMs = 5
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Live-location membership re-check cache (M2) + capturedAt clamp (L4)
+// Live-location membership re-check cache (M2). The capturedAt clamp (L4)
+// lives in lib/live-location-cache.ts, shared with the HTTP relay.
 // ────────────────────────────────────────────────────────────────────────
 
 /** Re-verify crew membership on the streaming path at most this often per socket. */
 const MEMBERSHIP_RECHECK_INTERVAL_MS = 15_000;
 /** ...or every this-many updates, whichever comes first. */
 const MEMBERSHIP_RECHECK_EVERY_N = 20;
-/** capturedAt may not be more than this far in the past relative to server time. */
-const CAPTURED_AT_MAX_AGE_MS = 60_000;
-/** ...nor more than this far in the future (clock skew tolerance). */
-const CAPTURED_AT_MAX_SKEW_MS = 30_000;
-
-/**
- * Clamp a client-supplied `capturedAt` to a small window around server time
- * (L4): a client must not be able to appear perpetually "live · N ago" nor
- * stamp a future fix. Returns an ISO string clamped to [now-MAXAGE, now+SKEW].
- * Falls back to `serverNowIso` if the input is unparseable.
- */
-function clampCapturedAt(capturedAt: any, serverNow: number, serverNowIso: string): string {
-  const t = Date.parse(capturedAt);
-  if (!Number.isFinite(t)) return serverNowIso;
-  const lo = serverNow - CAPTURED_AT_MAX_AGE_MS;
-  const hi = serverNow + CAPTURED_AT_MAX_SKEW_MS;
-  if (t < lo) return new Date(lo).toISOString();
-  if (t > hi) return new Date(hi).toISOString();
-  return new Date(t).toISOString();
-}
 
 /**
  * Setup Socket.IO event handlers
@@ -177,10 +164,9 @@ export default function setupSocketHandlers(deps: any) {
     getUserFestivalProfile,
     _getUserById,
     _buildAvatarUrl,
-    _emitter,
+    emitter,
     stores,
     removeSocketPresence,
-    getPresenceList,
     clearSocketSession,
     leaveFestivalRealtime,
     disconnectSocket,
@@ -239,8 +225,11 @@ export default function setupSocketHandlers(deps: any) {
     const previousFestivalId = leaveFestivalRealtime(socket, io);
     if (previousFestivalId && previousFestivalId !== festivalId) emitPresence(previousFestivalId, io);
 
-    // Join new room and set socket state
+    // Join new room and set socket state. The user room carries the author's own
+    // profile:updated (the offline queue's post-drain re-sync) to every device.
+    if (socket.data.userId && socket.data.userId !== session.userId) socket.leave(`user:${socket.data.userId}`);
     socket.join(festivalId);
+    socket.join(`user:${session.userId}`);
     socket.data.userId = session.userId;
     socket.data.username = session.username;
     socket.data.festivalId = festivalId;
@@ -248,17 +237,13 @@ export default function setupSocketHandlers(deps: any) {
     socket.data.userSessionToken = sessionToken;
     socket.authenticated = true;
 
-    // Update presence — guard against duplicates on reconnect
-    const presenceList = await getPresenceList(festivalId);
-    const existingPresence = presenceList.find((p: any) => p.userId === session.userId && p.socketId === socket.id);
-    if (!existingPresence) {
-      setSocketPresence(festivalId, session.userId, session.username, socket.id).catch((err: any) =>
-        // A failed presence write means emitPresence below runs on a stale set
-        // and the user is silently absent from who's-online — warn so it's
-        // visible in prod, not buried at debug.
-        log.warn('setSocketPresence error', { error: err.message, festivalId, userId: session.userId }),
-      );
-    }
+    // setSocketPresence is idempotent per socket id, so a reconnect adds no duplicate.
+    setSocketPresence(festivalId, session.userId, session.username, socket.id).catch((err: any) =>
+      // A failed presence write means emitPresence below runs on a stale set
+      // and the user is silently absent from who's-online — warn so it's
+      // visible in prod, not buried at debug.
+      log.warn('setSocketPresence error', { error: err.message, festivalId, userId: session.userId }),
+    );
     emitPresence(festivalId, io);
 
     return { ok: true, session, profile };
@@ -437,6 +422,9 @@ export default function setupSocketHandlers(deps: any) {
 
         // The socket must already be joined to this crew room (join:crew set it).
         if (socket.data?.crewId !== crewId) return respond({ ok: false, code: 'NOT_IN_CREW_ROOM' });
+        if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
+          return respond({ ok: false, code: 'RATE_LIMITED' });
+        }
 
         // Re-validate session + membership: sharing live GPS is more sensitive
         // than viewing, and a user who left the crew must not be able to share.
@@ -499,6 +487,7 @@ export default function setupSocketHandlers(deps: any) {
           // Phase 3C: cache the first fix so a late-joiner snapshot (location:sync)
           // can render this sharer immediately. Ephemeral (Redis-only) + fail-open.
           void writeLivePosition(redis, crewId, payload);
+          void noteBatteryLevel({ redis, stores, emitter, log }, payload);
         }
 
         log.debug('location:share', { userId: session.userId, crewId });
@@ -597,6 +586,7 @@ export default function setupSocketHandlers(deps: any) {
         socket.to('crew:' + crewId).emit('location:peer-update', payload);
         // Phase 3C: refresh the late-joiner snapshot cache with this fix.
         void writeLivePosition(redis, crewId, payload);
+        void noteBatteryLevel({ redis, stores, emitter, log }, payload);
       } catch (error: any) {
         log.error('location:update error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
       }
@@ -667,6 +657,9 @@ export default function setupSocketHandlers(deps: any) {
 
         // Must already be joined to this crew room (join:crew gated membership).
         if (socket.data?.crewId !== crewId) return respond({ ok: false, peers: [] });
+        if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
+          return respond({ ok: false, peers: [] });
+        }
 
         // Re-validate session + membership: the snapshot reveals peers' last-known
         // GPS, so a user who left the crew must not be able to pull positions.

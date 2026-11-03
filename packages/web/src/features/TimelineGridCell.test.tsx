@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import type { FestivalSet } from '@festie/shared/types';
+import type { ClashMark } from '@festie/shared/utils';
 import TimelineGridCell from './TimelineGridCell';
 
 const ROW_HEIGHT = 36;
@@ -18,7 +19,13 @@ function makeSet(id: string): FestivalSet {
   };
 }
 
-function renderCell(id: string, topSlot: number, spanSlots: number, myPick: 'want-to-see' | null = null, canPick = true) {
+function renderCell(
+  id: string,
+  topSlot: number,
+  spanSlots: number,
+  myPick: 'want-to-see' | null = null,
+  extra: { clash?: ClashMark; compact?: boolean; tabbable?: boolean; canPick?: boolean } = {},
+) {
   const { container } = render(
     <TimelineGridCell
       set={makeSet(id)}
@@ -30,8 +37,10 @@ function renderCell(id: string, topSlot: number, spanSlots: number, myPick: 'wan
       rowHeight={ROW_HEIGHT}
       myPick={myPick}
       others={[]}
-      hasConflict={false}
-      canPick={canPick}
+      compact={extra.compact ?? false}
+      tabbable={extra.tabbable ?? true}
+      clash={extra.clash}
+      canPick={extra.canPick ?? true}
       festival={null}
       onSetClick={vi.fn()}
       onSavePick={vi.fn()}
@@ -63,7 +72,29 @@ describe('TimelineGridCell block placement', () => {
   });
 
   it('shows the pick row only when canPick is set', () => {
-    expect(renderCell('d', 0, 4, null, true).querySelectorAll('button[aria-pressed]').length).toBeGreaterThan(0);
-    expect(renderCell('e', 0, 4, null, false).querySelectorAll('button[aria-pressed]').length).toBe(0);
+    expect(renderCell('d', 0, 4, null, { canPick: true }).querySelectorAll('button[aria-pressed]').length).toBeGreaterThan(0);
+    expect(renderCell('e', 0, 4, null, { canPick: false }).querySelectorAll('button[aria-pressed]').length).toBe(0);
+  });
+
+  it('draws a hatched bar for each clash segment and names the clash for screen readers', () => {
+    const clash: ClashMark = { segments: [{ from: 0.5, to: 1 }], withIds: ['b'], text: 'Clashes with Beta · Forest' };
+    const el = renderCell('d', 0, 4, 'want-to-see', { clash });
+    const bars = el.querySelectorAll<HTMLElement>('span[aria-hidden="true"][style*="top"]');
+    expect(bars).toHaveLength(1);
+    expect(bars[0]!.style.top).toBe('50%');
+    expect(bars[0]!.style.height).toBe('50%');
+    expect(el.textContent).toContain('Clashes with Beta · Forest');
+    expect(el.querySelector<HTMLElement>('[data-open]')!.title).toBe('Clashes with Beta · Forest');
+  });
+
+  it('compact hides the pick buttons and shows the pick icon', () => {
+    const el = renderCell('e', 0, 4, 'want-to-see', { compact: true });
+    expect(el.querySelector('button[aria-pressed]')).toBeNull();
+    expect(el.querySelector('svg')).not.toBeNull();
+  });
+
+  it('tabbable=false takes the open button out of the tab order', () => {
+    const el = renderCell('f', 0, 4, null, { tabbable: false });
+    expect(el.querySelector<HTMLElement>('[data-open]')!.tabIndex).toBe(-1);
   });
 });

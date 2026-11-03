@@ -20,6 +20,11 @@ function retryFailed(item: FailedSyncItem): void {
   Promise.resolve(offlineQueue.retryFailed(item)).catch((e) => Sentry.captureException(e));
 }
 
+/** Dismiss a failed mutation from the sheet and from storage, so it stays gone after a restart. */
+function dismissFailed(clientId: string): void {
+  offlineQueue.dismissFailed(clientId).catch((e) => Sentry.captureException(e));
+}
+
 /**
  * Offline banner — the mobile analog of the web OfflineBanner. Subscribes to
  * NetInfo for connectivity and drives the shared uiStore.offlineMode, then
@@ -50,7 +55,6 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
   const setOfflineMode = useUIStore((s) => s.setOfflineMode);
   const pendingSync = useUIStore((s) => s.pendingSync);
   const failedSync = useUIStore((s) => s.failedSync);
-  const dismissFailedSync = useUIStore((s) => s.dismissFailedSync);
   const clearFailedSync = useUIStore((s) => s.clearFailedSync);
   const [dismissed, setDismissed] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -312,7 +316,7 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
                     <Text style={styles.retryText}>Retry</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => dismissFailedSync(item.clientId)}
+                    onPress={() => dismissFailed(item.clientId)}
                     style={styles.dismissBtn}
                     accessibilityRole="button"
                     accessibilityLabel={`Dismiss ${item.label}`}
@@ -325,7 +329,10 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
 
             <View style={styles.sheetFooter}>
               <TouchableOpacity
-                onPress={() => clearFailedSync()}
+                onPress={() => {
+                  clearFailedSync();
+                  void offlineQueue.clearPersistedFailed();
+                }}
                 style={styles.dismissBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss all"

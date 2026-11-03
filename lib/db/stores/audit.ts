@@ -1,6 +1,33 @@
 import { randomUUID } from 'crypto';
 import type { Pool } from 'pg';
 
+const ROW_COLUMNS = `
+  id,
+  actor_type AS "actorType",
+  actor_id AS "actorId",
+  action,
+  target_type AS "targetType",
+  target_id AS "targetId",
+  details_json AS "detailsJson",
+  ip,
+  user_agent AS "userAgent",
+  request_id AS "requestId",
+  status,
+  created_at AS "createdAt"
+`;
+
+function withDetails(row: any) {
+  let details = null;
+  if (row.detailsJson) {
+    if (typeof row.detailsJson === 'object') {
+      details = row.detailsJson;
+    } else {
+      try { details = JSON.parse(row.detailsJson); } catch { details = null; }
+    }
+  }
+  return { ...row, details };
+}
+
 export default function createAuditStore(pool: Pool, _utils: any) {
   const auditLog = {
     async insert(entry: any) {
@@ -54,7 +81,9 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return id;
     },
 
-    async query({ actorId, actorType, action, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
+    // A row matches when its action equals any of `actions` or starts with any of
+    // `actionPrefixes` (`festival.`). Both null or empty means no action filter.
+    async query({ actorId, actorType, actions, actionPrefixes, targetId, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
       const maxLimit = 200;
       const finalLimit = Math.min(Math.max(1, limit || 50), maxLimit);
 
@@ -74,7 +103,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
 
       const params: any[] = [
         actorId || null,
-        action || null,
+        actions?.length ? actions : null,
         resourceType || null,
         from || null,
         to || null,
@@ -82,45 +111,30 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         cursorId,
         finalLimit,
         actorType || null,
+        actionPrefixes?.length ? actionPrefixes : null,
+        targetId || null,
       ];
 
       const result = await pool.query(`
-        SELECT
-          id,
-          actor_type AS "actorType",
-          actor_id AS "actorId",
-          action,
-          target_type AS "targetType",
-          target_id AS "targetId",
-          details_json AS "detailsJson",
-          ip,
-          user_agent AS "userAgent",
-          request_id AS "requestId",
-          status,
-          created_at AS "createdAt"
+        SELECT ${ROW_COLUMNS}
         FROM audit_log
         WHERE ($1::TEXT IS NULL OR actor_id = $1::TEXT)
-          AND ($2::TEXT IS NULL OR action = $2::TEXT)
+          AND (
+            ($2::TEXT[] IS NULL AND $10::TEXT[] IS NULL)
+            OR action = ANY(COALESCE($2::TEXT[], '{}'))
+            OR EXISTS (SELECT 1 FROM unnest(COALESCE($10::TEXT[], '{}')) AS p(prefix) WHERE starts_with(action, p.prefix))
+          )
           AND ($3::TEXT IS NULL OR target_type = $3::TEXT)
           AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4::TIMESTAMPTZ)
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
           AND ($6::TIMESTAMPTZ IS NULL OR (created_at, id) < ($6::TIMESTAMPTZ, $7::TEXT))
           AND ($9::TEXT IS NULL OR actor_type = $9::TEXT)
+          AND ($11::TEXT IS NULL OR target_id = $11::TEXT)
         ORDER BY created_at DESC, id DESC
         LIMIT $8
       `, params);
 
-      const rows = result.rows.map((row: any) => {
-        let details = null;
-        if (row.detailsJson) {
-          if (typeof row.detailsJson === 'object') {
-            details = row.detailsJson;
-          } else {
-            try { details = JSON.parse(row.detailsJson); } catch { details = null; }
-          }
-        }
-        return { ...row, details };
-      });
+      const rows = result.rows.map(withDetails);
 
       const nextCursor = rows.length === finalLimit
         ? `${new Date(rows[rows.length - 1].createdAt).toISOString()}|${rows[rows.length - 1].id}`
@@ -129,28 +143,50 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return { rows, nextCursor };
     },
 
-    async count({ actorId, actorType, action, resourceType, from, to }: any = {}) {
+    async count({ actorId, actorType, actions, actionPrefixes, targetId, resourceType, from, to }: any = {}) {
       const params: any[] = [
         actorId || null,
-        action || null,
+        actions?.length ? actions : null,
         resourceType || null,
         from || null,
         to || null,
         actorType || null,
+        actionPrefixes?.length ? actionPrefixes : null,
+        targetId || null,
       ];
 
       const result = await pool.query(`
         SELECT COUNT(*) AS total
         FROM audit_log
         WHERE ($1::TEXT IS NULL OR actor_id = $1::TEXT)
-          AND ($2::TEXT IS NULL OR action = $2::TEXT)
+          AND (
+            ($2::TEXT[] IS NULL AND $7::TEXT[] IS NULL)
+            OR action = ANY(COALESCE($2::TEXT[], '{}'))
+            OR EXISTS (SELECT 1 FROM unnest(COALESCE($7::TEXT[], '{}')) AS p(prefix) WHERE starts_with(action, p.prefix))
+          )
           AND ($3::TEXT IS NULL OR target_type = $3::TEXT)
           AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4::TIMESTAMPTZ)
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
           AND ($6::TEXT IS NULL OR actor_type = $6::TEXT)
+          AND ($8::TEXT IS NULL OR target_id = $8::TEXT)
       `, params);
 
       return parseInt(result.rows[0]?.total || 0, 10);
+    },
+
+    // Rows where the user acted, was the target, or was the member in a crew_member row.
+    async listForUser(userId: string, limit: number = 20) {
+      const finalLimit = Math.min(Math.max(1, Math.trunc(Number(limit)) || 20), 50);
+      const result = await pool.query(`
+        SELECT ${ROW_COLUMNS}
+        FROM audit_log
+        WHERE actor_id = $1
+           OR target_id = $1
+           OR (target_type = 'crew_member' AND split_part(target_id, ':', 2) = $1)
+        ORDER BY created_at DESC, id DESC
+        LIMIT $2
+      `, [userId, finalLimit]);
+      return result.rows.map(withDetails);
     },
 
     async cleanup(retentionDays: any = 90) {

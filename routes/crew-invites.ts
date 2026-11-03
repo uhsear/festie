@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { generateUniqueInviteCode, inviteExpiryFor } from '../lib/invite-code.js';
 import { ensureFestivalProfile } from '../lib/festival-profile.js';
+import { logCrewActivity } from '../lib/db/stores/activity.js';
 
 export default function createCrewInviteRoutes(deps: any) {
   const {
@@ -17,11 +18,17 @@ export default function createCrewInviteRoutes(deps: any) {
     validate,
     validateParams,
     io,
+    crewNotify,
   } = deps;
 
   const { resolveCrewOwnership, serializeCrewWithMembers, MAX_CREWS_PER_USER_PER_FESTIVAL } = deps._crewHelpers;
 
   const router = Router({ mergeParams: true });
+
+  function refuseLocked(res: any, crewId: string, userId: string) {
+    log.info('crew:join-refused-locked', { crewId, userId });
+    return sendError(res, 403, "This crew isn't taking new members.", ErrorCodes.CREW_LOCKED);
+  }
 
   // ── POST /join — Join a crew via invite code ────────────────────
   router.post('/join', userAuth, rateLimit(10, 'crew-join'), validate(schemas.crewJoin), async (req: any, res: any) => {
@@ -49,6 +56,11 @@ export default function createCrewInviteRoutes(deps: any) {
         const members = await stores.crews.getMembers(crew.id);
         return sendSuccess(res, { ...serializeCrewWithMembers(crew, members, req.user.userId), alreadyMember: true });
       }
+
+      // T54: a locked crew refuses invite joins. 403, never 423: clients read
+      // 423 as an account lockout. Runs before ensureFestivalProfile, so a
+      // refused join leaves no stray profile.
+      if (crew.inviteLocked) return refuseLocked(res, crew.id, req.user.userId);
 
       // Limit crews per user per festival
       const userCrews = await stores.crews.listByUserAndFestival(req.user.userId, crew.festivalId);
@@ -82,11 +94,15 @@ export default function createCrewInviteRoutes(deps: any) {
         return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
       }
 
-      // Pass the cap so the insert closes the count-then-insert race under a row lock.
+      // Pass the cap so the insert closes the count-then-insert race under a row
+      // lock. inviteJoin re-reads the lock under that row lock, so a lock flip
+      // between the check above and here still refuses the join.
       const joinResult = await stores.crews.addMember(
         { crewId: crew.id, userId: req.user.userId, role: 'member' },
         crew.maxMembers,
+        { inviteJoin: true },
       );
+      if (joinResult === 'locked') return refuseLocked(res, crew.id, req.user.userId);
       if (joinResult === 'full') {
         return sendError(res, 400, 'Crew is full', ErrorCodes.MAX_LIMIT_REACHED);
       }
@@ -101,6 +117,14 @@ export default function createCrewInviteRoutes(deps: any) {
           username: req.user.username,
         });
       }
+
+      await logCrewActivity(deps, { crewId: crew.id, userId: req.user.userId, type: 'member-joined' });
+      crewNotify?.queue({
+        crewId: crew.id,
+        actorId: req.user.userId,
+        kind: 'member',
+        text: `${req.user.username} joined`,
+      });
 
       log.info('crew:joined', { crewId: crew.id, festivalId: crew.festivalId, userId: req.user.userId });
       return sendSuccess(res, serializeCrewWithMembers(crew, members, req.user.userId));

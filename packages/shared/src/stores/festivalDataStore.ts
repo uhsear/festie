@@ -36,6 +36,13 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
     }
   }
 }
+
+/** GET /profiles/:festivalId with its anonymous meta.pickCounts ({} from a server without it). */
+async function fetchProfiles(festivalId: string): Promise<{ profiles: Profile[]; pickCounts: Record<string, number> }> {
+  const { data, meta } = await api.getEnvelope<Profile[]>(`/profiles/${festivalId}`);
+  const raw = meta.pickCounts;
+  return { profiles: data, pickCounts: raw && typeof raw === 'object' ? (raw as Record<string, number>) : {} };
+}
 import {
   Festival,
   FestivalSet,
@@ -49,6 +56,7 @@ import {
 } from '../types';
 
 import { logicalDayIndexAt } from '../utils/dayOf';
+import { mergeGuestPickMaps } from '../utils/guestPicks';
 import { writeOutcomeOf, type WriteOutcome } from '../utils/crewWrites';
 import { resolveFestivalTimeZone } from '../utils/festivalTime';
 import { useFestivalUIStore } from './festivalUIStore';
@@ -66,6 +74,12 @@ export interface FestivalDataState {
   currentFestival: Festival | null;
   currentProfile: Profile | null;
   allProfiles: Profile[];
+  /**
+   * Anonymous per-set pick counts of the other attendees (GET /profiles/:festivalId
+   * meta.pickCounts). allProfiles carries picks only for crew mates, so a count
+   * of everyone reads this. Empty from an older server: counts degrade to zero.
+   */
+  pickCounts: Record<string, number>;
   sets: FestivalSet[];
   stages: Stage[];
   days: FestivalDay[];
@@ -89,6 +103,12 @@ export interface FestivalDataState {
   savesInFlight: number;
   /** Epoch-ms of the last profile write the server acknowledged. */
   lastSavedAt: number | null;
+  /**
+   * A signed-out guest's picks, per festival id then set id. Persisted, so they
+   * survive a restart. Not a fake profile: notes, reminders and ratings stay
+   * account-only. `mergeGuestPicks` moves them onto the account at sign-in.
+   */
+  guestPicks: Record<string, Record<string, Priority>>;
 }
 
 export interface PickSyncEntry {
@@ -142,9 +162,19 @@ export interface FestivalDataActions {
    */
   restorePicks: (prev: Record<string, Priority | undefined>) => Promise<void>;
   setError: (error: string | null) => void;
+  /**
+   * Move a guest's picks onto the signed-in account, per festival. No-op without
+   * a user or guest picks. Concurrent calls share one in-flight promise.
+   */
+  mergeGuestPicks: () => Promise<void>;
 }
 
 export type FestivalDataStore = FestivalDataState & FestivalDataActions;
+
+/** The picks the current viewer sees: the profile's, else a guest's for this festival. */
+export function selectMyPicks(state: FestivalDataState): Record<string, Priority> | null {
+  return state.currentProfile?.picks ?? state.guestPicks[state.currentFestivalId ?? ''] ?? null;
+}
 
 // ── Persisted allProfiles snapshot bounds (F1) ─────────────────────────────
 // allProfiles powers crew-overlap / crew-digest / grid-overlap, which render
@@ -192,6 +222,33 @@ function rollbackKeys<T>(
 }
 
 let _lastSelectFestivalId: string | null = null;
+
+// Priority strength order so a bulk "maybe" can't silently clobber a hand-set
+// "must": must > want-to-see > maybe.
+const PICK_RANK: Record<Priority, number> = { maybe: 1, 'want-to-see': 2, must: 3 };
+
+// A guest has no profile and no account: their pick writes stay on the device.
+function isGuestWrite(get: () => FestivalDataStore): boolean {
+  return !get().currentProfile && !useAuthStore.getState().user;
+}
+
+/** Store one festival's guest picks; an empty map removes the festival entry. */
+function setGuestFestivalPicks(
+  get: () => FestivalDataStore,
+  set: (partial: Partial<FestivalDataStore>) => void,
+  festivalId: string,
+  picks: Record<string, Priority>,
+): void {
+  const { [festivalId]: _old, ...others } = get().guestPicks;
+  set({ guestPicks: Object.keys(picks).length > 0 ? { ...others, [festivalId]: picks } : others });
+}
+
+function guestFestivalKey(festivalId: string | null | undefined): string {
+  if (!festivalId) throw new Error('Choose a festival first');
+  return festivalId;
+}
+
+let guestMergeInFlight: Promise<void> | null = null;
 
 // One in-flight join per festival, so two quick taps send one POST (the
 // profile-join rate limit is 10 a minute).
@@ -270,12 +327,30 @@ async function clearReminderAfterPick(get: () => FestivalDataStore, festivalId: 
   }
 }
 
+/**
+ * Load the festival's remembered filters into the UI store. Called with cached
+ * data too (rehydrate, the start of selectFestival), so an offline or slow cold
+ * start shows and saves the remembered filters before any fetch returns.
+ */
+function restoreUIForFestival(
+  festivalId: string,
+  festival: Festival | null,
+  stages: Stage[],
+  days: FestivalDay[],
+): void {
+  const todayIdx = logicalDayIndexAt(days, Date.now(), resolveFestivalTimeZone(festival)) ?? 0;
+  useFestivalUIStore
+    .getState()
+    .restoreForFestival(festivalId, { stageIds: stages.map((s) => s.id), dayCount: days.length, todayIdx });
+}
+
 const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   festivals: [],
   currentFestivalId: null,
   currentFestival: null,
   currentProfile: null,
   allProfiles: [],
+  pickCounts: {},
   sets: [],
   stages: [],
   days: [],
@@ -287,6 +362,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   pickSync: {},
   savesInFlight: 0,
   lastSavedAt: null,
+  guestPicks: {},
 
   loadFestivals: async () => {
     set({ isLoading: true, error: null });
@@ -305,18 +381,24 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   //      Removed 3 phantom sub-resource fetches (/sets, /stages, /days).
   selectFestival: async (festivalId: string) => {
     _lastSelectFestivalId = festivalId;
+    const cached = get();
+    if (cached.currentFestival?.id === festivalId && cached.days.length > 0) {
+      restoreUIForFestival(festivalId, cached.currentFestival, cached.stages, cached.days);
+    }
     set({ isLoading: true, error: null, currentFestivalId: festivalId });
     try {
       // Festival detail is public; profiles require auth (401 for guests).
       const detail = await withRetry(() => api.get<FestivalDetailResponse>(`/festivals/${festivalId}`));
       let profiles: Profile[] = [];
+      let pickCounts: Record<string, number> | null = null;
       let profilesFetchFailed = false;
       if (useAuthStore.getState().user) {
         try {
-          profiles = await api.get<Profile[]>(`/profiles/${festivalId}`);
-        } catch (_) {
+          ({ profiles, pickCounts } = await fetchProfiles(festivalId));
+        } catch (err) {
           // Offline (the /profiles endpoint is not service-worker-cached) or a
           // session blip. Don't trust the empty list — see currentProfile below.
+          console.warn('festival load: profiles fetch failed; keeping cached profiles', festivalId, err);
           profilesFetchFailed = true;
         }
       }
@@ -375,6 +457,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         stages,
         days,
         allProfiles: preservedAllProfiles,
+        pickCounts: pickCounts ?? (prevState._cachedFestivalId === festivalId ? prevState.pickCounts : {}),
         currentProfile,
         isLoading: false,
         _festivalCachedAt: Date.now(),
@@ -383,21 +466,10 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         pickSync: {},
       });
 
-      // Default the day selector to the logical festival day containing now, in
-      // the festival zone (01:00 still counts as the night before), else day 0.
-      const todayIdx = logicalDayIndexAt(days, Date.now(), resolveFestivalTimeZone(festival)) ?? 0;
-
-      // Reset UI state in the UI store when selecting a new festival
-      useFestivalUIStore.setState({
-        // Empty array = "all stages" (the schedule UI normalizes all-selected →
-        // []). Storing the FULL stage-id array instead made index.tsx read a
-        // PHANTOM active stage filter on every festival load — force-opening the
-        // filter panel, lighting the active dot, and rendering the results-summary
-        // + Clear-all chip + PhaseHomeActions on a clean load (squeezing the
-        // timeline). [] keeps a fresh load filter-free.
-        activeStages: [],
-        selectedDay: todayIdx,
-      });
+      // Restore this festival's remembered filters (a refresh keeps the live ones).
+      // The day selector opens on the logical festival day containing now, in the
+      // festival zone (01:00 still counts as the night before), else day 0.
+      restoreUIForFestival(festivalId, festival, stages, days);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load festival');
       // Point the id back at the festival whose data is still loaded, so the id
@@ -415,7 +487,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   loadProfiles: async (festivalId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const profiles = await api.get<Profile[]>(`/profiles/${festivalId}`);
+      const { profiles, pickCounts } = await fetchProfiles(festivalId);
       const userId = useAuthStore.getState().user?.id;
       const serverProfile = userId ? profiles.find((p) => p.userId === userId) || null : null;
       const prevState = get();
@@ -436,6 +508,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
           : serverProfile;
       set({
         allProfiles: profiles,
+        pickCounts,
         currentProfile,
         isLoading: false,
         _profilesCachedAt: Date.now(),
@@ -483,6 +556,14 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   // FIX: PUT /profiles/:profileId with full picks map.
   //      Was incorrectly hitting PUT /profiles/:festivalId/picks.
   savePick: async (request: SavePickRequest) => {
+    if (isGuestWrite(get)) {
+      const festivalId = guestFestivalKey(request.festivalId);
+      const next = { ...(get().guestPicks[festivalId] ?? {}) };
+      if (request.priority) next[request.setId] = request.priority;
+      else delete next[request.setId];
+      setGuestFestivalPicks(get, set, festivalId, next);
+      return;
+    }
     // Join first: a server profile can already hold picks, so snapshot after it.
     if (!get().currentProfile) {
       try {
@@ -553,6 +634,19 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   // the write entirely rather than queue a redundant replay. Returns the real
   // count of sets changed so the caller never reports "Added N" on 0 changes.
   bulkSavePicks: async (setIds: string[], priority: Priority): Promise<number> => {
+    if (isGuestWrite(get)) {
+      const festivalId = guestFestivalKey(get().currentFestivalId);
+      const next = { ...(get().guestPicks[festivalId] ?? {}) };
+      let changed = 0;
+      for (const setId of setIds) {
+        const existing = next[setId];
+        if (existing && PICK_RANK[existing] >= PICK_RANK[priority]) continue;
+        next[setId] = priority;
+        changed += 1;
+      }
+      if (changed > 0) setGuestFestivalPicks(get, set, festivalId, next);
+      return changed;
+    }
     if (!get().currentProfile) await joinBeforeWrite(get, get().currentFestivalId);
     // Snapshot only the picks this call actually changes (filled in the loop
     // below), not the whole profile (see rollbackKeys).
@@ -564,10 +658,6 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         throw new Error('No active profile -- select a festival first');
       }
 
-      // Priority strength order so a bulk "maybe" can't silently clobber a
-      // hand-set "must": must > want-to-see > maybe.
-      const rank: Record<Priority, number> = { maybe: 1, 'want-to-see': 2, must: 3 };
-
       const basePicks = currentProfile.picks || {};
       const mergedPicks: Record<string, Priority> = { ...basePicks };
       let changed = 0;
@@ -575,7 +665,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         const existing = mergedPicks[setId];
         // Never DOWNGRADE a stronger existing pick — only set unpicked sets or
         // upgrade a weaker one. Count only the sets we actually change.
-        if (existing && rank[existing] >= rank[priority]) continue;
+        if (existing && PICK_RANK[existing] >= PICK_RANK[priority]) continue;
         prevValues[setId] = existing; // remember only the keys we touch, for rollback
         mergedPicks[setId] = priority;
         changed += 1;
@@ -610,6 +700,12 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   // FIX: PUT /profiles/:profileId with full picks map (key removed).
   //      Was incorrectly hitting DELETE /profiles/:festivalId/picks/:setId.
   removePick: async (festivalId: string, setId: string) => {
+    if (isGuestWrite(get)) {
+      const key = guestFestivalKey(festivalId);
+      const { [setId]: _removed, ...rest } = get().guestPicks[key] ?? {};
+      setGuestFestivalPicks(get, set, key, rest);
+      return;
+    }
     // Snapshot only the removed key, not the whole profile (see rollbackKeys).
     const prevPriority = get().currentProfile?.picks[setId];
     const syncEntry: PickSyncEntry = { state: 'saving', priority: null };
@@ -748,6 +844,16 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   },
 
   restorePicks: async (prev: Record<string, Priority | undefined>) => {
+    if (isGuestWrite(get)) {
+      const festivalId = guestFestivalKey(get().currentFestivalId);
+      const next = { ...(get().guestPicks[festivalId] ?? {}) };
+      for (const [setId, value] of Object.entries(prev)) {
+        if (value === undefined) delete next[setId];
+        else next[setId] = value;
+      }
+      setGuestFestivalPicks(get, set, festivalId, next);
+      return;
+    }
     // The pre-call value of each key this call changes, for rollback.
     const rollback: Record<string, Priority | undefined> = {};
     set({ error: null });
@@ -779,6 +885,71 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
 
   setError: (error: string | null) => {
     set({ error });
+  },
+
+  // Guest-pick merge, run after login, register and each successful checkSession.
+  // Rules, per festival:
+  //  - POST /profiles gets or creates the profile (idempotent) and returns its picks.
+  //  - Guest picks on set ids no longer in the festival are dropped: PUT /profiles/:id
+  //    rejects the whole map when one id is unknown.
+  //  - On a set both picked, the account's pick wins; guest picks only fill gaps.
+  //  - One PUT writes the merged map. It is offline-eligible, so a dropped connection
+  //    queues it. Guest picks clear only after the write succeeds or is queued.
+  //  - A 404 means the festival is gone, so its guest picks clear. Any other error
+  //    keeps them; the next sign-in or app start retries. Nothing drops silently.
+  mergeGuestPicks: () => {
+    if (guestMergeInFlight) return guestMergeInFlight;
+    guestMergeInFlight = (async () => {
+      if (!useFestivalDataStore.persist.hasHydrated()) {
+        await new Promise<void>((resolve) => {
+          const unsub = useFestivalDataStore.persist.onFinishHydration(() => {
+            unsub();
+            resolve();
+          });
+        });
+      }
+      if (!useAuthStore.getState().user) return;
+      let mergedCurrent = false;
+      for (const festivalId of Object.keys(get().guestPicks)) {
+        const guest = get().guestPicks[festivalId];
+        if (!guest) continue;
+        const dropFestival = () => {
+          const { [festivalId]: _done, ...rest } = get().guestPicks;
+          set({ guestPicks: rest });
+        };
+        try {
+          const profile = await api.post<Profile>('/profiles', { festivalId });
+          const state = get();
+          const setIds =
+            festivalId === state.currentFestivalId && state.sets.length > 0
+              ? state.sets.map((s) => s.id)
+              : (await api.get<FestivalDetailResponse>(`/festivals/${festivalId}`)).days.flatMap((d) =>
+                  (d.sets ?? []).map((s) => s.id),
+                );
+          const { merged, added } = mergeGuestPickMaps(profile.picks ?? {}, guest, new Set(setIds));
+          if (added > 0) {
+            await api.put(
+              `/profiles/${profile.id}`,
+              { picks: merged },
+              { clientId: `guest-merge-${profile.id}`, offlineLabel: 'Update picks' },
+            );
+          }
+          if (festivalId === get().currentFestivalId) {
+            set({ currentProfile: { ...profile, picks: merged } });
+            mergedCurrent = true;
+          }
+          dropFestival();
+        } catch (err) {
+          if ((err as { status?: number } | null)?.status === 404) dropFestival();
+          else console.warn('guest pick merge failed', festivalId, err);
+        }
+      }
+      const currentId = get().currentFestivalId;
+      if (mergedCurrent && currentId) await get().loadProfiles(currentId).catch(() => {});
+    })().finally(() => {
+      guestMergeInFlight = null;
+    });
+    return guestMergeInFlight;
   },
 });
 
@@ -817,6 +988,7 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
       _festivalCachedAt: state._festivalCachedAt,
       _profilesCachedAt: state._profilesCachedAt,
       _cachedFestivalId: state._cachedFestivalId,
+      guestPicks: state.guestPicks,
     }),
     // Hydration-vs-live-state guard: persist rehydrates ASYNCHRONOUSLY (the
     // AsyncStorage read), so a user can start selecting a festival BEFORE
@@ -825,6 +997,7 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
     // persisted snapshot (null for a first-time guest) — bouncing the user
     // back to the picker. When the live state already has a selection that
     // the persisted blob doesn't match, keep the live selection.
+    // shortcut: merges per festival, not per set; a same-festival pick made before hydration replaces the persisted map for that festival
     merge: (persisted, current) => {
       const p = (persisted ?? {}) as Partial<FestivalDataState>;
       if (current.currentFestivalId && p.currentFestivalId !== current.currentFestivalId) {
@@ -841,9 +1014,15 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
           _cachedFestivalId: _cfi,
           ...rest
         } = p;
-        return { ...current, ...rest };
+        return { ...current, ...rest, guestPicks: { ...(p.guestPicks ?? {}), ...current.guestPicks } };
       }
-      return { ...current, ...p };
+      return { ...current, ...p, guestPicks: { ...(p.guestPicks ?? {}), ...current.guestPicks } };
+    },
+    // A cached festival renders before any fetch (offline, slow start): restore
+    // its remembered filters now so they show and later changes are saved.
+    onRehydrateStorage: () => (state) => {
+      const f = state?.currentFestival;
+      if (f && state.days.length > 0) restoreUIForFestival(f.id, f, state.stages, state.days);
     },
   }),
 );

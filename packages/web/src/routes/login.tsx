@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearch, Link } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
-import { AUTH_COPY } from '@festie/shared/constants';
+import { AUTH_COPY, COPY } from '@festie/shared/constants';
 import { ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores/authStore';
 import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -10,6 +10,7 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import AuthTabs from '../components/ui/AuthTabs';
 import AuthBrand from '../components/auth/AuthBrand';
+import ProviderButtons from '../components/auth/ProviderButtons';
 import InviteBanner from '../components/auth/InviteBanner';
 import { cn } from '../lib/utils';
 
@@ -47,7 +48,7 @@ function LoginPageInner() {
     setPasswordErr('');
 
     if (!username) {
-      setUsernameErr('Username is required');
+      setUsernameErr(AUTH_COPY.loginIdentifierRequired);
       return;
     }
     if (!password) {
@@ -62,7 +63,7 @@ function LoginPageInner() {
     } catch (err) {
       // Read the thrown error, not the hook's `error`: that value comes from the
       // render before the request failed, so it is still null here.
-      setFormError(mapErrorToUserMessage(err, 'Sign-in failed. Check your username and password and try again.'));
+      setFormError(mapErrorToUserMessage(err, 'Sign-in failed. Check your username or email and your password, then try again.'));
     }
   };
 
@@ -101,9 +102,9 @@ function LoginPageInner() {
 
         <div className="mb-3">
           <Input
-            label="Username"
+            label={AUTH_COPY.loginIdentifierLabel}
             autoComplete="username"
-            maxLength={30}
+            maxLength={254}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             disabled={isLoading}
@@ -124,8 +125,10 @@ function LoginPageInner() {
         </div>
 
         <Button variant="primary" fullWidth type="submit" disabled={isLoading} isLoading={isLoading}>
-          {isLoading ? 'Signing in…' : AUTH_COPY.signIn}
+          {isLoading ? COPY.auth.signingIn : AUTH_COPY.signIn}
         </Button>
+
+        <ProviderButtons mode="signin" next={next} />
 
         <div className="mt-3 flex flex-col items-center">
           <Link to="/forgot-password" className={authLinkClass}>

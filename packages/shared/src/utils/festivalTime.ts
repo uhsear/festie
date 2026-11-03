@@ -142,6 +142,23 @@ export function pickDefaultFestival<T extends Festival>(festivals: readonly T[],
   return sortFestivalsForPicker(festivals, now)[0];
 }
 
+export type FestivalLoadState = 'ready' | 'loading' | 'error' | 'none';
+
+/** What a festival screen shows when it has no data yet: a spinner, the load error, or "no festival". */
+export function festivalLoadState(s: {
+  currentFestival: unknown;
+  festivals: readonly unknown[];
+  isLoading: boolean;
+  error: string | null;
+}): FestivalLoadState {
+  if (s.currentFestival) return 'ready';
+  if (s.isLoading) return 'loading';
+  if (s.error) return 'error';
+  // shortcut: boot has not run yet, or no festival is published; add a loaded flag to the store if an empty catalogue ever ships.
+  if (s.festivals.length === 0) return 'loading';
+  return 'none';
+}
+
 /**
  * Lifecycle phase of a festival, used to re-prioritize the home/landing surface:
  *  - 'pre'  — before it starts (lean into picks / lineup / crew invites / Spotify)
@@ -249,4 +266,25 @@ export function listTimeZones(current?: string | null): string[] {
   const zones = typeof supportedValuesOf === 'function' ? supportedValuesOf('timeZone') : [...FALLBACK_TIME_ZONES];
   if (isValidTimeZone(current) && !zones.includes(current)) zones.push(current);
   return zones;
+}
+
+/**
+ * Group festivals for a picker. Live and upcoming: soonest start first. Past:
+ * most recent start first. Undated (no usable dates): name order.
+ */
+export function groupFestivalsByStatus<F extends Festival & { startDate?: string | null; endDate?: string | null }>(
+  festivals: F[],
+  now: Date = new Date(),
+): { live: F[]; upcoming: F[]; past: F[]; undated: F[] } {
+  const groups = { live: [] as F[], upcoming: [] as F[], past: [] as F[], undated: [] as F[] };
+  for (const f of festivals) {
+    const status = festivalStatus(f, undefined, now);
+    groups[status === 'ongoing' ? 'live' : (status ?? 'undated')].push(f);
+  }
+  const start = (f: F) => f.startDate ?? '';
+  groups.live.sort((a, b) => start(a).localeCompare(start(b)));
+  groups.upcoming.sort((a, b) => start(a).localeCompare(start(b)));
+  groups.past.sort((a, b) => start(b).localeCompare(start(a)));
+  groups.undated.sort((a, b) => a.name.localeCompare(b.name));
+  return groups;
 }

@@ -5,62 +5,46 @@ vi.mock('../api', () => ({
 }));
 
 import { api } from '../api';
-import { exportErrorMessage, stopAllSharing } from '../account';
-import { useAuthStore } from '../../stores/authStore';
-import { useCrewStore } from '../../stores/crewStore';
+import { exportErrorMessage, fetchAccountExport } from '../account';
+import { DATA_COPY } from '../../constants/privacyCopy';
 
-const mockApi = api as unknown as { post: ReturnType<typeof vi.fn> };
-const err = (status: number, retryAfter?: string) =>
-  Object.assign(new Error('x'), { name: 'ApiClientError', status, retryAfter });
+const mockGet = api.get as unknown as ReturnType<typeof vi.fn>;
+const err = (status: number, retryAfter?: string, extra: object = {}) =>
+  Object.assign(new Error('x'), { name: 'ApiClientError', status, retryAfter, ...extra });
+const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 describe('exportErrorMessage', () => {
   it('429 with Retry-After in the morning says today', () => {
     const now = new Date(2026, 5, 10, 9, 0, 0).getTime();
-    expect(exportErrorMessage(err(429, '3600'), now)).toMatch(
-      /^You can download your data once a day\. Try again today at .+\.$/,
-    );
+    expect(exportErrorMessage(err(429, '3600'), now)).toBe(DATA_COPY.limit('today', clock(now + 3600_000)));
   });
 
   it('429 late at night says tomorrow', () => {
     const now = new Date(2026, 5, 10, 23, 30, 0).getTime();
-    expect(exportErrorMessage(err(429, '3600'), now)).toContain('Try again tomorrow at ');
+    expect(exportErrorMessage(err(429, '3600'), now)).toBe(DATA_COPY.limit('tomorrow', clock(now + 3600_000)));
   });
 
   it('429 without Retry-After has no time', () => {
-    expect(exportErrorMessage(err(429))).toBe('You can download your data once a day. Try again tomorrow.');
+    expect(exportErrorMessage(err(429))).toBe(DATA_COPY.limitNoTime);
   });
 
   it('500 gives the server-problem text', () => {
     expect(exportErrorMessage(err(500))).toBe('Something went wrong on our side. Try again in a minute.');
   });
+
+  it('a network error gives the offline text', () => {
+    expect(exportErrorMessage(err(0, undefined, { isNetworkError: true }))).toBe(
+      "You're offline. Check your connection and try again.",
+    );
+  });
 });
 
-describe('stopAllSharing', () => {
-  const row = (user_id: string) => ({
-    crew_id: 'c1', user_id, status: 'here' as const, target_meeting_point_id: null, eta_minutes: null, note: null,
-    latitude: 28.5, longitude: -81.4, location_captured_at: '2026-06-10T09:00:00Z', updated_at: '2026-06-10T09:00:00Z',
-  });
+describe('fetchAccountExport', () => {
+  beforeEach(() => mockGet.mockReset());
 
-  beforeEach(() => {
-    mockApi.post.mockReset();
-    useAuthStore.setState({ user: { id: 'u1', username: 'a', publicSchedule: true } as never });
-    useCrewStore.setState({ crewStatuses: [row('u1'), row('u2')] });
-  });
-
-  it('posts, merges the user and clears only my status location', async () => {
-    mockApi.post.mockResolvedValue({ user: { id: 'u1', publicSchedule: false }, clearedStatusLocations: 2 });
-    await stopAllSharing();
-    expect(mockApi.post).toHaveBeenCalledWith('/account/stop-sharing', {});
-    expect(useAuthStore.getState().user?.publicSchedule).toBe(false);
-    expect(useAuthStore.getState().user?.username).toBe('a');
-    const [mine, theirs] = useCrewStore.getState().crewStatuses;
-    expect(mine).toMatchObject({ user_id: 'u1', status: 'here', latitude: null, longitude: null, location_captured_at: null });
-    expect(theirs).toMatchObject({ user_id: 'u2', latitude: 28.5 });
-  });
-
-  it('propagates errors and leaves the status location', async () => {
-    mockApi.post.mockRejectedValue(new Error('nope'));
-    await expect(stopAllSharing()).rejects.toThrow('nope');
-    expect(useCrewStore.getState().crewStatuses[0].latitude).toBe(28.5);
+  it('asks for a 60 second timeout', async () => {
+    mockGet.mockResolvedValue({ exportVersion: '1.2' });
+    await fetchAccountExport();
+    expect(mockGet).toHaveBeenCalledWith('/account/export', { timeoutMs: 60000 });
   });
 });

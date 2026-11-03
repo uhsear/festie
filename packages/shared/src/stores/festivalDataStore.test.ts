@@ -6,14 +6,13 @@ import { useUIStore } from './uiStore';
 import { api } from '../services/api';
 import type { Festival, Profile } from '../types/domain';
 
-vi.mock('../services/api', () => ({
-  api: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+vi.mock('../services/api', () => {
+  const get = vi.fn();
+  // The profiles list reads meta.pickCounts through getEnvelope; route it through
+  // the get mock so each test's queued responses still apply in order.
+  const getEnvelope = vi.fn(async (path: string) => ({ data: await get(path), meta: {} }));
+  return { api: { get, getEnvelope, post: vi.fn(), put: vi.fn(), delete: vi.fn() } };
+});
 
 const mockFestival: Festival = {
   id: 'fest-1',
@@ -53,11 +52,14 @@ function resetStores() {
     pickSync: {},
     savesInFlight: 0,
     lastSavedAt: null,
+    guestPicks: {},
   });
   useFestivalUIStore.setState({
     selectedDay: 0,
     activeStages: [],
     searchQuery: '',
+    prefsFestivalId: null,
+    byFestival: {},
   });
 }
 
@@ -155,7 +157,7 @@ describe('festivalDataStore', () => {
       expect(state.sets[0]!.date).toBe('2026-06-01');
     });
 
-    it('resets activeStages to [] (all-selected) in the UI store', async () => {
+    it("restores the festival's remembered filters", async () => {
       const detailResponse = {
         ...mockFestival,
         stages: [
@@ -172,6 +174,32 @@ describe('festivalDataStore', () => {
       // all-selected → []); [] keeps a fresh load filter-free.
       expect(useFestivalUIStore.getState().activeStages).toEqual([]);
       expect(useFestivalUIStore.getState().selectedDay).toBe(0);
+    });
+
+    it('restores saved activeStages for the festival', async () => {
+      useFestivalUIStore.setState({
+        byFestival: {
+          'fest-1': {
+            view: null,
+            activeStages: ['s1'],
+            onlyMine: false,
+            searchQuery: '',
+            hiddenDays: [],
+            dismissedPhase: null,
+            groupBy: null,
+          },
+        },
+      });
+      vi.mocked(api.get).mockResolvedValueOnce({
+        ...mockFestival,
+        stages: [
+          { id: 's1', name: 'Main', festivalId: 'fest-1', createdAt: '', updatedAt: '' },
+          { id: 's2', name: 'Side', festivalId: 'fest-1', createdAt: '', updatedAt: '' },
+        ],
+        days: [],
+      });
+      await useFestivalDataStore.getState().selectFestival('fest-1');
+      expect(useFestivalUIStore.getState().activeStages).toEqual(['s1']);
     });
 
     it('defaults selectedDay to the logical festival day in the festival zone', async () => {
@@ -191,7 +219,9 @@ describe('festivalDataStore', () => {
         await useFestivalDataStore.getState().selectFestival('fest-1');
         expect(useFestivalUIStore.getState().selectedDay).toBe(0);
 
-        // 01:00 PDT on day 2's calendar date is day 1, not day 2.
+        // 01:00 PDT on day 2's calendar date is day 1, not day 2. A same-id reselect is a
+        // refresh that keeps the live day, so forget the festival to test a fresh open.
+        useFestivalUIStore.setState({ prefsFestivalId: null });
         vi.setSystemTime(Date.UTC(2026, 5, 3, 8, 0));
         vi.mocked(api.get).mockResolvedValueOnce(detailResponse);
         await useFestivalDataStore.getState().selectFestival('fest-1');
@@ -273,6 +303,38 @@ describe('festivalDataStore', () => {
       vi.mocked(api.get).mockRejectedValueOnce(new Error('404'));
       await expect(useFestivalDataStore.getState().selectFestival('bad')).rejects.toThrow();
       expect(useFestivalDataStore.getState().error).toBe('404');
+    });
+
+    it('restores remembered filters from cached data when the fetch fails', async () => {
+      const stage = (id: string) => ({ id, name: id, festivalId: 'fest-1', createdAt: '', updatedAt: '' });
+      const day = (id: string, date: string) => ({ id, festivalId: 'fest-1', date, createdAt: '', updatedAt: '' });
+      useFestivalDataStore.setState({
+        currentFestival: mockFestival,
+        stages: [stage('s1'), stage('s2')],
+        days: [day('d1', '2026-06-01'), day('d2', '2026-06-02')],
+      });
+      useFestivalUIStore.setState({
+        byFestival: {
+          'fest-1': {
+            view: 'timeline',
+            activeStages: ['s2'],
+            onlyMine: true,
+            searchQuery: '',
+            hiddenDays: [],
+            dismissedPhase: null,
+            groupBy: null,
+          },
+        },
+      });
+      vi.mocked(api.get).mockRejectedValueOnce(new Error('404'));
+      await expect(useFestivalDataStore.getState().selectFestival('fest-1')).rejects.toThrow();
+      const ui = useFestivalUIStore.getState();
+      expect(ui.prefsFestivalId).toBe('fest-1');
+      expect(ui.activeStages).toEqual(['s2']);
+      expect(ui.scheduleView).toBe('timeline');
+      // A change made while offline is saved for this festival.
+      ui.setSearchQuery('garden');
+      expect(useFestivalUIStore.getState().byFestival['fest-1']?.searchQuery).toBe('garden');
     });
 
     it('handles non-Error thrown values', async () => {
@@ -368,6 +430,19 @@ describe('festivalDataStore', () => {
   });
 
   describe('loadProfiles', () => {
+    it('stores the anonymous pickCounts from the response meta', async () => {
+      vi.mocked(api.getEnvelope).mockResolvedValueOnce({ data: [mockProfile], meta: { pickCounts: { 'set-1': 3 } } });
+      await useFestivalDataStore.getState().loadProfiles('fest-1');
+      expect(useFestivalDataStore.getState().pickCounts).toEqual({ 'set-1': 3 });
+    });
+
+    it('falls back to empty pickCounts when the server sends none', async () => {
+      useFestivalDataStore.setState({ pickCounts: { 'set-1': 9 } });
+      vi.mocked(api.get).mockResolvedValueOnce([mockProfile]);
+      await useFestivalDataStore.getState().loadProfiles('fest-1');
+      expect(useFestivalDataStore.getState().pickCounts).toEqual({});
+    });
+
     it('loads profiles and sets currentProfile matching user', async () => {
       useAuthStore.setState({
         user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' },
@@ -467,7 +542,8 @@ describe('festivalDataStore', () => {
       expect(profile.picks['set-1']).toBe('must'); // existing pick preserved
     });
 
-    it('throws when no current profile', async () => {
+    it('throws when signed in with no current profile and no festival', async () => {
+      useAuthStore.setState({ user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' } });
       useFestivalDataStore.setState({ currentProfile: null });
       await expect(
         useFestivalDataStore.getState().savePick({
@@ -592,7 +668,8 @@ describe('festivalDataStore', () => {
       expect(useFestivalDataStore.getState().currentProfile!.picks['set-2']).toBe('must');
     });
 
-    it('throws when no current profile', async () => {
+    it('throws when signed in with no current profile and no festival', async () => {
+      useAuthStore.setState({ user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' } });
       useFestivalDataStore.setState({ currentProfile: null });
       await expect(useFestivalDataStore.getState().bulkSavePicks(['set-1'], 'must')).rejects.toThrow(
         'No active profile',
@@ -630,7 +707,8 @@ describe('festivalDataStore', () => {
       expect(profile.picks['set-1']).toBeUndefined();
     });
 
-    it('throws when no current profile', async () => {
+    it('throws when signed in with no current profile', async () => {
+      useAuthStore.setState({ user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' } });
       useFestivalDataStore.setState({ currentProfile: null });
       await expect(useFestivalDataStore.getState().removePick('fest-1', 'set-1')).rejects.toThrow('No active profile');
     });
@@ -916,6 +994,7 @@ describe('festivalDataStore', () => {
     });
 
     it('does not mark a pick failed when there is no profile', async () => {
+      useAuthStore.setState({ user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' } });
       await expect(
         useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
       ).rejects.toThrow('No active profile');
@@ -1153,14 +1232,18 @@ describe('festivalDataStore', () => {
       });
       const cachedProfiles = [mockProfile];
       useFestivalDataStore.setState({ allProfiles: cachedProfiles, _cachedFestivalId: 'fest-1' });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const detailResponse = { ...mockFestival, stages: [], days: [] };
+      const offline = new Error('Network request failed');
       vi.mocked(api.get)
         .mockResolvedValueOnce(detailResponse)
-        .mockRejectedValueOnce(new Error('Network request failed')); // /profiles offline
+        .mockRejectedValueOnce(offline); // /profiles offline
 
       await useFestivalDataStore.getState().selectFestival('fest-1');
       expect(useFestivalDataStore.getState().allProfiles).toEqual(cachedProfiles);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('profiles fetch failed'), 'fest-1', offline);
+      warn.mockRestore();
     });
 
     it('DROPS a persisted allProfiles snapshot from a DIFFERENT festival (staleness guard)', async () => {
@@ -1225,11 +1308,10 @@ describe('festivalDataStore', () => {
       expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-2': 'must', 'set-3': 'maybe' });
     });
 
-    it('savePick with no profile and no user throws and sends no POST', async () => {
+    it('savePick with no profile and no user saves a guest pick and sends no POST', async () => {
       useAuthStore.setState({ user: null });
-      await expect(
-        useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' }),
-      ).rejects.toThrow('No active profile');
+      await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' });
+      expect(useFestivalDataStore.getState().guestPicks).toEqual({ 'fest-1': { 'set-2': 'must' } });
       expect(api.post).not.toHaveBeenCalled();
     });
 

@@ -25,11 +25,11 @@ describe('drag gestures keep a button alternative', () => {
     expect(src).toContain('aria-label="Close detail panel"');
   });
 
-  it('shared Sheet has a Close button, and the install sheet uses it', () => {
+  it('shared Sheet has a Close button, and the install drawer uses it', () => {
     const sheet = read('ui/Sheet.tsx');
     expect(sheet).toContain('Drawer.Root');
     expect(sheet).toContain('label="Close"');
-    const install = read('features/IOSInstallSheet.tsx');
+    const install = read('features/IOSInstallDrawer.tsx');
     expect(install).toContain("import Sheet from '../ui/Sheet'");
     expect(install).toContain('onCloseClick');
   });

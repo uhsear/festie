@@ -307,6 +307,13 @@ export function buildMapHtml(
     // appears, not on every position tick (which would yank the camera as peers
     // move). RN owns the one-shot SOS framing separately (__festieFlyTo).
     var FRAMED_LIVE = false;
+    // Camera padding: the right side clears the find-me and Drop pin column, the
+    // top clears the chip bar.
+    var FIT_PADDING = { top: 72, bottom: 72, left: 40, right: 72 };
+    // Place-marker taps open the RN place card only while neither placement nor
+    // authoring is armed. PLACEMENT and AUTHORING live inside init(), so their
+    // setters keep this top-level copy in step for renderPins/renderMapData.
+    var PLACE_TAPS = true;
 
     function post(msg) {
       if (window.ReactNativeWebView) {
@@ -331,11 +338,17 @@ export function buildMapHtml(
         el.setAttribute('role', 'button');
         el.setAttribute('aria-label', aLabel);
         el.setAttribute('title', aLabel);
-        var popupHtml = '<strong>' + escapeHtml(p.label) + '</strong>' +
-          (p.sublabel ? '<br/>' + escapeHtml(p.sublabel) : '');
+        // With PLACE_TAPS off the tap bubbles to map.on('click'), so placement
+        // on top of a pin still drops there.
+        (function (pin) {
+          el.addEventListener('click', function (e) {
+            if (!PLACE_TAPS) return;
+            e.stopPropagation();
+            post({ type: 'place-select', id: pin.id, kind: 'meeting-point' });
+          });
+        })(p);
         var marker = new maplibregl.Marker({ element: el })
           .setLngLat([p.longitude, p.latitude])
-          .setPopup(new maplibregl.Popup({ offset: 16 }).setHTML(popupHtml))
           .addTo(map);
         PIN_MARKERS.push(marker);
         if (!bounds) {
@@ -345,7 +358,7 @@ export function buildMapHtml(
         }
       });
       if (bounds && pins.length > 1) {
-        map.fitBounds(bounds, { padding: 48, maxZoom: 16, duration: 0 });
+        map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 16, duration: 0 });
       }
     }
 
@@ -422,7 +435,7 @@ export function buildMapHtml(
       // on every position tick as peers move.
       if (bounds && !HAD_PINS && !FRAMED_LIVE && items.length > 0) {
         FRAMED_LIVE = true;
-        map.fitBounds(bounds, { padding: 64, maxZoom: 16, duration: 300 });
+        map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 16, duration: 300 });
       }
     }
 
@@ -453,10 +466,15 @@ export function buildMapHtml(
         el.setAttribute('role', 'button');
         el.setAttribute('aria-label', aLabel);
         el.setAttribute('title', aLabel);
-        var popupHtml = '<strong>' + escapeHtml(p.label) + '</strong>';
+        (function (pin) {
+          el.addEventListener('click', function (e) {
+            if (!PLACE_TAPS) return;
+            e.stopPropagation();
+            post({ type: 'place-select', id: pin.id, kind: pin.kind === 'stage' ? 'stage' : 'amenity' });
+          });
+        })(p);
         var marker = new maplibregl.Marker({ element: el })
           .setLngLat([p.longitude, p.latitude])
-          .setPopup(new maplibregl.Popup({ offset: 14 }).setHTML(popupHtml))
           .addTo(map);
         MAPDATA_MARKERS.push(marker);
       });
@@ -605,6 +623,7 @@ export function buildMapHtml(
           PLACEMENT = !!on;
           try { map.getCanvas().style.cursor = PLACEMENT ? 'crosshair' : ''; } catch (e) {}
           post({ type: 'placement', on: PLACEMENT });
+          PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';
         };
 
         // Authoring mode (Phase D, admin map editor). Cosmetic only: it records
@@ -618,6 +637,7 @@ export function buildMapHtml(
           AUTHORING = (mode === 'stage' || mode === 'amenity' || mode === 'zone' || mode === 'siteplan')
             ? mode : 'off';
           post({ type: 'authoring', mode: AUTHORING });
+          PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';
         };
         map.on('click', function (e) {
           if (!PLACEMENT || !e || !e.lngLat) return;
@@ -627,6 +647,7 @@ export function buildMapHtml(
           var multiTap = (AUTHORING === 'zone' || AUTHORING === 'siteplan');
           if (!multiTap) {
             PLACEMENT = false;
+            PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';
             try { map.getCanvas().style.cursor = ''; } catch (err) {}
           }
           post({ type: 'map-longpress', longitude: e.lngLat.lng, latitude: e.lngLat.lat });
@@ -701,7 +722,7 @@ export function buildMapHtml(
         // checked on the RN side before injection.
         window.__festieFitBounds = function (west, south, east, north) {
           try {
-            map.fitBounds([[west, south], [east, north]], { padding: 48, maxZoom: 17, duration: 0 });
+            map.fitBounds([[west, south], [east, north]], { padding: FIT_PADDING, maxZoom: 17, duration: 0 });
             post({ type: 'fitted' });
           } catch (err) { post({ type: 'error', reason: 'fitbounds' }); }
         };

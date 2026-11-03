@@ -31,6 +31,10 @@ import {
   refreshTokenSchema,
   adminBulkDeactivateSchema,
   festivalDepthQuery,
+  lineupImportRequestSchema,
+  festivalAnnouncementSchema,
+  crewDaysSchema,
+  meetingPointComingSchema,
 } from './schemas';
 import { responseSchemas } from './responseSchemas';
 
@@ -123,6 +127,16 @@ function jsonResponseWrapper(props: Record<string, any>) {
 function arrayOf(name: string) {
   return { type: 'array', items: ref(name) };
 }
+
+/** `CrewMemberDay[]`: one row per answered day (no row means no answer). */
+const crewMemberDays = {
+  type: 'array',
+  items: {
+    type: 'object',
+    required: ['userId', 'dayIndex', 'answer'],
+    properties: { userId: { type: 'string' }, dayIndex: { type: 'integer' }, answer: { type: 'string', enum: ['going', 'maybe', 'no'] } },
+  },
+};
 
 /** The `crewId` path parameter shared by every crew sub-resource route. */
 const crewIdPathParam = { name: 'crewId', in: 'path', required: true, schema: { type: 'string' } };
@@ -254,8 +268,18 @@ export function generateOpenAPISpec(config: any) {
           responses: { 200: { description: 'Festival data (full depth=2 document; depth=1 returns the FestivalDepth1 shape)', ...jsonResponseRef('Festival') } },
         },
       },
+      '/api/v1/festivals/follows': {
+        get: { tags: ['Festivals'], summary: 'Festivals I follow (published, not deleted), newest first', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Followed festivals', ...jsonResponseWrapper({ festivalIds: { type: 'array', items: { type: 'string' } } }) }, 401: { description: 'Not signed in' } } },
+      },
+      '/api/v1/festivals/{id}/follow': {
+        put: { tags: ['Festivals'], summary: 'Follow a festival (idempotent)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Following', ...jsonResponseWrapper({ festivalId: { type: 'string' }, following: { type: 'boolean' } }) }, 404: { description: 'Festival not found (missing, deleted or draft)' } } },
+        delete: { tags: ['Festivals'], summary: 'Stop following a festival (idempotent)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Not following', ...jsonResponseWrapper({ festivalId: { type: 'string' }, following: { type: 'boolean' } }) } } },
+      },
+      '/api/v1/festivals/{festivalId}/sets/{setId}/also-picked': {
+        get: { tags: ['Festivals'], summary: 'Sets that people who picked this set also picked (anonymous, 20-user floor, max 8)', parameters: [{ name: 'festivalId', in: 'path', required: true, schema: { type: 'string' } }, { name: 'setId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Set ids, best first. Never counts or users.', ...jsonResponseWrapper({ setIds: { type: 'array', items: { type: 'string' } } }) }, 404: { description: 'Set not found' } } },
+      },
       '/api/v1/profiles/{festivalId}': {
-        get: { tags: ['Profiles'], summary: 'List profiles for festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'festivalId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Profile list', ...jsonResponseArrayRef('Profile') } } },
+        get: { tags: ['Profiles'], summary: 'List profiles for festival (picks of other users only for crew mates; meta.pickCounts holds anonymous per-set counts of other attendees)', security: [{ bearerAuth: [] }], parameters: [{ name: 'festivalId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Profile list', ...jsonResponseArrayRef('Profile') } } },
       },
       '/api/v1/profiles/{festivalId}/join': {
         post: { tags: ['Profiles'], summary: 'Join festival', security: [{ bearerAuth: [] }], responses: { 201: { description: 'Profile created', ...jsonResponseRef('Profile') } } },
@@ -268,7 +292,7 @@ export function generateOpenAPISpec(config: any) {
         post: { tags: ['Crews'], summary: 'Create crew', security: [{ bearerAuth: [] }], responses: { 201: { description: 'Crew created', ...jsonResponseRef('Crew') } } },
       },
       '/api/v1/crews/join/{code}': {
-        post: { tags: ['Crews'], summary: 'Join crew by invite code', security: [{ bearerAuth: [] }], parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Joined crew' } } },
+        post: { tags: ['Crews'], summary: 'Join crew by invite code', security: [{ bearerAuth: [] }], parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Joined crew' }, 403: { description: 'CREW_LOCKED: the crew is not taking new members' } } },
       },
       '/api/v1/crews/{crewId}/overlap': {
         get: { tags: ['Crews'], summary: 'Get crew pick overlap analysis', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Overlap data' } } },
@@ -296,11 +320,15 @@ export function generateOpenAPISpec(config: any) {
         get: { tags: ['Crews'], summary: 'List crew member statuses', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Member statuses', ...jsonResponseWrapper({ statuses: arrayOf('CrewMemberStatus') }) } } },
         put: { tags: ['Crews'], summary: 'Upsert my own status', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Status upserted', ...jsonResponseWrapper({ status: ref('CrewMemberStatus') }) } } },
       },
+      '/api/v1/crews/{crewId}/days': {
+        get: { tags: ['Crews'], summary: 'List the day answers of current crew members', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Day answers, ordered by user and day', ...jsonResponseWrapper({ days: crewMemberDays }) }, 403: { description: 'Not a crew member' } } },
+        put: { tags: ['Crews'], summary: 'Replace my day answers (a day left out is cleared)', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], requestBody: jsonBody(crewDaysSchema), responses: { 200: { description: 'My day answers', ...jsonResponseWrapper({ days: crewMemberDays }) }, 400: { description: 'A repeated day, or a day that is not part of this festival' }, 403: { description: 'Not a crew member' } } },
+      },
+      '/api/v1/crews/{crewId}/meeting-points/{mpId}/coming': {
+        put: { tags: ['Crews'], summary: "Set or clear my I'll be there tap on an active meeting point (idempotent)", security: [{ bearerAuth: [] }], parameters: [crewIdPathParam, { name: 'mpId', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(meetingPointComingSchema), responses: { 200: { description: 'The meeting point with its coming list', ...jsonResponseWrapper({ meetingPoint: ref('MeetingPoint') }) }, 403: { description: 'Not a crew member' }, 404: { description: 'Meeting point not found or not active' } } },
+      },
       '/api/v1/crews/{crewId}/activity': {
         get: { tags: ['Crews'], summary: 'Crew activity feed (cursor-paginated)', security: [{ bearerAuth: [] }], parameters: [crewIdPathParam], responses: { 200: { description: 'Activity entries', ...jsonResponseWrapper({ items: arrayOf('CrewActivityEntry'), nextCursor: { type: 'string', nullable: true } }) } } },
-      },
-      '/api/v1/festivals/{festivalId}/calendar': {
-        get: { tags: ['Export'], summary: 'Calendar events JSON for native integration', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Calendar events' } } },
       },
       '/api/v1/notifications/tokens': {
         post: { tags: ['Notifications'], summary: 'Register FCM push token', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Token registered' } } },
@@ -312,6 +340,53 @@ export function generateOpenAPISpec(config: any) {
       '/api/v1/admin/bulk/deactivate': {
         post: { tags: ['Admin'], summary: 'Bulk deactivate users', security: [{ bearerAuth: [] }], requestBody: jsonBody(adminBulkDeactivateSchema), responses: { 200: { description: 'Results' } } },
       },
+      '/api/v1/admin/festivals/{id}/import-lineup/preview': {
+        post: { tags: ['Admin'], summary: 'Preview a lineup import (writes nothing)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(lineupImportRequestSchema), responses: { 200: { description: 'Import plan: row statuses, counts, new stages and days, problems' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/import-lineup': {
+        post: { tags: ['Admin'], summary: 'Commit a lineup import', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(lineupImportRequestSchema), responses: { 200: { description: '{ committed: false, plan } when the plan has errors, else { committed: true, result, plan }' }, 400: { description: 'Invalid import payload' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/imports': {
+        get: { tags: ['Admin'], summary: 'Lineup import history (newest 20)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, imports }' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/imports/{importId}/undo': {
+        post: { tags: ['Admin'], summary: 'Undo the newest lineup import', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'importId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Removed, restored and kept sets' }, 400: { description: 'Not the newest import' }, 404: { description: 'Import not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/lineup-announcement': {
+        get: { tags: ['Admin'], summary: 'Count who a lineup announcement would reach', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, recipients }' }, 404: { description: 'Festival not found' } } },
+        post: { tags: ['Admin'], summary: 'Send the lineup announcement push and email', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ queued: true, recipients }' }, 400: { description: 'No one to notify' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/announcements': {
+        get: { tags: ['Admin'], summary: 'List the announcements of a festival (newest 20) and its audience size', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, recipients, announcements }' }, 404: { description: 'Festival not found' } } },
+        post: { tags: ['Admin'], summary: 'Send or schedule an announcement to everyone who joined the festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(festivalAnnouncementSchema), responses: { 201: { description: '{ announcement, recipients }' }, 400: { description: 'Invalid body, or sendAt not in the next 14 days' }, 404: { description: 'Festival not found' }, 409: { description: 'The festival is a draft' }, 429: { description: 'The festival already has 3 announcements within an hour of that time' } } },
+      },
+      '/api/v1/admin/festivals/{id}/announcements/{announcementId}': {
+        delete: { tags: ['Admin'], summary: 'Cancel a scheduled announcement, or take down the banner of a sent one', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, { name: 'announcementId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ announcement }' }, 404: { description: 'Announcement not found' } } },
+      },
+      '/api/v1/festivals/{id}/announcements': {
+        get: { tags: ['Festivals'], summary: 'Active announcements for the banner (sent in the last 24 hours, newest 3)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'FestivalAnnouncement[]; [] for a missing or draft festival' } } },
+      },
+      '/api/v1/admin/festivals': {
+        get: { tags: ['Admin'], summary: 'List every non-deleted festival, drafts included', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Festival list items plus { published, updatedAt }' } } },
+      },
+      '/api/v1/admin/festivals/archived': {
+        get: { tags: ['Admin'], summary: 'List deleted festivals (newest 100)', security: [{ bearerAuth: [] }], responses: { 200: { description: '[{ id, name, location, deletedAt, publishedAt }]' } } },
+      },
+      '/api/v1/admin/festivals/{id}': {
+        get: { tags: ['Admin'], summary: 'Get a festival, draft or published, with its publish checklist', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }, ...queryParams(festivalDepthQuery)], responses: { 200: { description: 'The full festival plus { publishedAt, updatedByUsername, checklist }' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/impact': {
+        get: { tags: ['Admin'], summary: 'Count who loses access if the festival is deleted', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ profiles, crews, picks }' }, 404: { description: 'Festival not found' } } },
+      },
+      '/api/v1/admin/festivals/{id}/publish': {
+        post: { tags: ['Admin'], summary: 'Publish a draft festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ publishedAt, checklist }' }, 404: { description: 'Festival not found' }, 409: { description: 'PUBLISH_BLOCKED: the checklist has a todo item (error.checklist)' } } },
+      },
+      '/api/v1/admin/festivals/{id}/restore': {
+        post: { tags: ['Admin'], summary: 'Restore a deleted festival', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ id, published }' }, 404: { description: 'This festival is not in Archived.' } } },
+      },
+      '/api/v1/admin/env': {
+        get: { tags: ['Admin'], summary: 'Environment label for the admin header band', security: [{ bearerAuth: [] }], responses: { 200: { description: '{ label: string | null }' } } },
+      },
       '/api/v1/admin/bulk/archive-festivals': {
         post: { tags: ['Admin'], summary: 'Bulk archive festivals', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Results' } } },
       },
@@ -322,7 +397,10 @@ export function generateOpenAPISpec(config: any) {
         get: { tags: ['Health'], summary: 'Health check with metrics', responses: { 200: { description: 'Health status' } } },
       },
       '/join/{code}': {
-        get: { tags: ['Deep Links'], summary: 'Crew invite page (HTML with share preview)', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Invite page with crew-specific Open Graph tags' }, 404: { description: 'No crew has this code' }, 410: { description: 'The invite code has expired' } } },
+        get: { tags: ['Deep Links'], summary: 'Crew invite page (HTML with share preview)', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Invite page with crew-specific Open Graph tags' }, 403: { description: 'CREW_LOCKED: the crew is not taking new members' }, 404: { description: 'No crew has this code' }, 410: { description: 'The invite code has expired' } } },
+      },
+      '/join/{code}/save.ics': {
+        get: { tags: ['Deep Links'], summary: 'Save a crew invite for later (one all-day calendar event for the festival dates)', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Calendar file', content: { 'text/calendar': { schema: { type: 'string' } } } }, 302: { description: 'Redirect to the invite page when the invite cannot be saved' } } },
       },
     },
     tags: [

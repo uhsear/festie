@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
 import { createSocket } from '@festie/shared/services';
 // Import the Socket type from the shared barrel (which re-exports it) rather
@@ -22,7 +22,6 @@ import { useCrewRealtime, useRevocationRealtime } from '@festie/shared/hooks';
 // package `exports` map resolves. It is the package itself (not a transitive
 // dep), so it is safe for the mobile typecheck and the Metro bundle.
 import { createStoreSink } from '@festie/shared';
-import type { OnlineUser } from '@festie/shared/types';
 import type {
   ProfileUpdatedPayload,
   ProfileDeletedPayload,
@@ -31,12 +30,14 @@ import type {
   PresenceUser,
   CrewUpdatedPayload,
   CrewMemberEventPayload,
+  CrewStatusUpdatedPayload,
 } from '@festie/shared/types/socket-events';
 import { setLiveSocket, useLiveSocket } from '../lib/liveSocket';
 
+const RECONNECT_FESTIVAL_RELOAD_GAP_MS = 60_000;
+
 export interface UseRealtimeSyncReturn {
   connected: boolean;
-  onlineUsers: OnlineUser[];
 }
 
 /**
@@ -49,6 +50,8 @@ export interface UseRealtimeSyncReturn {
  *
  * Socket events flow into the shared Zustand stores (festivalDataStore,
  * crewStore, uiStore) so the rest of the app reacts automatically.
+ * festival:updated reloads only when its id is the current festival. Presence
+ * fills uiStore but is not returned, so the tab layout does not re-render on it.
  */
 export function useRealtimeSync(): UseRealtimeSyncReturn {
   const socketRef = useRef<Socket | null>(null);
@@ -62,7 +65,6 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
   const activeCrewId = useCrewStore((s) => s.activeCrew?.id ?? null);
   const connected = useUIStore((s) => s.connected);
   const setConnected = useUIStore((s) => s.setConnected);
-  const onlineUsers = useUIStore((s) => s.onlineUsers);
   const setOnlineUsers = useUIStore((s) => s.setOnlineUsers);
 
   // ── Crew sub-feature + Live Location/SOS realtime ────────────────────────
@@ -89,6 +91,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
   useRevocationRealtime({
     socket: liveSocket,
     onSessionRevoked: () => router.replace('/(auth)/login'),
+    onCrewNotice: ({ title, message }) => Alert.alert(title, message),
   });
 
   // Debounce timers to coalesce bursty socket events into single store reloads.
@@ -126,7 +129,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
             socketRef.current.connect();
           }
         })
-        .catch(() => {});
+        .catch((e) => console.warn('socket token refresh failed; realtime paused until the next request', e));
     });
     socketRef.current = socket;
     // Expose this socket to the Live Location publisher (crew screen) which emits
@@ -212,8 +215,19 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     const handleCrewMemberAdded = (data: CrewMemberEventPayload) => reloadCrews(data?.crewId);
     const handleCrewMemberRemoved = (data: CrewMemberEventPayload) => reloadCrews(data?.crewId);
 
+    // A crewmate's last-synced status changed. Apply it only for the open crew, as web does.
+    const handleCrewStatusUpdated = (data: CrewStatusUpdatedPayload) => {
+      const row = data?.status;
+      if (!row) return;
+      const activeId = useCrewStore.getState().activeCrew?.id ?? null;
+      if (!activeId || row.crew_id !== activeId) return;
+      useCrewStore.getState().applyStatusUpdate(row);
+    };
+
     // Festival / sets -> festivalDataStore full reload
-    const handleFestivalUpdated = (_data: FestivalIdPayload) => reloadFestival();
+    const handleFestivalUpdated = (data: FestivalIdPayload) => {
+      if (data?.id === useFestivalDataStore.getState().currentFestivalId) reloadFestival();
+    };
     const handleSetAdded = (_data: FestivalIdPayload) => reloadFestival();
     const handleSetUpdated = (_data: FestivalIdPayload) => reloadFestival();
 
@@ -231,6 +245,12 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       }
     };
 
+    // Events sent while the socket was down are lost (the server keeps no
+    // buffer), so a reconnect re-reads picks and crews. The debounce coalesces
+    // these with the foreground backfill. The full festival reload is the
+    // heaviest call and lineup edits are rare: only after a long gap.
+    let connectedBefore = socket.connected;
+    let disconnectedAt: number | null = null;
     const handleConnect = () => {
       setConnected(true);
       const festivalId = useFestivalDataStore.getState().currentFestivalId;
@@ -240,10 +260,20 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       // The active crew room join is owned by useCrewRealtime (joinRoom: true),
       // which registers its own 'connect' handler and emits join:crew — so it is
       // deliberately NOT emitted here (doing both would double-join per connect).
+      if (connectedBefore) {
+        reloadProfiles();
+        reloadCrews();
+        if (disconnectedAt !== null && Date.now() - disconnectedAt >= RECONNECT_FESTIVAL_RELOAD_GAP_MS) {
+          reloadFestival();
+        }
+      }
+      connectedBefore = true;
+      disconnectedAt = null;
     };
 
     const handleDisconnect = () => {
       setConnected(false);
+      disconnectedAt ??= Date.now();
     };
 
     // ── Register listeners ─────────────────────────────────────────────
@@ -259,6 +289,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     socket.on('crew:updated', handleCrewUpdated);
     socket.on('crew:member-joined', handleCrewMemberAdded);
     socket.on('crew:member-left', handleCrewMemberRemoved);
+    socket.on('crew:status-updated', handleCrewStatusUpdated);
 
     socket.on('festival:updated', handleFestivalUpdated);
     socket.on('festival:set-added', handleSetAdded);
@@ -328,6 +359,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       socket.off('crew:updated', handleCrewUpdated);
       socket.off('crew:member-joined', handleCrewMemberAdded);
       socket.off('crew:member-left', handleCrewMemberRemoved);
+      socket.off('crew:status-updated', handleCrewStatusUpdated);
 
       socket.off('festival:updated', handleFestivalUpdated);
       socket.off('festival:set-added', handleSetAdded);
@@ -363,5 +395,5 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     };
   }, [userToken, currentFestivalId, activeCrewId, setConnected, setOnlineUsers]);
 
-  return { connected, onlineUsers };
+  return { connected };
 }

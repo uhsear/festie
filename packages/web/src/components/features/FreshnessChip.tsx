@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
-import { timeAgo } from '@festie/shared/utils';
+import { formatFreshnessLabel } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
 
 type Surface = 'crew' | 'schedule';
@@ -18,14 +18,14 @@ interface FreshnessChipProps {
 }
 
 /**
- * Offline-honest freshness chip. Renders "Synced N ago" when online or
- * "Showing offline data · synced N ago" when `uiStore.offlineMode` is set,
+ * Offline-honest freshness chip. Renders "Updated N ago" when online or
+ * "Showing offline data · updated N ago" when `uiStore.offlineMode` is set,
  * with a small "N queued" badge driven by `uiStore.pendingSync`.
  *
- * The relative-time label comes from the SHARED `timeAgo` util (single source
+ * The relative-time label comes from the SHARED `formatFreshnessLabel` util (single source
  * of truth across web + mobile) and the cache timestamp from the relevant
  * store. The "N ago" value advances from the device clock — even on a cold
- * offline launch — via a 30s tick that re-reads `timeAgo` against `Date.now()`.
+ * offline launch — via a 30s tick that re-reads the label against `Date.now()`.
  *
  * Renders nothing until the surface has been cached at least once (no
  * timestamp → no honest claim to make).
@@ -37,7 +37,7 @@ export default function FreshnessChip({ surface, className }: FreshnessChipProps
   const festivalCachedAt = useFestivalDataStore((s) => s._festivalCachedAt);
   const cachedAt = surface === 'crew' ? crewCachedAt : festivalCachedAt;
 
-  // Re-render on a 30s tick so "synced N ago" keeps advancing from the device
+  // Re-render on a 30s tick so "updated N ago" keeps advancing from the device
   // clock without any network — the cardinal offline-honesty requirement.
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function FreshnessChip({ surface, className }: FreshnessChipProps
 
   if (cachedAt == null) return null;
 
-  const label = offlineMode ? `Showing offline data · synced ${timeAgo(cachedAt)}` : `Synced ${timeAgo(cachedAt)}`;
+  const label = formatFreshnessLabel(cachedAt, offlineMode);
 
   return (
     <div className={cn('flex items-center gap-2 text-xs', className)} role="status" aria-live="polite">

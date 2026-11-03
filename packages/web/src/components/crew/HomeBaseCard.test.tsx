@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useCrewStore } from '@festie/shared/stores';
 
 const { putMock } = vi.hoisted(() => ({ putMock: vi.fn() }));
 
@@ -44,7 +45,18 @@ describe('HomeBaseCard', () => {
     await user.click(screen.getByRole('button'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: '6:00 PM' });
+    expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: '6:00 PM', planB: null });
+  });
+
+  it('lets the owner remove Home Base', async () => {
+    const user = userEvent.setup();
+    putMock.mockClear();
+    renderCard('18:00');
+
+    await user.click(screen.getByRole('button'));
+    await user.click(screen.getByRole('button', { name: 'Remove Home Base' }));
+
+    expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: null, time: null, planB: null });
   });
 
   it('clears a saved HH:MM time when the field is emptied', async () => {
@@ -56,7 +68,7 @@ describe('HomeBaseCard', () => {
     await user.clear(screen.getByLabelText('Meet at time'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: null });
+    expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: null, planB: null });
   });
 
   it('renders a readable non-interactive card for members', () => {
@@ -64,6 +76,23 @@ describe('HomeBaseCard', () => {
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByText('Home base:')).toBeInTheDocument();
     expect(screen.getByText('Ferris wheel')).toBeInTheDocument();
+  });
+
+  it('sends a trimmed Plan B on save', async () => {
+    const user = userEvent.setup();
+    putMock.mockClear();
+    renderCard('18:00');
+    await user.click(screen.getByRole('button'));
+    await user.type(screen.getByLabelText('Plan B (optional)'), '  Top of the hour ');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: '18:00', planB: 'Top of the hour' });
+  });
+
+  it('shows members the Plan B line', () => {
+    useCrewStore.setState({ activeCrew: { id: 'c1', homeBasePlanB: 'Top of the hour' } as never });
+    render(<HomeBaseCard crewId="c1" currentLocation="Ferris wheel" currentTime={null} isOwner={false} />);
+    expect(screen.getByText('If we lose each other: Top of the hour')).toBeInTheDocument();
+    useCrewStore.setState({ activeCrew: null });
   });
 
   it('renders an enabled button for owners', () => {

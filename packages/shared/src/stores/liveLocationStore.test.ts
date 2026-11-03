@@ -43,6 +43,8 @@ function resetStore() {
   useLiveLocationStore.setState({
     crewId: null,
     sharingCrewId: null,
+    shareIntent: null,
+    shareEndedReason: null,
     lastSentAt: null,
     lastSentCoord: null,
     peers: {},
@@ -63,7 +65,7 @@ describe('liveLocationStore', () => {
       const s = useLiveLocationStore.getState();
       expect(s.crewId).toBeNull();
       expect(s.sharingCrewId).toBeNull();
-      expect(s.shareIntentCrewId).toBeNull();
+      expect(s.shareIntent).toBeNull();
       expect(s.lastSentAt).toBeNull();
       expect(s.lastSentCoord).toBeNull();
       expect(s.peers).toEqual({});
@@ -172,36 +174,13 @@ describe('liveLocationStore', () => {
     });
   });
 
-  describe('requestSharing / cancelSharing (opt-in intent)', () => {
-    it('records the opt-in and withdraws it on cancel', () => {
-      const store = useLiveLocationStore.getState();
-      store.requestSharing('crew-1');
-      expect(useLiveLocationStore.getState().shareIntentCrewId).toBe('crew-1');
-      store.cancelSharing();
-      expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
-    });
-
+  describe('share intent vs publisher bookkeeping', () => {
     it('survives stopSharing, so a screen teardown cannot end an opted-in share', () => {
       const store = useLiveLocationStore.getState();
-      store.requestSharing('crew-1');
+      store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
       store.startSharing('crew-1');
       store.stopSharing();
-      expect(useLiveLocationStore.getState().shareIntentCrewId).toBe('crew-1');
-    });
-
-    it('a crew switch withdraws the opt-in — no silent re-share in the new crew', () => {
-      const store = useLiveLocationStore.getState();
-      store.setActiveCrew('crew-1');
-      store.requestSharing('crew-1');
-      store.setActiveCrew('crew-2');
-      expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
-    });
-
-    it('reset (logout) withdraws the opt-in', () => {
-      const store = useLiveLocationStore.getState();
-      store.requestSharing('crew-1');
-      store.reset();
-      expect(useLiveLocationStore.getState().shareIntentCrewId).toBeNull();
+      expect(useLiveLocationStore.getState().shareIntent?.crewId).toBe('crew-1');
     });
   });
 
@@ -270,6 +249,22 @@ describe('liveLocationStore', () => {
       const peers = useLiveLocationStore.getState().peers;
       expect(peers['fresh']).toBeDefined();
       expect(peers['stale']).toBeUndefined();
+    });
+
+    it('records only the last fix time of a swept peer; a new fix or a stop clears it', () => {
+      const store = useLiveLocationStore.getState();
+      const lastFix = isoFor(NOW, LIVE_LOCATION.STALE_MS + 1_000);
+      store.applyPeerUpdate(makePeer({ userId: 'gone', serverAt: lastFix }));
+      store.sweepStale(NOW);
+      expect(useLiveLocationStore.getState().lostContact).toEqual({ gone: lastFix });
+
+      store.applyPeerUpdate(makePeer({ userId: 'gone', serverAt: isoFor(NOW, 0) }));
+      expect(useLiveLocationStore.getState().lostContact).toEqual({});
+
+      store.applyPeerUpdate(makePeer({ userId: 'gone', serverAt: lastFix }));
+      store.sweepStale(NOW);
+      store.removePeer('gone');
+      expect(useLiveLocationStore.getState().lostContact).toEqual({});
     });
 
     it('keeps a peer exactly at the TTL boundary (not strictly older)', () => {
@@ -466,6 +461,82 @@ describe('liveLocationStore', () => {
 
       expect(useLiveLocationStore.getState().activeSosList).toHaveLength(1);
       warn.mockRestore();
+    });
+  });
+
+  describe('share session', () => {
+    it('beginShare stores background, defaulting to false, and pause keeps it', () => {
+      const store = useLiveLocationStore.getState();
+      store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
+      expect(useLiveLocationStore.getState().shareIntent?.background).toBe(false);
+      store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', false, true);
+      expect(useLiveLocationStore.getState().shareIntent?.background).toBe(true);
+      store.setSharePaused(true);
+      expect(useLiveLocationStore.getState().shareIntent?.background).toBe(true);
+    });
+
+    it('keeps the intent and flips paused', () => {
+      const store = useLiveLocationStore.getState();
+      store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', true);
+      store.setSharePaused(true);
+      expect(useLiveLocationStore.getState().shareIntent).toEqual({
+        crewId: 'crew-1',
+        expiresAt: '2026-06-06T14:00:00.000Z',
+        paused: true,
+        shareBattery: true,
+        background: false,
+      });
+    });
+
+    it('endShare clears the intent and records the reason', () => {
+      const store = useLiveLocationStore.getState();
+      store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
+      store.endShare('expired');
+      expect(useLiveLocationStore.getState().shareIntent).toBeNull();
+      expect(useLiveLocationStore.getState().shareEndedReason).toBe('expired');
+    });
+
+    it('endShare and setSharePaused change nothing without an intent', () => {
+      const before = useLiveLocationStore.getState();
+      before.endShare('user');
+      before.setSharePaused(true);
+      expect(useLiveLocationStore.getState().shareEndedReason).toBeNull();
+      expect(useLiveLocationStore.getState().shareIntent).toBeNull();
+    });
+
+    it('beginShare clears an earlier end reason', () => {
+      useLiveLocationStore.setState({ shareEndedReason: 'error' });
+      useLiveLocationStore.getState().beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
+      expect(useLiveLocationStore.getState().shareEndedReason).toBeNull();
+    });
+
+    it('a crew switch and reset clear the intent', () => {
+      const store = useLiveLocationStore.getState();
+      store.setActiveCrew('crew-1');
+      store.beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
+      useLiveLocationStore.getState().setActiveCrew('crew-2');
+      expect(useLiveLocationStore.getState().shareIntent).toBeNull();
+      useLiveLocationStore.getState().beginShare('crew-2', '2026-06-06T14:00:00.000Z', false);
+      useLiveLocationStore.getState().reset();
+      expect(useLiveLocationStore.getState().shareIntent).toBeNull();
+    });
+  });
+
+  describe('applySosSeen', () => {
+    it('merges by userId and ignores an unknown raiser', () => {
+      useLiveLocationStore.setState({ crewId: 'crew-1' });
+      useLiveLocationStore.getState().applySos(makeSos({ userId: 'raiser' }));
+      const store = useLiveLocationStore.getState();
+      store.applySosSeen('raiser', [{ userId: 'a', username: 'Ana' }]);
+      store.applySosSeen('raiser', [
+        { userId: 'a', username: 'Ana' },
+        { userId: 'b', username: 'Ben' },
+      ]);
+      store.applySosSeen('nobody', [{ userId: 'c', username: 'Cat' }]);
+      const state = useLiveLocationStore.getState();
+      expect(state.sosByUser['raiser']!.seenBy!.map((v) => v.userId).sort()).toEqual(['a', 'b']);
+      expect(state.sos!.seenBy).toHaveLength(2);
+      expect(state.sosByUser['nobody']).toBeUndefined();
     });
   });
 });

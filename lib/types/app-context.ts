@@ -91,12 +91,14 @@ export interface Stores {
     meetingPoints: {
       listByCrew(crewId: string): Promise<unknown[]>;
       countByCrew(crewId: string): Promise<number>;
+      listRecentlyExpired(crewId: string): Promise<unknown[]>;
       create(data: Record<string, unknown>): Promise<unknown>;
       getById(
         id: string,
       ): Promise<{ crew_id?: string; created_by?: string; active?: boolean; [k: string]: unknown } | null>;
       update(id: string, patch: unknown): Promise<unknown>;
       deactivate(id: string): Promise<unknown>;
+      setComing(mpId: string, crewId: string, userId: string, coming: boolean): Promise<unknown>;
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any;
@@ -139,7 +141,7 @@ export interface AppContext {
   // Auth / rate limiting middleware
   userAuth: Middleware;
   adminAuth: Middleware;
-  rateLimit: (max: number, key: string) => Middleware;
+  rateLimit: (max: number, key: string, opts?: { anonIpCap?: boolean }) => Middleware;
 
   // Stores
   stores: Stores;
@@ -164,6 +166,38 @@ export interface AppContext {
   [key: string]: any;
 }
 
+/** Crew push notifier (lib/notifications/crew-notify.ts). Never throws into a route. */
+export interface CrewNotify {
+  queue(item: { crewId: string; actorId: string | null; kind: 'member' | 'poll'; text: string }): void;
+  now(item: {
+    crewId: string;
+    actorId: string | null;
+    kind: 'meeting-point';
+    text: string;
+    key: string;
+    meetAt?: string | null;
+    userIds?: string[];
+  }): Promise<void>;
+  toUsers(item: {
+    crewId: string;
+    crewName?: string;
+    userIds: string[];
+    text: string;
+    kind: 'member' | 'poll';
+    type?: 'crew_update' | 'crew_nudge';
+  }): Promise<void>;
+  flushAll(): Promise<void>;
+}
+
+/** Poll closer (lib/poll-close.ts): shared by the manual end route and the expiry sweep. */
+export interface PollCloser {
+  announce(
+    poll: Record<string, unknown>,
+    actorId: string | null,
+  ): Promise<{ meetingPoint: unknown; winningSetId: string | null }>;
+  sweepExpired(): Promise<number>;
+}
+
 /**
  * What route factories actually receive: the context plus the runtime-injected
  * Socket.IO server and the domain event emitter (attached in server.ts).
@@ -171,4 +205,6 @@ export interface AppContext {
 export type RouteDeps = AppContext & {
   io: Server;
   emitter: SocketEmitter;
+  crewNotify?: CrewNotify;
+  pollCloser?: PollCloser;
 };

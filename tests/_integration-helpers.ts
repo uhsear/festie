@@ -5,13 +5,13 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import fs from 'fs';
 import path from 'path';
 import request from 'supertest';
 import { io as createSocketClient, type Socket } from 'socket.io-client';
 import { Pool } from 'pg';
 
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema as ensureTestSchemaFor } from './_test-schema';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,29 +73,8 @@ function createFestivalFixture() {
 // Ensure test schema exists (run once per test suite)
 async function ensureTestSchema() {
   if (testDbReady) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    // Check if schema already exists by looking for the users table
-    const { rows } = await pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1");
-    if (rows.length === 0) {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS citext');
-      const schemaPath = path.join(__dirname, '..', 'migrations', '004_postgresql_baseline.sql');
-      const schema = fs.readFileSync(schemaPath, 'utf8');
-      await pool.query(schema);
-    }
-    // Apply incremental migrations (005+) idempotently
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    const migrationFiles = fs.readdirSync(migrationsDir)
-      .filter((f: string) => f.endsWith('.sql') && !f.startsWith('004_'))
-      .sort();
-    for (const file of migrationFiles) {
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      await pool.query(sql).catch(() => {}); // Idempotent — IF NOT EXISTS used in all migrations
-    }
-    testDbReady = true;
-  } finally {
-    await pool.end();
-  }
+  await ensureTestSchemaFor(TEST_DATABASE_URL);
+  testDbReady = true;
 }
 
 // Truncate all data tables (fast — ~5ms vs ~500ms for CREATE DATABASE)

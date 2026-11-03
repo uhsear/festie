@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useInvitePreview, useJoinCrewByInvite } from '@festie/shared/hooks';
-import { describeInvitePreview, inviteStatusMessage } from '@festie/shared/utils';
+import { describeInvitePreview, inviteIsDead, inviteStatusMessage } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import Sheet from '../ui/Sheet';
 import Button from '../ui/Button';
@@ -28,7 +28,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
 
   const lines = preview ? describeInvitePreview(preview) : null;
   const full = preview?.spotsLeft === 0;
-  const unusable = status === 'invalid' || status === 'expired';
+  const unusable = inviteIsDead(status);
   const switchNote =
     preview?.festivalId && preview.festivalName && preview.festivalId !== currentFestivalId
       ? `Joining switches you to ${preview.festivalName}.`
@@ -42,10 +42,10 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
       const outcome = await joinByInvite(code);
       if (outcome.kind === 'joined') {
         toast(`Joined ${outcome.crew.name}`, 'success');
-        navigate({ to: '/crew' });
+        navigate({ to: '/crew', search: { tab: 'members' } });
       } else if (outcome.kind === 'already') {
         toast(`You're already in ${outcome.crew.name}`, 'info');
-        navigate({ to: '/crew' });
+        navigate({ to: '/crew', search: { tab: 'members' } });
       } else {
         toast("We'll join you when you're back online.", 'info');
       }

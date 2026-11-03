@@ -6,8 +6,8 @@ import { useFestivalDataStore } from './festivalDataStore';
 import { useFestivalUIStore } from './festivalUIStore';
 import { useFestivalModeStore } from './festivalModeStore';
 import { useLiveLocationStore } from './liveLocationStore';
-import { useOfflineReadinessStore } from './offlineReadinessStore';
 import { useInboxStore } from './inboxStore';
+import { useOfflineReadinessStore } from './offlineReadinessStore';
 import { useNotificationPrefsStore, DEFAULT_NOTIFICATION_PREFS } from './notificationPrefsStore';
 
 describe('resetAllStores', () => {
@@ -23,11 +23,16 @@ describe('resetAllStores', () => {
       stages: [{ id: 'st1' } as any],
       days: [{ id: 'd1' } as any],
       error: 'some error',
+      guestPicks: { f1: { s1: 'must' } },
     });
     useFestivalUIStore.setState({
       selectedDay: 3,
       activeStages: ['st1', 'st2'],
       searchQuery: 'test',
+      viewAsProfileId: 'p2',
+      byFestival: {
+        f1: { view: 'grid', activeStages: [], onlyMine: false, searchQuery: '', hiddenDays: [], dismissedPhase: null, groupBy: null },
+      },
     });
     useCrewStore.setState({
       crews: [{ id: 'c1' } as any],
@@ -48,7 +53,7 @@ describe('resetAllStores', () => {
     });
     useInboxStore.setState({ items: [{ id: 'n1' } as any], seenAt: '2026-01-01T00:00:00Z', loaded: true });
     useLiveLocationStore.getState().startSharing('crew-1');
-    useLiveLocationStore.getState().requestSharing('crew-1');
+    useLiveLocationStore.getState().beginShare('crew-1', '2026-06-06T14:00:00.000Z', false);
     useFestivalModeStore.setState({ lowPowerMode: true });
     useOfflineReadinessStore.setState({
       byFestival: {
@@ -82,6 +87,7 @@ describe('resetAllStores', () => {
     expect(state.stages).toEqual([]);
     expect(state.days).toEqual([]);
     expect(state.error).toBeNull();
+    expect(state.guestPicks).toEqual({});
   });
 
   it('resets festivalUIStore to defaults', () => {
@@ -90,6 +96,8 @@ describe('resetAllStores', () => {
     expect(state.selectedDay).toBe(0);
     expect(state.activeStages).toEqual([]);
     expect(state.searchQuery).toBe('');
+    expect(state.byFestival).toEqual({});
+    expect(state.viewAsProfileId).toBeNull();
   });
 
   it('resets crewStore to defaults', () => {
@@ -119,7 +127,7 @@ describe('resetAllStores', () => {
     resetAllStores();
     const state = useLiveLocationStore.getState();
     expect(state.sharingCrewId).toBeNull();
-    expect(state.shareIntentCrewId).toBeNull();
+    expect(state.shareIntent).toBeNull();
     expect(state.crewId).toBeNull();
     expect(state.peers).toEqual({});
     expect(state.sos).toBeNull();

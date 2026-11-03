@@ -16,6 +16,13 @@ function stripJoinCrewParam() {
   window.history.replaceState({}, '', url.pathname + url.search + url.hash);
 }
 
+/** Drops only ?festival= so ?ref= and the rest survive. */
+function stripFestivalParam() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('festival');
+  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+}
+
 /** Remembers an anonymous ?ref= source for sign-up counts. The first valid value wins. */
 function captureRef() {
   try {
@@ -92,9 +99,16 @@ export function useFestivalLoader() {
 
   // Auto-load festivals + select first one on boot (mirrors legacy init())
   useEffect(() => {
+    // ?festival=<id> from a public festival page; read before the load, on the root path only.
+    const linkedId = window.location.pathname === '/' ? new URLSearchParams(window.location.search).get('festival') : null;
     loadFestivals()
       .then(() => {
         const fests = useFestivalStore.getState().festivals;
+        if (linkedId) stripFestivalParam();
+        if (linkedId && fests.some((f) => f.id === linkedId)) {
+          selectFestival(linkedId).catch(() => {});
+          return;
+        }
         if (fests.length > 0 && !useFestivalStore.getState().currentFestival) {
           const pick = pickDefaultFestival(fests);
           if (pick) selectFestival(pick.id).catch(() => {});

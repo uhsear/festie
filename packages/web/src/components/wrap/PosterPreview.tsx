@@ -12,7 +12,7 @@ const PosterPreview = forwardRef<HTMLDivElement, { children: ReactNode }>(functi
   ref,
 ) {
   return (
-    <figure className="m-0 text-center">
+    <figure className="m-0">
       <div
         aria-hidden="true"
         className="mx-auto overflow-hidden rounded-xl border border-border pointer-events-none"
@@ -22,7 +22,7 @@ const PosterPreview = forwardRef<HTMLDivElement, { children: ReactNode }>(functi
           <div ref={ref}>{children}</div>
         </div>
       </div>
-      <figcaption className="mt-2 text-xs text-text-muted">This is the image you will share</figcaption>
+      <figcaption className="mt-2 text-center text-xs text-text-muted">This is the image you will share</figcaption>
     </figure>
   );
 });

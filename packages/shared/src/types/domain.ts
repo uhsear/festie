@@ -80,6 +80,10 @@ export interface Festival {
   endDate: string;
   location?: string;
   b2bSeparator?: string;
+  /** null = draft, visible to admins only. */
+  publishedAt?: string | null;
+  /** Public page slug (festie.us/f/<slug>); null or absent for drafts and old servers. */
+  slug?: string | null;
   /**
    * Optional IANA time-zone id (e.g. `America/New_York`). When present, set
    * reminders are anchored in the festival's zone so they fire at the right
@@ -148,6 +152,13 @@ export interface Artist {
 // serialized set (nullable `startTime`/`endTime`/`stageId`, no `festivalId`/
 // `stageName`/`date`/`dayIndex`/`createdAt`/`updatedAt`); this domain model is a
 // superset with required times. Kept hand-written.
+export interface SetMovedFrom {
+  dayIndex: number;
+  stageId: string | null;
+  start: string | null;
+  end: string | null;
+}
+
 export interface FestivalSet {
   id: string;
   festivalId: string;
@@ -160,13 +171,17 @@ export interface FestivalSet {
   artist?: string;
   artists?: Artist[];
   linkUrl?: string;
+  /** T46: present only for 48 hours after an admin moved the set. */
+  movedAt?: string;
+  /** T46: present only for 48 hours after an admin moved the set. */
+  movedFrom?: SetMovedFrom;
   createdAt: string;
   updatedAt: string;
 }
 
 // SINGLE-SOURCING NOTE (Phase 3): NOT aliased to api.gen.ts
 // `components['schemas']['User']` (the serializePublicUser projection). This
-// domain model is broader — adds `avatar`/`isAdmin`/`createdAt`/`updatedAt` and
+// domain model is broader — adds `isAdmin`/`createdAt`/`updatedAt` and
 // uses optional `email?`/`name?`/`emailVerified?` instead of the generated
 // `string | null` fields. Kept hand-written.
 export interface User {
@@ -175,7 +190,6 @@ export interface User {
   email?: string;
   emailVerified?: boolean;
   name?: string;
-  avatar?: string;
   avatarUrl?: string;
   isAdmin?: boolean;
   // Payment handles for settle-up deep links (serializePublicUser surfaces
@@ -230,7 +244,8 @@ export interface CrewMember {
 // SINGLE-SOURCING NOTE (Phase 3): NOT aliased to api.gen.ts
 // `components['schemas']['Crew']`. The generated type requires
 // `createdBy`/`memberCount` (and adds `maxMembers`/`inviteExpiresAt`/`role`);
-// this domain model omits those, makes `festivalId?` optional, and carries the
+// this domain model carries `role`/`maxMembers`/`memberCount` as optional,
+// omits `createdBy`, makes `festivalId?` optional, and carries the
 // client-only `_optimistic` flag. Broader client model — kept hand-written.
 export interface Crew {
   id: string;
@@ -239,6 +254,10 @@ export interface Crew {
   /** Sent to every member; regenerate is owner-only. */
   inviteExpiresAt?: string | null;
   owner: string;
+  /** The caller's role in this crew (the server sends it on list and detail reads). */
+  role?: 'owner' | 'member';
+  maxMembers?: number;
+  memberCount?: number;
   festivalId?: string;
   members: CrewMember[];
   // Home base is surfaced on the serialized crew (routes/crews.ts:48-50);
@@ -264,6 +283,10 @@ export interface Crew {
   // was reformed from, or null/absent for a normally-created crew. Surfaced by
   // routes/crews.ts so the UI can show "your crew last year". Additive/optional.
   reformedFrom?: string | null;
+  /** T54: owner "Lock crew". While true the invite code joins nobody; the code itself is kept. */
+  inviteLocked?: boolean;
+  /** T54: Home Base "Plan B" line ("If we lose each other: ..."). Null when unset or Home Base has no location. */
+  homeBasePlanB?: string | null;
   createdAt: string;
   updatedAt: string;
   /**
@@ -355,12 +378,19 @@ export interface CrewPoll {
    * when the poll closes. Omitted or null for plain polls.
    */
   set_refs?: (PollSetRef | null)[] | null;
+  /** One voter may pick several options. Absent on old rows (single-answer). */
+  multi_answer?: boolean;
+  /** When the poll ended (manual or timed). Null while open. */
+  closed_at?: string | null;
+  /** When the one allowed reminder was sent. Null if none yet. */
+  nudged_at?: string | null;
 }
 
 export interface CreateCrewPollRequest {
   question: string;
   options: string[];
   closesAt?: string;
+  multiAnswer?: boolean;
 }
 
 /**
@@ -415,10 +445,28 @@ export interface CrewMeetingPoint {
   updated_at?: string;
   /** Joined creator username (present on the list endpoint, not on create/update). */
   creator_name?: string;
+  /** T43: user ids who tapped "I'll be there", oldest first. Absent on old servers and the past list. */
+  coming?: string[];
+  /** T54: the member who made the last time or place edit. Written only by the server. */
+  edited_by?: string | null;
+  edited_at?: string | null;
+  /** T54: the values before that edit; a key is present only for the field that changed. `meetAt: null` means there was no time. */
+  edit_was?: { location?: string; meetAt?: string | null } | null;
+  /** T54: the editor's username; null when the editor's account is gone. */
+  editor_name?: string | null;
   active: boolean;
   created_at: string;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */
   _optimistic?: boolean;
+}
+
+/** T43: a member's answer for one festival day. No row means no answer. */
+export type CrewDayAnswer = 'going' | 'maybe' | 'no';
+
+export interface CrewMemberDay {
+  userId: string;
+  dayIndex: number;
+  answer: CrewDayAnswer;
 }
 
 export interface CreateCrewMeetingPointRequest {
@@ -448,8 +496,9 @@ export interface UpdateCrewMeetingPointRequest {
 /**
  * Crew packing-board item (M2 logistics) as serialized by the backend
  * (routes/crew-packing.ts). snake_case from Postgres. A shared "who's bringing
- * what" checklist row: a `label`, an optional `brought_by` owner, and a
- * `claimed` flag.
+ * what" checklist row: a `label`, a `claimed` flag, and `brought_by`, the
+ * claimer's user id (the server sets it to the caller on claim). `packed` is
+ * the claimer's own "packed" tick.
  */
 export interface CrewPackingItem {
   id: string;
@@ -458,6 +507,8 @@ export interface CrewPackingItem {
   label: string;
   brought_by: string | null;
   claimed: boolean;
+  /** The claimer has packed it. Absent on servers before migration 080. */
+  packed?: boolean;
   created_at: string;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */
   _optimistic?: boolean;
@@ -473,13 +524,16 @@ export interface UpdateCrewPackingItemRequest {
   label?: string;
   broughtBy?: string | null;
   claimed?: boolean;
+  packed?: boolean;
 }
 
 /**
  * Crew carpool / ride-board offer (M2 logistics) as serialized by the backend
  * (routes/crew-rides.ts). snake_case from Postgres. A shared "who's driving"
  * board row: an optional `driver` name, `seats` count, `depart_from` origin,
- * free-text `depart_at` time, and a `note`. Cloned from CrewPackingItem.
+ * `direction`, `depart_time` (a real instant, shown in festival time), a
+ * `note`, and the `passenger_ids` who took a seat. `depart_at` is legacy free
+ * text, shown only when `depart_time` is empty. Cloned from CrewPackingItem.
  */
 export interface CrewRideOffer {
   id: string;
@@ -490,6 +544,10 @@ export interface CrewRideOffer {
   depart_from: string | null;
   depart_at: string | null;
   note: string | null;
+  direction?: 'to_festival' | 'home' | null;
+  /** ISO instant of departure. Absent on servers before migration 080. */
+  depart_time?: string | null;
+  passenger_ids?: string[];
   created_at: string;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */
   _optimistic?: boolean;
@@ -501,6 +559,8 @@ export interface CreateCrewRideOfferRequest {
   departFrom?: string | null;
   departAt?: string | null;
   note?: string | null;
+  direction?: 'to_festival' | 'home' | null;
+  departTime?: string | null;
 }
 
 export interface UpdateCrewRideOfferRequest {
@@ -509,7 +569,12 @@ export interface UpdateCrewRideOfferRequest {
   departFrom?: string | null;
   departAt?: string | null;
   note?: string | null;
+  direction?: 'to_festival' | 'home' | null;
+  departTime?: string | null;
 }
+
+/** Must match the `crewStatusSchema` enum in lib/schemas.ts. */
+export type CrewStatusKey = 'on-my-way' | 'here' | 'delayed' | 'at-camp' | 'at-stage' | 'break' | 'lost';
 
 /**
  * Crew member status (M5) as serialized by the backend (routes/crew-status.ts).
@@ -520,7 +585,8 @@ export interface UpdateCrewRideOfferRequest {
  * render `updated_at` as honest staleness ("as of N ago" via formatStaleness) —
  * never imply real-time.
  *
- * - `status`: 'on-my-way' | 'here' | 'delayed' | null (null = cleared)
+ * - `status`: a `CrewStatusKey` or null (null = cleared). `at-stage` keeps the
+ *   stage name in `note`.
  * - `target_meeting_point_id`: free TEXT ref to a crew_meeting_points row (the
  *   ETA target); may dangle if the point was removed → renders without a target.
  * - `eta_minutes`: the member's own estimate (or geo-computed when the target
@@ -529,7 +595,7 @@ export interface UpdateCrewRideOfferRequest {
 export interface CrewMemberStatus {
   crew_id: string;
   user_id: string;
-  status: 'on-my-way' | 'here' | 'delayed' | null;
+  status: CrewStatusKey | null;
   target_meeting_point_id: string | null;
   eta_minutes: number | null;
   note: string | null;
@@ -558,7 +624,7 @@ export interface CrewMemberStatus {
  * fields optional; an empty `status` (null) clears it.
  */
 export interface UpdateCrewMemberStatusRequest {
-  status?: 'on-my-way' | 'here' | 'delayed' | null;
+  status?: CrewStatusKey | null;
   targetMeetingPointId?: string | null;
   etaMinutes?: number | null;
   note?: string | null;
@@ -592,6 +658,16 @@ export interface CrewExpense {
    */
   planned?: boolean;
   created_at: string;
+  /** Uneven split in integer cents by user id. Null/absent = equal split. */
+  split_amounts?: Record<string, number> | null;
+  /** Who added the row; can differ from `paid_by`. Null on rows before migration 079. */
+  created_by?: string | null;
+  updated_by?: string | null;
+  updated_at?: string | null;
+  /** Payment rows only: the payee confirmed it arrived. */
+  confirmed_at?: string | null;
+  /** Payment rows only: the payee said it has not arrived. */
+  disputed_at?: string | null;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */
   _optimistic?: boolean;
 }
@@ -609,7 +685,14 @@ export interface CreateCrewExpenseRequest {
   category: string;
   /** Mark as a planned/budget row (forecast-only, excluded from settle-up). */
   planned?: boolean;
+  /** The member who paid. The server defaults it to the caller. */
+  paidBy?: string;
+  /** Uneven split in integer cents. Same people as `splitWith`, summing to `amount`. */
+  shares?: { userId: string; cents: number }[];
 }
+
+/** PUT is a full replacement, so the edit body is the create body. */
+export type UpdateCrewExpenseRequest = CreateCrewExpenseRequest;
 
 export interface SettleCrewExpenseRequest {
   toUserId: string;
@@ -641,6 +724,8 @@ export interface CrewSettlement {
 export interface CrewSettlementPlan {
   balances: CrewExpenseBalance[];
   settlements: CrewSettlement[];
+  /** The crew's currency label (ISO 4217). Absent on old servers: treat as USD. */
+  currency?: string;
 }
 
 /**
@@ -701,6 +786,11 @@ export interface PeerLocation {
  * coordinate is the one intentional durable location datum (see crew_activity);
  * everything else about live location is ephemeral.
  */
+export interface SosViewer {
+  userId: string;
+  username: string;
+}
+
 export interface SosEntry {
   crewId: string;
   userId: string;
@@ -714,6 +804,8 @@ export interface SosEntry {
   };
   activityId?: string;
   raisedAt: string;
+  /** Crew members who have seen this SOS. */
+  seenBy?: SosViewer[];
 }
 
 export interface NotificationPrefs {

@@ -83,6 +83,750 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/env": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Environment label for the admin header band */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { label: string | null } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every non-deleted festival, drafts included */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Festival list items plus { published, updatedAt } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a festival, draft or published, with its publish checklist */
+        get: {
+            parameters: {
+                query?: {
+                    depth?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The full festival plus { publishedAt, updatedByUsername, checklist } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the announcements of a festival (newest 20) and its audience size */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { festivalName, recipients, announcements } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Send or schedule an announcement to everyone who joined the festival */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        body: string;
+                        /**
+                         * @default home
+                         * @enum {string}
+                         */
+                        screen?: "home" | "map" | "timeline" | "picks" | "festival-mode" | "crew";
+                        /** Format: date-time */
+                        sendAt?: string;
+                        /** @enum {string} */
+                        severity: "info" | "urgent";
+                        title: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description { announcement, recipients } */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid body, or sendAt not in the next 14 days */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The festival is a draft */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The festival already has 3 announcements within an hour of that time */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/announcements/{announcementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel a scheduled announcement, or take down the banner of a sent one */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    announcementId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { announcement } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Announcement not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count who loses access if the festival is deleted */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { profiles, crews, picks } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/import-lineup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit a lineup import */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default true */
+                        createMissing?: boolean;
+                        rows: {
+                            artist: string;
+                            date?: string;
+                            day?: string;
+                            endTime?: string;
+                            link?: string;
+                            row: number;
+                            setId?: string;
+                            stage?: string;
+                            stageColor?: string;
+                            startTime?: string;
+                        }[];
+                        /** @default false */
+                        skipSpotify?: boolean;
+                        /** @default false */
+                        updateExisting?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description { committed: false, plan } when the plan has errors, else { committed: true, result, plan } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid import payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/import-lineup/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview a lineup import (writes nothing) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default true */
+                        createMissing?: boolean;
+                        rows: {
+                            artist: string;
+                            date?: string;
+                            day?: string;
+                            endTime?: string;
+                            link?: string;
+                            row: number;
+                            setId?: string;
+                            stage?: string;
+                            stageColor?: string;
+                            startTime?: string;
+                        }[];
+                        /** @default false */
+                        skipSpotify?: boolean;
+                        /** @default false */
+                        updateExisting?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Import plan: row statuses, counts, new stages and days, problems */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lineup import history (newest 20) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { festivalName, imports } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/imports/{importId}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo the newest lineup import */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    importId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Removed, restored and kept sets */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not the newest import */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Import not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/lineup-announcement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count who a lineup announcement would reach */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { festivalName, recipients } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Send the lineup announcement push and email */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { queued: true, recipients } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No one to notify */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a draft festival */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { publishedAt, checklist } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description PUBLISH_BLOCKED: the checklist has a todo item (error.checklist) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a deleted festival */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { id, published } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description This festival is not in Archived. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/archived": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deleted festivals (newest 100) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description [{ id, name, location, deletedAt, publishedAt }] */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -439,6 +1183,111 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/crews/{crewId}/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the day answers of current crew members */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    crewId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Day answers, ordered by user and day */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            days?: {
+                                /** @enum {string} */
+                                answer: "going" | "maybe" | "no";
+                                dayIndex: number;
+                                userId: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Not a crew member */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** Replace my day answers (a day left out is cleared) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    crewId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        days: {
+                            /** @enum {string} */
+                            answer: "going" | "maybe" | "no";
+                            dayIndex: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description My day answers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            days?: {
+                                /** @enum {string} */
+                                answer: "going" | "maybe" | "no";
+                                dayIndex: number;
+                                userId: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description A repeated day, or a day that is not part of this festival */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not a crew member */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/crews/{crewId}/expenses": {
         parameters: {
             query?: never;
@@ -530,6 +1379,67 @@ export type paths = {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crews/{crewId}/meeting-points/{mpId}/coming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or clear my I'll be there tap on an active meeting point (idempotent) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    crewId: string;
+                    mpId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        coming: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description The meeting point with its coming list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            meetingPoint?: components["schemas"]["MeetingPoint"];
+                        };
+                    };
+                };
+                /** @description Not a crew member */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Meeting point not found or not active */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -855,6 +1765,13 @@ export type paths = {
                     };
                     content?: never;
                 };
+                /** @description CREW_LOCKED: the crew is not taking new members */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -899,25 +1816,39 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/festivals/{festivalId}/calendar": {
+    "/api/v1/festivals/{festivalId}/sets/{setId}/also-picked": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Calendar events JSON for native integration */
+        /** Sets that people who picked this set also picked (anonymous, 20-user floor, max 8) */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    festivalId: string;
+                    setId: string;
+                };
                 cookie?: never;
             };
             requestBody?: never;
             responses: {
-                /** @description Calendar events */
+                /** @description Set ids, best first. Never counts or users. */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            setIds?: string[];
+                        };
+                    };
+                };
+                /** @description Set not found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -962,6 +1893,160 @@ export type paths = {
                     content: {
                         "application/json": components["schemas"]["Festival"];
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/festivals/{id}/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active announcements for the banner (sent in the last 24 hours, newest 3) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description FestivalAnnouncement[]; [] for a missing or draft festival */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/festivals/{id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Follow a festival (idempotent) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Following */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            festivalId?: string;
+                            following?: boolean;
+                        };
+                    };
+                };
+                /** @description Festival not found (missing, deleted or draft) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** Stop following a festival (idempotent) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Not following */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            festivalId?: string;
+                            following?: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/festivals/follows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Festivals I follow (published, not deleted), newest first */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Followed festivals */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            festivalIds?: string[];
+                        };
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -1104,7 +2189,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List profiles for festival */
+        /** List profiles for festival (picks of other users only for crew mates; meta.pickCounts holds anonymous per-set counts of other attendees) */
         get: {
             parameters: {
                 query?: never;
@@ -1274,6 +2359,13 @@ export type paths = {
                     };
                     content?: never;
                 };
+                /** @description CREW_LOCKED: the crew is not taking new members */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
                 /** @description No crew has this code */
                 404: {
                     headers: {
@@ -1283,6 +2375,51 @@ export type paths = {
                 };
                 /** @description The invite code has expired */
                 410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/join/{code}/save.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Save a crew invite for later (one all-day calendar event for the festival dates) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Calendar file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/calendar": string;
+                    };
+                };
+                /** @description Redirect to the invite page when the invite cannot be saved */
+                302: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1331,11 +2468,13 @@ export type components = {
             createdBy: string;
             festivalId: string;
             homeBaseLocation: string | null;
+            homeBasePlanB: string | null;
             homeBaseTime: string | null;
             homeBaseUpdatedAt: string | null;
             id: string;
             inviteCode?: string;
             inviteExpiresAt?: string | null;
+            inviteLocked: boolean;
             joinedAt?: string;
             maxMembers?: number;
             memberCount: number;
@@ -1371,14 +2510,22 @@ export type components = {
         CrewExpense: {
             amount: string;
             category: string;
+            confirmed_at?: string | null;
             created_at: string;
+            created_by?: string | null;
             crew_id: string;
             description: string;
+            disputed_at?: string | null;
             id: string;
             paid_by: string;
             paid_by_name?: string;
             planned: boolean;
+            split_amounts?: {
+                [key: string]: number;
+            } | null;
             split_with: string[];
+            updated_at?: string | null;
+            updated_by?: string | null;
         };
         CrewMember: {
             avatarKey: string | null;
@@ -1418,11 +2565,14 @@ export type components = {
         };
         CrewPoll: {
             closed: boolean;
+            closed_at?: string | null;
             closes_at: string | null;
             created_at: string;
             created_by: string;
             crew_id: string;
             id: string;
+            multi_answer?: boolean;
+            nudged_at?: string | null;
             options: string[];
             question: string;
             vote_count?: string;
@@ -1453,6 +2603,7 @@ export type components = {
                 userId: string;
                 username: string;
             }[];
+            currency?: string;
             settlements: {
                 amount: number;
                 amountCents: number;
@@ -1502,12 +2653,21 @@ export type components = {
                     endTime: string | null;
                     id: string;
                     linkUrl: string | null;
+                    movedAt?: string;
+                    movedFrom?: {
+                        dayIndex: number;
+                        end: string | null;
+                        stageId: string | null;
+                        start: string | null;
+                    };
                     stageId: string | null;
                     startTime: string | null;
                 }[];
             }[];
             id: string;
+            latitude?: number | null;
             location: string;
+            longitude?: number | null;
             mapConfig: {
                 amenities?: {
                     features: {
@@ -1561,6 +2721,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            slug?: string | null;
             stages: {
                 color: string | null;
                 id: string;
@@ -1586,12 +2747,21 @@ export type components = {
                     }[];
                     endTime: string | null;
                     id: string;
+                    movedAt?: string;
+                    movedFrom?: {
+                        dayIndex: number;
+                        end: string | null;
+                        stageId: string | null;
+                        start: string | null;
+                    };
                     stageId: string | null;
                     startTime: string | null;
                 }[];
             }[];
             id: string;
+            latitude?: number | null;
             location: string;
+            longitude?: number | null;
             mapConfig: {
                 amenities?: {
                     features: {
@@ -1645,6 +2815,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            slug?: string | null;
             stages: {
                 color: string | null;
                 id: string;
@@ -1660,6 +2831,7 @@ export type components = {
             id: string;
             location: string;
             name: string;
+            slug?: string | null;
             stageCount: number;
             startDate: string | null;
         };
@@ -1674,15 +2846,30 @@ export type components = {
             endTime: string | null;
             id: string;
             linkUrl: string | null;
+            movedAt?: string;
+            movedFrom?: {
+                dayIndex: number;
+                end: string | null;
+                stageId: string | null;
+                start: string | null;
+            };
             stageId: string | null;
             startTime: string | null;
         };
         MeetingPoint: {
             active: boolean;
+            coming?: string[];
             created_at: string;
             created_by: string;
             creator_name?: string;
             crew_id: string;
+            edit_was?: {
+                location?: string;
+                meetAt?: string | null;
+            } | null;
+            edited_at?: string | null;
+            edited_by?: string | null;
+            editor_name?: string | null;
             expires_at: string | null;
             id: string;
             label: string;
@@ -1698,6 +2885,7 @@ export type components = {
         NotificationPrefs: {
             crewMeetingPoints: number;
             crewMoney: number;
+            crewNudges: number;
             crewPolls: number;
             crewReformed: number;
             crewRides: number;

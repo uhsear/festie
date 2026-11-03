@@ -8,6 +8,12 @@ export type { ConfirmDialogProps } from './ConfirmDialog';
 
 export { useReauthPrompt } from './ReauthDialog';
 
+export { default as SelectionBar } from './SelectionBar';
+export type { SelectionBarProps } from './SelectionBar';
+
+export { default as UserPicker } from './UserPicker';
+export type { UserPickerProps } from './UserPicker';
+
 export {
   LabeledTextInput,
   ModalSelect,
@@ -25,3 +31,6 @@ export type {
   HexColorFieldProps,
   DateTimeFieldProps,
 } from './AdminFields';
+
+export { default as ShiftTimesDialog } from './ShiftTimesDialog';
+export type { ShiftTimesDialogProps } from './ShiftTimesDialog';

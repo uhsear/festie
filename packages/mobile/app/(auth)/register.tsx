@@ -19,34 +19,35 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useAuthStore } from '@festie/shared/stores';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { registerErrorField, usernameError } from '@festie/shared/utils';
+import {
+  firstInvalidField,
+  registerErrorField,
+  usernameError,
+  validateRegister,
+  type RegisterErrors,
+  type RegisterField,
+} from '@festie/shared/utils';
 import { AUTH_COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
+import ProviderButtons from '../../components/ProviderButtons';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
-import { firstInvalidField, validateRegister, type RegisterErrors, type RegisterField } from '../../lib/registerValidation';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
-// Terms opens in an in-app browser sheet so sign-up never leaves the app.
+// No in-app Terms route exists yet; open the canonical web Terms of Service,
+// mirroring how the privacy screen links out to it.
 const TERMS_URL = 'https://festie.us/terms.html';
 
-const openTerms = async () => {
-  try {
-    await WebBrowser.openBrowserAsync(TERMS_URL);
-  } catch (err) {
-    console.warn('terms: in-app browser failed', err);
-    void Linking.openURL(TERMS_URL);
-  }
-};
+// Screen order; the first invalid field in this order takes focus.
+const FIELD_ORDER: RegisterField[] = ['username', 'email', 'password', 'confirmPassword', 'dateOfBirth', 'tosAccepted'];
 
 const useStyles = makeStyles((t) => ({
   container: {
@@ -322,7 +323,7 @@ export default function RegisterScreen() {
       return;
     }
     // DOB and the Terms checkbox are not text inputs: move the screen reader there.
-    const node = findNodeHandle((field === 'dob' ? dobRef : tosRef).current);
+    const node = findNodeHandle((field === 'dateOfBirth' ? dobRef : tosRef).current);
     if (node) AccessibilityInfo.setAccessibilityFocus(node);
   };
 
@@ -334,7 +335,7 @@ export default function RegisterScreen() {
       onChange: (_evt, selected) => {
         if (selected) {
           setDob(selected);
-          clearError('dob');
+          clearError('dateOfBirth');
         }
       },
     });
@@ -342,9 +343,16 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     Keyboard.dismiss();
-    const found = validateRegister({ username, email, password, confirmPassword, dob, tosAccepted });
+    const found = validateRegister({
+      username,
+      email,
+      password,
+      confirmPassword,
+      dateOfBirth: dob ? toIso(dob) : '',
+      tosAccepted,
+    });
     setErrors(found);
-    const first = firstInvalidField(found);
+    const first = firstInvalidField(found, FIELD_ORDER);
     if (first) {
       focusField(first);
       return;
@@ -584,12 +592,12 @@ export default function RegisterScreen() {
           onPress={Platform.OS === 'android' ? openAndroidPicker : () => setShowIosPicker(true)}
           style={[
             styles.dobPressable,
-            errors.dob ? styles.dobPressableError : undefined,
+            errors.dateOfBirth ? styles.dobPressableError : undefined,
           ]}
           accessibilityRole="button"
           accessibilityLabel={dobLabel ? `Date of birth: ${dobLabel}` : 'Date of birth, required'}
           accessibilityHint={
-            errors.dob ? `${errors.dob}. Opens a date picker.` : 'Opens a date picker. You must be 18 or older.'
+            errors.dateOfBirth ? `${errors.dateOfBirth}. Opens a date picker.` : 'Opens a date picker. You must be 18 or older.'
           }
         >
           <Text style={dobLabel ? styles.dobText : styles.dobPlaceholder}>
@@ -597,9 +605,9 @@ export default function RegisterScreen() {
           </Text>
           <Ionicons name="calendar-outline" size={20} color={t.colors.text.secondary} />
         </Pressable>
-        {errors.dob ? (
+        {errors.dateOfBirth ? (
           <Text style={styles.fieldError} accessibilityRole="alert" accessibilityLiveRegion="assertive">
-            {errors.dob}
+            {errors.dateOfBirth}
           </Text>
         ) : null}
 
@@ -628,9 +636,9 @@ export default function RegisterScreen() {
               I agree to the{' '}
             </Text>
             <TouchableOpacity
-              onPress={() => void openTerms()}
+              onPress={() => void Linking.openURL(TERMS_URL)}
               accessibilityRole="link"
-              accessibilityLabel="Read the Terms of Service"
+              accessibilityLabel="Read the Terms of Service, opens in browser"
             >
               <Text style={[styles.tosText, styles.linkTextAccent]}>Terms of Service</Text>
             </TouchableOpacity>
@@ -667,6 +675,8 @@ export default function RegisterScreen() {
           accessibilityState={{ disabled: isLoading, busy: isLoading }}
           style={styles.button}
         />
+
+        <ProviderButtons mode="signin" register />
 
         <Link href="/(auth)/login" asChild>
           <TouchableOpacity
@@ -711,7 +721,7 @@ export default function RegisterScreen() {
                   onPress={() => {
                     if (!dob) {
                       setDob(defaultDob);
-                      clearError('dob');
+                      clearError('dateOfBirth');
                     }
                     setShowIosPicker(false);
                   }}
@@ -729,7 +739,7 @@ export default function RegisterScreen() {
                 onChange={(_evt, selected) => {
                   if (selected) {
                     setDob(selected);
-                    clearError('dob');
+                    clearError('dateOfBirth');
                   }
                 }}
                 // Ensure the spinner respects the dark background.

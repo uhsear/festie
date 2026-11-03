@@ -1,14 +1,16 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
+import { FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
-import { formatFestivalDateRange, festivalStatus, sortFestivalsForPicker, type FestivalStatus } from '@festie/shared/utils';
+import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
 import { Skeleton } from './Skeleton';
+import FollowButton from './FollowButton';
 
 // Status pill styling. The list endpoint now provides startDate/endDate, so a
 // festival classifies as upcoming/ongoing/past. Returns null when undetermined.
@@ -18,11 +20,11 @@ function statusBadge(status: FestivalStatus | null): { label: string; bg: string
   // onLightAccent is the token-documented AA-safe pair for aqua fills.
   switch (status) {
     case 'ongoing':
-      return { label: 'Live', bg: 'aqua', fg: 'onLightAccent' };
+      return { label: FESTIVAL_STATUS_LABEL.ongoing, bg: 'aqua', fg: 'onLightAccent' };
     case 'upcoming':
-      return { label: 'Upcoming', bg: 'secondary', fg: 'aqua' };
+      return { label: FESTIVAL_STATUS_LABEL.upcoming, bg: 'secondary', fg: 'aqua' };
     case 'past':
-      return { label: 'Past', bg: 'secondary', fg: 'muted' };
+      return { label: FESTIVAL_STATUS_LABEL.past, bg: 'secondary', fg: 'muted' };
     default:
       return null;
   }
@@ -158,6 +160,12 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label'),
     color: t.colors.text.secondary,
   },
+  actionRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: t.spacing[2],
+    marginTop: t.spacing[2],
+  },
 }));
 
 function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
@@ -182,7 +190,20 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
   // "<name>, <status>, <dates>, <location>" as a single button instead of fragments.
   const a11yLabel = [festival.name, badgeSpec?.label, dateRange, festival.location].filter(Boolean).join(', ');
 
+  const followable = status === 'upcoming' || status === null;
+  const shareSlug = festival.slug;
+
+  const handleShare = () => {
+    if (!shareSlug) return;
+    const url = buildFestivalPageUrl(shareSlug);
+    // Android ignores `url`, so the message carries the link.
+    Share.share({ message: `${FESTIVAL_SHARE_COPY.text(festival.name)}: ${url}`, url, title: festival.name }).catch(
+      () => undefined,
+    );
+  };
+
   return (
+    <View>
     <TouchableOpacity
       testID={`festival-card-${festival.id}`}
       style={[styles.card, isPast && styles.cardPast, largeText && { padding: t.spacing[3] }]}
@@ -244,6 +265,23 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
         importantForAccessibility="no-hide-descendants"
       />
     </TouchableOpacity>
+    {followable || festival.slug ? (
+      <View style={styles.actionRow}>
+        {followable ? <FollowButton festivalId={festival.id} festivalName={festival.name} /> : null}
+        {festival.slug ? (
+          <Button
+            label={FESTIVAL_SHARE_COPY.button}
+            variant="secondary"
+            size="sm"
+            icon="share-outline"
+            onPress={handleShare}
+            accessibilityLabel={FESTIVAL_SHARE_COPY.a11y(festival.name)}
+            testID={`festival-share-${festival.id}`}
+          />
+        ) : null}
+      </View>
+    ) : null}
+    </View>
   );
 }
 
@@ -269,7 +307,12 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const haptics = useHaptics();
 
-  const sortedFestivals = useMemo(() => sortFestivalsForPicker(festivals), [festivals]);
+  // Order: live first, then upcoming (soonest first), then past (most recent
+  // first), so the festivals a user is most likely choosing sit at the top.
+  const sortedFestivals = useMemo(() => {
+    const g = groupFestivalsByStatus(festivals);
+    return [...g.live, ...g.upcoming, ...g.past, ...g.undated];
+  }, [festivals]);
 
   const handleRefresh = useCallback(() => {
     loadFestivals().catch(() => {});

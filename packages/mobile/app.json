@@ -22,7 +22,7 @@
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Festie uses your location to drop a meeting point, point you toward your crew, and—only when you turn it on—share your live location with your crew or send an SOS. Only used while the app is open.",
+        "NSLocationWhenInUseUsageDescription": "Festie uses your location to drop a meeting point, point you toward your crew, and, only when you turn it on, share your live location with your crew or send an SOS.",
         "NSCameraUsageDescription": "Festie uses the camera to scan a friend's plan QR code so they can join your festival plan offline."
       },
       "privacyManifests": {
@@ -143,6 +143,11 @@
             {
               "scheme": "https",
               "host": "festie.us",
+              "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "festie.us",
               "pathPrefix": "/reset-password"
             }
           ],
@@ -201,7 +206,12 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Festie uses your location to drop a meeting point, point you toward your crew, and—only when you turn it on—share your live location with your crew or send an SOS. Only used while the app is open."
+          "locationWhenInUsePermission": "Festie uses your location to drop a meeting point, point you toward your crew, and, only when you turn it on, share your live location with your crew or send an SOS.",
+          "locationAlwaysAndWhenInUsePermission": "If you choose to keep sharing when your phone is locked, Festie sends your location to your crew until the time you picked. It stops on its own.",
+          "locationAlwaysPermission": "If you choose to keep sharing when your phone is locked, Festie sends your location to your crew until the time you picked. It stops on its own.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [

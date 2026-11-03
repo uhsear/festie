@@ -1,6 +1,10 @@
 import type { Pool } from 'pg';
+import { randomUUID } from 'crypto';
 import { withTransaction } from '../connection';
 import { sanitizeString } from '../../helpers/sanitize.js';
+import { createLogger } from '../../logger.js';
+
+const log = createLogger('db:crews');
 
 /**
  * H3 (defense-in-depth, audit 2026-06-06): meeting-point label/location are user
@@ -15,6 +19,28 @@ function sanitizeMeetingPointText(value: any, maxLen: number) {
   if (typeof value !== 'string') return value;
   return sanitizeString(value, maxLen).replace(/[<>]/g, '');
 }
+
+/**
+ * 080: a ride's passengers, oldest seat first. The crew_members join drops
+ * people who left the crew, so their seat frees up without a cleanup job.
+ * `offer` is a fixed table name or alias from this file, never user input.
+ */
+function ridePassengerIds(offer: string) {
+  return `COALESCE(ARRAY(SELECT p.user_id FROM crew_ride_passengers p JOIN crew_members cm ON cm.user_id = p.user_id AND cm.crew_id = ${offer}.crew_id WHERE p.ride_id = ${offer}.id ORDER BY p.created_at), '{}') AS passenger_ids`;
+}
+
+/**
+ * 090: user ids of members who tapped "I'll be there" on meeting point `mp`,
+ * oldest tap first. Deleted users drop out. A fixed SQL fragment, no input.
+ */
+const MP_COMING = `COALESCE((SELECT array_agg(c.user_id ORDER BY c.created_at) FROM crew_meeting_point_coming c JOIN users u ON u.id = c.user_id AND u.deleted_at IS NULL WHERE c.meeting_point_id = mp.id), '{}') AS coming`;
+
+/**
+ * 096: username of the member who made the last time or place edit of
+ * meeting point `mp`. Null when the editor is soft-deleted or gone. A fixed
+ * SQL fragment, no input.
+ */
+const MP_EDITOR = '(SELECT e.username FROM users e WHERE e.id = mp.edited_by AND e.deleted_at IS NULL) AS editor_name';
 
 export default function createCrewsStore(pool: Pool, _utils: any) {
   // #29: Topic subscription store
@@ -88,7 +114,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
   };
 
   const CREW_COLUMNS =
-    'id, festival_id AS "festivalId", name, created_by AS "createdBy", invite_code AS "inviteCode", invite_expires_at AS "inviteExpiresAt", max_members AS "maxMembers", reformed_from AS "reformedFrom", home_base_location AS "homeBaseLocation", home_base_time AS "homeBaseTime", home_base_updated_at AS "homeBaseUpdatedAt", photo_album_url AS "photoAlbumUrl", totem_name AS "totemName", totem_emoji AS "totemEmoji", created_at AS "createdAt", updated_at AS "updatedAt"';
+    'id, festival_id AS "festivalId", name, created_by AS "createdBy", invite_code AS "inviteCode", invite_expires_at AS "inviteExpiresAt", max_members AS "maxMembers", reformed_from AS "reformedFrom", home_base_location AS "homeBaseLocation", home_base_time AS "homeBaseTime", home_base_updated_at AS "homeBaseUpdatedAt", photo_album_url AS "photoAlbumUrl", totem_name AS "totemName", totem_emoji AS "totemEmoji", invite_locked AS "inviteLocked", home_base_plan_b AS "homeBasePlanB", created_at AS "createdAt", updated_at AS "updatedAt"';
 
   // Phase 7: Crew system store
   const crews: any = {
@@ -226,6 +252,11 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
         vals.push(data.totemEmoji);
         idx++;
       }
+      if (data.inviteLocked !== undefined) {
+        sets.push('invite_locked = $' + idx);
+        vals.push(data.inviteLocked);
+        idx++;
+      }
       sets.push('updated_at = NOW()');
       vals.push(data.id);
       await pool.query('UPDATE crews SET ' + sets.join(', ') + ' WHERE id = $' + idx, vals);
@@ -293,6 +324,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           c.photo_album_url AS "photoAlbumUrl",
           c.totem_name AS "totemName",
           c.totem_emoji AS "totemEmoji",
+          c.invite_locked AS "inviteLocked",
+          c.home_base_plan_b AS "homeBasePlanB",
           c.created_at AS "createdAt",
           c.updated_at AS "updatedAt",
           cm.role,
@@ -328,6 +361,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           c.photo_album_url AS "photoAlbumUrl",
           c.totem_name AS "totemName",
           c.totem_emoji AS "totemEmoji",
+          c.invite_locked AS "inviteLocked",
+          c.home_base_plan_b AS "homeBasePlanB",
           c.created_at AS "createdAt",
           c.updated_at AS "updatedAt",
           cm.role,
@@ -361,13 +396,23 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
      * the count is re-read under the lock, and the insert is skipped if the crew
      * is full — closing the count-then-insert race in the join/admin-add routes.
      * Returns 'full' if the cap was reached (no insert), otherwise 'added'.
+     * With `opts.inviteJoin` (the invite-code join) a locked crew returns
+     * 'locked' (no insert), read under the same row lock so a lock flip cannot
+     * race the join. Admin force-add and reform pass no opts and ignore the lock.
      * Without a cap (owner creation, reform) it's a plain insert.
      */
-    async addMember(data: any, maxMembers?: number): Promise<'added' | 'full'> {
+    async addMember(
+      data: any,
+      maxMembers?: number,
+      opts?: { inviteJoin?: boolean },
+    ): Promise<'added' | 'full' | 'locked'> {
       if (typeof maxMembers === 'number') {
         return withTransaction(pool, async (client) => {
           // Lock the crew row; all capped joiners for this crew serialize here.
-          await client.query('SELECT 1 FROM crews WHERE id = $1 FOR UPDATE', [data.crewId]);
+          const lockRes = await client.query('SELECT invite_locked FROM crews WHERE id = $1 FOR UPDATE', [
+            data.crewId,
+          ]);
+          if (opts?.inviteJoin && lockRes.rows[0]?.invite_locked) return 'locked';
           const countRes = await client.query('SELECT COUNT(*)::int AS count FROM crew_members WHERE crew_id = $1', [
             data.crewId,
           ]);
@@ -484,6 +529,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     /**
      * Transfer crew ownership atomically: demote current owner, promote target.
      * Prevents inconsistent state where both or neither are owner.
+     * crews.created_by moves too: the API's `owner` field and the heir logic in
+     * users.hardDelete and retention_cleanup() read it. When the new owner already
+     * runs a reform of the same source in this festival, crews_reform_idem_uidx
+     * raises 23505 and the whole transfer rolls back.
      */
     async transferOwnership(crewId: string, fromUserId: string, toUserId: string) {
       return withTransaction(pool, async (client) => {
@@ -497,7 +546,60 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           crewId,
           toUserId,
         ]);
+        await client.query('UPDATE crews SET created_by = $1, updated_at = NOW() WHERE id = $2', [toUserId, crewId]);
       });
+    },
+
+    /**
+     * Before an account is soft-deleted, hand each crew it owns to another active
+     * member. A valid choice wins; otherwise the earliest-joined active member
+     * takes over. A candidate whose transfer clashes on crews_reform_idem_uidx
+     * (23505) is skipped. A crew with no usable candidate is left as it is: the
+     * 30-day purge deletes a sole-member crew.
+     */
+    async handOverOwnedCrews(userId: string, choices: Array<{ crewId: string; newOwnerId: string }> = []) {
+      const handedOver: Array<{ crewId: string; newOwnerId: string }> = [];
+      const owned = await pool.query("SELECT crew_id FROM crew_members WHERE user_id = $1 AND role = 'owner'", [
+        userId,
+      ]);
+      for (const { crew_id: crewId } of owned.rows) {
+        const result = await pool.query(
+          `
+          SELECT
+            cm.user_id
+          FROM
+            crew_members cm
+            JOIN users u ON u.id = cm.user_id
+            AND u.deleted_at IS NULL
+          WHERE
+            cm.crew_id = $1
+            AND cm.user_id <> $2
+          ORDER BY
+            cm.joined_at ASC,
+            cm.user_id ASC
+        `,
+          [crewId, userId],
+        );
+        const candidates: string[] = result.rows.map((r: any) => r.user_id);
+        const choice = choices.find((c) => c.crewId === crewId)?.newOwnerId;
+        if (choice && candidates.includes(choice)) {
+          candidates.splice(candidates.indexOf(choice), 1);
+          candidates.unshift(choice);
+        }
+        let newOwnerId: string | null = null;
+        for (const candidate of candidates) {
+          try {
+            await crews.transferOwnership(crewId, userId, candidate);
+            newOwnerId = candidate;
+            break;
+          } catch (err: any) {
+            if (err?.code !== '23505') throw err;
+          }
+        }
+        if (newOwnerId) handedOver.push({ crewId, newOwnerId });
+        else log.warn('crew:handover-skipped', { crewId, candidates: candidates.length });
+      }
+      return handedOver;
     },
 
     async getCrewPickOverlap(festivalId: string, crewId: string) {
@@ -523,11 +625,24 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       return result.rows;
     },
 
-    async updateHomeBase(crewId: string, { location, time }: { location?: string; time?: string }) {
-      await pool.query(
-        'UPDATE crews SET home_base_location = $1, home_base_time = $2, home_base_updated_at = NOW(), updated_at = NOW() WHERE id = $3',
-        [location || null, time || null, crewId],
-      );
+    // 096: `planB` undefined keeps the stored Plan B; null or '' clears it. A
+    // Home Base with no location always clears it, so old clients that remove
+    // Home Base with { location: null, time: null } leave no hidden Plan B.
+    async updateHomeBase(
+      crewId: string,
+      { location, time, planB }: { location?: string | null; time?: string | null; planB?: string | null },
+    ) {
+      if (location && planB === undefined) {
+        await pool.query(
+          'UPDATE crews SET home_base_location = $1, home_base_time = $2, home_base_updated_at = NOW(), updated_at = NOW() WHERE id = $3',
+          [location, time || null, crewId],
+        );
+      } else {
+        await pool.query(
+          'UPDATE crews SET home_base_location = $1, home_base_time = $2, home_base_plan_b = $3, home_base_updated_at = NOW(), updated_at = NOW() WHERE id = $4',
+          [location || null, time || null, location ? planB || null : null, crewId],
+        );
+      }
       const result = await pool.query(`SELECT ${CREW_COLUMNS} FROM crews WHERE id = $1`, [crewId]);
       return result.rows[0] || null;
     },
@@ -624,9 +739,14 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           recurs_daily,
           active,
           created_at,
-          updated_at
+          updated_at,
+          edited_by,
+          edited_at,
+          edit_was,
+          ${MP_COMING},
+          ${MP_EDITOR}
         FROM
-          crew_meeting_points
+          crew_meeting_points mp
         WHERE
           id = $1
       `,
@@ -654,7 +774,12 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           mp.active,
           mp.created_at,
           mp.updated_at,
-          u.username AS creator_name
+          mp.edited_by,
+          mp.edited_at,
+          mp.edit_was,
+          u.username AS creator_name,
+          ${MP_COMING},
+          ${MP_EDITOR}
         FROM
           crew_meeting_points mp
           JOIN users u ON u.id = mp.created_by
@@ -695,6 +820,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
             latitude: 'latitude',
             longitude: 'longitude',
             recursDaily: 'recurs_daily',
+            // 096: written only by the PUT route from req.user, never from a client body.
+            editedBy: 'edited_by',
+            editedAt: 'edited_at',
+            editWas: 'edit_was',
           } as Record<string, string>
         )[key];
         if (col) {
@@ -702,6 +831,12 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           let outVal = val;
           if (key === 'label') outVal = sanitizeMeetingPointText(val, 100);
           else if (key === 'location') outVal = sanitizeMeetingPointText(val, 200);
+          if (key === 'editWas') {
+            sets.push(col + ' = $' + idx + '::jsonb');
+            vals.push(val == null ? null : JSON.stringify(val));
+            idx++;
+            continue;
+          }
           sets.push(col + ' = $' + idx);
           vals.push(outVal);
           idx++;
@@ -728,9 +863,14 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           recurs_daily,
           active,
           created_at,
-          updated_at
+          updated_at,
+          edited_by,
+          edited_at,
+          edit_was,
+          ${MP_COMING},
+          ${MP_EDITOR}
         FROM
-          crew_meeting_points
+          crew_meeting_points mp
         WHERE
           id = $1
       `,
@@ -761,9 +901,14 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           recurs_daily,
           active,
           created_at,
-          updated_at
+          updated_at,
+          edited_by,
+          edited_at,
+          edit_was,
+          ${MP_COMING},
+          ${MP_EDITOR}
         FROM
-          crew_meeting_points
+          crew_meeting_points mp
         WHERE
           id = $1
       `,
@@ -780,10 +925,67 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       return result.rows[0].count;
     },
 
+    // The updated_at >= expires_at test tells a swept point from one a user removed before its time.
+    async listRecentlyExpired(crewId: string) {
+      const result = await pool.query(
+        `
+        SELECT
+          mp.id,
+          mp.crew_id,
+          mp.created_by,
+          mp.label,
+          mp.location,
+          mp.type,
+          mp.meet_at,
+          mp.stage_reference,
+          mp.expires_at,
+          mp.latitude,
+          mp.longitude,
+          mp.recurs_daily,
+          mp.active,
+          mp.created_at,
+          mp.updated_at,
+          u.username AS creator_name
+        FROM
+          crew_meeting_points mp
+          JOIN users u ON u.id = mp.created_by
+          AND u.deleted_at IS NULL
+        WHERE
+          mp.crew_id = $1
+          AND mp.active = FALSE
+          AND mp.recurs_daily IS NOT TRUE
+          AND mp.expires_at IS NOT NULL
+          AND mp.expires_at > NOW() - INTERVAL '12 hours'
+          AND mp.updated_at >= mp.expires_at
+        ORDER BY
+          mp.meet_at DESC NULLS LAST
+        LIMIT 20
+      `,
+        [crewId],
+      );
+      return result.rows;
+    },
+
     async expireStale() {
       return pool.query(
         'UPDATE crew_meeting_points SET active = FALSE, updated_at = NOW() WHERE active = TRUE AND expires_at IS NOT NULL AND expires_at < NOW()',
       );
+    },
+
+    // 090: "I'll be there". Both directions are idempotent. Returns the point with `coming`.
+    async setComing(mpId: string, crewId: string, userId: string, coming: boolean) {
+      if (coming) {
+        await pool.query(
+          'INSERT INTO crew_meeting_point_coming (meeting_point_id, crew_id, user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          [mpId, crewId, userId],
+        );
+      } else {
+        await pool.query('DELETE FROM crew_meeting_point_coming WHERE meeting_point_id = $1 AND user_id = $2', [
+          mpId,
+          userId,
+        ]);
+      }
+      return meetingPoints.getById(mpId);
     },
   };
 
@@ -817,6 +1019,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           label,
           brought_by,
           claimed,
+          packed,
           created_at
         FROM
           crew_packing_items
@@ -826,6 +1029,35 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
         [data.id],
       );
       return result.rows[0] || null;
+    },
+
+    // One multi-row INSERT for a template or pasted list. Rows come back open.
+    async createMany(crewId: string, createdBy: string, labels: string[]) {
+      if (labels.length === 0) return [];
+      const params: any[] = [crewId, createdBy];
+      const values = labels.map((label) => {
+        params.push('pack-' + randomUUID(), label);
+        return `($${params.length - 1}, $1, $2, $${params.length}, NULL, false, false, NOW())`;
+      });
+      const result = await pool.query(
+        `
+        INSERT INTO
+          crew_packing_items (id, crew_id, created_by, label, brought_by, claimed, packed, created_at)
+        VALUES
+          ${values.join(', ')}
+        RETURNING
+          id,
+          crew_id,
+          created_by,
+          label,
+          brought_by,
+          claimed,
+          packed,
+          created_at
+      `,
+        params,
+      );
+      return result.rows;
     },
 
     async listByCrew(crewId: string) {
@@ -838,6 +1070,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           pi.label,
           pi.brought_by,
           pi.claimed,
+          pi.packed,
           pi.created_at,
           u.username AS creator_name
         FROM
@@ -865,6 +1098,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
             label: 'label',
             broughtBy: 'brought_by',
             claimed: 'claimed',
+            packed: 'packed',
           } as Record<string, string>
         )[key];
         if (col) {
@@ -885,6 +1119,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           label,
           brought_by,
           claimed,
+          packed,
           created_at
         FROM
           crew_packing_items
@@ -910,6 +1145,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           label,
           brought_by,
           claimed,
+          packed,
           created_at
         FROM
           crew_packing_items
@@ -946,10 +1182,12 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
             depart_from,
             depart_at,
             note,
+            direction,
+            depart_time,
             created_at
           )
         VALUES
-          ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
       `,
         [
           data.id,
@@ -960,6 +1198,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           data.departFrom ?? null,
           data.departAt ?? null,
           data.note ?? null,
+          data.direction ?? null,
+          data.departTime ?? null,
         ],
       );
       const result = await pool.query(
@@ -973,7 +1213,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           depart_from,
           depart_at,
           note,
-          created_at
+          direction,
+          depart_time,
+          created_at,
+          ${ridePassengerIds('crew_ride_offers')}
         FROM
           crew_ride_offers
         WHERE
@@ -996,7 +1239,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           ro.depart_from,
           ro.depart_at,
           ro.note,
+          ro.direction,
+          ro.depart_time,
           ro.created_at,
+          ${ridePassengerIds('ro')},
           u.username AS creator_name
         FROM
           crew_ride_offers ro
@@ -1024,6 +1270,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
             departFrom: 'depart_from',
             departAt: 'depart_at',
             note: 'note',
+            direction: 'direction',
+            departTime: 'depart_time',
           } as Record<string, string>
         )[key];
         if (col) {
@@ -1046,7 +1294,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           depart_from,
           depart_at,
           note,
-          created_at
+          direction,
+          depart_time,
+          created_at,
+          ${ridePassengerIds('crew_ride_offers')}
         FROM
           crew_ride_offers
         WHERE
@@ -1073,7 +1324,10 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           depart_from,
           depart_at,
           note,
-          created_at
+          direction,
+          depart_time,
+          created_at,
+          ${ridePassengerIds('crew_ride_offers')}
         FROM
           crew_ride_offers
         WHERE
@@ -1089,6 +1343,45 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
         crewId,
       ]);
       return result.rows[0].count;
+    },
+
+    // Returns 'full' when no seat is left, else the offer row. The row lock
+    // serialises two people racing for the last seat. A repeat take succeeds.
+    async takeSeat(rideId: string, userId: string) {
+      const full = await withTransaction(pool, async (client) => {
+        const offer = await client.query('SELECT seats, crew_id FROM crew_ride_offers WHERE id = $1 FOR UPDATE', [
+          rideId,
+        ]);
+        const row = offer.rows[0];
+        if (!row) return false;
+        const taken = await client.query(
+          `
+          SELECT
+            p.user_id
+          FROM
+            crew_ride_passengers p
+            JOIN crew_members cm ON cm.user_id = p.user_id
+            AND cm.crew_id = $2
+          WHERE
+            p.ride_id = $1
+        `,
+          [rideId, row.crew_id],
+        );
+        if (taken.rows.some((r: any) => r.user_id === userId)) return false;
+        if (row.seats !== null && taken.rows.length >= row.seats) return true;
+        await client.query(
+          'INSERT INTO crew_ride_passengers (ride_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [rideId, userId],
+        );
+        return false;
+      });
+      if (full) return 'full';
+      return crewRides.getById(rideId);
+    },
+
+    async leaveSeat(rideId: string, userId: string) {
+      await pool.query('DELETE FROM crew_ride_passengers WHERE ride_id = $1 AND user_id = $2', [rideId, userId]);
+      return crewRides.getById(rideId);
     },
   };
 
@@ -1195,6 +1488,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           crew_member_status s
           JOIN users u ON u.id = s.user_id
           AND u.deleted_at IS NULL
+          JOIN crew_members m ON m.crew_id = s.crew_id
+          AND m.user_id = s.user_id
         WHERE
           s.crew_id = $1
         ORDER BY
@@ -1259,7 +1554,41 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           latitude,
           longitude,
           location_captured_at,
-          updated_at
+          updated_at,
+          EXISTS (
+            SELECT
+              1
+            FROM
+              crew_members m
+            WHERE
+              m.crew_id = crew_member_status.crew_id
+              AND m.user_id = $1
+          ) AS still_member
+      `,
+        [userId],
+      );
+      return result.rows;
+    },
+
+    // Privacy summary: crews the user still belongs to that hold a status
+    // location of theirs. Never returns the coordinates.
+    async listLocationsForUser(userId: string) {
+      const result = await pool.query(
+        `
+        SELECT
+          s.crew_id,
+          c.name AS crew_name,
+          s.location_captured_at
+        FROM
+          crew_member_status s
+          JOIN crews c ON c.id = s.crew_id
+          JOIN crew_members m ON m.crew_id = s.crew_id
+          AND m.user_id = s.user_id
+        WHERE
+          s.user_id = $1
+          AND s.latitude IS NOT NULL
+        ORDER BY
+          s.location_captured_at DESC NULLS LAST
       `,
         [userId],
       );
@@ -1267,5 +1596,57 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     },
   };
 
-  return { crews, topicSubscriptions, meetingPoints, crewPacking, crewRides, crewStatus };
+  // 090: which festival days each member attends. No row means no answer.
+  // Rows of members who left are gone by the crew_members cascade.
+  const crewDays = {
+    async listByCrew(crewId: string) {
+      const result = await pool.query(
+        `
+        SELECT
+          d.user_id AS "userId",
+          d.day_index AS "dayIndex",
+          d.answer
+        FROM
+          crew_member_days d
+          JOIN users u ON u.id = d.user_id
+          AND u.deleted_at IS NULL
+        WHERE
+          d.crew_id = $1
+        ORDER BY
+          d.user_id,
+          d.day_index
+      `,
+        [crewId],
+      );
+      return result.rows;
+    },
+
+    // Replaces the member's full answer set, so a replay of the same body is a no-op.
+    async replaceMine(crewId: string, userId: string, days: Array<{ dayIndex: number; answer: string }>) {
+      return withTransaction(pool, async (client) => {
+        await client.query('DELETE FROM crew_member_days WHERE crew_id = $1 AND user_id = $2', [crewId, userId]);
+        if (days.length) {
+          await client.query(
+            'INSERT INTO crew_member_days (crew_id, user_id, day_index, answer) SELECT $1, $2, d, a FROM unnest($3::int[], $4::text[]) AS t(d, a)',
+            [crewId, userId, days.map((d) => d.dayIndex), days.map((d) => d.answer)],
+          );
+        }
+        const result = await client.query(
+          'SELECT user_id AS "userId", day_index AS "dayIndex", answer FROM crew_member_days WHERE crew_id = $1 AND user_id = $2 ORDER BY day_index',
+          [crewId, userId],
+        );
+        return result.rows;
+      });
+    },
+
+    async dayCount(crewId: string) {
+      const result = await pool.query(
+        'SELECT COUNT(*)::int AS count FROM festival_days WHERE festival_id = (SELECT festival_id FROM crews WHERE id = $1)',
+        [crewId],
+      );
+      return result.rows[0].count as number;
+    },
+  };
+
+  return { crews, topicSubscriptions, meetingPoints, crewPacking, crewRides, crewStatus, crewDays };
 }

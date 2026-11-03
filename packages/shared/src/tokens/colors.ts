@@ -56,6 +56,10 @@ export const colors = {
     default: 'rgba(255, 255, 255, 0.06)',
     light: 'rgba(255, 255, 255, 0.1)',
   },
+  /** Off-state track of a switch: 3:1 on bg.secondary, and the white thumb stays visible on it. */
+  control: {
+    trackOff: '#66666f',
+  },
   priority: {
     must: '#ff3366',
     want: '#00e8d0',
@@ -86,6 +90,14 @@ export const colors = {
     unverifiedBg: 'rgba(251, 191, 36, 0.15)',
     warning: '#f0a030',
     error: '#ff6b6b',
+  },
+  /**
+   * Clash = two of the user's picks overlap. Alias of status.warning (amber means warning; coral is danger only).
+   * Never colour alone: pair with the warning icon, the hatching or the word Clash.
+   */
+  clash: {
+    mark: '#f0a030',
+    tint: 'rgba(240, 160, 48, 0.16)',
   },
   /**
    * Confidence — HOW OLD A FACT IS. Aliases only: every value below is an

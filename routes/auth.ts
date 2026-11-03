@@ -9,83 +9,28 @@
  * POST /login - Authenticate user and set session cookie
  * POST /logout - Invalidate session and clear cookie
  * POST /change-password - Change password (authenticated)
- * POST /reauth - Re-enter the password to open the 15-minute window for destructive admin actions
+ * POST /reauth - Re-enter the password, or a linked Google or Apple token, to open the 15-minute
+ *   window for destructive actions
  * (Email routes split to email-auth.js: forgot-password, verify-email, resend-verification.
  *  The unverified-write POST /update-email was removed; POST /api/v1/account/email replaces it.)
  */
 
 import crypto from 'crypto';
 import type { Request, Response, Router } from 'express';
-import { sendVerificationEmail } from '../lib/email';
 import { REAUTH_WINDOW_MS } from '../lib/app-context/session';
+import {
+  checkRegistrationConflicts,
+  createUserWithProfile,
+  deviceOf,
+  finishSignIn,
+  issueRefreshToken,
+  USERNAME_RULE_MESSAGE,
+} from '../lib/auth/sign-in';
+import { acceptProviderToken, ProviderRejection } from '../lib/oauth/accept';
 // Request augmentation (validatedBody, user, userToken, …) now lives centrally
 // in lib/types/request.ts. Importing the types barrel pulls in its global
 // side-effect so this module sees the augmented Request.
 import type {} from '../lib/types';
-
-/**
- * Create a new user, link orphan festival profiles, and optionally send
- * a verification email. Returns the created user record.
- *
- * Callers are responsible for session creation and HTTP response.
- */
-async function createUserWithProfile(userData: any, deps: any) {
-  const { cleanUsername, passwordHash, newUserId, cleanEmail, dateOfBirth } = userData;
-  const { stores, config, log, invalidateUserCache } = deps;
-
-  // Create user in database
-  const user = await stores.users.create({
-    id: newUserId,
-    username: cleanUsername,
-    passwordHash,
-    email: cleanEmail || null,
-    dateOfBirth: dateOfBirth || null,
-    createdAt: new Date().toISOString(),
-    tosAcceptedAt: new Date().toISOString(),
-    tosVersion: 1,
-  });
-  invalidateUserCache();
-
-  // Auto-link orphan profiles that match the new username (single batch query)
-  await stores.profiles.claimOrphanProfiles(user.id, cleanUsername);
-
-  // Send verification email if email was provided
-  if (cleanEmail) {
-    try {
-      const verifyToken = crypto.randomBytes(32).toString('hex');
-      const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
-      await stores.pool.query(
-        "INSERT INTO email_verification_tokens (user_id, token_hash, email, expires_at) VALUES ($1, $2, $3, NOW() + ($4 || ' hours')::INTERVAL)",
-        [user.id, tokenHash, cleanEmail, config.EMAIL_VERIFY_TOKEN_TTL_HOURS],
-      );
-      const verifyUrl = `${config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
-      await sendVerificationEmail({ to: cleanEmail, username: cleanUsername, verifyUrl, config, log });
-    } catch (emailErr: any) {
-      log.error('register:verify-email-send-failed', { error: emailErr.message, userId: user.id });
-      // Don't fail registration if email send fails
-    }
-  }
-
-  return user;
-}
-
-/**
- * Issue a refresh token for mobile clients and persist it.
- * Returns the raw refresh token string, or null if refresh tokens are disabled.
- */
-async function issueRefreshToken(userId: string, sessionToken: string, deps: any) {
-  const { stores, config, createOpaqueId } = deps;
-  if (!stores.refreshTokens) return null;
-  const { hashSessionToken: hashToken } = deps;
-  const refreshToken = createOpaqueId('rt');
-  await stores.refreshTokens.create({
-    token: hashToken(refreshToken),
-    userId,
-    sessionToken: hashToken(sessionToken),
-    expiresAt: new Date(Date.now() + config.REFRESH_TOKEN_TTL),
-  });
-  return refreshToken;
-}
 
 /**
  * Track a failed login attempt: increment metrics, record per-user failure,
@@ -177,7 +122,7 @@ export default function createAuthRoutes(deps: any): Router {
     const { username, password, confirmPassword, email: rawEmail } = body;
     const cleanUsername = sanitizeString(username, 30);
     if (!validateUsername(cleanUsername)) {
-      return { error: 'Username must be 2-30 characters (letters, numbers, spaces, hyphens, underscores)' };
+      return { error: USERNAME_RULE_MESSAGE };
     }
     const pwError = checkPasswordPolicy(password, { username: cleanUsername, email: rawEmail });
     if (pwError) {
@@ -187,24 +132,6 @@ export default function createAuthRoutes(deps: any): Router {
       return { error: 'Passwords do not match' };
     }
     return { cleanUsername, cleanEmail: rawEmail ? String(rawEmail).trim().toLowerCase() : null };
-  }
-
-  async function checkRegistrationConflicts(cleanUsername: string, cleanEmail: string | null) {
-    const [existingUser, userCount] = await Promise.all([
-      stores.users.getByUsername(cleanUsername),
-      stores.users.countActive(),
-    ]);
-    if (existingUser) return 'Username already taken';
-    if (userCount >= config.MAX_USERS) return 'Maximum users reached';
-
-    if (cleanEmail) {
-      const emailExists = await stores.pool.query(
-        'SELECT id FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL',
-        [cleanEmail],
-      );
-      if (emailExists.rows.length > 0) return 'Email address already in use';
-    }
-    return null;
   }
 
   // Anonymous ?ref= sign-up count (migration 070): a day and a ref, nothing that
@@ -232,7 +159,7 @@ export default function createAuthRoutes(deps: any): Router {
         if (validated.error) return sendError(res, 400, validated.error, ErrorCodes.INVALID_INPUT);
         const { cleanUsername, cleanEmail } = validated;
 
-        const conflict = await checkRegistrationConflicts(cleanUsername!, cleanEmail!);
+        const conflict = await checkRegistrationConflicts(cleanUsername!, cleanEmail!, deps);
         if (conflict) {
           const code = conflict === 'Maximum users reached' ? ErrorCodes.MAX_LIMIT_REACHED : ErrorCodes.ALREADY_EXISTS;
           return sendError(res, 400, conflict, code);
@@ -244,7 +171,7 @@ export default function createAuthRoutes(deps: any): Router {
         const user = await createUserWithProfile({ cleanUsername, passwordHash, newUserId, cleanEmail, dateOfBirth }, deps);
         await countSignupRef((req.validatedBody as any).ref);
 
-        const token = await createUserSession(user.id, user.username);
+        const token = await createUserSession(user.id, user.username, deviceOf(req));
         setNoStore(res);
         setUserSessionCookie(res, token);
         const refreshToken = await issueRefreshToken(user.id, token, deps);
@@ -274,9 +201,12 @@ export default function createAuthRoutes(deps: any): Router {
     },
   );
 
+  // Usernames cannot contain '@', so an '@' means sign-in by email. The email
+  // lookup skips soft-deleted accounts; only a username reactivates one.
   async function resolveLoginUser(username: string) {
-    const clean = String(username).trim();
-    return (await stores.users.getByUsername(clean)) ?? stores.users.findDeletedByUsername(clean);
+    const ident = String(username).trim();
+    if (ident.includes('@')) return stores.users.getByEmail(ident.toLowerCase());
+    return (await stores.users.getByUsername(ident)) ?? stores.users.findDeletedByUsername(ident);
   }
 
   async function checkAccountLockout(user: any, res: Response) {
@@ -315,41 +245,14 @@ export default function createAuthRoutes(deps: any): Router {
         const jitter = 500 + Math.floor(Math.random() * 1000);
         log.warn('authentication failed', { username: user ? user.username : 'unknown', ip: req.ip });
         return setTimeout(
-          () => sendError(res, 401, 'Invalid username or password', ErrorCodes.INVALID_CREDENTIALS),
+          () => sendError(res, 401, 'Wrong username, email or password.', ErrorCodes.INVALID_CREDENTIALS),
           jitter,
         );
       }
 
       if (stores.loginFailures) await stores.loginFailures.reset(user.id);
 
-      const reactivated = Boolean(user.deletedAt);
-      if (reactivated) {
-        await stores.users.reactivate(user.id);
-        const restoredProfiles = await stores.profiles.restoreByUserId(user.id);
-        invalidateUserCache();
-        log.info('account:reactivated', { userId: user.id, username: user.username, restoredProfiles });
-      }
-
-      const token = await createUserSession(user.id, user.username);
-      setNoStore(res);
-      setUserSessionCookie(res, token);
-      const refreshToken = await issueRefreshToken(user.id, token, deps);
-
-      const { serializePublicUser } = deps;
-      const roles = await stores.roles.getUserRoles(user.id);
-      // H4: body tokens only for the native bearer client (see register note);
-      // the web cookie client relies on the httpOnly cookie set above.
-      // Native bearer clients get body tokens; web cookie clients don't. New
-      // mobile builds send X-Festie-Client; for backward-compat, a missing
-      // Origin header also signals native (RN fetch omits Origin; browsers
-      // always send it), so this is safe to deploy before the mobile OTA lands.
-      const wantsBodyTokens = req.get('x-festie-client') === 'native' || !req.get('origin');
-      return sendSuccess(res, {
-        user: serializePublicUser(user),
-        ...(wantsBodyTokens ? { token, refreshToken } : {}),
-        roles,
-        ...(reactivated ? { reactivated: true } : {}),
-      });
+      return await finishSignIn(req, res, user, deps);
     } catch (error: any) {
       log.error('login failed', { error: error.message });
       return sendError(res, 500, 'Login failed', ErrorCodes.INTERNAL_ERROR);
@@ -427,7 +330,7 @@ export default function createAuthRoutes(deps: any): Router {
         // Disconnect sockets still using the old token to prevent stale connections
         disconnectSessionTokens([req.userToken], io);
       }
-      const token = await createUserSession(req.user.userId, req.user.username);
+      const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req));
       setUserSessionCookie(res, token);
       const { serializePublicUser } = deps;
       const user = await getUserById(req.user.userId);
@@ -466,24 +369,30 @@ export default function createAuthRoutes(deps: any): Router {
           return sendError(res, 401, 'Invalid or expired refresh token', ErrorCodes.TOKEN_EXPIRED);
         }
 
-        const user = await getUserById(stored.userId);
+        // Spend the old token atomically before minting anything: of two
+        // concurrent calls with one token, only one wins the claim.
+        const claimed = await stores.refreshTokens.claim(hashedToken);
+        if (!claimed) {
+          log.warn('auth:refresh-race', { userId: stored.userId });
+          return sendError(res, 401, 'Invalid or expired refresh token', ErrorCodes.TOKEN_EXPIRED);
+        }
+
+        const user = await getUserById(claimed.userId);
         if (!user) {
           return sendError(res, 401, 'User not found', ErrorCodes.AUTH_REQUIRED);
         }
 
         // Issue new session token
-        const newSessionToken = await createUserSession(user.id, user.username);
+        const newSessionToken = await createUserSession(user.id, user.username, deviceOf(req));
         setUserSessionCookie(res, newSessionToken);
 
-        // Rotate refresh token (old one marked revoked, new one issued)
         const newRefreshToken = createOpaqueId('rt');
-        const newRefreshHash = hashToken(newRefreshToken);
-        await stores.refreshTokens.rotate(
-          hashedToken,
-          newRefreshHash,
-          hashToken(newSessionToken),
-          new Date(Date.now() + config.REFRESH_TOKEN_TTL),
-        );
+        await stores.refreshTokens.create({
+          token: hashToken(newRefreshToken),
+          userId: user.id,
+          sessionToken: hashToken(newSessionToken),
+          expiresAt: new Date(Date.now() + config.REFRESH_TOKEN_TTL),
+        });
 
         const { serializePublicUser } = deps;
         const _roles = await stores.roles.getUserRoles(user.id);
@@ -520,6 +429,7 @@ export default function createAuthRoutes(deps: any): Router {
         createdAt: new Date(s.createdAt).toISOString(),
         lastAccess: new Date(s.lastAccess).toISOString(),
         current: s.token === currentTokenHash,
+        device: s.deviceLabel ?? null,
       }));
       return sendSuccess(res, items);
     } catch (error: any) {
@@ -614,7 +524,7 @@ export default function createAuthRoutes(deps: any): Router {
           return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
         }
         if (!(await verifyPassword(currentPassword, user.passwordHash))) {
-          return sendError(res, 400, 'Current password incorrect', ErrorCodes.PASSWORD_INCORRECT);
+          return sendError(res, 400, 'Your current password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
         }
 
         // Update password in database
@@ -633,7 +543,7 @@ export default function createAuthRoutes(deps: any): Router {
         // token for the address already on file survives.
         await stores.emailTokens.invalidatePendingEmailChanges(req.user.userId, user.email ?? null);
         disconnectUserSockets(req.user.userId, io);
-        const token = await createUserSession(req.user.userId, req.user.username);
+        const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req));
         setNoStore(res);
         setUserSessionCookie(res, token);
         // H4: body token only for the native bearer client (see login).
@@ -656,10 +566,18 @@ export default function createAuthRoutes(deps: any): Router {
     validate(schemas.reauth),
     async (req: Request, res: Response) => {
       try {
-        const { password } = req.validatedBody as any;
+        const body = req.validatedBody as any;
         const user = await getUserById(req.user.userId);
         if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
-        if (!(await verifyPassword(password, user.passwordHash))) {
+        if ('provider' in body) {
+          // A fresh token from a Google or Apple account linked to this user (T45).
+          const { claims } = await acceptProviderToken(body.provider, body, deps);
+          const identity = await stores.identities.findBySubject(body.provider, claims.subject);
+          if (identity?.userId !== user.id) {
+            return sendError(res, 403, 'That account is not linked to you.', ErrorCodes.IDENTITY_NOT_LINKED);
+          }
+        } else if (!(await verifyPassword(body.password, user.passwordHash))) {
+          // A provider-only user has no password hash and lands here too.
           return sendError(res, 403, 'That password is not right. Try again.', ErrorCodes.PASSWORD_INCORRECT);
         }
         const { hashSessionToken: hashToken } = deps;
@@ -667,6 +585,7 @@ export default function createAuthRoutes(deps: any): Router {
         setNoStore(res);
         return sendSuccess(res, { reauthUntil: new Date(Date.now() + REAUTH_WINDOW_MS).toISOString() });
       } catch (error: any) {
+        if (error instanceof ProviderRejection) return sendError(res, error.status, error.message, error.code);
         log.error('reauth failed', { error: error.message });
         return sendError(res, 500, 'Failed to confirm password', ErrorCodes.INTERNAL_ERROR);
       }

@@ -126,6 +126,12 @@ export interface JoinCrewRequest {
   inviteCode: string;
 }
 
+/** One crew's new owner, sent with DELETE /account. */
+export interface CrewHandoverChoice {
+  crewId: string;
+  newOwnerId: string;
+}
+
 export interface CreateCrewRequest {
   name: string;
   festivalId?: string;
@@ -146,6 +152,7 @@ export interface UpdateCrewRequest {
   name?: string;
   totemName?: string;
   totemEmoji?: string;
+  inviteLocked?: boolean;
 }
 
 export interface TransferCrewRequest {

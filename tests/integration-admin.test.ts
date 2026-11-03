@@ -136,7 +136,6 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     await waitForEvent(socket, 'connect');
 
     const adminToken = await loginAdmin(server);
-    const createdEvent = waitForEvent(socket, 'festival:created', (payload) => payload.id === 'fest-2');
 
     await server.request
       .post('/api/v1/festivals')
@@ -145,10 +144,18 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
         id: 'fest-2',
         name: 'Second Fest',
         location: 'Another Field',
+        timeZone: 'America/New_York',
         stages: [{ id: 'alt', name: 'Alt', color: '#4488ff' }],
         days: [{ label: 'Sunday', date: '2026-06-07', sets: [{ id: 'set-z', artist: 'Zeta', stageId: 'alt', startTime: '15:00', endTime: '16:00' }] }],
       })
       .expect(201);
+
+    // A new festival is a draft; festival:created goes out when it is published.
+    const createdEvent = waitForEvent(socket, 'festival:created', (payload) => payload.id === 'fest-2');
+    await server.request
+      .post('/api/v1/festivals/fest-2/publish')
+      .set('x-user-token', adminToken)
+      .expect(200);
 
     const createdPayload: any = await createdEvent;
     assert.equal(createdPayload.name, 'Second Fest');

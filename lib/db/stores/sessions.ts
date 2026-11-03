@@ -3,16 +3,23 @@ import { withTransaction } from '../connection';
 
 export default function createSessionsStore(pool: Pool, _utils: any) {
   const sessions: any = {
-    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser }: any) {
+    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser, deviceLabel }: any) {
       return withTransaction(pool, async (client) => {
         await client.query(
           `
           INSERT INTO
-            user_sessions (token, user_id, username, created_at, last_access)
+            user_sessions (
+              token,
+              user_id,
+              username,
+              created_at,
+              last_access,
+              device_label
+            )
           VALUES
-            ($1, $2, $3, $4, $5)
+            ($1, $2, $3, $4, $5, $6)
         `,
-          [token, userId, username, createdAt, lastAccess],
+          [token, userId, username, createdAt, lastAccess, deviceLabel ?? null],
         );
 
         // FOR UPDATE locks rows to prevent concurrent session creation from racing on eviction count
@@ -79,7 +86,8 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
           user_id AS "userId",
           username,
           created_at AS "createdAt",
-          last_access AS "lastAccess"
+          last_access AS "lastAccess",
+          device_label AS "deviceLabel"
         FROM
           user_sessions
         WHERE
@@ -172,20 +180,14 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
       }
       return row;
     },
-    async rotate(oldToken: string, newToken: string, newSessionToken: string, expiresAt: any) {
-      return withTransaction(pool, async (client) => {
-        const old = await client.query('SELECT user_id FROM refresh_tokens WHERE token = $1', [oldToken]);
-        if (!old.rows[0]) throw new Error('Old refresh token not found');
-        const userId = old.rows[0].user_id;
-        await client.query('UPDATE refresh_tokens SET revoked = TRUE, rotated_at = $1 WHERE token = $2', [
-          new Date(),
-          oldToken,
-        ]);
-        await client.query(
-          'INSERT INTO refresh_tokens (token, user_id, session_token, expires_at) VALUES ($1, $2, $3, $4)',
-          [newToken, userId, newSessionToken, expiresAt],
-        );
-      });
+    // Single-use spend: the row lock makes a concurrent second UPDATE re-check
+    // `revoked = FALSE` and match nothing, so only one caller gets the user id.
+    async claim(token: string): Promise<{ userId: string } | null> {
+      const result = await pool.query(
+        'UPDATE refresh_tokens SET revoked = TRUE, rotated_at = NOW() WHERE token = $1 AND revoked = FALSE AND expires_at > NOW() RETURNING user_id AS "userId"',
+        [token],
+      );
+      return result.rows[0] ?? null;
     },
     async revokeAll(userId: string) {
       await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 AND revoked = FALSE', [userId]);

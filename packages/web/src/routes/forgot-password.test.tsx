@@ -65,4 +65,8 @@ describe('ForgotPasswordPage', () => {
     render(<ForgotPasswordPage />);
     expect(screen.getByRole('link', { name: 'support@festie.us' })).toHaveAttribute('href', 'mailto:support@festie.us');
   });
+  it('shows the username hint under the email field', () => {
+    render(<ForgotPasswordPage />);
+    expect(screen.getByText(/Forgot your username\?/)).toBeInTheDocument();
+  });
 });

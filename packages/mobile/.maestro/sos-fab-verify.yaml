@@ -47,9 +47,11 @@ env:
 # Authed-only: the whole FAB check is gated on the login form appearing.
 - runFlow:
     when:
-      visible: "Username"
+      visible:
+        id: "login-username-input"
     commands:
-      - tapOn: "Username"
+      - tapOn:
+          id: "login-username-input"
       - inputText: "${TEST_USERNAME}"
       - hideKeyboard
       - tapOn: "Password"
@@ -60,7 +62,8 @@ env:
           text: "Not Now"
           optional: true
       - extendedWaitUntil:
-          notVisible: "Username"
+          notVisible:
+            id: "login-username-input"
           timeout: 25000
       # ── /map FAB ──
       - openLink: festie:///map

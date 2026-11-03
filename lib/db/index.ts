@@ -16,7 +16,12 @@ import { createRatingsStore } from './stores/ratings.js';
 import { createExpensesStore } from './stores/expenses.js';
 import { createActivityStore } from './stores/activity.js';
 import { createCalendarTokensStore } from './stores/calendar-tokens.js';
+import { createShareLinksStore } from './stores/share-links.js';
 import { createEmailTokensStore } from './stores/email-tokens.js';
+import { createLineupImportsStore } from './stores/lineup-imports.js';
+import { createFollowsStore } from './stores/follows.js';
+import { createAnnouncementsStore } from './stores/announcements.js';
+import { createIdentitiesStore } from './stores/identities.js';
 import { createDbLatencyTracker } from './latency.js';
 import { createLogger } from '../logger.js';
 import type { Pool } from 'pg';
@@ -58,6 +63,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
   const crewPacking = crewsResult.crewPacking;
   const crewRides = crewsResult.crewRides;
   const crewStatus = crewsResult.crewStatus;
+  const crewDays = crewsResult.crewDays;
 
   const sessions = createSessionsStore(pool, utils);
   const refreshTokens = sessions.refreshTokens;
@@ -77,7 +83,12 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
   const expenses = createExpensesStore(pool);
   const activity = createActivityStore(pool);
   const calendarTokens = createCalendarTokensStore(pool);
+  const shareLinks = createShareLinksStore(pool);
   const emailTokens = createEmailTokensStore(pool);
+  const lineupImports = createLineupImportsStore(pool, { festivals });
+  const follows = createFollowsStore(pool);
+  const announcements = createAnnouncementsStore(pool);
+  const identities = createIdentitiesStore(pool);
 
   return {
     pool,
@@ -95,6 +106,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
     crewPacking,
     crewRides,
     crewStatus,
+    crewDays,
     auditLog,
     roles,
     polls,
@@ -102,10 +114,15 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
     expenses,
     activity,
     calendarTokens,
+    shareLinks,
     refreshTokens,
     loginFailures,
     metricsRollups,
     emailTokens,
+    lineupImports,
+    follows,
+    announcements,
+    identities,
 
     async counts() {
       const result = await pool.query('SELECT COUNT(*) AS count FROM festivals WHERE deleted_at IS NULL');

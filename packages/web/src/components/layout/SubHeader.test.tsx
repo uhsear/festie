@@ -18,23 +18,32 @@ const storeState = {
   ],
   selectedDay: 0,
   activeStages: [] as string[],
+  activeGenres: [] as string[],
+  setActiveGenres: vi.fn(),
+  sets: [] as unknown[],
   searchQuery: '',
   setSelectedDay: vi.fn(),
   setActiveStages: vi.fn(),
   setSearchQuery: vi.fn(),
   // My picks toggle: gated on currentProfile + currentFestival.
-  currentProfile: { id: 'p1' } as { id: string } | null,
+  currentProfile: { id: 'p1', picks: { set1: 'must' } } as { id: string; picks: Record<string, string> } | null,
   onlyMine: false,
   setOnlyMine: vi.fn(),
+  isLoading: false,
+  hiddenDays: [] as number[],
+  setHiddenDays: vi.fn(),
 };
+const authState = { user: { id: 'u1' } as { id: string } | null };
 
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (selector: (s: typeof storeState) => unknown) => selector(storeState),
+  useAuthStore: (selector: (s: typeof authState) => unknown) => selector(authState),
 }));
 
 vi.mock('@festie/shared/hooks', () => ({
-  useFestival: () => ({ getStageColor: () => '#00e8d0' }),
+  useFestival: () => ({ getStageColor: () => '#00e8d0', getFilteredSets: () => [] }),
   useSaveStatus: () => ({ kind: 'saved', label: 'Saved' }),
+  useViewAs: () => ({ target: null, canView: () => false, start: vi.fn(), clear: vi.fn() }),
 }));
 
 let mockPathname = '/cards';
@@ -72,6 +81,17 @@ describe('SubHeader layout density', () => {
     expect(getNav()).toBeInTheDocument();
   });
 
+  it('labels an ongoing festival "Happening now"', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-29T18:00:00'));
+    try {
+      render(<SubHeader dayOnly={false} festivalOnly={false} />);
+      expect(screen.getByTestId('festival-status-pill')).toHaveTextContent('Happening now');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('applies compact horizontal rhythm on small widths and comfortable on desktop', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     const nav = getNav();
@@ -87,7 +107,7 @@ describe('SubHeader layout density', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     const tabs = screen.getByRole('group', { name: 'Festival days' });
     expect(tabs.className).toContain('gap-[var(--space-3)]');
-    expect(screen.getByRole('button', { name: 'Day: Fri' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fri May 29' })).toBeInTheDocument();
   });
 
   it('hides day tabs and search when festivalOnly is set (behavior preserved)', () => {
@@ -105,7 +125,7 @@ describe('SubHeader layout density', () => {
 describe('SubHeader My picks toggle', () => {
   afterEach(() => {
     // Restore the default state mutated by the tests below.
-    storeState.currentProfile = { id: 'p1' };
+    storeState.currentProfile = { id: 'p1', picks: { set1: 'must' } };
     storeState.currentFestival = { id: 'f1', name: 'Festival One' };
     storeState.onlyMine = false;
     vi.clearAllMocks();
@@ -136,6 +156,29 @@ describe('SubHeader My picks toggle', () => {
     expect(btn).toHaveAttribute('aria-pressed', 'true');
     btn.click();
     expect(storeState.setOnlyMine).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('SubHeader day chips and picks placeholder', () => {
+  afterEach(() => {
+    storeState.currentProfile = { id: 'p1' };
+    storeState.isLoading = false;
+    vi.clearAllMocks();
+  });
+
+  it('shows the date beside the label and names the chip by its visible text', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const chip = screen.getByRole('button', { name: 'Fri May 29' });
+    expect(chip).toHaveTextContent('Fri May 29');
+    expect(chip).not.toHaveAttribute('aria-label');
+  });
+
+  it('holds the My picks place with a placeholder while the profile loads', () => {
+    storeState.currentProfile = null;
+    storeState.isLoading = true;
+    const { container } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Show only my picks' })).not.toBeInTheDocument();
+    expect(container.querySelector('.skeleton-shimmer.w-\\[104px\\]')).toBeInTheDocument();
   });
 });
 
@@ -174,27 +217,67 @@ describe('SubHeader stage chips', () => {
     expect(storeState.setActiveStages).toHaveBeenCalledWith([]);
   });
 
-  it('shows the active-filter summary on Timeline (no chips there) and clears it', () => {
-    storeState.activeStages = ['s2'];
-    mockPathname = '/timeline';
-    render(<SubHeader dayOnly={true} festivalOnly={false} />);
-    expect(screen.queryByRole('button', { name: 'Forest' })).not.toBeInTheDocument();
-    // Timeline/Grid have no fold buttons, so the summary must stay visible on phones.
-    expect(screen.getByTestId('stage-filter-summary').closest('[class~="max-md:hidden"]')).toBeNull();
-    fireEvent.click(screen.getByTestId('stage-filter-summary'));
-    expect(storeState.setActiveStages).toHaveBeenCalledWith([]);
+  it('shows the search box and stage chips on Grid', () => {
+    mockPathname = '/grid';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('search')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All stages' })).toBeInTheDocument();
   });
 
-  it('hides the summary when no stage filter is active and on /picks', () => {
-    mockPathname = '/timeline';
-    const { unmount } = render(<SubHeader dayOnly={true} festivalOnly={false} />);
-    expect(screen.queryByTestId('stage-filter-summary')).not.toBeInTheDocument();
+  it('toggles chips through toggleStageFilter', () => {
+    storeState.activeStages = ['s1'];
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dome' }));
+    expect(storeState.setActiveStages).toHaveBeenCalledWith(['s1', 's3']);
+  });
+});
+
+describe('SubHeader search clear button', () => {
+  afterEach(() => {
+    storeState.searchQuery = '';
+  });
+
+  it('appears only with a query and empties it', () => {
+    const { unmount } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
     unmount();
-    storeState.activeStages = ['s2'];
+    storeState.searchQuery = 'foo';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(storeState.setSearchQuery).toHaveBeenCalledWith('');
+    expect(screen.getByLabelText('Search festival artists')).toHaveFocus();
+  });
+});
+
+describe('SubHeader guarded My picks and hidden days', () => {
+  afterEach(() => {
+    storeState.currentProfile = { id: 'p1', picks: { set1: 'must' } };
+    storeState.hiddenDays = [];
+    storeState.selectedDay = 0;
+    mockPathname = '/cards';
+  });
+
+  it('reads "Pick a set first" and ignores clicks when there are no picks', () => {
+    storeState.currentProfile = { id: 'p1', picks: {} };
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const chip = screen.getByText('Pick a set first').closest('button') as HTMLElement;
+    expect(chip).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(chip);
+    expect(storeState.setOnlyMine).not.toHaveBeenCalled();
+  });
+
+  it('drops a hidden day tab on /cards and offers "+1 hidden"; /picks shows every day', () => {
+    storeState.hiddenDays = [0];
+    storeState.selectedDay = 1;
+    const { unmount } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Fri May 29' })).not.toBeInTheDocument();
+    expect(screen.getByText('+1 hidden')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '+1 hidden day, show all' }));
+    expect(storeState.setHiddenDays).toHaveBeenCalledWith([]);
+    unmount();
     mockPathname = '/picks';
     render(<SubHeader dayOnly={true} festivalOnly={false} />);
-    expect(screen.queryByTestId('stage-filter-summary')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show only my picks' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fri May 29' })).toBeInTheDocument();
   });
 });
 
@@ -263,5 +346,52 @@ describe('SubHeader phone fold', () => {
     render(<SubHeader dayOnly={true} festivalOnly={false} />);
     expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Filters/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('SubHeader genre chips', () => {
+  const genreSet = (id: string, genres: string[]) => ({ id, artists: [{ name: id, genres }] });
+  const richSets = [
+    genreSet('a', ['house', 'techno']),
+    genreSet('b', ['house', 'techno']),
+    genreSet('c', ['house', 'techno']),
+  ];
+
+  afterEach(() => {
+    mockPathname = '/cards';
+    storeState.sets = [];
+    storeState.activeGenres = [];
+  });
+
+  it('hides the group when the festival has no genre data', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('group', { name: 'Filter by genre' })).not.toBeInTheDocument();
+  });
+
+  it('shows chips, toggles a genre and clears with All genres', () => {
+    storeState.sets = richSets;
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const group = screen.getByRole('group', { name: 'Filter by genre' });
+    expect(group).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'House' }));
+    expect(storeState.setActiveGenres).toHaveBeenCalledWith(['house']);
+    fireEvent.click(screen.getByRole('button', { name: 'All genres' }));
+    expect(storeState.setActiveGenres).toHaveBeenCalledWith([]);
+  });
+
+  it('marks active genres pressed and counts them in Filters', () => {
+    storeState.sets = richSets;
+    storeState.activeGenres = ['house', 'techno'];
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('button', { name: 'House' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'All genres' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Filters (1)' })).toBeInTheDocument();
+  });
+
+  it('hides the group on day-only routes where the stage chips hide', () => {
+    storeState.sets = richSets;
+    mockPathname = '/picks';
+    render(<SubHeader dayOnly={true} festivalOnly={false} />);
+    expect(screen.queryByRole('group', { name: 'Filter by genre' })).not.toBeInTheDocument();
   });
 });

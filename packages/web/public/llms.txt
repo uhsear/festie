@@ -8,8 +8,7 @@ signing in unlocks saved picks, crew planning, and the post-festival Wrap recap.
 ## Key routes
 
 - /cards — schedule as artist cards (default view)
-- /timeline — schedule by time
-- /grid — every stage at once
+- /grid — schedule by stage and time
 - /picks — your saved picks (sign in required)
 - /crew — plan with your crew (sign in required)
 - /wrap — post-festival recap (after the festival ends)

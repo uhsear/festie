@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { test as base, expect } from '@playwright/test';
+import type { Browser, BrowserContext, Page } from '@playwright/test';
 import { Pool } from 'pg';
 
 import { createFestivalPlanner } from '../../server.js';
@@ -208,6 +209,12 @@ function assertSpaBuilt() {
   }
 }
 
+// The fixture festivals are dated June 2026. Once both are past, the picker opens the
+// newest one (fest-2), so every page starts its clock before them to keep fest-1 the
+// default. setSystemTime shifts the clock but lets it run, so timers, retry backoff and
+// relative times still advance.
+export const FIXTURE_NOW = new Date('2026-06-01T12:00:00');
+
 export const test = base.extend<{ app: Awaited<ReturnType<typeof startServer>> }>({
   app: async ({}, use) => {
     assertSpaBuilt();
@@ -220,6 +227,7 @@ export const test = base.extend<{ app: Awaited<ReturnType<typeof startServer>> }
   // clicks the app. Pre-mark it completed so specs exercise the real flows;
   // onboarding itself gets dedicated coverage by clearing this key.
   page: async ({ page }, use) => {
+    await page.clock.setSystemTime(FIXTURE_NOW);
     await page.addInitScript(() => {
       try {
         localStorage.setItem('festie_onboarding_completed', 'true');
@@ -230,5 +238,87 @@ export const test = base.extend<{ app: Awaited<ReturnType<typeof startServer>> }
     await use(page);
   },
 });
+
+// ── Helpers for the critical-flow specs ──────────────────────────────────────
+
+const API_HEADERS = { 'content-type': 'application/json', 'x-festie-request': '1' };
+
+type AppRef = { baseUrl: string; databaseUrl?: string };
+
+// Register through the API. The session cookie lands in `context`, so the same
+// context can seed data (crews) before the user signs in through the form.
+export async function registerViaApi(context: BrowserContext, app: AppRef, username: string) {
+  const res = await context.request.post(`${app.baseUrl}/api/v1/auth/register`, {
+    headers: API_HEADERS,
+    data: {
+      username,
+      password: DEFAULT_PASSWORD,
+      confirmPassword: DEFAULT_PASSWORD,
+      dateOfBirth: '1995-01-01',
+      tosAccepted: true,
+    },
+  });
+  expect(res.ok(), `registration failed (${res.status()})`).toBe(true);
+}
+
+// Sign in through the real /login form and wait for the profile badge. Cookies
+// are cleared first so a session left by registerViaApi cannot skip the form.
+export async function signIn(page: Page, app: AppRef, username: string, password = DEFAULT_PASSWORD) {
+  await page.context().clearCookies();
+  await page.goto(`${app.baseUrl}/login`);
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-testid="profile-badge"]')).toBeVisible();
+}
+
+// Create a crew in fest-1 as the user whose cookie `context` holds. Returns the id and invite code.
+export async function createCrewViaApi(context: BrowserContext, app: AppRef, name: string, festivalId = 'fest-1') {
+  const res = await context.request.post(`${app.baseUrl}/api/v1/crews`, {
+    headers: API_HEADERS,
+    data: { name, festivalId },
+  });
+  expect(res.ok(), `crew creation failed (${res.status()})`).toBe(true);
+  const { data } = (await res.json()) as { data: { id: string; inviteCode: string } };
+  return { id: data.id, inviteCode: data.inviteCode };
+}
+
+// A second browser context for a second user. It carries the same clock, pre-set
+// onboarding flag and service-worker block as the default `page` fixture.
+export async function openUserContext(browser: Browser) {
+  const context = await browser.newContext({ serviceWorkers: 'block' });
+  await context.clock.setSystemTime(FIXTURE_NOW);
+  await context.addInitScript(() => {
+    try {
+      localStorage.setItem('festie_onboarding_completed', 'true');
+    } catch {
+      /* storage unavailable — onboarding will just show */
+    }
+  });
+  return context;
+}
+
+// Admin is a database role, not a configured username: register a fresh user,
+// grant the `admin` role directly (as tests/integration-auth.test.ts does), then
+// sign in through the form so the SPA loads with isAdmin set.
+export async function loginAdminUi(page: Page, app: AppRef) {
+  if (!app.databaseUrl) throw new Error('loginAdminUi needs app.databaseUrl from the app fixture.');
+  const username = `admin_${Date.now()}`;
+  await registerViaApi(page.context(), app, username);
+  const pool = new Pool({ connectionString: app.databaseUrl });
+  try {
+    await pool.query(
+      `INSERT INTO user_roles (user_id, role_id, granted_by, granted_at)
+       SELECT u.id, r.id, NULL, NOW() FROM users u, roles r
+       WHERE u.username = $1 AND r.name = 'admin'
+       ON CONFLICT (user_id, role_id) DO NOTHING`,
+      [username],
+    );
+  } finally {
+    await pool.end();
+  }
+  await signIn(page, app, username);
+  return username;
+}
 
 export { expect, ADMIN_USER, ADMIN_PASSWORD, DEFAULT_PASSWORD };

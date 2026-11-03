@@ -1,4 +1,5 @@
 import { m, useReducedMotion } from 'motion/react';
+import { COPY } from '@festie/shared/constants';
 import { SetStatus } from '@/hooks/useSetStatus';
 import { cn } from '@/lib/utils';
 
@@ -30,7 +31,7 @@ export default function LiveBadge({ status, label, className }: LiveBadgeProps) 
           'gap-1.5 bg-accent-coral-strong text-text-on-accent ring-1 ring-accent-coral/60 shadow-[0_0_10px_rgba(var(--accent-coral-rgb),0.45)]',
           className,
         )}
-        aria-label="Live"
+        aria-label={COPY.status.playingA11y}
       >
         {prefersReducedMotion ? (
           <div className="w-1.5 h-1.5 rounded-full bg-text-on-accent" aria-hidden="true" />
@@ -69,10 +70,10 @@ export default function LiveBadge({ status, label, className }: LiveBadgeProps) 
   // R6 UP NEXT (upcoming): transparent bg, 1px aqua outline at 40% opacity, aqua text.
   if (status === 'upcoming') {
     return (
-      <div className={cn(PILL_BASE, 'border border-[rgba(0,232,208,0.4)] text-accent-aqua', className)}>{label}</div>
+      <div className={cn(PILL_BASE, 'border border-[var(--color-aqua-a4)] text-accent-aqua', className)}>{label}</div>
     );
   }
 
-  // R6 PAST / TBA / Later: neutral surface #3a3a3a, muted text #686868.
-  return <div className={cn(PILL_BASE, 'bg-[#3a3a3a] text-[#686868]', className)}>{label}</div>;
+  // R6 PAST / TBA / Later: neutral surface and muted text tokens.
+  return <div className={cn(PILL_BASE, 'bg-bg-secondary text-text-muted', className)}>{label}</div>;
 }

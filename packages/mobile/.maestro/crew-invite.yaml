@@ -51,9 +51,11 @@ env:
 
 - runFlow:
     when:
-      visible: "Username"
+      visible:
+        id: "login-username-input"
     commands:
-      - tapOn: "Username"
+      - tapOn:
+          id: "login-username-input"
       - inputText: "${TEST_USERNAME}"
       - hideKeyboard
       - tapOn: "Password"
@@ -64,7 +66,8 @@ env:
           text: "Not Now"
           optional: true
       - extendedWaitUntil:
-          notVisible: "Username"
+          notVisible:
+            id: "login-username-input"
           timeout: 25000
 
 - takeScreenshot: ci-02-logged-in-a
@@ -97,7 +100,7 @@ env:
       - inputText: "Maestro Test Crew"
       - hideKeyboard
       - tapOn:
-          text: "Create Crew"
+          text: "Create crew"
       - waitForAnimationToEnd:
           timeout: 5000
       - takeScreenshot: ci-04-crew-created
@@ -141,9 +144,11 @@ env:
 
 - runFlow:
     when:
-      visible: "Username"
+      visible:
+        id: "login-username-input"
     commands:
-      - tapOn: "Username"
+      - tapOn:
+          id: "login-username-input"
       - inputText: "${TEST_USERNAME_B}"
       - hideKeyboard
       - tapOn: "Password"
@@ -154,7 +159,8 @@ env:
           text: "Not Now"
           optional: true
       - extendedWaitUntil:
-          notVisible: "Username"
+          notVisible:
+            id: "login-username-input"
           timeout: 25000
 
 - takeScreenshot: ci-07-logged-in-b

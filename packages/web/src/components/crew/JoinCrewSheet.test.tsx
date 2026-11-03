@@ -72,9 +72,16 @@ describe('JoinCrewSheet', () => {
     expect(screen.getByRole('button', { name: 'Crew is full' })).toBeDisabled();
   });
 
-  it.each(['invalid', 'expired'])('disables Join when the invite is %s', (status) => {
+  it.each(['invalid', 'expired', 'locked'])('disables Join when the invite is %s', (status) => {
     h.preview = { status, preview: null };
     renderSheet();
+    expect(screen.getByRole('button', { name: 'Join crew' })).toBeDisabled();
+  });
+
+  it('shows the locked message and disables Join for a locked crew', () => {
+    h.preview = { status: 'locked', preview: null };
+    renderSheet();
+    expect(screen.getByText("This crew isn't taking new members.")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Join crew' })).toBeDisabled();
   });
 
@@ -92,7 +99,7 @@ describe('JoinCrewSheet', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(h.join).toHaveBeenCalledWith('ABC123');
     expect(h.toast).toHaveBeenCalledWith('Joined Bass Gang', 'success');
-    expect(h.navigate).toHaveBeenCalledWith({ to: '/crew' });
+    expect(h.navigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'members' } });
   });
 
   it('says so when the caller is already in the crew', async () => {
@@ -101,7 +108,7 @@ describe('JoinCrewSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join crew' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(h.toast).toHaveBeenCalledWith("You're already in Bass Gang", 'info');
-    expect(h.navigate).toHaveBeenCalledWith({ to: '/crew' });
+    expect(h.navigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'members' } });
   });
 
   it('tells the user a queued join finishes when back online, without navigating', async () => {

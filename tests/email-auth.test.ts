@@ -8,12 +8,12 @@ import 'dotenv/config';
 
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
-import fs from 'fs';
 import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema } from './_test-schema';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,33 +31,6 @@ if (!TEST_DATABASE_URL) {
 if (!TEST_DATABASE_URL.includes('_test')) {
   console.error('SAFETY: TEST_DATABASE_URL must contain "_test" in the database name.');
   process.exit(1);
-}
-
-let testDbReady = false;
-
-async function ensureTestSchema() {
-  if (testDbReady) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    const { rows } = await pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1");
-    if (rows.length === 0) {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS citext');
-      const schema = fs.readFileSync(path.join(__dirname, '..', 'migrations', '004_postgresql_baseline.sql'), 'utf8');
-      await pool.query(schema);
-    }
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    const migrationFiles = fs
-      .readdirSync(migrationsDir)
-      .filter((f: string) => f.endsWith('.sql') && !f.startsWith('004_'))
-      .sort();
-    for (const file of migrationFiles) {
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      await pool.query(sql).catch(() => {});
-    }
-    testDbReady = true;
-  } finally {
-    await pool.end();
-  }
 }
 
 // Track IDs created per-test so teardown only removes what we created
@@ -80,7 +53,7 @@ async function cleanupCreatedUsers() {
 }
 
 async function startServer(overrides: any = {}) {
-  await ensureTestSchema();
+  await ensureTestSchema(TEST_DATABASE_URL!);
   const planner = await createFestivalPlanner({
     DATABASE_URL: TEST_DATABASE_URL,
     PUBLIC_DIR,

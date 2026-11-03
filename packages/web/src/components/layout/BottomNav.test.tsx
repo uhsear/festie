@@ -15,8 +15,10 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 let mockUser: { id: string; username: string } | null = null;
+const mockFestival = { scheduleView: null as string | null, sets: [], days: [], currentFestival: null };
 vi.mock('@festie/shared', () => ({
   useAuthStore: (selector: (s: { user: typeof mockUser }) => unknown) => selector({ user: mockUser }),
+  useFestivalStore: (selector: (s: typeof mockFestival) => unknown) => selector(mockFestival),
 }));
 
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
@@ -24,10 +26,15 @@ vi.mock('@festie/shared/utils', async (importOriginal) => ({
   isFestivalOver: () => true,
 }));
 
+const mockBadge = vi.hoisted(() => ({ value: { count: 0, dot: false, label: null as string | null } }));
+vi.mock('../../hooks/useCrewAttention', () => ({ useCrewAttention: () => mockBadge.value }));
+
 describe('BottomNav', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockBadge.value = { count: 0, dot: false, label: null };
     mockUser = null;
+    mockFestival.scheduleView = null;
     mockLocation.pathname = '/cards';
   });
 
@@ -38,12 +45,32 @@ describe('BottomNav', () => {
     const links = within(nav).getAllByRole('link');
     expect(links.map((l) => l.getAttribute('aria-label'))).toEqual([
       'View Lineup',
-      'View My Plan',
+      'View Picks',
       'View Crew',
       'View Map',
       'View More',
     ]);
     expect(links.map((l) => l.getAttribute('href'))).toEqual(['/cards', '/picks', '/crew', '/map', '/account']);
+  });
+
+  it('shows a count on the Crew tab and labels it', () => {
+    mockUser = { id: 'u1', username: 'alice' };
+    mockBadge.value = { count: 2, dot: false, label: '2' };
+    render(<BottomNav />);
+    expect(screen.getByLabelText('View Crew, 2 new')).toHaveTextContent('2');
+  });
+
+  it('shows a dot on the Crew tab when only the balance changed', () => {
+    mockUser = { id: 'u1', username: 'alice' };
+    mockBadge.value = { count: 0, dot: true, label: '' };
+    render(<BottomNav />);
+    expect(screen.getByLabelText('View Crew, needs attention')).toBeInTheDocument();
+  });
+
+  it('points Lineup at the remembered view', () => {
+    mockFestival.scheduleView = 'grid';
+    render(<BottomNav />);
+    expect(screen.getByLabelText('View Lineup')).toHaveAttribute('href', '/grid');
   });
 
   it('shows all five slots for guests, with Sign in in the More slot', () => {
@@ -116,10 +143,18 @@ describe('BottomNav', () => {
     expect(screen.getByLabelText('View Crew')).not.toHaveAttribute('tabindex', '-1');
   });
 
+  it('gives Picks its own icon, not the star', () => {
+    mockUser = { id: 'u1', username: 'alice' };
+    render(<BottomNav />);
+    const picks = screen.getByLabelText('View Picks').querySelector('svg')!;
+    expect(picks.getAttribute('class')).toContain('lucide-list-checks');
+    expect(picks.getAttribute('class')).not.toContain('lucide-star');
+  });
+
   it('renders label text for each section', () => {
     mockUser = { id: 'u1', username: 'alice' };
     render(<BottomNav />);
-    for (const label of ['Lineup', 'My Plan', 'Crew', 'Map', 'More']) {
+    for (const label of ['Lineup', 'Picks', 'Crew', 'Map', 'More']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });

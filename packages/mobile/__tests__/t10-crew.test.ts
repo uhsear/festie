@@ -7,7 +7,7 @@ const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8');
 describe('T10 crew large-text guards', () => {
   it('CrewStatus has the one-sentence banner and a wrapping empty line', () => {
     const src = read('components/CrewStatus.tsx');
-    expect(src).toContain('Not live: each status shows when that crewmate last had signal.');
+    expect(src).toContain('CREW_STATUS_HONESTY');
     expect(src).not.toContain('not live tracking');
     expect(src).not.toContain('<Text style={styles.emptyText} numberOfLines={1}>');
     expect(src).toContain('<Text style={styles.emptyText}>');

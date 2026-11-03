@@ -195,6 +195,28 @@ describe('createUsersStore', () => {
     });
   });
 
+  describe('getByEmail', () => {
+    it('matches LOWER(email) on active users only', async () => {
+      const pool = mockPool([{ rows: [fakeUserRow()], rowCount: 1 }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      const result = await users.getByEmail('alice@example.com');
+      assert.equal(result.username, 'alice');
+      assert.equal(pool.calls[0].params[0], 'alice@example.com');
+      const sql = norm(pool.calls[0].sql);
+      assert.ok(sql.includes('LOWER(email) = $1'));
+      assert.ok(sql.includes('deleted_at IS NULL'));
+      assert.ok(sql.includes('LIMIT 1'));
+    });
+
+    it('returns null when no user has that email', async () => {
+      const pool = mockPool([{ rows: [], rowCount: 0 }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      assert.equal(await users.getByEmail('nobody@example.com'), null);
+    });
+  });
+
   describe('findDeletedByUsername', () => {
     it('returns a soft-deleted user inside the 30-day window', async () => {
       const pool = mockPool([{ rows: [fakeUserRow({ deletedAt: '2026-10-20T00:00:00.000Z' })], rowCount: 1 }]);
@@ -645,6 +667,39 @@ describe('createSessionsStore', () => {
       assert.deepEqual(evicted, []);
     });
 
+    it('passes deviceLabel as the sixth INSERT parameter', async () => {
+      const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [{ token: 'tok1' }] }, { rows: [] }]);
+      const sessions = createSessionsStore(pool, mockUtils);
+
+      await sessions.createUserSession({
+        token: 'tok1',
+        userId: 'u1',
+        username: 'alice',
+        createdAt: new Date().toISOString(),
+        lastAccess: new Date().toISOString(),
+        maxPerUser: 5,
+        deviceLabel: 'Chrome on Windows',
+      });
+      const insert = pool.calls[1];
+      assert.ok(norm(insert.sql).includes('device_label'));
+      assert.equal(insert.params[5], 'Chrome on Windows');
+    });
+
+    it('stores a NULL device label when none is given', async () => {
+      const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [{ token: 'tok1' }] }, { rows: [] }]);
+      const sessions = createSessionsStore(pool, mockUtils);
+
+      await sessions.createUserSession({
+        token: 'tok1',
+        userId: 'u1',
+        username: 'alice',
+        createdAt: new Date().toISOString(),
+        lastAccess: new Date().toISOString(),
+        maxPerUser: 5,
+      });
+      assert.equal(pool.calls[1].params[5], null);
+    });
+
     it('evicts oldest sessions when over maxPerUser', async () => {
       // BEGIN, INSERT, SELECT FOR UPDATE (6 sessions, limit 5), DELETE evicted, COMMIT
       const sixSessions = Array.from({ length: 6 }, (_, i) => ({ token: `tok${i}` }));
@@ -785,6 +840,13 @@ describe('createSessionsStore', () => {
 
       const result = await sessions.listUserSessions('u1');
       assert.deepEqual(result, []);
+    });
+
+    it('selects the device label', async () => {
+      const pool = mockPool([{ rows: [], rowCount: 0 }]);
+      const sessions = createSessionsStore(pool, mockUtils);
+      await sessions.listUserSessions('u1');
+      assert.ok(norm(pool.calls[0].sql).includes('device_label AS "deviceLabel"'));
     });
 
     it('orders by last_access ASC', async () => {
@@ -1061,45 +1123,29 @@ describe('createSessionsStore', () => {
       });
     });
 
-    describe('rotate', () => {
-      it('revokes old token and inserts new within transaction', async () => {
-        const pool = mockPool([
-          { rows: [] }, // BEGIN
-          { rows: [{ user_id: 'u1' }] }, // SELECT old token
-          { rows: [] }, // UPDATE revoke
-          { rows: [] }, // INSERT new token
-          { rows: [] }, // COMMIT
-        ]);
+    describe('claim', () => {
+      it('spends only a live, unrevoked token in one conditional UPDATE', async () => {
+        const pool = mockPool([{ rows: [{ userId: 'u1' }], rowCount: 1 }]);
         const sessions = createSessionsStore(pool, mockUtils);
 
-        await sessions.refreshTokens.rotate('old-rt', 'new-rt', 'new-st', '2026-07-01T00:00:00.000Z');
-        assert.ok(pool.calls[1].sql.includes('SELECT user_id'));
-        assert.ok(pool.calls[2].sql.includes('UPDATE refresh_tokens SET revoked'));
-        assert.ok(pool.calls[3].sql.includes('INSERT INTO refresh_tokens'));
+        const result = await sessions.refreshTokens.claim('rt1');
+        assert.deepEqual(result, { userId: 'u1' });
+        assert.equal(pool.calls.length, 1);
+        const sql = norm(pool.calls[0].sql);
+        assert.ok(sql.startsWith('UPDATE refresh_tokens SET revoked = TRUE'));
+        assert.ok(sql.includes('revoked = FALSE'));
+        assert.ok(sql.includes('expires_at > NOW()'));
+        assert.deepEqual(pool.calls[0].params, ['rt1']);
       });
 
-      it('throws when old token not found', async () => {
-        const pool = mockPool([
-          { rows: [] }, // BEGIN
-          { rows: [] }, // SELECT (not found)
-          // withTransaction will ROLLBACK on error
-          { rows: [] }, // ROLLBACK
-        ]);
-        const sessions = createSessionsStore(pool, mockUtils);
+      for (const kind of ['revoked', 'expired', 'unknown']) {
+        it(`returns null for a ${kind} token (UPDATE matches no row)`, async () => {
+          const pool = mockPool([{ rows: [], rowCount: 0 }]);
+          const sessions = createSessionsStore(pool, mockUtils);
 
-        await assert.rejects(() => sessions.refreshTokens.rotate('missing', 'new-rt', 'new-st', new Date()), {
-          message: 'Old refresh token not found',
+          assert.equal(await sessions.refreshTokens.claim(`rt-${kind}`), null);
         });
-      });
-
-      it('uses transaction (BEGIN/COMMIT)', async () => {
-        const pool = mockPool([{ rows: [] }, { rows: [{ user_id: 'u1' }] }, { rows: [] }, { rows: [] }, { rows: [] }]);
-        const sessions = createSessionsStore(pool, mockUtils);
-
-        await sessions.refreshTokens.rotate('old', 'new', 'st', new Date());
-        assert.equal(pool.calls[0].sql, 'BEGIN');
-        assert.equal(pool.calls[pool.calls.length - 1].sql, 'COMMIT');
-      });
+      }
     });
 
     describe('revokeAll', () => {
@@ -1376,7 +1422,7 @@ describe('createSessionsStore', () => {
       assert.ok(sessions.refreshTokens);
       assert.equal(typeof sessions.refreshTokens.create, 'function');
       assert.equal(typeof sessions.refreshTokens.validate, 'function');
-      assert.equal(typeof sessions.refreshTokens.rotate, 'function');
+      assert.equal(typeof sessions.refreshTokens.claim, 'function');
       assert.equal(typeof sessions.refreshTokens.revokeAll, 'function');
       assert.equal(typeof sessions.refreshTokens.deleteExpired, 'function');
     });

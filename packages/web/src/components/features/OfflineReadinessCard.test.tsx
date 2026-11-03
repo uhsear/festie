@@ -1,155 +1,104 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import OfflineReadinessCard from './OfflineReadinessCard';
-import { useOfflineReadinessStore } from '@festie/shared/stores/offlineReadinessStore';
-import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { buildOfflineSteps, summarizeOffline } from '@festie/shared/utils';
+import type { FestivalPhase } from '@festie/shared/utils';
 
-const { downloadForOffline } = vi.hoisted(() => ({ downloadForOffline: vi.fn() }));
-const festivalOver = vi.hoisted(() => ({ value: false }));
-
-vi.mock('@festie/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@festie/shared/utils')>()),
-  isFestivalOver: () => festivalOver.value,
+const h = vi.hoisted(() => ({
+  state: null as unknown as Record<string, unknown>,
+  download: vi.fn(),
 }));
 
-type ReadinessState = {
-  byFestival: Record<string, unknown>;
-  downloadingFestivalId: string | null;
-  downloadForOffline: typeof downloadForOffline;
-};
+vi.mock('../../hooks/useOfflineDownload', () => ({
+  useOfflineDownload: () => ({ ...h.state, download: h.download }),
+}));
 
-vi.mock('@festie/shared/stores/offlineReadinessStore', () => {
-  const state: ReadinessState = { byFestival: {}, downloadingFestivalId: null, downloadForOffline };
-  return { useOfflineReadinessStore: vi.fn((sel: (s: ReadinessState) => unknown) => sel(state)) };
-});
-vi.mock('@festie/shared/stores/crewStore', () => {
-  const state = { activeCrew: { id: 'crew-1' } as { id: string } | null };
-  return { useCrewStore: vi.fn((sel: (s: typeof state) => unknown) => sel(state)) };
-});
+type Sec = { status: 'idle' | 'syncing' | 'ready' | 'error'; syncedAt: number | null };
+const idle: Sec = { status: 'idle', syncedAt: null };
+const ready: Sec = { status: 'ready', syncedAt: Date.now() };
 
-function setReadiness(state: Partial<ReadinessState>) {
-  const full: ReadinessState = { byFestival: {}, downloadingFestivalId: null, downloadForOffline, ...state };
-  vi.mocked(useOfflineReadinessStore).mockImplementation((sel: (s: ReadinessState) => unknown) => sel(full) as never);
+function setState(
+  sections: Partial<Record<'schedule' | 'picks' | 'crew' | 'weather' | 'art', Sec>>,
+  opts: { map?: Sec | null; mapDetail?: string; phase?: FestivalPhase | null; mapBytes?: number | null } = {},
+) {
+  const full = { schedule: idle, picks: idle, crew: idle, weather: idle, art: idle, ...sections };
+  const steps = buildOfflineSteps(full, { hasCrew: true, map: opts.map ?? null, mapDetail: opts.mapDetail });
+  h.state = {
+    steps,
+    summary: summarizeOffline(steps, opts.phase ?? 'pre'),
+    isDownloading: steps.some((s) => s.section.status === 'syncing'),
+    mapBytes: opts.mapBytes ?? null,
+    hasMap: !!opts.map,
+  };
 }
-function setCrew(activeCrew: { id: string } | null) {
-  const full = { activeCrew };
-  vi.mocked(useCrewStore).mockImplementation((sel: (s: typeof full) => unknown) => sel(full) as never);
-}
+
+const open = () => fireEvent.click(screen.getByRole('button', { name: 'Show offline download details' }));
 
 describe('OfflineReadinessCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    festivalOver.value = false;
-    setReadiness({});
-    setCrew({ id: 'crew-1' });
+    setState({});
   });
 
-  // R18: pending sections render as muted dots with no text label (idle state).
-  // Verify the section names are present and the Download button is shown.
-  it('renders all section labels and Download button before any download', () => {
+  it('is one collapsed line by default with a Download button', () => {
     render(<OfflineReadinessCard festivalId="fest-1" />);
-    expect(screen.getByText('Schedule')).toBeInTheDocument();
-    expect(screen.getByText('My picks')).toBeInTheDocument();
-    expect(screen.getByText('Crew plan')).toBeInTheDocument();
-    expect(screen.getByText('Weather')).toBeInTheDocument();
-    expect(screen.getByText('Artist art')).toBeInTheDocument();
-    expect(screen.getByText('Download')).toBeInTheDocument();
+    expect(screen.getByText('Download for offline')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show offline download details' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Weather')).not.toBeInTheDocument();
   });
 
-  it('shows visible "Not saved" text for an idle section', () => {
+  it('opens the checklist with the no-map description and Not saved rows', () => {
     render(<OfflineReadinessCard festivalId="fest-1" />);
+    open();
+    expect(screen.getByText(/The map needs signal at this festival\./)).toBeInTheDocument();
     expect(screen.getAllByText('Not saved').length).toBeGreaterThan(0);
-  });
-
-  // axe `list`: a role override on <li> makes it an invalid child of the <ul>.
-  it('keeps every checklist row a list item', () => {
-    render(<OfflineReadinessCard festivalId="fest-1" />);
     const list = screen.getByRole('list', { name: 'Offline readiness checklist' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(5);
   });
 
-  // R18: done sections show "synced N ago" or "ready" (no longer "Ready · synced").
-  it('renders a "synced" label for a section that is ready', () => {
-    setReadiness({
-      byFestival: {
-        'fest-1': {
-          schedule: { status: 'ready', syncedAt: Date.now() },
-          picks: { status: 'idle', syncedAt: null },
-          crew: { status: 'idle', syncedAt: null },
-          weather: { status: 'idle', syncedAt: null },
-          art: { status: 'idle', syncedAt: null },
-        },
-      },
-    });
+  it('shows the map row, size and coral detail when the festival has a map', () => {
+    setState({}, { map: { status: 'error', syncedAt: 1 }, mapDetail: 'Not enough space for the map (4 MB). Free up space, then retry.', mapBytes: 4_200_000 });
     render(<OfflineReadinessCard festivalId="fest-1" />);
-    expect(screen.getByText(/synced/)).toBeInTheDocument();
-    // Once any section is ready, the button becomes "Update".
-    expect(screen.getByText('Update')).toBeInTheDocument();
+    open();
+    expect(screen.getByText('Offline map')).toBeInTheDocument();
+    expect(screen.getByText(/festival map so they work with no signal\. The map is 4 MB\./)).toBeInTheDocument();
+    expect(screen.getByText(/Not enough space for the map/)).toHaveClass('text-accent-coral');
   });
 
-  it('calls downloadForOffline with the festival id and the active crew id on click', () => {
+  it('reads Available offline and Update when everything is ready', () => {
+    setState({ schedule: ready, picks: ready, crew: ready, weather: ready, art: ready });
     render(<OfflineReadinessCard festivalId="fest-1" />);
-    fireEvent.click(screen.getByText('Download'));
-    expect(downloadForOffline).toHaveBeenCalledWith('fest-1', 'crew-1');
+    expect(screen.getByText(/Available offline · synced/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument();
   });
 
-  it('passes undefined crew id when there is no active crew', () => {
-    setCrew(null);
+  it('shows a Retry action for a partial download and retries from a failed row', () => {
+    setState({ schedule: ready, picks: ready, crew: ready, art: ready, weather: { status: 'error', syncedAt: null } });
     render(<OfflineReadinessCard festivalId="fest-1" />);
-    fireEvent.click(screen.getByText('Download'));
-    expect(downloadForOffline).toHaveBeenCalledWith('fest-1', undefined);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    open();
+    fireEvent.click(screen.getByRole('button', { name: /retry weather/i }));
+    expect(h.download).toHaveBeenCalledTimes(1);
   });
 
-  it('disables the button and shows "Downloading…" while this festival is downloading', () => {
-    setReadiness({ downloadingFestivalId: 'fest-1' });
+  it('calls download from the action button', () => {
     render(<OfflineReadinessCard festivalId="fest-1" />);
-    const btn = screen.getByRole('button', { name: /download/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+    expect(h.download).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the action and sets aria-busy while syncing', () => {
+    setState({ schedule: { status: 'syncing', syncedAt: null } });
+    render(<OfflineReadinessCard festivalId="fest-1" />);
+    const btn = screen.getByRole('button', { name: 'Downloading…' });
     expect(btn).toBeDisabled();
-    expect(screen.getByText('Downloading…')).toBeInTheDocument();
+    expect(btn).toHaveAttribute('aria-busy', 'true');
   });
 
-  // R18: error sections show a Retry button (when onRetry is available).
-  // The coral "failed" text is shown only when syncedAt has a timestamp;
-  // with syncedAt: null and onRetry provided, just the Retry button appears.
-  it('shows a Retry button for a failed section', () => {
-    setReadiness({
-      byFestival: {
-        'fest-1': {
-          schedule: { status: 'ready', syncedAt: Date.now() },
-          picks: { status: 'ready', syncedAt: Date.now() },
-          crew: { status: 'ready', syncedAt: Date.now() },
-          weather: { status: 'error', syncedAt: null },
-          art: { status: 'ready', syncedAt: Date.now() },
-        },
-      },
-    });
-    render(<OfflineReadinessCard festivalId="fest-1" />);
-    // Retry button is rendered for the failed weather section.
-    expect(screen.getByRole('button', { name: /retry weather/i })).toBeInTheDocument();
-    // The weather label text turns coral (rendered as label text).
-    expect(screen.getByText('Weather')).toBeInTheDocument();
-  });
-
-  it('collapses to one row when every section is ready, and expands on tap', () => {
-    const ready = { status: 'ready', syncedAt: Date.now() };
-    setReadiness({
-      byFestival: { 'fest-1': { schedule: ready, picks: ready, crew: ready, weather: ready, art: ready } },
-    });
-    render(<OfflineReadinessCard festivalId="fest-1" />);
-    const row = screen.getByRole('button', { name: /Saved for offline · synced just now/ });
-    expect(screen.queryByText('Weather')).not.toBeInTheDocument();
-    fireEvent.click(row);
-    expect(screen.getByText('Weather')).toBeInTheDocument();
-  });
-
-  it('stays expanded after the festival when nothing was downloaded', () => {
-    festivalOver.value = true;
-    const idle = { status: 'idle', syncedAt: null };
-    setReadiness({
-      byFestival: { 'fest-1': { schedule: idle, picks: idle, crew: idle, weather: idle, art: idle } },
-    });
-    render(<OfflineReadinessCard festivalId="fest-1" />);
-    expect(screen.queryByRole('button', { name: /Saved for offline/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Weather')).toBeInTheDocument();
+  it('renders nothing for a past festival with nothing saved', () => {
+    setState({}, { phase: 'post' });
+    const { container } = render(<OfflineReadinessCard festivalId="fest-1" />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

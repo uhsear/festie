@@ -8,7 +8,7 @@ import {
 
 describe('navigation constants', () => {
   it('lists the five sections in order', () => {
-    expect(APP_SECTIONS.map((s) => s.label)).toEqual(['Lineup', 'My Plan', 'Crew', 'Map', 'More']);
+    expect(APP_SECTIONS.map((s) => s.label)).toEqual(['Lineup', 'Picks', 'Crew', 'Map', 'More']);
   });
 
   it('lists the four crew tabs in order', () => {

@@ -65,21 +65,94 @@ export const PRIORITY_SYMBOLS: Record<
 export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   'member-joined': 'joined the crew',
   'member-left': 'left the crew',
-  'member-kicked': 'was removed',
+  'member-kicked': 'was removed from the crew',
+  'owner-changed': 'changed the crew owner',
+  'poll-closed': 'ended a poll',
+  'meeting-point-updated': 'changed a meeting point',
+  'packing-created': 'added to the packing list',
+  'ride-created': 'offered a ride',
+  'photo-album-updated': 'updated the shared photo album',
   'poll-created': 'created a poll',
   'poll-voted': 'voted on a poll',
   'expense-added': 'added an expense',
   'expense-deleted': 'removed an expense',
   'expense-settled': 'settled up',
   expense_settled: 'settled up',
+  'expense-edited': 'edited an expense',
+  'payment-confirmed': 'confirmed a payment',
+  'payment-disputed': 'said a payment has not arrived',
+  'currency-changed': 'changed the crew currency',
   'settlement-undone': 'undid a payment',
-  'home-base-updated': 'updated the home base',
+  'home-base-updated': 'updated Home Base',
   'meeting-point-added': 'dropped a meeting point',
   'meeting-point-removed': 'removed a meeting point',
   'crew-updated': 'updated the crew',
   sos_raised: 'raised an SOS',
   sos_cleared: 'cleared an SOS',
+  'checkin-started': 'started a check-in timer',
+  'checkin-done': 'checked in safe',
+  'battery-low': 'is low on battery',
 };
+
+// ── Crew money and packing ─────────────────────────────────────────────────
+
+/**
+ * Currencies a crew can use. All have 2 decimal places, so integer-cent math
+ * stays valid. Keep in sync with CREW_CURRENCIES in lib/schemas.ts (the backend
+ * cannot import shared).
+ */
+export const CREW_CURRENCIES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'CAD',
+  'AUD',
+  'NZD',
+  'MXN',
+  'CHF',
+  'SEK',
+  'NOK',
+  'DKK',
+  'PLN',
+  'CZK',
+  'BRL',
+] as const;
+
+/** Starter packing lists offered on an empty crew packing tab. */
+export const PACKING_TEMPLATES: readonly { id: 'camping' | 'day-trip'; label: string; items: readonly string[] }[] = [
+  {
+    id: 'camping',
+    label: 'Camping list',
+    items: [
+      'Tent',
+      'Sleeping bags',
+      'Camping chairs',
+      'Cooler',
+      'Headlamps',
+      'Sunscreen',
+      'Water jugs',
+      'Portable charger',
+      'Earplugs',
+      'Rain ponchos',
+      'First aid kit',
+      'Trash bags',
+    ],
+  },
+  {
+    id: 'day-trip',
+    label: 'Day trip list',
+    items: [
+      'Tickets',
+      'Portable charger',
+      'Sunscreen',
+      'Refillable water bottle',
+      'Earplugs',
+      'Small bag',
+      'Rain poncho',
+      'Cash and card',
+    ],
+  },
+];
 
 // ── Expense categories ─────────────────────────────────────────────────────
 
@@ -206,59 +279,223 @@ export const LIVE_LOCATION = {
 } as const;
 
 /**
- * Time-boxed live-location sharing (the mobile opt-in sheet). Sharing is already
- * foreground-only and auto-stops on background; on top of that the user picks an
- * explicit bound up-front (default ~2h, Find My-style) after which the publisher
- * auto-expires — no silent indefinite sharing. `ms: null` = "until the festival
- * ends", which is clamped to LIVE_SHARE_MAX_MS so a forgotten session can never
- * run unbounded even if the device stays foregrounded.
+ * Time-boxed live-location sharing (the opt-in sheet on both apps). The user
+ * picks an explicit bound up-front (default ~2h, Find My-style) after which the
+ * publisher auto-expires — no silent indefinite sharing. There is no "until the
+ * festival ends" preset: sharing is foreground-only on mobile, so it cannot
+ * honestly promise that. "Rest of today" is built per call by liveShareOptions.
+ * LIVE_SHARE_MAX_MS caps every share, including background shares. The server
+ * mirrors it as MAX_SHARE_WINDOW_MS.
  */
 export const LIVE_SHARE_MAX_MS = 12 * 3_600_000;
 
 export interface LiveShareDuration {
   id: string;
   label: string;
-  /** Bound in ms, or null for "until the festival ends" (clamped to LIVE_SHARE_MAX_MS). */
-  ms: number | null;
+  /** Bound in ms (clamped to LIVE_SHARE_MAX_MS). */
+  ms: number;
 }
 
 export const LIVE_SHARE_DURATIONS: readonly LiveShareDuration[] = [
   { id: '1h', label: '1 hour', ms: 3_600_000 },
   { id: '2h', label: '2 hours', ms: 7_200_000 },
   { id: '4h', label: '4 hours', ms: 14_400_000 },
-  { id: 'festival', label: 'Until the festival ends', ms: null },
 ];
 
 export const LIVE_SHARE_DEFAULT_DURATION_ID = '2h';
 
-/** Resolve a preset's effective bound in ms (null → the festival ceiling). */
+/** Resolve a preset's effective bound in ms. */
 export function resolveLiveShareMs(d: LiveShareDuration): number {
-  return d.ms == null ? LIVE_SHARE_MAX_MS : Math.min(d.ms, LIVE_SHARE_MAX_MS);
+  return Math.min(d.ms, LIVE_SHARE_MAX_MS);
 }
 
-/**
- * Onboarding slide copy single-sourced for web + mobile parity (DC29 Option B).
- * Mobile's third slide (local notifications) is platform-specific and lives only
- * in FirstRunIntro.tsx. These two shared slides cover the core product value props.
- * Web step-1 icon uses the Star icon (picks); web step-2 icon uses the Users icon.
- * Mobile slides 1 and 2 correspond to these entries.
- */
+/** Live-sharing copy single-sourced for web + mobile. The stop rule differs because the behaviour does. */
+export const LIVE_SHARE_COPY = {
+  title: 'Share my live location',
+  switchA11y: 'Share my live location with this crew',
+  ruleNative: 'Only this crew sees it. It stops at the time you pick.',
+  keepLocked: 'Keep sharing when my phone is locked',
+  keepLockedHint: 'Uses more battery. Without this, sharing stops when you lock your phone or leave the app.',
+  lockedOnSub: 'Keeps sharing while your phone is locked',
+  lockedOffSub: 'Stops if you lock your phone or leave the app',
+  bgDisclosureTitle: 'Share while your phone is locked?',
+  bgDisclosureBody: (crewName: string, clock: string) =>
+    `Festie will collect your location in the background, even when the app is closed or not in use, and send it only to ${crewName} until ${clock}. You can stop it any time in the Crew tab.`,
+  bgDisclosureContinue: 'Continue',
+  bgDeniedTitle: 'Allow location all the time',
+  bgDeniedBodyIos: 'To keep sharing while your phone is locked, set Festie\'s location access to "Always" in Settings.',
+  bgDeniedBodyAndroid: 'To keep sharing while your phone is locked, set Festie\'s location permission to "Allow all the time" in Settings.',
+  bgDeniedShareOpen: 'Share while open',
+  openSettings: 'Open Settings',
+  fgsTitle: (crewName: string) => `Sharing your location with ${crewName}`,
+  fgsBody: (clock: string) => `Until ${clock}. Open Festie to stop.`,
+  stoppedNoticeTitle: 'Sharing stopped',
+  ruleWeb: 'Only this crew sees it. It stops at the time you pick, or when you close this tab.',
+  chooserTitle: 'Share your location for…',
+  restOfToday: (clock: string) => `Rest of today (until ${clock})`,
+  battery: 'Show my battery level',
+  batteryHint: 'Helps your crew see why your dot went quiet. At 10% or less, your crew feed says so once.',
+  cancel: 'Not now',
+  sharingTitle: "You're sharing your live location",
+  sharingSub: (countdown: string, clock: string) => `Ends in ${countdown} · ${clock}`,
+  pausedTitle: 'Sharing paused',
+  pausedSub: (countdown: string, clock: string) => `Your crew can't see you. Ends in ${countdown} · ${clock}`,
+  pause: 'Pause',
+  pauseA11y: 'Pause sharing. Your crew stops seeing you.',
+  resume: 'Resume',
+  resumeA11y: 'Resume sharing my live location',
+  stop: 'Stop',
+  stopA11y: 'Stop sharing my live location',
+  // One-time explainer before the first share on a device.
+  explainerTitle: 'Before you share your location',
+  explainerPoints: [
+    'Only this crew sees where you are.',
+    'Festie keeps no location history. It holds only your latest position, for 2 minutes at most.',
+    'If you allow background location, it keeps going while your phone is locked. On the web it runs only while Festie is open.',
+    'It stops at the time you pick. You can pause or stop it at any time.',
+  ],
+  explainerOk: 'Got it',
+} as const;
+
+export const LOW_POWER_COPY = {
+  name: 'Low-power mode',
+  hint: 'Saves battery: pauses live location and background refresh, and uses less GPS on the map. Reminders and your crew plan keep working.',
+  livePaused: 'Live location is off while low-power mode is on.',
+  turnOff: 'Turn off low-power mode',
+} as const;
+
+/** The T10 crew-status sentence, shared by both apps. */
+export const CREW_STATUS_HONESTY = 'Not live: each status shows when that crewmate last had signal.';
+
+export const CHECKIN_DURATIONS = [
+  { minutes: 15, label: '15 min' },
+  { minutes: 30, label: '30 min' },
+  { minutes: 60, label: '1 hour' },
+  { minutes: 120, label: '2 hours' },
+] as const;
+
+export const CHECKIN_COPY = {
+  title: 'Check-in timer',
+  idleBody:
+    "Walking somewhere alone? Start a timer. If you don't check in on time, your crew gets an SOS with your last location.",
+  activeTitle: (clock: string) => `Check in by ${clock}`,
+  activeBody: (countdown: string) => `${countdown} left. Tap I'm OK when you get there, or your crew gets an SOS.`,
+  ok: "I'm OK",
+  okA11y: "I'm OK. Stop the check-in timer.",
+  started: (clock: string) => `Check-in timer set for ${clock}.`,
+  done: 'Checked in. Timer stopped.',
+  ended: "Your timer had already ended, so your crew got an SOS. Clear it if you're OK.",
+} as const;
+
+export const BEACON_COPY = {
+  button: 'Beacon',
+  buttonHint:
+    'Turn your screen into a bright flashing signal so friends can spot you in a crowd. No GPS or signal needed.',
+  prompt: 'Hold your phone up high',
+  footer: 'Turn your screen brightness all the way up.',
+  done: 'Done',
+  a11y: 'Beacon is on. Your screen is flashing so friends can spot you. Tap Done to stop.',
+} as const;
+
+/** T52 find-your-friends copy: the compass "Point to" row, "Looking for you", near-stage and the battery line. */
+export const FIND_FRIEND_COPY = {
+  pointTo: 'Point to',
+  pointToA11y: (label: string) => `Point the compass at ${label}`,
+  peerNote: (name: string) => `Straight-line direction to where ${name} last shared. It moves when they do.`,
+  peerAge: (age: string) => `Location ${age}`, // age from formatStaleness: "as of 2m ago"
+  peerGoneTitle: (name: string) => `${name} isn't sharing their location now`,
+  peerGoneBody: 'The compass needs them to share. You can still tell them you are looking.',
+  emptyTitle: 'Nothing to point at yet',
+  emptyBody: 'Save a meeting point with a map pin, or ask a crewmate to share their live location.',
+  openCompassButton: 'Open the compass',
+  nudge: 'Looking for you',
+  nudgeA11y: (name: string) => `Tell ${name} you are looking for them`,
+  nudgeHint: (name: string) => `Sends ${name} a push. It never shares where you are.`,
+  nudgeSent: (name: string) => `Sent. ${name} gets a push if their crew notifications are on.`,
+  nudgeLimited: (name: string) => `You told ${name} in the last 5 minutes. Try again later.`,
+  nudgeGone: (name: string) => `${name} is no longer in this crew.`,
+  nudgeUnavailable: '"Looking for you" is not available right now.',
+  nudgeOffline: 'No signal. Nothing was sent.',
+  nudgeFailed: "Couldn't send it. Try again.",
+  openCompass: 'Compass',
+  openCompassA11y: (name: string) => `Open the compass pointing at ${name}`,
+  nearStage: (stage: string) => `near ${stage}`,
+  batteryVerb: (pct: number) => `has ${pct}% battery left`,
+  batteryDetail: (clock: string) => `last location update ${clock}`,
+} as const;
+
+/** Intro slides, single-sourced for web and mobile (design-system-23). Slide 1 names the three priorities. */
 export const ONBOARDING_SLIDES_SHARED = [
   {
-    title: 'Your festival, planned',
-    description: "Pick the sets you can't miss across every stage and see your whole weekend at a glance.",
+    key: 'plan',
+    title: 'Plan your weekend',
+    description: 'Tap Must See, Want to See or Maybe on any set. Your plan fills in across every stage.',
   },
   {
+    key: 'crew',
     title: 'Keep your crew together',
-    description: 'Compare schedules, drop meeting points, and find each other when the signal drops.',
+    description: 'Compare plans, set meeting points and find each other when the signal drops.',
+  },
+  {
+    key: 'reminders',
+    title: 'Reminders before your sets',
+    description: 'Get a reminder before each set you picked.',
   },
 ] as const;
+
+export const ONBOARDING_COPY = {
+  dialogLabel: 'Welcome to Festie',
+  next: 'Next',
+  skip: 'Skip',
+  skipA11y: 'Skip intro',
+  festival: {
+    title: 'Which festival?',
+    description: 'Pick the one you are going to. You can switch later.',
+  },
+  going: {
+    title: 'Going with friends?',
+    description: 'A crew shares plans, meeting points and where everyone is.',
+    start: 'Start a crew',
+    join: 'I have an invite code',
+    solo: 'Just me',
+  },
+  signInPrompt: 'Already have an account?',
+  signIn: 'Sign in',
+} as const;
+
+export const INTRO_REPLAY_COPY = {
+  title: 'How Festie works',
+  hint: 'Replay the intro',
+  a11y: 'Replay the Festie intro',
+} as const;
+
+export const FESTIVAL_READY_COPY = {
+  title: 'Festival ready',
+  hide: 'Hide',
+  hideA11y: 'Hide the Festival ready checklist',
+  items: {
+    picks: { label: 'Pick your first sets', hint: 'Tap Must See, Want to See or Maybe on any set below.' },
+    crew: { label: 'Start or join a crew', hint: 'Share plans and find each other on the day.' },
+    reminders: { label: 'Turn on set reminders', hint: 'Get a reminder before each set you picked.' },
+    offline: { label: 'Download for offline', hint: 'Keep your schedule and picks when the signal drops.' },
+  },
+} as const;
 
 /** Guest sign-in prompts, single-sourced so web and mobile teasers match. */
 export const GUEST_PROMPT_COPY = {
   createAccount: 'Create account',
   signIn: 'Sign in',
-  setSheet: 'Sign in to save picks, keep private notes and compare crew overlap.',
+  setSheet: 'Create a free account to keep private notes, set reminders and compare crew overlap.',
+  follow: {
+    title: (festivalName: string): string => `Follow ${festivalName}`,
+    message: 'Create a free account to hear when the lineup and set times are out.',
+  },
+  guestPicks: {
+    title: 'Your picks are saved on this device',
+    body: 'Create a free account to keep them on every device and plan with your crew.',
+    cta: 'Create free account',
+    signIn: 'I have an account',
+  },
   teasers: {
     picks: {
       title: 'Save your festival picks',
@@ -269,8 +506,8 @@ export const GUEST_PROMPT_COPY = {
       message: 'Create a free account to invite friends, compare picks and find the sets you all want to see.',
     },
     wrap: {
-      title: 'See your festival recap',
-      message: 'Create a free account to rate sets and get a recap of your festival to share.',
+      title: 'See your Festival Wrap',
+      message: 'Create a free account to rate sets and get a Festival Wrap to share.',
     },
   },
 } as const;
@@ -282,3 +519,9 @@ export const SOCKET_RECONNECTION_CONFIG = {
   reconnectionDelayMax: 5000,
   reconnectionAttempts: Infinity,
 };
+
+// ── Crew limits ────────────────────────────────────────────────────────────
+// `lib/constants.ts` is the source. `tests/constants-parity.test.ts` guards this copy.
+export const MAX_CREWS_PER_FESTIVAL = 3;
+export const MAX_OPEN_POLLS_PER_CREW = 3;
+export const DEFAULT_CREW_MAX_MEMBERS = 30;

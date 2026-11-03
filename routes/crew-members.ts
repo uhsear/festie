@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { parseJsonObject } from '../lib/db/connection';
+import { logCrewActivity } from '../lib/db/stores/activity';
+import { dropLivePosition } from '../lib/live-location-cache.js';
+import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 
 export default function createCrewMemberRoutes(deps: any) {
   const {
@@ -18,6 +21,9 @@ export default function createCrewMemberRoutes(deps: any) {
     validateQuery,
     validateParams,
     io,
+    redis,
+    crewNotify,
+    getRequestIp,
   } = deps;
 
   const { resolveCrewOwnership, serializeCrewWithMembers } = deps._crewHelpers;
@@ -33,7 +39,8 @@ export default function createCrewMemberRoutes(deps: any) {
    * sos:raised broadcast (a cross-tenant privacy leak), and keeps a stamped
    * sharingCrewId it could inject from. Force the socket out of the room, clear
    * its crew/sharing stamps, tell peers to drop its live marker (it may have
-   * been sharing), and tell the evicted client to tear down its crew + SOS UI.
+   * been sharing over a socket or over HTTP), and tell the evicted client to
+   * tear down its crew + SOS UI.
    *
    * Best-effort: a failure here must never fail the HTTP removal (the DB row is
    * already gone). io may be absent in some test/CLI contexts.
@@ -48,9 +55,18 @@ export default function createCrewMemberRoutes(deps: any) {
   const EVICTION_TIMEOUT_MS = 3_000;
 
   async function evictUserFromCrewRoom(crewId: string, removedUserId: string) {
+    // A background (HTTP) sharer has no sharing socket, so evict the cached fix
+    // and tell peers to drop the marker once, whatever sockets the user holds.
+    void dropLivePosition(redis, crewId, removedUserId);
     if (!io || typeof io.in !== 'function') return;
     const room = `crew:${crewId}`;
     try {
+      io.to(room).emit('location:peer-stopped', {
+        _v: 1,
+        crewId,
+        userId: removedUserId,
+        reason: 'revoked',
+      });
       // fetchSockets() goes through the Redis adapter, which issues PUBSUB NUMSUB
       // on the pub connection. That connection now buffers while Redis is
       // unavailable (the offline queue is ON for pub/sub clients — see
@@ -65,15 +81,6 @@ export default function createCrewMemberRoutes(deps: any) {
       ]);
       for (const s of sockets) {
         if (s.data?.userId !== removedUserId) continue;
-        // If this socket was sharing live GPS, tell peers its marker is gone.
-        if (s.data?.sharingCrewId === crewId) {
-          s.to(room).emit('location:peer-stopped', {
-            _v: 1,
-            crewId,
-            userId: removedUserId,
-            reason: 'revoked',
-          });
-        }
         // Tell the evicted client to tear down crew + SOS state.
         s.emit('crew:access-revoked', { crewId });
         // Clear the sharing stamp so the socket can no longer inject location
@@ -164,6 +171,7 @@ export default function createCrewMemberRoutes(deps: any) {
             username: req.user.username,
           });
         }
+        await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'member-left' });
         // H1: force the leaver's still-connected socket(s) out of the crew room
         // so they stop receiving live location/SOS and can't keep injecting.
         await evictUserFromCrewRoom(crewId, req.user.userId);
@@ -191,6 +199,7 @@ export default function createCrewMemberRoutes(deps: any) {
 
         const resolved = await resolveCrewOwnership(res, crewId, req.user.userId, 'kick members');
         if (!resolved) return;
+        const { crew: kickCrew } = resolved;
 
         if (targetUserId === req.user.userId) {
           return sendError(res, 400, 'Cannot kick yourself', ErrorCodes.INVALID_INPUT);
@@ -207,6 +216,14 @@ export default function createCrewMemberRoutes(deps: any) {
             userId: targetUserId,
           });
         }
+        await logCrewActivity(deps, { crewId, userId: targetUserId, type: 'member-kicked' });
+        crewNotify?.toUsers({
+          crewId,
+          crewName: kickCrew.name,
+          userIds: [targetUserId],
+          kind: 'member',
+          text: `You were removed from ${kickCrew.name}.`,
+        });
         // H1: force the kicked member's still-connected socket(s) out of the
         // crew room so they stop receiving live location/SOS and can't inject.
         await evictUserFromCrewRoom(crewId, targetUserId);
@@ -234,7 +251,6 @@ export default function createCrewMemberRoutes(deps: any) {
 
         const resolved = await resolveCrewOwnership(res, crewId, req.user.userId, 'transfer');
         if (!resolved) return;
-        const { crew } = resolved;
 
         const targetUserId = sanitizeIdentifier(req.validatedBody.userId, 100);
         if (!targetUserId) return sendError(res, 400, 'Target user ID required', ErrorCodes.MISSING_FIELD);
@@ -244,13 +260,33 @@ export default function createCrewMemberRoutes(deps: any) {
         if (!target) return sendError(res, 404, 'Target is not a crew member', ErrorCodes.NOT_FOUND);
 
         // Use transactional transferOwnership when available; fallback to separate calls
-        if (stores.crews.transferOwnership) {
-          await stores.crews.transferOwnership(crewId, req.user.userId, targetUserId);
-        } else {
-          await stores.crews.updateMemberRole(crewId, targetUserId, 'owner');
-          await stores.crews.updateMemberRole(crewId, req.user.userId, 'member');
+        try {
+          if (stores.crews.transferOwnership) {
+            await stores.crews.transferOwnership(crewId, req.user.userId, targetUserId);
+          } else {
+            await stores.crews.updateMemberRole(crewId, targetUserId, 'owner');
+            await stores.crews.updateMemberRole(crewId, req.user.userId, 'member');
+            await pool.query('UPDATE crews SET created_by = $1, updated_at = NOW() WHERE id = $2', [
+              targetUserId,
+              crewId,
+            ]);
+          }
+        } catch (err: any) {
+          // crews_reform_idem_uidx: the target already owns a reform of the same
+          // source crew in this festival.
+          if (err?.code === '23505') {
+            return sendError(
+              res,
+              409,
+              'That member already runs a copy of this crew for this festival. Pick someone else.',
+              ErrorCodes.CONFLICT,
+            );
+          }
+          throw err;
         }
 
+        // Re-read so `owner` in the response and the broadcast is the new owner.
+        const crew = (await stores.crews.getById(crewId)) ?? resolved.crew;
         const members = await stores.crews.getMembers(crewId);
 
         if (io) {
@@ -258,6 +294,14 @@ export default function createCrewMemberRoutes(deps: any) {
           delete broadcastData.inviteCode;
           io.to(`crew:${crewId}`).emit('crew:updated', broadcastData);
         }
+
+        const newOwner = members.find((m: any) => m.userId === targetUserId);
+        await logCrewActivity(deps, {
+          crewId,
+          userId: req.user.userId,
+          type: 'owner-changed',
+          detail: newOwner?.name || newOwner?.username || null,
+        });
 
         log.info('crew:ownership-transferred', { crewId, from: req.user.userId, to: targetUserId });
         return sendSuccess(res, serializeCrewWithMembers(crew, members, req.user.userId));
@@ -357,6 +401,33 @@ export default function createCrewMemberRoutes(deps: any) {
         );
         if (addResult === 'full') {
           return sendError(res, 400, 'Crew is full', ErrorCodes.MAX_LIMIT_REACHED);
+        }
+
+        // The member is already added, so a failed audit write is logged, not returned.
+        // auditWritten then stays unset and the generic middleware still records the request.
+        if (stores.auditLog) {
+          try {
+            await stores.auditLog.insert({
+              actorType: 'admin',
+              actorId: req.user.userId,
+              action: AUDIT_ACTIONS.CREW_MEMBER_ADDED,
+              targetType: 'user',
+              targetId: targetUserId,
+              detailsJson: JSON.stringify({
+                crewId: crew.id,
+                crewName: crew.name,
+                targetUsername: targetUser.username,
+              }),
+              ip: getRequestIp(req),
+            });
+            res.locals.auditWritten = true;
+          } catch (err: any) {
+            log.warn('crew admin add member audit write failed', {
+              crewId: crew.id,
+              targetUserId,
+              error: err?.message,
+            });
+          }
         }
 
         const members = await stores.crews.getMembers(crew.id);

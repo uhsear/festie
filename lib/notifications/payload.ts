@@ -13,7 +13,6 @@ export const FCM_RETRY_WEBHOOK_URL = config.FCM_RETRY_WEBHOOK_URL;
 // HMAC key for hashing device tokens before transmitting to external webhook
 export const WEBHOOK_TOKEN_HMAC_KEY = config.WEBHOOK_TOKEN_HMAC_KEY;
 
-// Finding #36: Reminders feature removed (ICS export superior, push notifications unreliable at festivals)
 // M3 re-engagement triggers (after-festival growth loops): lineup_drop / crew_reformed / wrap_ready.
 // All event-gated (never cron-spam), per-type opt-out, DND-respecting, deduped once-per-event-per-user.
 export const ALLOWED_NOTIFICATION_TYPES = new Set([
@@ -23,14 +22,22 @@ export const ALLOWED_NOTIFICATION_TYPES = new Set([
   'lineup_drop',
   'crew_reformed',
   'wrap_ready',
+  // Morning-after nudge to rate yesterday's picked sets (reengagement.ts sendRatePrompt).
+  'rate_prompt',
+  // T42: a festival's first set times are out. Shares the lineupDrops opt-out.
+  'set_times_out',
   // Finer crew types. Each has its own opt-out (PREF_MAP) and routes to the Android 'crew' channel.
   'crew_meeting_point',
   'crew_poll',
   'crew_money',
   'crew_ride',
+  // T52 "Looking for you" nudge (routes/crew-nudge.ts). Opt-out via PREF_MAP; skips quiet hours (send.ts).
+  'crew_nudge',
   // Safety-critical crew SOS. Deliberately NOT added to PREF_MAP (send.ts) — an
   // emergency has no per-type opt-out and bypasses DND (see CRITICAL_TYPES).
   'crew_sos',
+  // Admin announcement to everyone who joined a festival (lib/announcements.ts). Opt-out via scheduleChanges.
+  'festival_announcement',
 ]);
 export const MAX_TITLE_LENGTH = 100;
 export const MAX_BODY_LENGTH = 200;

@@ -24,7 +24,8 @@ env:
     commands:
       - tapOn: 'More'
 - assertVisible: 'Sign in to your account'
-- tapOn: 'Username'
+- tapOn:
+    id: "login-username-input"
 - inputText: ${TEST_USERNAME}
 - hideKeyboard
 - tapOn: 'Password'

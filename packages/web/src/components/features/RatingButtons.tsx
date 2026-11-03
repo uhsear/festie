@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toastContext';
 import { useHaptics } from '../../hooks/useHaptics';
 import { RATING_META, RATING_SCALE } from '../../lib/ratingIcon';
 import { cn } from '../../lib/utils';
+import SetRatingSummary from './SetRatingSummary';
 
 const RATINGS = RATING_SCALE.map((n) => ({ n, ...RATING_META[n]! }));
 
@@ -20,13 +21,21 @@ interface Props {
   festivalId: string;
   /** Compact (smaller buttons) for use inside set cards; default full-size. */
   compact?: boolean;
+  /** Fires after a rating saved (not after a removal). */
+  onRated?: (rating: number) => void;
+  /** Show the one-line memory field once a rating exists. */
+  showMemory?: boolean;
 }
 
-export default function RatingButtons({ setId, festivalId, compact = false }: Props) {
-  const { toastError } = useToast();
+const MEMORY_MAX = 140;
+
+export default function RatingButtons({ setId, festivalId, compact = false, onRated, showMemory = true }: Props) {
+  const { toast, toastError } = useToast();
   const qc = useQueryClient();
   const { select } = useHaptics();
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
 
   const { data: ratings = [] } = useQuery<Rating[]>({
     queryKey: ['ratings', festivalId],
@@ -38,7 +47,9 @@ export default function RatingButtons({ setId, festivalId, compact = false }: Pr
     staleTime: 60_000,
   });
 
-  const current = ratings.find((r) => r.setId === setId)?.rating ?? null;
+  const currentRating = ratings.find((r) => r.setId === setId);
+  const current = currentRating?.rating ?? null;
+  const savedNote = currentRating?.note?.trim() || '';
 
   // Offline-aware rate + remove. If navigator.onLine === false AND the
   // AppShell's offline queue bridge is ready, enqueue with a deterministic
@@ -60,11 +71,12 @@ export default function RatingButtons({ setId, festivalId, compact = false }: Pr
       }
       return api.post(`/ratings/${setId}`, body);
     },
-    onMutate: async ({ rating }) => {
+    onMutate: async ({ rating, note }) => {
       // Optimistic: update the ratings query cache so the UI responds instantly.
       await qc.cancelQueries({ queryKey: ['ratings', festivalId] });
       const prev = qc.getQueryData<Rating[]>(['ratings', festivalId]) || [];
-      const next = [...prev.filter((r) => r.setId !== setId), { setId, rating, note: null }];
+      const kept = prev.find((r) => r.setId === setId)?.note ?? null;
+      const next = [...prev.filter((r) => r.setId !== setId), { setId, rating, note: note ?? kept }];
       qc.setQueryData(['ratings', festivalId], next);
       return { prev };
     },
@@ -113,7 +125,22 @@ export default function RatingButtons({ setId, festivalId, compact = false }: Pr
         await remove.mutateAsync();
       } else {
         await rate.mutateAsync({ rating: n });
+        onRated?.(n);
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveMemory = async () => {
+    if (busy || current === null) return;
+    setBusy(true);
+    try {
+      await rate.mutateAsync({ rating: current, note: draft.trim() });
+      setEditing(false);
+      toast('Memory saved', 'success');
+    } catch {
+      // onError already toasted and rolled back; keep the draft open for a retry.
     } finally {
       setBusy(false);
     }
@@ -170,6 +197,55 @@ export default function RatingButtons({ setId, festivalId, compact = false }: Pr
       >
         {ratingCaption(current)}
       </p>
+      {showMemory && current !== null && (
+        <div className="mt-2 text-center text-sm">
+          {editing ? (
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                value={draft}
+                maxLength={MEMORY_MAX}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="What do you want to remember?"
+                aria-label="Memory"
+                className="w-full min-h-9 rounded-lg border border-border bg-bg-card px-3 text-sm"
+              />
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={saveMemory}
+                  className="min-h-9 px-3 rounded-full bg-accent-aqua text-bg-primary text-xs font-semibold cursor-pointer"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  className="min-h-9 px-3 rounded-full border border-border text-xs font-semibold text-text-secondary cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2">
+              {savedNote && <span className="text-text-primary italic">“{savedNote}”</span>}
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(savedNote);
+                  setEditing(true);
+                }}
+                className="min-h-9 px-2 text-xs font-semibold text-accent-aqua cursor-pointer"
+              >
+                {savedNote ? 'Edit' : 'Add a memory'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {!compact && <SetRatingSummary setId={setId} festivalId={festivalId} />}
     </div>
   );
 }

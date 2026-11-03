@@ -58,4 +58,39 @@ describe('inboxStore', () => {
     expect(s.items).toHaveLength(1);
     expect(s.loading).toBe(false);
   });
+
+  it('an empty first load sets seenAt to the epoch, so a later item is unread', async () => {
+    mockApi.get.mockResolvedValueOnce([]);
+    await useInboxStore.getState().load();
+    expect(useInboxStore.getState().seenAt).toBe('1970-01-01T00:00:00.000Z');
+    mockApi.get.mockResolvedValueOnce([item('a', '2026-01-01T00:00:00Z')]);
+    await useInboxStore.getState().load();
+    expect(selectInboxUnread(useInboxStore.getState())).toBe(1);
+  });
+
+  it('a second load during a running load waits for its items', async () => {
+    let resolve!: (v: InboxItem[]) => void;
+    mockApi.get.mockReturnValueOnce(new Promise<InboxItem[]>((r) => { resolve = r; }));
+    const first = useInboxStore.getState().load();
+    let secondDone = false;
+    const second = useInboxStore.getState().load().then(() => { secondDone = true; });
+    await Promise.resolve();
+    expect(secondDone).toBe(false);
+    resolve([item('a', '2026-01-01T00:00:00Z')]);
+    await second;
+    expect(useInboxStore.getState().items).toHaveLength(1);
+    await first;
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed load keeps the earlier items and loaded', async () => {
+    mockApi.get.mockResolvedValueOnce([item('a', '2026-01-01T00:00:00Z')]);
+    await useInboxStore.getState().load();
+    mockApi.get.mockRejectedValueOnce(new Error('boom'));
+    await useInboxStore.getState().load();
+    const s = useInboxStore.getState();
+    expect(s.items).toHaveLength(1);
+    expect(s.loaded).toBe(true);
+    expect(s.error).toBe('boom');
+  });
 });

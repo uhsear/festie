@@ -16,6 +16,9 @@ export function pushTargetHref(target: PushTarget): DeepLinkTarget {
     case 'screen':
       if (target.screen === 'compare') return '/crew-compare';
       if (target.screen === 'picks') return '/(tabs)/picks';
+      if (target.festivalId && (target.screen === 'wrap' || target.screen === 'rate')) {
+        return { pathname: `/${target.screen}`, params: { festival: target.festivalId } };
+      }
       return `/${target.screen}`;
   }
 }

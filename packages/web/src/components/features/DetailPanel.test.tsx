@@ -74,9 +74,10 @@ vi.mock('@festie/shared/services/api', () => ({
   mapErrorToUserMessage: (_err: unknown, fallback: string) => fallback,
 }));
 
+const storeStages = vi.hoisted(() => ({ value: [] as Array<{ id: string; latitude: number | null; longitude: number | null }> }));
 vi.mock('@festie/shared/stores/festivalStore', () => ({
   useFestivalStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) => selector({ loadProfiles: vi.fn() }),
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ loadProfiles: vi.fn(), stages: storeStages.value }),
     { getState: vi.fn(() => ({ loadProfiles: vi.fn() })) },
   ),
 }));
@@ -92,7 +93,6 @@ vi.mock('../../hooks/useHaptics', () => ({
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@festie/shared/utils')>()),
   hasSetStarted: vi.fn(() => false),
-  festivalTimeLabel: vi.fn((): 'Festival time' | null => null),
 }));
 
 // Mock sub-components to isolate DetailPanel behavior
@@ -101,11 +101,29 @@ vi.mock('./DetailArtistHeader', () => ({
   default: ({ artistName }: { artistName: string }) => <div data-testid="artist-header">{artistName}</div>,
 }));
 vi.mock('./DetailSpotifySection', () => ({
-  default: () => <div data-testid="spotify-section" />,
+  default: ({ status }: { status: string }) => <div data-testid="spotify-section">{status}</div>,
 }));
-vi.mock('./DetailConflictWarning', () => ({
-  default: () => <div data-testid="conflict-warning" />,
+const mockUseSpotifyPreview = vi.fn((): { status: string; preview: unknown } => ({ status: 'none', preview: null }));
+vi.mock('../../hooks/useSetStatus', () => ({
+  useNow: () => 0,
+  useSetStatus: () => null,
 }));
+vi.mock('./ClashPrompt', () => ({
+  default: ({ onClear }: { onClear: (id: string, label: string) => void }) => (
+    <button onClick={() => onClear('other-1', 'Other Act')}>Clash Clear</button>
+  ),
+}));
+const mockClearPick = vi.fn();
+const moveMock = vi.hoisted(() => ({ value: null as null | { chip: string; line: string; a11y: string } }));
+vi.mock('@festie/shared/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/hooks')>()),
+  useSpotifyPreview: () => mockUseSpotifyPreview(),
+  usePickClear: () => mockClearPick,
+  useCanPick: () => true,
+  useSetMove: () => moveMock.value,
+  useViewAs: () => ({ target: null, clear: vi.fn(), ...mockViewAs }),
+}));
+vi.mock('../../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 vi.mock('./DetailPriorityPicker', () => ({
   default: ({ onPriorityClick }: { onPriorityClick: (p: Priority | null) => void }) => (
     <div data-testid="priority-picker">
@@ -115,7 +133,12 @@ vi.mock('./DetailPriorityPicker', () => ({
   ),
 }));
 vi.mock('./DetailCrewSection', () => ({
-  default: ({ title }: { title: string }) => <div data-testid="crew-section">{title}</div>,
+  default: ({ title, onViewAs }: { title: string; onViewAs?: (id: string) => void }) => (
+    <div data-testid="crew-section">
+      {title}
+      <button onClick={() => onViewAs?.('p2')}>View as Ana</button>
+    </div>
+  ),
 }));
 vi.mock('./DetailNotesSection', () => ({
   default: ({ onPersonalChange }: { onPersonalChange: (v: string) => void }) => (
@@ -123,6 +146,7 @@ vi.mock('./DetailNotesSection', () => ({
       <textarea aria-label="personal note" onChange={(e) => onPersonalChange(e.target.value)} />
     </div>
   ),
+  NoteStatusLine: () => null,
 }));
 vi.mock('../../hooks/usePushNotifications', () => ({
   usePushNotifications: () => ({
@@ -133,10 +157,16 @@ vi.mock('../../hooks/usePushNotifications', () => ({
   }),
 }));
 const mockNavigate = vi.hoisted(() => vi.fn());
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => mockNavigate }));
+const mockPathname = vi.hoisted(() => ({ value: '/cards' }));
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => mockNavigate,
+  useLocation: () => ({ pathname: mockPathname.value }),
+}));
+const mockViewAs = vi.hoisted(() => ({ start: vi.fn(), canView: vi.fn(() => true) }));
+vi.mock('./AlsoPlaysSection', () => ({ default: () => <div data-testid="also-plays" /> }));
 
 import DetailPanel from './DetailPanel';
-import { festivalTimeLabel, hasSetStarted } from '@festie/shared/utils';
+import { hasSetStarted, formatSetWhen } from '@festie/shared/utils';
 import { useDetailPanelData } from './useDetailPanelData';
 import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
@@ -192,11 +222,31 @@ describe('DetailPanel', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPathname.value = '/cards';
     vi.mocked(useDetailPanelData).mockReturnValue(defaultDetailData());
     vi.mocked(hasSetStarted).mockReturnValue(false);
+    mockUseSpotifyPreview.mockReturnValue({ status: 'none', preview: null });
     useFestivalDataStore.setState({ saveNote: mockSaveNote } as never);
     useNotificationPrefsStore.setState({ loadPrefs: vi.fn(async () => {}) } as never);
     useAuthStore.setState({ user: { id: 'u1', username: 'asir' } } as never);
+  });
+
+  it('offers Show stage on map for a mapped stage and navigates to it', async () => {
+    storeStages.value = [{ id: 'stage-1', latitude: 28.5, longitude: -81.4 }];
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<DetailPanel {...defaultProps} onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: 'Show stage on map' }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/map', search: { focusStage: 'stage-1' } });
+    storeStages.value = [];
+  });
+
+  it('shows no Show stage on map button for an unmapped stage', () => {
+    storeStages.value = [{ id: 'stage-1', latitude: null, longitude: null }];
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByRole('button', { name: 'Show stage on map' })).not.toBeInTheDocument();
+    storeStages.value = [];
   });
 
   it('renders the drawer with set detail aria-label', () => {
@@ -216,12 +266,17 @@ describe('DetailPanel', () => {
 
   it('renders formatted time range', () => {
     render(<DetailPanel {...defaultProps} />);
-    expect(screen.getByText('2:00 PM - 3:00 PM')).toBeInTheDocument();
+    expect(screen.getByTestId('set-when')).toHaveTextContent('2:00 PM - 3:00 PM');
+  });
+
+  it('renders the when line from formatSetWhen', () => {
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.getByTestId('set-when').textContent).toBe(formatSetWhen(defaultProps.set, [], null));
   });
 
   it('renders TBA when times are missing', () => {
     render(<DetailPanel {...defaultProps} set={makeSet({ startTime: '', endTime: '' })} />);
-    expect(screen.getByText('TBA')).toBeInTheDocument();
+    expect(screen.getByTestId('set-when')).toHaveTextContent('Time TBA');
   });
 
   it('renders the close button', () => {
@@ -260,16 +315,26 @@ describe('DetailPanel', () => {
     });
     render(<DetailPanel {...defaultProps} />);
     expect(screen.getByText(GUEST_PROMPT_COPY.setSheet)).toBeInTheDocument();
-    expect(screen.queryByTestId('priority-picker')).not.toBeInTheDocument();
+    expect(screen.getByTestId('priority-picker')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(defaultProps.onClose).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login', search: { next: '/set/set-1' } });
   });
 
-  it('renders the conflict warning section', () => {
+  it('routes a ClashPrompt clear through usePickClear with the set id and label', async () => {
+    const user = userEvent.setup();
     render(<DetailPanel {...defaultProps} />);
-    expect(screen.getByTestId('conflict-warning')).toBeInTheDocument();
+    await user.click(screen.getByText('Clash Clear'));
+    expect(mockClearPick).toHaveBeenCalledWith('other-1', 'Other Act');
+  });
+
+  it('clears a pick through usePickClear when the priority is cleared', async () => {
+    const user = userEvent.setup();
+    render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByText('Clear Pick'));
+    expect(mockClearPick).toHaveBeenCalledWith('set-1', 'Daft Punk');
+    expect(mockSavePick).not.toHaveBeenCalled();
   });
 
   it('renders the crew section', () => {
@@ -304,25 +369,58 @@ describe('DetailPanel', () => {
     expect(screen.getByText('Daft Punk', { selector: 'h2' })).toBeInTheDocument();
   });
 
-  it('renders the reminder picker when user has a profile', () => {
+  it('keeps the reminder picker behind the Reminder & note button', async () => {
     render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByText('Remind me before it starts')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: /Remind me/ }));
     expect(screen.getByText('Remind me before it starts')).toBeInTheDocument();
   });
 
-  it('hides the reminder picker when the set has no start time', () => {
+  it('always renders Share and copies the set link without navigator.share', async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<DetailPanel {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText('Share this set'));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/\/set\/set-1$/)));
+    expect(mockToast).toHaveBeenCalledWith('Link copied', 'success');
+  });
+
+  it.each(['loading', 'ready', 'offline', 'none'])('renders the Listen section for %s', (status) => {
+    mockUseSpotifyPreview.mockReturnValue({ status, preview: null });
+    render(
+      <DetailPanel
+        {...defaultProps}
+        set={makeSet({
+          artist: 'Daft Punk',
+          artists: [{ name: 'Daft Punk', links: { spotify: 'https://open.spotify.com/artist/abc123' } }],
+        } as Partial<FestivalSet>)}
+      />,
+    );
+    expect(screen.getByTestId('spotify-section')).toHaveTextContent(status);
+  });
+
+  it('hides the Listen section without a Spotify artist link', () => {
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByTestId('spotify-section')).not.toBeInTheDocument();
+  });
+
+  it('hides the reminder picker when the set has no start time', async () => {
     render(<DetailPanel {...defaultProps} set={makeSet({ startTime: '', endTime: '' })} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /note/i }));
     expect(screen.queryByText('Remind me before it starts')).not.toBeInTheDocument();
   });
 
-  it('hides the reminder picker once the set has started', () => {
+  it('hides the reminder picker once the set has started', async () => {
     vi.mocked(hasSetStarted).mockReturnValue(true);
     render(<DetailPanel {...defaultProps} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /note/i }));
     expect(screen.queryByText('Remind me before it starts')).not.toBeInTheDocument();
   });
 
   it('flushes a pending note save when the sheet unmounts within 500 ms', () => {
     const { unmount } = render(<DetailPanel {...defaultProps} />);
-    fireEvent.change(screen.getByLabelText('personal note'), { target: { value: 'meet at the rail' } });
+    fireEvent.click(screen.getByRole('button', { name: /Remind me/ }));
+    fireEvent.change(screen.getByLabelText('Your note'), { target: { value: 'meet at the rail' } });
     expect(mockSaveNote).not.toHaveBeenCalled();
     unmount();
     expect(mockSaveNote).toHaveBeenCalledTimes(1);
@@ -332,6 +430,7 @@ describe('DetailPanel', () => {
   it('calls saveReminder when a reminder option is selected', async () => {
     const user = userEvent.setup();
     render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByRole('button', { name: /Remind me/ }));
     await user.click(screen.getByRole('button', { name: 'Remind me 15m before' }));
     expect(mockSaveReminder).toHaveBeenCalledWith('fest-1', 'set-1', 15);
   });
@@ -343,14 +442,30 @@ describe('DetailPanel', () => {
       myReminder: 30,
     });
     render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByRole('button', { name: /Reminder 30m/ }));
     await user.click(screen.getByRole('button', { name: 'Reminder 30m before, click to clear' }));
     expect(mockSaveReminder).toHaveBeenCalledWith('fest-1', 'set-1', null);
+  });
+
+  it('shows the old slot under the time when the set moved', () => {
+    moveMock.value = { chip: 'Moved', line: 'Moved from Sat 10:00 PM, Sahara', a11y: 'Moved from Saturday 10:00 PM, Sahara' };
+    render(<DetailPanel {...defaultProps} />);
+    const line = screen.getByTestId('set-moved');
+    expect(line).toHaveTextContent('Moved from Sat 10:00 PM, Sahara');
+    expect(line).toHaveAttribute('aria-label', 'Moved from Saturday 10:00 PM, Sahara');
+  });
+
+  it('shows no moved line when the set did not move', () => {
+    moveMock.value = null;
+    render(<DetailPanel {...defaultProps} />);
+    expect(screen.queryByTestId('set-moved')).toBeNull();
   });
 
   it('shows an error toast and resets busy when saveReminder rejects', async () => {
     const user = userEvent.setup();
     mockSaveReminder.mockRejectedValueOnce(new Error('network'));
     render(<DetailPanel {...defaultProps} />);
+    await user.click(screen.getByRole('button', { name: /Remind me/ }));
     const btn = screen.getByRole('button', { name: 'Remind me 5m before' });
     await user.click(btn);
     expect(mockSaveReminder).toHaveBeenCalledWith('fest-1', 'set-1', 5);
@@ -360,15 +475,30 @@ describe('DetailPanel', () => {
     expect(screen.getByRole('button', { name: 'Remind me 5m before' })).not.toBeDisabled();
   });
 
-  it('shows the Festival time label when the phone zone differs from the festival zone', () => {
-    vi.mocked(festivalTimeLabel).mockReturnValue('Festival time');
+  it('renders Also plays between the time line and the priority picker', () => {
     render(<DetailPanel {...defaultProps} />);
-    expect(screen.getByText(/Festival time/)).toBeInTheDocument();
+    const when = screen.getByTestId('set-when');
+    const also = screen.getByTestId('also-plays');
+    const picker = screen.getByTestId('priority-picker');
+    expect(when.compareDocumentPosition(also) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(also.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('omits the Festival time label when festivalTimeLabel returns null', () => {
-    vi.mocked(festivalTimeLabel).mockReturnValue(null);
+  it('View as starts the filter, closes the sheet and stays put on a schedule path', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<DetailPanel {...defaultProps} onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: 'View as Ana' }));
+    expect(mockViewAs.start).toHaveBeenCalledWith('p2');
+    expect(onClose).toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/' });
+  });
+
+  it('View as navigates to the schedule from a non-schedule path', async () => {
+    mockPathname.value = '/picks';
+    const user = userEvent.setup();
     render(<DetailPanel {...defaultProps} />);
-    expect(screen.queryByText(/Festival time/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'View as Ana' }));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/' });
   });
 });

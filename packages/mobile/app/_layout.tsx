@@ -8,8 +8,8 @@ import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigatio
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
-import { useAuthStore, useCrewStore, useFestivalStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
-import { resolvePushTarget } from '@festie/shared/utils';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { scrubSensitiveUrl } from '@festie/shared/utils';
 import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
 import {
@@ -22,11 +22,14 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UIProvider } from '../contexts/UIContext';
 import OfflineBanner from '../components/OfflineBanner';
 import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
+import LiveSharePublisher from '../components/LiveSharePublisher';
+import AnnouncementBanner from '../components/AnnouncementBanner';
 import FirstRunIntro from '../components/FirstRunIntro';
 import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -39,8 +42,7 @@ import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
 import { isGuestBlocked } from '../lib/authRoutes';
 import { setReturnTo, takeReturnTo } from '../lib/returnTo';
-import { CREW_MEET_HREF, sosPushCrewId } from '../lib/dayOfRoutes';
-import { pushTargetHref } from '../lib/pushRoutes';
+import { routeNotification } from '../lib/routeNotification';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
@@ -77,6 +79,22 @@ if (SENTRY_DSN && !isExpoGo) {
   Sentry.init({
     dsn: SENTRY_DSN,
     tracesSampleRate: Number(process.env.EXPO_PUBLIC_SENTRY_TRACES_RATE ?? 0.05),
+    environment: Updates.channel || (__DEV__ ? 'development' : 'production'),
+    sendDefaultPii: false,
+    // Reset links carry ?token=: keep tokens and invite codes out of Sentry.
+    beforeSend(event) {
+      if (event.request) event.request.url = scrubSensitiveUrl(event.request.url);
+      return event;
+    },
+    beforeBreadcrumb(breadcrumb) {
+      const d = breadcrumb.data;
+      if (d) {
+        if (d.url) d.url = scrubSensitiveUrl(d.url);
+        if (d.from) d.from = scrubSensitiveUrl(d.from);
+        if (d.to) d.to = scrubSensitiveUrl(d.to);
+      }
+      return breadcrumb;
+    },
   });
 }
 
@@ -102,27 +120,6 @@ configureApi({
     }
   },
 });
-
-// Route a tapped notification's data payload to its deep-link target. Shared by
-// the warm-tap listener and the cold-start useLastNotificationResponse handler
-// so both paths route identically.
-function routeNotification(r: ReturnType<typeof useRouter>, data: Record<string, unknown> | undefined) {
-  const sosCrewId = sosPushCrewId(data);
-  if (sosCrewId) {
-    // Open that crew's Find tab, where CrewSos shows the banner with "Get directions".
-    if (sosCrewId !== useCrewStore.getState().activeCrew?.id) {
-      useCrewStore.getState().selectCrew(sosCrewId).catch(() => {});
-    } else {
-      void useLiveLocationStore.getState().loadActiveSos(sosCrewId);
-    }
-    r.push(CREW_MEET_HREF);
-    return;
-  }
-  const target = resolvePushTarget(data);
-  if (!target) return;
-  if (target.kind === 'festival') useFestivalStore.getState().selectFestival(target.festivalId).catch(() => {});
-  r.push(pushTargetHref(target));
-}
 
 function AuthGate() {
   const { colors } = useTokens();
@@ -193,6 +190,8 @@ function AuthGate() {
   // The app-wide SOS banner sits under the OfflineBanner and takes the inset
   // only when the OfflineBanner is not showing.
   const [sosActive, setSosActive] = useState(false);
+  // The announcement banner sits under the SOS banner and takes the inset last.
+  const [announceActive, setAnnounceActive] = useState(false);
 
   // Ensure Android notification channels exist BEFORE any notification is
   // scheduled. useLocalReminders targets channelId 'updates' which must exist
@@ -268,8 +267,10 @@ function AuthGate() {
       .catch(() => setIntroSeen(true)); // on error, don't block with the intro
   }, []);
 
+  const introReplay = useUIStore((s) => s.introReplay);
   const dismissIntro = () => {
     setIntroSeen(true);
+    useUIStore.getState().setIntroReplay(false);
     AsyncStorage.setItem(INTRO_KEY, 'true').catch(() => {});
   };
 
@@ -390,7 +391,9 @@ function AuthGate() {
       <StatusBar style={theme === 'daylight' ? 'dark' : 'light'} />
       {!loading && <OfflineBanner onActiveChange={setBannerActive} />}
       {!loading && <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />}
-      <TopBannerContext.Provider value={bannerActive || sosActive}>
+      {!loading && <LiveSharePublisher />}
+      {!loading && <AnnouncementBanner padTop={!bannerActive && !sosActive} onActiveChange={setAnnounceActive} />}
+      <TopBannerContext.Provider value={bannerActive || sosActive || announceActive}>
         <View style={styles.appShell}>
           {/* Use expo-router's global router singleton (not the local useRouter
               instance): the root boundary sits OUTSIDE the Stack, so it must
@@ -468,6 +471,15 @@ function AuthGate() {
               }}
             />
             <Stack.Screen
+              name="meeting-point-new"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.6, 1.0],
+                sheetGrabberVisible: true,
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
               name="privacy"
               options={{ presentation: 'card', headerShown: true, title: 'Privacy Policy' }}
             />
@@ -482,7 +494,7 @@ function AuthGate() {
           <ActivityIndicator size="large" color={colors.accent.aqua} />
         </View>
       )}
-      {!loading && introSeen === false && !skipIntro && <FirstRunIntro onDone={dismissIntro} />}
+      {!loading && (introReplay || (introSeen === false && !skipIntro)) && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );
 }

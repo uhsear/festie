@@ -54,6 +54,8 @@ import {
   validatePasswordStrength,
   checkPasswordPolicy,
   validateFestival,
+  validateFestivalIssues,
+  publishChecklist,
   createOpaqueId,
   createVersionToken,
   formatTime,
@@ -90,6 +92,7 @@ import {
 import { createCookieHelpers } from './cookies';
 import { createCacheHelpers } from './cache';
 import { createSessionHelpers } from './session';
+import { createAppleClient } from '../oauth/apple';
 import type { AppContext, Stores } from '../types/app-context';
 
 const log = createLogger();
@@ -194,6 +197,14 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
 
   // ── CSP ───────────────────────────────────────────────────────────────
   const { contentSecurityPolicy, exportContentSecurityPolicy } = buildCspPolicies(config);
+
+  // ── Sign in with Google and Apple (T45) ───────────────────────────────
+  // Tests inject a local JWKS (`oauthJwks`) and an Apple client stub (`oauthApple`).
+  // The Apple client reads its key only on first use, so an unconfigured server never touches it.
+  const oauth = {
+    jwks: overrides.oauthJwks ?? null,
+    apple: overrides.oauthApple ?? createAppleClient(config, log.child({ module: 'oauth' })),
+  };
 
   // ── State ─────────────────────────────────────────────────────────────
   const state: Record<string, any> = {
@@ -354,7 +365,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     redisPresence,
     redis,
     log,
-    getUserMap,
+    stores,
     buildAvatarUrl,
   });
 
@@ -374,7 +385,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     removeProfileSockets,
   } = presenceManager;
 
-  const emitProfileIdentityWrapped = (user: any, io: any) => emitProfileIdentity(user, io, getProfiles);
+  const emitProfileIdentityWrapped = (user: any, io: any) => emitProfileIdentity(user, io);
 
   // ── Session / auth (extracted to ./session) ───────────────────────────
   const sessionHelpers = createSessionHelpers({
@@ -436,6 +447,9 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     dbLatencyTracker,
     avatarPool: _avatarPool,
     setIO,
+
+    // Provider sign-in helpers (routes/oauth.ts); the store is stores.identities
+    oauth,
 
     // CSP
     contentSecurityPolicy,
@@ -549,6 +563,8 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     validatePasswordStrength,
     checkPasswordPolicy,
     validateFestival,
+    validateFestivalIssues,
+    publishChecklist,
     serializeOwnProfile,
     serializeProfileForViewer,
     serializePublicUser,

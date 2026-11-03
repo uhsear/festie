@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   View,
   Text,
   FlatList,
@@ -8,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Share,
+  Linking,
   TextInput,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
@@ -16,73 +18,71 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
-import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
-import { usePicks, useFestival } from '@festie/shared/hooks';
-import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
-import type { ConflictGroup } from '@festie/shared/utils';
+import { useAuthStore, useCrewStore, useFestivalDataStore, useUIStore, selectMyPicks } from '@festie/shared/stores';
+import { usePicks, useFestival, usePicksPlan, usePickClear, useBulkAddPicks } from '@festie/shared/hooks';
+import type { FestivalSet, Priority } from '@festie/shared/types';
 import {
   artistDisplayName,
-  hasOfflineBasemap,
-  festivalPhase,
-  buildPickConflicts,
-  getSetTimeBounds,
-  resolveFestivalTimeZone,
-  formatTime,
-  buildPicksIcs,
-  buildPicksShareUrl,
+  buildBulkPickGroups,
+  BULK_SCOPE_LABEL,
+  type PicksRow,
+  type PicksFilter,
+  type PicksGroupMode,
+  type PicksOrder,
+  type PlanListItem,
+  type PlanListKind,
+  buildPicksIcsExport,
+  describeIcsExport,
+  buildListenList,
+  listenListText,
+  buildMyDay,
+  buildPlanList,
+  clashBadgeBySetId,
+  fmtZonedClock,
 } from '@festie/shared/utils';
-import { mapErrorToUserMessage } from '@festie/shared/services';
+import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
+import { COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
 import { duration as motionDuration } from '@festie/shared/tokens';
-import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
+import { undoNotifier } from '../../lib/undoNotifier';
 import { priorityIconName } from '../../lib/prioritySymbol';
+import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import ScreenHeader from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
+import GuestPicksBanner from '../../components/GuestPicksBanner';
 import { Skeleton } from '../../components/Skeleton';
 import SetCardMobile from '../../components/SetCardMobile';
 import CrewSuggestionStrip from '../../components/CrewSuggestionStrip';
+import RateNightBanner from '../../components/RateNightBanner';
 import OfflineReadinessCard from '../../components/OfflineReadinessCard';
-
-/**
- * Priority ordering + display metadata, mirroring the web /picks route. Sets
- * are grouped by day, then split into these three priority buckets in this
- * order, and finally sorted by start time (then artist name) within a bucket.
- */
-const PRIORITY_SECTIONS: readonly { value: Priority; label: string }[] = [
-  { value: 'must', label: 'Must See' },
-  { value: 'want-to-see', label: 'Want to See' },
-  { value: 'maybe', label: 'Maybe' },
-];
+import ClashCards from '../../components/ClashCards';
+import { WalkRow, GapRow, MeetRow, PlanListRow } from '../../components/PlanRows';
 
 const PRIORITY_CHOICES: readonly { value: Priority; label: string }[] = [
-  { value: 'must', label: 'Must' },
-  { value: 'want-to-see', label: 'Want' },
-  { value: 'maybe', label: 'Maybe' },
+  { value: 'must', label: PRIORITY_SYMBOLS.must.short },
+  { value: 'want-to-see', label: PRIORITY_SYMBOLS['want-to-see'].short },
+  { value: 'maybe', label: PRIORITY_SYMBOLS.maybe.short },
 ];
 
-/** How the picks plan is organized: by festival day, or by priority tier. */
-type GroupMode = 'day' | 'priority';
-
-/** The active focus filter applied on top of the chosen grouping. */
-type PickFilter = 'all' | Priority | 'clashes';
-
 /**
- * A flattened list row: a collapsible group header (day OR priority tier
- * depending on `groupMode`), a sub-group header, or a picked set. Keeping
- * everything in one FlatList (rather than nested .map in a ScrollView) preserves
- * list virtualization across the whole picks plan.
+ * A flattened list row: a collapsible group header, a sub-group header, or a
+ * picked set. One FlatList (rather than nested .map in a ScrollView) keeps list
+ * virtualization across the whole picks plan. Built by the shared usePicksPlan.
  */
 type Row =
-  | { kind: 'group'; key: string; groupId: string; label: string; count: number; color?: string; collapsed: boolean }
-  | { kind: 'subgroup'; key: string; label: string; count: number; color?: string }
-  | { kind: 'set'; key: string; set: FestivalSet };
+  | PicksRow
+  | { kind: 'walk'; key: string; minutes: number; fromStage: string }
+  | { kind: 'gap'; key: string; minutes: number }
+  | { kind: 'meet'; key: string; label: string; location: string; timeLabel: string }
+  | { kind: 'planItem'; key: string; item: PlanListItem; listKind: PlanListKind };
+
+const colorOf = (t: Parameters<typeof priorityColor>[0], p?: Priority) => (p ? priorityColor(t, p) : undefined);
 
 const SCROLL_TOP_THRESHOLD = 520;
 
@@ -105,6 +105,7 @@ export default function PicksScreen() {
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const user = useAuthStore((s) => s.user);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
+  const myPicks = useFestivalDataStore(selectMyPicks);
   const sets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
   // Raw festival days (FestivalDay[]) — needed for the TZ-/date-aware interval
@@ -115,384 +116,279 @@ export default function PicksScreen() {
   const isLoading = useFestivalDataStore((s) => s.isLoading);
   const error = useFestivalDataStore((s) => s.error);
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
-  const bulkSavePicks = useFestivalDataStore((s) => s.bulkSavePicks);
 
   const [exportBusy, setExportBusy] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkPriority, setBulkPriority] = useState<Priority>('must');
-  const [bulkBusyKey, setBulkBusyKey] = useState<string | null>(null);
 
-  // ── Organize / focus controls ───────────────────────────────────────────
-  const [groupMode, setGroupMode] = useState<GroupMode>('day');
-  const [filter, setFilter] = useState<PickFilter>('all');
-  const [search, setSearch] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  // Collapsed group ids (e.g. `day-2`, `prio-must`) — lets a long multi-day plan
-  // fold to its headers and scan fast. In-memory for the screen's lifetime.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const listRef = useRef<FlatList<Row>>(null);
-
-  const { getMyPick, savePick, removePick, getMyNote } = usePicks();
-  const { getDays, getStageColor, getStageName } = useFestival();
-
-  const days = useMemo(() => getDays(), [getDays]);
-
-  // ── Single source of truth for clashes ───────────────────────────────────
-  // The chip count, the "clashes" focus filter, the per-card conflict ring AND
-  // the banner all derive from the SAME `buildPickConflicts` groups — so the
-  // numbers can never disagree. `buildPickConflicts` is day-scoped, so we run it
-  // once per festival day and concatenate; this spans the WHOLE plan (the picks
-  // tab has no day selector — a clash on any day must surface here). This also
-  // replaces the old time-only `getConflictingSetIds`, picking up the shared TZ-
-  // and post-midnight-aware interval math (`getSetTimeBounds`).
-  const myPicks = currentProfile?.picks;
-  const festivalTimeZone = useMemo(() => resolveFestivalTimeZone(currentFestival), [currentFestival]);
-
-  // The festival's offline vector basemap archive, when one has been authored
-  // for it. Null for every other festival, which makes the download card omit
-  // the map step entirely rather than offer a control that can never succeed.
-  const offlineBasemapUrl = useMemo(
-    () => (hasOfflineBasemap(currentFestival?.mapConfig) ? currentFestival.mapConfig.offlineBasemap.pmtilesUrl : null),
-    [currentFestival],
-  );
-
-  const conflictGroups = useMemo<ConflictGroup[]>(() => {
-    if (!myPicks || storeDays.length === 0) return [];
-    // buildPickConflicts is day-scoped, so run it once per festival day index
-    // (positional, 0..n-1 = each set's dayIndex) and concatenate. di === 0 also
-    // catches picks with an undefined dayIndex (buildPickConflicts buckets them
-    // as day 0 via `dayIndex ?? 0`).
-    const out: ConflictGroup[] = [];
-    for (let di = 0; di < storeDays.length; di++) {
-      out.push(
-        ...buildPickConflicts({ sets, myPicks, selectedDay: di, days: storeDays, timeZone: festivalTimeZone }),
-      );
-    }
-    return out;
-  }, [sets, storeDays, myPicks, festivalTimeZone]);
-
-  // The set ids participating in ANY clash — drives the filter + the card ring.
-  const conflictIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const g of conflictGroups) for (const p of g.picks) ids.add(p.set.id);
-    return ids;
-  }, [conflictGroups]);
-
-  // ── At-a-glance summary across ALL picks (independent of the active filter,
-  // so the counts stay a stable overview the user can navigate by). ──────────
-  const stats = useMemo(() => {
-    let must = 0;
-    let want = 0;
-    let maybe = 0;
-    for (const s of sets) {
-      const p = getMyPick(s.id);
-      if (p === 'must') must += 1;
-      else if (p === 'want-to-see') want += 1;
-      else if (p === 'maybe') maybe += 1;
-    }
-    return { must, want, maybe, total: must + want + maybe, clashes: conflictIds.size };
-  }, [sets, getMyPick, conflictIds]);
-
-  // If the user is focused on clashes and then resolves the last one, don't
-  // strand them on an empty "no clashes" view — fall the view back to the full
-  // plan without mutating the stored filter (derive instead of setState-in-effect).
-  const effectiveFilter: PickFilter = filter === 'clashes' && stats.clashes === 0 ? 'all' : filter;
-
-  // Stable start-time-then-name comparator for sets within a bucket. Sort by the
-  // resolved absolute `startMs` (TZ- and post-midnight-aware) rather than the raw
-  // 'HH:mm' string — a string sort puts a 01:00 after-midnight set ABOVE 18:00,
-  // scrambling the late-night tail of a day. Sets whose time can't be resolved
-  // sink below timed ones, then tiebreak by artist name.
-  const compareSets = useMemo(() => {
-    const separator = currentFestival?.b2bSeparator;
-    return (a: FestivalSet, b: FestivalSet) => {
-      const boundsA = getSetTimeBounds(a, storeDays, festivalTimeZone);
-      const boundsB = getSetTimeBounds(b, storeDays, festivalTimeZone);
-      if (boundsA && boundsB) {
-        if (boundsA.startMs !== boundsB.startMs) return boundsA.startMs - boundsB.startMs;
-      } else if (boundsA && !boundsB) return -1;
-      else if (!boundsA && boundsB) return 1;
-      return artistDisplayName(a, separator).localeCompare(artistDisplayName(b, separator), undefined, {
-        sensitivity: 'base',
-      });
-    };
-  }, [currentFestival?.b2bSeparator, storeDays, festivalTimeZone]);
-
-  // Build the flattened row list. In `day` mode the outer header is the festival
-  // day and the inner sub-group is the priority tier (must → want → maybe); in
-  // `priority` mode that nesting inverts (tier outer, day inner). Search + the
-  // focus filter prune the eligible sets first; collapsed groups emit only their
-  // header. Days / tiers with no surviving picks are skipped entirely.
-  const rows = useMemo<Row[]>(() => {
-    const separator = currentFestival?.b2bSeparator;
-    const q = search.trim().toLowerCase();
-    const matchesSearch = (s: FestivalSet) => {
-      if (!q) return true;
-      const name = artistDisplayName(s, separator).toLowerCase();
-      const stage = (getStageName(s.stageId) || '').toLowerCase();
-      return name.includes(q) || stage.includes(q);
-    };
-
-    const eligible = sets.filter((s) => {
-      const p = getMyPick(s.id);
-      if (!p) return false;
-      if (!matchesSearch(s)) return false;
-      if (effectiveFilter === 'clashes') return conflictIds.has(s.id);
-      if (effectiveFilter !== 'all' && p !== effectiveFilter) return false;
-      return true;
-    });
-
-    const out: Row[] = [];
-
-    // A pick is "scheduled" only when its dayIndex maps to a real festival day.
-    // Picks with an undefined / out-of-range dayIndex used to be counted in the
-    // stats but dropped by every day/tier loop below (they match no `day.index`),
-    // so "All N" exceeded the rendered cards and those picks were unreachable.
-    // They now land in a dedicated "Unscheduled" bucket so the plan is complete.
-    const knownDayIndices = new Set(days.map((d) => d.index));
-    const isScheduled = (s: FestivalSet) =>
-      typeof s.dayIndex === 'number' && knownDayIndices.has(s.dayIndex);
-
-    if (groupMode === 'day') {
-      days.forEach((day) => {
-        const daySets = eligible.filter((s) => s.dayIndex === day.index);
-        if (daySets.length === 0) return;
-        const groupId = `day-${day.index}`;
-        const isCollapsed = collapsed.has(groupId);
-        out.push({
-          kind: 'group',
-          key: `g-${groupId}`,
-          groupId,
-          label: day.label || day.date,
-          count: daySets.length,
-          collapsed: isCollapsed,
-        });
-        if (isCollapsed) return;
-        PRIORITY_SECTIONS.forEach((section) => {
-          const picked = daySets.filter((s) => getMyPick(s.id) === section.value).sort(compareSets);
-          if (picked.length === 0) return;
-          out.push({
-            kind: 'subgroup',
-            key: `sg-${day.index}-${section.value}`,
-            label: section.label,
-            color: priorityColor(t, section.value),
-            count: picked.length,
-          });
-          picked.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
-        });
-      });
-
-      // Unscheduled (TBA) day group — same priority sub-grouping as a real day.
-      const tbaSets = eligible.filter((s) => !isScheduled(s));
-      if (tbaSets.length > 0) {
-        const groupId = 'day-tba';
-        const isCollapsed = collapsed.has(groupId);
-        out.push({
-          kind: 'group',
-          key: `g-${groupId}`,
-          groupId,
-          label: 'Unscheduled',
-          count: tbaSets.length,
-          collapsed: isCollapsed,
-        });
-        if (!isCollapsed) {
-          PRIORITY_SECTIONS.forEach((section) => {
-            const picked = tbaSets.filter((s) => getMyPick(s.id) === section.value).sort(compareSets);
-            if (picked.length === 0) return;
-            out.push({
-              kind: 'subgroup',
-              key: `sg-tba-${section.value}`,
-              label: section.label,
-              color: priorityColor(t, section.value),
-              count: picked.length,
-            });
-            picked.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
-          });
-        }
-      }
-    } else {
-      PRIORITY_SECTIONS.forEach((section) => {
-        const tierSets = eligible.filter((s) => getMyPick(s.id) === section.value);
-        if (tierSets.length === 0) return;
-        const groupId = `prio-${section.value}`;
-        const isCollapsed = collapsed.has(groupId);
-        out.push({
-          kind: 'group',
-          key: `g-${groupId}`,
-          groupId,
-          label: section.label,
-          count: tierSets.length,
-          color: priorityColor(t, section.value),
-          collapsed: isCollapsed,
-        });
-        if (isCollapsed) return;
-        days.forEach((day) => {
-          const daySets = tierSets.filter((s) => s.dayIndex === day.index).sort(compareSets);
-          if (daySets.length === 0) return;
-          out.push({
-            kind: 'subgroup',
-            key: `sg-${section.value}-${day.index}`,
-            label: day.label || day.date,
-            count: daySets.length,
-          });
-          daySets.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
-        });
-
-        // Unscheduled (TBA) picks in this tier, after the dated days.
-        const tbaSets = tierSets.filter((s) => !isScheduled(s)).sort(compareSets);
-        if (tbaSets.length > 0) {
-          out.push({
-            kind: 'subgroup',
-            key: `sg-${section.value}-tba`,
-            label: 'Unscheduled',
-            count: tbaSets.length,
-          });
-          tbaSets.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set }));
-        }
-      });
-    }
-
-    return out;
-  }, [
-    days,
-    sets,
-    getMyPick,
-    getStageName,
-    currentFestival?.b2bSeparator,
-    t,
+  // ── Organize / focus controls (shared with web) ─────────────────────────
+  const plan = usePicksPlan();
+  const {
     groupMode,
+    order,
+    setOrder,
     effectiveFilter,
     search,
-    conflictIds,
-    collapsed,
-    compareSets,
+    setSearch,
+    stats,
+    conflictGroups,
+    rows,
+    filtersActive,
+    toggleCollapsed,
+    toggleFilter,
+    setGroupMode,
+    clearFilters: clearPlanFilters,
+  } = plan;
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [listenOpen, setListenOpen] = useState(false);
+  const listRef = useRef<FlatList<Row>>(null);
+  // The clash chip on the schedule opens this tab with show=clashes.
+  const { show } = useLocalSearchParams<{ show?: string }>();
+  const [clashY, setClashY] = useState<number | null>(null);
+  useEffect(() => {
+    if (show !== 'clashes' || clashY === null) return;
+    listRef.current?.scrollToOffset({ offset: clashY, animated: !reduceMotion });
+    AccessibilityInfo.announceForAccessibility(
+      conflictGroups.length ? clashCount(conflictGroups.length) : COPY.clash.none,
+    );
+    router.setParams({ show: undefined });
+  }, [show, clashY, reduceMotion, conflictGroups.length, router]);
+
+  const { getMyPick, savePick, getMyNote, getMyReminder } = usePicks();
+  const { getDays, getStageColor, getStageName } = useFestival();
+  const clearPick = usePickClear(undoNotifier);
+  const { busyKey: bulkBusyKey, add: bulkAdd } = useBulkAddPicks(undoNotifier);
+
+  const days = useMemo(() => getDays(), [getDays]);
+  const conflictIds = plan.clashIds;
+  const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  const festivalTimeZone = currentFestival?.timeZone;
+  const separator = currentFestival?.b2bSeparator;
+  // My day replaces the day/priority grouping; a plan list replaces the whole plan.
+  const [myDayMode, setMyDayMode] = useState(false);
+  const [planList, setPlanList] = useState<PlanListKind | null>(null);
+
+  const clashBadges = useMemo(
+    () => clashBadgeBySetId(conflictGroups.flatMap((g) => g.pairs), separator),
+    [conflictGroups, separator],
+  );
+
+  const myNotes = currentProfile?.notes;
+  const myReminders = currentProfile?.reminders;
+  const planListInput = useMemo(
+    () => ({ sets, days: storeDays, timeZone: festivalTimeZone, notes: myNotes, reminders: myReminders, myPicks: myPicks ?? undefined }),
+    [sets, storeDays, festivalTimeZone, myNotes, myReminders, myPicks],
+  );
+  const reminderItems = useMemo(() => buildPlanList('reminders', planListInput), [planListInput]);
+  const noteItems = useMemo(() => buildPlanList('notes', planListInput), [planListInput]);
+  // A list that empties (last note removed) falls back to the plan instead of stranding the user.
+  const activePlanList =
+    planList === 'reminders' && reminderItems.length > 0
+      ? 'reminders'
+      : planList === 'notes' && noteItems.length > 0
+        ? 'notes'
+        : null;
+
+  const listRows = useMemo<Row[]>(() => {
+    if (activePlanList) {
+      const q = search.trim().toLowerCase();
+      const items = (activePlanList === 'reminders' ? reminderItems : noteItems).filter(
+        (item) =>
+          !q ||
+          artistDisplayName(item.set, separator).toLowerCase().includes(q) ||
+          (getStageName(item.set.stageId) || '').toLowerCase().includes(q),
+      );
+      const out: Row[] = [];
+      const known = new Set(days.map((d) => d.index));
+      const emit = (groupId: string, label: string, groupItems: PlanListItem[]) => {
+        if (groupItems.length === 0) return;
+        const collapsed = plan.collapsed.has(groupId);
+        out.push({ kind: 'group', key: `g-${groupId}`, groupId, label, count: groupItems.length, collapsed });
+        if (collapsed) return;
+        groupItems.forEach((item) =>
+          out.push({ kind: 'planItem', key: `plan-${activePlanList}-${item.set.id}`, item, listKind: activePlanList }),
+        );
+      };
+      days.forEach((day) => emit(`day-${day.index}`, day.label || day.date, items.filter((i) => i.dayIndex === day.index)));
+      emit('day-tba', 'Unscheduled', items.filter((i) => i.dayIndex == null || !known.has(i.dayIndex)));
+      return out;
+    }
+    if (!myDayMode) return rows;
+
+    // My day covers the picks the current filter and search leave in the plan.
+    const visiblePicks: Record<string, Priority> = {};
+    for (const row of rows) if (row.kind === 'set' && myPicks?.[row.set.id]) visiblePicks[row.set.id] = myPicks[row.set.id]!;
+    const out: Row[] = [];
+    days.forEach((day) => {
+      const myDay = buildMyDay({
+        sets,
+        myPicks: visiblePicks,
+        dayIndex: day.index,
+        days: storeDays,
+        timeZone: festivalTimeZone,
+        stages,
+        meetingPoints,
+        conflictGroups,
+        b2bSeparator: separator,
+      });
+      // buildMyDay lists picks with no known day as unscheduled on every day; keep this day's own.
+      const dayUnscheduled = myDay.unscheduled.filter((s) => s.dayIndex === day.index);
+      if (myDay.sections.length === 0 && dayUnscheduled.length === 0) return;
+      const setCount =
+        myDay.sections.reduce((n, sec) => n + sec.items.filter((i) => i.kind === 'set').length, 0) +
+        dayUnscheduled.length;
+      const groupId = `myday-${day.index}`;
+      const collapsed = plan.collapsed.has(groupId);
+      out.push({ kind: 'group', key: `g-${groupId}`, groupId, label: day.label || day.date, count: setCount, collapsed });
+      if (collapsed) return;
+      for (const section of myDay.sections) {
+        out.push({
+          kind: 'subgroup',
+          key: `sg-${day.index}-${section.part}`,
+          label: section.title,
+          count: section.items.filter((i) => i.kind === 'set').length,
+        });
+        for (const item of section.items) {
+          if (item.kind === 'set') {
+            if (item.walkFromPrev) {
+              out.push({
+                kind: 'walk',
+                key: `walk-${item.key}`,
+                minutes: item.walkFromPrev.minutes,
+                fromStage: getStageName(item.walkFromPrev.fromStageId) || 'Unknown',
+              });
+            }
+            out.push({ kind: 'set', key: item.key, set: item.set, priority: visiblePicks[item.set.id]! });
+          } else if (item.kind === 'gap') {
+            out.push({ kind: 'gap', key: item.key, minutes: item.minutes });
+          } else {
+            out.push({
+              kind: 'meet',
+              key: item.key,
+              label: item.label,
+              location: item.location,
+              timeLabel: fmtZonedClock(item.startMs, festivalTimeZone),
+            });
+          }
+        }
+      }
+      if (dayUnscheduled.length > 0) {
+        out.push({
+          kind: 'subgroup',
+          key: `sg-${day.index}-unscheduled`,
+          label: COPY.myDay.unscheduled,
+          count: dayUnscheduled.length,
+        });
+        dayUnscheduled.forEach((set) =>
+          out.push({ kind: 'set', key: `set-${set.id}`, set, priority: visiblePicks[set.id]! }),
+        );
+      }
+    });
+    return out;
+  }, [
+    activePlanList,
+    reminderItems,
+    noteItems,
+    search,
+    separator,
+    getStageName,
+    days,
+    plan.collapsed,
+    myDayMode,
+    rows,
+    myPicks,
+    sets,
+    storeDays,
+    festivalTimeZone,
+    stages,
+    meetingPoints,
+    conflictGroups,
   ]);
+
 
   const handlePickChange = useCallback(
     (set: FestivalSet, priority: Priority | null) => {
       if (!currentFestival) return;
       if (priority === null) {
-        // The card shows the Retry chip on failure.
-        removePick(currentFestival.id, set.id).catch(() => haptics.warning());
+        haptics.select();
+        clearPick(set.id, artistDisplayName(set, currentFestival.b2bSeparator));
       } else {
-        savePick(currentFestival.id, set.id, priority).catch(() => haptics.warning());
+        savePick(currentFestival.id, set.id, priority).catch((e) => {
+          haptics.warning();
+          undoNotifier.error(mapErrorToUserMessage(e, "Couldn't save your pick. Try again."));
+        });
       }
     },
-    [currentFestival, savePick, removePick, haptics],
+    [currentFestival, savePick, clearPick, haptics],
   );
 
   const toggleCollapse = useCallback(
     (groupId: string) => {
       haptics.tap();
-      setCollapsed((prev) => {
-        const next = new Set(prev);
-        if (next.has(groupId)) next.delete(groupId);
-        else next.add(groupId);
-        return next;
-      });
+      toggleCollapsed(groupId);
     },
-    [haptics],
+    [haptics, toggleCollapsed],
   );
 
   const setFocusFilter = useCallback(
-    (next: PickFilter) => {
+    (next: PicksFilter) => {
       haptics.select();
       // Tap an active chip to clear it (back to the whole plan).
-      setFilter((prev) => (prev === next ? 'all' : next));
+      setPlanList(null);
+      toggleFilter(next);
+    },
+    [haptics, toggleFilter],
+  );
+
+  const setGroupModeHaptic = useCallback(
+    (mode: PicksGroupMode | 'myday') => {
+      haptics.select();
+      setMyDayMode(mode === 'myday');
+      if (mode !== 'myday') setGroupMode(mode);
+    },
+    [haptics, setGroupMode],
+  );
+
+  const togglePlanList = useCallback(
+    (kind: PlanListKind) => {
+      haptics.select();
+      setPlanList((cur) => (cur === kind ? null : kind));
     },
     [haptics],
   );
 
-  const setGroupModeHaptic = useCallback(
-    (mode: GroupMode) => {
+  const setOrderHaptic = useCallback(
+    (next: PicksOrder) => {
       haptics.select();
-      setGroupMode(mode);
+      setOrder(next);
     },
-    [haptics],
+    [haptics, setOrder],
   );
 
   const clearFilters = useCallback(() => {
     haptics.tap();
-    setFilter('all');
-    setSearch('');
+    clearPlanFilters();
+    setPlanList(null);
     setSearchOpen(false);
-  }, [haptics]);
+  }, [haptics, clearPlanFilters]);
 
-  // ── M2 bulk pick helpers ────────────────────────────────────────────────
-  // Group the cached sets by stage and by artist genre so the user can add a
-  // whole group ("all on Main Stage", "all techno") in ONE coalesced write via
-  // festivalDataStore.bulkSavePicks (single PUT, offline-native + queued).
-  // Computed purely from cached store data — no network reads.
-  const stageGroups = useMemo(() => {
-    const byStage = new Map<string, string[]>();
-    for (const s of sets) {
-      const arr = byStage.get(s.stageId);
-      if (arr) arr.push(s.id);
-      else byStage.set(s.stageId, [s.id]);
-    }
-    const order = new Map<string, number>();
-    stages.forEach((st: Stage, i) => order.set(st.id, i));
-    return [...byStage.entries()]
-      .map(([stageId, setIds]) => ({
-        key: `stage-${stageId}`,
-        stageId,
-        label: getStageName(stageId) || 'Stage',
-        setIds,
-      }))
-      .sort((a, b) => (order.get(a.stageId) ?? 0) - (order.get(b.stageId) ?? 0));
-  }, [sets, stages, getStageName]);
-
-  const genreGroups = useMemo(() => {
-    const byGenre = new Map<string, string[]>();
-    // Lowercase only the dedupe KEY; keep the first-seen original casing for the
-    // display label so genres like "drum and bass" / "UK garage" aren't mangled
-    // by a textTransform:'capitalize'.
-    const labelByKey = new Map<string, string>();
-    for (const s of sets) {
-      const seen = new Set<string>();
-      for (const a of s.artists ?? []) {
-        for (const g of a.genres ?? []) {
-          const display = g.trim();
-          const key = display.toLowerCase();
-          if (!key || seen.has(key)) continue;
-          seen.add(key);
-          if (!labelByKey.has(key)) labelByKey.set(key, display);
-          const arr = byGenre.get(key);
-          if (arr) arr.push(s.id);
-          else byGenre.set(key, [s.id]);
-        }
-      }
-    }
-    return [...byGenre.entries()]
-      .map(([key, setIds]) => ({ key: `genre-${key}`, label: labelByKey.get(key) ?? key, setIds }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [sets]);
-
+  // ── Bulk pick helpers ───────────────────────────────────────────────────
+  // Group every cached set (all days) by stage and by artist genre so the user
+  // can add a whole group in ONE coalesced write via useBulkAddPicks.
+  const bulkGroups = useMemo(() => buildBulkPickGroups(sets, stages, getStageName), [sets, stages, getStageName]);
+  const stageGroups = bulkGroups.stages;
+  const genreGroups = bulkGroups.genres;
   const hasBulkGroups = stageGroups.length > 0 || genreGroups.length > 0;
 
   const handleBulkApply = useCallback(
-    (key: string, label: string, setIds: string[]) => {
-      if (setIds.length === 0 || bulkBusyKey) return;
-      setBulkBusyKey(key);
-      bulkSavePicks(setIds, bulkPriority)
-        .then(() => {
-          haptics.success();
-          const pLabel =
-            bulkPriority === 'must' ? 'Must See' : bulkPriority === 'want-to-see' ? 'Want to See' : 'Maybe';
-          Alert.alert(
-            'Picks added',
-            `Added ${setIds.length} set${setIds.length === 1 ? '' : 's'} from ${label} to ${pLabel}.`,
-          );
-        })
-        .catch((e) => {
-          // bulkSavePicks already rolled back + set the store error.
-          haptics.warning();
-          Alert.alert("Couldn't add picks", mapErrorToUserMessage(e, 'Try again.'));
-        })
-        .finally(() => setBulkBusyKey(null));
+    (group: (typeof stageGroups)[number]) => {
+      bulkAdd(group, bulkPriority).then((result) => {
+        if (result === 'added') haptics.success();
+        else if (result === 'failed') haptics.warning();
+      });
     },
-    [bulkSavePicks, bulkPriority, bulkBusyKey, haptics],
+    [bulkAdd, bulkPriority, haptics],
   );
 
   const renderItem = useCallback(
@@ -509,7 +405,7 @@ export default function PicksScreen() {
               item.collapsed ? 'collapsed, double tap to expand' : 'expanded, double tap to collapse'
             }`}
           >
-            {item.color ? <View style={[styles.dot, { backgroundColor: item.color }]} /> : null}
+            {item.priority ? <View style={[styles.dot, { backgroundColor: colorOf(t, item.priority) }]} /> : null}
             <Text style={styles.dayLabel} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
               {item.label}
             </Text>
@@ -529,7 +425,7 @@ export default function PicksScreen() {
       if (item.kind === 'subgroup') {
         return (
           <View style={styles.sectionHeader} accessibilityRole="header">
-            {item.color ? <View style={[styles.dot, { backgroundColor: item.color }]} /> : null}
+            {item.priority ? <View style={[styles.dot, { backgroundColor: colorOf(t, item.priority) }]} /> : null}
             <Text style={styles.sectionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               {item.label}
             </Text>
@@ -539,6 +435,21 @@ export default function PicksScreen() {
               </Text>
             </View>
           </View>
+        );
+      }
+      if (item.kind === 'walk') return <WalkRow minutes={item.minutes} fromStage={item.fromStage} />;
+      if (item.kind === 'gap') return <GapRow minutes={item.minutes} />;
+      if (item.kind === 'meet') {
+        return <MeetRow label={item.label} location={item.location} timeLabel={item.timeLabel} />;
+      }
+      if (item.kind === 'planItem') {
+        return (
+          <PlanListRow
+            item={item.item}
+            listKind={item.listKind}
+            stageName={getStageName(item.item.set.stageId) || 'Unknown'}
+            onPress={() => router.push(`/set/${item.item.set.id}`)}
+          />
         );
       }
       // No Reanimated entering/exiting/layout on rows: FlatList recycles and
@@ -553,7 +464,11 @@ export default function PicksScreen() {
           onPickChange={(priority) => handlePickChange(item.set, priority)}
           onPress={() => router.push(`/set/${item.set.id}`)}
           hasConflict={conflictIds.has(item.set.id)}
+          clashLabel={clashBadges.get(item.set.id)?.label}
           hasNote={!!getMyNote(item.set.id)}
+          b2bSeparator={currentFestival?.b2bSeparator}
+          onListen={() => router.push(`/set/${item.set.id}?listen=1`)}
+          reminderMinutes={getMyReminder(item.set.id)}
         />
       );
     },
@@ -563,11 +478,14 @@ export default function PicksScreen() {
       getStageColor,
       getMyPick,
       getMyNote,
+      getMyReminder,
       handlePickChange,
       conflictIds,
+      clashBadges,
       router,
       t,
       toggleCollapse,
+      currentFestival?.b2bSeparator,
     ],
   );
 
@@ -597,11 +515,11 @@ export default function PicksScreen() {
   // Built fully client-side from the already-loaded store data (no server call,
   // works offline) and shared via the OS sheet — same write/share flow as the
   // account data export.
-  const handleExportCalendar = useCallback(async () => {
+  const handleDownloadCalendar = useCallback(async () => {
     if (!currentFestival || !currentProfile || exportBusy) return;
     setExportBusy(true);
     try {
-      const ics = buildPicksIcs({
+      const result = buildPicksIcsExport({
         festival: {
           id: currentFestival.id,
           name: currentFestival.name,
@@ -611,7 +529,9 @@ export default function PicksScreen() {
         stages,
         picks: currentProfile.picks,
         notes: currentProfile.notes,
+        reminders: currentProfile.reminders,
       });
+      const ics = result.ics;
       const safeName = (currentFestival.name || 'festival').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
       const file = new File(Paths.cache, `${safeName}_picks.ics`);
       file.create({ overwrite: true });
@@ -623,6 +543,7 @@ export default function PicksScreen() {
           UTI: 'com.apple.ical.ics',
           dialogTitle: 'Add picks to calendar',
         });
+        useUIStore.getState().showToast(describeIcsExport(result), { kind: 'success' });
       } else {
         Alert.alert('Sharing unavailable', 'Calendar sharing is not available on this device.');
       }
@@ -634,6 +555,41 @@ export default function PicksScreen() {
     }
   }, [currentFestival, currentProfile, sets, stages, exportBusy, haptics]);
 
+  // Subscribe to the live feed: webcal:// opens the iOS Calendar subscribe prompt.
+  // Android has no webcal handler, so the open rejects and Google Calendar's
+  // add-by-URL page takes over. No scheme probe: on iOS that needs a native plist entry.
+  const handleSubscribeCalendar = useCallback(async () => {
+    if (!currentFestival) return;
+    let links: Awaited<ReturnType<typeof fetchCalendarLinks>>;
+    try {
+      links = await fetchCalendarLinks(currentFestival.id);
+    } catch {
+      haptics.warning();
+      useUIStore
+        .getState()
+        .showToast("Couldn't get your calendar link. Check your connection and try again.", { kind: 'error' });
+      return;
+    }
+    try {
+      await Linking.openURL(links.webcalUrl);
+    } catch {
+      Linking.openURL(links.googleUrl).catch(() => haptics.warning());
+    }
+  }, [currentFestival, haptics]);
+
+  const handleAddToCalendar = useCallback(() => {
+    haptics.tap();
+    Alert.alert(
+      'Add to calendar',
+      'Subscribe keeps your calendar up to date when set times change. Download once saves a file that does not update.',
+      [
+        { text: 'Subscribe (stays up to date)', onPress: () => void handleSubscribeCalendar() },
+        { text: 'Download once', onPress: () => void handleDownloadCalendar() },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  }, [haptics, handleSubscribeCalendar, handleDownloadCalendar]);
+
   // Nothing to export / share with zero picks — disable so the action can't
   // produce an empty .ics or share an empty plan.
   const noPicks = stats.total === 0;
@@ -641,7 +597,7 @@ export default function PicksScreen() {
   const calendarButton = (
     <TouchableOpacity
       style={[styles.calendarButton, (exportBusy || noPicks) && styles.calendarButtonDisabled]}
-      onPress={handleExportCalendar}
+      onPress={handleAddToCalendar}
       disabled={exportBusy || noPicks}
       activeOpacity={0.8}
       accessibilityRole="button"
@@ -659,31 +615,109 @@ export default function PicksScreen() {
     </TouchableOpacity>
   );
 
-  // Share a public, read-only link to my picks (server route GET /s/:profileId).
+  // One share hub (link, QR, scan, text). Open even with no picks so Scan QR is reachable.
   const handleSharePicks = useCallback(() => {
-    if (!currentProfile || !currentFestival) return;
     haptics.tap();
-    const url = buildPicksShareUrl(currentProfile.id);
-    Share.share({ message: `My ${currentFestival.name} picks on Festie: ${url}`, url }).catch(() => {});
-  }, [currentProfile, currentFestival, haptics]);
+    router.push({ pathname: '/plan-share', params: { tab: 'link' } });
+  }, [router, haptics]);
+
+  // "Listen before you go": every pick by day with Spotify link-outs. No Spotify sign-in.
+  const listenList = useMemo(
+    () =>
+      buildListenList(
+        sets.filter((s) => myPicks?.[s.id]),
+        storeDays,
+        currentFestival?.b2bSeparator,
+      ),
+    [sets, myPicks, storeDays, currentFestival?.b2bSeparator],
+  );
+  // Mobile has no clipboard module; the share sheet offers Copy.
+  const handleShareListenList = useCallback(() => {
+    if (!currentFestival) return;
+    haptics.tap();
+    Share.share({ message: listenListText(currentFestival.name, listenList) }).catch(() => {});
+  }, [currentFestival, listenList, haptics]);
+
+  const listenSection =
+    listenList.length > 0 ? (
+      <View style={styles.listenCard}>
+        <TouchableOpacity
+          style={styles.listenToggle}
+          onPress={() => setListenOpen((o) => !o)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: listenOpen }}
+        >
+          <Ionicons name="musical-notes-outline" size={16} color={t.colors.accent.aqua} />
+          <Text style={styles.listenTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Listen before you go
+          </Text>
+          <Ionicons name={listenOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+        </TouchableOpacity>
+        {listenOpen && (
+          <View>
+            {listenList.map((day) => (
+              <View key={day.label} style={styles.listenDay}>
+                <Text style={styles.listenDayLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {day.label}
+                </Text>
+                {day.rows.map((row) => (
+                  <View key={row.setId} style={styles.listenRow}>
+                    <Text style={styles.listenName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {row.name}
+                    </Text>
+                    {row.spotifyUrl ? (
+                      <TouchableOpacity
+                        style={styles.listenLinkHit}
+                        onPress={() => Linking.openURL(row.spotifyUrl as string).catch(() => {})}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Open ${row.name} in Spotify`}
+                      >
+                        <Text style={styles.listenLink} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                          Spotify ↗
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ))}
+            <TouchableOpacity
+              style={styles.calendarButton}
+              onPress={handleShareListenList}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+              <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+                Share as text
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    ) : null;
 
   // ── At-a-glance summary + focus filter chips ─────────────────────────────
+  const hasPlan = stats.total > 0 || reminderItems.length > 0 || noteItems.length > 0;
   const summaryRow =
-    stats.total > 0 ? (
+    hasPlan ? (
       <View style={styles.summaryRow}>
-        <StatChip
-          label="All"
-          count={stats.total}
-          active={effectiveFilter === 'all'}
-          onPress={() => setFocusFilter('all')}
-        />
+        {stats.total > 0 ? (
+          <StatChip
+            label="All"
+            count={stats.total}
+            active={effectiveFilter === 'all' && !activePlanList}
+            onPress={() => setFocusFilter('all')}
+          />
+        ) : null}
         {stats.must > 0 ? (
           <StatChip
             label="Must"
             count={stats.must}
             color={t.colors.priority.must}
             icon={priorityIconName('must')}
-            active={effectiveFilter === 'must'}
+            active={effectiveFilter === 'must' && !activePlanList}
             onPress={() => setFocusFilter('must')}
           />
         ) : null}
@@ -693,7 +727,7 @@ export default function PicksScreen() {
             count={stats.want}
             color={t.colors.priority.want}
             icon={priorityIconName('want-to-see')}
-            active={effectiveFilter === 'want-to-see'}
+            active={effectiveFilter === 'want-to-see' && !activePlanList}
             onPress={() => setFocusFilter('want-to-see')}
           />
         ) : null}
@@ -703,19 +737,37 @@ export default function PicksScreen() {
             count={stats.maybe}
             color={t.colors.priority.maybe}
             icon={priorityIconName('maybe')}
-            active={effectiveFilter === 'maybe'}
+            active={effectiveFilter === 'maybe' && !activePlanList}
             onPress={() => setFocusFilter('maybe')}
           />
         ) : null}
         {stats.clashes > 0 ? (
           <StatChip
-            label="Clashes"
+            label={COPY.clash.filter}
             count={stats.clashes}
             icon="warning"
             color={t.colors.accent.coral}
             danger
-            active={effectiveFilter === 'clashes'}
+            active={effectiveFilter === 'clashes' && !activePlanList}
             onPress={() => setFocusFilter('clashes')}
+          />
+        ) : null}
+        {reminderItems.length > 0 ? (
+          <StatChip
+            label={COPY.planLists.reminders}
+            count={reminderItems.length}
+            icon="notifications-outline"
+            active={activePlanList === 'reminders'}
+            onPress={() => togglePlanList('reminders')}
+          />
+        ) : null}
+        {noteItems.length > 0 ? (
+          <StatChip
+            label={COPY.planLists.notes}
+            count={noteItems.length}
+            icon="document-text-outline"
+            active={activePlanList === 'notes'}
+            onPress={() => togglePlanList('notes')}
           />
         ) : null}
       </View>
@@ -725,8 +777,8 @@ export default function PicksScreen() {
     stats.total > 0 ? (
       <View style={styles.controlsRow}>
         <View style={styles.segment} accessibilityRole="radiogroup" accessibilityLabel="Group picks by">
-          {(['day', 'priority'] as const).map((mode) => {
-            const activeMode = groupMode === mode;
+          {(['day', 'priority', 'myday'] as const).map((mode) => {
+            const activeMode = mode === 'myday' ? myDayMode : !myDayMode && groupMode === mode;
             return (
               <TouchableOpacity
                 key={mode}
@@ -735,10 +787,12 @@ export default function PicksScreen() {
                 activeOpacity={0.8}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: activeMode }}
-                accessibilityLabel={mode === 'day' ? 'Group by day' : 'Group by priority'}
+                accessibilityLabel={
+                  mode === 'day' ? 'Group by day' : mode === 'priority' ? 'Group by priority' : 'Show my day'
+                }
               >
                 <Ionicons
-                  name={mode === 'day' ? 'calendar-clear-outline' : 'flag-outline'}
+                  name={mode === 'day' ? 'calendar-clear-outline' : mode === 'priority' ? 'flag-outline' : 'time-outline'}
                   size={t.iconSize.xs}
                   color={activeMode ? t.colors.accent.aqua : t.colors.text.muted}
                 />
@@ -746,7 +800,7 @@ export default function PicksScreen() {
                   style={[styles.segmentText, activeMode && styles.segmentTextActive]}
                   maxFontSizeMultiplier={MAX_FONT_SCALE}
                 >
-                  {mode === 'day' ? 'By day' : 'By priority'}
+                  {mode === 'day' ? 'By day' : mode === 'priority' ? 'By priority' : COPY.myDay.name}
                 </Text>
               </TouchableOpacity>
             );
@@ -769,6 +823,36 @@ export default function PicksScreen() {
             color={searchOpen || search.length > 0 ? t.colors.accent.aqua : t.colors.text.muted}
           />
         </TouchableOpacity>
+      </View>
+    ) : null;
+
+  const orderRow =
+    stats.total > 0 ? (
+      <View style={styles.controlsRow}>
+        <View style={styles.segment} accessibilityRole="radiogroup" accessibilityLabel="Order sets">
+          {(['openers', 'headliners'] as const).map((value) => {
+            const active = order === value;
+            const label = value === 'openers' ? 'Openers first' : 'Headliners first';
+            return (
+              <TouchableOpacity
+                key={value}
+                style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                onPress={() => setOrderHaptic(value)}
+                activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={label}
+              >
+                <Text
+                  style={[styles.segmentText, active && styles.segmentTextActive]}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
     ) : null;
 
@@ -812,10 +896,10 @@ export default function PicksScreen() {
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityState={{ expanded: bulkOpen }}
-        accessibilityLabel="Bulk add picks"
+        accessibilityLabel="Bulk add picks for all days"
       >
-        <Ionicons name="sparkles-outline" size={16} color={t.colors.accent.aqua} />
-        <Text style={styles.bulkHeaderText}>Bulk add picks</Text>
+        <Ionicons name="add-circle-outline" size={16} color={t.colors.accent.aqua} />
+        <Text style={styles.bulkHeaderText}>{`Bulk add picks · ${BULK_SCOPE_LABEL}`}</Text>
         <Ionicons
           name={bulkOpen ? 'chevron-up' : 'chevron-down'}
           size={16}
@@ -865,7 +949,7 @@ export default function PicksScreen() {
                     count={g.setIds.length}
                     busy={bulkBusyKey === g.key}
                     disabled={!!bulkBusyKey}
-                    onPress={() => handleBulkApply(g.key, g.label, g.setIds)}
+                    onPress={() => handleBulkApply(g)}
                   />
                 ))}
               </View>
@@ -883,7 +967,7 @@ export default function PicksScreen() {
                     count={g.setIds.length}
                     busy={bulkBusyKey === g.key}
                     disabled={!!bulkBusyKey}
-                    onPress={() => handleBulkApply(g.key, g.label, g.setIds)}
+                    onPress={() => handleBulkApply(g)}
                   />
                 ))}
               </View>
@@ -896,43 +980,56 @@ export default function PicksScreen() {
 
   const picksHeader = (
     <View>
-      <View style={styles.headerActions}>
-        {calendarButton}
-        <TouchableOpacity
-          style={[styles.calendarButton, noPicks && styles.calendarButtonDisabled]}
-          onPress={handleSharePicks}
-          disabled={noPicks}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: noPicks }}
-          accessibilityLabel="Share my picks"
-        >
-          <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
-          <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-            Share picks
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {!user ? <GuestPicksBanner /> : null}
+      {user ? (
+        <View style={styles.headerActions}>
+          {calendarButton}
+          <TouchableOpacity
+            style={[styles.calendarButton, noPicks && styles.calendarButtonDisabled]}
+            onPress={() => router.push('/picks-image')}
+            disabled={noPicks}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: noPicks }}
+            accessibilityLabel="Save my picks as an image"
+          >
+            <Ionicons name="image-outline" size={16} color={t.colors.accent.aqua} />
+            <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+              {COPY.picks.saveImage}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.calendarButton, !currentFestival && styles.calendarButtonDisabled]}
+            onPress={handleSharePicks}
+            disabled={!currentFestival}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !currentFestival }}
+            accessibilityLabel="Share my picks"
+          >
+            <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+            <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+              {COPY.picks.share}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {currentFestival && (
         <View style={styles.offlineCard}>
-          <OfflineReadinessCard
-            festivalId={currentFestival.id}
-            pmtilesUrl={offlineBasemapUrl}
-            festivalPast={festivalPhase(currentFestival, storeDays) === 'post'}
-          />
+          <OfflineReadinessCard festivalId={currentFestival.id} />
         </View>
       )}
       {summaryRow}
       {controlsRow}
+      {orderRow}
       {searchField}
       <CrewSuggestionStrip />
-      <ClashBannerInline
-        groups={conflictGroups}
-        days={days}
-        separator={currentFestival?.b2bSeparator}
-        reduceMotion={reduceMotion}
-      />
+      <RateNightBanner />
+      <View onLayout={(e) => setClashY(e.nativeEvent.layout.y)}>
+        <ClashCards groups={conflictGroups} days={days} />
+      </View>
       {bulkPanel}
+      {listenSection}
     </View>
   );
 
@@ -948,9 +1045,15 @@ export default function PicksScreen() {
 
   // Distinguish "you have no picks at all" from "your filter/search hid them" so
   // the empty state is honest and offers the right next action.
-  const filtersActive = effectiveFilter !== 'all' || search.trim().length > 0;
   const emptyComponent =
-    stats.total === 0 ? (
+    activePlanList ? (
+      <EmptyState
+        icon="search-outline"
+        title="No matching picks"
+        message={`Nothing matches “${search.trim()}”.`}
+        action={{ label: 'Clear filters', onPress: clearFilters }}
+      />
+    ) : stats.total === 0 ? (
       <EmptyState
         illustration="noPicks"
         title="No picks yet"
@@ -963,8 +1066,8 @@ export default function PicksScreen() {
       // search/filter empty state below rather than falsely claiming all-clear.
       <EmptyState
         icon="checkmark-circle-outline"
-        title="No clashes"
-        message="Nothing on your plan overlaps — you're all set."
+        title={COPY.clash.none}
+        message={COPY.clash.noneBody}
         action={{ label: 'Show all picks', onPress: clearFilters }}
       />
     ) : (
@@ -976,33 +1079,6 @@ export default function PicksScreen() {
       />
     );
 
-  if (!user) {
-    return (
-      <View style={styles.container} testID="picks-screen">
-        <ScreenHeader title="Picks" icon="star" />
-        <EmptyState
-          icon="star-outline"
-          title={GUEST_PROMPT_COPY.teasers.picks.title}
-          message={GUEST_PROMPT_COPY.teasers.picks.message}
-          action={{
-            label: GUEST_PROMPT_COPY.createAccount,
-            onPress: () => {
-              setReturnTo('/(tabs)/picks');
-              router.push('/(auth)/register');
-            },
-          }}
-          secondaryAction={{
-            label: GUEST_PROMPT_COPY.signIn,
-            onPress: () => {
-              setReturnTo('/(tabs)/picks');
-              router.push('/(auth)/login');
-            },
-          }}
-        />
-      </View>
-    );
-  }
-
   let body: React.ReactNode;
   if (!currentFestival) {
     body = (
@@ -1012,7 +1088,7 @@ export default function PicksScreen() {
         message="Choose a festival from the Schedule tab to start saving picks."
       />
     );
-  } else if (!currentProfile) {
+  } else if (user && !currentProfile) {
     body = (
       <EmptyState
         icon="musical-note-outline"
@@ -1036,7 +1112,7 @@ export default function PicksScreen() {
     body = (
       <FlatList
         ref={listRef}
-        data={rows}
+        data={listRows}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         contentContainerStyle={listContentStyle}
@@ -1055,7 +1131,7 @@ export default function PicksScreen() {
 
   return (
     <View style={styles.container} testID="picks-screen">
-      <ScreenHeader title="My Plan" icon="star" />
+      <ScreenHeader title={COPY.picks.title} icon={CONCEPT_IONICON.picks} />
       <View style={styles.body}>{body}</View>
       {showScrollTop ? (
         <Animated.View
@@ -1201,129 +1277,6 @@ function BulkPill({
   );
 }
 
-/**
- * All-days set-time clash banner for the picks tab. Driven by the SAME
- * `buildPickConflicts` groups that feed the chip + the "clashes" filter (passed
- * in as `groups`), so those surfaces can never disagree. Unlike the schedule
- * tab's ClashBanner — which is scoped to the currently selected day — this spans
- * EVERY festival day (the picks tab has no day selector), so each card is tagged
- * with its day for context. Renders nothing when there are no clashes.
- */
-function ClashBannerInline({
-  groups,
-  days,
-  separator,
-  reduceMotion,
-}: {
-  groups: ConflictGroup[];
-  days: { index: number; date: string; label?: string }[];
-  separator?: string;
-  reduceMotion: boolean;
-}) {
-  const t = useTokens();
-  const styles = useStyles();
-  if (groups.length === 0) return null;
-  return (
-    <View style={styles.clashWrap}>
-      <View style={styles.clashHeading}>
-        <Ionicons name="warning-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
-        <Text style={styles.clashHeadingText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {groups.length === 1 ? 'Schedule clash' : `${groups.length} schedule clashes`}
-        </Text>
-      </View>
-      {groups.map((group) => (
-        <ClashCardInline
-          key={group.picks.map((p) => p.set.id).join('|')}
-          group={group}
-          days={days}
-          separator={separator}
-          reduceMotion={reduceMotion}
-        />
-      ))}
-    </View>
-  );
-}
-
-/** One clash card: the clashing acts + a "tap to decide" affordance. */
-function ClashCardInline({
-  group,
-  days,
-  separator,
-  reduceMotion,
-}: {
-  group: ConflictGroup;
-  days: { index: number; date: string; label?: string }[];
-  separator?: string;
-  reduceMotion: boolean;
-}) {
-  const t = useTokens();
-  const styles = useStyles();
-  const router = useRouter();
-
-  const keep = group.picks.find((p) => p.set.id === group.recommendedKeepId) ?? group.picks[0];
-  if (!keep) return null;
-  const keepName = artistDisplayName(keep.set, separator);
-  // The moment both acts are on stage = the latest start among the group.
-  const latest = group.picks.reduce((a, b) => (b.startMs > a.startMs ? b : a));
-  const atLabel = formatTime(latest.set.startTime);
-  const dayLabel = days.find((d) => d.index === (latest.set.dayIndex ?? 0))?.label;
-  const overlapLabel = group.overlapMin > 0 ? `${group.overlapMin} min overlap` : 'overlapping sets';
-  const a11yNames = group.picks.map((p) => artistDisplayName(p.set, separator)).join(', ');
-  // "Sat · 8:30 PM · 30 min overlap" — day prefix disambiguates across the plan.
-  const timeLabel = [dayLabel, atLabel, overlapLabel].filter(Boolean).join(' · ');
-
-  const card = (
-    <TouchableOpacity
-      style={styles.clashCard}
-      activeOpacity={0.8}
-      onPress={() => router.push(`/set/${keep.set.id}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`Schedule clash${dayLabel ? ` on ${dayLabel}` : ''}${
-        atLabel ? ` at ${atLabel}` : ''
-      }: ${a11yNames}. Recommended keep ${keepName}. Tap to decide.`}
-    >
-      <View style={styles.clashCardHead}>
-        <Text style={styles.clashCardTime} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-          {timeLabel}
-        </Text>
-        <View style={styles.clashDecideRow}>
-          <Text style={styles.clashDecideText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            Tap to decide
-          </Text>
-          <Ionicons name="chevron-forward" size={t.iconSize.xs} color={t.colors.accent.aqua} />
-        </View>
-      </View>
-      <View style={styles.clashActList}>
-        {group.picks.map((pick) => {
-          const recommended = pick.set.id === group.recommendedKeepId;
-          return (
-            <View key={pick.set.id} style={styles.clashActRow}>
-              <View style={[styles.clashPriorityDot, { backgroundColor: priorityColor(t, pick.priority) }]} />
-              <Text
-                style={[styles.clashActName, recommended && styles.clashActNameKeep]}
-                numberOfLines={1}
-                maxFontSizeMultiplier={MAX_FONT_SCALE}
-              >
-                {artistDisplayName(pick.set, separator)}
-              </Text>
-              {recommended ? (
-                <View style={styles.clashKeepTag}>
-                  <Text style={styles.clashKeepTagText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                    Keep
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          );
-        })}
-      </View>
-    </TouchableOpacity>
-  );
-
-  if (reduceMotion) return card;
-  return <Animated.View entering={FadeIn.duration(motionDuration.med)}>{card}</Animated.View>;
-}
-
 const useStyles = makeStyles((t) => ({
   container: {
     flex: 1,
@@ -1363,6 +1316,52 @@ const useStyles = makeStyles((t) => ({
   },
   calendarButtonDisabled: {
     opacity: 0.5,
+  },
+  listenCard: {
+    marginBottom: t.spacing[3],
+    paddingHorizontal: t.spacing[3],
+    paddingBottom: t.spacing[1],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  listenToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    minHeight: 44,
+  },
+  listenTitle: {
+    ...typeStyle('label'),
+    color: t.colors.text.primary,
+    flex: 1,
+  },
+  listenDay: {
+    marginBottom: t.spacing[2],
+  },
+  listenDayLabel: {
+    ...typeStyle('caption', 700),
+    color: t.colors.text.secondary,
+  },
+  listenRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    minHeight: 44,
+  },
+  listenName: {
+    ...typeStyle('body'),
+    color: t.colors.text.primary,
+    flex: 1,
+  },
+  listenLinkHit: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  listenLink: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
   },
   separator: {
     height: t.spacing[2],

@@ -13,14 +13,14 @@ env:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Plan your whole weekend|Select a Festival"
+      text: "Plan your weekend|Select a Festival"
     timeout: 90000
 - takeScreenshot: 01-launch
 - runFlow:
     when:
-      visible: "Plan your whole weekend"
+      visible: "Plan your weekend"
     commands:
-      - assertVisible: "Plan your whole weekend"
+      - assertVisible: "Plan your weekend"
       - tapOn: "Skip intro"
 - extendedWaitUntil:
     visible: "Select a Festival"
@@ -131,11 +131,11 @@ env:
     timeout: 6000
 - takeScreenshot: 07-cards-saturday
 
-# Switch the My Plan/Crew/Lineup NativeTabs by their label, exactly as the
+# Switch the Picks/Crew/Lineup NativeTabs by their label, exactly as the
 # passing Android smoke does. Each screenshot is taken BEFORE its assertion so a
 # failure still captures the real screen — the "Remove credential-bearing Maestro
 # metadata" CI step strips Maestro's own debug hierarchy from the artifact.
-- tapOn: "My Plan"
+- tapOn: "Picks"
 - takeScreenshot: 10-picks
 - extendedWaitUntil:
     visible:
@@ -174,7 +174,7 @@ env:
 - takeScreenshot: 08-timeline
 - openLink: "festie://grid"
 - extendedWaitUntil:
-    visible: "Schedule grid"
+    visible: ".*· Grid"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
@@ -215,11 +215,11 @@ env:
     id: "map-sos-fab"
 - extendedWaitUntil:
     visible:
-      text: "Drop pin|Map needs the festival downloaded for offline.*"
+      text: "Add meeting point|Map needs the festival downloaded for offline.*"
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 6000
-- assertNotVisible: "Find each other"
+- assertNotVisible: "Find your crew"
 - takeScreenshot: 16-map
 - openLink: "festie://compass"
 - extendedWaitUntil:
@@ -233,9 +233,10 @@ env:
 - takeScreenshot: 17-compass
 - openLink: "festie://plan-share"
 - extendedWaitUntil:
-    visible: "Share plan"
+    visible: "Share picks"
     timeout: 30000
-- tapOn: "Text crew"
+- tapOn:
+    id: "plan-share-tab-text"
 - assertVisible:
     id: "plan-share-tab-text"
     selected: true

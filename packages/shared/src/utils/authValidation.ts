@@ -1,4 +1,5 @@
 import { AUTH_COPY } from '../constants/authCopy';
+import { passwordPolicyError } from './passwordPolicy';
 
 // Source of truth: lib/helpers/validation.ts (backend username rule).
 const USERNAME_RE = /^[a-zA-Z0-9_-]+( [a-zA-Z0-9_-]+)*$/;
@@ -13,10 +14,11 @@ export function usernameError(value: string): string | null {
 export function validateNewPassword(
   password: string,
   confirm: string,
+  ctx?: { username?: string | null; email?: string | null },
 ): { password?: string; confirmPassword?: string } {
   const errors: { password?: string; confirmPassword?: string } = {};
-  if (!password) errors.password = 'Password is required';
-  else if (password.length < 8) errors.password = 'Password must be at least 8 characters';
+  const policyError = passwordPolicyError(password, ctx);
+  if (policyError) errors.password = policyError;
   else if (password !== confirm) errors.confirmPassword = 'Passwords do not match';
   return errors;
 }

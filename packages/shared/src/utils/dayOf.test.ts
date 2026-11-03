@@ -5,6 +5,7 @@ import {
   fmtTimeLeft,
   fmtZonedClock,
   fmtZonedWeekday,
+  logicalDayEndAt,
   logicalDayIndexAt,
   nowPositionPercent,
   selectActiveMeet,
@@ -15,6 +16,7 @@ import {
   sosWhen,
   zonedCalendarDayDiff,
 } from './dayOf';
+import { lostContactLabel } from './liveLocation';
 
 // All zoned: assertions hold in every host zone. New York is UTC-4 in September.
 const TZ = 'America/New_York';
@@ -39,6 +41,18 @@ const SETS = [
   set('late', 0, '23:30', '01:30'), // runs past midnight
   set('sat', 1, '20:00', '21:00'),
 ];
+
+describe('logicalDayEndAt', () => {
+  it('returns 06:00 the next day, including after midnight on the same logical day', () => {
+    const end = ny('2026-09-05', '06:00');
+    expect(logicalDayEndAt(DAYS, ny('2026-09-04', '23:00'), TZ)).toBe(end);
+    expect(logicalDayEndAt(DAYS, ny('2026-09-05', '01:00'), TZ)).toBe(end);
+  });
+
+  it('is null before day 1', () => {
+    expect(logicalDayEndAt(DAYS, ny('2026-09-04', '05:00'), TZ)).toBeNull();
+  });
+});
 
 describe('logicalDayIndexAt', () => {
   it('keeps 01:00 after midnight on the previous festival day', () => {
@@ -179,8 +193,57 @@ describe('selectCrewWhereabouts', () => {
     expect(rows.map((r) => r.userId)).toEqual(['c', 'b', 'a', 'd']);
     expect(rows[0]!.name).toBe('cat');
     expect(rows[1]!.live).toBe('live');
-    expect(rows[2]!.statusLabel).toBe('Here · Big tree');
+    expect(rows[2]!.statusLabel).toBe("I'm here · Big tree");
     expect(rows[3]!.statusLabel).toBeNull();
+  });
+});
+
+describe('selectCrewWhereabouts battery', () => {
+  it('gives battery for a live peer and null for a stale one', () => {
+    const nowMs = Date.parse('2026-09-04T21:00:00Z');
+    const peer = (userId: string, serverAt: string) => ({
+      crewId: 'c1',
+      userId,
+      username: userId,
+      lat: 0,
+      lng: 0,
+      battery: 55,
+      capturedAt: '',
+      serverAt,
+    });
+    const rows = selectCrewWhereabouts({
+      members: [{ userId: 'a', name: 'Ana' }, { userId: 'b', name: 'Ben' }],
+      statuses: [],
+      peers: { a: peer('a', '2026-09-04T20:59:50Z'), b: peer('b', '2026-09-04T20:58:00Z') },
+      sos: [],
+      meetingPoints: [],
+      selfUserId: 'me',
+      nowMs,
+    });
+    expect(rows.find((r) => r.userId === 'a')!.battery).toBe(55);
+    expect(rows.find((r) => r.userId === 'b')!.battery).toBeNull();
+  });
+});
+
+describe('selectCrewWhereabouts lost contact', () => {
+  it('gives lostAt for a swept peer and null once they share again', () => {
+    const nowMs = Date.parse('2026-09-04T21:00:00Z');
+    const base = {
+      members: [{ userId: 'a', name: 'Ana' }],
+      statuses: [],
+      sos: [],
+      meetingPoints: [],
+      selfUserId: 'me',
+      nowMs,
+    };
+    const lost = selectCrewWhereabouts({ ...base, peers: {}, lostContact: { a: '2026-09-04T20:48:00Z' } });
+    expect(lost[0]!.lostAt).toBe(Date.parse('2026-09-04T20:48:00Z'));
+    expect(lostContactLabel(lost[0]!.lostAt!, nowMs)).toBe('Lost contact 12 min ago');
+
+    const peer = { crewId: 'c1', userId: 'a', username: 'a', lat: 0, lng: 0, capturedAt: '', serverAt: '2026-09-04T20:59:50Z' };
+    const back = selectCrewWhereabouts({ ...base, peers: { a: peer }, lostContact: { a: '2026-09-04T20:48:00Z' } });
+    expect(back[0]!.lostAt).toBeNull();
+    expect(lostContactLabel(nowMs - 125 * 60_000, nowMs)).toBe('Lost contact 2 h ago');
   });
 });
 
@@ -260,5 +323,39 @@ describe('nowPositionPercent', () => {
   it('places 01:00 on the next calendar date inside a 1200-1560 window', () => {
     const now = Date.UTC(2026, 6, 11, 5, 0); // Jul 11, 01:00 EDT = minute 1500 of Jul 10
     expect(nowPositionPercent(now, '2026-07-10', { minMin: 1200, maxMin: 1560 }, TZ)).toBeCloseTo((300 / 360) * 100, 5);
+  });
+});
+
+describe('selectCrewWhereabouts status freshness', () => {
+  const nowMs = Date.parse('2026-09-04T21:00:00Z');
+  const st = (user_id: string, status: 'here' | 'at-stage', updated_at: string, note: string | null = null) => ({
+    crew_id: 'c1',
+    user_id,
+    status,
+    target_meeting_point_id: null,
+    eta_minutes: null,
+    note,
+    updated_at,
+  });
+  const run = (statuses: ReturnType<typeof st>[]) =>
+    selectCrewWhereabouts({
+      members: [{ userId: 'a', name: 'Ana' }, { userId: 'b', name: 'Ben' }],
+      statuses,
+      peers: {},
+      sos: [],
+      meetingPoints: [],
+      nowMs,
+    });
+
+  it('hides a 5-hour-old status and ranks it after a fresh one', () => {
+    const rows = run([st('a', 'here', '2026-09-04T16:00:00Z'), st('b', 'here', '2026-09-04T20:30:00Z')]);
+    expect(rows.map((r) => r.userId)).toEqual(['b', 'a']);
+    expect(rows[1]!.statusLabel).toBeNull();
+    expect(rows[1]!.statusAt).toBeNull();
+  });
+
+  it('labels at-stage with the stage name', () => {
+    const rows = run([st('a', 'at-stage', '2026-09-04T20:30:00Z', 'Main Stage')]);
+    expect(rows[0]!.statusLabel).toBe('At Main Stage');
   });
 });

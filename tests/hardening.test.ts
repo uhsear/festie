@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
-import fs from 'fs';
 import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
@@ -8,6 +7,7 @@ import { io as createSocketClient } from 'socket.io-client';
 import { Pool } from 'pg';
 import crypto from 'crypto';
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema } from './_test-schema';
 import { sanitizeString } from '../lib/helpers/sanitize';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -21,7 +21,6 @@ const AVATAR_FIXTURE = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91Jpz
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 if (!TEST_DATABASE_URL) { console.error('ERROR: TEST_DATABASE_URL env var required. Set it in .env. (Never falls back to DATABASE_URL to protect production data.)'); process.exit(1); }
 if (!TEST_DATABASE_URL.includes('_test')) { console.error('SAFETY: TEST_DATABASE_URL must contain "_test" in the database name to prevent accidental production wipe.'); process.exit(1); }
-let testDbReady = false;
 
 function createFestivalFixture() {
   return [
@@ -45,31 +44,6 @@ function createFestivalFixture() {
       ],
     },
   ];
-}
-
-async function ensureTestSchema() {
-  if (testDbReady) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    const { rows } = await pool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1");
-    if (rows.length === 0) {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS citext');
-      const schemaPath = path.join(__dirname, '..', 'migrations', '004_postgresql_baseline.sql');
-      const schema = fs.readFileSync(schemaPath, 'utf8');
-      await pool.query(schema);
-    }
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    const migrationFiles = fs.readdirSync(migrationsDir)
-      .filter(f => f.endsWith('.sql') && !f.startsWith('004_'))
-      .sort();
-    for (const file of migrationFiles) {
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      await pool.query(sql).catch(() => {});
-    }
-    testDbReady = true;
-  } finally {
-    await pool.end();
-  }
 }
 
 async function truncateAllTables(databaseUrl: string) {
@@ -106,7 +80,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
 
   describe('Password Reset Flow', { concurrency: 1 }, () => {
     test('GET /reset/:token redirects 303 to forgot-password for invalid token format', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -125,7 +99,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('POST /api/v1/auth/reset-password with expired token fails', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -164,7 +138,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('POST /api/v1/auth/reset-password with invalid token fails', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -186,7 +160,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('POST /api/v1/auth/forgot-password rate limits per email', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -216,7 +190,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
 
   describe('Session Management', { concurrency: 1 }, () => {
     test('GET /api/v1/auth/sessions requires authentication', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -234,7 +208,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('GET /api/v1/auth/sessions lists user sessions', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -264,7 +238,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('DELETE /api/v1/auth/sessions/:id revokes session', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -310,7 +284,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('DELETE /api/v1/auth/sessions/:id fails for invalid ID format', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -338,7 +312,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('DELETE /api/v1/auth/sessions/:id prevents current session revocation', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -374,7 +348,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
 
   describe('Export & Share', { concurrency: 1 }, () => {
     test('GET /s/:profileId loads share page', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -414,23 +388,33 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
         .post('/api/v1/festivals')
         .set('x-user-token', adminToken)
         .set(TRUSTED_MUTATION_HEADER, '1')
-        .send({ name: 'Share Test Fest', location: 'Test', stages: [{ id: 'main', name: 'Main', color: '#ff0000' }], days: [] });
+        .send({
+          name: 'Share Test Fest', location: 'Test', timeZone: 'America/New_York',
+          stages: [{ id: 'main', name: 'Main', color: '#ff0000' }],
+          days: [{ label: 'Fri', date: '2026-06-05', sets: [{ id: 'share-s1', artist: 'A', stageId: 'main', startTime: '20:00', endTime: '21:00' }] }],
+        });
       const festivalId = festivalRes.body.data.id;
+      // A new festival is a draft; attendees can join it once it is published.
+      await request(app)
+        .post(`/api/v1/festivals/${festivalId}/publish`)
+        .set('x-user-token', adminToken)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .expect(200);
 
       const profileRes = await request(app)
         .post('/api/v1/profiles')
         .set('x-user-token', token)
         .set(TRUSTED_MUTATION_HEADER, '1')
         .send({ festivalId });
-      const profileId = profileRes.body.data.id;
+      assert.ok(profileRes.body.data.id);
 
-      const shareRes = await request(app).get(`/s/${profileId}`);
+      const shareRes = await request(app).get(`/s/${(await request(app).post(`/api/v1/account/share-link/${festivalId}`).set('x-user-token', token).set(TRUSTED_MUTATION_HEADER, '1').expect(200)).body.data.token}`);
       assert.equal(shareRes.status, 200);
       assert.ok(shareRes.text.includes('<!DOCTYPE html') || shareRes.text.includes('<!doctype html'));
     });
 
     test('GET /s/:profileId returns 404 for invalid profile', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -448,7 +432,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('GET /s/:profileId/json returns JSON data', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -488,23 +472,33 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
         .post('/api/v1/festivals')
         .set('x-user-token', adminToken2)
         .set(TRUSTED_MUTATION_HEADER, '1')
-        .send({ name: 'JSON Fest', location: 'Test', stages: [{ id: 'main', name: 'Main', color: '#00ff00' }], days: [] });
+        .send({
+          name: 'JSON Fest', location: 'Test', timeZone: 'America/New_York',
+          stages: [{ id: 'main', name: 'Main', color: '#00ff00' }],
+          days: [{ label: 'Fri', date: '2026-06-05', sets: [{ id: 'share-s1', artist: 'A', stageId: 'main', startTime: '20:00', endTime: '21:00' }] }],
+        });
       const festivalId = festivalRes.body.data.id;
+      // A new festival is a draft; attendees can join it once it is published.
+      await request(app)
+        .post(`/api/v1/festivals/${festivalId}/publish`)
+        .set('x-user-token', adminToken2)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .expect(200);
 
       const profileRes = await request(app)
         .post('/api/v1/profiles')
         .set('x-user-token', token)
         .set(TRUSTED_MUTATION_HEADER, '1')
         .send({ festivalId });
-      const profileId = profileRes.body.data.id;
+      assert.ok(profileRes.body.data.id);
 
-      const jsonRes = await request(app).get(`/s/${profileId}/json`);
+      const jsonRes = await request(app).get(`/s/${(await request(app).post(`/api/v1/account/share-link/${festivalId}`).set('x-user-token', token).set(TRUSTED_MUTATION_HEADER, '1').expect(200)).body.data.token}/json`);
       assert.equal(jsonRes.status, 200);
       assert.ok(jsonRes.body.data || jsonRes.body);
     });
 
     test('GET /s/:profileId/json returns 404 for invalid profile', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -524,7 +518,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
 
   describe('Health Endpoints', { concurrency: 1 }, () => {
     test('GET /api/ready returns 200 when ready', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -542,7 +536,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('GET /api/info returns feature flags and limits', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -563,7 +557,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('GET /health returns ok status', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -584,7 +578,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
 
   describe('Socket.IO Events', { concurrency: 1 }, () => {
     test('join:crew event validates crewId', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer, io: testIo } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -641,7 +635,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('join:festival event requires authentication', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer, io: testIo } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
@@ -686,7 +680,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     });
 
     test('leave:crew event removes socket from crew room', async () => {
-      await ensureTestSchema();
+      await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
       const { app: testApp, server: testServer, io: testIo } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,

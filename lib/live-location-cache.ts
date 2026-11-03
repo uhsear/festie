@@ -42,6 +42,34 @@ const POSITION_TTL_MS = 120_000;
 /** Default freshness window for what a snapshot returns (mirrors STALE_MS). */
 const SNAPSHOT_FRESH_MS = POSITION_TTL_MS;
 
+/**
+ * Longest share window a client may claim (12 h). Mirrors `LIVE_SHARE_MAX_MS`
+ * in @festie/shared, mirrored for the same reason as POSITION_TTL_MS; keep the
+ * two in sync.
+ */
+export const MAX_SHARE_WINDOW_MS = 12 * 3_600_000;
+
+/** capturedAt may not be more than this far in the past relative to server time. */
+const CAPTURED_AT_MAX_AGE_MS = 60_000;
+/** ...nor more than this far in the future (clock skew tolerance). */
+const CAPTURED_AT_MAX_SKEW_MS = 30_000;
+
+/**
+ * Clamp a client-supplied `capturedAt` to a small window around server time
+ * (L4): a client must not be able to appear perpetually "live · N ago" nor
+ * stamp a future fix. Returns an ISO string clamped to [now-MAXAGE, now+SKEW].
+ * Falls back to `serverNowIso` if the input is unparseable.
+ */
+export function clampCapturedAt(capturedAt: any, serverNow: number, serverNowIso: string): string {
+  const t = Date.parse(capturedAt);
+  if (!Number.isFinite(t)) return serverNowIso;
+  const lo = serverNow - CAPTURED_AT_MAX_AGE_MS;
+  const hi = serverNow + CAPTURED_AT_MAX_SKEW_MS;
+  if (t < lo) return new Date(lo).toISOString();
+  if (t > hi) return new Date(hi).toISOString();
+  return new Date(t).toISOString();
+}
+
 function positionsKey(crewId: string): string {
   return `loc:pos:${crewId}`;
 }
@@ -79,6 +107,43 @@ export async function dropLivePosition(redis: any, crewId: string, userId: strin
     await redis.hdel(positionsKey(crewId), userId);
   } catch {
     /* TTL will reap it */
+  }
+}
+
+export interface LivePosition {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  capturedAt: string;
+}
+
+/**
+ * One sharer's cached position, or `null` when it is missing, malformed or
+ * older than POSITION_TTL_MS (by `serverAt`). Swallows Redis errors. Used by a
+ * missed check-in timer to attach the freshest known fix to its SOS.
+ */
+export async function readLivePosition(
+  redis: any,
+  crewId: string,
+  userId: string,
+  now: number = Date.now(),
+): Promise<LivePosition | null> {
+  if (!redis || !crewId || !userId) return null;
+  try {
+    const raw = await redis.hget(positionsKey(crewId), userId);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !isFiniteNumber(obj.lat) || !isFiniteNumber(obj.lng)) return null;
+    const serverMs = Date.parse(obj.serverAt);
+    if (!Number.isFinite(serverMs) || now - serverMs > POSITION_TTL_MS) return null;
+    return {
+      lat: obj.lat,
+      lng: obj.lng,
+      accuracy: optionalFiniteNumber(obj.accuracy),
+      capturedAt: typeof obj.capturedAt === 'string' ? obj.capturedAt : obj.serverAt,
+    };
+  } catch {
+    return null;
   }
 }
 

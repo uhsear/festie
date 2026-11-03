@@ -1,4 +1,4 @@
-import type { OnlineUser, Priority, CrewMemberStatus } from './domain';
+import type { OnlineUser, Priority, CrewMemberStatus, CrewExpense, CrewMemberDay } from './domain';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket.IO Event Payload Types
@@ -87,12 +87,15 @@ export interface CrewUpdatedPayload {
 export interface CrewDeletedPayload {
   crewId: string;
   festivalId?: string;
+  /** Set when the owner deleted the crew; absent for admin deletes. */
+  deletedBy?: string;
 }
 
 export interface CrewHomeBaseUpdatedPayload {
   crewId: string;
   location: string | null;
   time: string | null;
+  planB?: string | null;
 }
 
 export interface CrewMeetingPointPayload {
@@ -106,6 +109,12 @@ export interface CrewMeetingPointRemovedPayload {
   crewId: string;
 }
 
+export interface CrewDaysUpdatedPayload {
+  crewId: string;
+  userId: string;
+  days: CrewMemberDay[];
+}
+
 export interface CrewPollCreatedPayload {
   pollId: string;
   question: string;
@@ -116,7 +125,9 @@ export interface CrewPollCreatedPayload {
 export interface CrewPollVotedPayload {
   pollId: string;
   userId: string;
+  /** First choice, or -1 when the vote was taken back. */
   optionIndex: number;
+  optionIndexes?: number[];
 }
 
 export interface CrewPollClosedPayload {
@@ -131,6 +142,25 @@ export interface CrewExpensePayload extends VersionedPayload {
 export interface CrewExpenseDeletedPayload extends VersionedPayload {
   crewId: string;
   expenseId: string;
+}
+
+/** An expense was edited, a payment confirmed or disputed, or the currency changed. */
+export interface CrewExpenseUpdatedPayload extends VersionedPayload {
+  crewId: string;
+  expense?: CrewExpense;
+}
+
+/**
+ * Any `crew:packing-*` event. Clients treat it as a reload signal and do not
+ * rely on the item, items or itemId the server also sends.
+ */
+export interface CrewPackingChangedPayload {
+  crewId: string;
+}
+
+/** Any `crew:ride-*` event, seat changes included. A reload signal like packing. */
+export interface CrewRidesChangedPayload {
+  crewId: string;
 }
 
 export interface CrewActivityPayload extends VersionedPayload {
@@ -238,6 +268,13 @@ export interface SosRaisedPayload extends VersionedPayload {
   raisedAt: string;
 }
 
+/** Server to crew room: the full list of members who have seen one raiser's SOS. */
+export interface SosSeenPayload extends VersionedPayload {
+  crewId: string;
+  raiserId: string;
+  seenBy: Array<{ userId: string; username: string }>;
+}
+
 /**
  * server→client: emitted by POST /crews/:crewId/sos/clear. `userId` is the
  * raiser whose SOS was cleared; `clearedBy` is the username of the person who
@@ -303,11 +340,19 @@ export interface ServerToClientEvents {
   'crew:meeting-point-created': (data: CrewMeetingPointPayload) => void;
   'crew:meeting-point-updated': (data: CrewMeetingPointPayload) => void;
   'crew:meeting-point-removed': (data: CrewMeetingPointRemovedPayload) => void;
+  'crew:days-updated': (data: CrewDaysUpdatedPayload) => void;
   'crew:poll-created': (data: CrewPollCreatedPayload) => void;
   'crew:poll-voted': (data: CrewPollVotedPayload) => void;
   'crew:poll-closed': (data: CrewPollClosedPayload) => void;
   'crew:expense-added': (data: CrewExpensePayload) => void;
   'crew:expense-deleted': (data: CrewExpenseDeletedPayload) => void;
+  'crew:expense-updated': (data: CrewExpenseUpdatedPayload) => void;
+  'crew:packing-created': (data: CrewPackingChangedPayload) => void;
+  'crew:packing-updated': (data: CrewPackingChangedPayload) => void;
+  'crew:packing-deleted': (data: CrewPackingChangedPayload) => void;
+  'crew:ride-created': (data: CrewRidesChangedPayload) => void;
+  'crew:ride-updated': (data: CrewRidesChangedPayload) => void;
+  'crew:ride-deleted': (data: CrewRidesChangedPayload) => void;
   'crew:activity': (data: CrewActivityPayload) => void;
   'crew:status-updated': (data: CrewStatusUpdatedPayload) => void;
 
@@ -316,6 +361,7 @@ export interface ServerToClientEvents {
   'location:peer-stopped': (data: LocationPeerStoppedPayload) => void;
   'sos:raised': (data: SosRaisedPayload) => void;
   'sos:cleared': (data: SosClearedPayload) => void;
+  'sos:seen': (data: SosSeenPayload) => void;
 
   // Identity
   'profile:identity': (data: { festivalId: string; profileId: string; username: string; avatarUrl?: string }) => void;

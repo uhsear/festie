@@ -68,6 +68,7 @@ describe('re-auth window (admin festival delete)', { skip, concurrency: 1 }, () 
       NODE_ENV: 'test',
       REDIS_ENABLED: 'false',
       PUBLIC_ORIGIN: '',
+      GOOGLE_WEB_CLIENT_ID: '',
     });
     await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
     try {
@@ -133,6 +134,15 @@ describe('re-auth window (admin festival delete)', { skip, concurrency: 1 }, () 
       await reauth(ADMIN_PASSWORD).expect(200);
       const deleted = await del();
       assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+
+      // T45: a provider token is refused while no provider is configured.
+      const provider = await api
+        .post('/api/v1/auth/reauth')
+        .set('x-user-token', token)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .send({ provider: 'google', idToken: 'x'.repeat(40) });
+      assert.equal(provider.status, 404);
+      assert.equal(provider.body.error.code, 'PROVIDER_NOT_CONFIGURED');
     } finally {
       await planner.close();
     }

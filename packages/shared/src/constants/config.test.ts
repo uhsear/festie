@@ -4,12 +4,16 @@ import {
   PRIORITY_OPTIONS,
   PRIORITY_SYMBOLS,
   CREW_ACTIVITY_LABELS,
+  CREW_CURRENCIES,
+  PACKING_TEMPLATES,
   EXPENSE_CATEGORIES,
   expenseCategoryFor,
   RATING_SCALE_DATA,
   RATING_SCALE,
   RATING_LABEL,
   ratingCaption,
+  LIVE_SHARE_DURATIONS,
+  FIND_FRIEND_COPY,
 } from './config';
 import { PRIORITY_WEIGHT } from '../utils/crewNudges';
 
@@ -75,16 +79,38 @@ describe('CREW_ACTIVITY_LABELS', () => {
       'meeting-point-added',
       'meeting-point-removed',
       'crew-updated',
+      'owner-changed',
+      'poll-closed',
+      'meeting-point-updated',
+      'expense_settled',
+      'packing-created',
+      'ride-created',
+      'photo-album-updated',
+      'battery-low',
     ];
     for (const key of required) {
       expect(CREW_ACTIVITY_LABELS[key], `missing key: ${key}`).toBeTruthy();
     }
   });
 
+  it('has the check-in labels', () => {
+    expect(CREW_ACTIVITY_LABELS['checkin-started']).toBe('started a check-in timer');
+    expect(CREW_ACTIVITY_LABELS['checkin-done']).toBe('checked in safe');
+  });
+
   it('all values are non-empty strings', () => {
     for (const [, label] of Object.entries(CREW_ACTIVITY_LABELS)) {
       expect(typeof label).toBe('string');
       expect(label.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('FIND_FRIEND_COPY', () => {
+  it('says none of the retired or watching words', () => {
+    for (const v of Object.values(FIND_FRIEND_COPY)) {
+      const text = typeof v === 'function' ? (v as (a: string | number) => string)('X') : v;
+      expect(text).not.toMatch(/log in|\bping|\bpoke|\btrack|\bfollow|\bpursue/i);
     }
   });
 });
@@ -170,6 +196,34 @@ describe('PRIORITY_SYMBOLS', () => {
     for (const opt of PRIORITY_OPTIONS) {
       expect(PRIORITY_SYMBOLS[opt.value].short).toBe(PRIORITY_LABEL[opt.value]);
       expect(PRIORITY_SYMBOLS[opt.value].label).toBe(opt.label);
+    }
+  });
+});
+
+describe('LIVE_SHARE_DURATIONS', () => {
+  it('has only numeric bounds', () => {
+    expect(LIVE_SHARE_DURATIONS.map((d) => d.id)).toEqual(['1h', '2h', '4h']);
+    for (const d of LIVE_SHARE_DURATIONS) expect(typeof d.ms).toBe('number');
+  });
+});
+
+describe('crew money and packing constants', () => {
+  it('lists 14 unique three-letter currencies starting with USD', () => {
+    expect(CREW_CURRENCIES).toHaveLength(14);
+    expect(new Set(CREW_CURRENCIES).size).toBe(14);
+    expect(CREW_CURRENCIES[0]).toBe('USD');
+    for (const c of CREW_CURRENCIES) expect(c).toMatch(/^[A-Z]{3}$/);
+  });
+
+  it('has the camping and day-trip templates with unique items', () => {
+    expect(PACKING_TEMPLATES.map((t) => t.id)).toEqual(['camping', 'day-trip']);
+    expect(PACKING_TEMPLATES.map((t) => t.items.length)).toEqual([12, 8]);
+    for (const t of PACKING_TEMPLATES) expect(new Set(t.items).size).toBe(t.items.length);
+  });
+
+  it('labels the new activity types', () => {
+    for (const k of ['expense-edited', 'payment-confirmed', 'payment-disputed', 'currency-changed', 'expense_settled']) {
+      expect(CREW_ACTIVITY_LABELS[k]).toBeTruthy();
     }
   });
 });

@@ -5,6 +5,7 @@ import { registerCreateReconciler } from '../services/offlineQueue';
 import { mapErrorToUserMessage } from '../services/errors';
 import { getStorage } from '../platform/storage';
 import { writeOutcomeOf, type WriteOutcome } from '../utils/crewWrites';
+import { crewCopy } from '../utils/crewManage';
 import { useAuthStore } from './authStore';
 import {
   Crew,
@@ -20,6 +21,7 @@ import {
   PollSetRef,
   ClosePollOptions,
   CrewMeetingPoint,
+  CrewMemberDay,
   CreateCrewMeetingPointRequest,
   UpdateCrewMeetingPointRequest,
   CrewPackingItem,
@@ -33,6 +35,7 @@ import {
   CrewExpense,
   CrewExpenseBalance,
   CreateCrewExpenseRequest,
+  UpdateCrewExpenseRequest,
   SettleCrewExpenseRequest,
   CrewSettlement,
   CrewSettlementPlan,
@@ -44,6 +47,31 @@ export function parseActivityPage(res: unknown): CrewActivityEntry[] {
   if (Array.isArray(res)) return res as CrewActivityEntry[];
   const page = res as { items?: CrewActivityEntry[]; activity?: CrewActivityEntry[] } | null;
   return page?.items ?? page?.activity ?? [];
+}
+
+/** Reads `nextCursor` from an activity response; null when absent. */
+function parseActivityCursor(res: unknown): string | null {
+  const cursor = (res as { nextCursor?: unknown } | null)?.nextCursor;
+  return typeof cursor === 'string' && cursor ? cursor : null;
+}
+
+/** Merge activity pages: de-duplicate by id (later wins), newest first by `created_at` then `id`. */
+function mergeActivity(...lists: CrewActivityEntry[][]): CrewActivityEntry[] {
+  const byId = new Map<string, CrewActivityEntry>();
+  for (const list of lists) for (const item of list) byId.set(item.id, item);
+  return [...byId.values()].sort(
+    (a, b) => String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id)),
+  );
+}
+
+/** Replace the user's votes on a poll with one entry per chosen index. */
+function withMyVotes(p: CrewPoll, userId: string, optionIndexes: number[]): CrewPoll {
+  const others = (p.votes ?? []).filter((v) => v.user_id !== userId);
+  return { ...p, votes: [...others, ...optionIndexes.map((option) => ({ option, user_id: userId }))] };
+}
+
+function markPollClosed(p: CrewPoll): CrewPoll {
+  return p.closed ? p : { ...p, closed: true, closed_at: new Date().toISOString() };
 }
 
 /** Reads `{ overlap: { [setId]: member[] } }` into the sets picked by 2+ members. */
@@ -76,12 +104,19 @@ export interface CrewState {
   // sync snapshot list (NOT live GPS) — render each row's `updated_at` with
   // formatStaleness ("as of N ago"), never as real-time.
   crewStatuses: CrewMemberStatus[];
+  // T43: each member's per-day answers for the active crew (no row = no answer).
+  crewDays: CrewMemberDay[];
   expenses: CrewExpense[];
   expenseBalances: CrewExpenseBalance[];
   // Netted who-pays-whom plan (greedy min-cash-flow) + payee handles. Loaded
   // alongside balances from the settlement-plan endpoint.
   settlements: CrewSettlement[];
+  // ISO 4217 label from the settlement plan; the crew owner sets it. Persisted
+  // with `settlements` so offline amounts keep the right symbol.
+  expenseCurrency: string;
   activity: CrewActivityEntry[];
+  // Cursor for the next older activity page; null when there is none. Not persisted.
+  activityNextCursor: string | null;
   crewLoading: boolean;
   error: string | null;
   // ── Offline read-cache bookkeeping (persisted) ──────────────────
@@ -102,10 +137,15 @@ export interface CrewActions {
   // body; the snake_case totem_name/totem_emoji come back on the returned crew,
   // merged onto activeCrew + the crews list (mirrors updateHomeBase).
   updateCrew: (crewId: string, request: UpdateCrewRequest) => Promise<Crew>;
+  // Owner-only lock switch (PUT /crews/:id { inviteLocked }). Not offline-eligible.
+  setCrewLocked: (crewId: string, locked: boolean) => Promise<Crew>;
   joinByCode: (request: JoinCrewRequest) => Promise<JoinCrewResponse | null>;
   leaveCrew: (crewId: string) => Promise<void>;
   kickMember: (crewId: string, memberId: string) => Promise<void>;
   transferOwnership: (crewId: string, newOwnerId: string) => Promise<void>;
+  // Owner leave: transfer, then leave. 'owner-changed' means the transfer
+  // worked but leave failed; the user is now a regular member and can retry.
+  handOverAndLeave: (crewId: string, newOwnerId: string) => Promise<'left' | 'owner-changed'>;
   regenerateInvite: (crewId: string) => Promise<string>;
   // Reform the given (source) crew for another festival: server creates a NEW
   // crew in `targetFestivalId`, auto-adds prior members who already have a
@@ -116,6 +156,8 @@ export interface CrewActions {
   deleteCrew: (crewId: string) => Promise<void>;
   loadOverlap: (crewId: string, festivalId: string) => Promise<void>;
   forceAddMember: (crewId: string, userId: string) => Promise<void>;
+  // Admin add by exact username. Returns the matched username.
+  forceAddByUsername: (crewId: string, username: string) => Promise<string>;
   // Polls (routes/crew-polls.ts).
   loadPolls: (crewId: string) => Promise<void>;
   // `setRefs` (optional) carries the schedule-aware composer's option→set
@@ -123,7 +165,8 @@ export interface CrewActions {
   // only and never sent to the server — closePoll consumes it to spawn the
   // winning set's meeting point + reminder. Plain polls omit it.
   createPoll: (crewId: string, request: CreateCrewPollRequest, setRefs?: (PollSetRef | null)[]) => Promise<CrewPoll>;
-  votePoll: (crewId: string, pollId: string, optionIndex: number) => Promise<void>;
+  votePoll: (crewId: string, pollId: string, optionIndexes: number[]) => Promise<void>;
+  nudgePoll: (crewId: string, pollId: string) => Promise<number>;
   // `opts` (optional) lets a schedule-aware poll, on close, materialize the
   // winning option's linked set as a meeting point + seeded reminder. Omitted →
   // legacy close (just drop the poll).
@@ -137,6 +180,14 @@ export interface CrewActions {
     request: UpdateCrewMeetingPointRequest,
   ) => Promise<CrewMeetingPoint>;
   deleteMeetingPoint: (crewId: string, mpId: string) => Promise<WriteOutcome>;
+  // T43: crew days and the "I'll be there" tap.
+  loadCrewDays: (crewId: string) => Promise<void>;
+  setMyDays: (
+    crewId: string,
+    myUserId: string,
+    body: { days: Array<{ dayIndex: number; answer: CrewMemberDay['answer'] }> },
+  ) => Promise<WriteOutcome>;
+  setMeetingPointComing: (crewId: string, mpId: string, myUserId: string, coming: boolean) => Promise<WriteOutcome>;
   // Packing board (routes/crew-packing.ts). Offline-native like polls.
   loadPacking: (crewId: string) => Promise<void>;
   createPackingItem: (crewId: string, request: CreateCrewPackingItemRequest) => Promise<CrewPackingItem>;
@@ -146,11 +197,18 @@ export interface CrewActions {
     request: UpdateCrewPackingItemRequest,
   ) => Promise<CrewPackingItem>;
   deletePackingItem: (crewId: string, itemId: string) => Promise<WriteOutcome>;
+  // POST /crews/:crewId/packing/batch (template lists). Online prepends the
+  // returned items; offline inserts one placeholder per label.
+  addPackingItems: (crewId: string, labels: string[]) => Promise<WriteOutcome>;
   // Ride board (routes/crew-rides.ts). Offline-native like packing.
   loadRides: (crewId: string) => Promise<void>;
   createRideOffer: (crewId: string, request: CreateCrewRideOfferRequest) => Promise<CrewRideOffer>;
   updateRideOffer: (crewId: string, offerId: string, request: UpdateCrewRideOfferRequest) => Promise<CrewRideOffer>;
   deleteRideOffer: (crewId: string, offerId: string) => Promise<WriteOutcome>;
+  // POST / DELETE /crews/:crewId/rides/:offerId/seat. Optimistic add or remove of
+  // myUserId in passenger_ids; an online error rolls back and rethrows.
+  takeRideSeat: (crewId: string, offerId: string, myUserId: string) => Promise<WriteOutcome>;
+  leaveRideSeat: (crewId: string, offerId: string, myUserId: string) => Promise<WriteOutcome>;
   // Member status (routes/crew-status.ts). Offline-degraded like the crew
   // sub-resources: updateMyStatus queues offline (deterministic clientId
   // collapses toggles) and reconciles on a signal blip. NOT live GPS.
@@ -162,11 +220,21 @@ export interface CrewActions {
   // than acknowledged by the server, so callers never show "sent" copy for it.
   addExpense: (crewId: string, request: CreateCrewExpenseRequest) => Promise<WriteOutcome>;
   removeExpense: (crewId: string, expenseId: string) => Promise<WriteOutcome>;
+  // PUT is a full replacement (any member, not for payments). Offline merges the
+  // request onto the local row and queues it.
+  updateExpense: (crewId: string, expenseId: string, request: UpdateCrewExpenseRequest) => Promise<WriteOutcome>;
+  // Owner-only. Relabels the crew currency without converting amounts.
+  setExpenseCurrency: (crewId: string, currency: string) => Promise<WriteOutcome>;
+  // The payee says a marked payment arrived (true) or did not (false).
+  confirmPayment: (crewId: string, expenseId: string, received: boolean) => Promise<WriteOutcome>;
+  // The creditor nudges a debtor; the server allows one per day and answers 409.
+  remindPayment: (crewId: string, userId: string) => Promise<WriteOutcome>;
   settleExpense: (crewId: string, request: SettleCrewExpenseRequest) => Promise<WriteOutcome>;
   // Activity feed (routes/crew-activity.ts).
   loadActivity: (crewId: string) => Promise<void>;
+  loadOlderActivity: (crewId: string) => Promise<void>;
   // Home base (owner-only PUT /crews/:id/home-base).
-  updateHomeBase: (crewId: string, payload: { location: string | null; time: string | null }) => Promise<void>;
+  updateHomeBase: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => Promise<void>;
   // M6 Crew Photo Wall (Phase 1, link-out): set/clear the crew shared-album URL
   // (member-gated PUT /crews/:id/photo-album). Pass null to clear.
   updatePhotoAlbum: (crewId: string, payload: { photoAlbumUrl: string | null }) => Promise<void>;
@@ -175,13 +243,14 @@ export interface CrewActions {
   // active crew. They mutate the in-memory polls / meetingPoints / activeCrew
   // home base so the open crew screen reflects remote changes live, without an
   // API round-trip. All are guarded by the caller against crew mismatch.
-  applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null }) => void;
+  applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => void;
   // M6: merge a remote photo-album change onto the active crew + crews list.
   applyPhotoAlbumUpdate: (crewId: string, payload: { photoAlbumUrl: string | null }) => void;
   applyMeetingPointUpsert: (meetingPoint: CrewMeetingPoint) => void;
   applyMeetingPointRemoval: (mpId: string) => void;
+  applyCrewDays: (payload: { crewId: string; userId: string; days: CrewMemberDay[] }) => void;
   applyPollCreated: (poll: CrewPoll) => void;
-  applyPollVote: (pollId: string, userId: string, optionIndex: number) => void;
+  applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => void;
   applyPollClosed: (pollId: string) => void;
   // M5: upsert a crew member's last-synced status from a remote
   // crew:status-updated event. Replaces any prior row for that user (one row
@@ -203,7 +272,7 @@ async function loadBalances(set: CrewSet, crewId: string): Promise<void> {
   const res = await api.get<CrewSettlementPlan>(`/crews/${crewId}/expenses/settlement-plan`);
   const expenseBalances = res?.balances ?? [];
   const settlements = res?.settlements ?? [];
-  set({ expenseBalances, settlements });
+  set({ expenseBalances, settlements, expenseCurrency: res?.currency ?? 'USD' });
 }
 
 // ── Persisted read-cache size bounds ──────────────────────────────────────
@@ -216,6 +285,7 @@ const MAX_CACHED_PACKING = 200;
 const MAX_CACHED_RIDES = 200;
 const MAX_CACHED_STATUSES = 100;
 const MAX_CACHED_EXPENSES = 100;
+const MAX_CACHED_CREW_DAYS = 600;
 
 // ── Offline optimistic-create helpers (Phase 2) ────────────────────────────
 // Drop any lingering client-only optimistic placeholders from a list. Called
@@ -228,7 +298,7 @@ function dropOptimistic<T extends { _optimistic?: boolean }>(list: T[]): T[] {
 
 let _lastSelectCrewId: string | null = null;
 
-const crewStore: StateCreator<CrewStore> = (set) => ({
+const crewStore: StateCreator<CrewStore> = (set, get) => ({
   crews: [],
   activeCrew: null,
   crewMembers: [],
@@ -238,10 +308,13 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   packingItems: [],
   rideOffers: [],
   crewStatuses: [],
+  crewDays: [],
   expenses: [],
   expenseBalances: [],
   settlements: [],
+  expenseCurrency: 'USD',
   activity: [],
+  activityNextCursor: null,
   crewLoading: false,
   error: null,
   _cachedAt: null,
@@ -279,10 +352,13 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
         packingItems: sameCrew ? state.packingItems : [],
         rideOffers: sameCrew ? state.rideOffers : [],
         crewStatuses: sameCrew ? state.crewStatuses : [],
+        crewDays: sameCrew ? state.crewDays : [],
         expenses: sameCrew ? state.expenses : [],
         expenseBalances: sameCrew ? state.expenseBalances : [],
         settlements: sameCrew ? state.settlements : [],
+        expenseCurrency: sameCrew ? state.expenseCurrency : 'USD',
         activity: sameCrew ? state.activity : [],
+        activityNextCursor: sameCrew ? state.activityNextCursor : null,
       };
     });
     try {
@@ -298,6 +374,8 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
         _cachedAt: Date.now(),
         _cachedCrewId: crewId,
       });
+      // Fire and forget: a failed days read must not fail the crew load.
+      void Promise.resolve(get().loadCrewDays(crewId)).catch(() => {});
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load crew');
       set({ error: message, crewLoading: false });
@@ -343,6 +421,8 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       throw err;
     }
   },
+
+  setCrewLocked: (crewId: string, locked: boolean) => get().updateCrew(crewId, { inviteLocked: locked }),
 
   // POST /crews/join -> the joined crew. Offline: queue the join and insert an
   // optimistic placeholder crew so the user sees "joined" immediately; the
@@ -402,6 +482,16 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       const message = mapErrorToUserMessage(err, 'Failed to leave crew');
       set({ error: message });
       throw err;
+    }
+  },
+
+  handOverAndLeave: async (crewId: string, newOwnerId: string) => {
+    await get().transferOwnership(crewId, newOwnerId);
+    try {
+      await get().leaveCrew(crewId);
+      return 'left';
+    } catch {
+      return 'owner-changed';
     }
   },
 
@@ -538,6 +628,21 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     }
   },
 
+  forceAddByUsername: async (crewId: string, username: string) => {
+    const q = username.trim().replace(/^@/, '');
+    const matches = await api.get<Array<{ id: string; username: string }>>(
+      `/crews/search-users?q=${encodeURIComponent(q)}`,
+    );
+    const match = (matches ?? []).find((u) => u.username.toLowerCase() === q.toLowerCase());
+    if (!match) {
+      const message = crewCopy.noUserCalled(q);
+      set({ error: message });
+      throw new Error(message);
+    }
+    await get().forceAddMember(crewId, match.id);
+    return match.username;
+  },
+
   // ── Polls ──────────────────────────────────────────────────────
   // GET /crews/:crewId/polls -> { polls } (api unwraps the data envelope).
   // Normalize votes the way the web PollsTab does so counts stay consistent.
@@ -588,6 +693,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
               votes: [],
               closes_at: request.closesAt ?? null,
               closed: false,
+              multi_answer: request.multiAnswer ?? false,
               created_at: new Date().toISOString(),
               _optimistic: true,
               ...(localSetRefs ? { set_refs: localSetRefs } : {}),
@@ -616,49 +722,43 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   // option fills instantly (mirrors savePick) — critical on festival-grade signal
   // where the refetch may never complete. Snapshot + roll back on error; the
   // best-effort refetch then reconciles to the server-authoritative counts.
-  votePoll: async (crewId: string, pollId: string, optionIndex: number) => {
+  votePoll: async (crewId: string, pollId: string, optionIndexes: number[]) => {
     set({ error: null });
 
     const userId = useAuthStore.getState().user?.id ?? null;
-    // Capture ONLY my prior vote on this poll (the delta this action touches),
-    // not a whole-array snapshot — so a failure rolls my vote back against the
+    // Capture ONLY my prior votes on this poll (the delta this action touches),
+    // not a whole-array snapshot — so a failure rolls my votes back against the
     // LATEST state and never clobbers a concurrent socket-applied vote (another
     // member voting on the same poll via applyPollVote) that landed during the
     // round-trip.
-    const prevVote = userId
-      ? ((useCrewStore.getState().polls.find((p) => p.id === pollId)?.votes ?? []).find((v) => v.user_id === userId) ??
-        null)
-      : null;
+    const prevVotes = userId
+      ? (useCrewStore.getState().polls.find((p) => p.id === pollId)?.votes ?? []).filter((v) => v.user_id === userId)
+      : [];
 
     if (userId) {
       set((state) => ({
-        polls: state.polls.map((p) => {
-          if (p.id !== pollId) return p;
-          // One vote per user: drop this user's prior vote, then add the new one.
-          const others = (p.votes ?? []).filter((v) => v.user_id !== userId);
-          return { ...p, votes: [...others, { option: optionIndex, user_id: userId }] };
-        }),
+        polls: state.polls.map((p) => (p.id === pollId ? withMyVotes(p, userId, optionIndexes) : p)),
       }));
     }
 
     try {
-      await api.post(`/crews/${crewId}/polls/${pollId}/vote`, { optionIndex });
+      await api.post(`/crews/${crewId}/polls/${pollId}/vote`, { optionIndexes });
       try {
         await useCrewStore.getState().loadPolls(crewId);
       } catch {
         /* refetch is best-effort; the write succeeded */
       }
     } catch (err) {
-      // Roll back ONLY my vote against the LATEST polls: drop my optimistic vote
-      // and restore my prior one (if any), leaving other members' votes and any
-      // other poll that changed mid-flight intact. A poll concurrently closed/
-      // removed is simply absent here and not resurrected.
+      // Roll back ONLY my votes against the LATEST polls: drop my optimistic
+      // votes and restore my prior ones, leaving other members' votes and any
+      // other poll that changed mid-flight intact. A poll concurrently removed
+      // is simply absent here and not resurrected.
       if (userId) {
         set((state) => ({
           polls: state.polls.map((p) => {
             if (p.id !== pollId) return p;
             const others = (p.votes ?? []).filter((v) => v.user_id !== userId);
-            return { ...p, votes: prevVote ? [...others, prevVote] : others };
+            return { ...p, votes: [...others, ...prevVotes] };
           }),
         }));
       }
@@ -668,7 +768,28 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     }
   },
 
-  // DELETE /crews/:crewId/polls/:pollId (close). Drop it from local state.
+  // POST /crews/:crewId/polls/:pollId/nudge -> { nudged }. One reminder per poll.
+  nudgePoll: async (crewId: string, pollId: string) => {
+    set({ error: null });
+    try {
+      // Online-only: a queued nudge would report "sent to 0" now and fire later, maybe after the poll ends.
+      const res = await api.post<{ nudged: number }>(
+        `/crews/${crewId}/polls/${pollId}/nudge`,
+        {},
+        { _bypassOfflineQueue: true },
+      );
+      const nudgedAt = new Date().toISOString();
+      set((state) => ({ polls: state.polls.map((p) => (p.id === pollId ? { ...p, nudged_at: nudgedAt } : p)) }));
+      return res?.nudged ?? 0;
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, "Couldn't send the reminder. Try again.");
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // DELETE /crews/:crewId/polls/:pollId (end). Mark it closed in local state so
+  // it moves to the Decided group.
   //
   // The server tallies the votes and, for a schedule-aware poll, creates the
   // winning set's meeting point and broadcasts it. We upsert the returned point
@@ -685,7 +806,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       res = await api.delete<{ closed: unknown; meetingPoint: CrewMeetingPoint | null; winningSetId: string | null }>(
         `/crews/${crewId}/polls/${pollId}`,
       );
-      set((state) => ({ polls: state.polls.filter((p) => p.id !== pollId) }));
+      set((state) => ({ polls: state.polls.map((p) => (p.id === pollId ? markPollClosed(p) : p)) }));
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to close poll');
       set({ error: message });
@@ -949,6 +1070,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
               ...(request.label !== undefined ? { label: request.label } : {}),
               ...(request.broughtBy !== undefined ? { brought_by: request.broughtBy } : {}),
               ...(request.claimed !== undefined ? { claimed: request.claimed } : {}),
+              ...(request.packed !== undefined ? { packed: request.packed } : {}),
             };
             return merged;
           }),
@@ -998,6 +1120,48 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     }
   },
 
+  // POST /crews/:crewId/packing/batch -> { items }. Offline queues the write and
+  // inserts one placeholder per label (`${clientId}-${i}`); the next loadPacking
+  // drops them through dropOptimistic and brings the real rows.
+  addPackingItems: async (crewId: string, labels: string[]) => {
+    set({ error: null });
+    try {
+      let clientId: string | null = null;
+      const res = await api.post<{ items: CrewPackingItem[] } | { id: string; _optimistic: true }>(
+        `/crews/${crewId}/packing/batch`,
+        { labels },
+        {
+          onOptimisticCreate: (result) => {
+            clientId = (result as { id: string }).id;
+          },
+        },
+      );
+      if (clientId !== null) {
+        const id: string = clientId;
+        const now = new Date().toISOString();
+        const placeholders: CrewPackingItem[] = labels.map((label, i) => ({
+          id: `${id}-${i}`,
+          crew_id: crewId,
+          created_by: '',
+          label,
+          brought_by: null,
+          claimed: false,
+          created_at: now,
+          _optimistic: true,
+        }));
+        set((state) => ({ packingItems: [...placeholders, ...state.packingItems] }));
+        return 'queued';
+      }
+      const { items } = res as { items: CrewPackingItem[] };
+      set((state) => ({ packingItems: [...(items ?? []), ...state.packingItems] }));
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to add packing items');
+      set({ error: message });
+      throw err;
+    }
+  },
+
   // ── Ride board (M2 logistics) ──────────────────────────────────
   // GET /crews/:crewId/rides -> { offers }. Drop any lingering optimistic
   // placeholders so a refetch can't duplicate an offline-created offer.
@@ -1035,6 +1199,9 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
             depart_from: request.departFrom ?? null,
             depart_at: request.departAt ?? null,
             note: request.note ?? null,
+            direction: request.direction ?? null,
+            depart_time: request.departTime ?? null,
+            passenger_ids: [],
             created_at: new Date().toISOString(),
             _optimistic: true,
           };
@@ -1081,6 +1248,8 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
               ...(request.departFrom !== undefined ? { depart_from: request.departFrom } : {}),
               ...(request.departAt !== undefined ? { depart_at: request.departAt } : {}),
               ...(request.note !== undefined ? { note: request.note } : {}),
+              ...(request.direction !== undefined ? { direction: request.direction } : {}),
+              ...(request.departTime !== undefined ? { depart_time: request.departTime } : {}),
             };
             return merged;
           }),
@@ -1095,6 +1264,8 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
             depart_from: request.departFrom ?? null,
             depart_at: request.departAt ?? null,
             note: request.note ?? null,
+            direction: request.direction ?? null,
+            depart_time: request.departTime ?? null,
             created_at: new Date().toISOString(),
             _optimistic: true,
           }
@@ -1127,6 +1298,58 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
       return writeOutcomeOf(res);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to remove ride offer');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  takeRideSeat: async (crewId: string, offerId: string, myUserId: string) => {
+    set({ error: null });
+    const setRiders = (change: (ids: string[]) => string[]) =>
+      set((state) => ({
+        rideOffers: state.rideOffers.map((o) =>
+          o.id === offerId ? { ...o, passenger_ids: change(o.passenger_ids ?? []) } : o,
+        ),
+      }));
+    setRiders((ids) => (ids.includes(myUserId) ? ids : [...ids, myUserId]));
+    try {
+      const res = await api.post<{ offer: CrewRideOffer } | { _optimistic: true }>(
+        `/crews/${crewId}/rides/${offerId}/seat`,
+      );
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const { offer } = res as { offer: CrewRideOffer };
+      set((state) => ({ rideOffers: state.rideOffers.map((o) => (o.id === offerId ? offer : o)) }));
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to take a seat');
+      // Undo only my change so a socket update that landed mid-flight survives.
+      setRiders((ids) => ids.filter((id) => id !== myUserId));
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  leaveRideSeat: async (crewId: string, offerId: string, myUserId: string) => {
+    set({ error: null });
+    const setRiders = (change: (ids: string[]) => string[]) =>
+      set((state) => ({
+        rideOffers: state.rideOffers.map((o) =>
+          o.id === offerId ? { ...o, passenger_ids: change(o.passenger_ids ?? []) } : o,
+        ),
+      }));
+    setRiders((ids) => ids.filter((id) => id !== myUserId));
+    try {
+      const res = await api.delete<{ offer: CrewRideOffer } | { _optimistic: true }>(
+        `/crews/${crewId}/rides/${offerId}/seat`,
+      );
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const { offer } = res as { offer: CrewRideOffer };
+      set((state) => ({ rideOffers: state.rideOffers.map((o) => (o.id === offerId ? offer : o)) }));
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to leave the ride');
+      // Undo only my change so a socket update that landed mid-flight survives.
+      setRiders((ids) => (ids.includes(myUserId) ? ids : [...ids, myUserId]));
       set({ error: message });
       throw err;
     }
@@ -1235,6 +1458,98 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     }
   },
 
+  // ── Crew days (T43) ────────────────────────────────────────────
+  // GET /crews/:crewId/days -> { days }. An old server answers 404: treat it as
+  // "no answers" so a new client never breaks against it.
+  loadCrewDays: async (crewId: string) => {
+    try {
+      const res = await api.get<{ days: CrewMemberDay[] } | CrewMemberDay[]>(`/crews/${crewId}/days`);
+      const days = Array.isArray(res) ? res : (res?.days ?? []);
+      if (get().activeCrew?.id !== crewId) return;
+      set({ crewDays: days });
+    } catch (err) {
+      if ((err as { status?: number } | null)?.status === 404) {
+        if (get().activeCrew?.id === crewId) set({ crewDays: [] });
+        return;
+      }
+      throw err;
+    }
+  },
+
+  // PUT /crews/:crewId/days replaces MY full answer set. Optimistic; a deterministic
+  // clientId collapses repeated offline changes into the latest body. An online
+  // reject restores only my previous rows.
+  setMyDays: async (crewId, myUserId, body) => {
+    set({ error: null });
+    let prevMine: CrewMemberDay[] = [];
+    const nextMine: CrewMemberDay[] = body.days.map((d) => ({ userId: myUserId, dayIndex: d.dayIndex, answer: d.answer }));
+    set((state) => {
+      prevMine = state.crewDays.filter((d) => d.userId === myUserId);
+      return { crewDays: [...state.crewDays.filter((d) => d.userId !== myUserId), ...nextMine] };
+    });
+    try {
+      const res = await api.put<{ days: CrewMemberDay[] } | (typeof body & { _optimistic: true })>(
+        `/crews/${crewId}/days`,
+        body,
+        {
+          clientId: `PUT:/crews/${crewId}/days:days-${crewId}-${myUserId}`,
+          offlineLabel: 'Update my days',
+        },
+      );
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const mine = (res as { days?: CrewMemberDay[] } | undefined)?.days;
+      if (Array.isArray(mine)) {
+        set((state) => ({ crewDays: [...state.crewDays.filter((d) => d.userId !== myUserId), ...mine] }));
+      }
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, "Couldn't save your days. Try again.");
+      set((state) => ({
+        crewDays: [...state.crewDays.filter((d) => d.userId !== myUserId), ...prevMine],
+        error: message,
+      }));
+      throw err;
+    }
+  },
+
+  // PUT /crews/:crewId/meeting-points/:mpId/coming -> { meetingPoint }. Optimistically
+  // adds or removes my id in that point's `coming`; same deterministic-clientId
+  // collapse as setMyDays. An online reject puts my id back as it was.
+  setMeetingPointComing: async (crewId, mpId, myUserId, coming) => {
+    set({ error: null });
+    const withMine = (ids: string[], on: boolean) =>
+      on ? (ids.includes(myUserId) ? ids : [...ids, myUserId]) : ids.filter((id) => id !== myUserId);
+    const patch = (on: boolean) =>
+      set((state) => ({
+        meetingPoints: state.meetingPoints.map((m) =>
+          m.id === mpId ? { ...m, coming: withMine(m.coming ?? [], on) } : m,
+        ),
+      }));
+    const wasComing = (get().meetingPoints.find((m) => m.id === mpId)?.coming ?? []).includes(myUserId);
+    patch(coming);
+    try {
+      const res = await api.put<{ meetingPoint: CrewMeetingPoint } | { coming: boolean; _optimistic: true }>(
+        `/crews/${crewId}/meeting-points/${mpId}/coming`,
+        { coming },
+        {
+          clientId: `PUT:/crews/${crewId}/meeting-points/${mpId}/coming:coming-${mpId}-${myUserId}`,
+          offlineLabel: "Update I'll be there",
+        },
+      );
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const { meetingPoint } = res as { meetingPoint?: CrewMeetingPoint };
+      if (meetingPoint && typeof meetingPoint.id === 'string') {
+        set((state) => ({ meetingPoints: state.meetingPoints.map((m) => (m.id === mpId ? meetingPoint : m)) }));
+      }
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, "Couldn't update I'll be there");
+      patch(wasComing);
+      set({ error: message });
+      throw err;
+    }
+  },
+
   // ── Expenses ───────────────────────────────────────────────────
   // GET /crews/:crewId/expenses -> array (api unwraps the data envelope).
   // Fetches the expense list AND the balance ledger together so one call
@@ -1318,6 +1633,107 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     }
   },
 
+  // PUT /crews/:crewId/expenses/:id (full replacement), then refetch. Offline,
+  // api.put queues it and returns the synthetic shape, so merge the request onto
+  // the local row (camelCase to snake_case) and flag it `_optimistic` ("Not sent
+  // yet"). The next online loadExpenses replaces it with the server row.
+  updateExpense: async (crewId: string, expenseId: string, request: UpdateCrewExpenseRequest) => {
+    set({ error: null });
+    try {
+      const res = await api.put(`/crews/${crewId}/expenses/${expenseId}`, request);
+      if (writeOutcomeOf(res) === 'queued') {
+        set((state) => ({
+          expenses: state.expenses.map((e) =>
+            e.id === expenseId
+              ? {
+                  ...e,
+                  description: request.description,
+                  amount: request.amount,
+                  split_with: request.splitWith,
+                  category: request.category,
+                  planned: request.planned === true,
+                  ...(request.paidBy !== undefined ? { paid_by: request.paidBy } : {}),
+                  split_amounts: request.shares
+                    ? Object.fromEntries(request.shares.map((sh) => [sh.userId, sh.cents]))
+                    : null,
+                  _optimistic: true,
+                }
+              : e,
+          ),
+        }));
+        return 'queued';
+      }
+      try {
+        await useCrewStore.getState().loadExpenses(crewId);
+      } catch {
+        /* refetch is best-effort; the write succeeded */
+      }
+      return 'sent';
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to update expense');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // PUT /crews/:crewId/expenses/currency (owner only). Set at once, roll back to
+  // the prior label when the server refuses online.
+  setExpenseCurrency: async (crewId: string, currency: string) => {
+    set({ error: null });
+    const prev = useCrewStore.getState().expenseCurrency;
+    set({ expenseCurrency: currency });
+    try {
+      const res = await api.put(`/crews/${crewId}/expenses/currency`, { currency });
+      return writeOutcomeOf(res);
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to change currency');
+      set({ expenseCurrency: prev, error: message });
+      throw err;
+    }
+  },
+
+  // POST /crews/:crewId/expenses/:id/confirm. Flag the row locally, then refetch
+  // when the server acknowledged it. The ledger is unchanged either way.
+  confirmPayment: async (crewId: string, expenseId: string, received: boolean) => {
+    set({ error: null });
+    try {
+      const res = await api.post(`/crews/${crewId}/expenses/${expenseId}/confirm`, { received });
+      const at = new Date().toISOString();
+      set((state) => ({
+        expenses: state.expenses.map((e) =>
+          e.id === expenseId ? { ...e, ...(received ? { confirmed_at: at } : { disputed_at: at }) } : e,
+        ),
+      }));
+      const outcome = writeOutcomeOf(res);
+      if (outcome === 'sent') {
+        try {
+          await useCrewStore.getState().loadExpenses(crewId);
+        } catch {
+          /* refetch is best-effort; the write succeeded */
+        }
+      }
+      return outcome;
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to confirm payment');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // POST /crews/:crewId/expenses/remind. No local change. A second reminder the
+  // same day is a 409 whose message the caller shows, so rethrow.
+  remindPayment: async (crewId: string, userId: string) => {
+    set({ error: null });
+    try {
+      const res = await api.post(`/crews/${crewId}/expenses/remind`, { userId });
+      return writeOutcomeOf(res);
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to send reminder');
+      set({ error: message });
+      throw err;
+    }
+  },
+
   settleExpense: async (crewId: string, request: SettleCrewExpenseRequest) => {
     set({ error: null });
     try {
@@ -1339,12 +1755,38 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   },
 
   // ── Activity feed ──────────────────────────────────────────────
-  // GET /crews/:crewId/activity -> array of crew events.
+  // GET /crews/:crewId/activity -> { items, nextCursor }. Merge the first page
+  // into the list so a periodic refresh keeps older pages already loaded.
   loadActivity: async (crewId: string) => {
     set({ error: null });
     try {
-      const activity = parseActivityPage(await api.get<unknown>(`/crews/${crewId}/activity`));
-      set({ activity });
+      const res = await api.get<unknown>(`/crews/${crewId}/activity`);
+      const page = parseActivityPage(res);
+      const nextCursor = parseActivityCursor(res);
+      set((state) => ({
+        activity: mergeActivity(state.activity, page),
+        // Older pages are loaded when the list is longer than this page: keep their cursor.
+        activityNextCursor: state.activity.length > page.length ? state.activityNextCursor : nextCursor,
+      }));
+    } catch (err) {
+      const message = mapErrorToUserMessage(err, 'Failed to load activity');
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  // GET /crews/:crewId/activity?cursor=... -> the next older page.
+  loadOlderActivity: async (crewId: string) => {
+    const cursor = useCrewStore.getState().activityNextCursor;
+    if (!cursor) return;
+    set({ error: null });
+    try {
+      const res = await api.get<unknown>(`/crews/${crewId}/activity?cursor=${encodeURIComponent(cursor)}`);
+      const page = parseActivityPage(res);
+      set((state) => ({
+        activity: mergeActivity(state.activity, page),
+        activityNextCursor: parseActivityCursor(res),
+      }));
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load activity');
       set({ error: message });
@@ -1355,7 +1797,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   // ── Home base ──────────────────────────────────────────────────
   // PUT /crews/:crewId/home-base -> { crew }. Owner-only server-side. Merge the
   // returned crew so activeCrew/crews reflect the new home base immediately.
-  updateHomeBase: async (crewId: string, payload: { location: string | null; time: string | null }) => {
+  updateHomeBase: async (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => {
     set({ error: null });
     try {
       const { crew } = await api.put<{ crew: Crew }>(`/crews/${crewId}/home-base`, payload);
@@ -1403,7 +1845,7 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
   // Merge a remote home-base change onto the active crew + crews list. The
   // socket payload carries `location` / `time`; map them onto the serialized
   // crew's homeBaseLocation / homeBaseTime fields.
-  applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null }) => {
+  applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => {
     set((state) => ({
       activeCrew:
         state.activeCrew?.id === crewId
@@ -1411,10 +1853,18 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
               ...state.activeCrew,
               homeBaseLocation: payload.location,
               homeBaseTime: payload.time,
+              ...('planB' in payload ? { homeBasePlanB: payload.planB ?? null } : {}),
             }
           : state.activeCrew,
       crews: state.crews.map((c) =>
-        c.id === crewId ? { ...c, homeBaseLocation: payload.location, homeBaseTime: payload.time } : c,
+        c.id === crewId
+          ? {
+              ...c,
+              homeBaseLocation: payload.location,
+              homeBaseTime: payload.time,
+              ...('planB' in payload ? { homeBasePlanB: payload.planB ?? null } : {}),
+            }
+          : c,
       ),
     }));
   },
@@ -1447,24 +1897,17 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     });
   },
 
-  // Apply a single remote vote: one-vote-per-user, so replace any prior vote
-  // by this user on this poll, then add the new one.
-  applyPollVote: (pollId: string, userId: string, optionIndex: number) => {
+  // Apply a single remote vote: replace this user's prior votes on the poll with
+  // one entry per chosen index (none when they took the vote back).
+  applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => {
     set((state) => ({
-      polls: state.polls.map((p) => {
-        if (p.id !== pollId) return p;
-        const others = (p.votes || []).filter((v) => v.user_id !== userId);
-        return {
-          ...p,
-          votes: [...others, { option: optionIndex, user_id: userId }],
-        };
-      }),
+      polls: state.polls.map((p) => (p.id === pollId ? withMyVotes(p, userId, optionIndexes) : p)),
     }));
   },
 
-  // Drop a closed poll from local state (mirrors closePoll's local effect).
+  // Mark a poll ended (mirrors closePoll's local effect); it stays for the Decided group.
   applyPollClosed: (pollId: string) => {
-    set((state) => ({ polls: state.polls.filter((p) => p.id !== pollId) }));
+    set((state) => ({ polls: state.polls.map((p) => (p.id === pollId ? markPollClosed(p) : p)) }));
   },
 
   // M5: upsert a member's last-synced status from a remote crew:status-updated
@@ -1489,6 +1932,12 @@ const crewStore: StateCreator<CrewStore> = (set) => ({
     });
   },
 
+  // T43: replace one member's day answers from a crew:days-updated event.
+  applyCrewDays: ({ crewId, userId, days }) => {
+    if (get().activeCrew?.id !== crewId) return;
+    set((state) => ({ crewDays: [...state.crewDays.filter((d) => d.userId !== userId), ...days] }));
+  },
+
   setError: (error: string | null) => {
     set({ error });
   },
@@ -1500,7 +1949,7 @@ export const useCrewStore = create<CrewStore>()(
     // v2 (M5): added the persisted `crewStatuses` read-cache. Old v1 blobs lack
     // the key; the migrate below backfills it to an empty list so a rehydrate
     // from v1 never yields `crewStatuses: undefined`.
-    version: 2,
+    version: 3,
     storage: createJSONStorage(() => getStorage()),
     // Persist ONLY the read-cache for the active crew so a cold start with no
     // signal (the festival condition) renders the crew's members / meeting
@@ -1518,9 +1967,11 @@ export const useCrewStore = create<CrewStore>()(
       packingItems: state.packingItems.slice(0, MAX_CACHED_PACKING),
       rideOffers: state.rideOffers.slice(0, MAX_CACHED_RIDES),
       crewStatuses: state.crewStatuses.slice(0, MAX_CACHED_STATUSES),
+      crewDays: state.crewDays.slice(0, MAX_CACHED_CREW_DAYS),
       expenses: state.expenses.slice(0, MAX_CACHED_EXPENSES),
       expenseBalances: state.expenseBalances,
       settlements: state.settlements,
+      expenseCurrency: state.expenseCurrency,
       activity: state.activity.slice(0, MAX_CACHED_ACTIVITY),
       _cachedAt: state._cachedAt,
       _cachedCrewId: state._cachedCrewId,
@@ -1530,10 +1981,11 @@ export const useCrewStore = create<CrewStore>()(
     // carried through unchanged.
     migrate: (persistedState, version) => {
       const s = (persistedState ?? {}) as Partial<CrewStore>;
-      if (version < 2 && !Array.isArray(s.crewStatuses)) {
-        return { ...s, crewStatuses: [] } as CrewStore;
-      }
-      return s as CrewStore;
+      let next = s;
+      if (version < 2 && !Array.isArray(s.crewStatuses)) next = { ...next, crewStatuses: [] };
+      // v2 -> v3 (T43): backfill the crew days read-cache.
+      if (version < 3 && !Array.isArray(s.crewDays)) next = { ...next, crewDays: [] };
+      return next as CrewStore;
     },
   }),
 );

@@ -26,6 +26,8 @@ import { loadConfig } from './config.js';
 import { redisRateCheck as redisRateCheckFn } from './redis.js';
 
 const FALLBACK_WARN_INTERVAL_MS = 30_000;
+// Guests behind one festival IP keep their own token buckets; one caller cycling tokens is capped per IP.
+const ANON_TOKEN_IP_MULTIPLIER = 10;
 
 function resolveClusterSize(config: any) {
   if (config && Number.isFinite(config.CLUSTER_SIZE)) {
@@ -166,29 +168,47 @@ function createRateLimiters({
     };
   }
 
-  function rateLimit(max = config.RATE_LIMIT_MAX, scope = '') {
+  // anonIpCap: false only for app-level mounts, which run before userAuth so signed-in traffic has no req.user.
+  function rateLimit(max = config.RATE_LIMIT_MAX, scope = '', { anonIpCap = true } = {}) {
     return async (req: any, res: any, next: any) => {
       const ip = getRequestIp(req);
       let rateLimitKey = ip;
+      let anonToken = false;
       if (req.user?.userId) {
         rateLimitKey = `user:${req.user.userId}`;
       } else {
         const { token } = resolveRequestToken(req, 'x-user-token', config.USER_SESSION_COOKIE);
         if (token && token.length >= 16) {
           rateLimitKey = `tok:${hashSessionToken(token)}`;
+          anonToken = anonIpCap;
         }
       }
 
       if (scope) {
-        const result = await tryRedisRateCheck({
-          redisClient: redis,
-          redisKey: `rl:${scope}:${rateLimitKey}`,
-          max,
-          windowMs: config.RATE_LIMIT_WINDOW,
-          fallbackMap: state.routeRateLimits,
-          fallbackKey: `${scope}:${rateLimitKey}`,
-          tier: 'scoped',
-        });
+        const checkScoped = (key: string, limit: number) =>
+          tryRedisRateCheck({
+            redisClient: redis,
+            redisKey: `rl:${scope}:${key}`,
+            max: limit,
+            windowMs: config.RATE_LIMIT_WINDOW,
+            fallbackMap: state.routeRateLimits,
+            fallbackKey: `${scope}:${key}`,
+            tier: 'scoped',
+          });
+        let result = await checkScoped(rateLimitKey, max);
+        // An unvalidated token is caller-chosen, so also cap the real client IP.
+        if (anonToken) {
+          const ipKey = `ip:${ip}`;
+          const ipResult = await checkScoped(ipKey, max * ANON_TOKEN_IP_MULTIPLIER);
+          const ipCloser =
+            ipResult.limited !== result.limited
+              ? ipResult.limited
+              : ipResult.remaining / ipResult.limit < result.remaining / result.limit;
+          if (ipCloser) {
+            result = ipResult;
+            rateLimitKey = ipKey;
+          }
+        }
 
         res.setHeader('X-RateLimit-Limit', String(result.limit));
         res.setHeader('X-RateLimit-Remaining', String(result.remaining));
@@ -204,6 +224,7 @@ function createRateLimiters({
             });
           }
           res.setHeader('Retry-After', String(result.retryAfter));
+          promMetrics?.rateLimitHitsCounter?.inc({ tier: 'route', action: scope });
           return sendError(res, 429, 'Too many requests', ErrorCodes.RATE_LIMITED);
         }
         return next();
@@ -233,6 +254,7 @@ function createRateLimiters({
           });
         }
         res.setHeader('Retry-After', String(result.retryAfter));
+        promMetrics?.rateLimitHitsCounter?.inc({ tier: 'route', action: 'default' });
         return sendError(res, 429, 'Too many requests', ErrorCodes.RATE_LIMITED);
       }
       return next();
@@ -249,6 +271,7 @@ function createRateLimiters({
             if (result.limited) {
               log.warn('rate-limit:exceeded', { scope: `auth:${ip}`, ip, path: req.path, userId: req.user?.userId });
               res.set('Retry-After', String(Math.max(1, Math.ceil(result.resetMs / 1000))));
+              promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
               return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
             }
             return next();
@@ -277,6 +300,7 @@ function createRateLimiters({
         });
         const retryAfter = Math.ceil((entry.start + config.AUTH_RATE_LIMIT_WINDOW - now) / 1000);
         res.set('Retry-After', String(Math.max(1, retryAfter)));
+        promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
         return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
       }
       return next();
@@ -735,6 +759,72 @@ async function listActiveSos(redis: any, crewId: any, now: number) {
   }
 }
 
+/**
+ * Is this raiser's SOS active? `true` / `false`, or `null` when Redis is
+ * unavailable or throws (caller decides how to fail open).
+ */
+async function isSosActive(redis: any, crewId: any, raiserId: any): Promise<boolean | null> {
+  if (!redis || !crewId || !raiserId) return null;
+  try {
+    return (await redis.hexists(sosRaisersKey(crewId), raiserId)) === 1;
+  } catch {
+    return null;
+  }
+}
+
+// "Seen by": one hash per SOS, field = viewer userId, value = viewer username.
+const sosSeenKey = (crewId: any, raiserId: any) => `sos:seen:${crewId}:${raiserId}`;
+
+interface SosViewer {
+  userId: string;
+  username: string;
+}
+
+function toViewers(raw: Record<string, string> | null | undefined): SosViewer[] {
+  return Object.entries(raw || {})
+    .map(([userId, username]) => ({ userId, username: String(username) }))
+    .sort((a, b) => a.username.localeCompare(b.username));
+}
+
+/**
+ * Read who has seen one raiser's SOS, sorted by username. Returns `[]` when
+ * Redis is unavailable or throws.
+ */
+async function listSosSeen(redis: any, crewId: any, raiserId: any): Promise<SosViewer[]> {
+  if (!redis || !crewId || !raiserId) return [];
+  try {
+    return toViewers(await redis.hgetall(sosSeenKey(crewId, raiserId)));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Record that `viewer` saw one raiser's SOS and refresh the 1h expiry. Returns
+ * the full seen list, or `null` when Redis is unavailable or throws.
+ */
+async function markSosSeen(redis: any, crewId: any, raiserId: any, viewer: SosViewer): Promise<SosViewer[] | null> {
+  if (!redis || !crewId || !raiserId || !viewer?.userId) return null;
+  try {
+    const key = sosSeenKey(crewId, raiserId);
+    await redis.hset(key, viewer.userId, viewer.username);
+    await redis.pexpire(key, SOS_ACTIVE_TTL_MS);
+    return toViewers(await redis.hgetall(key));
+  } catch {
+    return null;
+  }
+}
+
+/** Drop one raiser's seen list (after a clear). Best-effort; the TTL reaps it anyway. */
+async function clearSosSeen(redis: any, crewId: any, raiserId: any): Promise<void> {
+  if (!redis || !crewId || !raiserId) return;
+  try {
+    await redis.del(sosSeenKey(crewId, raiserId));
+  } catch {
+    /* TTL will reap it */
+  }
+}
+
 export {
   createRateLimiters,
   createPasswordResetRateLimit,
@@ -753,4 +843,8 @@ export {
   markSosActive,
   clearSosActive,
   listActiveSos,
+  isSosActive,
+  markSosSeen,
+  listSosSeen,
+  clearSosSeen,
 };

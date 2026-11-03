@@ -12,7 +12,7 @@ describe('T3 mobile set sheet', () => {
   it('does not swallow pick, reminder or note save errors', () => {
     expect(src).not.toMatch(/(savePick|saveReminder|saveNote)\([^)]*\)\.catch\(\(\) => \{\}\)/);
   });
-  it('shows a failed reminder save inline, since the root toast sits behind the iOS sheet', () => {
+  it('shows a failed reminder save inline, beside the chip that failed', () => {
     expect(src).toContain('Reminder not saved.');
     expect(src).toContain('setReminderFailed({ minutes })');
   });

@@ -102,6 +102,7 @@ export function buildAmenityFeature(
 /** Title-case the enum value for a default label ('water' → 'Water'). */
 export function humanizeAmenityType(amenityType: AmenityType | string): string {
   const s = String(amenityType || '');
+  if (s === 'atm') return 'ATM';
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Amenity';
 }
 
@@ -347,4 +348,70 @@ export function removeZone(config: FestivalMapConfig | null | undefined, zoneId:
  */
 export function zoneCount(config: FestivalMapConfig | null | undefined): number {
   return config?.zones?.features?.length ?? 0;
+}
+
+/**
+ * Return a new FestivalMapConfig with the matching zone's label replaced
+ * (trimmed; blank stays '' so the renderer falls back). No-op when the id is
+ * absent. Pure.
+ */
+export function setZoneLabel(config: FestivalMapConfig | null | undefined, zoneId: string, label: string): FestivalMapConfig {
+  const base: FestivalMapConfig = config ? { ...config } : { version: 1 };
+  const prevFeatures = base.zones?.features ?? [];
+  return {
+    ...base,
+    version: 1,
+    zones: {
+      type: 'FeatureCollection',
+      features: prevFeatures.map((f) =>
+        (f?.properties as { id?: unknown } | undefined)?.id === zoneId
+          ? { ...f, properties: { ...f.properties, label: (label ?? '').trim() } }
+          : f,
+      ),
+    },
+  };
+}
+
+/**
+ * Return a new FestivalMapConfig with the matching zone moved so the mean of its
+ * ring vertices (closing point excluded) sits on `coord`. Returns the config
+ * unchanged when `coord` is invalid, the zone is missing, or any shifted point
+ * would leave the valid range. Keeps the ring closed. Pure.
+ */
+export function moveZone(
+  config: FestivalMapConfig | null | undefined,
+  zoneId: string,
+  coord: { latitude: number; longitude: number },
+): FestivalMapConfig {
+  const base: FestivalMapConfig = config ? { ...config } : { version: 1 };
+  const unchanged = { ...base, version: 1 as const };
+  if (!isValidLatLng(coord)) return unchanged;
+  const features = base.zones?.features ?? [];
+  const target = features.find((f) => (f?.properties as { id?: unknown } | undefined)?.id === zoneId);
+  if (!target || target.geometry?.type !== 'Polygon') return unchanged;
+  const rings = target.geometry.coordinates;
+  const outer = rings[0];
+  if (!Array.isArray(outer) || outer.length < 4) return unchanged;
+  const open = outer.slice(0, -1);
+  const meanLng = open.reduce((s, p) => s + p[0], 0) / open.length;
+  const meanLat = open.reduce((s, p) => s + p[1], 0) / open.length;
+  const dLng = coord.longitude - meanLng;
+  const dLat = coord.latitude - meanLat;
+  const shifted: [number, number][][] = [];
+  for (const ring of rings) {
+    const out: [number, number][] = [];
+    for (const p of ring) {
+      const pt: [number, number] = [p[0] + dLng, p[1] + dLat];
+      if (!isValidLatLng({ latitude: pt[1], longitude: pt[0] })) return unchanged;
+      out.push(pt);
+    }
+    shifted.push(out);
+  }
+  return {
+    ...unchanged,
+    zones: {
+      type: 'FeatureCollection',
+      features: features.map((f) => (f === target ? { ...f, geometry: { type: 'Polygon', coordinates: shifted } } : f)),
+    },
+  };
 }

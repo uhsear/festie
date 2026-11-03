@@ -19,6 +19,8 @@ import { buildSchedulePushes } from './schedule-diff.js';
 
 const EVENT_VERSION = 1;
 const SCHEDULE_PUSH_CHUNK = 20;
+/** A pick change sends at most one silent sync per festival per window (per process). */
+export const SILENT_SYNC_COALESCE_MS = 60_000;
 
 export function createSocketEmitter({ io, log, notificationService, buildAvatarUrl, _getUserById, stores, config }: any) {
 
@@ -75,6 +77,21 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     _crewPushTimers.set(key, timer);
   }
 
+  // One trailing silent sync per festival per window; later pick changes inside the window ride along.
+  // No excludeUserIds: with several authors in one window, excluding one of them is wrong.
+  const _silentSyncTimers = new Map();
+
+  function queueSilentSync(festivalId: any) {
+    if (_shuttingDown || typeof notificationService?.sendSilentSync !== 'function' || _silentSyncTimers.has(festivalId)) return;
+    const timer = setTimeout(() => {
+      _silentSyncTimers.delete(festivalId);
+      notificationService.sendSilentSync({ festivalId, syncType: 'profiles' })
+        .catch((err: any) => log.warn('silent sync push failed', { error: err.message }));
+    }, SILENT_SYNC_COALESCE_MS);
+    timer.unref?.();
+    _silentSyncTimers.set(festivalId, timer);
+  }
+
   // Profile update batching — coalesce rapid pick/status changes into a single broadcast
   const _profileBatchTimers = new Map();
   const _profileBatchPayloads = new Map();
@@ -87,7 +104,26 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     const payload = _profileBatchPayloads.get(key);
     _profileBatchPayloads.delete(key);
     if (!payload) return;
-    io.to(payload.festivalId).emit('profile:updated', {
+    void _emitToAuthorCrews(payload);
+  }
+
+  // Picks reach only the author's own devices (user room) and crews on this
+  // festival, never the whole festival room: other attendees see anonymous
+  // counts on their next GET /profiles/:festivalId. The user room keeps the
+  // offline queue's post-drain re-sync working for a crewless author.
+  // shortcut: a socket sits in one crew room (its active crew), so a crew mate
+  // viewing a different shared crew catches up on reload.
+  async function _emitToAuthorCrews(payload: any) {
+    if (!payload.userId) return;
+    // A failed crew lookup still re-syncs the author's own devices.
+    const crews = stores?.crews
+      ? await stores.crews.listByUserAndFestival(payload.userId, payload.festivalId).catch((err: any) => {
+        log.warn('profile:updated crew lookup failed', { error: err.message });
+        return [];
+      })
+      : [];
+    const rooms = ['user:' + payload.userId, ...(crews || []).map((c: any) => 'crew:' + c.id)];
+    io.to(rooms).emit('profile:updated', {
       _v: EVENT_VERSION,
       festivalId: payload.festivalId,
       profileId: payload.profileId,
@@ -129,6 +165,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     _profileBatchPayloads.set(key, {
       festivalId: profile.festivalId,
       profileId: profile.id,
+      userId: profile.userId,
       name: profile.name,
       avatarUrl: buildAvatarUrl(user),
       picks: profile.picks || {},
@@ -149,11 +186,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       queueCrewPickPush(profile);
 
       // #30: Silent push for background data sync (no visible notification)
-      notificationService.sendSilentSync?.({
-        festivalId: profile.festivalId,
-        syncType: 'profiles',
-        excludeUserIds: [profile.userId],
-      }).catch((err: any) => log.warn('silent sync push failed', { error: err.message }));
+      queueSilentSync(profile.festivalId);
     }
   }
 
@@ -242,6 +275,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     for (const timer of _crewPushTimers.values()) clearTimeout(timer);
     _crewPushTimers.clear();
     _crewPushPending.clear();
+    for (const timer of _silentSyncTimers.values()) clearTimeout(timer);
+    _silentSyncTimers.clear();
   }
 
   function crewExpenseAdded({ crewId, expense }: any) {
@@ -249,6 +284,10 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
   }
   function crewExpenseDeleted({ crewId, expenseId }: any) {
     io.to('crew:' + crewId).emit('crew:expense-deleted', { _v: EVENT_VERSION, crewId, expenseId });
+  }
+  // An expense was edited, a payment confirmed or disputed, or the currency changed.
+  function crewExpenseUpdated({ crewId, expense }: any) {
+    io.to('crew:' + crewId).emit('crew:expense-updated', { _v: EVENT_VERSION, crewId, expense });
   }
   function crewActivityLogged({ crewId, item }: any) {
     io.to('crew:' + crewId).emit('crew:activity', { _v: EVENT_VERSION, crewId, item });
@@ -267,6 +306,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     flushAll,
     crewExpenseAdded,
     crewExpenseDeleted,
+    crewExpenseUpdated,
     crewActivityLogged,
   };
 }

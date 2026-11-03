@@ -40,7 +40,6 @@ export default function createSpotifyRoutes(deps: any) {
       albumArt: track.album?.images?.[0]?.url || null,
       artistId,
       artistName: track.artists?.[0]?.name || artistName,
-      url: track.preview_url || null,
       embedUrl: 'https://open.spotify.com/embed/track/' + track.id + '?utm_source=generator&theme=0',
     };
   }
@@ -92,23 +91,17 @@ export default function createSpotifyRoutes(deps: any) {
 
       const token = await getToken(config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET);
 
-      // Search for tracks by artist — search API works with client credentials.
-      // Prefer a track that has a preview_url (30-sec clip); fall back to first result.
-      const searchRes = await fetch(
-        'https://api.spotify.com/v1/search?q=artist%3A' + encodeURIComponent(artistName!) +
-        '&type=track&market=US&limit=10',
+      // Use the artist's top tracks by stored id, never a name search. Return a track
+      // only when it lists this artist id; otherwise fall back to the artist embed.
+      const topRes = await fetch(
+        'https://api.spotify.com/v1/artists/' + artistId + '/top-tracks?market=US',
         { headers: { 'Authorization': 'Bearer ' + token } }
       );
 
-      if (searchRes.ok) {
-        const searchData = await searchRes.json();
-        const tracks = searchData.tracks?.items || [];
-        // Filter to tracks actually by this artist (search can return loose matches)
-        const byArtist = tracks.filter((t: any) =>
-          t.artists?.some((a: any) => a.id === artistId || a.name?.toLowerCase() === artistName?.toLowerCase())
-        );
-        const pool2 = byArtist.length ? byArtist : tracks;
-        const track = pool2.find((t: any) => t.preview_url) || pool2[0];
+      if (topRes.ok) {
+        const topData = await topRes.json();
+        const tracks = Array.isArray(topData.tracks) ? topData.tracks : [];
+        const track = tracks.find((t: any) => t.artists?.some((a: any) => a.id === artistId));
         if (track) {
           const r = trackEmbed(track, artistId, artistName!);
           setCachedPreview(setId, r);

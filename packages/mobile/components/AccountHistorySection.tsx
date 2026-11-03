@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@festie/shared/services';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
+import { festivalPhase, formatDateSpan } from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
+import Button from './Button';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-import { formatDateSpan } from '../lib/accountFormat';
 
 // Server shape from GET /ratings/lifetime (M3 cross-festival YoY history).
 interface LifetimeTotals {
@@ -39,6 +41,8 @@ interface LifetimeResponse {
   totals: LifetimeTotals;
   byFestival: FestivalRow[];
   topArtists: TopArtist[];
+  /** Absent on an older server. */
+  seenMost?: { artist: string; festivals: number }[];
 }
 
 interface AccountHistorySectionProps {
@@ -59,6 +63,9 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
   const t = useTokens();
   const styles = useStyles();
   const reduceMotion = useReduceMotion();
+  const router = useRouter();
+  const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const festivalDays = useFestivalDataStore((s) => s.days);
   // Auth gate: /ratings/lifetime 401s for guests (section can be mounted
   // eagerly by NativeTabs even when the user never opens Account).
   const user = useAuthStore((s) => s.user);
@@ -146,15 +153,58 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
   const totals = data?.totals;
   const byFestival = data?.byFestival ?? [];
   const topArtists = data?.topArtists ?? [];
+  const seenMost = (data?.seenMost ?? []).slice(0, 5);
+
+  const seenMostCard =
+    seenMost.length > 0 ? (
+      <View style={styles.card}>
+        <View style={styles.cardHead}>
+          <Ionicons name="repeat-outline" size={14} color={t.colors.text.secondary} style={styles.cardHeadIcon} />
+          <Text style={styles.cardLabel} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Artists you&apos;ve seen most
+          </Text>
+        </View>
+        {seenMost.map((r, i) => (
+          <View
+            key={r.artist}
+            accessible
+            accessibilityLabel={`${r.artist}, ${r.festivals} festivals`}
+            style={[styles.artistRow, i === seenMost.length - 1 && styles.lastRow]}
+          >
+            <Text style={styles.artistName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {r.artist}
+            </Text>
+            <Text style={styles.artistMeta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {r.festivals} festivals
+            </Text>
+          </View>
+        ))}
+      </View>
+    ) : null;
 
   if (!totals || totals.totalRated === 0) {
-    return (
+    const empty = (
       <View style={[styles.card, styles.centered]}>
         <View style={styles.emptyIcon}>
           <Ionicons name="time-outline" size={26} color={t.colors.accent.aqua} />
         </View>
         <Text style={styles.emptyTitle}>No history yet</Text>
         <Text style={styles.emptyText}>Rate sets at a festival and your year-over-year timeline builds here.</Text>
+        {currentFestival && ['live', 'post'].includes(festivalPhase(currentFestival, festivalDays) ?? '') ? (
+          <Button
+            label={`Rate sets from ${currentFestival.name}`}
+            variant="secondary"
+            size="sm"
+            onPress={() => router.push({ pathname: '/rate', params: { festival: currentFestival.id } })}
+          />
+        ) : null}
+      </View>
+    );
+    if (!seenMostCard) return empty;
+    return (
+      <View style={styles.wrap}>
+        {empty}
+        {seenMostCard}
       </View>
     );
   }
@@ -167,8 +217,8 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
       {/* Lifetime totals */}
       <View style={styles.statGrid}>
         <Stat icon="musical-notes-outline" label="Festivals" value={String(totals.festivalsAttended)} />
-        <Stat icon="star-outline" label="Sets rated" value={String(totals.totalRated)} />
-        <Stat icon="star" label="Avg rating" value={avg} accent />
+        <Stat icon="flame-outline" label="Sets rated" value={String(totals.totalRated)} />
+        <Stat icon="flame" label="Avg rating" value={avg} accent />
         <Stat icon="time-outline" label="Hours" value={(totals.totalHours ?? 0).toFixed(1)} />
       </View>
 
@@ -182,7 +232,14 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
           {byFestival.map((f, i) => {
             const span = formatDateSpan(f.startDate, f.endDate);
             return (
-              <View key={f.festivalId} style={[styles.festRow, i === byFestival.length - 1 && styles.lastRow]}>
+              <TouchableOpacity
+                key={f.festivalId}
+                style={[styles.festRow, i === byFestival.length - 1 && styles.lastRow]}
+                onPress={() => router.push({ pathname: '/wrap', params: { festival: f.festivalId } })}
+                activeOpacity={0.8}
+                accessibilityRole="link"
+                accessibilityLabel={`Open your ${f.festivalName || f.festivalId} wrap`}
+              >
                 <View style={styles.festHead}>
                   <Text style={styles.festName} numberOfLines={1}>
                     {f.festivalName || f.festivalId}
@@ -190,13 +247,13 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
                   {span ? <Text style={styles.festDate}>{span}</Text> : null}
                 </View>
                 <View style={styles.festChips}>
-                  <MetaChip icon="star" text={`${f.totalRated} rated`} />
-                  {f.avgRating != null ? <MetaChip icon="star-half" text={`${f.avgRating.toFixed(1)} avg`} /> : null}
+                  <MetaChip icon="flame" text={`${f.totalRated} rated`} />
+                  {f.avgRating != null ? <MetaChip icon="flame" text={`${f.avgRating.toFixed(1)} avg`} /> : null}
                   <MetaChip icon="location-outline" text={`${f.stagesVisited} ${f.stagesVisited === 1 ? 'stage' : 'stages'}`} />
                   <MetaChip icon="sunny-outline" text={`${f.daysAttended} ${f.daysAttended === 1 ? 'day' : 'days'}`} />
                   <MetaChip icon="time-outline" text={`${(f.totalHours ?? 0).toFixed(1)}h`} />
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -218,7 +275,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
                 {a.artist}
               </Text>
               <View style={styles.artistMetaWrap}>
-                <Ionicons name="star" size={11} color={t.colors.accent.amber} />
+                <Ionicons name="flame" size={11} color={t.colors.accent.amber} />
                 <Text style={styles.artistMeta}>
                   {a.bestRating} · {a.timesRated}×
                 </Text>
@@ -227,6 +284,8 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
           ))}
         </View>
       ) : null}
+
+      {seenMostCard}
     </Wrapper>
   );
 }

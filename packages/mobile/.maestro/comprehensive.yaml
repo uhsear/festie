@@ -12,7 +12,8 @@ env:
     visible: "Sign in to your account"
     timeout: 90000
 - takeScreenshot: c01-login
-- tapOn: "Username"
+- tapOn:
+    id: "login-username-input"
 - inputText: "asir"
 - tapOn: "Password"
 - inputText: "${TEST_PASSWORD}"
@@ -58,22 +59,22 @@ env:
 - assertVisible: "${FESTIVAL}"
 - assertNotVisible: "Select a Festival"
 
-# --- My Plan ---
-- tapOn: "My Plan"
+# --- Picks ---
+- tapOn: "Picks"
 - extendedWaitUntil:
-    visible: "My Plan"
+    visible: "My picks"
     timeout: 20000
 - takeScreenshot: c06-picks
 
 # --- Set detail (open a known pick) ---
 - tapOn: "Mary Droppinz"
 - extendedWaitUntil:
-    notVisible: "My Plan"
+    notVisible: "My picks"
     timeout: 20000
 - takeScreenshot: c07-set-detail
 - pressKey: Back
 - extendedWaitUntil:
-    visible: "My Plan"
+    visible: "My picks"
     timeout: 20000
 
 # --- Crew (incl. expenses/activity) ---

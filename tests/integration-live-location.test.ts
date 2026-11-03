@@ -7,8 +7,9 @@
  *   - location:share re-verifies crew membership against Postgres (sharing live
  *     GPS is more sensitive than viewing); a non-member is rejected NOT_A_MEMBER,
  *     a socket not in the crew room is rejected NOT_IN_CREW_ROOM.
- *   - NO Postgres write happens for any location event (positions are ephemeral
- *     and travel ONLY over Socket.IO) — asserted by inspecting crew_activity.
+ *   - no location event writes a position to Postgres; the only row a fix can
+ *     write is the one-time `battery-low` line, which holds a percentage
+ *     (positions travel ONLY over Socket.IO) — asserted by inspecting crew_activity.
  *   - location:update broadcasts location:peer-update to the crew room EXCLUDING
  *     the sender; a non-sharing sender is rejected (NOT_SHARING) and never
  *     reaches peers.
@@ -323,6 +324,35 @@ describe('Integration — Live Location (ephemeral sockets)', { concurrency: 1 }
       assert.ok(
         !types.some((t: string) => /location|share|update/i.test(t)),
         `live location must never persist; found activity types: ${JSON.stringify(types)}`,
+      );
+    } finally {
+      await pool.end();
+    }
+
+    aliceSocket.close();
+    bobSocket.close();
+  });
+
+  // The battery line needs Redis for its once-only key; this server runs with
+  // REDIS_ENABLED 'false', so a 9% fix must post nothing (fail closed).
+  test('a 9% battery fix writes no battery-low row without Redis, and no row holds a coordinate', async () => {
+    const { server, alice, bob, crewId } = await setupCrew();
+    const aliceSocket = await joinedCrewSocket(server, server.baseUrl, alice.token, crewId);
+    const bobSocket = await joinedCrewSocket(server, server.baseUrl, bob.token, crewId);
+
+    await emitWithAck(aliceSocket, 'location:share', { crewId, position: { ...VALID_FIX, battery: 9 } });
+    const peerUpdate = waitForEvent(bobSocket, 'location:peer-update', () => true);
+    aliceSocket.emit('location:update', { crewId, ...VALID_FIX, battery: 9 });
+    await peerUpdate;
+    await emitWithAck(aliceSocket, 'location:stop', { crewId });
+
+    const pool = new Pool({ connectionString: server.databaseUrl });
+    try {
+      const { rows } = await pool.query(`SELECT type, detail FROM crew_activity WHERE crew_id = $1`, [crewId]);
+      assert.ok(!rows.some((r: any) => r.type === 'battery-low'), `found: ${JSON.stringify(rows)}`);
+      assert.ok(
+        !rows.some((r: any) => typeof r.detail === 'string' && /-?\d+\.\d{3,}/.test(r.detail)),
+        `no feed row may hold a coordinate; found: ${JSON.stringify(rows)}`,
       );
     } finally {
       await pool.end();

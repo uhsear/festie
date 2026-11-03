@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import fs from 'fs';
 import os from 'os';
+import express from 'express';
+import request from 'supertest';
 
+import { configureMiddleware } from '../lib/middleware.js';
+import { sendError, ErrorCodes } from '../lib/response.js';
 import { buildCspPolicies, buildContentSecurityPolicy, collectInlineHashes } from '../lib/app-context/csp.js';
 
 // ─── collectInlineHashes ─────────────────────────────────────────────────────
@@ -138,6 +143,30 @@ describe('csp: buildContentSecurityPolicy', () => {
     const csp = buildContentSecurityPolicy(minimalConfig, emptyHashes);
     assert.ok(csp.includes('report-uri /api/csp-report'));
   });
+
+  it('adds no Google or Apple hosts when sign-in is unconfigured', () => {
+    const csp = buildContentSecurityPolicy(minimalConfig, emptyHashes);
+    assert.ok(!csp.includes('accounts.google.com'));
+    assert.ok(!csp.includes('appleid'));
+    assert.ok(/frame-src 'self' https:\/\/open\.spotify\.com(;|$)/.test(csp));
+  });
+
+  it('adds exactly the Google hosts when Google sign-in is on', () => {
+    const csp = buildContentSecurityPolicy({ ...minimalConfig, OAUTH_GOOGLE_ENABLED: true }, emptyHashes);
+    assert.ok(csp.includes('https://accounts.google.com/gsi/client'));
+    assert.ok(csp.includes("frame-src 'self' https://open.spotify.com https://accounts.google.com/gsi/"));
+    assert.ok(csp.includes('https://accounts.google.com/gsi/style'));
+    assert.ok(csp.includes('connect-src') && /connect-src [^;]*https:\/\/accounts\.google\.com\/gsi\//.test(csp));
+    assert.ok(!csp.includes('appleid'));
+  });
+
+  it('adds exactly the Apple hosts when Apple web sign-in is on', () => {
+    const csp = buildContentSecurityPolicy({ ...minimalConfig, OAUTH_APPLE_WEB_ENABLED: true }, emptyHashes);
+    assert.ok(/script-src [^;]*https:\/\/appleid\.cdn-apple\.com/.test(csp));
+    assert.ok(/frame-src [^;]*https:\/\/appleid\.apple\.com/.test(csp));
+    assert.ok(/connect-src [^;]*https:\/\/appleid\.apple\.com/.test(csp));
+    assert.ok(!csp.includes('accounts.google.com'));
+  });
 });
 
 // ─── buildCspPolicies ────────────────────────────────────────────────────────
@@ -153,5 +182,61 @@ describe('csp: buildCspPolicies', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+// ─── COOP follows the sign-in providers ──────────────────────────────────────
+
+describe('csp: Cross-Origin-Opener-Policy', () => {
+  const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+
+  async function coopFor(config: Record<string, any>) {
+    const app = express();
+    const ctx = {
+      express,
+      config: {
+        TRUST_PROXY: false,
+        PUBLIC_ORIGIN: '',
+        NODE_ENV: 'production',
+        PUBLIC_DIR,
+        WEB_DIST: path.join(PUBLIC_DIR, '__no-build__'),
+        JSON_LIMIT: '1mb',
+        API_VERSION: '1',
+        REQUEST_TIMEOUT_MS: 10_000,
+        MOBILE_ORIGINS: [],
+        PROFILE_RATE_LIMIT_MAX: 100,
+        OVERLAP_RATE_LIMIT_MAX: 100,
+        ...config,
+      },
+      log: { info() {}, warn() {}, error() {} },
+      state: { metrics: { totalRequests: 0, totalDuration: 0, requestCount: 0, totalErrors: 0, statusCodes: {}, endpointLatency: {} }, timers: [] },
+      contentSecurityPolicy: "default-src 'self'",
+      enforceAllowedOrigin: (_req: any, _res: any, next: any) => next(),
+      avatarDirPath: () => path.join(PUBLIC_DIR, 'uploads', 'avatars'),
+      isAllowedOrigin: () => false,
+      setNoStore: () => {},
+      getRequestIp: (req: any) => req.ip || '127.0.0.1',
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      authRateLimit: (_req: any, _res: any, next: any) => next(),
+      sendError,
+      ErrorCodes,
+      generateOpenAPISpec: () => ({}),
+      stores: { auditLog: { insert: async () => {} } },
+    };
+    configureMiddleware(app as any, ctx as any);
+    const res = await request(app).get('/health/live');
+    return res.headers['cross-origin-opener-policy'];
+  }
+
+  it('stays same-origin when no provider is enabled', async () => {
+    assert.equal(await coopFor({}), 'same-origin');
+  });
+
+  it('allows popups when Google sign-in is enabled', async () => {
+    assert.equal(await coopFor({ OAUTH_GOOGLE_ENABLED: true }), 'same-origin-allow-popups');
+  });
+
+  it('allows popups when Apple web sign-in is enabled', async () => {
+    assert.equal(await coopFor({ OAUTH_APPLE_WEB_ENABLED: true }), 'same-origin-allow-popups');
   });
 });

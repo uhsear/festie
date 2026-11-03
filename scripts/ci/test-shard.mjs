@@ -30,6 +30,13 @@ function main() {
     process.exit(2);
   }
 
+  if (process.env.CI && !process.env.TEST_DATABASE_URL) {
+    console.error(
+      'TEST_DATABASE_URL is not set in CI, so every DB suite would skip and CI would pass without them. Set it in the test-shard job env.',
+    );
+    process.exit(2);
+  }
+
   const dir = 'tests';
   const files = readdirSync(dir)
     .filter((f) => f.endsWith('.test.ts'))

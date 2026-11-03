@@ -1,17 +1,33 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import { ApiClientError } from '@festie/shared/services/api';
 import AdminFestivals from './AdminFestivals';
 
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
+}));
+vi.mock('./useAdminSearch', () => ({
+  useAdminSearch: () => [{ tab: 'festivals', festival: 'f1', view: 'edit' }, vi.fn()],
+}));
 vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
 }));
 vi.mock('./LineupImport', () => ({ default: () => null }));
 vi.mock('./FestivalMapEditor', () => ({ default: () => null }));
+vi.mock('./FestivalStatusPanel', () => ({ default: () => null }));
+vi.mock('../../lib/useUnsavedChangesGuard', () => ({
+  useUnsavedChangesGuard: () => ({ confirmLeave: (fn: () => void) => fn(), guardDialog: null }),
+}));
 vi.mock('./FestivalEditForm', () => ({
   default: ({ onSave }: { onSave: () => void }) => <button onClick={onSave}>save form</button>,
 }));
+
+const render = (ui: React.ReactElement) =>
+  rtlRender(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })}>{ui}</QueryClientProvider>,
+  );
 
 const mockGet = vi.fn();
 const mockPut = vi.fn();
@@ -50,7 +66,6 @@ describe('AdminFestivals', () => {
     mockPut.mockResolvedValueOnce(undefined);
 
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
 
     expect(await screen.findByText('Remove sets with picks?')).toBeInTheDocument();

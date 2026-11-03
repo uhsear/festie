@@ -1,105 +1,139 @@
-import React, { useEffect, useState } from 'react';
-import { api } from '@festie/shared/services/api';
-import { useToast } from '../../lib/toastContext';
-import {
-  type AnalyticsData,
-  normalizeAnalytics,
-  ANALYTICS_DEFAULTS,
-  formatDate,
-  timeAgoFromIso,
-} from '@festie/shared/utils';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchAdminAnalytics } from '@festie/shared/services/admin';
+import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { analyticsQuestions, analyticsScopeLine, formatDate, funnelSteps, timeAgoFromIso } from '@festie/shared/utils';
+import EmptyState from '../ui/EmptyState';
 import PickDistribution from './PickDistribution';
-import EngagementMetrics from './EngagementMetrics';
 import TopSets from './TopSets';
+import FestivalPickInsight from './FestivalPickInsight';
 import FestivalStats from './FestivalStats';
+import { ADMIN_QUERY_OPTIONS, adminKeys } from './adminQueries';
+import { useAdminSearch } from './useAdminSearch';
 
 /**
- * Analytics dashboard with charts and metrics.
+ * Analytics dashboard: named questions, funnel and true totals.
  */
 export default function AdminAnalytics() {
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { toastError } = useToast();
+  const [{ festival }, setAdminSearch] = useAdminSearch();
+  const { data, error, isError, isPending, refetch } = useQuery({
+    queryKey: adminKeys.analytics(festival),
+    queryFn: () => fetchAdminAnalytics(festival),
+    ...ADMIN_QUERY_OPTIONS,
+  });
 
-  useEffect(() => {
-    loadAnalytics();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load once on mount
-
-  const loadAnalytics = async () => {
-    try {
-      setLoading(true);
-      const raw = await api.get<unknown>('/admin/analytics');
-      setData(normalizeAnalytics(raw));
-    } catch (err: unknown) {
-      toastError(err, "Couldn't load analytics. Try again.");
-      setData(ANALYTICS_DEFAULTS);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
+  if (isPending) {
     return <div className="text-center py-12 text-text-muted">Loading analytics…</div>;
   }
 
-  if (!data) {
-    return <div className="text-center py-12 text-text-muted">Analytics data unavailable</div>;
+  if (isError || !data) {
+    return (
+      <EmptyState
+        title="Couldn't load analytics"
+        description={mapErrorToUserMessage(error, 'Check your connection, then try again.')}
+        cta={{ label: 'Retry', onClick: () => void refetch() }}
+      />
+    );
   }
 
-  // Derive pick distribution totals
-  const totals = data.topSets.reduce(
-    (acc, s) => ({
-      must: acc.must + s.mustCount,
-      want: acc.want + s.wantCount,
-      maybe: acc.maybe + s.maybeCount,
-    }),
-    { must: 0, want: 0, maybe: 0 },
-  );
-
-  // Engagement metrics
-  const totalUsers = data.activeUsers.length;
-  const picksSum = data.activeUsers.reduce((s, u) => s + u.totalPicks, 0);
-  const avgPicksPerUser = totalUsers > 0 ? picksSum / totalUsers : 0;
-  const crewMembers = data.crews.reduce((s, c) => s + c.memberCount, 0);
-  const avgCrewSize = data.crews.length > 0 ? crewMembers / data.crews.length : 0;
-  const crewParticipation = totalUsers > 0 ? Math.min(1, crewMembers / totalUsers) : 0;
+  const selectFestival = (id?: string) => setAdminSearch({ tab: 'analytics', ...(id && { festival: id }) });
 
   return (
     <div className="space-y-8">
-      <PickDistribution must={totals.must} want={totals.want} maybe={totals.maybe} />
+      <div className="space-y-2">
+        <label htmlFor="analytics-festival" className="type-label text-text-primary block">
+          Festival
+        </label>
+        <select
+          id="analytics-festival"
+          value={festival ?? ''}
+          onChange={(e) => selectFestival(e.target.value || undefined)}
+          className="w-full sm:w-auto min-h-11 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+        >
+          <option value="">All festivals</option>
+          {data.festivalStats.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+        <p className="text-sm text-text-muted">{analyticsScopeLine(data)}</p>
+      </div>
 
-      <EngagementMetrics
-        avgPicksPerUser={avgPicksPerUser}
-        avgCrewSize={avgCrewSize}
-        crewParticipation={crewParticipation}
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {analyticsQuestions(data).map((q) => (
+          <li key={q.id} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
+            <div className="type-label text-text-muted mb-1">{q.question}</div>
+            <div className="text-text-primary">{q.answer}</div>
+          </li>
+        ))}
+      </ul>
+
+      <div>
+        <h2 className="type-heading text-text-primary mb-1">Where do people drop off?</h2>
+        <p className="text-xs text-text-muted mb-4">
+          Each step counts people. A step can be larger than the one before it, for example when someone joins a crew
+          before picking.
+        </p>
+        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-4">
+          {funnelSteps(data).map((step) => (
+            <div key={step.label}>
+              <div className="flex justify-between text-sm text-text-primary mb-1">
+                <span>{step.label}</span>
+                <span>
+                  {step.count} · {step.pctOfStart} of sign-ups
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-bg-primary/30 overflow-hidden">
+                <div
+                  style={{ width: `${Math.min(100, parseInt(step.pctOfStart, 10) || 0)}%` }}
+                  className="h-full bg-accent-aqua"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <PickDistribution
+        must={data.pickDistribution.must}
+        want={data.pickDistribution.want}
+        maybe={data.pickDistribution.maybe}
+        total={data.totals.picks}
       />
 
       <TopSets sets={data.topSets} />
 
-      <FestivalStats stats={data.festivalStats} />
+      {festival ? (
+        <FestivalPickInsight festivalId={festival} />
+      ) : (
+        <p className="text-sm text-text-muted">Choose a festival to see clashing picks and export picks per set.</p>
+      )}
+
+      <FestivalStats stats={data.festivalStats} onSelect={(id) => selectFestival(id)} />
 
       {/* Active Users */}
       {data.activeUsers.length > 0 && (
         <div>
-          <h2 className="type-heading text-text-primary mb-4">Most Active Users</h2>
+          <h2 className="type-heading text-text-primary mb-4">Most recently active people (latest 50)</h2>
           <div
             role="region"
             tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: keeps this overflow-x-auto table keyboard-scrollable; rule only exempts role=tabpanel
-            aria-label="Most active users table"
+            aria-label="Recently active people table"
             className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-x-auto focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           >
             <table className="w-full text-sm">
-              <caption className="sr-only">Most active users</caption>
+              <caption className="sr-only">Most recently active people</caption>
               <thead>
                 <tr className="text-left text-text-muted border-b border-glass-border">
                   <th className="px-4 py-2">User</th>
-                  <th className="px-4 py-2 text-right">Profiles</th>
-                  <th className="px-4 py-2 text-right">Total Picks</th>
-                  <th className="px-4 py-2 text-right">Last Active</th>
+                  <th className="px-4 py-2 text-right">Festival plans</th>
+                  <th className="px-4 py-2 text-right">Total picks</th>
+                  <th className="px-4 py-2 text-right">Last active</th>
                 </tr>
               </thead>
               <tbody>
-                {data.activeUsers.slice(0, 15).map((u) => (
+                {data.activeUsers.map((u) => (
                   <tr key={u.id} className="border-b border-glass-border last:border-0">
                     <td className="px-4 py-2 text-text-primary">{u.username}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{u.profileCount}</td>
@@ -116,7 +150,7 @@ export default function AdminAnalytics() {
       {/* Crews */}
       {data.crews.length > 0 && (
         <div>
-          <h2 className="type-heading text-text-primary mb-4">Crews</h2>
+          <h2 className="type-heading text-text-primary mb-4">Largest crews (top 20)</h2>
           <div
             role="region"
             tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: keeps this overflow-x-auto table keyboard-scrollable; rule only exempts role=tabpanel
@@ -124,10 +158,11 @@ export default function AdminAnalytics() {
             className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-x-auto focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           >
             <table className="w-full text-sm">
-              <caption className="sr-only">Crews overview</caption>
+              <caption className="sr-only">Largest crews</caption>
               <thead>
                 <tr className="text-left text-text-muted border-b border-glass-border">
                   <th className="px-4 py-2">Name</th>
+                  <th className="px-4 py-2">Festival</th>
                   <th className="px-4 py-2 text-right">Members</th>
                   <th className="px-4 py-2 text-right">Created</th>
                 </tr>
@@ -136,6 +171,7 @@ export default function AdminAnalytics() {
                 {data.crews.map((c) => (
                   <tr key={c.id} className="border-b border-glass-border last:border-0">
                     <td className="px-4 py-2 text-text-primary">{c.name}</td>
+                    <td className="px-4 py-2 text-text-muted">{c.festivalName}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{c.memberCount}</td>
                     <td className="px-4 py-2 text-right text-text-muted">{formatDate(c.createdAt)}</td>
                   </tr>

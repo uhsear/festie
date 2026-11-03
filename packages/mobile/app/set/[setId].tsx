@@ -22,20 +22,38 @@ import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFestivalDataStore, useAuthStore, useUIStore, useNotificationPrefsStore } from '@festie/shared/stores';
-import { usePicks, usePickSync, useFestival, useCrew, useDebouncedNote, type NoteSaveStatus } from '@festie/shared/hooks';
+import {
+  usePicks,
+  useCanPick,
+  usePickSync,
+  usePickClear,
+  useFestival,
+  useSetMove,
+  useCrew,
+  useViewAs,
+  useDebouncedNote,
+  useSpotifyPreview,
+  type NoteSaveStatus,
+} from '@festie/shared/hooks';
 import { api, mapErrorToUserMessage } from '@festie/shared/services';
 import {
-  formatTime,
+  formatSetWhen,
+  reminderNoteSummary,
+  primarySpotifyArtist,
+  getSetStatus,
   artistDisplayName,
   artistSubtitle,
   getSetLinks,
   detectConflicts,
   hasSetStarted,
   buildSetUrl,
-  festivalTimeLabel,
   resolveFestivalTimeZone,
   reminderDeliveryProblem,
   QUEUED_WRITE_MESSAGE,
+  MAP_COPY,
+  stageCoord,
+  getAvatarColor,
+  viewAsButtonLabel,
   type ReminderPermission,
 } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
@@ -55,18 +73,11 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
-
-/**
- * Spotify preview payload returned by GET /spotify/preview/:setId. The server
- * returns artistName/trackName (NOT a `label` field) — we derive the display
- * label from trackName||artistName.
- */
-interface SpotifyPreview {
-  embedUrl: string;
-  embedType: 'artist' | 'track' | null;
-  artistName?: string;
-  trackName?: string;
-}
+import AlsoPickedSection from '../../components/AlsoPickedSection';
+import AlsoPlaysSection from '../../components/AlsoPlaysSection';
+import AppPressable from '../../components/AppPressable';
+import { undoNotifier } from '../../lib/undoNotifier';
+import { compassHref, stageMapHref } from '../../lib/dayOfRoutes';
 
 const REMINDER_ASK_DISMISSED_KEY = 'festie-reminder-ask-dismissed';
 
@@ -123,7 +134,7 @@ export default function SetDetailScreen() {
   // drag handle / close / share clear the notch on Android and any full-screen
   // presentation. Inside an iOS formSheet the sheet already sits below the status bar.
   const topInset = Platform.OS === 'ios' ? t.spacing[3] : Math.max(t.spacing[3], insets.top);
-  const { setId } = useLocalSearchParams<{ setId: string }>();
+  const { setId, listen } = useLocalSearchParams<{ setId: string; listen?: string }>();
 
   // Safe dismiss: on a cold deep link there is no back stack, so router.back()
   // would strand the user on a blank screen. Fall back to the home tab.
@@ -153,13 +164,16 @@ export default function SetDetailScreen() {
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const allProfiles = useFestivalDataStore((s) => s.allProfiles);
   const days = useFestivalDataStore((s) => s.days);
+  const stages = useFestivalDataStore((s) => s.stages);
 
-  const { getMyPick, savePick, getOtherPicks, saveReminder, getMyReminder } = usePicks();
+  const { getMyPick, savePick, getOtherPicks, getPickCount, saveReminder, getMyReminder } = usePicks();
   const { getStageColor, getStageName } = useFestival();
   const { getCrewScopedOtherPicks } = useCrew();
+  const viewAs = useViewAs();
   const haptics = useHaptics();
 
   const set = useMemo(() => sets.find((x) => x.id === setId), [sets, setId]);
+  const move = useSetMove(set ?? null);
 
   // Cold deep-link (festie.us/set/<id> or festie://set/<id>): the set isn't in
   // the store yet because its festival isn't loaded. Resolve which festival the
@@ -214,6 +228,7 @@ export default function SetDetailScreen() {
   }, [set, artistName, currentFestival?.name, shareUrl]);
   const subtitle = set ? artistSubtitle(set, b2bSeparator) : '';
   const stageName = set ? getStageName(set.stageId) || 'Unknown' : 'Unknown';
+  const coord = set ? stageCoord(stages, set.stageId) : null;
   const stageColor = safeStageColor(set ? getStageColor(set.stageId) : undefined, t.colors.text.muted);
   // F26: server stage colors carry no AA guarantee as TEXT. Move the hue's
   // luminance away from the background until the label reaches ~4.6:1 (lighter on
@@ -223,11 +238,9 @@ export default function SetDetailScreen() {
     () => ensureStageTextContrast(stageColor, t.colors.bg.primary),
     [stageColor, t.colors.bg.primary],
   );
-  const zoneLabel = festivalTimeLabel(resolveFestivalTimeZone(currentFestival), nowMs);
-  const timeLabel =
-    set && set.startTime && set.endTime
-      ? `${formatTime(set.startTime)} - ${formatTime(set.endTime)}${zoneLabel ? ` · ${zoneLabel}` : ''}`
-      : 'TBA';
+  const timeZone = resolveFestivalTimeZone(currentFestival);
+  const status = set ? getSetStatus(set, new Date(nowMs), days, timeZone) : null;
+  const whenLine = set ? formatSetWhen(set, days, status) : '';
   const myPick = set ? getMyPick(set.id) : undefined;
   const myReminder = set ? getMyReminder(set.id) : undefined;
 
@@ -249,10 +262,10 @@ export default function SetDetailScreen() {
 
   // Crew / who's going.
   const others = useMemo(() => {
-    if (!set || !currentProfile) return [];
+    if (!set || !currentProfile) return { list: [], crewScoped: false };
     const raw = getCrewScopedOtherPicks(set.id);
     const scoped = raw.length > 0 ? raw : getOtherPicks(set.id);
-    return scoped.map((o) => {
+    const list = scoped.map((o) => {
       const profile = allProfiles.find((p) => p.id === o.profileId);
       return {
         profileId: o.profileId,
@@ -260,9 +273,18 @@ export default function SetDetailScreen() {
         name: profile?.name || 'Unknown',
       };
     });
+    return { list, crewScoped: raw.length > 0 };
   }, [set, currentProfile, getCrewScopedOtherPicks, getOtherPicks, allProfiles]);
 
-  const whoTitle = others.length > 0 ? `Who's Going (${others.length})` : 'Nobody else going yet';
+  // Non-crew picks arrive only as an anonymous count, so the fallback shows the number without names.
+  const { list: othersList, crewScoped } = others;
+  const othersTotal = set ? getPickCount(set.id) : 0;
+  const whoTitle =
+    othersList.length > 0
+      ? `Who's Going (${othersList.length})`
+      : othersTotal > 0
+        ? `${othersTotal} going`
+        : 'Nobody else going yet';
 
   const crewNotes = useMemo(() => {
     if (!set) return [];
@@ -290,6 +312,8 @@ export default function SetDetailScreen() {
     onError: () => haptics.warning(),
   });
 
+  const canRemind = !!set?.startTime && !(set && currentFestival && hasSetStarted(set, currentFestival, days));
+  const reminderSummary = reminderNoteSummary(myReminder, !!personal.value, canRemind);
   // ---- Reminder delivery (OS permission + Account preference). ----
   // 'undetermined', and 'denied' while the OS can still ask, count as 'default' (not enabled yet).
   const [permission, setPermission] = useState<ReminderPermission>('granted');
@@ -298,11 +322,7 @@ export default function SetDetailScreen() {
     Notifications.getPermissionsAsync()
       .then((p) =>
         setPermission(
-          p.status === 'granted'
-            ? 'granted'
-            : p.status === 'denied' && !p.canAskAgain
-              ? 'denied'
-              : 'default',
+          p.status === 'granted' ? 'granted' : p.status === 'denied' && !p.canAskAgain ? 'denied' : 'default',
         ),
       )
       .catch(() => {});
@@ -327,45 +347,44 @@ export default function SetDetailScreen() {
   });
   const { sync: pickSync, retry: retryPick } = usePickSync(set?.id ?? '');
 
-  // ---- Spotify preview (fetched on mount, rendered inline via WebView). ----
-  const [spotify, setSpotify] = useState<SpotifyPreview | null>(null);
+  // ---- Spotify preview (shared hook; rendered inline via WebView). ----
+  const { status: spotifyStatus, preview } = useSpotifyPreview(set?.id);
+  const spotifyArtist = set ? primarySpotifyArtist(set) : null;
+  const embedUrl = preview?.embedUrl;
   const [spotifyOpen, setSpotifyOpen] = useState(false);
-
-  // Server returns artistName/trackName (no `label`); derive a display label.
-  const spotifyLabel = spotify?.trackName || spotify?.artistName || 'Play on Spotify';
-
+  const [noteOpen, setNoteOpen] = useState(false);
+  // Opened from a card's Listen button: open the player once it is ready.
+  const listenHandled = useRef(false);
   useEffect(() => {
-    if (!set) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const preview = await api.get<SpotifyPreview>(`/spotify/preview/${set.id}`);
-        if (!cancelled && preview?.embedType) setSpotify(preview);
-      } catch {
-        /* No Spotify preview available */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [set]);
+    if (listen === '1' && spotifyStatus === 'ready' && !listenHandled.current) {
+      listenHandled.current = true;
+      setSpotifyOpen(true);
+    }
+  }, [listen, spotifyStatus]);
 
   // ---- Actions. ------------------------------------------------------------
+  const clearPick = usePickClear(undoNotifier);
   const handlePriority = useCallback(
     (priority: Priority | null) => {
       if (!set || !currentFestival) return;
       // F34: selection haptic, matching SetCardMobile's priority toggle and the
       // reminder chips below — the same gesture class should always buzz.
       haptics.select();
+      if (priority === null) {
+        clearPick(set.id, artistDisplayName(set, b2bSeparator));
+        return;
+      }
       savePick(currentFestival.id, set.id, priority).catch((err) => {
         haptics.warning();
-        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), { kind: 'error' });
+        useUIStore
+          .getState()
+          .showToast(mapErrorToUserMessage(err, "Couldn't save your pick. Try again."), { kind: 'error' });
       });
     },
-    [set, currentFestival, savePick, haptics],
+    [set, currentFestival, savePick, haptics, clearPick, b2bSeparator],
   );
 
-  // A failed reminder save shows inline: on iOS the root toast sits behind this native sheet.
+  // A failed reminder save also shows inline, beside the chip that failed.
   const [reminderFailed, setReminderFailed] = useState<{ minutes: number | null } | null>(null);
   const handleReminder = useCallback(
     (minutes: number | null) => {
@@ -376,27 +395,26 @@ export default function SetDetailScreen() {
       saveReminder(currentFestival.id, set.id, minutes).catch((err) => {
         haptics.warning();
         setReminderFailed({ minutes });
-        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't save your reminder. Try again."), { kind: 'error' });
+        useUIStore
+          .getState()
+          .showToast(mapErrorToUserMessage(err, "Couldn't save your reminder. Try again."), { kind: 'error' });
       });
     },
     [set, currentFestival, saveReminder, haptics, artistName],
   );
 
-  // Clash-prompt clear — demote one side of a clash to null. savePick is
-  // offline-queued, so resolving a clash works on dead signal.
+  // Clash-prompt clear — demote one side of a clash to null, with an undo
+  // toast. The write is offline-queued, so resolving a clash works on dead signal.
   const handleClashClear = useCallback(
-    (clearSetId: string) => {
-      if (!currentFestival) return;
+    (clearSetId: string, label: string) => {
       haptics.select();
-      savePick(currentFestival.id, clearSetId, null).catch((err) => {
-        haptics.warning();
-        useUIStore.getState().showToast(mapErrorToUserMessage(err, "Couldn't clear your pick. Try again."), { kind: 'error' });
-      });
+      clearPick(clearSetId, label);
     },
-    [currentFestival, savePick, haptics],
+    [clearPick, haptics],
   );
 
   const user = useAuthStore((s) => s.user);
+  const canPick = useCanPick();
   const goToAuth = useCallback(
     (route: '/(auth)/register' | '/(auth)/login') => {
       if (set) setReturnTo(`/set/${set.id}`);
@@ -470,24 +488,6 @@ export default function SetDetailScreen() {
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-        {/* Artist photo (from Spotify backfill) — R15: wrapped in a container
-              that clips the image to its rounded corners. No text is overlaid
-              on the hero, so the previous stacked-rgba "gradient" (a hard
-              rgba(10,10,10,0.85) rectangle over the bottom 60% without
-              expo-linear-gradient) only obscured the portrait subject. The
-              photo now reads clean, with no scrim: a flat low-alpha band
-              also showed as a hard gray stripe on Daylight (iOS sweep). */}
-        {artistPhoto && !largeText ? (
-          <View style={styles.artistPhotoContainer}>
-            <Image
-              source={{ uri: artistPhoto }}
-              style={styles.artistPhoto}
-              resizeMode="cover"
-              accessibilityIgnoresInvertColors
-            />
-          </View>
-        ) : null}
-
         {/* Stage pill */}
         <View style={[styles.stagePill, { backgroundColor: stageColor + '25' }]}>
           <Text style={[styles.stageText, { color: stageTextColor }]} numberOfLines={1}>
@@ -495,146 +495,225 @@ export default function SetDetailScreen() {
           </Text>
         </View>
 
-        {/* Artist header */}
-        <Text style={styles.artist} accessibilityRole="header" maxFontSizeMultiplier={typeScaleCap('display-lg')}>
-          <DisplayWords text={artistName} fontSize={styles.artist.fontSize} />
-        </Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-        <Text style={styles.time}>{timeLabel}</Text>
+        {/* Artist header: small avatar beside the name keeps the pick buttons in the half-height detent. */}
+        <View style={styles.artistRow}>
+          {artistPhoto && !largeText ? (
+            <Image
+              source={{ uri: artistPhoto }}
+              style={styles.artistAvatar}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
+          ) : null}
+          <View style={styles.artistText}>
+            <Text style={styles.artist} accessibilityRole="header" maxFontSizeMultiplier={typeScaleCap('display-lg')}>
+              <DisplayWords text={artistName} fontSize={styles.artist.fontSize} />
+            </Text>
+            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          </View>
+        </View>
+        <Text style={styles.time}>{whenLine}</Text>
+        {move ? (
+          <Text style={styles.moved} accessibilityLabel={move.a11y}>
+            {move.line}
+          </Text>
+        ) : null}
+        {coord ? (
+          <View style={styles.stageActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="map-outline"
+              label={MAP_COPY.showStageOnMap}
+              onPress={() => router.navigate(stageMapHref(set.stageId))}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="compass-outline"
+              label={MAP_COPY.pointMeThere}
+              onPress={() => router.push(compassHref(stageName, coord))}
+            />
+          </View>
+        ) : null}
 
-        {/* Priority picker / guest sign-in prompt */}
+        <AlsoPlaysSection set={set} nowMs={nowMs} />
+
+        {/* Priority picker: guests pick on this device */}
+        {canPick ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Your pick</Text>
+            <View style={styles.priorityRow}>
+              {PRIORITY_BUTTONS.map((option) => {
+                const active = myPick === option.value;
+                const accent = priorityColor(t, option.value);
+                const pending = pickSync?.state === 'saving' || pickSync?.state === 'queued';
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.priorityButton, active && { backgroundColor: accent, borderColor: accent }]}
+                    onPress={() => handlePriority(active ? null : option.value)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={
+                      active && pending
+                        ? `${option.label}, ${pickSync?.state === 'queued' ? 'waiting to sync' : 'saving'}`
+                        : option.label
+                    }
+                  >
+                    <Ionicons
+                      name={option.icon}
+                      size={16}
+                      color={active ? t.colors.text.onLightAccent : t.colors.text.muted}
+                    />
+                    {active && pending ? (
+                      <Ionicons name="time-outline" size={14} color={t.colors.text.onLightAccent} />
+                    ) : null}
+                    <Text
+                      style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
+                      maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    >
+                      {option.short}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {pickSync?.state === 'failed' ? (
+              <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                <Text style={styles.statusWarn}>Pick not saved.</Text>
+                <TouchableOpacity
+                  style={styles.statusAction}
+                  onPress={() => retryPick().catch(() => {})}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry saving pick"
+                >
+                  <Text style={styles.statusActionText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Reminder and note / guest sign-in prompt */}
         {user ? (
           <>
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Your pick</Text>
-              <View style={styles.priorityRow}>
-                {PRIORITY_BUTTONS.map((option) => {
-                  const active = myPick === option.value;
-                  const accent = priorityColor(t, option.value);
-                  const pending = pickSync?.state === 'saving' || pickSync?.state === 'queued';
-                  return (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[styles.priorityButton, active && { backgroundColor: accent, borderColor: accent }]}
-                      onPress={() => handlePriority(active ? null : option.value)}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      accessibilityLabel={
-                        active && pending
-                          ? `${option.label}, ${pickSync?.state === 'queued' ? 'waiting to sync' : 'saving'}`
-                          : option.label
-                      }
-                    >
-                      <Ionicons
-                        name={option.icon}
-                        size={16}
-                        color={active ? t.colors.text.onLightAccent : t.colors.text.muted}
-                      />
-                      {active && pending ? (
-                        <Ionicons name="time-outline" size={14} color={t.colors.text.onLightAccent} />
+              <TouchableOpacity
+                style={styles.panelButton}
+                onPress={() => setNoteOpen((v) => !v)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: noteOpen }}
+                accessibilityLabel={`Reminder and note: ${reminderSummary}`}
+              >
+                <Ionicons name="notifications-outline" size={16} color={t.colors.accent.aqua} />
+                <Text style={styles.spotifyText} numberOfLines={1}>
+                  {reminderSummary}
+                </Text>
+                <Ionicons name={noteOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+              </TouchableOpacity>
+              {noteOpen ? (
+                <>
+                  {canRemind ? (
+                    <>
+                      <View style={styles.reminderRow}>
+                        {REMINDER_OPTIONS.map((opt) => {
+                          const active = myReminder === opt.value;
+                          return (
+                            <TouchableOpacity
+                              key={opt.value}
+                              style={[
+                                styles.reminderChip,
+                                active && {
+                                  backgroundColor: t.colors.accent.aqua,
+                                  borderColor: t.colors.accent.aqua,
+                                },
+                              ]}
+                              onPress={() => handleReminder(active ? null : opt.value)}
+                              activeOpacity={0.7}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: active }}
+                              accessibilityLabel={
+                                active
+                                  ? `Reminder set ${opt.label} before, tap to clear`
+                                  : `Remind me ${opt.label} before`
+                              }
+                            >
+                              <Text
+                                style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
+                                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                              >
+                                {opt.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      {reminderFailed ? (
+                        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                          <Text style={styles.statusWarn}>Reminder not saved.</Text>
+                          <TouchableOpacity
+                            style={styles.statusAction}
+                            onPress={() => handleReminder(reminderFailed.minutes)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Retry saving reminder"
+                          >
+                            <Text style={styles.statusActionText}>Retry</Text>
+                          </TouchableOpacity>
+                        </View>
                       ) : null}
-                      <Text
-                        style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
-                        maxFontSizeMultiplier={MAX_FONT_SCALE}
-                      >
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {pickSync?.state === 'failed' ? (
-                <View style={styles.statusRow} accessibilityLiveRegion="polite">
-                  <Text style={styles.statusWarn}>Pick not saved.</Text>
-                  <TouchableOpacity
-                    style={styles.statusAction}
-                    onPress={() => retryPick().catch(() => {})}
-                    accessibilityRole="button"
-                    accessibilityLabel="Retry saving pick"
-                  >
-                    <Text style={styles.statusActionText}>Retry</Text>
-                  </TouchableOpacity>
-                </View>
+                      {deliveryProblem === 'not-enabled' ? (
+                        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                          <Text style={styles.statusWarn}>
+                            Notifications are off, so this reminder can't reach you.
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.statusAction}
+                            onPress={turnOnNotifications}
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.statusActionText}>Turn on</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
+                      {deliveryProblem === 'denied' || deliveryProblem === 'pref-off' ? (
+                        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+                          <Text style={styles.statusWarn}>
+                            {deliveryProblem === 'denied'
+                              ? "Notifications are off for Festie, so this reminder can't reach you."
+                              : 'Set reminders are turned off in Account.'}
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.statusAction}
+                            onPress={() =>
+                              deliveryProblem === 'denied' ? Linking.openSettings() : router.push('/(tabs)/account')
+                            }
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.statusActionText}>
+                              {deliveryProblem === 'denied' ? 'Open settings' : 'Open Account'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <Text style={styles.sectionLabel}>Your note</Text>
+                  <TextInput
+                    style={styles.noteInput}
+                    value={personal.value}
+                    onChangeText={personal.setValue}
+                    placeholder='Private note, e.g. "meet at the rail"'
+                    placeholderTextColor={t.colors.text.placeholder}
+                    multiline
+                    accessibilityLabel="Personal note"
+                  />
+                  <NoteStatus status={personal.status} onRetry={personal.retry} />
+                </>
               ) : null}
             </View>
-            {!(currentFestival && hasSetStarted(set, currentFestival, days)) ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Remind me before it starts</Text>
-              <View style={styles.reminderRow}>
-                {REMINDER_OPTIONS.map((opt) => {
-                  const active = myReminder === opt.value;
-                  return (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={[
-                        styles.reminderChip,
-                        active && {
-                          backgroundColor: t.colors.accent.aqua,
-                          borderColor: t.colors.accent.aqua,
-                        },
-                      ]}
-                      onPress={() => handleReminder(active ? null : opt.value)}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      accessibilityLabel={
-                        active ? `Reminder set ${opt.label} before, tap to clear` : `Remind me ${opt.label} before`
-                      }
-                    >
-                      <Text
-                        style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
-                        maxFontSizeMultiplier={MAX_FONT_SCALE}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {reminderFailed ? (
-                <View style={styles.statusRow} accessibilityLiveRegion="polite">
-                  <Text style={styles.statusWarn}>Reminder not saved.</Text>
-                  <TouchableOpacity
-                    style={styles.statusAction}
-                    onPress={() => handleReminder(reminderFailed.minutes)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Retry saving reminder"
-                  >
-                    <Text style={styles.statusActionText}>Retry</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              {deliveryProblem === 'not-enabled' ? (
-                <View style={styles.statusRow} accessibilityLiveRegion="polite">
-                  <Text style={styles.statusWarn}>Notifications are off, so this reminder can't reach you.</Text>
-                  <TouchableOpacity style={styles.statusAction} onPress={turnOnNotifications} accessibilityRole="button">
-                    <Text style={styles.statusActionText}>Turn on</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              {deliveryProblem === 'denied' || deliveryProblem === 'pref-off' ? (
-                <View style={styles.statusRow} accessibilityLiveRegion="polite">
-                  <Text style={styles.statusWarn}>
-                    {deliveryProblem === 'denied'
-                      ? "Notifications are off for Festie, so this reminder can't reach you."
-                      : 'Set reminders are turned off in Account.'}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.statusAction}
-                    onPress={() =>
-                      deliveryProblem === 'denied' ? Linking.openSettings() : router.push('/(tabs)/account')
-                    }
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.statusActionText}>
-                      {deliveryProblem === 'denied' ? 'Open settings' : 'Open Account'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-            </View>
-            ) : null}
           </>
         ) : (
           <View style={styles.joinBox}>
@@ -644,61 +723,38 @@ export default function SetDetailScreen() {
           </View>
         )}
 
-        {/* Genres */}
-        {allGenres.length > 0 ? (
-          <View style={styles.chipRow}>
-            {allGenres.map((g) => (
-              <View key={g} style={styles.chip}>
-                <Text style={styles.chipText}>{g}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Artist links */}
-        {artistLinks.length > 0 ? (
-          <View style={styles.linkRow}>
-            {artistLinks.flatMap((entry) =>
-              Object.entries(entry.links).map(([key, url]) => (
-                <TouchableOpacity
-                  key={`${entry.name}-${key}`}
-                  style={styles.linkButton}
-                  onPress={() => openLink(url)}
-                  activeOpacity={0.7}
-                  accessibilityRole="link"
-                  accessibilityLabel={`Open ${entry.name} on ${key}`}
-                >
-                  <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
-                  <Text style={styles.linkText}>{key}</Text>
-                </TouchableOpacity>
-              )),
-            )}
-          </View>
-        ) : null}
-
-        {/* Spotify preview — inline WebView embed behind a show/hide toggle.
-            The embedUrl already carries theme=0 (dark). The section renders
-            nothing when no preview is available (guarded on embedType). */}
-        {spotify && spotify.embedUrl ? (
+        {/* Listen: one Spotify entry point. The links row skips this artist's Spotify link. */}
+        {spotifyArtist ? (
           <View style={styles.spotifySection}>
-            <TouchableOpacity
-              style={styles.spotifyButton}
-              onPress={() => setSpotifyOpen((v) => !v)}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: spotifyOpen }}
-              accessibilityLabel={spotifyOpen ? `Hide preview: ${spotifyLabel}` : `Play preview: ${spotifyLabel}`}
-            >
-              <Ionicons name="musical-note" size={16} color={t.colors.accent.aqua} />
-              <Text style={styles.spotifyText} numberOfLines={1}>
-                {spotifyLabel}
-              </Text>
-              <Ionicons name={spotifyOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
-            </TouchableOpacity>
-            {spotifyOpen ? (
-              <View style={[styles.spotifyEmbed, { height: spotify.embedType === 'track' ? 152 : 352 }]}>
+            {spotifyStatus === 'ready' || spotifyStatus === 'loading' ? (
+              <TouchableOpacity
+                style={styles.spotifyButton}
+                onPress={() => setSpotifyOpen((v) => !v)}
+                disabled={spotifyStatus === 'loading'}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: spotifyOpen, disabled: spotifyStatus === 'loading' }}
+                accessibilityLabel={
+                  spotifyOpen ? 'Hide player' : `Listen to ${preview?.artistName ?? spotifyArtist.name}`
+                }
+              >
+                <Ionicons name="musical-note" size={16} color={t.colors.accent.aqua} />
+                <Text style={styles.spotifyText} numberOfLines={1}>
+                  Listen
+                  {preview?.trackName ? <Text style={styles.spotifyTrack}>{`  ${preview.trackName}`}</Text> : null}
+                </Text>
+                <Ionicons
+                  name={spotifyOpen ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={t.colors.text.secondary}
+                />
+              </TouchableOpacity>
+            ) : null}
+            {spotifyStatus === 'offline' ? <Text style={styles.statusText}>Listening needs signal.</Text> : null}
+            {spotifyOpen && spotifyStatus === 'ready' && embedUrl ? (
+              <View style={[styles.spotifyEmbed, { height: preview?.embedType === 'track' ? 152 : 352 }]}>
                 <WebView
-                  source={{ uri: spotify.embedUrl }}
+                  source={{ uri: embedUrl }}
                   style={styles.spotifyWebView}
                   allowsInlineMediaPlayback
                   mediaPlaybackRequiresUserAction={false}
@@ -708,7 +764,7 @@ export default function SetDetailScreen() {
                     // resource loads stay in the WebView. User clicks (Spotify
                     // or not) open externally; any other origin is blocked so a
                     // hijacked iframe can't navigate the WebView off-Spotify.
-                    if (req.url === spotify.embedUrl) return true;
+                    if (req.url === embedUrl) return true;
                     let host = '';
                     try {
                       host = new URL(req.url).hostname;
@@ -727,6 +783,18 @@ export default function SetDetailScreen() {
                 />
               </View>
             ) : null}
+            {spotifyStatus !== 'loading' && (spotifyStatus !== 'ready' || spotifyOpen) ? (
+              <TouchableOpacity
+                style={styles.linkButton}
+                onPress={() => openLink(spotifyArtist.url)}
+                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityLabel={`Open ${spotifyArtist.name} in Spotify`}
+              >
+                <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
+                <Text style={styles.linkText}>Open in Spotify</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : null}
 
@@ -734,7 +802,8 @@ export default function SetDetailScreen() {
               card — it names both acts and offers per-pair Keep/Switch actions
               ("Keep {other}" clears the current pick = a Switch). The passive
               "N scheduling conflicts" box that used to sit below was the
-              duplicate coral surface and has been removed. */}
+              duplicate coral surface and has been removed. ClashPrompt also keeps a
+              quiet "Clashes with" line after "Keep both". */}
         {currentProfile && conflicts.length > 0 ? (
           <ClashPrompt
             currentSet={set}
@@ -753,22 +822,71 @@ export default function SetDetailScreen() {
           </View>
         ) : null}
 
+        {/* Genres */}
+        {allGenres.length > 0 ? (
+          <View style={styles.chipRow}>
+            {allGenres.map((g) => (
+              <View key={g} style={styles.chip}>
+                <Text style={styles.chipText}>{g}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Artist links */}
+        {artistLinks.length > 0 ? (
+          <View style={styles.linkRow}>
+            {artistLinks.flatMap((entry) =>
+              Object.entries(entry.links)
+                .filter(([key, url]) => !(key === 'spotify' && url === spotifyArtist?.url))
+                .map(([key, url]) => (
+                  <TouchableOpacity
+                    key={`${entry.name}-${key}`}
+                    style={styles.linkButton}
+                    onPress={() => openLink(url)}
+                    activeOpacity={0.7}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Open ${entry.name} on ${key}`}
+                  >
+                    <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
+                    <Text style={styles.linkText}>{key}</Text>
+                  </TouchableOpacity>
+                )),
+            )}
+          </View>
+        ) : null}
+
         {/* Who's going */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{whoTitle}</Text>
-          {others.map((o) => {
+          {othersList.map((o) => {
             // F27: the priority tier must not be color-only. The dot keeps the
             // color; a label + matching icon carry the same signal for
             // color-blind users, and the row exposes it to screen readers.
             const meta = { label: PRIORITY_SYMBOLS[o.priority].short, icon: priorityIconName(o.priority) };
             return (
-              <View key={o.profileId} style={styles.crewRow} accessible accessibilityLabel={`${o.name}, ${meta.label}`}>
-                <View style={[styles.crewDot, { backgroundColor: priorityColor(t, o.priority) }]} />
-                <Text style={styles.crewName} numberOfLines={1}>
-                  {o.name}
-                </Text>
-                <Ionicons name={meta.icon} size={12} color={t.colors.text.muted} />
-                <Text style={styles.crewPriority}>{meta.label}</Text>
+              <View key={o.profileId} style={styles.crewRow}>
+                <View style={styles.crewInfo} accessible accessibilityLabel={`${o.name}, ${meta.label}`}>
+                  <View style={[styles.crewDot, { backgroundColor: getAvatarColor(o.name) }]} />
+                  <Text style={styles.crewName}>{o.name}</Text>
+                  <Ionicons name={meta.icon} size={12} color={priorityColor(t, o.priority)} />
+                  <Text style={[styles.crewPriority, { color: priorityColor(t, o.priority) }]}>{meta.label}</Text>
+                </View>
+                {crewScoped && viewAs.canView(o.profileId) ? (
+                  <AppPressable
+                    style={styles.viewAsButton}
+                    onPress={() => {
+                      viewAs.start(o.profileId);
+                      router.navigate('/(tabs)');
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={viewAsButtonLabel(o.name)}
+                  >
+                    <Text style={styles.viewAsText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {viewAsButtonLabel(o.name)}
+                    </Text>
+                  </AppPressable>
+                ) : null}
               </View>
             );
           })}
@@ -780,27 +898,17 @@ export default function SetDetailScreen() {
           ))}
         </View>
 
-        {/* Notes */}
+        <AlsoPickedSection setId={set.id} />
+
+        {/* Crew note */}
         {currentProfile ? (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Your note</Text>
-            <TextInput
-              style={styles.noteInput}
-              value={personal.value}
-              onChangeText={personal.setValue}
-              placeholder="Private note for yourself"
-              placeholderTextColor={t.colors.text.placeholder}
-              multiline
-              accessibilityLabel="Personal note"
-            />
-            <NoteStatus status={personal.status} onRetry={personal.retry} />
-            <View style={styles.noteDivider} />
-            <Text style={styles.sectionLabel}>Crew note</Text>
+            <Text style={styles.sectionLabel}>Crew note (your crew sees this)</Text>
             <TextInput
               style={styles.noteInput}
               value={crew.value}
               onChangeText={crew.setValue}
-              placeholder="Shared note for your crew"
+              placeholder="Share a note with your crew…"
               placeholderTextColor={t.colors.text.placeholder}
               multiline
               accessibilityLabel="Crew note"
@@ -911,24 +1019,19 @@ const useStyles = makeStyles((t) => ({
     // the last input clears the home indicator on notched iPhones.
     gap: t.spacing[3],
   },
-  // R15: container clips the overlay Views to the rounded image corners.
-  // position:relative + overflow:hidden is the RN pattern for this. Negative
-  // horizontal margins achieve full-bleed: the parent content has padding
-  // (t.spacing[5]) that would shrink the image, so we pull the container out
-  // to the edges.
-  artistPhotoContainer: {
-    height: 120,
-    borderRadius: t.radii.default,
-    marginBottom: t.spacing[3],
-    marginHorizontal: -t.spacing[5],
-    overflow: 'hidden',
+  artistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+  },
+  artistAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: t.radii.pill,
     backgroundColor: t.colors.bg.secondary,
   },
-  // R15: the photo fills the container; border-radius is inherited from the
-  // container via overflow:hidden, so we don't duplicate it here.
-  artistPhoto: {
-    width: '100%',
-    height: '100%',
+  artistText: {
+    flex: 1,
   },
   stagePill: {
     alignSelf: 'flex-start',
@@ -950,6 +1053,15 @@ const useStyles = makeStyles((t) => ({
   time: {
     ...typeStyle('body'),
     color: t.colors.text.secondary,
+  },
+  moved: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+  },
+  stageActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
   },
   chipRow: {
     flexDirection: 'row',
@@ -1007,6 +1119,22 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label'),
     color: t.colors.text.primary,
     flex: 1,
+  },
+  spotifyTrack: {
+    ...typeStyle('label'),
+    color: t.colors.text.muted,
+  },
+  panelButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[4],
+    paddingVertical: t.spacing[3],
+    borderRadius: t.radii.pill,
+    borderWidth: 1,
+    borderColor: t.colors.border.light,
+    backgroundColor: t.colors.bg.card,
   },
   spotifyEmbed: {
     borderRadius: t.radii.default,
@@ -1089,9 +1217,23 @@ const useStyles = makeStyles((t) => ({
   // Join CTA migrated to components/Button (F8).
   crewRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: t.spacing[2],
   },
+  crewInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  viewAsButton: {
+    minHeight: 44,
+    paddingHorizontal: t.spacing[2],
+    justifyContent: 'center',
+  },
+  viewAsText: { ...typeStyle('label'), color: t.colors.accent.aqua },
   crewDot: {
     width: 8,
     height: 8,
@@ -1159,12 +1301,5 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border.light,
     backgroundColor: t.colors.bg.input,
     textAlignVertical: 'top',
-  },
-  // R2 hairline divider between personal and crew note sections for visual
-  // separation (glass.border token).
-  noteDivider: {
-    height: 1,
-    backgroundColor: t.colors.glass.border,
-    marginVertical: t.spacing[3],
   },
 }));

@@ -2,7 +2,8 @@ import { useCallback } from 'react';
 import { useFestivalStore } from '../stores/festivalStore';
 import { FestivalSet } from '../types';
 import { STAGE_COLOR_FALLBACK } from '../utils/stageColor';
-import { setMatchesSearch } from '../utils/setSearch';
+import { filterScheduleSets } from '../utils/scheduleFilters';
+import { useViewAs } from './useViewAs';
 
 export interface UseFestivalReturn {
   getDays: () => { index: number; date: string; label?: string }[];
@@ -18,9 +19,11 @@ export function useFestival(): UseFestivalReturn {
   const stages = useFestivalStore((state) => state.stages);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
   const activeStages = useFestivalStore((state) => state.activeStages);
+  const activeGenres = useFestivalStore((state) => state.activeGenres);
   const searchQuery = useFestivalStore((state) => state.searchQuery);
   const onlyMine = useFestivalStore((state) => state.onlyMine);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const { target } = useViewAs();
 
   const getDays = useCallback(() => {
     return days.map((day, index) => ({
@@ -36,23 +39,19 @@ export function useFestival(): UseFestivalReturn {
     return sets.filter((s) => s.dayIndex === selectedDay);
   }, [selectedDay, days, sets]);
 
-  const getFilteredSets = useCallback(() => {
-    const daySets = getCurrentDaySets();
-
-    return daySets.filter((set) => {
-      // Legacy: only filter when SOME but NOT ALL stages are selected
-      if (activeStages.length > 0 && activeStages.length < stages.length && !activeStages.includes(set.stageId)) {
-        return false;
-      }
-
-      // "My picks only" — show just the sets the user has picked.
-      if (onlyMine && !currentProfile?.picks?.[set.id]) {
-        return false;
-      }
-
-      return setMatchesSearch(set, searchQuery, stages);
-    });
-  }, [getCurrentDaySets, activeStages, searchQuery, stages, onlyMine, currentProfile]);
+  const getFilteredSets = useCallback(
+    () =>
+      filterScheduleSets(getCurrentDaySets(), {
+        activeStages,
+        genres: activeGenres,
+        stages,
+        onlyMine,
+        picks: currentProfile?.picks,
+        query: searchQuery,
+        viewAsPicks: target?.picks,
+      }),
+    [getCurrentDaySets, activeStages, activeGenres, searchQuery, stages, onlyMine, currentProfile, target],
+  );
 
   // Use actual stage.color from API response. When a stage has no color we
   // return the platform-neutral STAGE_COLOR_FALLBACK sentinel (NOT a web CSS var

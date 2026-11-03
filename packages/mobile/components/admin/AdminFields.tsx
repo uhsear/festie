@@ -1,18 +1,27 @@
 import { useState } from 'react';
-import { Modal, View, Text, TextInput, TouchableOpacity, Pressable, ScrollView } from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, Pressable, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
-import { HEX_RE, isValidDate, isValidTime, isTbaFallback, filterOptions } from '../../lib/adminValidators';
+import {
+  HEX_RE,
+  isValidDate,
+  isValidTime,
+  isTbaFallback,
+  filterOptions,
+  pickerDateFromValue,
+  valueFromPickerDate,
+} from '../../lib/adminValidators';
 
 // Re-export the pure validators (lifted to lib/adminValidators.ts so they can be
 // unit-tested without RN) so existing importers of this module are unchanged.
 export { HEX_RE, isValidDate, isValidTime };
 
 /**
- * Pure-RN form primitives for the admin edit surfaces. NO native module — every
- * picker is a core <Modal>, every field a token-styled <TextInput>. This keeps
- * the whole admin write surface OTA-able (no datetimepicker / color-picker
- * native deps). All inputs follow the focus affordance from the Account inline
+ * Form primitives for the admin edit surfaces. Every picker is a core <Modal>,
+ * every field a token-styled <TextInput>. The one native piece is the Android
+ * DateField / TimeField branch, which uses the datetimepicker module already in
+ * the binary, so the admin write surface stays OTA-able. All inputs follow the focus affordance from the Account inline
  * sections (accent border + subtle aqua ring on focus).
  */
 
@@ -305,8 +314,9 @@ export function HexColorField({ label, value, onChangeText, hint, error, editabl
 }
 
 // ---------------------------------------------------------------------------
-// DateField / TimeField — validated text inputs (YYYY-MM-DD, HH:MM). NO native
-// datetimepicker module. Empty/"TBA" is a permitted fallback (returns '').
+// DateField / TimeField — validated text inputs (YYYY-MM-DD, HH:MM) on iOS and
+// web. Android opens the system picker (DateTimePickerAndroid), already in the
+// binary via the register screen. Empty/"TBA" is a permitted fallback (returns '').
 // ---------------------------------------------------------------------------
 
 export interface DateTimeFieldProps {
@@ -317,12 +327,92 @@ export interface DateTimeFieldProps {
   editable?: boolean;
 }
 
+type PickerKind = 'date' | 'time';
+
+function AndroidPickerField({
+  kind,
+  label,
+  value,
+  onChangeText,
+  hint,
+  editable,
+  error,
+}: DateTimeFieldProps & { kind: PickerKind; error: string | null }) {
+  const styles = useStyles();
+  const isBlank = value.trim() === '';
+  const noun = kind === 'date' ? 'date' : 'time';
+
+  const open = () => {
+    if (!editable) return;
+    DateTimePickerAndroid.open({
+      value: pickerDateFromValue(kind, value),
+      mode: kind,
+      is24Hour: true,
+      onChange: (event, d) => {
+        if (event.type === 'set' && d) onChangeText(valueFromPickerDate(kind, d));
+      },
+    });
+  };
+
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.pickerRow}>
+        <TouchableOpacity
+          style={[styles.input, styles.selectRow, styles.pickerBox, error && styles.inputError, !editable && styles.inputDisabled]}
+          onPress={open}
+          activeOpacity={0.7}
+          disabled={!editable}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}, ${isBlank ? 'not set' : value}`}
+          accessibilityHint={`Opens the ${noun} picker`}
+        >
+          <Text style={isBlank ? styles.selectPlaceholder : styles.selectValue} numberOfLines={1}>
+            {isBlank ? `Tap to pick a ${noun}` : value}
+          </Text>
+        </TouchableOpacity>
+        {!isBlank && editable ? (
+          <TouchableOpacity
+            onPress={() => onChangeText('')}
+            style={styles.clearButton}
+            accessibilityRole="button"
+            accessibilityLabel={`Clear ${label}`}
+          >
+            <Text style={styles.clearText}>Clear</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {error ? (
+        <Text style={styles.error} accessibilityLiveRegion="polite">
+          {error}
+        </Text>
+      ) : hint ? (
+        <Text style={styles.hint}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+}
+
 export function DateField({ label, value, onChangeText, hint, editable = true }: DateTimeFieldProps) {
   const t = useTokens();
   const styles = useStyles();
   const [focused, setFocused] = useState(false);
 
   const showError = !isTbaFallback(value) && !isValidDate(value);
+
+  if (Platform.OS === 'android') {
+    return (
+      <AndroidPickerField
+        kind="date"
+        label={label}
+        value={value}
+        onChangeText={onChangeText}
+        hint={hint}
+        editable={editable}
+        error={showError ? 'Use YYYY-MM-DD, or leave blank / “TBA”.' : null}
+      />
+    );
+  }
 
   return (
     <View style={styles.field}>
@@ -359,6 +449,20 @@ export function TimeField({ label, value, onChangeText, hint, editable = true }:
   const [focused, setFocused] = useState(false);
 
   const showError = !isTbaFallback(value) && !isValidTime(value);
+
+  if (Platform.OS === 'android') {
+    return (
+      <AndroidPickerField
+        kind="time"
+        label={label}
+        value={value}
+        onChangeText={onChangeText}
+        hint={hint}
+        editable={editable}
+        error={showError ? 'Use HH:MM (24h), or leave blank / “TBA”.' : null}
+      />
+    );
+  }
 
   return (
     <View style={styles.field}>
@@ -497,6 +601,24 @@ const useStyles = makeStyles((t) => ({
     flex: 1,
   },
   optionLabelActive: {
+    color: t.colors.accent.aqua,
+  },
+  // Android date/time picker ------------------------------------------------
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+  },
+  pickerBox: {
+    flex: 1,
+  },
+  clearButton: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: t.spacing[2],
+  },
+  clearText: {
+    ...typeStyle('label', 600),
     color: t.colors.accent.aqua,
   },
   // HexColorField ----------------------------------------------------------

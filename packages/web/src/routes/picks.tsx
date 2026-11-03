@@ -1,220 +1,166 @@
-import { useMemo, useCallback, lazy, Suspense } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useLocation, useNavigate } from '@tanstack/react-router';
+import { useReducedMotion } from 'motion/react';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import { useFestivalStore, useAuthStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { usePicks, useFestival } from '@festie/shared/hooks';
-import { Priority } from '@festie/shared/types';
-import {
-  formatTime,
-  byStartTime,
-  artistDisplayName,
-  buildPicksIcs,
-  buildPicksShareUrl,
-  resolveStageColor,
-  isSetScheduled,
-} from '@festie/shared/utils';
-import StageBadge from '../components/ui/StageBadge';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { usePicksPlan } from '@festie/shared/hooks';
+import type { Priority } from '@festie/shared/types';
+import { COPY } from '@festie/shared/constants';
+import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
+import type { PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
-import Button from '../components/ui/Button';
 import RefreshableView from '../components/layout/RefreshableView';
 import PickBulkActions from '../components/PickBulkActions';
 import OfflineReadinessCard from '../components/features/OfflineReadinessCard';
 import CrewSuggestionStrip from '../components/features/CrewSuggestionStrip';
-import GuestTeaser from '../components/features/GuestTeaser';
+import GuestPicksBanner from '../components/features/GuestPicksBanner';
 import PickConflicts from '../components/features/PickConflicts';
-// Lazy-loaded: PlanQRShare pulls in qrcode.react, which has no business in the
+import RateNightBanner from '../components/features/RateNightBanner';
+import PicksPlanRow from '../components/features/PicksPlanRow';
+import ListenList from '../components/features/ListenList';
+import MyDayList from '../components/features/MyDayList';
+import PlanNotesList from '../components/features/PlanNotesList';
+// Lazy-loaded: SharePicksDialog pulls in qrcode.react, which has no business in the
 // picks bundle until the user actually opens the share modal.
-const PlanQRShare = lazy(() => import('../components/features/PlanQRShare'));
-import { useToast } from '../lib/toastContext';
-import { CalendarX, UserPlus, CalendarPlus, Share2 } from 'lucide-react';
+const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
+const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
+const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
+import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-// Each section carries its priority value, label, the dot accent token, and the
-// matching tint-ring Badge variant — mirroring the mobile Picks tab where every
-// bucket (Must/Want/Maybe) shares one accent across its dot, count pill, and the
-// set card's left border.
-const PRIORITY_SECTIONS: Array<{
-  value: Priority;
-  label: string;
-  accent: string;
-  badge: 'must' | 'want' | 'maybe';
-}> = [
-  { value: 'must', label: 'Must See', accent: 'var(--color-priority-must)', badge: 'must' },
-  { value: 'want-to-see', label: 'Want to See', accent: 'var(--color-priority-want)', badge: 'want' },
-  { value: 'maybe', label: 'Maybe', accent: 'var(--color-priority-maybe)', badge: 'maybe' },
+type PicksViewMode = 'plan' | 'myday' | 'reminders' | 'notes';
+
+// Dot accent token and the matching tint-ring Badge variant per priority —
+// mirroring the mobile Picks tab where every tier shares one accent across its
+// dot, count pill and the set card's left border.
+const PRIORITY_STYLE: Record<Priority, { accent: string; badge: 'must' | 'want' | 'maybe' }> = {
+  must: { accent: 'var(--color-priority-must)', badge: 'must' },
+  'want-to-see': { accent: 'var(--color-priority-want)', badge: 'want' },
+  maybe: { accent: 'var(--color-priority-maybe)', badge: 'maybe' },
+};
+
+const GROUP_MODES: Array<{ value: PicksGroupMode; label: string }> = [
+  { value: 'day', label: 'By day' },
+  { value: 'priority', label: 'By priority' },
 ];
+
+const ORDERS: Array<{ value: PicksOrder; label: string }> = [
+  { value: 'openers', label: 'Openers first' },
+  { value: 'headliners', label: 'Headliners first' },
+];
+
+const chipClass = (active: boolean) =>
+  `inline-flex items-center gap-1.5 rounded-full border px-3 min-h-9 text-xs font-semibold cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 ${
+    active
+      ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover'
+      : 'border-border text-text-secondary hover:bg-bg-card-hover'
+  }`;
 
 function PicksViewInner() {
   const navigate = useNavigate();
+  const hash = useLocation().hash;
+  const reducedMotion = useReducedMotion();
   const user = useAuthStore((state) => state.user);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const myPicks = useFestivalStore(selectMyPicks);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const sets = useFestivalStore((state) => state.sets);
-  const stages = useFestivalStore((state) => state.stages);
   const days = useFestivalStore((state) => state.days);
+  const stages = useFestivalStore((state) => state.stages);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
-
   const setDetailSet = useUIStore((state) => state.setDetailSet);
-  const { getMyPick } = usePicks();
-  const { getStageColor: getStageColorRaw, getStageName } = useFestival();
-  // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
-  const getStageColor = useCallback(
-    (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)'),
-    [getStageColorRaw],
-  );
-  const { toast } = useToast();
+  const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  const [view, setView] = useState<PicksViewMode>('plan');
+  const {
+    groupMode,
+    setGroupMode,
+    order,
+    setOrder,
+    effectiveFilter,
+    toggleFilter,
+    search,
+    setSearch,
+    toggleCollapsed,
+    clearFilters,
+    filtersActive,
+    stats,
+    conflictGroups,
+    clashIds,
+    rows,
+  } = usePicksPlan();
 
-  // Sets for the selected day, PLUS any unscheduled (TBA — schedule not yet
-  // announced) picks. A pick on a set with an undefined/out-of-range dayIndex
-  // matches no day tab under a plain `dayIndex === selectedDay` filter, so
-  // without this OR it becomes permanently invisible and unremovable (see
-  // docs/audits/tech-debt-2026-07-16-deep-findings.md, "Picks grouping/sorting
-  // logic re-implemented (not shared) on web").
-  const daySets = useMemo(() => {
-    return sets.filter((s) => s.dayIndex === selectedDay || !isSetScheduled(s, days));
-  }, [sets, selectedDay, days]);
-
-  // Group picks by priority
-  const picksGrouped = useMemo(() => {
-    const groups: Record<Priority, typeof sets> = {
-      must: [],
-      'want-to-see': [],
-      maybe: [],
-    };
-
-    daySets.forEach((set) => {
-      const priority = getMyPick(set.id);
-      if (priority && priority in groups) {
-        groups[priority].push(set);
-      }
+  // The clash chip on the schedule links here with #clashes. Show the clash cards, scroll to them, then drop the hash.
+  useEffect(() => {
+    if (hash.replace(/^#/, '') !== 'clashes') return;
+    setView('plan');
+    const id = window.requestAnimationFrame(() => {
+      const el = document.getElementById('clashes');
+      el?.scrollIntoView({ block: 'start', behavior: reducedMotion ? 'auto' : 'smooth' });
+      el?.focus({ preventScroll: true });
+      void navigate({ to: '/picks', hash: undefined, replace: true });
     });
+    return () => window.cancelAnimationFrame(id);
+  }, [hash, reducedMotion, navigate]);
 
-    // Sort each group by time, then name
-    Object.keys(groups).forEach((key) => {
-      groups[key as Priority].sort((a, b) => {
-        return (
-          byStartTime(a, b) ||
-          artistDisplayName(a, currentFestival?.b2bSeparator).localeCompare(
-            artistDisplayName(b, currentFestival?.b2bSeparator),
-            undefined,
-            { sensitivity: 'base' },
-          )
-        );
-      });
-    });
+  // True when the profile has any pick at all, which gates the calendar export
+  // independently of the active filters.
+  const pickedSets = useMemo(() => sets.filter((s) => myPicks?.[s.id]), [sets, myPicks]);
+  const hasAnyPicks = !!currentProfile && pickedSets.length > 0;
 
-    return groups;
-  }, [daySets, getMyPick, currentFestival?.b2bSeparator]);
-
-  // True when the profile has any pick at all (across every day), which gates
-  // the calendar export independently of the day filter — you can be on a day
-  // with no picks and still export the whole festival plan.
-  const hasAnyPicks = useMemo(
-    () => !!currentProfile && sets.some((s) => currentProfile.picks?.[s.id]),
-    [sets, currentProfile],
+  const timeZone = resolveFestivalTimeZone(currentFestival);
+  const planInput = useMemo(
+    () => ({ sets, days, timeZone, notes: currentProfile?.notes, reminders: currentProfile?.reminders, myPicks: myPicks ?? undefined }),
+    [sets, days, timeZone, currentProfile?.notes, currentProfile?.reminders, myPicks],
   );
+  const reminderItems = useMemo(() => buildPlanList('reminders', planInput), [planInput]);
+  const noteItems = useMemo(() => buildPlanList('notes', planInput), [planInput]);
 
-  // Build the user's picks into an RFC-5545 .ics and trigger a browser
-  // download. Mirrors the mobile Picks export (same shared buildPicksIcs over
-  // the already-loaded store data — fully client-side, no server round-trip);
-  // mobile hands the file to the OS share sheet, the web equivalent is a Blob
-  // download. Exports ALL picks across days, not just the selected day.
-  const handleExportCalendar = useCallback(() => {
-    if (!currentFestival || !currentProfile) return;
-    const ics = buildPicksIcs({
-      festival: {
-        id: currentFestival.id,
-        name: currentFestival.name,
-        location: currentFestival.location,
-      },
+  const myDay = useMemo(() => {
+    if (view !== 'myday') return null;
+    const picks = myPicks ?? {};
+    const dayGroups = buildPickConflicts({ sets, myPicks: picks, selectedDay, days, timeZone, stages });
+    return buildMyDay({
       sets,
+      myPicks: picks,
+      dayIndex: selectedDay,
+      days,
+      timeZone,
       stages,
-      picks: currentProfile.picks,
-      notes: currentProfile.notes,
+      meetingPoints,
+      conflictGroups: dayGroups,
+      b2bSeparator: currentFestival?.b2bSeparator,
     });
-    const safeName = (currentFestival.name || 'festival').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeName}_picks.ics`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }, [currentFestival, currentProfile, sets, stages]);
-
-  // Share a public, read-only link to my picks (server route GET /s/:profileId).
-  // Mirrors the mobile Picks share: native share sheet where available,
-  // clipboard copy as the desktop fallback.
-  const handleSharePicks = useCallback(async () => {
-    if (!currentProfile || !currentFestival) return;
-    const url = buildPicksShareUrl(currentProfile.id);
-    const text = `My ${currentFestival.name} picks on Festie`;
-    const nav = navigator as Navigator & {
-      share?: (data: ShareData) => Promise<void>;
-      canShare?: (data: ShareData) => boolean;
-    };
-    if (typeof nav.share === 'function') {
-      try {
-        await nav.share({ title: text, text, url });
-        return;
-      } catch (err) {
-        // AbortError = user dismissed the sheet; don't fall through to clipboard.
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      toast('Share link copied to clipboard', 'success');
-    } catch {
-      toast("Couldn't share link. Try again.", 'error');
-    }
-  }, [currentProfile, currentFestival, toast]);
+  }, [view, sets, myPicks, selectedDay, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator]);
 
   const actionButtons = hasAnyPicks ? (
-    <>
-      <Button variant="secondary" size="sm" type="button" onClick={handleSharePicks} aria-label="Share my picks">
-        <Share2 className="w-4 h-4" aria-hidden="true" />
-        Share picks
-      </Button>
-      {/* Offline-native QR handoff (mirrors mobile PlanQRShare). Suspense fallback
-          is the share-picks button row above, so nothing flashes while it loads. */}
-      <Suspense fallback={null}>
-        <PlanQRShare />
-      </Suspense>
-      <Button
-        variant="secondary"
-        size="sm"
-        type="button"
-        onClick={handleExportCalendar}
-        aria-label="Add picks to calendar"
-      >
-        <CalendarPlus className="w-4 h-4" aria-hidden="true" />
-        Add to calendar
-      </Button>
-    </>
+    <Suspense fallback={null}>
+      <SharePicksDialog />
+      <CalendarDialog />
+      <ScheduleImageDialog />
+    </Suspense>
   ) : null;
 
-  // Guests get the in-place sign-up teaser (parity with the always-visible nav
-  // tabs) instead of a redirect to /login.
-  if (!user) return <GuestTeaser mode="picks" />;
+  const guestBanner = user ? null : <GuestPicksBanner />;
 
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
     return (
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
-        <EmptyState
+        {loadState === 'error' ? <FestivalLoadError /> : <EmptyState
           icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
           title="No festival selected"
           description="Choose a festival from the top menu to start saving picks."
-        />
+        />}
       </div>
     );
   }
 
-  if (!currentProfile) {
+  if (user && !currentProfile) {
     return (
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
         <EmptyState
@@ -227,23 +173,71 @@ function PicksViewInner() {
     );
   }
 
-  const totalPicksThisDay = picksGrouped.must.length + picksGrouped['want-to-see'].length + picksGrouped.maybe.length;
+  const viewTabs: Array<{ id: PicksViewMode; label: string }> = [
+    { id: 'plan', label: COPY.myDay.allPicks },
+    { id: 'myday', label: COPY.myDay.name },
+    { id: 'reminders', label: `${COPY.planLists.reminders} · ${reminderItems.length}` },
+    { id: 'notes', label: `${COPY.planLists.notes} · ${noteItems.length}` },
+  ];
+  const viewTabRow =
+    hasAnyPicks || reminderItems.length > 0 || noteItems.length > 0 ? (
+      <div role="tablist" aria-label="Picks views" className="flex gap-2 mb-3 overflow-x-auto">
+        {viewTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={view === tab.id}
+            className={cn(
+              'min-h-[44px] px-4 rounded-full border text-sm font-medium whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+              view === tab.id
+                ? 'bg-accent-aqua/20 border-accent-aqua text-text-primary'
+                : 'bg-bg-card border-border text-text-secondary hover:bg-bg-card-hover',
+            )}
+            onClick={() => setView(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    ) : null;
 
-  // Global empty state: zero picks on this day → single friendly CTA pointing
-  // at /cards, rather than three stacked "Tap X on…" hint blocks which looked
-  // like broken/stuck UI on first visit.
-  if (totalPicksThisDay === 0) {
-    // Was a bespoke inline-styled block referencing legacy classes
-    // (.empty-state-guide / .empty-state-icon) that have no CSS rule in
-    // the React package — rendered as an un-styled stack of text on this
-    // route. EmptyState matches /crew + /wrap + /timeline empty surfaces.
+  // Reminders and notes can exist without picks, so these lists skip the empty state.
+  if (view === 'reminders' || view === 'notes') {
     return (
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
           {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {viewTabRow}
+          <PlanNotesList
+            kind={view}
+            items={view === 'reminders' ? reminderItems : noteItems}
+            days={days}
+            onOpenSet={setDetailSet}
+          />
+        </div>
+      </RefreshableView>
+    );
+  }
+
+  // Global empty state: zero picks → single friendly CTA pointing at /cards,
+  // rather than stacked hint blocks which looked like broken/stuck UI on first visit.
+  if (stats.total === 0) {
+    return (
+      <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
+        <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
+          {guestBanner}
+          {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {viewTabRow}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
           <PickBulkActions />
+          <ListenList
+            sets={pickedSets}
+            days={days}
+            festivalName={currentFestival.name}
+            separator={currentFestival.b2bSeparator}
+          />
           <EmptyState
             illustration="noPicks"
             title="No picks yet"
@@ -255,73 +249,195 @@ function PicksViewInner() {
     );
   }
 
+  const chips: Array<{ value: PicksFilter; label: string; count: number; priority?: Priority; clash?: boolean }> = [
+    { value: 'all', label: 'All', count: stats.total },
+    ...(stats.must > 0 ? [{ value: 'must' as const, label: 'Must', count: stats.must, priority: 'must' as const }] : []),
+    ...(stats.want > 0
+      ? [{ value: 'want-to-see' as const, label: 'Want', count: stats.want, priority: 'want-to-see' as const }]
+      : []),
+    ...(stats.maybe > 0
+      ? [{ value: 'maybe' as const, label: 'Maybe', count: stats.maybe, priority: 'maybe' as const }]
+      : []),
+    ...(stats.clashes > 0
+      ? [{ value: 'clashes' as const, label: COPY.clash.filter, count: stats.clashes, clash: true }]
+      : []),
+  ];
+
+  const trimmedSearch = search.trim();
+  const clashOnlyEmpty = effectiveFilter === 'clashes' && !trimmedSearch;
+
   return (
     <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
       <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
+        {guestBanner}
         {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+        {viewTabRow}
         <CrewSuggestionStrip />
-        <PickConflicts />
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
-        <PickBulkActions />
-        {/* Priority sections */}
-        {PRIORITY_SECTIONS.map(({ value: pri, label, accent, badge }) => {
-          const items = picksGrouped[pri];
-          return (
-            <div key={pri} className="mb-4">
-              {/* Mobile section-header pattern: round accent dot + label role text +
-                tint-ring count pill, separated from the rows by a hairline divider. */}
-              <h3 className="flex items-center gap-2 mb-3 pb-2.5 border-b border-border">
-                <span style={{ color: accent }} className="inline-flex">
-                  <PriorityIcon priority={pri} className="w-4 h-4" filled />
+
+        {view === 'myday' && myDay && <MyDayList myDay={myDay} onOpenSet={setDetailSet} timeZone={timeZone} />}
+
+        {view === 'plan' && (
+          <>
+        <div role="group" aria-label="Filter picks" className="flex flex-wrap gap-2 mb-3">
+          {chips.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              aria-pressed={effectiveFilter === c.value}
+              className={chipClass(effectiveFilter === c.value)}
+              onClick={() => toggleFilter(c.value)}
+            >
+              {c.priority && (
+                <span style={{ color: PRIORITY_STYLE[c.priority].accent }} className="inline-flex">
+                  <PriorityIcon priority={c.priority} className="w-3.5 h-3.5" filled />
                 </span>
-                <span className="text-sm font-medium text-text-secondary">{label}</span>
-                <Badge variant={badge} className="ml-auto">
-                  {items.length}
-                </Badge>
-              </h3>
-
-              {items.map((set) => {
-                const sc = getStageColor(set.stageId);
-                const sn = getStageName(set.stageId) || '';
-                const dn = artistDisplayName(set, currentFestival?.b2bSeparator);
-                const dayLabel = isSetScheduled(set, days) ? days[set.dayIndex ?? 0]?.label || '' : 'Unscheduled';
-
-                return (
-                  <button
-                    key={set.id}
-                    className="flex items-center gap-x-3 px-4 py-3 w-full text-left bg-bg-card border border-border rounded-xl mb-2 cursor-pointer transition-[background,transform] duration-200 ease-standard hover:bg-bg-card-hover active:scale-[0.97] motion-reduce:transition-none motion-reduce:transform-none focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-                    type="button"
-                    aria-label={`${dn} — ${dayLabel}${set.startTime ? ' ' + formatTime(set.startTime) : ' TBA'}`}
-                    onClick={() => setDetailSet(set)}
-                  >
-                    <div className="text-xs text-text-muted min-w-[100px] font-semibold tabular-nums">
-                      {dayLabel}
-                      {set.startTime ? ' ' + formatTime(set.startTime) : ' TBA'}
-                    </div>
-                    <div className="flex-1 text-sm font-bold min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                      {dn}
-                    </div>
-                    <StageBadge variant="pick" stageName={sn} stageColor={sc} />
-                  </button>
-                );
-              })}
-
-              {items.length === 0 && (
-                // Collapsed empty state: a single muted helper line rather than a
-                // full EmptyState per bucket — stacking three of those read as
-                // broken/stuck UI once the user already had picks in another
-                // bucket. The header + 0 badge above already signals "empty".
-                <p className="px-1 py-1 text-xs text-text-muted">
-                  {pri === 'must'
-                    ? 'Tap the star on any set to mark it as must-see.'
-                    : pri === 'want-to-see'
-                      ? "Tap the diamond on sets you'd like to catch."
-                      : "Tap the circle on sets you're considering."}
-                </p>
               )}
-            </div>
+              {c.clash && <TriangleAlert className="w-3.5 h-3.5 text-accent-coral" aria-hidden="true" />}
+              {c.label}
+              <Badge variant={c.priority ? PRIORITY_STYLE[c.priority].badge : 'count'}>{c.count}</Badge>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div
+            role="radiogroup"
+            aria-label="Group picks by"
+            className="inline-flex rounded-full border border-border p-0.5"
+          >
+            {GROUP_MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                role="radio"
+                aria-checked={groupMode === m.value}
+                onClick={() => setGroupMode(m.value)}
+                className={`rounded-full px-3 min-h-8 text-xs font-semibold cursor-pointer transition-colors ${
+                  groupMode === m.value ? 'bg-bg-card-hover text-accent-aqua' : 'text-text-secondary'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div role="radiogroup" aria-label="Order sets" className="inline-flex rounded-full border border-border p-0.5">
+            {ORDERS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={order === o.value}
+                onClick={() => setOrder(o.value)}
+                className={`rounded-full px-3 min-h-8 text-xs font-semibold cursor-pointer transition-colors ${
+                  order === o.value ? 'bg-bg-card-hover text-accent-aqua' : 'text-text-secondary'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative flex-1 min-w-[160px]">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter picks by artist or stage"
+              aria-label="Filter my picks"
+              className="w-full min-h-9 rounded-full border border-border bg-bg-card pl-9 pr-9 text-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearch('')}
+                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-8 min-w-8 items-center justify-center text-text-muted cursor-pointer"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <PickConflicts groups={conflictGroups} />
+        <RateNightBanner />
+        <PickBulkActions />
+        <ListenList
+          sets={pickedSets}
+          days={days}
+          festivalName={currentFestival.name}
+          separator={currentFestival.b2bSeparator}
+        />
+
+        {rows.length === 0 && (
+          <EmptyState
+            icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
+            title={clashOnlyEmpty ? COPY.clash.none : 'No matching picks'}
+            description={
+              clashOnlyEmpty
+                ? COPY.clash.noneBody
+                : trimmedSearch
+                  ? `Nothing matches “${trimmedSearch}”.`
+                  : 'No picks in this view.'
+            }
+            cta={
+              clashOnlyEmpty
+                ? { label: 'Show all picks', onClick: clearFilters }
+                : filtersActive
+                  ? { label: 'Clear filters', onClick: clearFilters }
+                  : undefined
+            }
+          />
+        )}
+
+        {rows.map((row) => {
+          if (row.kind === 'set') {
+            return <PicksPlanRow key={row.key} set={row.set} hasClash={clashIds.has(row.set.id)} />;
+          }
+          const dot = row.priority && (
+            <span style={{ color: PRIORITY_STYLE[row.priority].accent }} className="inline-flex">
+              <PriorityIcon priority={row.priority} className="w-4 h-4" filled />
+            </span>
+          );
+          const badge = (
+            <Badge variant={row.priority ? PRIORITY_STYLE[row.priority].badge : 'count'} className="ml-auto">
+              {row.count}
+            </Badge>
+          );
+          if (row.kind === 'subgroup') {
+            return (
+              <h3 key={row.key} className="flex items-center gap-2 mt-1 mb-3 pb-2.5 border-b border-border">
+                {dot}
+                <span className="text-sm font-medium text-text-secondary">{row.label}</span>
+                {badge}
+              </h3>
+            );
+          }
+          return (
+            <button
+              key={row.key}
+              type="button"
+              aria-expanded={!row.collapsed}
+              aria-label={`${row.label}, ${row.count} ${row.count === 1 ? 'pick' : 'picks'}`}
+              onClick={() => toggleCollapsed(row.groupId)}
+              className="flex items-center gap-2 w-full min-h-11 mt-2 mb-2 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-lg"
+            >
+              {dot}
+              <span className="text-sm font-bold text-text-primary">{row.label}</span>
+              {badge}
+              <ChevronDown
+                className={`w-4 h-4 text-text-muted transition-transform ${row.collapsed ? '-rotate-90' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
           );
         })}
+          </>
+        )}
       </div>
     </RefreshableView>
   );
@@ -330,7 +446,7 @@ function PicksViewInner() {
 export default function PicksView() {
   return (
     <>
-      <h1 className="sr-only">My Picks</h1>
+      <h1 className="sr-only">My picks</h1>
       <RenderErrorBoundary name="picks">
         <PicksViewInner />
       </RenderErrorBoundary>

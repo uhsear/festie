@@ -12,7 +12,7 @@ import type { FestivalUIState, FestivalUIActions } from './festivalUIStore';
 
 export type { FestivalDataState, FestivalDataActions } from './festivalDataStore';
 export type { FestivalUIState, FestivalUIActions } from './festivalUIStore';
-export { useFestivalDataStore } from './festivalDataStore';
+export { useFestivalDataStore, selectMyPicks } from './festivalDataStore';
 export { useFestivalUIStore } from './festivalUIStore';
 
 // Legacy combined types -- kept so `FestivalState`, `FestivalActions`, and
@@ -101,6 +101,7 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     'currentFestival',
     'currentProfile',
     'allProfiles',
+    'pickCounts',
     'sets',
     'stages',
     'days',
@@ -112,6 +113,8 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     'pickSync',
     'savesInFlight',
     'lastSavedAt',
+    'guestPicks',
+    'mergeGuestPicks',
     'loadFestivals',
     'selectFestival',
     'loadProfiles',
@@ -130,12 +133,26 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
   const uiKeys = new Set<string>([
     'selectedDay',
     'activeStages',
+    'activeGenres',
     'searchQuery',
     'onlyMine',
+    'scheduleView',
+    'hiddenDays',
+    'dismissedPhase',
+    'scheduleGroupBy',
+    'prefsFestivalId',
+    'prefsScope',
+    'byFestival',
     'setSelectedDay',
     'setActiveStages',
+    'setActiveGenres',
     'setSearchQuery',
     'setOnlyMine',
+    'setScheduleView',
+    'setHiddenDays',
+    'dismissPhaseBand',
+    'setScheduleGroupBy',
+    'restoreForFestival',
   ]);
 
   const dataPart: Record<string, unknown> = {};

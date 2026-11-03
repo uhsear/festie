@@ -56,12 +56,6 @@ describe('T33 privacy policy copy (source-level guards)', () => {
     expect(src).not.toContain('[YOUR NAME]');
   });
 
-  it('sign-up opens Terms in an in-app browser sheet', () => {
-    const src = read('app/(auth)/register.tsx');
-    expect(src).toContain('WebBrowser.openBrowserAsync(TERMS_URL)');
-    expect(src).toContain('accessibilityLabel="Read the Terms of Service"');
-  });
-
   it('the privacy screen opens Terms the same way', () => {
     expect(MOBILE).toContain('WebBrowser.openBrowserAsync(TERMS_URL)');
   });

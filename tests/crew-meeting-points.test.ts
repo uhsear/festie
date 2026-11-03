@@ -3,7 +3,8 @@
  *
  * Covers: PUT /:crewId/home-base, GET /:crewId/meeting-points,
  *         POST /:crewId/meeting-points, PUT /:crewId/meeting-points/:mpId,
- *         DELETE /:crewId/meeting-points/:mpId
+ *         DELETE /:crewId/meeting-points/:mpId,
+ *         PUT /:crewId/meeting-points/:mpId/coming
  *
  * Mounts the route factory on a minimal Express app with fully stubbed deps.
  * No database required -- all stores are mock.fn() stubs.
@@ -13,6 +14,8 @@ import assert from 'node:assert/strict';
 import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
+
+import { createCrewNotifier } from '../lib/notifications/crew-notify.js';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -57,6 +60,11 @@ function makeDeps(overrides: any = {}) {
         getById: mock.fn(async () => null),
         update: mock.fn(async (id: any, data: any) => ({ ...DEFAULT_MEETING_POINT, ...data, id })),
         deactivate: mock.fn(async () => {}),
+        setComing: mock.fn(async (id: any, _crewId: any, userId: any, coming: any) => ({
+          ...DEFAULT_MEETING_POINT,
+          id,
+          coming: coming ? [userId] : [],
+        })),
       },
     },
     activity: {
@@ -119,9 +127,11 @@ function makeDeps(overrides: any = {}) {
       crewHomeBase: {},
       meetingPointCreate: {},
       meetingPointUpdate: {},
+      meetingPointComing: {},
     },
     io: overrides.io !== undefined ? overrides.io : ioObj,
     emitter: { crewActivityLogged: mock.fn(() => {}) },
+    crewNotify: overrides.crewNotify,
     stores,
   };
 
@@ -172,7 +182,11 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/home-base', () => {
     assert.ok(res.body.data.crew);
     assert.equal(updateHomeBase.mock.calls.length, 1);
     assert.equal((updateHomeBase.mock.calls as any[])[0].arguments[0], 'crew-1');
-    assert.deepEqual((updateHomeBase.mock.calls as any[])[0].arguments[1], { location: 'Gate A', time: '3pm' });
+    assert.deepEqual((updateHomeBase.mock.calls as any[])[0].arguments[1], {
+      location: 'Gate A',
+      time: '3pm',
+      planB: undefined,
+    });
   });
 
   test('broadcasts crew:home-base-updated via Socket.IO', async () => {
@@ -196,6 +210,7 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/home-base', () => {
       crewId: 'crew-1',
       location: 'Gate A',
       time: '3pm',
+      planB: null,
     });
   });
 
@@ -383,6 +398,57 @@ describe('routes/crew-meeting-points.js -- GET /:crewId/meeting-points', () => {
     });
 
     const res = await request(app).get('/crew-1/meeting-points');
+
+    assert.equal(res.status, 500);
+    assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+  });
+});
+
+describe('routes/crew-meeting-points.js -- GET /:crewId/meeting-points/past', () => {
+  test('returns recently expired points for a crew member', async () => {
+    const listRecentlyExpired = mock.fn(async () => [{ ...DEFAULT_MEETING_POINT, id: 'mp-old' }]);
+    const { app } = await buildApp({
+      stores: {
+        crews: {
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          meetingPoints: { listRecentlyExpired },
+        },
+      },
+    });
+
+    const res = await request(app).get('/crew-1/meeting-points/past');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.meetingPoints.length, 1);
+    assert.equal(res.body.data.meetingPoints[0].id, 'mp-old');
+    assert.equal((listRecentlyExpired.mock.calls as any[])[0].arguments[0], 'crew-1');
+  });
+
+  test('returns 403 when user is not a crew member', async () => {
+    const { app } = await buildApp({
+      stores: { crews: { getMember: mock.fn(async () => null) } },
+    });
+
+    const res = await request(app).get('/crew-1/meeting-points/past');
+
+    assert.equal(res.status, 403);
+  });
+
+  test('returns 500 on store error', async () => {
+    const { app } = await buildApp({
+      stores: {
+        crews: {
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          meetingPoints: {
+            listRecentlyExpired: mock.fn(async () => {
+              throw new Error('db down');
+            }),
+          },
+        },
+      },
+    });
+
+    const res = await request(app).get('/crew-1/meeting-points/past');
 
     assert.equal(res.status, 500);
     assert.equal(res.body.error.code, 'INTERNAL_ERROR');
@@ -1107,5 +1173,411 @@ describe('routes/crew-meeting-points.js -- DELETE /:crewId/meeting-points/:mpId'
 
     assert.equal(res.status, 500);
     assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+  });
+});
+
+describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
+  const member = { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) };
+  const mkNotify = () => ({ now: mock.fn(async () => {}) });
+  const mkLog = () => mock.fn(async () => 'act-1');
+
+  test('create writes meeting-point-added and pushes now with key mp:<id>', async () => {
+    const log = mkLog();
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({ crewNotify, stores: { crews: member, activity: { log } } });
+    const res = await request(app)
+      .post('/crew-1/meeting-points')
+      .send({ label: 'Main Stage', location: 'Left', meetAt: '2026-05-08T20:00:00.000Z' });
+    assert.equal(res.status, 201);
+    assert.equal((log.mock.calls as any[])[0].arguments[0].type, 'meeting-point-added');
+    assert.equal((log.mock.calls as any[])[0].arguments[0].detail, 'Main Stage');
+    const push = (crewNotify.now.mock.calls as any[])[0].arguments[0];
+    assert.equal(push.key, 'mp:mp-new-1');
+    assert.equal(push.actorId, 'user-1');
+    assert.equal(push.text, 'testuser set a meeting point: Main Stage');
+  });
+
+  test('update of only the label writes a row and does not push', async () => {
+    const log = mkLog();
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: {
+        crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
+        activity: { log },
+      },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ label: 'New name' });
+    assert.equal(res.status, 200);
+    assert.equal((log.mock.calls as any[])[0].arguments[0].type, 'meeting-point-updated');
+    assert.equal((log.mock.calls as any[])[0].arguments[0].detail, 'New name');
+    assert.equal(crewNotify.now.mock.calls.length, 0);
+  });
+
+  test('update that resends the same meetAt (stored as a Date) does not push', async () => {
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: {
+        crews: {
+          ...member,
+          meetingPoints: {
+            getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, meet_at: new Date('2026-05-08T21:00:00.000Z') })),
+          },
+        },
+      },
+    });
+    const res = await request(app)
+      .put('/crew-1/meeting-points/mp-1')
+      .send({ label: 'New name', meetAt: '2026-05-08T21:00:00.000Z' });
+    assert.equal(res.status, 200);
+    assert.equal(crewNotify.now.mock.calls.length, 0);
+  });
+
+  test('update that changes meetAt pushes', async () => {
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: {
+        crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
+      },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T21:00:00.000Z' });
+    assert.equal(res.status, 200);
+    const push = (crewNotify.now.mock.calls as any[])[0].arguments[0];
+    assert.equal(push.key, 'mp-move:mp-1:2026-05-08T21:00:00.000Z:Near the food trucks::');
+    assert.equal(push.meetAt, '2026-05-08T21:00:00.000Z');
+    assert.equal(push.userIds, undefined, 'no taps: the whole crew hears about the move');
+    assert.match(push.text, /^testuser moved .+ to$/);
+  });
+
+  test('delete writes meeting-point-removed', async () => {
+    const log = mkLog();
+    const { app } = await buildApp({
+      stores: {
+        crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
+        activity: { log },
+      },
+    });
+    const res = await request(app).delete('/crew-1/meeting-points/mp-1');
+    assert.equal(res.status, 200);
+    const row = (log.mock.calls as any[])[0].arguments[0];
+    assert.equal(row.type, 'meeting-point-removed');
+    assert.equal(row.detail, DEFAULT_MEETING_POINT.label);
+  });
+
+  test('missing crewNotify still returns 201 and 200', async () => {
+    const { app } = await buildApp({
+      stores: {
+        crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
+      },
+    });
+    const created = await request(app)
+      .post('/crew-1/meeting-points')
+      .send({ label: 'A', location: 'B', meetAt: '2026-05-08T20:00:00.000Z' });
+    assert.equal(created.status, 201);
+    const updated = await request(app).put('/crew-1/meeting-points/mp-1').send({ location: 'Elsewhere' });
+    assert.equal(updated.status, 200);
+  });
+});
+
+describe("routes/crew-meeting-points.js -- I'll be there alerts", () => {
+  const member = { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) };
+  const mkNotify = () => ({ now: mock.fn(async () => {}) });
+  const tapped = (coming: string[]) => mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, coming }));
+
+  test('a move with two tappers targets those two', async () => {
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: { crews: { ...member, meetingPoints: { getById: tapped(['user-2', 'user-3']) } } },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ location: 'Gate B' });
+    assert.equal(res.status, 200);
+    const push = (crewNotify.now.mock.calls as any[])[0].arguments[0];
+    assert.deepEqual(push.userIds, ['user-2', 'user-3']);
+    assert.equal(push.key, 'mp-move:mp-1::Gate B::');
+  });
+
+  test('a cancel with tappers pushes "cancelled" to them only', async () => {
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: { crews: { ...member, meetingPoints: { getById: tapped(['user-2']) } } },
+    });
+    const res = await request(app).delete('/crew-1/meeting-points/mp-1');
+    assert.equal(res.status, 200);
+    const push = (crewNotify.now.mock.calls as any[])[0].arguments[0];
+    assert.deepEqual(push.userIds, ['user-2']);
+    assert.equal(push.key, 'mp-cancel:mp-1');
+    assert.equal(push.text, 'testuser cancelled Main Stage Left');
+    assert.equal(push.actorId, 'user-1');
+  });
+
+  test('a cancel with no tappers pushes nothing', async () => {
+    const crewNotify = mkNotify();
+    const { app } = await buildApp({
+      crewNotify,
+      stores: { crews: { ...member, meetingPoints: { getById: tapped([]) } } },
+    });
+    const res = await request(app).delete('/crew-1/meeting-points/mp-1');
+    assert.equal(res.status, 200);
+    assert.equal(crewNotify.now.mock.callCount(), 0);
+  });
+
+  test('two different moves inside 2 minutes both push; the same move twice pushes once', async () => {
+    const send = mock.fn(async () => ({ sent: 1 }));
+    const crewNotify = createCrewNotifier({
+      stores: {
+        crews: {
+          getById: async () => ({ id: 'crew-1', name: 'Crew' }),
+          getMembers: async () => [{ userId: 'user-1' }, { userId: 'user-2' }, { userId: 'user-3' }],
+        },
+        notificationPrefs: { get: async () => null },
+        pool: { query: async () => ({ rows: [{ time_zone: 'UTC' }] }) },
+      },
+      notificationService: { isConfigured: true, send },
+      log: noopLog,
+    });
+    const { app } = await buildApp({
+      crewNotify,
+      stores: { crews: { ...member, meetingPoints: { getById: tapped(['user-2']) } } },
+    });
+    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T21:00:00.000Z' });
+    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T22:00:00.000Z' });
+    assert.equal(send.mock.callCount(), 2);
+    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T22:00:00.000Z' });
+    assert.equal(send.mock.callCount(), 2, 'the repeat of the same move is deduped');
+    const userIds = (send.mock.calls as any[]).map((c) => c.arguments[0].userId);
+    assert.deepEqual(userIds, ['user-2', 'user-2']);
+  });
+});
+
+describe('routes/crew-meeting-points.js -- PUT /:crewId/meeting-points/:mpId/coming', () => {
+  const member = { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) };
+  const active = () => mock.fn(async () => ({ ...DEFAULT_MEETING_POINT }));
+
+  test('true taps me in, emits meeting-point-updated, and does not push or log', async () => {
+    const ioObj = makeIo();
+    const crewNotify = { now: mock.fn(async () => {}) };
+    const log = mock.fn(async () => {});
+    const { app, deps } = await buildApp({
+      io: ioObj,
+      crewNotify,
+      stores: { crews: { ...member, meetingPoints: { getById: active() } }, activity: { log } },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1/coming').send({ coming: true });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.meetingPoint.coming, ['user-1']);
+    const args = (deps.stores.crews.meetingPoints.setComing.mock.calls as any[])[0].arguments;
+    assert.deepEqual(args, ['mp-1', 'crew-1', 'user-1', true]);
+    assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
+    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:meeting-point-updated');
+    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1].coming, ['user-1']);
+    assert.equal(crewNotify.now.mock.callCount(), 0);
+    assert.equal(log.mock.callCount(), 0);
+  });
+
+  test('false removes my tap', async () => {
+    const { app, deps } = await buildApp({ stores: { crews: { ...member, meetingPoints: { getById: active() } } } });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1/coming').send({ coming: false });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.meetingPoint.coming, []);
+    assert.equal((deps.stores.crews.meetingPoints.setComing.mock.calls as any[])[0].arguments[3], false);
+  });
+
+  test('an inactive point is 404', async () => {
+    const { app, deps } = await buildApp({
+      stores: {
+        crews: {
+          ...member,
+          meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, active: false })) },
+        },
+      },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1/coming').send({ coming: true });
+    assert.equal(res.status, 404);
+    assert.equal(res.body.error.message, 'Meeting point not found');
+    assert.equal(deps.stores.crews.meetingPoints.setComing.mock.callCount(), 0);
+  });
+
+  test('a point in another crew is 404', async () => {
+    const { app } = await buildApp({
+      stores: {
+        crews: {
+          ...member,
+          meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, crew_id: 'crew-2' })) },
+        },
+      },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1/coming').send({ coming: true });
+    assert.equal(res.status, 404);
+  });
+
+  test('a non-member is 403', async () => {
+    const { app, deps } = await buildApp();
+    const res = await request(app).put('/crew-1/meeting-points/mp-1/coming').send({ coming: true });
+    assert.equal(res.status, 403);
+    assert.equal(deps.stores.crews.meetingPoints.setComing.mock.callCount(), 0);
+  });
+});
+
+// =====================================================================
+//  T54: Plan B on Home Base
+// =====================================================================
+describe('routes/crew-meeting-points.js -- Home Base Plan B', () => {
+  const owner = { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'owner' })) };
+
+  async function putHomeBase(body: any, stored: string | null) {
+    const ioObj = makeIo();
+    const updateHomeBase = mock.fn(async () => ({ id: 'crew-1', homeBasePlanB: stored }));
+    const { app } = await buildApp({ io: ioObj, stores: { crews: { ...owner, updateHomeBase } } });
+    const res = await request(app).put('/crew-1/home-base').send(body);
+    assert.equal(res.status, 200);
+    return {
+      storeArg: (updateHomeBase.mock.calls as any[])[0].arguments[1],
+      emitted: (ioObj._emit.mock.calls as any[])[0].arguments[1],
+    };
+  }
+
+  test('an omitted planB reaches the store as undefined and the emit carries the kept value', async () => {
+    const { storeArg, emitted } = await putHomeBase({ location: 'Gate A', time: '3pm' }, 'Top of each hour');
+    assert.ok('planB' in storeArg);
+    assert.equal(storeArg.planB, undefined);
+    assert.equal(emitted.planB, 'Top of each hour');
+  });
+
+  test('planB null reaches the store and the emit carries null', async () => {
+    const { storeArg, emitted } = await putHomeBase({ location: 'Gate A', time: '3pm', planB: null }, null);
+    assert.equal(storeArg.planB, null);
+    assert.equal(emitted.planB, null);
+  });
+
+  test('a Plan B text is written and broadcast', async () => {
+    const { storeArg, emitted } = await putHomeBase(
+      { location: 'Gate A', time: '3pm', planB: 'Top of each hour' },
+      'Top of each hour',
+    );
+    assert.equal(storeArg.planB, 'Top of each hour');
+    assert.deepEqual(emitted, { crewId: 'crew-1', location: 'Gate A', time: '3pm', planB: 'Top of each hour' });
+  });
+
+  test('removing Home Base broadcasts planB null from the stored row', async () => {
+    const { storeArg, emitted } = await putHomeBase({ location: null, time: null }, null);
+    assert.equal(storeArg.location, null);
+    assert.equal(emitted.planB, null);
+  });
+});
+
+// =====================================================================
+//  T54: meeting point edit trail ("Edited by ana, was ...")
+// =====================================================================
+describe('routes/crew-meeting-points.js -- edit trail', () => {
+  const OLD_AT = '2026-06-15T15:00:00.000Z';
+  const member = { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) };
+
+  async function put(body: any, existing: any = {}) {
+    const ioObj = makeIo();
+    const crewNotify = { now: mock.fn(async () => {}) };
+    const update = mock.fn(async (id: any, data: any) => ({ ...DEFAULT_MEETING_POINT, ...data, id }));
+    const { app } = await buildApp({
+      io: ioObj,
+      crewNotify,
+      stores: {
+        crews: {
+          ...member,
+          meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, ...existing })), update },
+        },
+      },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1').send(body);
+    assert.equal(res.status, 200);
+    return { crewNotify, data: (update.mock.calls as any[])[0].arguments[1] };
+  }
+
+  function assertNoTrail(data: any) {
+    assert.equal('editedBy' in data, false);
+    assert.equal('editedAt' in data, false);
+    assert.equal('editWas' in data, false);
+  }
+
+  test('a rename never changes the time and writes no trail or push', async () => {
+    const existing = { meet_at: new Date(OLD_AT), recurs_daily: false, expires_at: '2026-06-15T15:30:00.000Z' };
+    const { data, crewNotify } = await put({ label: 'Tree (north)' }, existing);
+    assert.equal('meetAt' in data, false);
+    assert.equal(data.expiresAt, '2026-06-15T15:30:00.000Z');
+    assertNoTrail(data);
+    assert.equal(crewNotify.now.mock.calls.length, 0);
+  });
+
+  test('a time-only change writes editWas.meetAt as the old ISO instant', async () => {
+    const { data } = await put({ meetAt: '2026-06-15T20:00:00.000Z' }, { meet_at: new Date(OLD_AT) });
+    assert.equal(data.editedBy, 'user-1');
+    assert.ok(!Number.isNaN(Date.parse(data.editedAt)));
+    assert.deepEqual(data.editWas, { meetAt: OLD_AT });
+  });
+
+  test('a place-only change writes editWas.location as the old text', async () => {
+    const { data } = await put({ location: 'North gate' });
+    assert.equal(data.editedBy, 'user-1');
+    assert.deepEqual(data.editWas, { location: 'Near the food trucks' });
+  });
+
+  test('a time and place change writes both keys', async () => {
+    const { data } = await put({ location: 'North gate', meetAt: '2026-06-15T20:00:00.000Z' }, { meet_at: OLD_AT });
+    assert.deepEqual(data.editWas, { location: 'Near the food trucks', meetAt: OLD_AT });
+  });
+
+  test('clearing the time writes the old time', async () => {
+    const { data } = await put({ meetAt: null }, { meet_at: new Date(OLD_AT) });
+    assert.deepEqual(data.editWas, { meetAt: OLD_AT });
+  });
+
+  test('setting a time on a point with none writes meetAt null', async () => {
+    const { data } = await put({ meetAt: '2026-06-15T20:00:00.000Z' }, { meet_at: null });
+    assert.deepEqual(data.editWas, { meetAt: null });
+  });
+
+  test('a coordinate-only change writes no trail but still pushes', async () => {
+    const { data, crewNotify } = await put({ latitude: 28.5, longitude: -81.4 }, { latitude: 28.4, longitude: -81.3 });
+    assertNoTrail(data);
+    assert.equal(crewNotify.now.mock.calls.length, 1);
+  });
+
+  test('re-sending the same time and place writes no trail', async () => {
+    const { data, crewNotify } = await put(
+      { label: 'Renamed', location: 'Near the food trucks', meetAt: OLD_AT, recursDaily: false },
+      { meet_at: new Date(OLD_AT) },
+    );
+    assertNoTrail(data);
+    assert.equal(crewNotify.now.mock.calls.length, 0);
+  });
+
+  test('the response and the emit carry the store row unchanged', async () => {
+    const row = {
+      ...DEFAULT_MEETING_POINT,
+      location: 'North gate',
+      edited_by: 'user-1',
+      edited_at: '2026-06-15T19:00:00.000Z',
+      edit_was: { location: 'Near the food trucks' },
+      editor_name: 'ana',
+    };
+    const ioObj = makeIo();
+    const { app } = await buildApp({
+      io: ioObj,
+      stores: {
+        crews: {
+          ...member,
+          meetingPoints: {
+            getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })),
+            update: mock.fn(async () => row),
+          },
+        },
+      },
+    });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ location: 'North gate' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.meetingPoint, row);
+    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[1], row);
   });
 });

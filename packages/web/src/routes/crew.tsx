@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@festie/shared';
+import { Pencil } from 'lucide-react';
 import { useCrewStore } from '@festie/shared/stores';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { useFestivalStore } from '@festie/shared/stores';
 import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
+import CrewHeader from '../components/crew/CrewHeader';
+import CrewSkeleton from '../components/ui/skeletons/CrewSkeleton';
+import OfflineStatusChip from '../components/features/OfflineStatusChip';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
 import EmptyState from '../components/ui/EmptyState';
@@ -19,15 +22,25 @@ import JoinCrewSheet from '../components/crew/JoinCrewSheet';
 import ReformCrewButton from '../components/crew/ReformCrewButton';
 import CrewTabBar from '../components/crew/CrewTabBar';
 import CrewTabContent from '../components/crew/CrewTabContent';
+import CreateCrewDialog from '../components/crew/CreateCrewDialog';
+import HandOverDialog from '../components/crew/HandOverDialog';
+import IconButton from '../components/ui/IconButton';
 import GuestTeaser from '../components/features/GuestTeaser';
 import { useCrewAdmin } from '../components/crew/useCrewAdmin';
 import { useToast } from '../lib/toastContext';
 import PromptDialog from '../components/ui/PromptDialog';
+import UserPickerDialog from '../components/admin/UserPickerDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
+import { useActiveCrew } from '@festie/shared/hooks';
+import { balancesQueryOptions, pollsQueryOptions } from '../hooks/useCrewAttention';
 import {
   DEFAULT_CREW_TAB,
+  balanceCents,
+  openPollIds,
+  crewCopy,
   deleteCrewConfirmMessage,
+  handOverCandidates,
   leaveCrewConfirmMessage,
   parseInviteCode,
   removeMemberConfirmMessage,
@@ -52,17 +65,20 @@ function CrewViewInner() {
   const crews = useCrewStore((state) => state.crews);
   const activeCrew = useCrewStore((state) => state.activeCrew);
   const selectCrew = useCrewStore((state) => state.selectCrew);
-  const createCrew = useCrewStore((state) => state.createCrew);
+  const updateCrew = useCrewStore((state) => state.updateCrew);
+  const handOverAndLeave = useCrewStore((state) => state.handOverAndLeave);
   const leaveCrew = useCrewStore((state) => state.leaveCrew);
   const deleteCrew = useCrewStore((state) => state.deleteCrew);
   const kickMember = useCrewStore((state) => state.kickMember);
   const transferOwnership = useCrewStore((state) => state.transferOwnership);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
+  const festivals = useFestivalStore((state) => state.festivals);
+  const loadFestivals = useFestivalStore((state) => state.loadFestivals);
   const { toast, toastError } = useToast();
   const navigate = useNavigate();
   // /crew?tab=<key> keeps the tab across reloads and shared links.
   // /crew?sos=<userId> (SOS banner) opens Find with the map aimed at that raiser.
-  const { sos: focusSosUserId, tab: tabParam } = useSearch({ from: '/crew' });
+  const { sos: focusSosUserId, tab: tabParam, start } = useSearch({ from: '/crew' });
   const tab: CrewTabKey = focusSosUserId ? 'find' : (tabParam ?? DEFAULT_CREW_TAB);
   const handleTabChange = (next: CrewTabKey) => {
     navigate({ to: '/crew', search: { tab: next }, replace: true });
@@ -71,23 +87,27 @@ function CrewViewInner() {
   const { isAdmin, adminOpen, setAdminOpen, adminAddBusy, submitForceAdd, handleForceAdd } = useCrewAdmin(
     user,
     activeCrew?.id,
+    activeCrew?.name,
     toast,
   );
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createBusy, setCreateBusy] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [sheetCode, setSheetCode] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmKind, setConfirmKind] = useState<'leave' | 'delete' | null>(null);
+  const [handOverOpen, setHandOverOpen] = useState(false);
+  const [handOverBusy, setHandOverBusy] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [kickTarget, setKickTarget] = useState<CrewMember | null>(null);
   const [transferTarget, setTransferTarget] = useState<CrewMember | null>(null);
 
+  const { status, retry } = useActiveCrew();
+
+  // Group labels in the crew picker need festival names; crews of every festival load at once.
   useEffect(() => {
-    if (user && crews.length > 0 && !activeCrew) {
-      selectCrew(crews[0]!.id).catch(() => {});
-    }
-  }, [user?.id, crews, activeCrew, selectCrew]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (user && crews.length > 0 && festivals.length === 0) loadFestivals().catch(() => {});
+  }, [user?.id, crews.length, festivals.length, loadFestivals]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tab badge counts. These reuse the exact query keys + endpoints the Polls
   // and Expenses tabs use, so the data is shared from the react-query cache
@@ -96,27 +116,33 @@ function CrewViewInner() {
   const activeCrewId = activeCrew?.id;
   const userId = user?.id;
   const { data: openPollCount = 0 } = useQuery({
-    queryKey: ['polls', activeCrewId],
-    queryFn: async () => {
-      const res = await api.get<{ polls: { closed?: boolean }[] } | { closed?: boolean }[]>(
-        `/crews/${activeCrewId}/polls`,
-      );
-      return Array.isArray(res) ? res : res?.polls || [];
-    },
-    enabled: !!activeCrewId,
+    ...pollsQueryOptions(activeCrewId),
     select: (list) => list.filter((p) => !p.closed).length,
   });
   const { data: hasUnsettledBalance = false } = useQuery({
-    queryKey: ['expense-balances', activeCrewId],
-    queryFn: async () => {
-      const res = await api.get<
-        { userId: string; balance: number }[] | { balances: { userId: string; balance: number }[] }
-      >(`/crews/${activeCrewId}/expenses/balances`);
-      return Array.isArray(res) ? res : res?.balances || [];
-    },
-    enabled: !!activeCrewId,
+    ...balancesQueryOptions(activeCrewId),
     select: (balances) => Math.abs(balances.find((b) => b.userId === userId)?.balance ?? 0) > 0.01,
   });
+  // Raw lists (same cache entries, no extra request) feed the Crew tab badge's "seen" marks.
+  const { data: rawPolls } = useQuery(pollsQueryOptions(activeCrewId));
+  const { data: rawBalances } = useQuery(balancesQueryOptions(activeCrewId));
+  const markCrewBadgeSeen = useUIStore((state) => state.markCrewBadgeSeen);
+  useEffect(() => {
+    if (!activeCrewId) return;
+    if (tab === 'plan' && rawPolls) markCrewBadgeSeen(activeCrewId, { pollIds: openPollIds(rawPolls) });
+    if (tab === 'money' && rawBalances) {
+      const mine = rawBalances.find((b) => b.userId === userId)?.balance;
+      markCrewBadgeSeen(activeCrewId, { balanceCents: balanceCents(mine) });
+    }
+  }, [activeCrewId, tab, rawPolls, rawBalances, userId, markCrewBadgeSeen]);
+
+  // /crew?start=create|join (from the intro) opens that prompt once, then drops the param.
+  useEffect(() => {
+    if (!user || !start) return;
+    if (start === 'create') setCreateOpen(true);
+    else setJoinOpen(true);
+    navigate({ from: '/crew', to: '/crew', search: (prev) => ({ ...prev, start: undefined }), replace: true });
+  }, [user?.id, start]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!user) return <GuestTeaser mode="crew" />;
 
@@ -126,17 +152,6 @@ function CrewViewInner() {
     });
   };
   const handleCreateCrew = () => setCreateOpen(true);
-  const submitCreateCrew = async (name: string) => {
-    setCreateBusy(true);
-    try {
-      await createCrew({ name, festivalId: currentFestival?.id });
-      setCreateOpen(false);
-    } catch (e) {
-      toastError(e, "Couldn't create crew. Try again.");
-    } finally {
-      setCreateBusy(false);
-    }
-  };
 
   const handleJoinCrew = () => setJoinOpen(true);
   const submitJoinCrew = (input: string) => {
@@ -150,21 +165,57 @@ function CrewViewInner() {
   };
 
   const submitDestroy = async () => {
-    if (!activeCrew) return;
+    if (!activeCrew || !confirmKind) return;
+    const deleting = confirmKind === 'delete';
     setConfirmBusy(true);
     try {
-      if (isOwner) {
+      if (deleting) {
         await deleteCrew(activeCrew.id);
         toast('Crew deleted', 'success');
       } else {
         await leaveCrew(activeCrew.id);
         toast('Left crew', 'success');
       }
-      setConfirmOpen(false);
+      setConfirmKind(null);
     } catch (e) {
-      toastError(e, isOwner ? "Couldn't delete crew. Try again." : "Couldn't leave crew. Try again.");
+      toastError(e, deleting ? "Couldn't delete crew. Try again." : "Couldn't leave crew. Try again.");
     } finally {
       setConfirmBusy(false);
+    }
+  };
+
+  // Members leave directly. An owner with company picks a successor first; a solo owner can only delete.
+  const handleLeaveCrew = () => {
+    if (!isOwner) setConfirmKind('leave');
+    else if (handOverCandidates(members, user.id).length === 0) setConfirmKind('delete');
+    else setHandOverOpen(true);
+  };
+
+  const submitHandOver = async (newOwnerId: string) => {
+    if (!activeCrew) return;
+    const heir = members.find((m) => m.userId === newOwnerId);
+    const heirName = heir?.name || heir?.username || 'Your pick';
+    setHandOverBusy(true);
+    try {
+      const outcome = await handOverAndLeave(activeCrew.id, newOwnerId);
+      if (outcome === 'left') toast(crewCopy.handedOverAndLeft(activeCrew.name, heirName), 'success');
+      else toast(crewCopy.handOverPartial(activeCrew.name, heirName), 'error');
+      setHandOverOpen(false);
+    } catch (e) {
+      toastError(e, "Couldn't hand over the crew. Try again.");
+    } finally {
+      setHandOverBusy(false);
+    }
+  };
+
+  const submitRename = async (name: string) => {
+    if (!activeCrew) return;
+    try {
+      await updateCrew(activeCrew.id, { name });
+      toast(crewCopy.renamed, 'success');
+      setRenameOpen(false);
+    } catch (e) {
+      toastError(e, "Couldn't rename crew. Try again.");
     }
   };
 
@@ -175,8 +226,10 @@ function CrewViewInner() {
 
   const submitTransferOwnership = () => {
     if (!activeCrew || !transferTarget) return;
+    const name = transferTarget.name || transferTarget.username || 'Member';
     transferOwnership(activeCrew.id, transferTarget.userId)
       .then(() => selectCrew(activeCrew.id))
+      .then(() => toast(crewCopy.transferred(name), 'success'))
       .catch((e: unknown) => {
         toastError(e, "Couldn't transfer ownership. Try again.");
       })
@@ -190,8 +243,10 @@ function CrewViewInner() {
 
   const submitKick = () => {
     if (!activeCrew || !kickTarget) return;
+    const name = kickTarget.name || kickTarget.username || 'Member';
     kickMember(activeCrew.id, kickTarget.userId)
       .then(() => selectCrew(activeCrew.id))
+      .then(() => toast(crewCopy.removed(name), 'success'))
       .catch((e: unknown) => {
         toastError(e, "Couldn't remove member. Try again.");
       })
@@ -205,33 +260,74 @@ function CrewViewInner() {
 
   return (
     <div className="crew-page space-y-4 pb-6 max-w-[600px] mx-auto min-w-0 w-full">
+      {activeCrew && (
+        <CrewHeader crew={activeCrew} members={members} onOpenMembers={() => handleTabChange('members')} />
+      )}
+
       {crews.length > 0 && (
-        <CrewSelector
-          crews={crews}
-          selectedCrewId={activeCrew?.id}
-          onSelectCrew={handleSelectCrew}
-          onCreateCrew={handleCreateCrew}
-          onJoinCrew={handleJoinCrew}
-        />
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <CrewSelector
+              crews={crews}
+              selectedCrewId={activeCrew?.id}
+              onSelectCrew={handleSelectCrew}
+              onCreateCrew={handleCreateCrew}
+              onJoinCrew={handleJoinCrew}
+              festivals={festivals}
+              currentFestivalId={currentFestival?.id}
+            />
+          </div>
+          {activeCrew && isOwner && (
+            <IconButton label="Rename crew" icon={<Pencil className="w-4 h-4" />} onClick={() => setRenameOpen(true)} />
+          )}
+        </div>
       )}
 
       {!activeCrew ? (
-        <Card padding="lg" className="space-y-4">
-          <EmptyState
-            illustration="noCrew"
-            title="No crew yet"
-            description="Plan with your friends. Make a crew, or join one with a code."
-            cta={crews.length === 0 ? { label: 'Create crew', onClick: handleCreateCrew } : undefined}
-            secondaryCta={crews.length === 0 ? { label: 'Join with code', onClick: handleJoinCrew } : undefined}
-          />
-        </Card>
+        status === 'loading' ? (
+          <CrewSkeleton />
+        ) : status === 'error' ? (
+          <Card padding="lg" className="space-y-4">
+            <EmptyState
+              illustration="noCrew"
+              title="Couldn't load your crew"
+              description="Check your connection, then try again."
+              cta={{ label: 'Try again', onClick: retry }}
+            />
+          </Card>
+        ) : (
+          <Card padding="lg" className="space-y-4">
+            <EmptyState
+              illustration="noCrew"
+              title="No crew yet"
+              description="Plan with your friends. Make a crew, or join one with a code."
+              cta={{ label: 'Create crew', onClick: handleCreateCrew }}
+              secondaryCta={{ label: 'Join with code', onClick: handleJoinCrew }}
+            />
+          </Card>
+        )
       ) : (
         <div className="crew-content space-y-4 min-w-0">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <FreshnessChip surface="crew" />
+            <OfflineStatusChip />
             <LastSyncedBadge surface="crew" />
             <SosRaiseButton crewId={activeCrew.id} compact />
           </div>
+
+          {members.length <= 1 && activeCrew.inviteCode && (
+            <Card padding="md" className="space-y-2">
+              <h2 className="text-base font-bold text-text-primary">{crewCopy.inviteCardTitle}</h2>
+              <p className="text-sm text-text-secondary">{crewCopy.inviteCardBody(activeCrew.name)}</p>
+              <CrewInviteBar
+                inviteCode={activeCrew.inviteCode}
+                crewId={activeCrew.id}
+                crewName={activeCrew.name}
+                isOwner={isOwner}
+                expiresAt={activeCrew.inviteExpiresAt}
+              />
+            </Card>
+          )}
 
           <HomeBaseCard
             crewId={activeCrew.id}
@@ -259,7 +355,9 @@ function CrewViewInner() {
             onForceAdd={handleForceAdd}
             onTransferOwnership={handleTransferOwnership}
             onKick={handleKick}
-            onDestroyCrew={() => setConfirmOpen(true)}
+            onLeaveCrew={handleLeaveCrew}
+            onDeleteCrew={() => setConfirmKind('delete')}
+            maxMembers={crew?.maxMembers}
             focusSosUserId={focusSosUserId}
           />
 
@@ -268,7 +366,7 @@ function CrewViewInner() {
             <h2 id="crew-setup-heading" className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
               Plan and setup
             </h2>
-            {activeCrew.inviteCode && (
+            {activeCrew.inviteCode && members.length > 1 && (
               <CrewInviteBar
                 inviteCode={activeCrew.inviteCode}
                 crewId={activeCrew.id}
@@ -301,17 +399,7 @@ function CrewViewInner() {
         </div>
       )}
 
-      <PromptDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        title="New crew"
-        description="Give your crew a name. You can invite others after."
-        placeholder="Sunset Squad"
-        confirmLabel="Create"
-        busy={createBusy}
-        maxLength={60}
-        onConfirm={submitCreateCrew}
-      />
+      <CreateCrewDialog open={createOpen} onOpenChange={setCreateOpen} />
       <PromptDialog
         open={joinOpen}
         onOpenChange={setJoinOpen}
@@ -324,28 +412,45 @@ function CrewViewInner() {
         onConfirm={submitJoinCrew}
       />
       <JoinCrewSheet code={sheetCode} onClose={() => setSheetCode(null)} />
-      <PromptDialog
+      <UserPickerDialog
         open={adminOpen}
         onOpenChange={setAdminOpen}
-        title="Force add member"
-        description="Admin only. Type a username or email to add them without an invite code."
-        placeholder="username or email"
-        confirmLabel="Add"
-        busy={adminAddBusy}
-        onConfirm={submitForceAdd}
+        title={`Add a member to ${activeCrew?.name ?? 'this crew'}`}
+        existingUserIds={members.map((m) => m.userId)}
+        onPick={submitForceAdd}
+      />
+      <PromptDialog
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+        title="Rename crew"
+        description="Everyone in the crew sees the new name."
+        defaultValue={activeCrew?.name ?? ''}
+        confirmLabel="Save"
+        maxLength={60}
+        onConfirm={submitRename}
+      />
+      <HandOverDialog
+        open={handOverOpen}
+        onOpenChange={setHandOverOpen}
+        crewName={activeCrew?.name ?? ''}
+        candidates={handOverCandidates(members, user.id)}
+        busy={handOverBusy}
+        onConfirm={submitHandOver}
       />
       <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={isOwner ? 'Delete crew' : 'Leave crew'}
+        open={confirmKind !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmKind(null);
+        }}
+        title={confirmKind === 'delete' ? 'Delete crew' : 'Leave crew'}
         description={
           activeCrew
-            ? isOwner
+            ? confirmKind === 'delete'
               ? deleteCrewConfirmMessage(activeCrew.name, members.length)
               : leaveCrewConfirmMessage(activeCrew.name)
             : undefined
         }
-        confirmLabel={isOwner ? 'Delete crew' : 'Leave crew'}
+        confirmLabel={confirmKind === 'delete' ? 'Delete crew' : 'Leave crew'}
         destructive
         busy={confirmBusy}
         onConfirm={submitDestroy}

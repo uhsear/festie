@@ -1,21 +1,36 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, ACCOUNT_DELETION_EXPLAINER, accountDeletionNotice } from '@festie/shared/stores';
-import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import {
+  useAuthStore,
+  useCrewStore,
+  useUIStore,
+  ACCOUNT_DELETION_EXPLAINER,
+  accountDeletionNotice,
+} from '@festie/shared/stores';
+import type { CrewMember } from '@festie/shared/types';
+import { crewCopy, ownedCrewsForDeletion, type OwnedCrewHandover } from '@festie/shared/utils';
+import { api, exportErrorMessage, withReauth } from '@festie/shared/services';
+import { DATA_COPY } from '@festie/shared/constants';
+import { useReauthPrompt } from './admin';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { shareAccountExport } from '../lib/exportData';
 
 interface AccountDangerSectionProps {
   /** Called after a successful delete (store + token already cleared) so the
    *  screen can route to login. */
   onDeleted: () => void;
+  /** false = provider-only account. The Account screen passes true while loading or after a failed load. */
+  hasPassword: boolean;
 }
 
 /**
  * Danger-zone (account deletion) for the Account screen.
  *
- * Wired to the shared authStore.deleteAccount(password) → DELETE /account/
- * with { password }. The server schedules deletion for 30 days out and keeps
+ * Wired to the shared authStore.deleteAccount(password, crewHandover) → DELETE /account/
+ * with { password, crewHandover }. Owners pick who takes over each crew with
+ * other members; the server falls back to the first joiner. The server schedules deletion for 30 days out and keeps
  * picks and notes until then; signing in before that cancels it. The shared
  * action calls logout() on success (clearing the token + resetting all stores)
  * and returns the deletion date. This component shows that date, then invokes
@@ -24,33 +39,64 @@ interface AccountDangerSectionProps {
  * Flow: expand the danger row → enter the account password → a double-confirm
  * Alert spells out the 30-day window → on confirm we call deleteAccount.
  * A wrong password surfaces inline (server returns PASSWORD_INCORRECT / 403).
+ *
+ * A provider-only account has no password: the field is hidden and the delete runs through
+ * withReauth, so the user confirms with Google or Apple first (DELETE /account/ with no password).
  */
-export default function AccountDangerSection({ onDeleted }: AccountDangerSectionProps) {
+export default function AccountDangerSection({ onDeleted, hasPassword }: AccountDangerSectionProps) {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const user = useAuthStore((s) => s.user);
+  const crews = useCrewStore((s) => s.crews);
+  const loadCrews = useCrewStore((s) => s.loadCrews);
+  const offlineMode = useUIStore((s) => s.offlineMode);
+
+  const { ask, reauthDialog } = useReauthPrompt();
 
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // crewId -> chosen new owner; a crew with no entry uses its default (first joiner).
+  const [chosenOwners, setChosenOwners] = useState<Record<string, string>>({});
+
+  const { handover, soloCount } = useMemo(
+    () => (user ? ownedCrewsForDeletion(crews, user.id) : { handover: [], soloCount: 0 }),
+    [crews, user],
+  );
+  const ownerFor = (h: OwnedCrewHandover) => chosenOwners[h.crew.id] ?? h.defaultOwnerId;
+  const memberLabel = (m: CrewMember) => m.name || m.username || 'Member';
 
   const reset = () => {
     setPassword('');
     setError(null);
+    setChosenOwners({});
   };
 
   const toggle = () => {
     setOpen((prev) => {
-      if (!prev) haptics.warning();
-      else reset();
+      if (!prev) {
+        haptics.warning();
+        if (crews.length === 0) loadCrews().catch(() => {});
+      } else reset();
       return !prev;
     });
   };
 
+  const pickOwner = (h: OwnedCrewHandover) =>
+    Alert.alert(crewCopy.newOwnerFor(h.crew.name), undefined, [
+      ...h.candidates.slice(0, 10).map((m) => ({
+        text: memberLabel(m),
+        onPress: () => setChosenOwners((prev) => ({ ...prev, [h.crew.id]: m.userId })),
+      })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+
   const confirmDelete = () => {
-    if (!password) {
+    if (hasPassword && !password) {
       setError('Enter your password to confirm.');
       return;
     }
@@ -70,11 +116,35 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
     );
   };
 
+  const downloadFirst = async () => {
+    setDownloading(true);
+    try {
+      await shareAccountExport();
+    } catch (err) {
+      haptics.warning();
+      Alert.alert(DATA_COPY.title, exportErrorMessage(err));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleDelete = async () => {
     setSubmitting(true);
     setError(null);
     try {
-      const { deletionDate } = await deleteAccount(password);
+      const crewHandover = handover.map((h) => ({ crewId: h.crew.id, newOwnerId: ownerFor(h) }));
+      let deletionDate: string | null;
+      if (hasPassword) {
+        ({ deletionDate } = await deleteAccount(password, crewHandover));
+      } else {
+        const res = await withReauth(
+          () => api.delete<{ deletionDate?: string | null }>('/account/', { body: crewHandover.length ? { crewHandover } : {} }),
+          ask,
+        );
+        if (res === null) return;
+        await useAuthStore.getState().logout();
+        deletionDate = res?.deletionDate ?? null;
+      }
       // deleteAccount → logout already cleared token + reset stores.
       Alert.alert('Account deletion scheduled', accountDeletionNotice(deletionDate));
       onDeleted();
@@ -117,6 +187,54 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
             </View>
           </View>
 
+          {handover.length > 0 ? (
+            <View style={styles.owned}>
+              <Text style={styles.calloutTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteOwnedTitle}</Text>
+              <Text style={styles.calloutText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteOwnedBody}</Text>
+              {handover.map((h) => {
+                const owner = h.candidates.find((m) => m.userId === ownerFor(h));
+                return (
+                  <TouchableOpacity
+                    key={h.crew.id}
+                    style={styles.ownedRow}
+                    onPress={() => pickOwner(h)}
+                    disabled={submitting}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${h.crew.name}. New owner: ${owner ? memberLabel(owner) : 'none'}. Change`}
+                  >
+                    <View style={styles.rowBody}>
+                      <Text style={styles.rowTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>{h.crew.name}</Text>
+                      <Text style={styles.rowHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>New owner: {owner ? memberLabel(owner) : 'None'}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={t.colors.text.secondary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+          {soloCount > 0 ? <Text style={styles.calloutText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteSolo(soloCount)}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.download, (downloading || submitting || offlineMode) && styles.submitDisabled]}
+            onPress={() => void downloadFirst()}
+            disabled={downloading || submitting || offlineMode}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={DATA_COPY.downloadFirst}
+            accessibilityState={{ disabled: downloading || submitting || offlineMode, busy: downloading }}
+          >
+            {downloading ? (
+              <ActivityIndicator size="small" color={t.colors.accent.aqua} />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={16} color={t.colors.accent.aqua} style={styles.submitIcon} />
+                <Text style={styles.downloadText}>{DATA_COPY.downloadFirst}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {hasPassword ? (
           <TextInput
             style={styles.input}
             value={password}
@@ -132,6 +250,7 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
             onSubmitEditing={confirmDelete}
             accessibilityLabel="Account password to confirm deletion"
           />
+          ) : null}
 
           {error ? (
             <Text style={styles.error} accessibilityLiveRegion="polite">
@@ -159,6 +278,7 @@ export default function AccountDangerSection({ onDeleted }: AccountDangerSection
           </TouchableOpacity>
         </View>
       ) : null}
+      {reauthDialog}
     </View>
   );
 }
@@ -235,6 +355,20 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
   },
+  owned: {
+    gap: t.spacing[2],
+  },
+  ownedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[3],
+    minHeight: 56,
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.primary,
+  },
   input: {
     ...typeStyle('body'),
     color: t.colors.text.primary,
@@ -258,6 +392,20 @@ const useStyles = makeStyles((t) => ({
     borderRadius: t.radii.default,
     minHeight: 48,
     paddingHorizontal: t.spacing[4],
+  },
+  download: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.accent.aqua,
+    minHeight: 44,
+    paddingHorizontal: t.spacing[4],
+  },
+  downloadText: {
+    ...typeStyle('body'),
+    color: t.colors.accent.aqua,
   },
   submitDisabled: {
     opacity: 0.6,

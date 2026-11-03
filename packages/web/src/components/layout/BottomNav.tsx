@@ -2,17 +2,19 @@ import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
 import { Map as MapIcon } from 'lucide-react';
 import { useAuthStore } from '@festie/shared';
-import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
+import { APP_SECTIONS, badgeA11yLabel, type AppSectionKey } from '@festie/shared/utils';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
+import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { SECTION_HREF, activeSection } from './sections';
+import { useLineupHref } from '../../hooks/useLineupHref';
+import { useCrewAttention } from '../../hooks/useCrewAttention';
 
 // Per-tab chunk prefetchers. Called from onPointerDown so the tap-up navigation
 // happens with the chunk already loaded — no chunk-load pause that made the
 // first scroll after tab switch feel laggy.
 const prefetchers: Record<string, () => Promise<unknown>> = {
   '/cards': () => import('../../routes/cards'),
-  '/timeline': () => import('../../routes/timeline'),
   '/grid': () => import('../../routes/grid'),
   '/picks': () => import('../../routes/picks'),
   '/crew': () => import('../../routes/crew'),
@@ -27,13 +29,6 @@ const ScheduleIcon = () => (
     <rect x="14" y="3" width="7" height="7" rx="1" />
     <rect x="3" y="14" width="7" height="7" rx="1" />
     <rect x="14" y="14" width="7" height="7" rx="1" />
-  </svg>
-);
-
-/** Picks icon — star */
-const PicksIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
   </svg>
 );
 
@@ -59,7 +54,7 @@ const ProfileIcon = () => (
 
 const SECTION_ICON: Record<AppSectionKey, React.ReactNode> = {
   lineup: <ScheduleIcon />,
-  myPlan: <PicksIcon />,
+  myPlan: <CONCEPT_ICON.picks aria-hidden="true" />,
   crew: <CrewIcon />,
   map: <MapIcon aria-hidden="true" />,
   more: <ProfileIcon />,
@@ -69,6 +64,7 @@ export default function BottomNav() {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const footerRef = useRef<HTMLElement>(null);
+  const badge = useCrewAttention();
 
   // Drive --bottom-nav-h on :root so floating elements (e.g. the Timeline "Now"
   // FAB) can position themselves above the nav without hard-coding 88px. The
@@ -90,9 +86,10 @@ export default function BottomNav() {
   }, []);
 
   // All five sections stay visible for guests (parity with mobile's NativeTabs):
-  // My Plan/Crew gate in-place via GuestTeaser, and the More slot reads "Sign in"
+  // Picks/Crew gate in-place via GuestTeaser, and the More slot reads "Sign in"
   // and opens /login directly.
   const current = activeSection(location.pathname);
+  const lineupHref = useLineupHref();
 
   return (
     <footer
@@ -113,17 +110,18 @@ export default function BottomNav() {
     >
       <nav className="flex justify-around w-full max-md:gap-0.5" aria-label="Primary">
         {APP_SECTIONS.map((section) => {
-          const href = SECTION_HREF[section.key];
+          const href = section.key === 'lineup' ? lineupHref : SECTION_HREF[section.key];
           const isGuestTab = section.key === 'more' && !user;
           const label = isGuestTab ? GUEST_PROMPT_COPY.signIn : section.label;
           const active = current === section.key;
+          const badged = section.key === 'crew' && badge.label !== null;
           return (
             <Link
               key={section.key}
               to={isGuestTab ? '/login' : href}
               search={isGuestTab ? { next: location.href } : undefined}
               aria-current={active ? 'page' : undefined}
-              aria-label={`View ${label}`}
+              aria-label={`View ${badged ? badgeA11yLabel(label, badge) : label}`}
               className={cn(
                 'flex flex-col items-center gap-1 px-3 py-2',
                 'bg-transparent text-text-muted text-[10px] font-semibold no-underline',
@@ -135,12 +133,28 @@ export default function BottomNav() {
                 'max-[480px]:[&_svg]:w-5 max-[480px]:[&_svg]:h-5',
                 'max-[375px]:min-h-11 max-[375px]:px-1 max-[375px]:py-[5px]',
                 'max-[359px]:justify-center max-[359px]:px-0 max-[359px]:py-1.5',
-                active && ['text-accent-aqua', '[&_svg]:drop-shadow-[0_0_6px_rgba(0,232,208,0.4)]'],
+                active && ['text-accent-aqua', '[&_svg]:drop-shadow-[0_0_6px_var(--color-aqua-a4)]'],
               )}
               onPointerEnter={() => prefetchers[href]?.().catch(() => {})}
               onPointerDown={() => prefetchers[href]?.().catch(() => {})}
             >
-              {SECTION_ICON[section.key]}
+              {badged ? (
+                <span className="relative inline-flex">
+                  {SECTION_ICON[section.key]}
+                  {badge.label === '' ? (
+                    <span aria-hidden="true" className="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-accent-coral" />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -top-1 -right-2 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[10px] font-semibold leading-none text-center"
+                    >
+                      {badge.label}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                SECTION_ICON[section.key]
+              )}
               <span className={cn('max-w-full overflow-hidden text-ellipsis whitespace-nowrap', 'max-[359px]:hidden')}>
                 {label}
               </span>

@@ -9,11 +9,17 @@ import {
   fmtTimeLeft,
   fmtZonedClock,
   fmtZonedDayClock,
+  settleUpLine,
+  formatBatteryLabel,
+  lostContactLabel,
   timeAgo,
   type ActiveMeet,
   type CrewWhereabout,
   type NowNextSelection,
+  type StageWalk,
 } from '@festie/shared/utils';
+import { COPY } from '@festie/shared/constants';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import AppPressable from './AppPressable';
 import Avatar from './Avatar';
@@ -62,6 +68,7 @@ interface HeroProps {
   onOpenSet: (set: FestivalSet) => void;
   onBrowse: () => void;
   onWrap?: () => void;
+  walk?: StageWalk | null;
 }
 
 export function NowHero({
@@ -74,6 +81,7 @@ export function NowHero({
   onOpenSet,
   onBrowse,
   onWrap,
+  walk,
 }: HeroProps) {
   const t = useTokens();
   const s = useStyles();
@@ -137,10 +145,10 @@ export function NowHero({
   } else if (phase === 'after') {
     body = (
       <Quiet
-        icon="sparkles-outline"
+        icon={CONCEPT_IONICON.wrap}
         title="That's a wrap"
         body="The festival is over."
-        action={onWrap ? <Button label="See your Wrap" variant="secondary" onPress={onWrap} /> : undefined}
+        action={onWrap ? <Button label={COPY.wrap.open} variant="secondary" onPress={onWrap} /> : undefined}
       />
     );
   } else if (!lineupMode && todayCount === 0) {
@@ -160,12 +168,13 @@ export function NowHero({
     const stage = getStageName(next.set.stageId) || '';
     const imminent = Math.floor((next.start - nowMs) / 60_000) <= IMMINENT_MIN;
     const startsIn = fmtStartsIn(next.start, nowMs, timeZone);
+    const walkA11y = walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : '';
     body = (
       <AppPressable
         style={s.card}
         onPress={() => onOpenSet(next.set)}
         accessibilityRole="button"
-        accessibilityLabel={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}. Open details`}
+        accessibilityLabel={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}${walkA11y}. Open details`}
       >
         <SectionLabel style={s.flushLabel}>Next</SectionLabel>
         <Text style={s.artist}>
@@ -175,11 +184,11 @@ export function NowHero({
           {stage ? (
             <View style={s.walk}>
               <Ionicons name="walk-outline" size={iconSize.sm} color={t.colors.accent.aqua} />
-              <Text style={s.walkText}>Head to {stage}</Text>
+              <Text style={s.walkText}>{walk ? `Head to ${stage} · ${walk.label}` : `Head to ${stage}`}</Text>
             </View>
           ) : null}
           <View style={s.countdownRow}>
-            <Text style={[s.countdown, imminent && s.countdownImminent]}>{startsIn}</Text>
+            <Text style={[s.countdown, (imminent || walk?.late) && s.countdownImminent]}>{startsIn}</Text>
             <Text style={s.figureMuted}>{fmtZonedClock(next.start, timeZone)}</Text>
           </View>
         </View>
@@ -210,10 +219,16 @@ function Freshness({ row }: { row: CrewWhereabout }) {
   const s = useStyles();
   if (row.sos) return <Text style={s.sosTag}>SOS</Text>;
   if (row.live === 'live') {
+    const battery = formatBatteryLabel(row.battery);
     return (
       <View style={s.fresh}>
         <View style={[s.dot, { backgroundColor: t.colors.confidence.live }]} />
         <Text style={s.freshText}>Live</Text>
+        {battery ? (
+          <Text style={s.freshMuted} accessibilityLabel={`Battery ${battery}`}>
+            {` · ${battery}`}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -222,6 +237,13 @@ function Freshness({ row }: { row: CrewWhereabout }) {
       <View style={s.fresh}>
         <View style={[s.dot, s.ring, { borderColor: t.colors.confidence.aging }]} />
         <Text style={s.freshMuted}>Seen {timeAgo(row.liveAt)}</Text>
+      </View>
+    );
+  }
+  if (row.lostAt) {
+    return (
+      <View style={s.fresh}>
+        <Text style={s.freshMuted}>{lostContactLabel(row.lostAt)}</Text>
       </View>
     );
   }
@@ -342,6 +364,34 @@ export function CrewPrompt({ title, body, cta, onPress }: { title: string; body:
         </View>
       </View>
       <Button label={cta} onPress={onPress} />
+    </View>
+  );
+}
+
+export function CrewWrapUp({
+  crewName,
+  balance,
+  onSettle,
+  onReform,
+}: {
+  crewName: string;
+  balance: number;
+  onSettle: () => void;
+  onReform: () => void;
+}) {
+  const t = useTokens();
+  const s = useStyles();
+  return (
+    <View style={[s.card, s.section]}>
+      <View style={s.quietRow}>
+        <Ionicons name="people-outline" size={iconSize.md} color={t.colors.accent.aqua} />
+        <View style={s.flex}>
+          <Text style={s.quietTitle}>Wrap up with {crewName}</Text>
+          <Text style={s.secondary}>{settleUpLine(balance)}</Text>
+        </View>
+      </View>
+      <Button label={Math.abs(balance) > 0.01 ? 'Settle up' : 'See expenses'} onPress={onSettle} />
+      <Button label="Reform this crew for another festival" variant="secondary" onPress={onReform} />
     </View>
   );
 }

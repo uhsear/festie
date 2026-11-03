@@ -18,6 +18,16 @@ describe('validateNewPassword', () => {
   it('requires 8 characters', () => {
     expect(validateNewPassword('short', 'short')).toEqual({ password: 'Password must be at least 8 characters' });
   });
+  it('rejects a common password', () => {
+    expect(validateNewPassword('password123', 'password123')).toEqual({
+      password: 'That password is too common — please choose something harder to guess',
+    });
+  });
+  it('applies the username context', () => {
+    expect(validateNewPassword('alice-rocks-99', 'alice-rocks-99', { username: 'alice' })).toEqual({
+      password: 'Password must not contain your username',
+    });
+  });
   it('requires a match', () => {
     expect(validateNewPassword('longenough', 'different')).toEqual({ confirmPassword: 'Passwords do not match' });
   });

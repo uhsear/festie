@@ -16,10 +16,11 @@ import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores';
-import { AUTH_COPY } from '@festie/shared/constants';
+import { AUTH_COPY, COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
+import ProviderButtons from '../../components/ProviderButtons';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
@@ -164,7 +165,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     Keyboard.dismiss();
     if (!username.trim() || !password.trim()) {
-      setError('Username and password are required');
+      setError('Enter your username or email and your password.');
       return;
     }
     setError(null);
@@ -228,19 +229,20 @@ export default function LoginScreen() {
           </Text>
         ) : null}
 
-        {/* Visible only: the input carries the same accessibilityLabel, so VoiceOver (and Maestro) see one "Username". */}
+        {/* Visible only: the input carries the same accessibilityLabel, so VoiceOver sees one "Username or email" (Maestro targets the testID). */}
         <Text style={styles.label} accessible={false} importantForAccessibility="no">
-          Username
+          {AUTH_COPY.loginIdentifierLabel}
         </Text>
         <TextInput
           testID="login-username-input"
           style={[styles.input, focusedField === 'username' && styles.inputFocused]}
-          placeholder="Username"
+          placeholder={AUTH_COPY.loginIdentifierLabel}
           placeholderTextColor={t.colors.text.placeholder}
-          accessibilityLabel="Username"
+          accessibilityLabel={AUTH_COPY.loginIdentifierLabel}
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
+          keyboardType="email-address"
           autoComplete="username"
           textContentType="username"
           returnKeyType="next"
@@ -290,6 +292,8 @@ export default function LoginScreen() {
           style={styles.button}
         />
 
+        <ProviderButtons mode="signin" />
+
         <Link href="/(auth)/forgot-password" asChild>
           <TouchableOpacity style={styles.forgotButton} accessibilityRole="link" accessibilityLabel="Forgot password?">
             <Text style={styles.linkText}>Forgot password?</Text>
@@ -300,10 +304,10 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.linkButton}
             accessibilityRole="link"
-            accessibilityLabel="Sign up for an account"
+            accessibilityLabel="Create an account"
           >
             <Text style={styles.linkText}>
-              Don't have an account? <Text style={styles.linkTextAccent}>Sign up</Text>
+              Don't have an account? <Text style={styles.linkTextAccent}>{COPY.auth.createAccount}</Text>
             </Text>
           </TouchableOpacity>
         </Link>

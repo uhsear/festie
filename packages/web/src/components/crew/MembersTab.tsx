@@ -2,8 +2,13 @@ import React, { useState } from 'react';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
+import MyDaysCard from './MyDaysCard';
+import MemberDayChips from './MemberDayChips';
+import { useFestivalStore } from '@festie/shared/stores';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { Users, UserPlus, Crown, ChevronDown, Trash2, LogOut } from 'lucide-react';
-import type { CrewMember } from '@festie/shared/types';
+import { memberAvatarUrl, memberCountLabel } from '@festie/shared/utils';
+import type { CrewMember, FestivalDay } from '@festie/shared/types';
 
 export interface MembersTabProps {
   members: CrewMember[];
@@ -16,9 +21,14 @@ export interface MembersTabProps {
   onTransferOwnership: (member: CrewMember) => void;
   /** Owner-only kick. Optional so non-owner views can omit it. */
   onKick?: (member: CrewMember) => void;
-  /** Opens the delete (owner) or leave (member) confirm. Omit to hide the danger area. */
-  onDestroyCrew?: () => void;
+  /** Opens the leave flow (every member). Omit to hide the Membership area. */
+  onLeaveCrew?: () => void;
+  /** Opens the delete confirm (owner only). Omit to hide the Danger zone. */
+  onDeleteCrew?: () => void;
+  maxMembers?: number;
 }
+
+const NO_DAYS: FestivalDay[] = [];
 
 export default function MembersTab({
   members,
@@ -30,9 +40,14 @@ export default function MembersTab({
   currentUserId,
   onTransferOwnership,
   onKick,
-  onDestroyCrew,
+  onLeaveCrew,
+  onDeleteCrew,
+  maxMembers,
 }: MembersTabProps) {
   const [managingId, setManagingId] = useState<string | null>(null);
+  const crewFestivalId = useCrewStore((s) => s.activeCrew?.festivalId);
+  // Day answers are positional, so they only map onto the crew's own festival's days.
+  const festivalDays = useFestivalStore((s) => (s.currentFestival?.id === crewFestivalId ? s.days : NO_DAYS));
   return (
     <div className="space-y-1.5 px-4">
       {isAdmin && (
@@ -47,6 +62,12 @@ export default function MembersTab({
         </div>
       )}
       {members.length > 0 ? (
+        <>
+        <div className="flex items-baseline justify-between px-1 pb-1">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Members</h3>
+          <span className="text-xs text-text-secondary">{memberCountLabel(members.length, maxMembers)}</span>
+        </div>
+        <MyDaysCard currentUserId={currentUserId} />
         <div className="space-y-0.5">
           {members.map((m, index) => {
             const memberIsOwner = m.role === 'owner' || ownerId === m.userId;
@@ -61,9 +82,12 @@ export default function MembersTab({
                 style={{ '--i': Math.min(index, 6) } as React.CSSProperties}
               >
                 <div className="crew-member-row relative py-2 px-2.5 rounded-md bg-bg-card border border-glass-border flex items-center gap-2.5">
-                  <Avatar name={displayName} size="sm" />
+                  <Avatar name={displayName} image={memberAvatarUrl(m)} size="sm" />
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-text-primary truncate">{m.name || m.username}</div>
+                    <div className="font-semibold text-text-primary truncate">
+                      {m.userId === currentUserId ? `${displayName} (you)` : displayName}
+                    </div>
+                    <MemberDayChips userId={m.userId} name={displayName} days={festivalDays} />
                     {memberIsOwner && (
                       <div className="text-xs text-text-secondary inline-flex items-center gap-1">
                         <Crown className="w-3 h-3" aria-hidden="true" /> Owner
@@ -108,33 +132,33 @@ export default function MembersTab({
             );
           })}
         </div>
+        </>
       ) : (
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
           title="No members yet"
-          description="Share the invite code below — they'll appear here the moment they join."
+          description="Share the invite link — friends appear here the moment they join."
         />
       )}
-      {onDestroyCrew && (
-        <section aria-labelledby="crew-danger-heading" className="mt-6 pt-4 border-t border-border space-y-2">
-          <h3 id="crew-danger-heading" className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            {isOwner ? 'Danger zone' : 'Membership'}
+      {onLeaveCrew && (
+        <section aria-labelledby="crew-membership-heading" className="mt-6 pt-4 border-t border-border space-y-2">
+          <h3 id="crew-membership-heading" className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Membership
           </h3>
-          <Button
-            variant="outline"
-            onClick={onDestroyCrew}
-            className="min-h-11 text-sm text-[var(--color-text-danger)]"
-          >
-            {isOwner ? (
-              <>
-                <Trash2 className="w-4 h-4" aria-hidden="true" /> Delete crew…
-              </>
-            ) : (
-              <>
-                <LogOut className="w-4 h-4" aria-hidden="true" /> Leave crew…
-              </>
-            )}
+          <Button variant="outline" onClick={onLeaveCrew} className="min-h-11 text-sm text-[var(--color-text-danger)]">
+            <LogOut className="w-4 h-4" aria-hidden="true" /> Leave crew…
           </Button>
+        </section>
+      )}
+      {isOwner && onDeleteCrew && (
+        <section aria-labelledby="crew-danger-heading" className="mt-4 pt-4 border-t border-border space-y-2">
+          <h3 id="crew-danger-heading" className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Danger zone
+          </h3>
+          <Button variant="outline" onClick={onDeleteCrew} className="min-h-11 text-sm text-[var(--color-text-danger)]">
+            <Trash2 className="w-4 h-4" aria-hidden="true" /> Delete crew…
+          </Button>
+          <p className="text-xs text-text-muted">Deletes the crew for everyone.</p>
         </section>
       )}
     </div>

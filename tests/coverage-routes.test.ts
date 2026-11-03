@@ -15,7 +15,6 @@
 
 import 'dotenv/config';
 import assert from 'node:assert/strict';
-import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { afterEach, after as afterAll, describe, test } from 'node:test';
@@ -23,6 +22,7 @@ import request from 'supertest';
 import { Pool } from 'pg';
 import { io as createSocketClient } from 'socket.io-client';
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema } from './_test-schema';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,7 +36,6 @@ if (!TEST_DATABASE_URL) { console.error('ERROR: TEST_DATABASE_URL env var requir
 if (!TEST_DATABASE_URL.includes('_test')) { console.error('SAFETY: TEST_DATABASE_URL must contain "_test".'); process.exit(1); }
 
 // ── fixtures ─────────────────────────────────────────────────────
-let testDbReady = false;
 
 function createFestivalFixture() {
   return [{
@@ -76,32 +75,6 @@ function createFestivalFixture() {
       ],
     }],
   }];
-}
-
-async function ensureTestSchema() {
-  if (testDbReady) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    const { rows } = await pool.query(
-      "SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1"
-    );
-    if (rows.length === 0) {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS citext');
-      const schema = fs.readFileSync(
-        path.join(__dirname, '..', 'migrations', '004_postgresql_baseline.sql'), 'utf8'
-      );
-      await pool.query(schema);
-    }
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    const files = fs.readdirSync(migrationsDir)
-      .filter((f: string) => f.endsWith('.sql') && !f.startsWith('004_'))
-      .sort();
-    for (const file of files) {
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      await pool.query(sql).catch(() => {});
-    }
-    testDbReady = true;
-  } finally { await pool.end(); }
 }
 
 async function truncateAllTables() {
@@ -155,7 +128,7 @@ async function seedTestData(festivals = createFestivalFixture()) {
 }
 
 async function startServer(overrides: any = {}) {
-  await ensureTestSchema();
+  await ensureTestSchema(TEST_DATABASE_URL!);
   await truncateAllTables();
   await seedTestData();
   const planner = await createFestivalPlanner({
@@ -468,7 +441,7 @@ describe('admin festival CRUD + cascade + audit', () => {
       for (let i = 0; i < 100 && rows.length === 0; i++) {
         if (i > 0) await new Promise((r) => setTimeout(r, 20));
         ({ rows } = await pool.query(
-          "SELECT * FROM audit_log WHERE action = 'festival:create' AND target_id = $1",
+          "SELECT * FROM audit_log WHERE action = 'festival.created' AND target_id = $1",
           [festId]
         ));
       }
@@ -556,25 +529,6 @@ describe('export routes', () => {
       .expect(200);
     assert.match(res.headers['content-type']!, /text\/html/);
     assert.match(res.text, /<!DOCTYPE html>/i);
-  });
-
-  test('ICS calendar export returns valid iCalendar', async () => {
-    const server = await startServer(); servers.push(server);
-    const user = await registerUser(server, 'icsexportuser');
-    const profile = await joinFestival(server, user.token);
-    await server.request
-      .put(`/api/v1/profiles/${profile.id}`)
-      .set('x-user-token', user.token)
-      .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ picks: { 'set-a': 'must' } })
-      .expect(200);
-    const res = await server.request
-      .get(`/api/v1/export/fest-1/${profile.id}/calendar`)
-      .set('x-user-token', user.token)
-      .expect(200);
-    assert.match(res.headers['content-type']!, /text\/calendar/);
-    assert.match(res.text, /BEGIN:VCALENDAR/);
-    assert.match(res.text, /END:VCALENDAR/);
   });
 });
 
@@ -789,12 +743,17 @@ describe('misc route edges', () => {
       .set('x-user-token', adminToken)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({
-        id: 'stale-fest', name: 'Stale Test', location: 'Test',
+        id: 'stale-fest', name: 'Stale Test', location: 'Test', timeZone: 'America/New_York',
         stages: [{ id: 'main', name: 'Main', color: '#ff3366' }],
         days: [{ label: 'Fri', date: '2026-06-05', sets: [
           { id: 'set-s1', artist: 'Artist', stageId: 'main', startTime: '10:00', endTime: '11:00' },
         ]}],
       });
+    // A new festival is a draft; attendees can join it once it is published.
+    await server.request.post('/api/v1/festivals/stale-fest/publish')
+      .set('x-user-token', adminToken)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .expect(200);
 
     const join = await server.request.post('/api/v1/profiles')
       .set('x-user-token', user.token)
@@ -910,7 +869,9 @@ describe('Crew Polls', () => {
       .get(`/api/v1/crews/${crew.id}/polls`)
       .set('x-user-token', alice.token)
       .expect(200);
-    assert.equal(listAfter.body.data.polls.length, 0);
+    // Closed polls stay listed as decided (open polls plus the last 10 decided).
+    assert.equal(listAfter.body.data.polls.length, 1);
+    assert.equal(listAfter.body.data.polls[0].closed, true);
   });
 
   test('rejects poll creation with invalid data', async () => {

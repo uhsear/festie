@@ -14,7 +14,8 @@
  * editable view-model, not domain types.
  */
 
-import type { FestivalMapConfig } from '@festie/shared/types';
+import type { Artist, FestivalMapConfig } from '@festie/shared/types';
+import { joinArtistNames, shiftSetTimes, sortLineup, withArtistNames } from '@festie/shared/utils';
 
 export interface StageRow {
   id: string;
@@ -38,6 +39,8 @@ export interface SetRow {
   endTime: string;
   /** Optional spotify/soundcloud URL — sent as linkUrl (server normalizes it). */
   linkUrl: string;
+  /** Per-artist entries (B2B sets hold up to 4). Empty for a set not yet given structured artists. */
+  artists: Artist[];
 }
 
 export interface DayRow {
@@ -51,6 +54,8 @@ export interface FormState {
   name: string;
   location: string;
   timeZone: string; // '' = device-local (no festival zone)
+  /** Joins B2B artist names in the set's display string. */
+  b2bSeparator: string;
   stages: StageRow[];
   days: DayRow[];
   /**
@@ -138,6 +143,39 @@ export function addSet(f: FormState, dayId: string, newSet: SetRow): FormState {
   };
 }
 
+/** Put a new set first in ONE day so the admin sees it without scrolling. Other days keep their reference. */
+export function prependSet(f: FormState, dayId: string, newSet: SetRow): FormState {
+  return {
+    ...f,
+    days: f.days.map((d) => (d.id === dayId ? { ...d, sets: [newSet, ...d.sets] } : d)),
+  };
+}
+
+/** Sort every day's sets by stage order, then start time (after-midnight sets last). */
+export function sortFormSets(f: FormState): FormState {
+  return { ...f, days: f.days.map((d) => ({ ...d, sets: sortLineup(d.sets, f.stages) })) };
+}
+
+/**
+ * Shift the listed sets of ONE day by `minutes`. Throws RangeError for a shift
+ * outside -720..720 or zero; other days are returned by reference.
+ */
+export function shiftDaySets(
+  f: FormState,
+  dayId: string,
+  ids: readonly string[],
+  minutes: number,
+): { form: FormState; result: { shifted: number; skipped: number; crossedDayStart: number } } {
+  let result = { shifted: 0, skipped: 0, crossedDayStart: 0 };
+  const days = f.days.map((d) => {
+    if (d.id !== dayId) return d;
+    const r = shiftSetTimes(d.sets, ids, minutes);
+    result = { shifted: r.shifted, skipped: r.skipped, crossedDayStart: r.crossedDayStart };
+    return { ...d, sets: r.sets };
+  });
+  return { form: { ...f, days }, result };
+}
+
 /**
  * Remove exactly the set matching BOTH dayId and setId. A set with the same
  * setId living under a different day is left intact.
@@ -164,6 +202,34 @@ export function setSetField(
     ...f,
     days: f.days.map((d) =>
       d.id === dayId ? { ...d, sets: d.sets.map((s) => (s.id === setId ? { ...s, [field]: value } : s)) } : d,
+    ),
+  };
+}
+
+/** Removing an artist drops the same index from the names and the loaded origin, so later artists keep their links. */
+export function withoutIndex<T>(list: T[], index: number): T[] {
+  return list.filter((_, j) => j !== index);
+}
+
+/**
+ * Replace the artist names of ONE set (dayId + setId). `origin` is the artist list
+ * loaded with the set, so each artist keeps its own links and photo by index even
+ * when a middle name is blank. Also rewrites the flat `artist` display string with
+ * the festival's B2B separator.
+ */
+export function setSetArtistNames(
+  f: FormState,
+  dayId: string,
+  setId: string,
+  origin: Artist[] | undefined,
+  names: string[],
+): FormState {
+  const artists = withArtistNames(origin, names);
+  const artist = joinArtistNames(names, f.b2bSeparator);
+  return {
+    ...f,
+    days: f.days.map((d) =>
+      d.id === dayId ? { ...d, sets: d.sets.map((s) => (s.id === setId ? { ...s, artists, artist } : s)) } : d,
     ),
   };
 }

@@ -15,43 +15,55 @@ export default function mountAdminAuditRoutes({ router, deps, ctx }: any): void 
     schemas, validateQuery,
     getUsers,
   } = deps;
-  const { getFriendlyAction } = ctx;
+  const { enrichAuditEntries } = ctx;
 
   // ── GET /audit — query audit log with filters ────────────
   router.get('/audit', adminAuth, validateQuery(schemas.adminAuditQuery), async (req: any, res: any) => {
     try {
       setNoStore(res);
-      const { actor_id: actorId, action, resource_type: resourceType, cursor, limit, scope, actor } = req.validatedQuery;
+      const { actor_id: actorId, action, resource_type: resourceType, cursor, limit, scope, actor, user } = req.validatedQuery;
       const actorType = scope === 'all' ? null : scope;
       const from = req.validatedQuery.from ? new Date(req.validatedQuery.from).toISOString() : null;
       const to = req.validatedQuery.to ? new Date(req.validatedQuery.to).toISOString() : null;
 
-      const users = await getUsers();
-      const usernameById = new Map<string, string>(users.map((u: any) => [u.id, u.username]));
-
-      // Resolve the username filter to an id; an unknown name matches nothing.
+      // Resolve username filters to ids; an unknown name matches nothing.
+      const users = actor || user ? await getUsers() : [];
+      const idForUsername = (name: string) => {
+        const wanted = name.toLowerCase();
+        return users.find((u: any) => String(u.username).toLowerCase() === wanted)?.id ?? null;
+      };
       let resolvedActorId = actorId || null;
       if (actor) {
-        const wanted = actor.toLowerCase();
-        const match = users.find((u: any) => String(u.username).toLowerCase() === wanted);
-        if (!match) return sendSuccess(res, [], { total: 0, limit, nextCursor: null });
-        resolvedActorId = match.id;
+        resolvedActorId = idForUsername(actor);
+        if (!resolvedActorId) return sendSuccess(res, [], { total: 0, limit, nextCursor: null });
+      }
+      let targetId = null;
+      if (user) {
+        targetId = idForUsername(user);
+        if (!targetId) return sendSuccess(res, [], { total: 0, limit, nextCursor: null });
       }
 
-      const filters = { actorId: resolvedActorId, actorType, action: action || null, resourceType: resourceType || null, from, to };
+      // A comma list matches any item. `festival.*` matches every name that starts with `festival.`;
+      // without `.*` the name must match exactly.
+      const items = typeof action === 'string' && action ? action.split(',') : [];
+      const actions = items.filter((a: string) => !a.endsWith('.*'));
+      const actionPrefixes = items.filter((a: string) => a.endsWith('.*')).map((a: string) => a.slice(0, -1));
+      const filters = {
+        actorId: resolvedActorId,
+        actorType,
+        actions: actions.length ? actions : null,
+        actionPrefixes: actionPrefixes.length ? actionPrefixes : null,
+        targetId,
+        resourceType: resourceType || null,
+        from,
+        to,
+      };
       const [{ rows, nextCursor }, total] = await Promise.all([
         stores.auditLog.query({ ...filters, limit, cursor: cursor || null }),
         stores.auditLog.count(filters),
       ]);
 
-      const entries = rows.map((row: any) => ({
-        ...row,
-        friendlyAction: getFriendlyAction(row.action),
-        actorUsername: usernameById.get(row.actorId) || row.actorId,
-        targetLabel: row.details?.targetUsername || row.details?.name || `${row.targetType} ${row.targetId ?? ''}`.trim(),
-      }));
-
-      return sendSuccess(res, entries, { total, limit, nextCursor });
+      return sendSuccess(res, await enrichAuditEntries(rows), { total, limit, nextCursor });
     } catch (error: any) {
       log.error('admin audit query failed', { error: error.message });
       return sendError(res, 500, 'Failed to query audit log', ErrorCodes.INTERNAL_ERROR);

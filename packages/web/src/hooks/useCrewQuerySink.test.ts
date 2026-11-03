@@ -4,6 +4,7 @@ import { QueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { useCrewRealtime } from '@festie/shared/hooks/useCrewRealtime';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { buildCrewQuerySink } from './useCrewQuerySink';
 
 /**
@@ -177,6 +178,8 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     sink.onPollClosed(crewId, 'p');
     sink.onExpensesChanged(crewId);
     sink.onActivityLogged(crewId);
+    sink.onPackingChanged(crewId);
+    sink.onRidesChanged(crewId);
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['meeting-points', crewId] });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['polls', crewId] });
@@ -185,5 +188,114 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settlement-plan', crewId] });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['crew-activity', crewId] });
     expect(invalidate).toHaveBeenCalledTimes(9);
+  });
+
+  it('reloads crewStore meeting points and polls on their events', () => {
+    const loadMeetingPoints = vi.fn().mockResolvedValue(undefined);
+    const loadPolls = vi.fn().mockRejectedValue(new Error('offline'));
+    const state = useCrewStore.getState();
+    const spy = vi.spyOn(useCrewStore, 'getState').mockReturnValue({ ...state, loadMeetingPoints, loadPolls });
+    const sink = buildCrewQuerySink(queryClient);
+
+    sink.onMeetingPointUpsert('c1', {} as never);
+    sink.onMeetingPointRemoved('c1', 'mp1');
+    expect(loadMeetingPoints).toHaveBeenCalledTimes(2);
+    expect(loadMeetingPoints).toHaveBeenCalledWith('c1');
+
+    sink.onPollCreated('c1', { pollId: 'p', question: 'q', options: [], createdBy: 'u' });
+    sink.onPollVoted('c1', 'p', 'u', 0);
+    sink.onPollClosed('c1', 'p');
+    expect(loadPolls).toHaveBeenCalledTimes(3);
+    expect(loadPolls).toHaveBeenCalledWith('c1');
+    spy.mockRestore();
+  });
+});
+
+describe('buildCrewQuerySink packing and rides', () => {
+  const { loadPacking: realLoadPacking, loadRides: realLoadRides } = useCrewStore.getState();
+  afterEach(() => {
+    useCrewStore.setState({ activeCrew: null, loadPacking: realLoadPacking, loadRides: realLoadRides });
+  });
+
+  it('reloads the store lists for the active crew only', () => {
+    const loadPacking = vi.fn().mockResolvedValue(undefined);
+    const loadRides = vi.fn().mockResolvedValue(undefined);
+    useCrewStore.setState({ activeCrew: { id: 'c1' } as never, loadPacking, loadRides });
+    const sink = buildCrewQuerySink(new QueryClient());
+
+    sink.onPackingChanged('c1');
+    sink.onRidesChanged('c1');
+    expect(loadPacking).toHaveBeenCalledWith('c1');
+    expect(loadRides).toHaveBeenCalledWith('c1');
+
+    sink.onPackingChanged('other');
+    sink.onRidesChanged('other');
+    expect(loadPacking).toHaveBeenCalledTimes(1);
+    expect(loadRides).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildCrewQuerySink crew days', () => {
+  afterEach(() => {
+    useCrewStore.setState({ activeCrew: null, crewDays: [] });
+  });
+
+  it('applies a days event to the crew store', () => {
+    useCrewStore.setState({ activeCrew: { id: 'c1' } as never, crewDays: [] });
+    const days = [{ userId: 'u2', dayIndex: 0, answer: 'no' as const }];
+    buildCrewQuerySink(new QueryClient()).onDaysUpdated('c1', { crewId: 'c1', userId: 'u2', days });
+    expect(useCrewStore.getState().crewDays).toEqual(days);
+  });
+});
+
+describe('buildCrewQuerySink reconnect resync', () => {
+  const real = useCrewStore.getState();
+  const loaders = () => ({
+    loadMeetingPoints: vi.fn().mockResolvedValue(undefined),
+    loadPolls: vi.fn().mockResolvedValue(undefined),
+    loadPacking: vi.fn().mockResolvedValue(undefined),
+    loadRides: vi.fn().mockResolvedValue(undefined),
+  });
+  afterEach(() => {
+    useUIStore.setState({ pendingSync: 0 });
+    useCrewStore.setState({
+      activeCrew: null,
+      loadMeetingPoints: real.loadMeetingPoints,
+      loadPolls: real.loadPolls,
+      loadPacking: real.loadPacking,
+      loadRides: real.loadRides,
+    });
+  });
+
+  it('invalidates every crew list key and reloads packing and rides', () => {
+    const l = loaders();
+    useCrewStore.setState({ activeCrew: { id: 'c1' } as never, ...l });
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    buildCrewQuerySink(queryClient).onReconnectResync?.('c1');
+
+    for (const key of ['meeting-points', 'polls', 'expenses', 'expense-balances', 'settlement-plan', 'crew-activity']) {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: [key, 'c1'] });
+    }
+    expect(invalidate).toHaveBeenCalledTimes(6);
+    expect(l.loadMeetingPoints).toHaveBeenCalledWith('c1');
+    expect(l.loadPolls).toHaveBeenCalledWith('c1');
+    expect(l.loadPacking).toHaveBeenCalledWith('c1');
+    expect(l.loadRides).toHaveBeenCalledWith('c1');
+  });
+
+  it('does nothing while offline writes are still queued', () => {
+    const l = loaders();
+    useCrewStore.setState({ activeCrew: { id: 'c1' } as never, ...l });
+    useUIStore.setState({ pendingSync: 2 });
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    buildCrewQuerySink(queryClient).onReconnectResync?.('c1');
+
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(l.loadPacking).not.toHaveBeenCalled();
+    expect(l.loadRides).not.toHaveBeenCalled();
   });
 });

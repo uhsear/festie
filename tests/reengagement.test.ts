@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 
 import { ALLOWED_NOTIFICATION_TYPES } from '../lib/notifications/payload.js';
 import { createSendService } from '../lib/notifications/send.js';
-import { createReengagementTriggers } from '../lib/notifications/reengagement.js';
+import { createReengagementTriggers, findRatePromptDay } from '../lib/notifications/reengagement.js';
 
 // ---------------------------------------------------------------------------
 // Minimal logger / config helpers
@@ -230,6 +230,26 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
     });
   });
 
+  it('countLineupDrop returns the fresh count and sends nothing', async () => {
+    const { triggers, sends } = build(mockPool('North Coast', ['p1', 'p2']));
+    const r = await triggers.countLineupDrop('fest-2027');
+    assert.deepEqual(r, { festivalName: 'North Coast', recipients: 2 });
+    assert.equal(sends.length, 0);
+  });
+
+  it('edition match ignores a trailing year', async () => {
+    const sqls: string[] = [];
+    const pool = {
+      query: async (sql: string) => {
+        sqls.push(sql);
+        return { rows: sql.includes('SELECT name') ? [{ name: 'North Coast 2027' }] : [] };
+      },
+    };
+    const { triggers } = build(pool);
+    await triggers.countLineupDrop('fest-2027');
+    assert.ok(sqls.some((q) => q.includes('regexp_replace(lower(fp.name)')));
+  });
+
   it('no prior attendees → nothing sent', async () => {
     const { triggers, sends } = build(mockPool('North Coast', []));
     const r = await triggers.sendLineupDrop('fest-2027');
@@ -401,7 +421,352 @@ describe('createReengagementTriggers.sendWrapReady', () => {
 });
 
 // =====================================================================
-// T33 inbox rows carry data.eventKey, so existsForEvents (which matches any
+// sendRatePrompt — next-morning nudge to rate yesterday's picked sets
+// =====================================================================
+describe('findRatePromptDay', () => {
+  const days = [{ date: '2026-04-24' }, { date: '2026-04-25' }, { date: '2026-04-26' }];
+
+  it('UTC fallback (no zone): due 10:00 to 20:00 on the next calendar date', () => {
+    assert.equal(findRatePromptDay(days, null, Date.parse('2026-04-25T09:59:00Z')), -1);
+    assert.equal(findRatePromptDay(days, null, Date.parse('2026-04-25T10:00:00Z')), 0);
+    assert.equal(findRatePromptDay(days, null, Date.parse('2026-04-25T19:59:00Z')), 0);
+    assert.equal(findRatePromptDay(days, null, Date.parse('2026-04-25T20:00:00Z')), -1);
+    assert.equal(findRatePromptDay(days, null, Date.parse('2026-04-27T12:00:00Z')), 2);
+  });
+
+  it('an invalid zone falls back to UTC', () => {
+    assert.equal(findRatePromptDay(days, 'Not/AZone', Date.parse('2026-04-25T10:30:00Z')), 0);
+  });
+
+  it('honours a non-UTC festival zone', () => {
+    // America/Los_Angeles is UTC-7 in April: 10:00 local = 17:00Z, 20:00 local = 03:00Z next day.
+    const tz = 'America/Los_Angeles';
+    assert.equal(findRatePromptDay(days, tz, Date.parse('2026-04-25T16:30:00Z')), -1); // 09:30 local
+    assert.equal(findRatePromptDay(days, tz, Date.parse('2026-04-25T17:30:00Z')), 0); // 10:30 local
+    assert.equal(findRatePromptDay(days, tz, Date.parse('2026-04-26T02:30:00Z')), 0); // 19:30 local
+    assert.equal(findRatePromptDay(days, tz, Date.parse('2026-04-26T03:30:00Z')), -1); // 20:30 local
+  });
+
+  it('rolls over a month end and skips days without a date', () => {
+    assert.equal(findRatePromptDay([{ date: '' }, { date: '2026-04-30' }], null, Date.parse('2026-05-01T12:00:00Z')), 1);
+    assert.equal(findRatePromptDay([], null, Date.now()), -1);
+    assert.equal(findRatePromptDay(null, null, Date.now()), -1);
+  });
+});
+
+describe('createReengagementTriggers.sendRatePrompt', () => {
+  const festival = {
+    name: 'Coachella',
+    timeZone: 'America/Los_Angeles',
+    days: [
+      { dayIndex: 0, label: 'Friday', date: '2026-04-24' },
+      { dayIndex: 1, label: '', date: '2026-04-25' },
+    ],
+  };
+  const AT_1030_AFTER_DAY0 = Date.parse('2026-04-25T17:30:00Z'); // 10:30 PDT on 04-25
+
+  function build({ fest = festival as any, rows = [] as any[] } = {}) {
+    const sends: any[] = [];
+    const queries: any[] = [];
+    const logged = new Set<string>(); // `${uid}|${eventKey}` rows in notification_log
+    const notificationService = {
+      isConfigured: true,
+      send: async (args: any) => {
+        sends.push(args);
+        logged.add(`${args.userId}|${args.data.eventKey}`);
+        return { sent: 1 };
+      },
+    };
+    const stores = {
+      festivals: { getById: async () => fest },
+      notificationLog: {
+        existsForEvents: async (uids: string[], type: string, key: string) => {
+          assert.equal(type, 'rate_prompt');
+          return new Set(uids.filter((u) => logged.has(`${u}|${key}`)));
+        },
+        insert: async () => {},
+      },
+    };
+    const pool = {
+      query: async (sql: string, params: any[]) => {
+        queries.push({ sql, params });
+        return { rows };
+      },
+    };
+    const triggers = createReengagementTriggers({ stores, config, log, notificationService, pool });
+    return { triggers, sends, queries };
+  }
+
+  it('at 10:30 the morning after day 0, pushes users with unrated day-0 picks', async () => {
+    const { triggers, sends, queries } = build({ rows: [{ userId: 'u1', unrated: 3 }] });
+    const r = await triggers.sendRatePrompt('fest-1', AT_1030_AFTER_DAY0);
+    assert.deepEqual(r, { sent: 1, eventKey: 'rate:fest-1:0', dayIndex: 0 });
+    assert.equal(sends.length, 1);
+    assert.deepEqual(sends[0], {
+      userId: 'u1',
+      type: 'rate_prompt',
+      title: 'How was Friday at Coachella?',
+      body: 'Rate the 3 sets you picked while you still remember them.',
+      data: { festivalId: 'fest-1', eventKey: 'rate:fest-1:0', deepLink: 'https://festie.test/rate?festival=fest-1' },
+    });
+    // Recipients come from one parameterized query that skips rated sets.
+    assert.equal(queries.length, 1);
+    assert.deepEqual(queries[0].params, ['fest-1', 0]);
+    assert.match(queries[0].sql, /NOT EXISTS \(SELECT 1 FROM set_ratings r/);
+  });
+
+  it('a user who rated every day-0 pick is not returned by the query, so gets no push', async () => {
+    const { triggers, sends } = build({ rows: [] });
+    const r = await triggers.sendRatePrompt('fest-1', AT_1030_AFTER_DAY0);
+    assert.equal(r.sent, 0);
+    assert.equal(sends.length, 0);
+  });
+
+  it('each user gets their own unrated count in the body', async () => {
+    const { triggers, sends } = build({ rows: [{ userId: 'u1', unrated: 3 }, { userId: 'u2', unrated: 5 }] });
+    await triggers.sendRatePrompt('fest-1', AT_1030_AFTER_DAY0);
+    assert.deepEqual(
+      sends.map((s) => [s.userId, s.body]),
+      [
+        ['u1', 'Rate the 3 sets you picked while you still remember them.'],
+        ['u2', 'Rate the 5 sets you picked while you still remember them.'],
+      ],
+    );
+  });
+
+  it('09:30 and 20:30 festival time: not_due, no query, no push', async () => {
+    for (const at of ['2026-04-25T16:30:00Z', '2026-04-26T03:30:00Z']) {
+      const { triggers, sends, queries } = build({ rows: [{ userId: 'u1', unrated: 3 }] });
+      const r = await triggers.sendRatePrompt('fest-1', Date.parse(at));
+      assert.deepEqual(r, { sent: 0, reason: 'not_due' });
+      assert.equal(queries.length, 0);
+      assert.equal(sends.length, 0);
+    }
+  });
+
+  it('running the sweep twice sends once (eventKey dedup)', async () => {
+    const { triggers, sends } = build({ rows: [{ userId: 'u1', unrated: 3 }] });
+    await triggers.sendRatePrompt('fest-1', AT_1030_AFTER_DAY0);
+    const again = await triggers.sendRatePrompt('fest-1', AT_1030_AFTER_DAY0 + 60 * 60 * 1000);
+    assert.equal(again.sent, 0);
+    assert.equal(sends.length, 1);
+  });
+
+  it('day 1 falls back to "Day 2" when its label is empty, and keys on day 1', async () => {
+    const { triggers, sends, queries } = build({ rows: [{ userId: 'u1', unrated: 1 }] });
+    const r = await triggers.sendRatePrompt('fest-1', Date.parse('2026-04-26T18:00:00Z'));
+    assert.equal(r.eventKey, 'rate:fest-1:1');
+    assert.deepEqual(queries[0].params, ['fest-1', 1]);
+    assert.equal(sends[0].title, 'How was Day 2 at Coachella?');
+  });
+
+  it('cuts the title to 100 characters', async () => {
+    const { triggers, sends } = build({
+      fest: { ...festival, name: 'X'.repeat(150) },
+      rows: [{ userId: 'u1', unrated: 2 }],
+    });
+    await triggers.sendRatePrompt('fest-1', AT_1030_AFTER_DAY0);
+    assert.equal(sends[0].title.length, 100);
+    assert.ok(sends[0].title.startsWith('How was Friday at XXX'));
+  });
+
+  it('unknown festival: festival_not_found', async () => {
+    const { triggers, sends } = build({ fest: null });
+    assert.deepEqual(await triggers.sendRatePrompt('nope', AT_1030_AFTER_DAY0), { sent: 0, reason: 'festival_not_found' });
+    assert.equal(sends.length, 0);
+  });
+});
+
+describe('rate_prompt through createSendService: Wrap pref and DND', () => {
+  function buildService(prefs: any) {
+    const sent: any[] = [];
+    const messaging = {
+      send: async (msg: any) => {
+        sent.push(msg);
+        return 'msg-id';
+      },
+      sendEach: async () => ({ responses: [] }),
+    };
+    const stores = {
+      notificationPrefs: { get: async () => prefs },
+      deviceTokens: {
+        listByUser: async () => [{ token: 'a'.repeat(40), platform: 'android' }],
+        unregister: async () => {},
+      },
+      notificationCounts: { getByUser: async () => [], increment: async () => {} },
+      notificationLog: { insert: async () => {} },
+    };
+    const svc = createSendService({ stores, config, log, messaging, retryQueue: { enqueue() {} } });
+    return { svc, sent };
+  }
+
+  it('is suppressed when the wrapReady pref is off', async () => {
+    const { svc, sent } = buildService({ wrapReady: 0, dndStart: null, dndEnd: null });
+    const r = await svc.send({ userId: 'u1', type: 'rate_prompt', title: 't', body: 'b', data: {} });
+    assert.equal(r.reason, 'user_disabled');
+    assert.equal(sent.length, 0);
+  });
+
+  it('is held back inside quiet hours (not a critical type)', async () => {
+    const { svc, sent } = buildService({ wrapReady: 1, dndStart: '00:00', dndEnd: '23:59', dndTimeZone: 'UTC' });
+    const r = await svc.send({ userId: 'u1', type: 'rate_prompt', title: 't', body: 'b', data: {} });
+    assert.equal(r.reason, 'dnd_active');
+    assert.equal(sent.length, 0);
+  });
+
+  it('is delivered when wrapReady is on and quiet hours are off', async () => {
+    const { svc, sent } = buildService({ wrapReady: 1, dndStart: null, dndEnd: null });
+    const r = await svc.send({ userId: 'u1', type: 'rate_prompt', title: 't', body: 'b', data: {} });
+    assert.equal(r.sent, 1);
+    assert.equal(sent.length, 1);
+  });
+});
+
+// =====================================================================
+// sendSetTimesOut — once per festival, followers + profile holders
+// =====================================================================
+describe('createReengagementTriggers.sendSetTimesOut', () => {
+  // Fake pg pool. The recipient query's UNION is emulated by a Set, so a user
+  // who follows AND has a profile is one recipient.
+  function build({
+    festival = { name: 'EDC', publishedAt: '2026-01-01T00:00:00.000Z' } as any,
+    hasTimes = true,
+    followers = ['f1', 'f2'],
+    profileHolders = ['p1', 'p2', 'f1'],
+    markThrows = false,
+    prefs = null as any,
+  } = {}) {
+    const state = { setTimesOutAt: null as string | null, events: [] as string[], markThrows };
+    const sends: any[] = [];
+    const seen = new Set<string>();
+    const pool = {
+      query: async (sql: string, params: any[]) => {
+        assert.equal(params[0], 'fest-1');
+        if (sql.includes('set_times_out_at AS')) {
+          return { rows: festival ? [{ ...festival, setTimesOutAt: state.setTimesOutAt, hasTimes }] : [] };
+        }
+        if (/festival_follows f\s/.test(sql)) {
+          assert.match(sql, /UNION/);
+          return { rows: [...new Set([...followers, ...profileHolders])].map((userId) => ({ userId })) };
+        }
+        if (sql.startsWith('UPDATE festivals SET set_times_out_at')) {
+          if (state.markThrows) throw new Error('db blip');
+          state.events.push('mark');
+          state.setTimesOutAt ??= '2026-11-01T00:00:00.000Z';
+          return { rows: [] };
+        }
+        throw new Error(`unexpected query: ${sql}`);
+      },
+    };
+    const notificationService = {
+      isConfigured: true,
+      send: async (args: any) => {
+        sends.push(args);
+        state.events.push('push');
+        seen.add(`${args.userId}|${args.type}|${args.data.eventKey}`);
+        return { sent: 1 };
+      },
+    };
+    const stores = {
+      users: { getByIds: async () => new Map() },
+      notificationPrefs: { get: async () => prefs },
+      notificationLog: {
+        // Stands in for notification_log: a user pushed for this event is not fresh.
+        existsForEvents: async (uids: string[], type: string, key: string) =>
+          new Set(uids.filter((u) => seen.has(`${u}|${type}|${key}`))),
+        insert: async () => {},
+      },
+    };
+    const triggers = createReengagementTriggers({ stores, config, log, notificationService, pool });
+    return { triggers, sends, state };
+  }
+
+  it('pushes once to each follower and profile holder, then sets the marker', async () => {
+    const { triggers, sends, state } = build();
+    const r = await triggers.sendSetTimesOut('fest-1');
+    assert.equal(r.sent, 4);
+    assert.deepEqual(sends.map((s) => s.userId).sort(), ['f1', 'f2', 'p1', 'p2']);
+    assert.deepEqual(sends[0], {
+      userId: sends[0].userId,
+      type: 'set_times_out',
+      title: 'EDC set times are out',
+      body: 'See who plays when and build your plan.',
+      data: { festivalId: 'fest-1', eventKey: 'times:fest-1', deepLink: 'https://festie.test/?festival=fest-1' },
+    });
+    assert.equal(state.events.at(-1), 'mark');
+    assert.ok(state.setTimesOutAt);
+  });
+
+  it('sends nothing once the marker is set, even after times are blanked and re-added', async () => {
+    const { triggers, sends } = build();
+    await triggers.sendSetTimesOut('fest-1');
+    sends.length = 0;
+    const r = await triggers.sendSetTimesOut('fest-1');
+    assert.equal(r.reason, 'already_sent');
+    assert.equal(sends.length, 0);
+  });
+
+  it('a draft, a festival with no times and a missing festival send nothing and set no marker', async () => {
+    for (const [opts, reason] of [
+      [{ festival: { name: 'EDC', publishedAt: null } }, 'draft'],
+      [{ hasTimes: false }, 'no_times'],
+      [{ festival: null }, 'festival_not_found'],
+    ] as const) {
+      const { triggers, sends, state } = build(opts as any);
+      const r = await triggers.sendSetTimesOut('fest-1');
+      assert.equal(r.reason, reason);
+      assert.equal(sends.length, 0);
+      assert.equal(state.setTimesOutAt, null);
+    }
+  });
+
+  it('a published festival with no recipients still sets the marker', async () => {
+    const { triggers, sends, state } = build({ followers: [], profileHolders: [] });
+    await triggers.sendSetTimesOut('fest-1');
+    assert.equal(sends.length, 0);
+    assert.ok(state.setTimesOutAt);
+  });
+
+  it('a retry after the marker write failed sends no second push', async () => {
+    const { triggers, sends, state } = build({ markThrows: true });
+    await assert.rejects(() => triggers.sendSetTimesOut('fest-1'), /db blip/);
+    assert.equal(sends.length, 4);
+    assert.equal(state.setTimesOutAt, null);
+
+    state.markThrows = false;
+    const r = await triggers.sendSetTimesOut('fest-1');
+    assert.equal(r.sent, 0);
+    assert.equal(sends.length, 4);
+    assert.ok(state.setTimesOutAt);
+  });
+
+  it('a follower with New lineups and set times off gets no email', async () => {
+    // RESEND_API_KEY is unset, so sendEmail logs 'email:skip' when the fan-out reaches it.
+    async function emailAttempts(prefs: any) {
+      const skips: string[] = [];
+      const emailLog = { ...log, warn: (msg: string) => { if (msg === 'email:skip') skips.push(msg); } };
+      const stores = {
+        users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', username: 'f1' }]]) },
+        notificationPrefs: { get: async () => prefs },
+        notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {} },
+      };
+      const pool = {
+        query: async (sql: string) => {
+          if (sql.includes('set_times_out_at AS')) return { rows: [{ name: 'EDC', publishedAt: 'x', setTimesOutAt: null, hasTimes: true }] };
+          if (/festival_follows f\s/.test(sql)) return { rows: [{ userId: 'f1' }] };
+          return { rows: [] };
+        },
+      };
+      await createReengagementTriggers({ stores, config, log: emailLog, pool }).sendSetTimesOut('fest-1');
+      return skips.length;
+    }
+    assert.equal(await emailAttempts({ lineupDrops: false }), 0);
+    assert.equal(await emailAttempts({ lineupDrops: true }), 1);
+  });
+});
+
+// =====================================================================
+// T47 inbox rows carry data.eventKey, so existsForEvents (which matches any
 // notification_log row of the type) now counts a push held by quiet hours, or
 // one to a user with no device, as already sent. Before, such a user had no
 // row and was retried on the next run.

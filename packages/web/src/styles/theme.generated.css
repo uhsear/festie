@@ -29,6 +29,7 @@
   --color-accent-green: #39ff14;
   --color-border: rgba(255, 255, 255, 0.06);
   --color-border-light: rgba(255, 255, 255, 0.1);
+  --color-control-track-off: #66666f;
   --color-priority-must: #ff3366;
   --color-priority-want: #00e8d0;
   --color-priority-maybe: #ffb020;
@@ -111,6 +112,8 @@
   --color-status-unverified-bg: rgba(251, 191, 36, 0.15);
   --color-status-warning: #f0a030;
   --color-status-error: #ff6b6b;
+  --color-clash: #f0a030;
+  --color-clash-tint: rgba(240, 160, 48, 0.16);
   --color-spotify: #1DB954;
   --color-overlay-1: rgba(255, 255, 255, 0.03);
   --color-overlay-2: rgba(255, 255, 255, 0.04);
@@ -174,6 +177,7 @@
   --color-accent-green: #175800;
   --color-border: rgba(0, 0, 0, 0.12);
   --color-border-light: rgba(0, 0, 0, 0.3);
+  --color-control-track-off: #767684;
   --color-priority-must: #a8002a;
   --color-priority-want: #00594f;
   --color-priority-maybe: #6b4100;
@@ -197,6 +201,8 @@
   --color-status-unverified-bg: rgba(107, 65, 0, 0.12);
   --color-status-warning: #6b4100;
   --color-status-error: #a3001f;
+  --color-clash: #6b4100;
+  --color-clash-tint: rgba(107, 65, 0, 0.12);
   --color-spotify: #1DB954;
   --color-overlay-1: rgba(0, 0, 0, 0.03);
   --color-overlay-2: rgba(0, 0, 0, 0.04);

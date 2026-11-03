@@ -5,6 +5,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import { recordJobRun } from './metrics.js';
+
 /**
  * Create background periodic timers — session cleanup, avatar orphan removal,
  * expired token purge, memory pressure monitoring.
@@ -56,6 +58,12 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     return;
   }
 
+  // A half-configured sign-in provider stays off and never fails boot (T45).
+  // Logged here, on the leader only, so the warning appears once per boot.
+  for (const [provider, missing] of Object.entries(config.OAUTH_CONFIG_MISSING ?? {})) {
+    if ((missing as string[]).length > 0) log.warn('oauth:config-incomplete', { provider, missing });
+  }
+
   // Session cleanup — evict expired sessions and disconnect their sockets
   const _sessionCleanupTimer = setInterval(async () => {
     try {
@@ -68,7 +76,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         disconnectSocket(socket, io, presenceTargets);
       }
       for (const festivalId of presenceTargets) emitPresence(festivalId, io);
+      recordJobRun('session_cleanup', true);
     } catch (err: any) {
+      recordJobRun('session_cleanup', false);
       log.error('session cleanup failed', { error: err.message });
     }
   }, config.SESSION_CLEANUP_INTERVAL_MS);
@@ -84,7 +94,10 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     async () => {
       try {
         const avatarDir = avatarDirPath();
-        if (!fs.existsSync(avatarDir)) return;
+        if (!fs.existsSync(avatarDir)) {
+          recordJobRun('avatar_cleanup', true);
+          return;
+        }
         const files = fs.readdirSync(avatarDir);
         const { rows: keyRows } = await stores.pool.query(
           'SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL',
@@ -102,7 +115,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
             }
           }
         }
+        recordJobRun('avatar_cleanup', true);
       } catch (err: any) {
+        recordJobRun('avatar_cleanup', false);
         log.warn('avatar cleanup failed', { error: err.message });
       }
     },
@@ -127,7 +142,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         if (resetPurged > 0 || verifyPurged > 0 || refreshPurged > 0) {
           log.info('token cleanup', { resetPurged, verifyPurged, refreshPurged });
         }
+        recordJobRun('token_cleanup', true);
       } catch (err: any) {
+        recordJobRun('token_cleanup', false);
         log.warn('token cleanup failed', { error: err.message });
       }
     },
@@ -139,14 +156,24 @@ function createBackgroundTasks(ctx: any, { io }: any) {
   // Audit log cleanup — purge entries older than retention threshold
   const _auditCleanupTimer = setInterval(
     async () => {
+      let ok = true;
       try {
         const deleted = await stores.auditLog.cleanup(config.AUDIT_LOG_RETENTION_DAYS);
         if (deleted > 0) {
           log.info('audit log cleanup', { deleted, retentionDays: config.AUDIT_LOG_RETENTION_DAYS });
         }
       } catch (err: any) {
+        ok = false;
         log.warn('audit log cleanup failed', { error: err.message });
       }
+      try {
+        const purged = await stores.identities.purgeExpiredStates();
+        if (purged > 0) log.info('oauth state cleanup', { purged });
+      } catch (err: any) {
+        ok = false;
+        log.warn('oauth state cleanup failed', { error: err.message });
+      }
+      recordJobRun('audit_cleanup', ok);
     },
     6 * 60 * 60 * 1000,
   );
@@ -179,6 +206,10 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     state.reminderScheduler = ctx.reminderScheduler;
     log.info('reminder scheduler registered with background tasks');
   }
+  if (ctx.checkinScheduler) {
+    ctx.checkinScheduler.start();
+    state.checkinScheduler = ctx.checkinScheduler;
+  }
 
   // Phase 1B: Meeting point expiry — deactivate expired points every 5 min
   const _meetingPointExpiryTimer = setInterval(async () => {
@@ -187,12 +218,46 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         const { rowCount } = await stores.crews.meetingPoints.expireStale();
         if (rowCount > 0) log.debug('expired meeting points', { count: rowCount });
       }
+      recordJobRun('meeting_point_expiry', true);
     } catch (err: any) {
+      recordJobRun('meeting_point_expiry', false);
       log.warn('meeting point expiry failed', { error: err.message });
     }
   }, config.TOKEN_CLEANUP_INTERVAL_MS);
   _meetingPointExpiryTimer.unref();
   state.timers.push(_meetingPointExpiryTimer);
+
+  // Poll expiry sweep: end polls whose closes_at has passed (announce + push, like a manual end).
+  if (ctx.pollCloser) {
+    const _pollExpiryTimer = setInterval(async () => {
+      try {
+        const count = await ctx.pollCloser.sweepExpired();
+        if (count > 0) log.debug('ended expired polls', { count });
+        recordJobRun('poll_expiry', true);
+      } catch (err: any) {
+        recordJobRun('poll_expiry', false);
+        log.warn('poll expiry sweep failed', { error: err.message });
+      }
+    }, 60 * 1000);
+    _pollExpiryTimer.unref();
+    state.timers.push(_pollExpiryTimer);
+  }
+
+  // Festival announcements: send scheduled rows when due (lib/announcements.ts).
+  if (ctx.announcer) {
+    const _announcementTimer = setInterval(async () => {
+      try {
+        const count = await ctx.announcer.deliverDue();
+        if (count > 0) log.debug('delivered festival announcements', { count });
+        recordJobRun('announcements', true);
+      } catch (err: any) {
+        recordJobRun('announcements', false);
+        log.warn('announcement sweep failed', { error: err.message });
+      }
+    }, 60 * 1000);
+    _announcementTimer.unref();
+    state.timers.push(_announcementTimer);
+  }
 
   // M3 wrap_ready sweep — there is no in-request "festival became over" event, so
   // a leader-only periodic sweep is the clearest available trigger (see roadmap
@@ -225,7 +290,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
           }
         }
         if (rows.length > 0) log.debug('wrap_ready sweep complete', { festivals: rows.length });
+        recordJobRun('wrap_ready', true);
       } catch (err: any) {
+        recordJobRun('wrap_ready', false);
         log.warn('wrap_ready sweep failed', { error: err.message });
       }
     };
@@ -233,6 +300,44 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     _wrapReadyTimer.unref();
     state.timers.push(_wrapReadyTimer);
     log.info('wrap_ready sweep registered (hourly, leader-only)');
+  }
+
+  // T37 rate_prompt sweep: hourly, leader-only. Candidates are festivals with a
+  // day dated in [today-2d, today]; sendRatePrompt picks the day whose morning
+  // window (10:00-20:00 festival time, the next day) is open now, and its
+  // per-user eventKey dedup makes the hourly re-runs send once per day.
+  if (ctx.reengagement?.sendRatePrompt) {
+    const RATE_PROMPT_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly
+    const runRatePromptSweep = async () => {
+      try {
+        const { rows } = await stores.pool.query(`
+          SELECT f.id
+          FROM festivals f
+          WHERE f.deleted_at IS NULL
+            AND EXISTS (
+              SELECT 1 FROM festival_days d
+              WHERE d.festival_id = f.id
+                AND d.date BETWEEN (CURRENT_DATE - 2)::text AND CURRENT_DATE::text
+            )
+        `);
+        for (const r of rows) {
+          try {
+            await ctx.reengagement.sendRatePrompt(r.id);
+          } catch (err: any) {
+            log.debug('rate_prompt sweep: per-festival send failed', { festivalId: r.id, error: err.message });
+          }
+        }
+        if (rows.length > 0) log.debug('rate_prompt sweep complete', { festivals: rows.length });
+        recordJobRun('rate_prompt', true);
+      } catch (err: any) {
+        recordJobRun('rate_prompt', false);
+        log.warn('rate_prompt sweep failed', { error: err.message });
+      }
+    };
+    const _ratePromptTimer = setInterval(runRatePromptSweep, RATE_PROMPT_SWEEP_INTERVAL_MS);
+    _ratePromptTimer.unref();
+    state.timers.push(_ratePromptTimer);
+    log.info('rate_prompt sweep registered (hourly, leader-only)');
   }
 }
 
@@ -249,6 +354,7 @@ function createCloseHandler({
   redis,
   cacheBus,
   emitter,
+  crewNotify,
   clearPresenceTimers,
   avatarPool,
   inFlightRequests,
@@ -273,9 +379,21 @@ function createCloseHandler({
         /* ignore */
       }
     }
+    if (state.checkinScheduler) {
+      try {
+        state.checkinScheduler.stop();
+      } catch {
+        /* ignore */
+      }
+    }
 
     // Flush any pending batched events before disconnecting sockets
     if (emitter?.flushAll) emitter.flushAll();
+    try {
+      await crewNotify?.flushAll();
+    } catch (err: any) {
+      log.warn('crew digest flush on shutdown failed', { error: err.message });
+    }
 
     // Stop accepting new HTTP connections
     if (server.listening) {

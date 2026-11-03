@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { escapeHtml, renderInviteJoinPage, renderInviteErrorPage, INVITE_ERROR_MESSAGES } from '../lib/invite-pages';
+import {
+  escapeHtml,
+  renderInviteJoinPage,
+  renderInviteErrorPage,
+  renderInviteIcs,
+  INVITE_ERROR_MESSAGES,
+} from '../lib/invite-pages';
 
 // ---------------------------------------------------------------------------
 // escapeHtml (re-exported from lib/helpers/sanitize.js)
@@ -47,6 +53,11 @@ describe('invite-pages: renderInviteJoinPage', () => {
     inviteCode: 'ABC123',
     origin: 'https://festie.us',
   };
+
+  it('tints the page with the festival colour', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, festivalName: 'Coachella' });
+    assert.ok(html.includes('body { background: #08160c; }'));
+  });
 
   it('returns valid HTML document', () => {
     const html = renderInviteJoinPage(defaultArgs);
@@ -137,6 +148,99 @@ describe('invite-pages: renderInviteJoinPage', () => {
     const html = renderInviteJoinPage(defaultArgs);
     assert.ok(html.includes('width=device-width, initial-scale=1.0'));
   });
+
+  it('offers Save for later under Join when the festival has dates', () => {
+    const html = renderInviteJoinPage(defaultArgs);
+    assert.ok(
+      html.includes('<a href="https://festie.us/join/ABC123/save.ics" class="invite-link invite-save" download>Save for later</a>'),
+    );
+    assert.ok(html.includes('Adds the festival dates and this invite to your calendar.'));
+    assert.ok(html.indexOf('>Join Test Crew</a>') < html.indexOf('Save for later'));
+    assert.ok(html.includes('.invite-save { display: inline-block; margin-top: 16px; padding: 12px 8px; }'));
+  });
+
+  it('has no Save for later link without both dates', () => {
+    for (const dates of [{ startDate: null }, { endDate: null }, { startDate: null, endDate: null }]) {
+      const html = renderInviteJoinPage({ ...defaultArgs, ...dates });
+      assert.ok(!html.includes('save.ics'));
+      assert.ok(!html.includes('Save for later'));
+    }
+  });
+
+  it('encodes and escapes the code in the Save for later link', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, inviteCode: 'A"B<x>' });
+    assert.ok(html.includes('href="https://festie.us/join/A%22B%3Cx%3E/save.ics"'));
+    assert.ok(!html.includes('A"B<x>'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderInviteIcs
+// ---------------------------------------------------------------------------
+
+describe('invite-pages: renderInviteIcs', () => {
+  // The public preview this comes from also knows the owner and members. None
+  // of that may reach the calendar file.
+  const preview = {
+    crewName: 'Bass Gang',
+    ownerName: 'Ana Lopez',
+    members: [
+      { userId: 'u-1', username: 'ana', name: 'Ana Lopez', role: 'owner' },
+      { userId: 'u-2', username: 'ben', name: 'Ben Ortiz', role: 'member' },
+    ],
+    festivalName: 'EDC Orlando',
+    startDate: '2026-11-06',
+    endDate: '2026-11-08',
+  };
+  const args = {
+    festivalName: preview.festivalName,
+    crewName: preview.crewName,
+    startDate: preview.startDate,
+    endDate: preview.endDate,
+    inviteCode: 'ABC123',
+    origin: 'https://festie.us',
+  };
+
+  it('is one all-day event over the festival dates, with an exclusive end', () => {
+    const ics = renderInviteIcs(args);
+    assert.ok(ics.startsWith('BEGIN:VCALENDAR\r\n'));
+    assert.ok(ics.endsWith('END:VCALENDAR'));
+    assert.equal(ics.split('BEGIN:VEVENT').length - 1, 1);
+    assert.ok(ics.includes('\r\nDTSTART;VALUE=DATE:20261106\r\n'));
+    assert.ok(ics.includes('\r\nDTEND;VALUE=DATE:20261109\r\n'));
+    assert.ok(ics.includes('PRODID:-//Festie//Invite//EN'));
+    assert.ok(ics.includes('X-WR-CALNAME:EDC Orlando'));
+    assert.ok(ics.includes('SUMMARY:EDC Orlando'));
+    assert.ok(ics.includes('UID:invite-ABC123@https://festie.us'));
+    assert.ok(!ics.includes('VALARM'));
+    assert.ok(!ics.includes('LOCATION:'));
+  });
+
+  it('crosses a month end for the exclusive end date', () => {
+    const ics = renderInviteIcs({ ...args, startDate: '2026-12-30', endDate: '2026-12-31' });
+    assert.ok(ics.includes('DTEND;VALUE=DATE:20270101'));
+  });
+
+  it('holds the invite URL and no owner, member or user id', () => {
+    // Unfold first so a folded line cannot hide or split a string.
+    const ics = renderInviteIcs(args).replace(/\r\n /g, '');
+    assert.ok(ics.includes('DESCRIPTION:Crew invite to Bass Gang on Festie: https://festie.us/join/ABC123'));
+    for (const leak of ['Ana Lopez', 'Ben Ortiz', 'ana', 'ben', 'u-1', 'u-2']) {
+      assert.ok(!ics.includes(leak), `ICS leaks ${leak}`);
+    }
+    assert.ok(!/u-\d/.test(ics));
+  });
+
+  it('escapes commas and semicolons in the crew name', () => {
+    const ics = renderInviteIcs({ ...args, crewName: 'Bass, Gang; Crew' }).replace(/\r\n /g, '');
+    assert.ok(ics.includes('Crew invite to Bass\\, Gang\\; Crew on Festie'));
+  });
+
+  it('falls back to generic names without a festival name', () => {
+    const ics = renderInviteIcs({ ...args, festivalName: null });
+    assert.ok(ics.includes('SUMMARY:Festival'));
+    assert.ok(ics.includes('X-WR-CALNAME:Festie'));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -153,6 +257,12 @@ describe('invite-pages: renderInviteErrorPage', () => {
   it('contains the error title', () => {
     const html = renderInviteErrorPage('https://festie.us', INVITE_ERROR_MESSAGES.invalid);
     assert.ok(html.includes("<title>This invite doesn't work</title>"));
+  });
+
+  it('has the locked message', () => {
+    assert.equal(INVITE_ERROR_MESSAGES.locked, "This crew isn't taking new members.");
+    const html = renderInviteErrorPage('https://festie.us', INVITE_ERROR_MESSAGES.locked);
+    assert.ok(html.includes('This crew isn&#39;t taking new members.'));
   });
 
   it('contains the escaped error message', () => {

@@ -24,6 +24,13 @@ function currentUserId(): string | null {
   return useAuthStore.getState().user?.id ?? null;
 }
 
+/** The crew's name from the crew list or the open crew, read before teardown. */
+function readCrewName(crewId: string): string | null {
+  const { crews, activeCrew } = useCrewStore.getState();
+  const crew = crews.find((c) => c.id === crewId) ?? (activeCrew?.id === crewId ? activeCrew : null);
+  return crew?.name ?? null;
+}
+
 /**
  * The current user lost access to `crewId` (kicked, removed by an admin, or
  * the crew was revoked). Drop it from the crew list and, when it is the open
@@ -52,6 +59,7 @@ export function applyCrewAccessRevoked(crewId: string): void {
       expenseBalances: [],
       settlements: [],
       activity: [],
+      activityNextCursor: null,
       crewOverlap: {},
       _cachedAt: null,
       _cachedCrewId: null,
@@ -68,13 +76,17 @@ export function applyCrewAccessRevoked(crewId: string): void {
  * A member was kicked from `crewId`. Self -> full access teardown; anyone else
  * -> drop that one roster row (only for the crew that is actually open, since
  * `crewMembers` holds the active crew's roster).
+ *
+ * Returns the crew name when the kicked user is me (so the caller can show a
+ * notice), else null.
  */
-export function applyCrewMemberKicked(crewId: string, userId: string): void {
-  if (!crewId || !userId) return;
+export function applyCrewMemberKicked(crewId: string, userId: string): { crewName: string | null } | null {
+  if (!crewId || !userId) return null;
   const me = currentUserId();
   if (me && userId === me) {
+    const crewName = readCrewName(crewId);
     applyCrewAccessRevoked(crewId);
-    return;
+    return { crewName };
   }
   useCrewStore.setState((state) => {
     if (state.activeCrew?.id !== crewId) return {};
@@ -86,6 +98,19 @@ export function applyCrewMemberKicked(crewId: string, userId: string): void {
       },
     };
   });
+  return null;
+}
+
+/**
+ * The crew was deleted. Tear down local access like a revocation. Returns the
+ * crew name for a notice unless the deleter is me (I already know).
+ */
+export function applyCrewDeleted(crewId: string, deletedBy?: string): { crewName: string | null } | null {
+  if (!crewId) return null;
+  const crewName = readCrewName(crewId);
+  applyCrewAccessRevoked(crewId);
+  const me = currentUserId();
+  return deletedBy && me && deletedBy === me ? null : { crewName };
 }
 
 /**

@@ -14,13 +14,16 @@ import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
 import IOSInstallSheet from '../features/IOSInstallSheet';
+import NowNextStrip from '../features/NowNextStrip';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
+import AnnouncementBanner from '../features/AnnouncementBanner';
 import LiveLocationSharing from '../crew/LiveLocationSharing';
 import Onboarding from '../features/Onboarding';
 import JoinCrewSheet from '../crew/JoinCrewSheet';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { useInboxRefresh } from '../../hooks/useInboxRefresh';
 import { usePushLanding } from '../../hooks/usePushLanding';
 import { useScrollReset } from '../../hooks/useScrollReset';
 import { useOfflineQueueBridge } from '../../hooks/useOfflineQueueBridge';
@@ -30,7 +33,7 @@ import { prefetchMainRoutes } from '../../router';
 import { cn } from '../../lib/utils';
 import { SocketContext } from '../../lib/socketContext';
 
-const authRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
+const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password'];
 
 // Centered branded loader for lazy-route chunk loads. Replaces the bare
 // "Loading..." text the Suspense boundaries used to fall back to.
@@ -52,10 +55,11 @@ function RouteFallback() {
 const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan', '/festival-mode'];
 
 // Routes that keep ONLY the day toggle (Sat/Sun).
-const dayOnlySubHeaderRoutes = ['/timeline', '/grid', '/picks', '/compare'];
+// /picks has its own filters (T20); /grid gets the full schedule filters (T17).
+const dayOnlySubHeaderRoutes = ['/compare'];
 
 // Routes that keep ONLY the festival selector.
-const festivalOnlySubHeaderRoutes = ['/wrap'];
+const festivalOnlySubHeaderRoutes = ['/wrap', '/picks'];
 
 export default function AppShell() {
   const location = useLocation();
@@ -84,6 +88,7 @@ export default function AppShell() {
   const socket = realtime?.socket ?? null;
   useOffline();
   usePushNotifications();
+  useInboxRefresh();
   usePushLanding();
   useOfflineQueueBridge();
   const { pendingJoinCode, clearPendingJoin } = useFestivalLoader();
@@ -161,6 +166,7 @@ export default function AppShell() {
         {joinCrewSheet}
         <Header />
         <SosBanner />
+        <AnnouncementBanner />
         <LiveLocationSharing />
 
         {showDayBanner && <FestivalDayBanner />}
@@ -168,6 +174,7 @@ export default function AppShell() {
         <div className="main-content flex flex-1 overflow-hidden flex-col">
           {!hideSubHeader && <SubHeader dayOnly={dayOnlySubHeader} festivalOnly={festivalOnlySubHeader} />}
           {isSchedulePath(location.pathname) && <ScheduleViewSwitcher />}
+          {isSchedulePath(location.pathname) && <NowNextStrip />}
 
           <main
             id="main-content"

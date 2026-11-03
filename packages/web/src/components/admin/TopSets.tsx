@@ -3,6 +3,8 @@ import React from 'react';
 interface TopSet {
   artist: string;
   pickCount: number;
+  festivalName?: string;
+  dayLabel?: string | null;
 }
 
 export interface TopSetsProps {
@@ -17,13 +19,18 @@ export default function TopSets({ sets, maxPicks }: TopSetsProps) {
 
   return (
     <div>
-      <h2 className="type-heading text-text-primary mb-4">Top Picked Sets</h2>
+      <h2 className="type-heading text-text-primary mb-4">Most-picked sets (top 20)</h2>
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
-        {sets.slice(0, 15).map((s, i) => (
+        {sets.map((s, i) => (
           <div key={`${s.artist}-${i}`} className="flex items-center gap-3">
             <div className="text-sm font-bold text-text-muted min-w-6">{i + 1}</div>
             <div className="flex-1 min-w-0">
               <div className="text-sm text-text-primary mb-1 truncate">{s.artist}</div>
+              {s.festivalName && (
+                <div className="text-xs text-text-muted mb-1 truncate">
+                  {s.dayLabel ? `${s.festivalName} · ${s.dayLabel}` : s.festivalName}
+                </div>
+              )}
               <div className="h-2 rounded-full bg-bg-primary/30 overflow-hidden">
                 <div
                   style={{ transform: `scaleX(${max > 0 ? s.pickCount / max : 0})` }}

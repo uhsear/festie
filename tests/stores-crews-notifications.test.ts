@@ -551,6 +551,21 @@ describe('createCrewsStore — meetingPoints', () => {
     ]);
   });
 
+  it('listRecentlyExpired queries swept one-shot points from the last 12 hours', async () => {
+    const pool = mockPool([{ rows: [{ id: 'mp1' }] }]);
+    const { meetingPoints } = createCrewsStore(pool, mockUtils);
+
+    const result = await meetingPoints.listRecentlyExpired('c1');
+
+    assert.deepStrictEqual(result, [{ id: 'mp1' }]);
+    assert.deepStrictEqual(pool.queries[0].params, ['c1']);
+    const sql = norm(pool.queries[0].sql);
+    assert.ok(sql.includes('mp.active = FALSE'));
+    assert.ok(sql.includes('recurs_daily IS NOT TRUE'));
+    assert.ok(sql.includes("INTERVAL '12 hours'"));
+    assert.ok(sql.includes('mp.updated_at >= mp.expires_at'));
+  });
+
   it('create uses defaults for optional fields', async () => {
     const mp = { id: 'mp1', crewId: 'c1', createdBy: 'u1', label: 'X', location: 'Y' };
     const pool = mockPool([{ rows: [] }, { rows: [{ id: 'mp1' }] }]);
@@ -885,7 +900,7 @@ describe('createNotificationsStore — deviceTokens', () => {
     assert.deepStrictEqual(await deviceTokens.listByUsers(undefined as any), []);
   });
 
-  it('listByUsers builds IN clause for multiple ids', async () => {
+  it('listByUsers passes every id as one array parameter', async () => {
     const pool = mockPool([
       {
         rows: [{ id: 'dt1', userId: 'u1', token: 't1', platform: 'ios' }],
@@ -896,10 +911,9 @@ describe('createNotificationsStore — deviceTokens', () => {
     const result = await deviceTokens.listByUsers(['u1', 'u2', 'u3']);
 
     assert.strictEqual(result.length, 1);
-    assert.ok(pool.queries[0].sql.includes('$1'));
-    assert.ok(pool.queries[0].sql.includes('$2'));
-    assert.ok(pool.queries[0].sql.includes('$3'));
-    assert.deepStrictEqual(pool.queries[0].params, ['u1', 'u2', 'u3']);
+    assert.ok(pool.queries[0].sql.includes('user_id = ANY($1)'));
+    assert.ok(!pool.queries[0].sql.includes('$2'));
+    assert.deepStrictEqual(pool.queries[0].params, [['u1', 'u2', 'u3']]);
   });
 
   it('deleteByUser removes all tokens for user', async () => {
@@ -1111,6 +1125,31 @@ describe('createNotificationsStore — notificationLog', () => {
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 10]);
   });
 
+  it('countRecentPushes passes user ids and exempt types and maps counts by user', async () => {
+    const pool = mockPool([{ rows: [{ userId: 'u1', n: 6 }, { userId: 'u2', n: 1 }] }]);
+    const { notificationLog } = createNotificationsStore(pool, mockUtils);
+
+    const counts = await notificationLog.countRecentPushes(['u1', 'u2', 'u3'], ['crew_sos', 'set_reminder']);
+
+    const sql = norm(pool.queries[0].sql);
+    assert.ok(sql.includes("platform = 'inbox'"));
+    assert.ok(sql.includes("status = 'inbox'"));
+    assert.deepStrictEqual(pool.queries[0].params, [['u1', 'u2', 'u3'], ['crew_sos', 'set_reminder']]);
+    assert.strictEqual(counts.get('u1'), 6);
+    assert.strictEqual(counts.get('u2'), 1);
+    assert.strictEqual(counts.has('u3'), false);
+  });
+
+  it('countRecentPushes returns an empty map for no user ids without a query', async () => {
+    const pool = mockPool([]);
+    const { notificationLog } = createNotificationsStore(pool, mockUtils);
+
+    const counts = await notificationLog.countRecentPushes([], ['crew_sos']);
+
+    assert.strictEqual(counts.size, 0);
+    assert.strictEqual(pool.queries.length, 0);
+  });
+
   it('updateStatus sets status and delivered_at', async () => {
     const pool = mockPool([]);
     const { notificationLog } = createNotificationsStore(pool, mockUtils);
@@ -1199,13 +1238,15 @@ describe('createRatingsStore', () => {
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 's1', 5, 'Great!']);
   });
 
-  it('upsert defaults note to empty string', async () => {
+  it('upsert without a note passes null so the stored note is kept (a first rating stores empty)', async () => {
     const pool = mockPool([{ rows: [{ id: 'r1' }] }]);
     const store = createRatingsStore(pool);
 
     await store.upsert('u1', 's1', 4);
 
-    assert.strictEqual(pool.queries[0].params[3], '');
+    assert.strictEqual(pool.queries[0].params[3], null);
+    assert.ok(pool.queries[0].sql.includes("COALESCE($4, '')"));
+    assert.ok(pool.queries[0].sql.includes('WHEN $4::text IS NULL THEN set_ratings.note'));
   });
 
   it('upsert returns undefined when no RETURNING row', async () => {

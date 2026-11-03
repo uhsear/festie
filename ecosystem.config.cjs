@@ -39,6 +39,9 @@ module.exports = {
     // restart, by name or by config file. Only `pm2 delete` + `pm2 start` does.
     script: 'dist/server.js',
     interpreter: 'node',
+    // Load Sentry before express so its hooks instrument it (lib/instrument.ts, T59).
+    // Like `script`, a change here needs `pm2 delete` + `pm2 start` to apply.
+    node_args: ['--import', './dist/instrument.js'],
 
     exec_mode: 'fork',
     // Stays 1. Bundling did NOT unblock cluster mode: lib/email.ts send-idempotency

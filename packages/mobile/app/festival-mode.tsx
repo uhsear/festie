@@ -1,17 +1,29 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, Stack } from 'expo-router';
 import { useAuthStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
 import type { FestivalSet } from '@festie/shared/types';
-import { festivalTimeLabel, fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
+import {
+  festivalTimeLabel,
+  fmtZonedClock,
+  isFixRecent,
+  resolveFestivalTimeZone,
+  selectNowNext,
+  stageCoord,
+  walkToStage,
+} from '@festie/shared/utils';
 import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
+import { useLastKnownFix } from '../hooks/useLastKnownFix';
 import EmptyState from '../components/EmptyState';
 import FreshnessChip from '../components/FreshnessChip';
+import OfflineStatusChip from '../components/OfflineStatusChip';
+import WeatherStrip from '../components/WeatherStrip';
+import CaughtNowCard from '../components/CaughtNowCard';
 import { DaylightToggle, LowPowerToggle, LowPowerIndicator } from '../components/LowPowerControls';
-import { CrewNow, CrewPrompt, MeetNow, NowHero, UpNext } from '../components/NowSurface';
+import { CrewNow, CrewPrompt, CrewWrapUp, MeetNow, NowHero, UpNext } from '../components/NowSurface';
 import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref } from '../lib/dayOfRoutes';
 
 /**
@@ -35,6 +47,7 @@ export default function FestivalModeScreen() {
   const days = useFestivalDataStore((s) => s.days);
   const picks = useFestivalDataStore((s) => s.currentProfile?.picks);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  const expenseBalances = useCrewStore((s) => s.expenseBalances);
   const { getStageName } = useFestival();
   const nowMs = useNow(60_000);
 
@@ -44,7 +57,22 @@ export default function FestivalModeScreen() {
     () => selectNowNext({ sets, days, picks: lineupMode ? undefined : (picks ?? {}), nowMs, timeZone }),
     [sets, days, picks, lineupMode, nowMs, timeZone],
   );
+  const stages = useFestivalDataStore((s) => s.stages);
+  const fix = useLastKnownFix();
+  const next = selection.upcoming[0];
+  const walk =
+    next && isFixRecent(fix.at, nowMs)
+      ? walkToStage(fix.coord, stageCoord(stages, next.set.stageId), next.start, nowMs)
+      : null;
   const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
+  const after = selection.phase === 'after';
+  const crewId = crew?.id;
+  const balance = expenseBalances.find((b) => b.userId === user?.id)?.balance ?? 0;
+
+  // The wrap-up card shows my balance, so refresh it once the festival is over.
+  useEffect(() => {
+    if (after && crewId) useCrewStore.getState().loadExpenses(crewId).catch(() => {});
+  }, [after, crewId]);
 
   // Native tabs can leave this pushed stack screen without an Android history
   // entry. Always return hardware Back to Schedule instead of exiting the app.
@@ -93,6 +121,7 @@ export default function FestivalModeScreen() {
           </View>
           <View style={styles.metaRow}>
             <FreshnessChip surface="schedule" />
+            {user ? <OfflineStatusChip /> : null}
             <LowPowerIndicator />
           </View>
 
@@ -106,7 +135,21 @@ export default function FestivalModeScreen() {
             onOpenSet={openSet}
             onBrowse={() => router.navigate(SCHEDULE_HREF)}
             onWrap={user ? () => router.push('/wrap') : undefined}
+            walk={walk}
           />
+
+          <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
+
+          {user ? (
+            <CaughtNowCard
+              key={currentFestival.id}
+              festivalId={currentFestival.id}
+              nowMs={nowMs}
+              timeZone={timeZone}
+              getStageName={getStageName}
+              b2bSeparator={currentFestival.b2bSeparator}
+            />
+          ) : null}
 
           {!user ? (
             <CrewPrompt
@@ -114,6 +157,13 @@ export default function FestivalModeScreen() {
               body="Sign in to see where your friends are and where you're meeting."
               cta="Sign in"
               onPress={() => router.push('/(auth)/login')}
+            />
+          ) : after && crew ? (
+            <CrewWrapUp
+              crewName={crew.name}
+              balance={balance}
+              onSettle={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'money' } })}
+              onReform={() => router.push({ pathname: '/(tabs)/crew', params: { tab: 'members' } })}
             />
           ) : crew ? (
             <>

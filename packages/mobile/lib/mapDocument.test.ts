@@ -91,6 +91,50 @@ describe('map document theme', () => {
   });
 });
 
+describe('map document place taps and camera padding', () => {
+  const html = VARIANTS[0]![1];
+  const body = (name: string) => {
+    const start = html.indexOf(`function ${name}(`);
+    return html.slice(start, html.indexOf('\n    function ', start + 1));
+  };
+
+  it('posts place-select and pads every fit with FIT_PADDING', () => {
+    expect(html).toContain('place-select');
+    expect(html).toContain('var FIT_PADDING =');
+    expect(html).not.toContain('padding: 48');
+    expect(html).not.toContain('padding: 64');
+  });
+
+  // The RN place card replaces the popup. A place tap stops propagation only while
+  // PLACE_TAPS is on, so placement and authoring still reach map.on('click') on a pin.
+  it('posts place-select from place markers behind PLACE_TAPS, with no popup', () => {
+    expect(body('renderPins')).toContain("kind: 'meeting-point'");
+    for (const name of ['renderPins', 'renderMapData']) {
+      expect(body(name)).toContain('place-select');
+      expect(body(name)).toContain('if (!PLACE_TAPS) return;');
+      expect(body(name)).toContain('stopPropagation');
+      expect(body(name)).not.toContain('setPopup');
+    }
+  });
+
+  it('keeps pursue-select and the popup on live markers', () => {
+    expect(body('renderLive')).toContain("type: 'pursue-select'");
+    expect(body('renderLive')).toContain('setPopup');
+  });
+
+  it('keeps PLACE_TAPS in step with placement and authoring', () => {
+    expect(html).toContain('var PLACE_TAPS = true;');
+    const setter = (name: string) => {
+      const start = html.indexOf(`window.${name} = function`);
+      return html.slice(start, html.indexOf('\n        };', start));
+    };
+    expect(setter('__festieSetPlacement')).toContain("PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';");
+    expect(setter('__festieSetAuthoring')).toContain("PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';");
+    const click = html.slice(html.indexOf("map.on('click'"), html.indexOf('window.__festieFlyTo'));
+    expect(click).toContain("PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';");
+  });
+});
+
 describe('map document CSP', () => {
   for (const [name, html] of VARIANTS) {
     it(`allows no unpkg.com origin in any directive (${name})`, () => {

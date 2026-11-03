@@ -33,6 +33,8 @@ interface ApiOptions {
   _bypassOfflineQueue?: boolean;
   /** Return the whole `{ data, meta }` body instead of unwrapping `data`. */
   _envelope?: boolean;
+  /** Return the response body as text instead of parsing JSON (e.g. the HTML export). */
+  asText?: boolean;
 }
 
 let _apiBase = API_BASE;
@@ -112,8 +114,14 @@ const OFFLINE_ELIGIBLE_PATTERNS: RegExp[] = [
   // (status-<crewId>-<userId>) collapses repeated offline toggles into the
   // latest, replay-safe write — captured offline, delivered on a signal blip.
   /^\/crews\/[^/]+\/status(\/|$)/,
-  // DELIBERATELY ABSENT: /crews/:id/sos and /sos/clear. An SOS must be
-  // ONLINE-ONLY. Queuing it would let a "rescue" replay hours later when signal
+  // T43: my per-day attendance answers. PUT replaces my full set, so a replay is safe.
+  /^\/crews\/[^/]+\/days(\/|$)/,
+  // Saw it / Skipped marks: PUT /ratings/:setId/caught with clientId caught-<userId>-<setId>.
+  /^\/ratings\/[^/]+\/caught$/,
+  // DELIBERATELY ABSENT: /crews/:id/sos, /sos/clear, /sos/seen and
+  // /crews/:id/checkin (start and done), and /crews/:id/live-location (a queued
+  // fix would replay a stale position hours later). An SOS must be ONLINE-ONLY, and so
+  // must a check-in timer. Queuing it would let a "rescue" replay hours later when signal
   // returns — dangerous and misleading. The safe failure here is to TELL the
   // user ("No signal — SOS not sent, use phone/radio"), not to silently queue.
   // These paths match none of the patterns above, so they already fall through
@@ -235,7 +243,14 @@ async function maybeQueueOffline<T>(path: string, method: string, options: ApiOp
   }
   if (!offline) return NOT_QUEUED;
 
-  return enqueueOfflineMutation<T>(path, method, options);
+  try {
+    return await enqueueOfflineMutation<T>(path, method, options);
+  } catch (err) {
+    // A storage failure must not escape raw: send online instead. Offline, that
+    // fetch fails and surfaces the normal network error callers already map.
+    console.warn('offline enqueue failed; sending online', err);
+    return NOT_QUEUED;
+  }
 }
 
 export class ApiClientError extends Error implements ApiError {
@@ -267,7 +282,7 @@ export class ApiClientError extends Error implements ApiError {
 
 // Error-classification helpers live in ./errors (type-only dependency on this
 // module) so store tests that mock '../services/api' don't clobber them.
-export { isApiClientError, parseRetryAfterMs, mapErrorToUserMessage, isResetLinkExpired } from './errors';
+export { isApiClientError, parseRetryAfterMs, mapErrorToUserMessage, isResetLinkExpired, isPasswordIncorrect } from './errors';
 
 async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = false): Promise<T> {
   const method = String(options.method || 'GET').toUpperCase();
@@ -316,10 +331,11 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const { asText, ...fetchOptions } = options;
     const response = await fetch(`${_apiBase}${path}`, {
       credentials: _authMode === 'cookie' ? 'same-origin' : 'omit',
       signal: controller.signal,
-      ...options,
+      ...fetchOptions,
       method,
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -355,6 +371,8 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
     // Reachability confirmed (from the network) — recover from a prior
     // false-offline and drain. Guards inside reject cached/offline false 200s.
     markOnlineAndDrain(path);
+
+    if (asText) return (await response.text()) as T;
 
     const body = await response.json();
     if (options._envelope) return body as T;

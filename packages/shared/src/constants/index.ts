@@ -3,4 +3,10 @@ export * from './authCopy';
 // PRIORITY_WEIGHT lives in utils/crewNudges but is also available here so
 // consumers can import everything pick-priority-related from one subpath.
 export { PRIORITY_WEIGHT } from '../utils/crewNudges';
+export * from './copy';
+export * from './accountSettings';
+export * from './accountCopy';
+export * from './announcementCopy';
+export * from './providerCopy';
+export * from './inboxCopy';
 export * from './privacyCopy';

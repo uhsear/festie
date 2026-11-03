@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { getStorage } from '../platform/storage';
 import { api } from '../services/api';
 import { mapErrorToUserMessage } from '../services/errors';
-import { INBOX_COPY } from '../constants/privacyCopy';
+import { INBOX_COPY } from '../constants/inboxCopy';
 
 export interface InboxItem {
   id: string;
@@ -15,6 +15,9 @@ export interface InboxItem {
 }
 
 export const INBOX_LIMIT = 50;
+
+/** Seen-marker for an empty first load: a fast device clock must not hide later items. */
+const EPOCH_ISO = '1970-01-01T00:00:00.000Z';
 
 export interface InboxState {
   items: InboxItem[];
@@ -36,6 +39,8 @@ export function selectInboxUnread(s: { items: InboxItem[]; seenAt: string | null
   return s.items.filter((item) => isInboxItemUnread(item, s.seenAt)).length;
 }
 
+let inFlight: Promise<void> | null = null;
+
 export const useInboxStore = create<InboxState>()(
   persist(
     (set, get) => ({
@@ -45,17 +50,24 @@ export const useInboxStore = create<InboxState>()(
       loading: false,
       error: null,
 
-      load: async () => {
-        if (get().loading) return;
+      load: () => {
+        // A caller that awaits load() then markAllSeen() must see the running request's items.
+        if (get().loading && inFlight) return inFlight;
         set({ loading: true });
-        try {
-          const items = await api.get<InboxItem[]>(`/notifications/history?limit=${INBOX_LIMIT}`);
-          // First load starts from "all seen" so nobody opens to a badge of 50.
-          const seenAt = get().seenAt ?? items[0]?.createdAt ?? new Date().toISOString();
-          set({ items, seenAt, loaded: true, loading: false, error: null });
-        } catch (err) {
-          set({ loading: false, error: mapErrorToUserMessage(err, INBOX_COPY.error) });
-        }
+        const request = (async () => {
+          try {
+            const items = await api.get<InboxItem[]>(`/notifications/history?limit=${INBOX_LIMIT}`);
+            // First load starts from "all seen" so nobody opens to a badge of 50.
+            const seenAt = get().seenAt ?? items[0]?.createdAt ?? EPOCH_ISO;
+            set({ items, seenAt, loaded: true, loading: false, error: null });
+          } catch (err) {
+            set({ loading: false, error: mapErrorToUserMessage(err, INBOX_COPY.error) });
+          }
+        })().finally(() => {
+          if (inFlight === request) inFlight = null;
+        });
+        inFlight = request;
+        return request;
       },
 
       markAllSeen: async () => {

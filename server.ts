@@ -85,20 +85,17 @@ validateStartupConfig(_bootConfig);
 // Sentry. Position of this call is NOT what it looks like: this package is
 // "type": "module", so every import in this file is hoisted and evaluated
 // before any statement here runs. initSentry() therefore always runs AFTER
-// express has been imported, and Sentry logs on every boot:
-//   [Sentry] express is not instrumented …
+// express has been imported. @sentry/node 11 injects its tracing channels only
+// into modules that load after Sentry.init, so this call alone records no
+// Express spans. Error capture still works: setupExpressErrorHandler (below) is
+// a plain express error middleware.
 //
-// Measured 2026-08-18, so nobody re-derives it:
-//   * Error capture still WORKS. setupExpressErrorHandler (see below) is a plain
-//     express error middleware; a probe confirmed both route exceptions and
-//     direct captureException produce events. Sentry is NOT blind.
-//   * What is missing is the OpenTelemetry layer: tracing spans and per-request
-//     isolation/context on those events.
-//   * Sentry's documented ESM fix is `node --import ./instrument.mjs`. Both
-//     moving init into an early-imported module AND `tsx --import ./instrument.ts`
-//     were tried and neither silenced the warning — tsx installs its own ESM
-//     loader, which appears to defeat Sentry's import-in-the-middle hooks. Do not
-//     re-attempt either without new evidence; the blocker is tsx, not ordering.
+// Production runs the esbuild bundle (dist/server.js) under plain node, not tsx.
+// When PM2 passes `--import ./dist/instrument.js`, that preload initializes
+// Sentry before express loads and Express tracing works. Without it, the call
+// below is the fallback and behaves as before. initSentry is idempotent across
+// the two bundles: this copy adopts the preload's client instead of calling
+// Sentry.init again. tests/sentry-preload.test.ts proves both cases.
 import { initSentry, sentry } from './lib/sentry';
 initSentry({ release: _bootConfig.APP_VERSION || 'dev' });
 
@@ -108,6 +105,11 @@ import { configureSocketIO } from './lib/socket-setup';
 import { createBackgroundTasks, createCloseHandler } from './lib/shutdown';
 import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
+import { createCrewNotifier } from './lib/notifications/crew-notify';
+import { createPollCloser } from './lib/poll-close';
+import { createSosRaiser } from './lib/sos-raise';
+import { createCheckinScheduler } from './lib/checkin';
+import { createAnnouncer } from './lib/announcements';
 import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
 import createPageRoutes from './routes/pages';
@@ -123,16 +125,22 @@ import {
 import express from 'express';
 import createAuthRoutes from './routes/auth';
 import createEmailAuthRoutes from './routes/email-auth';
+import createOAuthRoutes from './routes/oauth';
+import createIdentityRoutes from './routes/identities';
 import createAccountRoutes from './routes/account';
 import createAdminRoutes from './routes/admin';
+import createAdminSiteplanRoutes from './routes/admin-siteplan';
 import createFestivalRoutes from './routes/festivals';
 import createProfileRoutes from './routes/profiles';
 import createExportRoutes from './routes/export';
 import createNotificationRoutes from './routes/notifications';
 import createCrewRoutes from './routes/crews';
 import createLineupImportRoutes from './routes/lineup-import';
+import createLineupAnnounceRoutes from './routes/lineup-announce';
+import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from './routes/festival-announcements';
 import createShareRoutes from './routes/share';
 import { createRatingsRoutes } from './routes/ratings';
+import { createFestivalDiscoveryRoutes } from './routes/festival-discovery';
 import { createWeatherRoutes } from './routes/weather';
 import createExpenseRoutes from './routes/expenses';
 import createActivityRoutes from './routes/activity';
@@ -220,6 +228,7 @@ async function createFestieApp(overrides: any = {}) {
   }
   const reengagement = reengagementQueue || reengagementExecutor;
   deps.reengagement = reengagement;
+  deps.reengagementExecutor = reengagementExecutor;
   ctx.reengagement = reengagement; // also exposed to background tasks (wrap_ready sweep)
   ctx.reengagementQueue = reengagementQueue; // for graceful shutdown
   ctx.reengagementExecutor = reengagementExecutor; // inline path for the shutdown sweep
@@ -234,20 +243,52 @@ async function createFestieApp(overrides: any = {}) {
   });
   ctx.reminderScheduler = reminderScheduler;
   deps.emitter = emitter;
+  const crewNotify = createCrewNotifier({ stores: ctx.stores, notificationService, log });
+  const pollCloser = createPollCloser({
+    stores: ctx.stores,
+    io,
+    emitter,
+    crewNotify,
+    createOpaqueId: ctx.createOpaqueId,
+    log,
+  });
+  deps.crewNotify = crewNotify;
+  ctx.crewNotify = crewNotify;
+  deps.pollCloser = pollCloser;
+  ctx.pollCloser = pollCloser;
+  // Check-in timers: a missed timer raises an SOS through the same code as POST /sos.
+  const sosRaiser = createSosRaiser(deps);
+  ctx.checkinScheduler = createCheckinScheduler({
+    redis,
+    stores: ctx.stores,
+    raiser: sosRaiser,
+    notificationService,
+    log,
+    config,
+  });
+  const announcer = createAnnouncer({ stores: ctx.stores, notificationService, config, log });
+  deps.announcer = announcer;
+  ctx.announcer = announcer;
   // Venue geocoding (OpenStreetMap Nominatim). Off under test so suites make no network calls.
   if (config.NODE_ENV !== 'test') deps.geocodeVenue = createVenueGeocoder({ log }).geocodeVenue;
 
   // 5. Mount route modules
   const authRoutes = createAuthRoutes(deps);
   const emailAuthRoutes = createEmailAuthRoutes(deps);
+  const oauthRoutes = createOAuthRoutes(deps);
+  const identityRoutes = createIdentityRoutes(deps);
   const accountRoutes = createAccountRoutes(deps);
   const adminRoutes = createAdminRoutes(deps);
   const festivalRoutes = createFestivalRoutes(deps);
+  const festivalDiscoveryRoutes = createFestivalDiscoveryRoutes(deps);
   const profileRoutes = createProfileRoutes(deps);
   const exportRoutes = createExportRoutes(deps);
   const notificationRoutes = createNotificationRoutes(deps);
   const crewRoutes = createCrewRoutes(deps);
   const lineupImportRoutes = createLineupImportRoutes(deps);
+  const lineupAnnounceRoutes = createLineupAnnounceRoutes(deps);
+  const adminAnnouncementRoutes = createAdminAnnouncementRoutes(deps);
+  const publicAnnouncementRoutes = createPublicAnnouncementRoutes(deps);
   const shareRoutes = createShareRoutes(deps);
   const ratingsRoutes = createRatingsRoutes(deps);
   const weatherRoutes = createWeatherRoutes(deps);
@@ -264,10 +305,17 @@ async function createFestieApp(overrides: any = {}) {
 
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1/auth', emailAuthRoutes);
+  app.use('/api/v1/auth', oauthRoutes);
+  app.use('/api/v1/auth', identityRoutes);
   app.use('/api/v1/account', accountRoutes);
   app.use('/api/v1/admin', adminRoutes);
+  app.use('/api/v1/admin', createAdminSiteplanRoutes(deps));
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
+  app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);
+  app.use('/api/v1/festivals', festivalDiscoveryRoutes);
+  app.use('/api/v1/admin/festivals', deps.adminAuth, adminAnnouncementRoutes);
+  app.use('/api/v1/festivals', publicAnnouncementRoutes);
   app.use('/api/v1/festivals', festivalRoutes);
   app.use('/api/v1/profiles', profileRoutes);
   app.use('/api/v1', exportRoutes);
@@ -328,6 +376,7 @@ async function createFestieApp(overrides: any = {}) {
     const status = error.status || error.statusCode || 500;
 
     if (status >= 500) {
+      metrics.errorCounter?.inc({ kind: 'http_5xx' });
       const fingerprint = `${status}:${error.message || 'unknown'}`;
       const existing = _errorFingerprints.get(fingerprint);
       if (existing) {
@@ -361,8 +410,9 @@ async function createFestieApp(overrides: any = {}) {
           reqId: (req as any).id,
           traceId: (req as any).traceId,
           status,
+          // First occurrence of each 5xx fingerprint carries its stack in every environment.
+          stack: error.stack,
         };
-        if (config.NODE_ENV !== 'production') meta.stack = error.stack;
         log.error('unhandled request error', meta);
       }
     } else {
@@ -456,6 +506,7 @@ async function createFestieApp(overrides: any = {}) {
     redis,
     cacheBus,
     emitter,
+    crewNotify,
     clearPresenceTimers: ctx.clearPresenceTimers,
     avatarPool,
     inFlightRequests,

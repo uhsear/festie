@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-import { test, expect, DEFAULT_PASSWORD } from './fixtures.js';
+import { test, expect, DEFAULT_PASSWORD, FIXTURE_NOW, signIn } from './fixtures.js';
 
 const viewports = [
   { name: 'iphone-se', width: 320, height: 568 },
@@ -13,29 +13,31 @@ const viewports = [
 async function gotoSchedule(
   page: Page,
   app: { baseUrl: string },
-  route: '/cards' | '/timeline' = '/cards',
+  route: '/cards' | '/grid' = '/cards',
 ) {
   // The suite verifies settled layout, not entrance-animation keyframes. This
   // also avoids Chromium's screenshot animation fast-forward leaving
   // content-visibility/staggered cards in an unpainted first frame.
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  // The page fixture already starts the clock before the June fixture dates; freeze it
+  // there so time-driven chrome renders the same in every screenshot.
+  await page.clock.setFixedTime(FIXTURE_NOW);
   await page.goto(`${app.baseUrl}${route}`);
   await expect(page.locator('#app')).toBeVisible();
-  await expect(page.locator('[data-testid="festival-select"]')).toHaveValue('fest-1');
+  await expect(page.locator('[data-testid="festival-select"]')).toHaveAttribute('data-festival-id', 'fest-1');
 
   if (route === '/cards') {
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
   } else {
-    await expect(page.getByRole('region', { name: 'Timeline view' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Schedule grid' })).toBeVisible();
   }
 
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
   // Give Chromium two painted frames after lazy route/content-visibility work.
-  // Without this, the 320px timeline intermittently captures blank chrome.
+  // Without this, the 320px grid intermittently captures blank chrome.
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   );
-  await page.waitForTimeout(100);
 }
 
 async function createJoinedUser(page: Page, app: { baseUrl: string }) {
@@ -59,19 +61,15 @@ async function createJoinedUser(page: Page, app: { baseUrl: string }) {
   });
   expect(join.ok(), `festival join failed (${join.status()})`).toBe(true);
 
-  // APIRequestContext shares cookies with the page, but the app's in-memory
-  // auth store still starts as a guest. Sign in through the UI so this test
-  // exercises the same profile-loading path that exposes pick controls.
-  await page.goto(`${app.baseUrl}/login`);
-  await page.getByLabel('Username').fill(username);
-  await page.getByLabel('Password', { exact: true }).fill(DEFAULT_PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/cards$/);
+  // The registration cookie would make /login redirect a signed-in user away, so
+  // signIn clears it and signs in through the form. This exercises the same
+  // profile-loading path that exposes pick controls.
+  await signIn(page, app, username);
 }
 
 async function expectViewportScreenshot(page: Page, name: string) {
   // toHaveScreenshot's animation fast-forward drops composited chrome on the
-  // Timeline route. The page already emulates reduced motion, so compare a raw
+  // grid route. The page already emulates reduced motion, so compare a raw
   // settled viewport capture and keep the same snapshot/update workflow.
   const image = await page.screenshot({ animations: 'allow', fullPage: false });
   expect(image).toMatchSnapshot(name, { maxDiffPixelRatio: 0.05 });
@@ -108,6 +106,19 @@ test.describe('responsive design', () => {
       expect(overflow).toBe(false);
     });
   }
+
+  test('grid fits two stages without sideways scroll at 390px', async ({ app, page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoSchedule(page, app, '/grid');
+
+    // Fixture day 1 has two stages, and the phone grid shows two columns at a time.
+    const scroller = page.getByRole('region', { name: 'Schedule grid' });
+    const { scrollWidth, clientWidth } = await scroller.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+  });
 
   test('header stays above scrolled content', async ({ app, page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -149,9 +160,15 @@ test.describe('responsive design', () => {
     await expect(drawer).toBeVisible();
     expect(await drawer.evaluate((el) => getComputedStyle(el, '::after').display)).toBe('none');
 
+    // Visible fires on the first frame, while vaul can still hold the panel at its off-screen start.
+    await expect
+      .poll(async () => {
+        const b = await drawer.boundingBox();
+        return b && Math.round(b.x + b.width);
+      })
+      .toBe(1440);
     const box = await drawer.boundingBox();
     expect(box).not.toBeNull();
-    expect(Math.round(box!.x + box!.width)).toBe(1440);
     expect(Math.round(box!.y)).toBe(0);
     expect(Math.round(box!.height)).toBe(900);
   });
@@ -176,6 +193,8 @@ test.describe('responsive design', () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await gotoSchedule(page, app);
 
+    // Below md the search folds behind a Search toggle.
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
     const searchInput = page.getByLabel('Search festival artists');
     await expect(searchInput).toBeVisible();
     const box = await searchInput.boundingBox();
@@ -191,10 +210,10 @@ test.describe('responsive design', () => {
       await expectViewportScreenshot(page, `cards-${vp.name}.png`);
     });
 
-    test(`timeline view screenshot ${vp.name}`, async ({ app, page }) => {
+    test(`grid view screenshot ${vp.name}`, async ({ app, page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await gotoSchedule(page, app, '/timeline');
-      await expectViewportScreenshot(page, `timeline-${vp.name}.png`);
+      await gotoSchedule(page, app, '/grid');
+      await expectViewportScreenshot(page, `grid-${vp.name}.png`);
     });
   }
 });

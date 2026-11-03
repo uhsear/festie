@@ -1,8 +1,13 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react';
-import { Modal, View, Text, TouchableOpacity, Pressable } from 'react-native';
-import { REAUTH_COPY } from '@festie/shared/services';
+import { Linking, Modal, Platform, View, Text, TouchableOpacity, Pressable } from 'react-native';
+import { PROVIDER_COPY } from '@festie/shared/constants';
+import { REAUTH_COPY, listIdentities, type ReauthBody } from '@festie/shared/services';
+import type { ProviderName } from '@festie/shared/types';
 import { makeStyles, typeStyle } from '../../hooks/useTokens';
+import ProviderButtons from '../ProviderButtons';
 import { LabeledTextInput } from './AdminFields';
+
+const WEB_ACCOUNT_URL = 'https://festie.us/account';
 
 /**
  * Password re-check prompt for gated admin actions. `askPassword()` opens the
@@ -11,6 +16,8 @@ import { LabeledTextInput } from './AdminFields';
  */
 export function useReauthPrompt(): {
   askPassword: () => Promise<string | null>;
+  /** Password for a password account, a provider token for a provider-only one; null on cancel. */
+  ask: () => Promise<string | ReauthBody | null>;
   reauthDialog: ReactElement;
 } {
   const [visible, setVisible] = useState(false);
@@ -34,17 +41,109 @@ export function useReauthPrompt(): {
     setPassword('');
   }, []);
 
+  // Non-null while the provider dialog is open: the providers linked to this account.
+  const [linked, setLinked] = useState<ProviderName[] | null>(null);
+  const providerResolver = useRef<((value: ReauthBody | null) => void) | null>(null);
+
+  const finishProvider = useCallback((value: ReauthBody | null) => {
+    providerResolver.current?.(value);
+    providerResolver.current = null;
+    setLinked(null);
+  }, []);
+
+  const ask = useCallback(async (): Promise<string | ReauthBody | null> => {
+    let identities: Awaited<ReturnType<typeof listIdentities>> | null = null;
+    try {
+      identities = await listIdentities();
+    } catch {
+      // Unknown account type: fall back to the password prompt, which the server still checks.
+    }
+    if (!identities || identities.hasPassword) return askPassword();
+    providerResolver.current?.(null);
+    const providers = identities.identities.map((i) => i.provider);
+    setLinked(providers);
+    return new Promise<ReauthBody | null>((resolve) => {
+      providerResolver.current = resolve;
+    });
+  }, [askPassword]);
+
   const reauthDialog = (
-    <ReauthDialog
-      visible={visible}
-      password={password}
-      onChangePassword={setPassword}
-      onConfirm={() => finish(password)}
-      onCancel={() => finish(null)}
-    />
+    <>
+      <ReauthDialog
+        visible={visible}
+        password={password}
+        onChangePassword={setPassword}
+        onConfirm={() => finish(password)}
+        onCancel={() => finish(null)}
+      />
+      <ProviderReauthDialog linked={linked} onResult={finishProvider} />
+    </>
   );
 
-  return { askPassword, reauthDialog };
+  return { askPassword, ask, reauthDialog };
+}
+
+/** Providers this device can use to re-confirm: Apple sign-in does not run in the Android app. */
+export function reauthProvidersFor(linked: ProviderName[], platform: string): ProviderName[] {
+  return platform === 'android' ? linked.filter((p) => p !== 'apple') : linked;
+}
+
+function ProviderReauthDialog({
+  linked,
+  onResult,
+}: {
+  linked: ProviderName[] | null;
+  onResult: (value: ReauthBody | null) => void;
+}) {
+  const styles = useStyles();
+  const usable = reauthProvidersFor(linked ?? [], Platform.OS);
+  const label = usable.map((p) => PROVIDER_COPY.providerLabel[p]).join(' or ');
+  return (
+    <Modal visible={linked !== null} transparent animationType="fade" onRequestClose={() => onResult(null)} statusBarTranslucent>
+      <View style={styles.scrim}>
+        <Pressable style={styles.backdrop} onPress={() => onResult(null)} accessible={false} />
+        <View style={styles.card} accessibilityViewIsModal>
+          <Text style={styles.title} accessibilityRole="header">
+            {REAUTH_COPY.title}
+          </Text>
+          {usable.length > 0 ? (
+            <>
+              <Text style={styles.message}>{PROVIDER_COPY.reauthProviderBody(label)}</Text>
+              <ProviderButtons
+                mode="reauth"
+                only={usable}
+                onCredential={async (provider, body) => {
+                  onResult({ provider, idToken: body.idToken, nonce: body.nonce, authorizationCode: body.authorizationCode });
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <Text style={styles.message}>Confirm on festie.us, or set a password first.</Text>
+              <TouchableOpacity
+                style={[styles.button, styles.confirmButton]}
+                onPress={() => void Linking.openURL(WEB_ACCOUNT_URL)}
+                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityLabel="Open festie.us account page"
+              >
+                <Text style={styles.confirmLabel}>Open festie.us</Text>
+              </TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={() => onResult(null)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
+            <Text style={styles.cancelLabel}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 interface ReauthDialogProps {

@@ -75,6 +75,7 @@ function paletteGroups(c: Palette) {
   core.push(['--color-accent-green', c.accent.green]);
   core.push(['--color-border', c.border.default]);
   core.push(['--color-border-light', c.border.light]);
+  core.push(['--color-control-track-off', c.control.trackOff]);
   core.push(['--color-priority-must', c.priority.must]);
   core.push(['--color-priority-want', c.priority.want]);
   core.push(['--color-priority-maybe', c.priority.maybe]);
@@ -105,6 +106,8 @@ function paletteGroups(c: Palette) {
   rest.push(['--color-status-unverified-bg', c.status.unverifiedBg]);
   rest.push(['--color-status-warning', c.status.warning]);
   rest.push(['--color-status-error', c.status.error]);
+  rest.push(['--color-clash', c.clash.mark]);
+  rest.push(['--color-clash-tint', c.clash.tint]);
   rest.push(['--color-spotify', c.spotify.brand]);
 
   // ── Overlay scale (white at increasing opacity) ────────────────────────────

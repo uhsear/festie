@@ -6,7 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import type { CrewPackingItem } from '@festie/shared/types';
-import { isPending, QUEUED_WRITE_MESSAGE } from '@festie/shared/utils';
+import { PACKING_TEMPLATES } from '@festie/shared/constants';
+import {
+  isPending,
+  memberDisplayName,
+  packingClaim,
+  packingClaimLine,
+  QUEUED_WRITE_MESSAGE,
+} from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
@@ -14,6 +21,7 @@ import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import EmptyState from './EmptyState';
 import Button from './Button';
 import CrewSyncMarker from './CrewSyncMarker';
+import Avatar from './Avatar';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -27,8 +35,9 @@ interface CrewPackingProps {
  * Crew packing board (M2 logistics) — a shared "who's bringing what" checklist.
  * Offline-native: reads/writes go through the crewStore, so an item added with
  * no signal renders optimistically and reconciles when the queued POST replays
- * (same pattern as polls). Tapping the checkbox claims/unclaims an item (sets or
- * clears `brought_by` = current user). The screen owns loading.
+ * (same pattern as polls). "I'll bring it" claims an item (`brought_by` = current
+ * user); only the claimer or the owner can release it, and only the claimer can
+ * tick "Packed". Tapping a label renames it inline. The screen owns loading.
  */
 export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPackingProps) {
   const t = useTokens();
@@ -40,6 +49,10 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
   const createPackingItem = useCrewStore((s) => s.createPackingItem);
   const updatePackingItem = useCrewStore((s) => s.updatePackingItem);
   const deletePackingItem = useCrewStore((s) => s.deletePackingItem);
+  const addPackingItems = useCrewStore((s) => s.addPackingItems);
+  const crewMembers = useCrewStore((s) => s.crewMembers);
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const members = crewMembers.length ? crewMembers : (activeCrew?.members ?? []);
 
   const { hiddenIds, remove } = useUndoableRemove(
     (id) => deletePackingItem(crewId, id),
@@ -51,6 +64,9 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
   const [createBusy, setCreateBusy] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [templateBusy, setTemplateBusy] = useState(false);
 
   const reset = () => {
     setLabel('');
@@ -74,21 +90,37 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
     }
   };
 
-  const handleToggle = async (item: CrewPackingItem) => {
+  const handleUpdate = async (item: CrewPackingItem, patch: Parameters<typeof updatePackingItem>[2]) => {
     if (busyId === item.id) return;
-    // Tactile tick on claim/unclaim — the checkbox feels physical.
     haptics.select();
     setBusyId(item.id);
     try {
-      // Claim: mark claimed + record this user as the bringer. Un-claim: clear both.
-      await updatePackingItem(crewId, item.id, {
-        claimed: !item.claimed,
-        broughtBy: !item.claimed ? currentUserId : null,
-      });
+      await updatePackingItem(crewId, item.id, patch);
     } catch {
       // Error surfaced via the crew store.
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const saveEdit = async (item: CrewPackingItem) => {
+    const next = editText.trim();
+    setEditingId(null);
+    if (!next || next === item.label) return;
+    await handleUpdate(item, { label: next });
+  };
+
+  const handleTemplate = async (items: readonly string[]) => {
+    if (templateBusy) return;
+    setTemplateBusy(true);
+    try {
+      const added = await addPackingItems(crewId, [...items]);
+      if (added === 'queued') AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
+      else haptics.success();
+    } catch {
+      // Error surfaced via the crew store.
+    } finally {
+      setTemplateBusy(false);
     }
   };
 
@@ -151,15 +183,34 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
       )}
 
       {visibleItems.length === 0 ? (
-        <EmptyState
-          illustration="emptyList"
-          title="Nothing on the list yet"
-          message="Add what your crew needs to bring, like a tent, a cooler or sunscreen."
-          action={{ label: 'Add item', onPress: () => setShowForm(true) }}
-        />
+        <>
+          <EmptyState
+            illustration="emptyList"
+            title="Nothing on the list yet"
+            message="Add what your crew needs to bring, like a tent, a cooler or sunscreen."
+            action={{ label: 'Add item', onPress: () => setShowForm(true) }}
+          />
+          <Text style={styles.templateHint}>Start from a list:</Text>
+          <View style={styles.templateRow}>
+            {PACKING_TEMPLATES.map((tpl) => (
+              <TouchableOpacity
+                key={tpl.id}
+                style={styles.templateButton}
+                onPress={() => handleTemplate(tpl.items)}
+                disabled={templateBusy}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={tpl.label}
+              >
+                <Text style={styles.templateButtonText}>{tpl.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
       ) : (
         visibleItems.map((item) => {
-          const mine = item.brought_by === currentUserId;
+          const claim = packingClaim(item, currentUserId, isOwner);
+          const pending = isPending(item);
           // A queued create has no server id yet, so it cannot be removed.
           const canRemove = !isPending(item) && (item.created_by === currentUserId || isOwner);
           // DC8: items fade/reflow in and out as the crew adds/claims/removes
@@ -195,25 +246,100 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
             : { style: styles.itemRow };
           return (
             <RowContainer key={item.id} {...pressProps} {...motionProps}>
-              <TouchableOpacity
-                onPress={() => handleToggle(item)}
-                disabled={busyId === item.id}
-                style={[styles.checkbox, item.claimed && styles.checkboxOn]}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                activeOpacity={0.8}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: item.claimed }}
-                accessibilityLabel={item.claimed ? `Unclaim ${item.label}` : `Claim ${item.label}`}
-              >
-                {item.claimed ? <Ionicons name="checkmark" size={16} color={t.colors.accent.aqua} /> : null}
-              </TouchableOpacity>
               <View style={styles.itemBody}>
-                <Text style={[styles.itemLabel, item.claimed && styles.itemLabelClaimed]} numberOfLines={1}>
-                  {item.label}
-                </Text>
-                {item.claimed && item.brought_by ? (
-                  <Text style={styles.itemMeta}>{mine ? 'Bringing it' : 'Claimed'}</Text>
+                {editingId === item.id ? (
+                  <TextInput
+                    style={[styles.input, styles.editInput]}
+                    value={editText}
+                    onChangeText={setEditText}
+                    maxLength={200}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={() => saveEdit(item)}
+                    onBlur={() => saveEdit(item)}
+                    accessibilityLabel="Item name"
+                  />
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEditText(item.label);
+                      setEditingId(item.id);
+                    }}
+                    disabled={pending}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Rename ${item.label}`}
+                  >
+                    <Text style={styles.itemLabel} numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {claim.state !== 'open' ? (
+                  <View style={styles.claimRow}>
+                    <Avatar
+                      size="xs"
+                      name={memberDisplayName(members, claim.state === 'mine' ? currentUserId : claim.userId)}
+                    />
+                    <Text style={styles.itemMeta} numberOfLines={1}>
+                      {packingClaimLine(item, members, currentUserId)}
+                    </Text>
+                  </View>
                 ) : null}
+                <View style={styles.actionRow}>
+                  {claim.state === 'open' ? (
+                    <TouchableOpacity
+                      onPress={() => handleUpdate(item, { claimed: true, broughtBy: currentUserId })}
+                      disabled={pending || busyId === item.id}
+                      style={styles.actionButton}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`I'll bring ${item.label}`}
+                    >
+                      <Text style={styles.actionText}>I'll bring it</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {claim.state === 'mine' ? (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => handleUpdate(item, { packed: !claim.packed })}
+                        disabled={pending || busyId === item.id}
+                        style={styles.actionButton}
+                        activeOpacity={0.8}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: claim.packed }}
+                        accessibilityLabel={`Packed: ${item.label}`}
+                      >
+                        <View style={[styles.checkbox, claim.packed && styles.checkboxOn]}>
+                          {claim.packed ? <Ionicons name="checkmark" size={16} color={t.colors.accent.aqua} /> : null}
+                        </View>
+                        <Text style={styles.actionText}>Packed</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleUpdate(item, { claimed: false, broughtBy: null })}
+                        disabled={pending || busyId === item.id}
+                        style={styles.actionButton}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Not bringing ${item.label}`}
+                      >
+                        <Text style={styles.actionTextMuted}>Not bringing it</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : null}
+                  {claim.state === 'theirs' && claim.canRelease ? (
+                    <TouchableOpacity
+                      onPress={() => handleUpdate(item, { claimed: false, broughtBy: null })}
+                      disabled={pending || busyId === item.id}
+                      style={styles.actionButton}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove claim on ${item.label}`}
+                    >
+                      <Text style={styles.actionTextMuted}>Remove claim</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
                 <CrewSyncMarker item={item} />
               </View>
               {canRemove ? (
@@ -334,12 +460,60 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('body'),
     color: t.colors.text.primary,
   },
-  itemLabelClaimed: {
-    color: t.colors.text.secondary,
-    textDecorationLine: 'line-through',
-  },
   itemMeta: {
     ...typeStyle('caption'),
+    color: t.colors.accent.aqua,
+    flexShrink: 1,
+  },
+  editInput: {
+    paddingVertical: t.spacing[2],
+  },
+  claimRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    marginTop: t.spacing[1],
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[4],
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  actionText: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
+  },
+  actionTextMuted: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
+  },
+  templateHint: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+  },
+  templateRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: t.spacing[2],
+  },
+  templateButton: {
+    minHeight: 44,
+    paddingHorizontal: t.spacing[4],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.accent.aqua,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  templateButtonText: {
+    ...typeStyle('label'),
     color: t.colors.accent.aqua,
   },
 }));

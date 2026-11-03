@@ -159,6 +159,15 @@ export default function createUsersStore(pool: Pool, utils: any) {
       return normalizeRow(result.rows[0]);
     },
 
+    // Caller lower-cases the address; deleted accounts are excluded on purpose.
+    async getByEmail(email: string) {
+      const result = await pool.query(
+        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL LIMIT 1`,
+        [email],
+      );
+      return normalizeRow(result.rows[0]);
+    },
+
     // A soft-deleted account still inside its 30-day grace window. The bound
     // matches the copy even if the pg_cron purge runs late.
     async findDeletedByUsername(username: string) {
@@ -193,9 +202,9 @@ export default function createUsersStore(pool: Pool, utils: any) {
       );
     },
 
-    async create({ id, username, passwordHash, email, dateOfBirth, createdAt, tosAcceptedAt, tosVersion }: any) {
+    async create({ id, username, passwordHash, email, dateOfBirth, createdAt, tosAcceptedAt, tosVersion, emailVerifiedAt }: any) {
       await pool.query(
-        'INSERT INTO users (id, username, password_hash, email, date_of_birth, created_at, tos_accepted_at, tos_version) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        'INSERT INTO users (id, username, password_hash, email, date_of_birth, created_at, tos_accepted_at, tos_version, email_verified_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
         [
           id,
           username,
@@ -205,6 +214,7 @@ export default function createUsersStore(pool: Pool, utils: any) {
           createdAt || new Date().toISOString(),
           tosAcceptedAt || null,
           tosVersion || null,
+          emailVerifiedAt || null,
         ],
       );
       return this.getById(id);

@@ -13,15 +13,15 @@ import type { Page } from '@playwright/test';
  *
  * Selectors are drawn ONLY from the real components:
  *   - #app, .auth-screen ......................... AppShell
- *   - [data-testid="festival-select"] ............ SubHeader (festival dropdown)
+ *   - [data-testid="festival-select"] ............ SubHeader (festival picker trigger)
  *   - .day-tab-underline ......................... SubHeader (day tabs)
  *   - [data-testid="set-card"][data-artist=…] .... SetCard
  *   - .card-priority-btn (aria-label "Must See" …) SetCard footer priority buttons
  *   - [aria-label="Set detail panel"] ............ DetailPanel (vaul Drawer.Content)
- *   - "Sign in" / "Create Account" buttons ....... login.tsx / register.tsx
+ *   - "Sign in" / "Create account" buttons ....... login.tsx / register.tsx
  *   - [data-testid="profile-badge"] .............. UserMenu trigger
- *   - "Lineup"/"Cards"/"Timeline"/"Grid" tabs .. Header desktop nav + ScheduleViewSwitcher
- *   - "My Plan"/"Crew" nav ......................... Header (desktop) / BottomNav (mobile)
+ *   - "Schedule"/"Cards"/"Grid" tabs ............. Header desktop nav + ScheduleViewSwitcher
+ *   - "Picks"/"Crew" nav ......................... Header (desktop) / BottomNav (mobile)
  *   - toast role="status"/"alert" ................ Toast.tsx
  *
  * No screenshot/visual assertions (the CI run uses --grep-invert screenshot).
@@ -52,17 +52,17 @@ async function registerUser(page: Page, app: { baseUrl: string }, username: stri
   // TOS checkbox (label wraps a checkbox with id="authTos").
   await page.locator('#authTos').check();
 
-  await page.getByRole('button', { name: 'Create Account' }).click();
+  await page.getByRole('button', { name: 'Create account' }).click();
 
   // Lands on the authed schedule with the profile badge present.
   await expect(page.locator('#app')).toBeVisible();
   await expect(page.locator('[data-testid="profile-badge"]')).toBeVisible();
 }
 
-// Navigate to one of the three schedule views via the in-page ScheduleViewSwitcher.
+// Navigate to one of the schedule views via the in-page ScheduleViewSwitcher.
 // The switcher is a nav of route links (aria-current on the active one, no
-// tablist), named by their visible text "Cards" / "Timeline" / "Grid".
-async function openScheduleView(page: Page, label: 'Cards' | 'Timeline' | 'Grid') {
+// tablist), named by their visible text "Cards" / "Grid".
+async function openScheduleView(page: Page, label: 'Cards' | 'Grid') {
   await page.getByRole('link', { name: label, exact: true }).click();
 }
 
@@ -96,16 +96,17 @@ test.describe('festival planner browser regression', () => {
     await gotoApp(page, app);
 
     // fest-1 auto-selected on boot → its sets render.
-    await expect(page.locator('[data-testid="festival-select"]')).toHaveValue('fest-1');
+    await expect(page.locator('[data-testid="festival-select"]')).toHaveAttribute('data-festival-id', 'fest-1');
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
     await expect(page.locator('[data-testid="set-card"][data-artist="Beta"]')).toBeVisible();
 
     // Guests now get the full nav (parity with mobile) instead of a guest
-    // banner: the "My Plan" tab is visible even when logged out.
-    await expect(page.getByRole('link', { name: 'My Plan' })).toBeVisible();
+    // banner: the "Picks" tab is visible even when logged out.
+    await expect(page.getByRole('link', { name: 'Picks' })).toBeVisible();
 
     // Switch to fest-2 → Omega appears (Friday/Sunday differ; Sunday is the only day).
-    await page.locator('[data-testid="festival-select"]').selectOption('fest-2');
+    await page.locator('[data-testid="festival-select"]').click();
+    await page.locator('[data-testid="festival-option-fest-2"]').click();
     await expect(page.locator('[data-testid="set-card"][data-artist="Omega"]')).toBeVisible();
   });
 
@@ -114,9 +115,10 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
     await openSet(page, 'Alpha');
-    // Guests see the sign-in prompt with both auth buttons, never a Join Festival button.
+    // Guests pick on this device (T39), so the panel prompts sign-up for the account-only
+    // extras with both auth buttons, never a Join Festival button.
     const panel = page.locator('[aria-label="Set detail panel"]');
-    await expect(panel).toContainText('Sign in to save picks');
+    await expect(panel).toContainText('Create a free account to keep private notes');
     await expect(panel.getByRole('button', { name: 'Create account' })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Sign in' })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Join Festival' })).toHaveCount(0);
@@ -135,7 +137,7 @@ test.describe('festival planner browser regression', () => {
     // inline field errors (rendered by the Input component) instead.
     await page.getByRole('button', { name: 'Sign in' }).click();
     // The username Input is required-first; its error text appears in the form.
-    await expect(page.locator('form')).toContainText('Username is required');
+    await expect(page.locator('form')).toContainText('Enter your username or email.');
   });
 
   test('register requires accepting the Terms of Service', async ({ app, page }) => {
@@ -148,7 +150,7 @@ test.describe('festival planner browser regression', () => {
     await page.getByLabel('Date of birth').fill('1995-01-01');
     await page.getByLabel('Email', { exact: true }).fill('tosskip@example.test');
     // Intentionally do NOT check TOS.
-    await page.getByRole('button', { name: 'Create Account' }).click();
+    await page.getByRole('button', { name: 'Create account' }).click();
 
     // formError region (role="alert") renders the TOS message.
     await expect(page.getByRole('alert')).toContainText('Terms of Service');
@@ -160,7 +162,7 @@ test.describe('festival planner browser regression', () => {
     await registerUser(page, app, `alice_${Date.now()}`);
 
     // On /cards the schedule loads for fest-1.
-    await expect(page.locator('[data-testid="festival-select"]')).toHaveValue('fest-1');
+    await expect(page.locator('[data-testid="festival-select"]')).toHaveAttribute('data-festival-id', 'fest-1');
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
     // Profile badge in the header opens the user menu.
@@ -168,7 +170,7 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="user-menu-profile"]')).toBeVisible();
   });
 
-  test('saving a pick from the detail panel reflects on the card and in My Picks', async ({ app, page }) => {
+  test('saving a pick from the detail panel reflects on the card and in Picks', async ({ app, page }) => {
     await registerUser(page, app, `picker_${Date.now()}`);
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
@@ -184,7 +186,7 @@ test.describe('festival planner browser regression', () => {
     const alphaCard = page.locator('[data-testid="set-card"][data-artist="Alpha"]');
     await expect(alphaCard.getByRole('button', { name: /^Must See/ })).toHaveAttribute('aria-pressed', 'true');
 
-    // Navigate to My Picks (desktop Header nav OR mobile BottomNav both expose
+    // Navigate to Picks (desktop Header nav OR mobile BottomNav both expose
     // the destination; click whichever is visible).
     await openMyPicks(page);
     await expect(page).toHaveURL(/\/picks$/);
@@ -210,16 +212,36 @@ test.describe('festival planner browser regression', () => {
     // Cards → Grid (the grid renders timed sets as columns/rows).
     await openScheduleView(page, 'Grid');
     await expect(page).toHaveURL(/\/grid$/);
-    await expect(page.getByRole('grid', { name: /Festival schedule grid/ })).toBeVisible();
+    await expect(page.getByRole('group', { name: /Festival schedule grid/ })).toBeVisible();
 
-    // Grid → Timeline.
-    await openScheduleView(page, 'Timeline');
-    await expect(page).toHaveURL(/\/timeline$/);
-
-    // Timeline → Cards (back to the card grid; Alpha visible again).
+    // Grid → Cards (back to the card grid; Alpha visible again).
     await openScheduleView(page, 'Cards');
     await expect(page).toHaveURL(/\/cards$/);
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
+
+    // Web has one grid: old /timeline links land on it.
+    await page.goto(`${app.baseUrl}/timeline`);
+    await expect(page).toHaveURL(/\/grid$/);
+  });
+
+  test('the grid clash chip opens the clash cards in Picks', async ({ app, page }) => {
+    await registerUser(page, app, `clasher_${Date.now()}`);
+
+    // Alpha (10:00-11:00, Main) and Beta (10:30-11:30, Forest) overlap.
+    for (const artist of ['Alpha', 'Beta']) {
+      const want = page
+        .locator(`[data-testid="set-card"][data-artist="${artist}"]`)
+        .getByRole('button', { name: /^Want to See/ });
+      await want.click();
+      await expect(want).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    await openScheduleView(page, 'Grid');
+    const chip = page.getByRole('button', { name: 'You have 1 schedule clash. Open it in Picks.' });
+    await expect(chip).toBeVisible();
+    await chip.click();
+    await expect(page).toHaveURL(/\/picks$/);
+    await expect(page.locator('#clashes')).toBeFocused();
   });
 
   test('switching the day filter changes the visible sets', async ({ app, page }) => {
@@ -246,25 +268,32 @@ test.describe('festival planner browser regression', () => {
   });
 
   test('guests see an in-place sign-up teaser on protected tabs', async ({ app, page }) => {
-    // /picks no longer redirects; it renders <GuestTeaser mode="picks"/> in place.
+    // Guests can pick on this device (T39), so /picks shows the sign-up banner over their local picks.
     await page.goto(`${app.baseUrl}/picks`);
     await expect(page).toHaveURL(/\/picks$/);
-    await expect(page.getByRole('heading', { name: 'Save your festival picks' })).toBeVisible();
+    const banner = page.getByRole('region', { name: 'Save your picks' });
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole('button', { name: 'Create free account' })).toBeVisible();
+
+    // /crew still renders <GuestTeaser mode="crew"/> in place instead of redirecting.
+    await page.goto(`${app.baseUrl}/crew`);
+    await expect(page).toHaveURL(/\/crew$/);
+    await expect(page.getByRole('heading', { name: 'Plan with your crew' })).toBeVisible();
   });
 });
 
 // ── Nav helpers that tolerate desktop (Header) vs mobile (BottomNav) ─────────
 
-// The desktop Header nav uses plain text links ("My Plan", "Crew"); the
-// mobile BottomNav uses links with aria-label "View My Plan" / "View Crew".
+// The desktop Header nav uses plain text links ("Picks", "Crew"); the
+// mobile BottomNav uses links with aria-label "View Picks" / "View Crew".
 // Click whichever exists for the current viewport.
 async function openMyPicks(page: Page) {
-  const desktop = page.getByRole('link', { name: 'My Plan' });
+  const desktop = page.getByRole('link', { name: 'Picks' });
   if (await desktop.count()) {
     await desktop.first().click();
     return;
   }
-  await page.getByRole('link', { name: 'View My Plan' }).click();
+  await page.getByRole('link', { name: 'View Picks' }).click();
 }
 
 async function openCrew(page: Page) {

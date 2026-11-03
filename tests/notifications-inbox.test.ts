@@ -1,21 +1,13 @@
 /**
  * The in-app notification inbox: send() and sendToOfflineUsers() write one
- * notification_log row with platform 'inbox' per user per notification, and
- * GET /notifications/history reads only those rows.
- *
- * The first block uses mocked stores and runs without a database. The second
- * block is DB-gated like tests/account.test.ts (TEST_DATABASE_URL).
+ * notification_log row with platform 'inbox' per user per notification.
+ * Mocked stores; no database. The read side is in notifications-history.test.ts.
  */
 
 import assert from 'node:assert/strict';
-import { afterEach, describe, it, mock } from 'node:test';
+import { describe, it, mock } from 'node:test';
 
 import { createSendService } from '../lib/notifications/send.js';
-
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
-// The shared helpers exit the process without a test database, so load them only when it exists.
-const helpers = skip ? null : await import('./_integration-helpers');
 
 const fakeLog = { info() {}, warn() {}, error() {}, debug() {} };
 const config = { PUBLIC_ORIGIN: 'https://festie.us' };
@@ -77,14 +69,17 @@ describe('notification inbox rows (mocked stores)', () => {
     assert.deepEqual(JSON.parse(row.dataJson), update.data);
   });
 
-  it('a send() during quiet hours writes one inbox row and no device row', async () => {
+  it('a send() during quiet hours writes one held inbox row and no device row', async () => {
     const stores = makeStores({
       prefs: { u1: { crewUpdates: true, ...quietHoursNow() } },
       tokens: { u1: [{ token: androidA, platform: 'android' }] },
     });
     const result = await build(stores).send(update);
     assert.equal(result.reason, 'dnd_active');
-    assert.equal(inboxRows(stores).length, 1);
+    assert.deepEqual(
+      inboxRows(stores).map((r: any) => r.status),
+      ['held'],
+    );
     assert.equal(deviceRows(stores).length, 0);
   });
 
@@ -126,6 +121,7 @@ describe('notification inbox rows (mocked stores)', () => {
     assert.equal(result.sent, 1);
     assert.equal(inboxRows(stores).length, 1);
     assert.equal(inboxRows(stores)[0].type, 'crew_sos');
+    assert.equal(inboxRows(stores)[0].status, 'inbox');
     assert.equal(deviceRows(stores).length, 1);
   });
 
@@ -178,39 +174,23 @@ describe('notification inbox rows (mocked stores)', () => {
     await build(stores).sendSilentSync({ festivalId: 'f1', syncType: 'schedule' });
     assert.equal(rows(stores).length, 0);
   });
-});
 
-describe('GET /notifications/history (database)', { concurrency: 1, skip }, () => {
-  const servers: any[] = [];
-  afterEach(async () => {
-    while (servers.length > 0) await servers.pop().close();
-  });
-
-  it('returns only inbox rows, and data holds only the four allowed keys', async () => {
-    const h = helpers!;
-    const server = await h.startServer();
-    servers.push(server);
-    const registered = await h.registerUser(server, `inbox-${Date.now().toString(36)}`);
-    const userId = registered.user.id as string;
-    const token = registered.token as string;
-
-    const pool = new h.Pool({ connectionString: h.TEST_DATABASE_URL });
-    try {
-      const sosData = JSON.stringify({ deepLink: 'https://festie.us/crew?sos=u1', crewId: 'c1', lat: '1', lng: '2' });
-      await pool.query(
-        `INSERT INTO notification_log (id, user_id, type, title, body, data_json, status, platform, created_at)
-         VALUES ('n-inbox', $1, 'crew_sos', 'SOS', 'Alex needs help', $2, 'inbox', 'inbox', NOW()),
-                ('n-device', $1, 'crew_sos', 'SOS', 'Alex needs help', $2, 'sent', 'android', NOW())`,
-        [userId, sosData],
-      );
-    } finally {
-      await pool.end();
-    }
-
-    const res = await server.request.get('/api/v1/notifications/history').set('x-user-token', token).expect(200);
-    assert.equal(res.body.data.length, 1);
-    const [item] = res.body.data;
-    assert.equal(item.id, 'n-inbox');
-    assert.deepEqual(item.data, { deepLink: 'https://festie.us/crew?sos=u1', crewId: 'c1' });
+  it('a festival_announcement through sendToOfflineUsers() keeps festivalId, announcementId and deepLink', async () => {
+    const stores = makeStores({ tokens: { u1: [{ token: androidA, platform: 'android' }] } });
+    const data = { festivalId: 'f1', announcementId: 'a1', deepLink: 'https://festie.us/' };
+    await build(stores).sendToOfflineUsers({
+      festivalId: 'f1',
+      userIds: ['u1', 'u2'],
+      type: 'festival_announcement',
+      title: 'Gates open at 4',
+      body: 'Bring water',
+      data,
+    });
+    const inbox = inboxRows(stores);
+    assert.deepEqual(
+      inbox.map((r: any) => r.userId),
+      ['u1', 'u2'],
+    );
+    for (const row of inbox) assert.deepEqual(JSON.parse(row.dataJson), data);
   });
 });

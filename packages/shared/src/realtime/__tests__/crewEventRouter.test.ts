@@ -7,7 +7,10 @@ import {
   routePollVoted,
   routePollClosed,
   routeExpensesChanged,
+  routePackingChanged,
+  routeRidesChanged,
   routeActivityLogged,
+  routeLocationPeerUpdate,
 } from '../crewEventRouter';
 import { createStoreSink } from '../crewRealtimeSink';
 import { useCrewStore } from '../../stores/crewStore';
@@ -176,7 +179,16 @@ describe('crewEventRouter — pure routers', () => {
         pollId: 'poll-1',
         userId: 'user-2',
         optionIndex: 1,
+        optionIndexes: [1],
       });
+    });
+
+    it('routePollVoted derives optionIndexes from an old-server payload', () => {
+      expect(routePollVoted({ ...pollVotedPayload, optionIndex: 2 }, ACTIVE)?.optionIndexes).toEqual([2]);
+      expect(routePollVoted({ ...pollVotedPayload, optionIndex: -1 }, ACTIVE)?.optionIndexes).toEqual([]);
+      expect(
+        routePollVoted({ ...pollVotedPayload, optionIndex: 0, optionIndexes: [0, 2] }, ACTIVE)?.optionIndexes,
+      ).toEqual([0, 2]);
     });
 
     it('routePollClosed passes through with active crewId', () => {
@@ -211,6 +223,22 @@ describe('crewEventRouter — pure routers', () => {
 
     it('routeExpensesChanged rejects a different-crew event', () => {
       expect(routeExpensesChanged(expenseAddedPayload, OTHER)).toBeNull();
+    });
+
+    it('routeExpensesChanged accepts an expense-updated payload and ignores another crew', () => {
+      const updated = { _v: 1, crewId: ACTIVE };
+      expect(routeExpensesChanged(updated, ACTIVE)).toEqual({ kind: 'expenses-changed', crewId: ACTIVE });
+      expect(routeExpensesChanged(updated, OTHER)).toBeNull();
+    });
+
+    it('routePackingChanged and routeRidesChanged route the active crew only', () => {
+      const payload = { crewId: ACTIVE };
+      expect(routePackingChanged(payload, ACTIVE)).toEqual({ kind: 'packing-changed', crewId: ACTIVE });
+      expect(routeRidesChanged(payload, ACTIVE)).toEqual({ kind: 'rides-changed', crewId: ACTIVE });
+      expect(routePackingChanged(payload, OTHER)).toBeNull();
+      expect(routeRidesChanged(payload, OTHER)).toBeNull();
+      expect(routePackingChanged(payload, null)).toBeNull();
+      expect(routeRidesChanged(payload, null)).toBeNull();
     });
 
     it('routeActivityLogged accepts active crew, rejects others / null', () => {
@@ -273,6 +301,19 @@ describe('crewEventRouter + createStoreSink integration', () => {
     expect((active as unknown as { homeBaseTime: string }).homeBaseTime).toBe('20:00');
   });
 
+  it('home-base planB passes through the router and the sink, and is absent without the key', () => {
+    expect(routeHomeBaseUpdated({ ...homeBasePayload, planB: 'Top of the hour' }, ACTIVE)).toMatchObject({
+      planB: 'Top of the hour',
+    });
+    expect(routeHomeBaseUpdated({ ...homeBasePayload, planB: null }, ACTIVE)).toMatchObject({ planB: null });
+    expect(routeHomeBaseUpdated(homeBasePayload, ACTIVE)).not.toHaveProperty('planB');
+
+    sink().onHomeBaseUpdated(ACTIVE, { location: 'Main Gate', time: '20:00', planB: 'Top of the hour' });
+    expect(useCrewStore.getState().activeCrew!.homeBasePlanB).toBe('Top of the hour');
+    sink().onHomeBaseUpdated(ACTIVE, { location: 'Main Gate', time: '20:00' });
+    expect(useCrewStore.getState().activeCrew!.homeBasePlanB).toBe('Top of the hour');
+  });
+
   it('meeting-point upsert inserts then replaces in place', () => {
     const intent = routeMeetingPointUpsert(mpRowSnake, ACTIVE)!;
     sink().onMeetingPointUpsert(intent.crewId, intent.meetingPoint);
@@ -307,12 +348,12 @@ describe('crewEventRouter + createStoreSink integration', () => {
     };
     useCrewStore.setState({ polls: [poll] });
     const intent = routePollVoted(pollVotedPayload, ACTIVE)!;
-    sink().onPollVoted(intent.crewId, intent.pollId, intent.userId, intent.optionIndex);
+    sink().onPollVoted(intent.crewId, intent.pollId, intent.userId, intent.optionIndexes);
     const votes = useCrewStore.getState().polls[0]!.votes;
     expect(votes).toEqual([{ option: 1, user_id: 'user-2' }]);
   });
 
-  it('poll-closed intent drops the poll', () => {
+  it('poll-closed intent marks the poll closed and keeps it', () => {
     const poll: CrewPoll = {
       id: 'poll-1',
       crew_id: ACTIVE,
@@ -327,7 +368,8 @@ describe('crewEventRouter + createStoreSink integration', () => {
     useCrewStore.setState({ polls: [poll] });
     const intent = routePollClosed(pollClosedPayload, ACTIVE)!;
     sink().onPollClosed(intent.crewId, intent.pollId);
-    expect(useCrewStore.getState().polls).toHaveLength(0);
+    expect(useCrewStore.getState().polls).toHaveLength(1);
+    expect(useCrewStore.getState().polls[0]!.closed).toBe(true);
   });
 
   it('poll-created intent reloads the authoritative poll list', async () => {
@@ -383,5 +425,27 @@ describe('crewEventRouter + createStoreSink integration', () => {
     sink().onExpensesChanged(OTHER);
     await new Promise((r) => setTimeout(r, 0));
     expect(api.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('routeLocationPeerUpdate selfUserId', () => {
+  const payload = {
+    _v: 1,
+    crewId: ACTIVE,
+    userId: 'u1',
+    username: 'one',
+    lat: 1,
+    lng: 2,
+    capturedAt: '2026-06-06T12:00:00.000Z',
+    serverAt: '2026-06-06T12:00:01.000Z',
+  } as const;
+
+  it('drops an echo of the viewer\'s own fix', () => {
+    expect(routeLocationPeerUpdate(payload, ACTIVE, 'u1')).toBeNull();
+  });
+
+  it('routes another user and routes with no selfUserId', () => {
+    expect(routeLocationPeerUpdate(payload, ACTIVE, 'u2')?.peer.userId).toBe('u1');
+    expect(routeLocationPeerUpdate(payload, ACTIVE)?.peer.userId).toBe('u1');
   });
 });

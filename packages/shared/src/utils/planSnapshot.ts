@@ -25,9 +25,18 @@
  */
 
 import { z } from 'zod';
+import type { CrewMeetingPoint, Priority } from '../types';
+import { planBLine } from '../constants/copy';
+import { PRIORITY_WEIGHT } from './crewNudges';
 
 /** Current envelope version. Bump when the payload shape changes incompatibly. */
 export const PLAN_SNAPSHOT_VERSION = 1 as const;
+
+/** Envelope version that adds the optional Plan B line. Written only when Plan B is set. */
+export const PLAN_SNAPSHOT_VERSION_PLAN_B = 2 as const;
+
+/** Max Plan B length in UTF-16 units; matches the server's Zod max(140). */
+export const PLAN_B_MAX = 140;
 
 /**
  * Hard cap on the ENCODED string length. A version-2 QR code at error
@@ -69,18 +78,25 @@ const meetingPointSchema = z
  * Full versioned envelope. `v` is validated FIRST (as a literal) so an unknown
  * version is reported as a clean version mismatch rather than a field error.
  */
-const envelopeSchema = z
+const envelopeFields = {
+  festivalId: z.string().min(1).max(128),
+  festivalName: z.string().min(1).max(200),
+  picks: z.array(pickSchema).max(MAX_PICKS),
+  meetingPoint: meetingPointSchema.optional(),
+};
+
+const envelopeSchema = z.object({ v: z.literal(PLAN_SNAPSHOT_VERSION), ...envelopeFields }).strict();
+
+const envelopeSchemaPlanB = z
   .object({
-    v: z.literal(PLAN_SNAPSHOT_VERSION),
-    festivalId: z.string().min(1).max(128),
-    festivalName: z.string().min(1).max(200),
-    picks: z.array(pickSchema).max(MAX_PICKS),
-    meetingPoint: meetingPointSchema.optional(),
+    v: z.literal(PLAN_SNAPSHOT_VERSION_PLAN_B),
+    ...envelopeFields,
+    planB: z.string().min(1).max(PLAN_B_MAX).optional(),
   })
   .strict();
 
-/** The validated, decoded snapshot a consumer receives. */
-export type PlanSnapshot = z.infer<typeof envelopeSchema>;
+/** The validated, decoded snapshot a consumer receives (v1, or v2 with Plan B). */
+export type PlanSnapshot = z.infer<typeof envelopeSchema> | z.infer<typeof envelopeSchemaPlanB>;
 
 /** Input accepted by {@link encodePlanSnapshot} (the version is added for you). */
 export interface PlanSnapshotInput {
@@ -88,6 +104,7 @@ export interface PlanSnapshotInput {
   festivalName: string;
   picks: Array<{ setId: string; priority: PickPriority }>;
   meetingPoint?: { label: string; lat: number; lng: number };
+  planB?: string;
 }
 
 /** Result of decoding untrusted input — a discriminated union, never a throw. */
@@ -242,12 +259,13 @@ function fromBase64Url(str: string): string {
  */
 export function encodePlanSnapshot(input: PlanSnapshotInput): string {
   const envelope: PlanSnapshot = {
-    v: PLAN_SNAPSHOT_VERSION,
+    v: input.planB ? PLAN_SNAPSHOT_VERSION_PLAN_B : PLAN_SNAPSHOT_VERSION,
     festivalId: input.festivalId,
     festivalName: input.festivalName,
     picks: input.picks.slice(0, MAX_PICKS),
     ...(input.meetingPoint ? { meetingPoint: input.meetingPoint } : {}),
-  };
+    ...(input.planB ? { planB: input.planB } : {}),
+  } as PlanSnapshot;
   return toBase64Url(JSON.stringify(envelope));
 }
 
@@ -284,13 +302,97 @@ export function decodePlanSnapshot(text: unknown): DecodeResult {
   }
 
   // Distinguish a version mismatch from a generic shape error for clearer UX.
-  if (parsed && typeof parsed === 'object' && 'v' in parsed && (parsed as { v: unknown }).v !== PLAN_SNAPSHOT_VERSION) {
+  const hasVersion = !!parsed && typeof parsed === 'object' && 'v' in parsed;
+  const version = hasVersion ? (parsed as { v: unknown }).v : undefined;
+  if (hasVersion && version !== PLAN_SNAPSHOT_VERSION && version !== PLAN_SNAPSHOT_VERSION_PLAN_B) {
     return { ok: false, error: 'unsupported snapshot version' };
   }
 
-  const result = envelopeSchema.safeParse(parsed);
+  const result = (version === PLAN_SNAPSHOT_VERSION_PLAN_B ? envelopeSchemaPlanB : envelopeSchema).safeParse(parsed);
   if (!result.success) {
     return { ok: false, error: 'snapshot failed validation' };
   }
   return { ok: true, data: result.data };
+}
+
+// ---------------------------------------------------------------------------
+// snapshot assembly (shared by web + mobile PlanQRShare)
+// ---------------------------------------------------------------------------
+
+/** Soonest active, future meeting point with a coord; falls back to any active+coord one. */
+export function pickShareMeetingPoint(points: CrewMeetingPoint[], nowMs: number): CrewMeetingPoint | null {
+  const withCoord = points.filter((p) => p.active && typeof p.latitude === 'number' && typeof p.longitude === 'number');
+  const future = withCoord
+    .filter((p) => p.meet_at)
+    .map((p) => ({ p, ms: new Date(p.meet_at as string).getTime() }))
+    .filter(({ ms }) => Number.isFinite(ms) && ms >= nowMs)
+    .sort((a, b) => a.ms - b.ms);
+  if (future.length > 0) return future[0]!.p;
+  return withCoord[0] ?? null;
+}
+
+/**
+ * Build the snapshot input from in-memory store data: picks ranked
+ * must > want > maybe and capped to {@link MAX_PICKS}, plus the best meeting
+ * point when it has coordinates.
+ */
+export function buildPlanSnapshotInput(args: {
+  festival: { id: string; name: string };
+  picks: Record<string, Priority> | undefined;
+  meetingPoints: CrewMeetingPoint[] | undefined;
+  nowMs: number;
+  planB?: string | null;
+}): { input: PlanSnapshotInput; picksCount: number; meetingPoint: CrewMeetingPoint | null } {
+  const picks = Object.entries(args.picks ?? {})
+    .sort(([, a], [, b]) => (PRIORITY_WEIGHT[b] ?? 0) - (PRIORITY_WEIGHT[a] ?? 0))
+    .slice(0, MAX_PICKS)
+    .map(([setId, priority]) => ({ setId, priority: toPickPriority(priority) }));
+
+  const mp = pickShareMeetingPoint(args.meetingPoints ?? [], args.nowMs);
+  const planB = (args.planB ?? '').trim().slice(0, PLAN_B_MAX);
+  const input: PlanSnapshotInput = {
+    festivalId: args.festival.id,
+    festivalName: args.festival.name,
+    picks,
+    ...(mp && typeof mp.latitude === 'number' && typeof mp.longitude === 'number'
+      ? { meetingPoint: { label: mp.label, lat: mp.latitude, lng: mp.longitude } }
+      : {}),
+    ...(planB ? { planB } : {}),
+  };
+  return { input, picksCount: picks.length, meetingPoint: mp };
+}
+
+/**
+ * Build the "Text the meeting point" SMS body. Plain text for any SMS client.
+ * Pass the festival's `timeZone` so the time is the festival's, not the phone's.
+ * Returns '' when there is neither a meeting point nor a Plan B.
+ */
+export function buildHandoffSms(args: {
+  meetingPoint?: CrewMeetingPoint | null;
+  planB?: string | null;
+  festivalId: string | null;
+  timeZone?: string;
+}): string {
+  const mp = args.meetingPoint ?? null;
+  const planB = (args.planB ?? '').trim();
+  if (!mp && !planB) return '';
+  const lines: string[] = [];
+  if (mp) {
+    lines.push(`Meet at: ${mp.label}`);
+    if (typeof mp.latitude === 'number' && typeof mp.longitude === 'number') {
+      lines.push(`https://maps.google.com/?q=${mp.latitude},${mp.longitude}`);
+    }
+    if (mp.meet_at) {
+      const when = new Date(mp.meet_at);
+      if (!Number.isNaN(when.getTime())) {
+        const opts: Intl.DateTimeFormatOptions = { weekday: 'short', hour: 'numeric', minute: '2-digit' };
+        if (args.timeZone) opts.timeZone = args.timeZone;
+        lines.push(`When: ${when.toLocaleString([], opts)}`);
+      }
+    }
+  }
+  if (planB) lines.push(planBLine(planB));
+  if (args.festivalId) lines.push(`Open in Festie: https://festie.us/festival/${args.festivalId}`);
+  lines.push('(Sent via Festie)');
+  return lines.join('\n');
 }

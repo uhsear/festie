@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { COPY } from '@festie/shared/constants';
 import { useHaptics } from '../../hooks/useHaptics';
 
 /**
@@ -39,7 +40,7 @@ export default function FestivalDayBanner() {
 
   return (
     <div
-      className="flex items-center justify-between gap-2.5 bg-[linear-gradient(90deg,rgba(0,212,170,0.18),rgba(155,114,255,0.12))] border border-[rgba(0,212,170,0.3)] rounded-xl py-2.5 px-4 mx-3 my-2 text-sm text-text-primary animate-[fm-day-banner-slide_0.3s_ease-out]"
+      className="flex items-center justify-between gap-2.5 bg-[linear-gradient(90deg,var(--color-aqua-a15),var(--color-aqua-a06))] border border-[var(--color-aqua-a3)] rounded-xl py-2.5 px-4 mx-3 my-2 text-sm text-text-primary animate-[fm-day-banner-slide_0.3s_ease-out]"
       role="status"
       data-testid="festival-day-banner"
     >
@@ -52,7 +53,7 @@ export default function FestivalDayBanner() {
         onClick={enter}
         data-testid="festival-day-banner-enter"
       >
-        Open Now &amp; Next
+        {COPY.nowNext.open}
       </Link>
       <button
         type="button"

@@ -1,25 +1,33 @@
-import React, { useCallback, useMemo, useSyncExternalStore } from 'react';
-import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import React, { Fragment, useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { useFestivalStore, useAuthStore, useCrewStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { usePicks, useFestival } from '@festie/shared/hooks';
+import { usePicks, useFestival, useCanPick, useFestivalReady } from '@festie/shared/hooks';
 import {
-  artistDisplayName,
-  getSetHotness,
-  getConflictingSetIds,
+  getHomeActions,
+  festivalLoadState,
+  resolveFestivalTimeZone,
+  splitCardsByNow,
+  detectConflicts,
+  clashBadgeBySetId,
   festivalPhase,
+  groupScheduleSets,
   resolveStageColor,
-  setMatchesSearch,
   searchOtherDays,
-  searchEmptyCopy,
+  SCHEDULE_GROUP_BYS,
 } from '@festie/shared/utils';
-import { useScheduleFilters } from '../hooks/useScheduleFilters';
+import { useNow } from '../hooks/useSetStatus';
 import SetCard from '../components/features/SetCard';
 import PhaseHomeActions from '../components/features/PhaseHomeActions';
+import OfflineStatusChip from '../components/features/OfflineStatusChip';
+import FestivalReadyCard from '../components/features/FestivalReadyCard';
 import OtherDayMatches from '../components/features/OtherDayMatches';
-import EmptyState from '../components/ui/EmptyState';
+import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
+import SetTimesBanner from '../components/features/SetTimesBanner';
+import DiscoverRow from '../components/features/DiscoverRow';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { Music, SearchX } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function CardsView() {
   return (
@@ -56,20 +64,24 @@ function usePrefersReducedMotion(): boolean {
 function CardsViewInner() {
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const days = useFestivalStore((state) => state.days);
+  const myPicks = useFestivalStore(selectMyPicks);
   const user = useAuthStore((state) => state.user);
+  const crews = useCrewStore((state) => state.crews);
   const sets = useFestivalStore((state) => state.sets);
   const selectedDay = useFestivalStore((state) => state.selectedDay);
   const stages = useFestivalStore((state) => state.stages);
   const setSelectedDay = useFestivalStore((state) => state.setSelectedDay);
-  const setActiveStages = useFestivalStore((state) => state.setActiveStages);
-  const setOnlyMine = useFestivalStore((state) => state.setOnlyMine);
   const searchQuery = useFestivalStore((state) => state.searchQuery);
-  const { filterSets } = useScheduleFilters();
+  const dismissedPhase = useFestivalStore((state) => state.dismissedPhase);
+  const dismissPhaseBand = useFestivalStore((state) => state.dismissPhaseBand);
+  const groupBy = useFestivalStore((state) => state.scheduleGroupBy) ?? 'time';
+  const setGroupBy = useFestivalStore((state) => state.setScheduleGroupBy);
 
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const setDetailAutoSpotify = useUIStore((state) => state.setDetailAutoSpotify);
   const { getMyPick, getOtherPicks } = usePicks();
-  const { getStageColor: getStageColorRaw, getStageName, getDays } = useFestival();
+  const canPick = useCanPick();
+  const { getStageColor: getStageColorRaw, getStageName, getDays, getFilteredSets } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
     (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)'),
@@ -85,36 +97,30 @@ function CardsViewInner() {
     [setDetailAutoSpotify, setDetailSet],
   );
 
-  // Filter sets by day, stages, and search query — mirrors legacy filteredSets()
-  const filteredSets = useMemo(() => {
-    // Filter by selected day using dayIndex (legacy: getCurrentDaySets via day array index)
-    let filtered = sets.filter((s) => s.dayIndex === selectedDay);
+  const nowMs = useNow();
+  const [showEarlier, setShowEarlier] = useState(false);
 
-    // Filter by search query (artist, B2B names, stage name)
-    if (searchQuery) filtered = filtered.filter((s) => setMatchesSearch(s, searchQuery, stages));
-
-    // Stage chips + My picks, shared with Timeline and Grid.
-    filtered = filterSets(filtered);
-
-    // Sort by hotness (picks count), then by time, then by artist name
-    return filtered.sort((a, b) => {
-      const hotA = getSetHotness(a);
-      const hotB = getSetHotness(b);
-      if (hotA > 0 || hotB > 0) return hotB - hotA;
-
-      const timeA = a.startTime || '';
-      const timeB = b.startTime || '';
-      if (timeA && timeB) return timeA.localeCompare(timeB);
-      if (timeA && !timeB) return -1;
-      if (!timeA && timeB) return 1;
-
-      return artistDisplayName(a, currentFestival?.b2bSeparator).localeCompare(
-        artistDisplayName(b, currentFestival?.b2bSeparator),
-        undefined,
-        { sensitivity: 'base' },
-      );
-    });
-  }, [sets, selectedDay, filterSets, searchQuery, stages, currentFestival?.b2bSeparator]);
+  // Day, stage chips, My picks and search all come from the shared filter.
+  // Time order; sets already over today fold into one "Earlier today" row.
+  const { earlier, rest } = useMemo(
+    () =>
+      splitCardsByNow(getFilteredSets(), {
+        days,
+        nowMs,
+        timeZone: resolveFestivalTimeZone(currentFestival),
+        separator: currentFestival?.b2bSeparator,
+      }),
+    [getFilteredSets, days, nowMs, currentFestival],
+  );
+  const filteredSets = useMemo(() => [...earlier, ...rest], [earlier, rest]);
+  const visibleSets = showEarlier ? filteredSets : rest;
+  // Sections for the remembered "Group by" (Time, Stage or A-Z).
+  const groups = useMemo(
+    () => groupScheduleSets(visibleSets, groupBy, stages, currentFestival?.b2bSeparator),
+    [visibleSets, groupBy, stages, currentFestival?.b2bSeparator],
+  );
+  // Position in render order, for the stagger entrance.
+  const renderIndex = useMemo(() => new Map(groups.flatMap((g) => g.sets).map((set, i) => [set.id, i])), [groups]);
 
   // Matches on the other days, so a search never dead-ends on the selected day.
   const otherDayGroups = useMemo(
@@ -127,89 +133,101 @@ function CardsViewInner() {
     return map;
   }, [getDays]);
   const q = searchQuery.trim();
-  const searchCopy = searchEmptyCopy({
-    sets,
-    query: searchQuery,
-    selectedDay,
-    stages,
-    otherDayCount: otherDayGroups.length,
-    dayLabel: dayLabels[selectedDay],
-  });
 
-  // Compute conflict set IDs
-  const conflictIds = useMemo(() => {
-    return getConflictingSetIds(filteredSets, getMyPick);
-  }, [filteredSets, getMyPick]);
-
-  const conflictsBySetId = useMemo(() => {
-    const conflictSets = filteredSets.filter((s) => conflictIds.has(s.id));
-    const map = new Map<string, typeof conflictSets>();
-    for (const s of conflictSets) {
-      map.set(
-        s.id,
-        conflictSets.filter((c) => c.id !== s.id),
-      );
-    }
-    return map;
-  }, [filteredSets, conflictIds]);
+  // Per-set badge naming the other set it clashes with and the overlap.
+  const clashBadges = useMemo(
+    () => clashBadgeBySetId(detectConflicts(filteredSets, getMyPick), currentFestival?.b2bSeparator),
+    [filteredSets, getMyPick, currentFestival?.b2bSeparator],
+  );
 
   // P1-5 — festival lifecycle phase (pre / live / post), derived from the
   // festival's date range vs now (shared `festivalPhase`). Drives the
   // phase-aware home action band; null when the festival has no usable dates.
   const phase = useMemo(() => festivalPhase(currentFestival, days), [currentFestival, days]);
 
+  // AppShell already runs usePushNotifications; read the permission directly instead of a second instance.
+  const notificationsAllowed = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  const ready = useFestivalReady(notificationsAllowed);
+
   // Show layout-matched skeleton while festivals are being fetched on boot
   // — same component the router uses for the chunk-load fallback so the
   // visual is continuous across route-transition → data-fetch.
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
+    if (loadState === 'error') return <FestivalLoadError />;
     return <CardsSkeleton />;
   }
 
+  const hasCrew = crews.some((c) => !c.festivalId || c.festivalId === currentFestival.id);
+  const actions = getHomeActions({
+    phase,
+    signedIn: !!user,
+    pickCount: Object.keys(myPicks ?? {}).length,
+    hasCrew,
+  });
+
   return (
     <>
-      {/* P1-5 — phase-aware home actions (authed only; matches BottomNav hiding
-          crew/picks/wrap from guests). Re-prioritizes destinations by phase. */}
-      {user && phase ? (
-        <div className={phase === 'post' ? undefined : 'max-md:hidden'}>
-          <PhaseHomeActions phase={phase} />
-        </div>
+      {/* Before the festival the Festival ready checklist takes the band's place until it is done or hidden. */}
+      {/* Next useful steps for this phase; empty (hidden) when there is nothing to do or dismissed. */}
+      {ready.visible ? (
+        <FestivalReadyCard ready={ready} />
+      ) : actions.length > 0 && phase && dismissedPhase !== phase ? (
+        <PhaseHomeActions actions={actions} onDismiss={() => dismissPhaseBand(phase)} />
       ) : null}
+
+      <SetTimesBanner />
+      <DiscoverRow />
+
+      {filteredSets.length > 0 && (
+        <div className="flex items-center gap-2 w-full mx-auto max-w-[1440px] mb-[var(--space-3)]">
+          <span id="cards-group-by" className="text-[length:var(--font-size-14)] text-text-secondary">
+            Group by
+          </span>
+          <div className="flex gap-1 p-1 rounded-full bg-bg-secondary" role="group" aria-labelledby="cards-group-by">
+            {SCHEDULE_GROUP_BYS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={groupBy === key}
+                onClick={() => setGroupBy(key)}
+                className={
+                  'rounded-full px-3 min-h-11 text-[length:var(--font-size-14)] font-semibold cursor-pointer ' +
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua ' +
+                  (groupBy === key
+                    ? 'bg-accent-aqua text-[var(--text-on-light-accent)]'
+                    : 'bg-transparent text-text-secondary hover:text-text-primary')
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {user ? <OfflineStatusChip className="mb-[var(--space-4)]" remind /> : null}
 
       {/* Card grid */}
       {filteredSets.length === 0 ? (
-        <>
-          <EmptyState
-            icon={
-              q ? (
-                <SearchX className="w-12 h-12" aria-hidden="true" />
-              ) : (
-                <Music className="w-12 h-12" aria-hidden="true" />
-              )
-            }
-            title={q ? searchCopy.title : 'No sets for this day'}
-            description={q ? searchCopy.description : 'Pick another day from the day selector to browse the schedule.'}
-            cta={
-              q && searchCopy.hiddenByFilters
-                ? {
-                    label: 'Clear filters',
-                    onClick: () => {
-                      setActiveStages([]);
-                      setOnlyMine(false);
-                    },
-                  }
-                : undefined
-            }
-          />
-          {q && (
-            <OtherDayMatches
-              groups={otherDayGroups}
-              dayLabels={dayLabels}
-              stages={stages}
-              b2bSeparator={currentFestival?.b2bSeparator}
-              onSelectDay={setSelectedDay}
-            />
-          )}
-        </>
+        <ScheduleEmptyState
+          dayLabel={dayLabels[selectedDay] ?? 'this day'}
+          dayFallback={{
+            title: 'No sets for this day',
+            description: 'Pick another day from the day selector to browse the schedule.',
+          }}
+          otherDayMatches={
+            q && otherDayGroups.length > 0 ? (
+              <OtherDayMatches
+                groups={otherDayGroups}
+                dayLabels={dayLabels}
+                stages={stages}
+                b2bSeparator={currentFestival?.b2bSeparator}
+                onSelectDay={setSelectedDay}
+              />
+            ) : undefined
+          }
+        />
       ) : (
         <div
           // `card-grid` is kept for its behavioral hooks (scroll-container
@@ -225,53 +243,81 @@ function CardsViewInner() {
           // for every route, so the grid (and the empty-state branch above)
           // share one origin instead of stacking an extra grid pad on top.
           style={{
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
+            // 300px keeps the Must/Want/Maybe row inside the card; 260px clipped Maybe.
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
             gap: 'var(--cards-gap, var(--space-3))',
           }}
           role="region"
           aria-label="Card view"
         >
-          {filteredSets.map((set, idx) => {
-            const sc = getStageColor(set.stageId);
-            const sn = getStageName(set.stageId) || 'Unknown';
-            const others = getOtherPicks(set.id);
-            const setConflicts = conflictsBySetId.get(set.id) || [];
+          {earlier.length > 0 && (
+            <button
+              type="button"
+              className="col-span-full inline-flex items-center justify-center gap-1.5 min-h-11 rounded-xl border border-glass-border bg-bg-card text-sm font-medium text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+              aria-expanded={showEarlier}
+              aria-label={
+                showEarlier
+                  ? 'Hide sets that ended earlier today'
+                  : `Show ${earlier.length} sets that ended earlier today`
+              }
+              onClick={() => setShowEarlier((v) => !v)}
+            >
+              {showEarlier ? 'Hide earlier sets' : `Earlier today (${earlier.length})`}
+              {showEarlier ? (
+                <ChevronUp className="w-4 h-4" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="w-4 h-4" aria-hidden="true" />
+              )}
+            </button>
+          )}
+          {groups.map((group) => (
+            <Fragment key={group.key || 'other'}>
+              <h3 className="col-span-full mt-[var(--space-2)] text-[length:var(--font-size-14)] font-semibold text-text-secondary">
+                {group.label}
+              </h3>
+              {group.sets.map((set) => {
+                const idx = renderIndex.get(set.id) ?? 0;
+                const sc = getStageColor(set.stageId);
+                const sn = getStageName(set.stageId) || 'Unknown';
+                const others = getOtherPicks(set.id);
 
-            return (
-              <div
-                key={set.id}
-                // No windowing lib is a dependency, so the interim quick win:
-                // content-visibility:auto lets the browser skip layout/paint for
-                // off-screen cards, with contain-intrinsic-size reserving an
-                // approximate box so the scrollbar stays stable. Cuts render cost
-                // on long single-day lineups without virtualization machinery.
-                className="[content-visibility:auto] [contain-intrinsic-size:auto_240px]"
-                // Softened stagger entrance on the motion tokens
-                // (duration.med + easing.out). Skipped entirely when the user
-                // prefers reduced motion.
-                style={
-                  prefersReducedMotion
-                    ? undefined
-                    : ({
-                        animation: 'stagger-fade-in var(--duration-med) var(--ease-out) both',
-                        animationDelay: `calc(${Math.min(idx, 20)} * 24ms)`,
-                      } as React.CSSProperties)
-                }
-              >
-                <SetCard
-                  set={set}
-                  onTap={() => setDetailSet(set)}
-                  onPreview={() => handlePreview(set)}
-                  showPicks={!!user}
-                  stageName={sn}
-                  stageColor={sc}
-                  friendProfiles={others}
-                  conflicts={setConflicts}
-                  b2bSeparator={currentFestival?.b2bSeparator}
-                />
-              </div>
-            );
-          })}
+                return (
+                  <div
+                    key={set.id}
+                    // No windowing lib is a dependency, so the interim quick win:
+                    // content-visibility:auto lets the browser skip layout/paint for
+                    // off-screen cards, with contain-intrinsic-size reserving an
+                    // approximate box so the scrollbar stays stable. Cuts render cost
+                    // on long single-day lineups without virtualization machinery.
+                    className="[content-visibility:auto] [contain-intrinsic-size:auto_240px]"
+                    // Softened stagger entrance on the motion tokens
+                    // (duration.med + easing.out). Skipped entirely when the user
+                    // prefers reduced motion.
+                    style={
+                      prefersReducedMotion
+                        ? undefined
+                        : ({
+                            animation: 'stagger-fade-in var(--duration-med) var(--ease-out) both',
+                            animationDelay: `calc(${Math.min(idx, 20)} * 24ms)`,
+                          } as React.CSSProperties)
+                    }
+                  >
+                    <SetCard
+                      set={set}
+                      onTap={() => setDetailSet(set)}
+                      onPreview={() => handlePreview(set)}
+                      showPicks={canPick}
+                      stageName={sn}
+                      stageColor={sc}
+                      friendProfiles={others}
+                      clashLabel={clashBadges.get(set.id)?.label}
+                      b2bSeparator={currentFestival?.b2bSeparator}
+                    />
+                  </div>
+                );
+              })}
+            </Fragment>
+          ))}
         </div>
       )}
       {q && filteredSets.length > 0 && (

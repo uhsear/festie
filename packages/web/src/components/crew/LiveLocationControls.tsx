@@ -1,36 +1,41 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, Navigation, ShieldCheck, X, MapPin } from 'lucide-react';
 import { clearCrewSos, sosErrorMessage } from '@festie/shared';
 import type { SosEntry } from '@festie/shared/types';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { LIVE_LOCATION } from '@festie/shared/constants';
-import { formatStaleness } from '@festie/shared/utils';
+import { useFestivalStore } from '@festie/shared/stores';
+import { useShareExplainer } from '@festie/shared/hooks';
+import { LIVE_SHARE_COPY, LOW_POWER_COPY } from '@festie/shared/constants';
+import { formatStaleness, liveShareOptions, resolveFestivalTimeZone, sosSeenLabel } from '@festie/shared/utils';
 import { useSharedSocket } from '../../lib/socketContext';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
+import Switch from '../ui/Switch';
+import { useReturnFocus } from '../../hooks/useReturnFocus';
 import SosRaiseButton from './SosRaiseButton';
+import CheckInCard from './CheckInCard';
+import { BeaconButton } from './BeaconOverlay';
 
 interface Props {
   crewId: string;
   currentUserId: string;
 }
 
-const SESSION_MINUTES = Math.round(LIVE_LOCATION.MAX_SESSION_MS / 60_000);
-
 /**
  * LiveLocationControls — opt-in live-location sharing + SOS for the active crew.
  *
- * PRIVACY MODEL (see liveLocationStore header): sharing is OFF by default, is a
- * per-session opt-in that is never persisted (resets on reload) and is scoped to
- * THIS crew only. This switch only records the opt-in in liveLocationStore; the
- * app-level LiveLocationSharing owns the GPS watch, its stop paths and the
- * non-dismissible sharing indicator, so sharing survives leaving this tab.
+ * PRIVACY MODEL (see liveLocationStore header): sharing is OFF by default and is a
+ * per-session opt-in that is never persisted (resets on reload). The sharer picks
+ * how long; the choice becomes ONE session per crew in liveLocationStore
+ * (`shareIntent`). LiveLocationSharing in AppShell runs it app-wide, so it survives
+ * tab and page changes, and shows the bar with Pause and Stop. It ends at the
+ * picked time, on Stop, on a crew switch, on logout or when low-power mode turns on.
  *
  * SOS is HTTP (not a fire-and-forget socket emit) so it reliably writes the
  * crew_activity row + fans out push; it is online-only (never queued), so an
@@ -42,34 +47,42 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
   const { toast } = useToast();
 
   // Per-session opt-in, held in the non-persisted store (always starts OFF).
-  const shareIntentCrewId = useLiveLocationStore((s) => s.shareIntentCrewId);
-  const sharingCrewId = useLiveLocationStore((s) => s.sharingCrewId);
+  const shareIntent = useLiveLocationStore((s) => s.shareIntent);
   // Read the FULL active-SOS list (not just the newest `sos`) so a second
   // concurrent SOS stays visible. The store is scoped to the active crew; filter
   // anyway as defense in depth (parity with mobile CrewSos).
   const activeSosList = useLiveLocationStore((s) => s.activeSosList);
   const sosList = useMemo(() => activeSosList.filter((e) => e.crewId === crewId), [activeSosList, crewId]);
-  const isSharingThisCrew = shareIntentCrewId === crewId && sharingCrewId === crewId;
+  const isSharingThisCrew = shareIntent?.crewId === crewId;
 
   // Low-power mode disables the battery-hungry live-location auto-share (GPS
   // watch + socket emit loop). SOS stays available — it's an essential.
   const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
+  const setLowPowerMode = useFestivalModeStore((s) => s.setLowPowerMode);
+  const festivalDays = useFestivalStore((s) => s.days);
+  const festivalSets = useFestivalStore((s) => s.sets);
+  const currentFestival = useFestivalStore((s) => s.currentFestival);
+  const chooserHeadingId = useId();
 
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const explainer = useShareExplainer();
+  const [shareBattery, setShareBattery] = useState(false);
   const [clearBusy, setClearBusy] = useState(false);
   // The SOS pending a clear-confirm. Any member may resolve any SOS (parity with
   // mobile — the raiser's phone may be dead), but a stray tap must not silently
   // clear a live emergency, so clearing is confirm-gated like the raise. null = closed.
   const [clearTarget, setClearTarget] = useState<SosEntry | null>(null);
+  const returnFocus = useReturnFocus();
 
   function toggleSharing() {
-    if (shareIntentCrewId === crewId) {
-      useLiveLocationStore.getState().cancelSharing();
+    if (isSharingThisCrew) {
+      useLiveLocationStore.getState().endShare('user');
       return;
     }
-    if (lowPowerMode) {
-      toast('Low-power mode is on — turn it off to share your live location.', 'info');
-      return;
-    }
+    setChooserOpen((open) => !open);
+  }
+
+  function startSharing(ms: number) {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       toast('Location is not available on this device.', 'error');
       return;
@@ -78,7 +91,9 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
       toast('Not connected — can’t share your location right now.', 'error');
       return;
     }
-    useLiveLocationStore.getState().requestSharing(crewId);
+    useLiveLocationStore.getState().beginShare(crewId, new Date(Date.now() + ms).toISOString(), shareBattery);
+    setChooserOpen(false);
+    setShareBattery(false);
   }
 
   // Clear a specific raiser's SOS. Any crew member may resolve any SOS (the
@@ -102,6 +117,21 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
   const showSos = sosList.length > 0;
   const clearMine = clearTarget?.userId === currentUserId;
   const ownSosActive = sosList.some((e) => e.userId === currentUserId);
+  const showChooser = chooserOpen && !isSharingThisCrew && !lowPowerMode;
+  // Duration buttons, the default first so it is first in focus order.
+  const durationChoices = showChooser
+    ? liveShareOptions({
+        days: festivalDays,
+        sets: festivalSets,
+        timeZone: resolveFestivalTimeZone(currentFestival),
+        nowMs: Date.now(),
+      })
+    : null;
+  const orderedOptions = durationChoices
+    ? [...durationChoices.options].sort(
+        (a, b) => Number(b.id === durationChoices.defaultId) - Number(a.id === durationChoices.defaultId),
+      )
+    : [];
 
   return (
     <div className="space-y-2">
@@ -109,6 +139,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
           (the banner below carries "I'm safe"), as on mobile. ─────────────── */}
       {!ownSosActive && <SosRaiseButton crewId={crewId} alerting={showSos} />}
       <p className="text-xs text-text-muted">For emergencies — alerts your whole crew. Needs signal to send.</p>
+      <CheckInCard crewId={crewId} />
 
       {/* ── Active SOS banners (crew-wide, prominent) ──────────────────────────
           One banner per active SOS. With 2+ live, a "{N} active" header labels
@@ -136,6 +167,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
                 </p>
                 {entry.message && <p className="text-sm text-text-secondary mt-0.5 break-words">{entry.message}</p>}
                 <p className="text-xs text-text-muted mt-0.5">{formatStaleness(entry.raisedAt)}</p>
+                <p className="text-xs text-text-muted">{sosSeenLabel(entry)}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -170,42 +202,88 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
           <MapPin className="w-5 h-5 text-text-secondary shrink-0" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p id="live-share-label" className="text-sm font-semibold text-text-primary">
-              Share my live location with this crew
+              {LIVE_SHARE_COPY.title}
             </p>
             <p id="live-share-desc" className="text-xs text-text-muted">
-              {lowPowerMode
-                ? 'Paused by low-power mode to save battery. Turn it off in Festival Mode to share.'
-                : `Ephemeral and crew-only. Keeps running on other pages and auto-stops after ${SESSION_MINUTES} min.`}
+              {lowPowerMode ? LOW_POWER_COPY.livePaused : LIVE_SHARE_COPY.ruleWeb}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isSharingThisCrew}
-            aria-labelledby="live-share-label"
-            aria-describedby="live-share-desc"
-            onClick={toggleSharing}
+          <Switch
+            checked={isSharingThisCrew}
+            onChange={() => toggleSharing()}
+            label={LIVE_SHARE_COPY.switchA11y}
+            describedBy="live-share-desc"
             disabled={lowPowerMode}
             data-testid="live-share-toggle"
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua disabled:opacity-40 disabled:cursor-not-allowed ${
-              isSharingThisCrew ? 'bg-accent-aqua' : 'bg-border-light'
-            }`}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                isSharingThisCrew ? 'translate-x-[22px]' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
         </div>
+        {lowPowerMode && (
+          <Button variant="outline" size="sm" onClick={() => setLowPowerMode(false)}>
+            {LOW_POWER_COPY.turnOff}
+          </Button>
+        )}
+        {showChooser && (
+          <div
+            role="group"
+            aria-labelledby={chooserHeadingId}
+            className="flex flex-col gap-2"
+            data-testid="live-share-chooser"
+          >
+            <p id={chooserHeadingId} className="text-sm font-semibold text-text-primary">
+              {explainer.needed ? LIVE_SHARE_COPY.explainerTitle : LIVE_SHARE_COPY.chooserTitle}
+            </p>
+            {explainer.needed ? (
+              <>
+                <ul className="list-disc pl-5 text-sm text-text-secondary space-y-1">
+                  {LIVE_SHARE_COPY.explainerPoints.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+                <Button className="min-h-11" onClick={explainer.markSeen}>
+                  {LIVE_SHARE_COPY.explainerOk}
+                </Button>
+              </>
+            ) : (
+              <>
+                <label className="flex items-start gap-2 text-sm text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={shareBattery}
+                    onChange={(e) => setShareBattery(e.target.checked)}
+                    className="mt-1 h-4 w-4 accent-accent-aqua"
+                  />
+                  <span>
+                    {LIVE_SHARE_COPY.battery}
+                    <span className="block text-xs text-text-muted">{LIVE_SHARE_COPY.batteryHint}</span>
+                  </span>
+                </label>
+                {orderedOptions.map((option) => (
+                  <Button
+                    key={option.id}
+                    variant={option.id === durationChoices?.defaultId ? 'primary' : 'outline'}
+                    className="min-h-11"
+                    onClick={() => startSharing(option.ms)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </>
+            )}
+            <Button variant="utility" className="min-h-11" onClick={() => setChooserOpen(false)}>
+              {LIVE_SHARE_COPY.cancel}
+            </Button>
+          </div>
+        )}
       </div>
+
+      <BeaconButton />
 
       {/* ── Clear-SOS confirm dialog (parity with the raise: one stray tap must
           not silently resolve a live emergency) ────────────────────────────── */}
       <Dialog.Root open={!!clearTarget} onOpenChange={(o: boolean) => !clearBusy && !o && setClearTarget(null)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
+          <Dialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
+          <Dialog.Content {...returnFocus} className="fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
             {clearTarget && (
               <>
                 <div className="flex items-start justify-between gap-3">

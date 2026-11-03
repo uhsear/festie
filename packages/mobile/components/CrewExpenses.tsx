@@ -2,11 +2,28 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, Alert, Linking, AccessibilityInfo } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { useCrewStore, useUIStore } from '@festie/shared/stores';
-import type { CrewExpense, CrewMember, CrewSettlement } from '@festie/shared/types';
+import { useCrewStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
+import { useCrewDaysIndex } from '@festie/shared/hooks';
+import type { CrewExpense, CrewMember, CrewSettlement, CreateCrewExpenseRequest } from '@festie/shared/types';
+import { mapErrorToUserMessage } from '@festie/shared/services';
 import {
   formatBalance,
   formatAmount,
+  formatCents,
+  toCents,
+  evenShares,
+  sharesByDays,
+  attendingDayCount,
+  hasDayAnswers,
+  memberSummary,
+  sharesError,
+  expenseShareCents,
+  settlementSentence,
+  balanceSentence,
+  paymentsToConfirm,
+  paymentStatusLine,
+  expenseTrailLine,
+  isSettlement,
   isPending,
   payOptionsFor,
   createSettleUpFlow,
@@ -16,7 +33,7 @@ import {
   QUEUED_WRITE_MESSAGE,
   writeOutcomeMessage,
 } from '@festie/shared/utils';
-import { EXPENSE_CATEGORIES, expenseCategoryFor } from '@festie/shared/constants';
+import { EXPENSE_CATEGORIES, CREW_CURRENCIES, expenseCategoryFor } from '@festie/shared/constants';
 import {
   sanitizeAmountInput,
   canAddExpense,
@@ -44,7 +61,6 @@ interface CrewExpensesProps {
   currentUserId: string;
 }
 
-
 /**
  * Crew expenses — track shared costs, view per-person balances, settle debts.
  * Mirrors the web ExpensesTab against the same endpoints, via the shared
@@ -63,6 +79,12 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   const addExpense = useCrewStore((s) => s.addExpense);
   const removeExpense = useCrewStore((s) => s.removeExpense);
   const settleExpense = useCrewStore((s) => s.settleExpense);
+  const updateExpense = useCrewStore((s) => s.updateExpense);
+  const confirmPayment = useCrewStore((s) => s.confirmPayment);
+  const remindPayment = useCrewStore((s) => s.remindPayment);
+  const setExpenseCurrency = useCrewStore((s) => s.setExpenseCurrency);
+  const currency = useCrewStore((s) => s.expenseCurrency);
+  const isOwner = useCrewStore((s) => s.activeCrew?.owner === currentUserId);
 
   const [showForm, setShowForm] = useState(false);
   const [description, setDescription] = useState('');
@@ -70,13 +92,24 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   const [category, setCategory] = useState<string>('other');
   const [planned, setPlanned] = useState(false);
   const [splitWith, setSplitWith] = useState<string[]>(() => members.map((m) => m.userId));
+  const [editing, setEditing] = useState<CrewExpense | null>(null);
+  const [paidBy, setPaidBy] = useState(currentUserId);
+  // Editing someone else's row: only the payer, the adder or the owner may move who paid.
+  const payerLocked =
+    !!editing && editing.paid_by !== currentUserId && editing.created_by !== currentUserId && !isOwner;
+  const [uneven, setUneven] = useState(false);
+  const [shareText, setShareText] = useState<Record<string, string>>({});
+  const [removedNames, setRemovedNames] = useState<string[]>([]);
+  const daysIndex = useCrewDaysIndex();
+  const dayCount = useFestivalStore((s) => s.days.length);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // Planned-vs-actual filter. 'actual' = the real ledger (feeds settle-up);
   // 'planned' = the budget/forecast view; 'all' = both.
   const [view, setView] = useState<'all' | 'actual' | 'planned'>('actual');
-  // Settle-up view. 'simplified' = the netted greedy min-cash-flow plan (fewest
-  // transfers, never a stranger-to-pay); 'raw' = every member's gross net balance.
-  const [settleView, setSettleView] = useState<'simplified' | 'raw'>('simplified');
+  // Settle-up view. 'fewest' = the netted greedy min-cash-flow plan (fewest
+  // transfers, never a stranger-to-pay); 'everyone' = every member's net balance.
+  const [settleView, setSettleView] = useState<'fewest' | 'everyone'>('fewest');
 
   const reset = () => {
     setDescription('');
@@ -84,7 +117,47 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
     setCategory('other');
     setPlanned(false);
     setSplitWith(members.map((m) => m.userId));
+    setPaidBy(currentUserId);
+    setUneven(false);
+    setShareText({});
+    setRemovedNames([]);
+    setEditing(null);
     setShowForm(false);
+  };
+
+  const startEdit = (e: CrewExpense) => {
+    setEditing(e);
+    setDescription(e.description);
+    setAmount(String(e.amount));
+    setCategory(e.category);
+    setPlanned(e.planned === true);
+    // Former members cannot be picked or removed in the form and the server rejects them, so drop them here.
+    const isMember = (id: string) => members.some((m) => m.userId === id);
+    setSplitWith(e.split_with.filter(isMember));
+    setPaidBy(isMember(e.paid_by) ? e.paid_by : currentUserId);
+    const stored = e.split_amounts;
+    setUneven(!!stored && Object.keys(stored).length > 0);
+    setShareText(
+      Object.fromEntries(Object.entries(stored ?? {}).map(([uid, cents]) => [uid, (cents / 100).toFixed(2)])),
+    );
+    setShowForm(true);
+  };
+
+  const startUneven = () => {
+    setShareText(
+      Object.fromEntries(evenShares(toCents(amount), splitWith).map((sh) => [sh.userId, (sh.cents / 100).toFixed(2)])),
+    );
+    setUneven(true);
+  };
+
+  const splitByDays = () => {
+    const { shares: byDays, removed } = sharesByDays(toCents(amount), splitWith, (id) =>
+      attendingDayCount(daysIndex, id, dayCount),
+    );
+    if (byDays.length === 0) return;
+    setSplitWith((prev) => prev.filter((id) => !removed.includes(id)));
+    setShareText(Object.fromEntries(byDays.map((sh) => [sh.userId, (sh.cents / 100).toFixed(2)])));
+    setRemovedNames(removed.map((id) => members.find((m) => m.userId === id)?.name || 'Member'));
   };
 
   const toggleMember = (uid: string) => {
@@ -109,7 +182,12 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   const myReceipts = selectMyReceipts(settlements, currentUserId);
 
   const amt = Number(amount);
-  const canAdd = canAddExpense(description, amt, splitWith.length);
+  const memberIds = members.map((m) => m.userId);
+  const shares = splitWith.map((userId) => ({ userId, cents: toCents(shareText[userId] ?? '') }));
+  const shareProblem = uneven && amt > 0 ? sharesError(toCents(amt), shares, currency) : null;
+  const sharesSum = shares.reduce((sum, sh) => sum + sh.cents, 0);
+  const canAdd = canAddExpense(description, amt, splitWith.length) && !shareProblem;
+  const toConfirm = paymentsToConfirm(expenses, currentUserId);
   // Inline-validation flag: amount typed but not a usable positive number.
   // (decimal-pad can still surface '-', '..', or trailing dots on some devices.)
   const amountInvalid = isAmountInvalid(amount, amt);
@@ -122,13 +200,16 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
     if (!canAdd || busy) return;
     setBusy(true);
     try {
-      const outcome = await addExpense(crewId, {
+      const request: CreateCrewExpenseRequest = {
         description: description.trim(),
         amount: amt,
         splitWith,
         category,
         planned,
-      });
+        ...(payerLocked ? {} : { paidBy }),
+        ...(uneven ? { shares } : {}),
+      };
+      const outcome = editing ? await updateExpense(crewId, editing.id, request) : await addExpense(crewId, request);
       // Queued offline: the row shows "Not sent yet"; never celebrate it as sent.
       if (outcome === 'queued') AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
       else haptics.success();
@@ -145,16 +226,16 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
     haptics.warning();
     Alert.alert(
       'Remove expense',
-      `Remove "${expense.description}" (${formatAmount(expense.amount)})? Everyone's balance is recalculated without it.`,
+      `Remove "${expense.description}" (${formatAmount(expense.amount, currency)})? Everyone's balance is recalculated without it.`,
       [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          removeExpense(crewId, expense.id).catch(() => {});
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            removeExpense(crewId, expense.id).catch(() => {});
+          },
         },
-      },
       ],
     );
   };
@@ -163,7 +244,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
     haptics.warning();
     Alert.alert(
       'Undo this payment?',
-      `${describePayment(payment, currentUserId, nameOf)}. Undo it only if it was recorded by mistake. Balances go back to what they were before.`,
+      `${describePayment(payment, currentUserId, nameOf, currency)}. Undo it only if it was recorded by mistake. Balances go back to what they were before.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -188,12 +269,12 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   // after the user confirms they paid.
   const handleConfirmPaid = (s: CrewSettlement) => {
     if (s.amount <= 0) return;
-    Alert.alert('Record payment', confirmPaidMessage(s, formatAmount(s.amount)), [
+    Alert.alert('Record payment', confirmPaidMessage(s, formatAmount(s.amount, currency)), [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Yes, I paid',
         onPress: () => {
-          createSettleUpFlow(s, (req) => settleExpense(crewId, req))
+          createSettleUpFlow(s, (req) => settleExpense(crewId, req), currency)
             .confirmPaid()
             .then((outcome) => {
               if (outcome === 'queued') Alert.alert('Not sent yet', QUEUED_WRITE_MESSAGE);
@@ -203,6 +284,34 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
         },
       },
     ]);
+  };
+
+  const handleConfirmReceived = (p: CrewExpense, received: boolean) => {
+    const payer = nameOf(p.paid_by) ?? p.paid_by_name ?? 'Your crewmate';
+    confirmPayment(crewId, p.id, received)
+      .then((outcome) => {
+        const message =
+          outcome === 'queued'
+            ? QUEUED_WRITE_MESSAGE
+            : received
+              ? `Thanks. ${payer} can see you got it.`
+              : `${payer} has been told it hasn't arrived.`;
+        useUIStore.getState().showToast(message, { kind: outcome === 'queued' ? 'info' : 'success' });
+      })
+      .catch(() => {});
+  };
+
+  const handleRemind = (s: CrewSettlement) => {
+    remindPayment(crewId, s.fromUserId)
+      .then((outcome) => {
+        if (outcome === 'queued') {
+          AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
+          return;
+        }
+        AccessibilityInfo.announceForAccessibility(`Reminder sent to ${s.fromName}.`);
+        haptics.success();
+      })
+      .catch((err) => Alert.alert('Reminder not sent', mapErrorToUserMessage(err, 'Try again.')));
   };
 
   // Open a payment app deep link (falls back to the https URL if the app isn't
@@ -219,11 +328,60 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
 
   return (
     <View style={styles.container}>
+      {isOwner ? (
+        <View style={styles.ledger}>
+          <TouchableOpacity
+            style={styles.currencyRow}
+            onPress={() => setCurrencyOpen((o) => !o)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: currencyOpen }}
+            accessibilityLabel={`Currency, ${currency}`}
+          >
+            <Text style={styles.ledgerLabel}>Currency</Text>
+            <Text style={styles.ledgerName}>{currency}</Text>
+            <Ionicons
+              name={currencyOpen ? 'chevron-up' : 'chevron-down'}
+              size={t.iconSize.xs}
+              color={t.colors.text.secondary}
+            />
+          </TouchableOpacity>
+          {currencyOpen ? (
+            <>
+              <View style={styles.chipGrid}>
+                {CREW_CURRENCIES.map((c) => {
+                  const active = currency === c;
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      style={[styles.chip, active && styles.chipActive]}
+                      onPress={() => {
+                        if (!active) setExpenseCurrency(crewId, c).catch(() => {});
+                        setCurrencyOpen(false);
+                      }}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`Use ${c}`}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{c}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.splitHint}>Changing the currency does not convert amounts.</Text>
+            </>
+          ) : null}
+        </View>
+      ) : (
+        <Text style={styles.splitHint}>Amounts in {currency}</Text>
+      )}
+
       {expenses.length > 0 ? (
         <View style={styles.statsGrid}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Total spent</Text>
-            <Text style={[styles.statValue, styles.tabularNums]}>{formatAmount(totalSpent)}</Text>
+            <Text style={[styles.statValue, styles.tabularNums]}>{formatAmount(totalSpent, currency)}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Your balance</Text>
@@ -235,7 +393,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                 myBalance < -0.01 && styles.balanceNegative,
               ]}
             >
-              {formatBalance(myBalance)}
+              {formatBalance(myBalance, currency)}
             </Text>
             {/* Directional plain-language gloss so the signed number is never
                 ambiguous: positive = others owe you, negative = you owe. */}
@@ -256,7 +414,9 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
       {totalPlanned > 0 ? (
         <View style={styles.statBox}>
           <Text style={styles.statLabel}>Planned (budget)</Text>
-          <Text style={[styles.statValue, styles.balancePositive, styles.tabularNums]}>{formatAmount(totalPlanned)}</Text>
+          <Text style={[styles.statValue, styles.balancePositive, styles.tabularNums]}>
+            {formatAmount(totalPlanned, currency)}
+          </Text>
         </View>
       ) : null}
 
@@ -291,16 +451,50 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
         </View>
       ) : null}
 
-      {/* Settle up — one card, toggle between the netted Simplified plan
-          (fewest transfers, never a stranger-to-pay) and the Raw per-member
-          balances. Simplified surfaces one actionable net line per crew member:
-          "You owe {name}" (settle-able) / "{name} owes you" (read-only). */}
+      {/* Payments to confirm — the payee answers "Got it" / "Not received". */}
+      {toConfirm.length > 0 ? (
+        <View style={styles.ledger}>
+          <Text style={styles.ledgerLabel}>Payments to confirm</Text>
+          {toConfirm.map((p) => (
+            <View key={p.id} style={styles.settleGroup}>
+              <Text style={[styles.ledgerName, styles.tabularNums]}>
+                {nameOf(p.paid_by) ?? p.paid_by_name} marked {formatAmount(p.amount, currency)} paid to you.
+              </Text>
+              <View style={styles.payLinkRow}>
+                <TouchableOpacity
+                  style={styles.settleButton}
+                  onPress={() => handleConfirmReceived(p, true)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Got it. Confirm ${nameOf(p.paid_by) ?? p.paid_by_name} paid you`}
+                >
+                  <Text style={styles.settleButtonText}>Got it</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.payLink}
+                  onPress={() => handleConfirmReceived(p, false)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Not received from ${nameOf(p.paid_by) ?? p.paid_by_name}`}
+                >
+                  <Text style={styles.payLinkText}>Not received</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Settle up — one card, toggle between the netted Fewest payments plan
+          (never a stranger-to-pay) and Everyone's balance. Fewest payments
+          surfaces one actionable net line per crew member: "You owe {name}"
+          (settle-able) / "{name} owes you" (read-only, with a reminder). */}
       {settlements.length > 0 || nonZeroBalances.length > 0 ? (
         <View style={styles.ledger}>
           <View style={styles.ledgerHeader}>
             <Text style={styles.ledgerLabel}>Settle up</Text>
             <View style={styles.settleToggle}>
-              {(['simplified', 'raw'] as const).map((v) => {
+              {(['fewest', 'everyone'] as const).map((v) => {
                 const active = settleView === v;
                 return (
                   <TouchableOpacity
@@ -313,10 +507,10 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                     activeOpacity={0.8}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
-                    accessibilityLabel={`Show ${v} settle-up`}
+                    accessibilityLabel={`Show ${v === 'fewest' ? 'fewest payments' : "everyone's balance"}`}
                   >
                     <Text style={[styles.settleToggleText, active && styles.settleToggleTextActive]}>
-                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                      {v === 'fewest' ? 'Fewest payments' : "Everyone's balance"}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -324,19 +518,18 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
             </View>
           </View>
 
-          {settleView === 'simplified' ? (
+          {settleView === 'fewest' ? (
             myPayments.length === 0 && myReceipts.length === 0 ? (
               <Text style={styles.ledgerName}>You're all settled up.</Text>
             ) : (
               <>
                 {/* You owe {name} — settle-able net transfers. */}
                 {myPayments.map((s) => {
-                  const options = payOptionsFor(s);
+                  const options = payOptionsFor(s, currency);
                   return (
                     <View key={`pay-${s.toUserId}`} style={styles.settleGroup}>
-                      <Text style={styles.ledgerName}>
-                        You owe {s.toName}{' '}
-                        <Text style={[styles.balanceNegative, styles.tabularNums]}>{formatAmount(s.amount)}</Text>
+                      <Text style={[styles.ledgerName, styles.balanceNegative, styles.tabularNums]}>
+                        {settlementSentence(s, currentUserId, currency)}
                       </Text>
                       {options.length > 0 ? (
                         <View style={styles.payLinkRow}>
@@ -373,11 +566,20 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                 })}
                 {/* {name} owes you — read-only; the other person settles. */}
                 {myReceipts.map((s) => (
-                  <View key={`get-${s.fromUserId}`} style={styles.ledgerRow}>
-                    <Text style={styles.ledgerName}>
-                      {s.fromName} owes you{' '}
-                      <Text style={[styles.balancePositive, styles.tabularNums]}>{formatAmount(s.amount)}</Text>
+                  <View key={`get-${s.fromUserId}`} style={styles.settleGroup}>
+                    <Text style={[styles.ledgerName, styles.balancePositive, styles.tabularNums]}>
+                      {settlementSentence(s, currentUserId, currency)}
                     </Text>
+                    <TouchableOpacity
+                      style={styles.settleButton}
+                      onPress={() => handleRemind(s)}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remind ${s.fromName} to pay you`}
+                    >
+                      <Ionicons name="notifications-outline" size={14} color={t.colors.accent.aqua} />
+                      <Text style={styles.settleButtonText}>Remind {s.fromName}</Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
               </>
@@ -385,11 +587,14 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
           ) : nonZeroBalances.length > 0 ? (
             nonZeroBalances.map((b) => (
               <View key={b.userId} style={styles.ledgerRow}>
-                <Text style={styles.ledgerName}>
-                  {b.userId === currentUserId ? 'You' : b.username}{' '}
-                  <Text style={[b.balance > 0 ? styles.balancePositive : styles.balanceNegative, styles.tabularNums]}>
-                    {formatBalance(b.balance)}
-                  </Text>
+                <Text
+                  style={[
+                    styles.ledgerName,
+                    b.balance > 0 ? styles.balancePositive : styles.balanceNegative,
+                    styles.tabularNums,
+                  ]}
+                >
+                  {balanceSentence(b, currentUserId, currency)}
                 </Text>
               </View>
             ))
@@ -402,13 +607,13 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
       {showForm ? (
         <View style={styles.formBox}>
           <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>New expense</Text>
+            <Text style={styles.formTitle}>{editing ? 'Edit expense' : 'New expense'}</Text>
             <TouchableOpacity
               onPress={reset}
               style={styles.iconButton}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Cancel new expense"
+              accessibilityLabel={editing ? 'Cancel editing expense' : 'Cancel new expense'}
             >
               <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.secondary} />
             </TouchableOpacity>
@@ -433,7 +638,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
           />
           {amountInvalid ? (
             <Text style={styles.errorText} accessibilityLiveRegion="polite">
-              Enter an amount greater than $0.00
+              {`Enter an amount greater than ${formatAmount(0, currency)}`}
             </Text>
           ) : null}
           <View style={styles.chipGrid}>
@@ -458,6 +663,36 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
               );
             })}
           </View>
+          <Text style={styles.splitLabel}>Paid by</Text>
+          <View style={styles.chipGrid}>
+            {[
+              ...members.filter((m) => m.userId === currentUserId),
+              ...members.filter((m) => m.userId !== currentUserId),
+            ].map((m) => {
+              const active = paidBy === m.userId;
+              return (
+                <TouchableOpacity
+                  key={m.userId}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setPaidBy(m.userId)}
+                  disabled={payerLocked}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active, disabled: payerLocked }}
+                  accessibilityLabel={`Paid by ${m.userId === currentUserId ? 'you' : m.name || 'member'}`}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                    {m.userId === currentUserId ? 'You' : m.name || 'Member'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {payerLocked ? (
+            <Text style={styles.splitHint}>
+              Only the payer, the person who added this, or the crew owner can change who paid.
+            </Text>
+          ) : null}
           <Text style={styles.splitLabel}>Split between</Text>
           <View style={styles.chipGrid}>
             {members.map((m) => {
@@ -476,11 +711,71 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
               );
             })}
           </View>
-          {splitWith.length > 0 && amt > 0 ? (
+          {!uneven && splitWith.length > 0 && amt > 0 ? (
             <Text style={[styles.splitHint, styles.tabularNums]}>
-              {formatAmount(amt / splitWith.length)}/person × {splitWith.length}
+              {formatCents(evenShares(toCents(amt), splitWith)[0]?.cents ?? 0, currency)} each × {splitWith.length}
             </Text>
           ) : null}
+          {uneven ? (
+            <>
+              {splitWith.map((uid) => (
+                <View key={uid} style={styles.shareRow}>
+                  <Text style={styles.shareName} numberOfLines={2}>
+                    {uid === currentUserId ? 'You' : (nameOf(uid) ?? 'Member')}
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.shareInput]}
+                    placeholder="0.00"
+                    placeholderTextColor={t.colors.text.placeholder}
+                    value={shareText[uid] ?? ''}
+                    onChangeText={(next) => setShareText((prev) => ({ ...prev, [uid]: sanitizeAmountInput(next) }))}
+                    keyboardType="decimal-pad"
+                    accessibilityLabel={`Amount for ${uid === currentUserId ? 'you' : (nameOf(uid) ?? 'member')}`}
+                  />
+                </View>
+              ))}
+              {amt > 0 ? (
+                <Text style={[styles.splitHint, styles.tabularNums]} accessibilityLiveRegion="polite">
+                  {sharesSum === toCents(amt)
+                    ? `Adds up to ${formatCents(sharesSum, currency)}`
+                    : `Left to assign: ${formatCents(toCents(amt) - sharesSum, currency)}`}
+                </Text>
+              ) : null}
+              {shareProblem ? (
+                <Text style={styles.errorText} accessibilityLiveRegion="polite">
+                  {shareProblem}
+                </Text>
+              ) : null}
+              {uneven && amt > 0 && dayCount > 0 && hasDayAnswers(daysIndex, splitWith) ? (
+                <TouchableOpacity
+                  style={styles.textButton}
+                  onPress={splitByDays}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.textButtonText}>By days attending</Text>
+                </TouchableOpacity>
+              ) : null}
+              {removedNames.length > 0 ? (
+                <Text style={styles.splitHint} accessibilityLiveRegion="polite">
+                  {memberSummary(removedNames)} not there any day, so not in this split.
+                </Text>
+              ) : null}
+            </>
+          ) : null}
+          <TouchableOpacity
+            style={styles.textButton}
+            onPress={() => {
+              if (uneven) {
+                setUneven(false);
+                setRemovedNames([]);
+              } else startUneven();
+            }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <Text style={styles.textButtonText}>{uneven ? 'Split evenly' : 'Split unevenly'}</Text>
+          </TouchableOpacity>
           {/* Planned = budget/forecast row. Excluded from balances + settle-up. */}
           <TouchableOpacity
             style={styles.plannedToggle}
@@ -500,18 +795,21 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
             </Text>
           </TouchableOpacity>
           <Button
-            label="Add"
+            label={editing ? 'Save changes' : 'Add'}
             loading={busy}
-            loadingLabel="Adding…"
+            loadingLabel={editing ? 'Saving…' : 'Adding…'}
             disabled={!canAdd}
             onPress={handleAdd}
-            accessibilityLabel="Add expense"
+            accessibilityLabel={editing ? 'Save changes to expense' : 'Add expense'}
           />
         </View>
       ) : (
         <TouchableOpacity
           style={styles.toggle}
-          onPress={() => setShowForm(true)}
+          onPress={() => {
+            reset();
+            setShowForm(true);
+          }}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel="Add an expense"
@@ -539,7 +837,21 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
         visibleExpenses.map((e, idx) => {
           const cat = expenseCategoryFor(e.category);
           // A queued create has no server id yet, so it cannot be removed.
-          const canRemove = e.paid_by === currentUserId && !isPending(e);
+          const queued = isPending(e);
+          const canEdit = !isSettlement(e) && !queued;
+          const canRemove =
+            !queued &&
+            (isSettlement(e)
+              ? e.paid_by === currentUserId
+              : e.paid_by === currentUserId || e.created_by === currentUserId || isOwner);
+          const share = expenseShareCents(e, currentUserId, memberIds);
+          const shareLine = e.planned
+            ? null
+            : share === null
+              ? 'Not in your split'
+              : `Your share ${formatCents(share, currency)}`;
+          const trailLine = expenseTrailLine(e, members);
+          const statusLine = paymentStatusLine(e, members, currentUserId);
           // R20 swipe-to-delete fallback: react-native-gesture-handler is absent
           // from the mobile deps, so the whole row is long-pressable (= delete
           // affordance) rather than a Gesture.Pan swipe. The trash button stays the
@@ -576,9 +888,23 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                     {e.planned ? 'planned' : `${e.paid_by === currentUserId ? 'You' : e.paid_by_name} paid`} · split{' '}
                     {e.split_with.length} {e.split_with.length === 1 ? 'way' : 'ways'}
                   </Text>
+                  {shareLine ? <Text style={styles.expenseMeta}>{shareLine}</Text> : null}
+                  {trailLine ? <Text style={styles.expenseMeta}>{trailLine}</Text> : null}
+                  {statusLine ? <Text style={styles.expenseMeta}>{statusLine}</Text> : null}
                   <CrewSyncMarker item={e} />
                 </View>
-                <Text style={[styles.expenseAmount, styles.tabularNums]}>{formatAmount(e.amount)}</Text>
+                <Text style={[styles.expenseAmount, styles.tabularNums]}>{formatAmount(e.amount, currency)}</Text>
+                {canEdit ? (
+                  <TouchableOpacity
+                    onPress={() => startEdit(e)}
+                    style={styles.iconButton}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit expense ${e.description}`}
+                  >
+                    <Ionicons name="pencil-outline" size={t.iconSize.action} color={t.colors.text.secondary} />
+                  </TouchableOpacity>
+                ) : null}
                 {canRemove ? (
                   <TouchableOpacity
                     onPress={() => handleRemove(e)}
@@ -602,13 +928,20 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
           <Text style={styles.splitHint}>Settle-up payments. Not counted in Total spent.</Text>
           {payments.map((p) => (
             <View key={p.id} style={styles.ledgerRow}>
-              <Text style={[styles.ledgerName, styles.tabularNums]}>{describePayment(p, currentUserId, nameOf)}</Text>
+              <View style={styles.paymentInfo}>
+                <Text style={[styles.ledgerName, styles.tabularNums]}>
+                  {describePayment(p, currentUserId, nameOf, currency)}
+                </Text>
+                {paymentStatusLine(p, members, currentUserId) ? (
+                  <Text style={styles.splitHint}>{paymentStatusLine(p, members, currentUserId)}</Text>
+                ) : null}
+              </View>
               {p.paid_by === currentUserId && !isPending(p) ? (
                 <TouchableOpacity
                   onPress={() => handleUndoPayment(p)}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel={`Undo payment: ${describePayment(p, currentUserId, nameOf)}`}
+                  accessibilityLabel={`Undo payment: ${describePayment(p, currentUserId, nameOf, currency)}`}
                 >
                   <Text style={styles.undoText}>Undo payment</Text>
                 </TouchableOpacity>
@@ -757,6 +1090,39 @@ const useStyles = makeStyles((t) => ({
   },
   tabularNums: {
     fontVariant: ['tabular-nums'],
+  },
+  currencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    minHeight: 44,
+  },
+  shareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  shareName: {
+    ...typeStyle('caption'),
+    color: t.colors.text.primary,
+    flex: 1,
+  },
+  shareInput: {
+    width: 120,
+    textAlign: 'right',
+  },
+  textButton: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  textButtonText: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.aqua,
+  },
+  paymentInfo: {
+    flex: 1,
+    gap: t.spacing[1],
   },
   ledgerRow: {
     flexDirection: 'row',

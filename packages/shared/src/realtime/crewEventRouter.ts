@@ -20,7 +20,7 @@
  *   crew:meeting-point-updated  <raw DB row> { crew_id, ... }
  *   crew:meeting-point-removed  { id, crewId }
  *   crew:poll-created           { pollId, question, options, createdBy }   (no crewId)
- *   crew:poll-voted             { pollId, userId, optionIndex }            (no crewId)
+ *   crew:poll-voted             { pollId, userId, optionIndex, optionIndexes } (no crewId)
  *   crew:poll-closed            { pollId }                                 (no crewId)
  *   crew:expense-added          { _v, crewId, expense }
  *   crew:expense-deleted        { _v, crewId, expenseId }
@@ -48,6 +48,9 @@ import type {
   CrewPollClosedPayload,
   CrewExpensePayload,
   CrewExpenseDeletedPayload,
+  CrewExpenseUpdatedPayload,
+  CrewPackingChangedPayload,
+  CrewRidesChangedPayload,
   CrewActivityPayload,
   LocationPeerUpdatePayload,
   LocationPeerStoppedPayload,
@@ -64,6 +67,7 @@ export interface HomeBaseUpdatedIntent {
   crewId: string;
   location: string | null;
   time: string | null;
+  planB?: string | null;
 }
 
 export interface MeetingPointUpsertIntent {
@@ -99,6 +103,8 @@ export interface PollVotedIntent {
   pollId: string;
   userId: string;
   optionIndex: number;
+  /** All chosen options; empty when the vote was taken back. */
+  optionIndexes: number[];
 }
 
 export interface PollClosedIntent {
@@ -109,6 +115,16 @@ export interface PollClosedIntent {
 
 export interface ExpensesChangedIntent {
   kind: 'expenses-changed';
+  crewId: string;
+}
+
+export interface PackingChangedIntent {
+  kind: 'packing-changed';
+  crewId: string;
+}
+
+export interface RidesChangedIntent {
+  kind: 'rides-changed';
   crewId: string;
 }
 
@@ -156,6 +172,8 @@ export type CrewRealtimeIntent =
   | PollVotedIntent
   | PollClosedIntent
   | ExpensesChangedIntent
+  | PackingChangedIntent
+  | RidesChangedIntent
   | ActivityLoggedIntent
   | LocationPeerUpdateIntent
   | LocationPeerStoppedIntent
@@ -195,6 +213,7 @@ export function routeHomeBaseUpdated(
     crewId: payload.crewId,
     location: payload.location,
     time: payload.time,
+    ...('planB' in payload ? { planB: payload.planB } : {}),
   };
 }
 
@@ -248,6 +267,12 @@ export function routePollVoted(payload: CrewPollVotedPayload, activeCrewId: stri
     pollId: payload.pollId,
     userId: payload.userId,
     optionIndex: payload.optionIndex,
+    // Old servers send only optionIndex (-1 means the vote was taken back).
+    optionIndexes: Array.isArray(payload.optionIndexes)
+      ? payload.optionIndexes
+      : payload.optionIndex >= 0
+        ? [payload.optionIndex]
+        : [],
   };
 }
 
@@ -261,11 +286,27 @@ export function routePollClosed(payload: CrewPollClosedPayload, activeCrewId: st
 }
 
 export function routeExpensesChanged(
-  payload: CrewExpensePayload | CrewExpenseDeletedPayload,
+  payload: CrewExpensePayload | CrewExpenseDeletedPayload | CrewExpenseUpdatedPayload,
   activeCrewId: string | null,
 ): ExpensesChangedIntent | null {
   if (!matchesActiveCrew(payload?.crewId, activeCrewId)) return null;
   return { kind: 'expenses-changed', crewId: payload.crewId };
+}
+
+export function routePackingChanged(
+  payload: CrewPackingChangedPayload,
+  activeCrewId: string | null,
+): PackingChangedIntent | null {
+  if (!matchesActiveCrew(payload?.crewId, activeCrewId)) return null;
+  return { kind: 'packing-changed', crewId: payload.crewId };
+}
+
+export function routeRidesChanged(
+  payload: CrewRidesChangedPayload,
+  activeCrewId: string | null,
+): RidesChangedIntent | null {
+  if (!matchesActiveCrew(payload?.crewId, activeCrewId)) return null;
+  return { kind: 'rides-changed', crewId: payload.crewId };
 }
 
 export function routeActivityLogged(
@@ -279,8 +320,10 @@ export function routeActivityLogged(
 export function routeLocationPeerUpdate(
   payload: LocationPeerUpdatePayload,
   activeCrewId: string | null,
+  selfUserId?: string | null,
 ): LocationPeerUpdateIntent | null {
   if (!matchesActiveCrew(payload?.crewId, activeCrewId)) return null;
+  if (selfUserId && selfUserId === payload.userId) return null;
   return {
     kind: 'location-peer-update',
     crewId: payload.crewId,

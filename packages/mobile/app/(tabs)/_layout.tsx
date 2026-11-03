@@ -1,9 +1,11 @@
 import { NativeTabs, type MaterialIcon, type SFSymbolIcon } from 'expo-router/native-tabs';
 import { colors } from '@festie/shared/tokens';
-import { useUIStore, useAuthStore } from '@festie/shared/stores';
-import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
+import { useEffect } from 'react';
+import { useUIStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
+import { APP_SECTIONS, crewTabBadge, type AppSectionKey } from '@festie/shared/utils';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
+import { useInboxRefresh } from '../../hooks/useInboxRefresh';
 import { useTokens } from '../../hooks/useTokens';
 
 /**
@@ -15,7 +17,7 @@ import { useTokens } from '../../hooks/useTokens';
  *
  * `tintColor` keeps the brand accent rule (aqua = primary/selection) and follows
  * the active theme (daylight aqua is the darkened #00594f). Tab labels and
- * order come from the shared APP_SECTIONS (Lineup/My Plan/Crew/Map/More), so
+ * order come from the shared APP_SECTIONS (Lineup/Picks/Crew/Map/More), so
  * web and mobile name the sections the same. Five is the iOS limit before the
  * system "More" overflow: do not add a sixth. Web falls back to the JS
  * <Tabs> in _layout.web.tsx (NativeTabs is native-only; eas update still bundles
@@ -26,7 +28,11 @@ import { useTokens } from '../../hooks/useTokens';
 // glyph on select.
 const TAB_ROUTES: Record<AppSectionKey, { name: string; sf: SFSymbolIcon['sf']; md: MaterialIcon['md'] }> = {
   lineup: { name: 'index', sf: { default: 'calendar.circle', selected: 'calendar.circle.fill' }, md: 'event' },
-  myPlan: { name: 'picks', sf: { default: 'star', selected: 'star.fill' }, md: 'star' },
+  myPlan: {
+    name: 'picks',
+    sf: { default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' },
+    md: 'checklist',
+  },
   crew: { name: 'crew', sf: { default: 'person.2', selected: 'person.2.fill' }, md: 'group' },
   map: { name: 'map', sf: { default: 'map', selected: 'map.fill' }, md: 'map' },
   more: {
@@ -55,9 +61,31 @@ export default function TabLayout() {
   // Connect Socket.IO when the user is on the main tabs (authenticated). Events
   // flow into the shared Zustand stores automatically. Must stay mounted here.
   useRealtimeSync();
+  useInboxRefresh();
+
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const crewBadgeSeen = useUIStore((s) => s.crewBadgeSeen);
+  const activeCrewId = useCrewStore((s) => s.activeCrew?.id);
+  const polls = useCrewStore((s) => s.polls);
+  const expenseBalances = useCrewStore((s) => s.expenseBalances);
+  const loadPolls = useCrewStore((s) => s.loadPolls);
+  const loadExpenses = useCrewStore((s) => s.loadExpenses);
+  const userId = user?.id;
+  // Both loaders write the shared crew `error` field; skipping offline avoids the common failure.
+  useEffect(() => {
+    if (!userId || !activeCrewId || offlineMode) return;
+    loadPolls(activeCrewId).catch((e) => console.warn('crew badge: load failed', e));
+    loadExpenses(activeCrewId).catch((e) => console.warn('crew badge: load failed', e));
+  }, [userId, activeCrewId, offlineMode, loadPolls, loadExpenses]);
+  const badge = crewTabBadge({
+    polls,
+    myBalance: expenseBalances.find((b) => b.userId === userId)?.balance,
+    userId,
+    seen: crewBadgeSeen[activeCrewId ?? ''],
+  });
 
   // All five tabs stay visible for guests: the More tab is the sign-in entry
-  // (it routes a guest to /login), Map shows stages and amenities, and My Plan/Crew advertise the features +
+  // (it routes a guest to /login), Map shows stages and amenities, and Picks/Crew advertise the features +
   // gate via AuthGate (crew shows an in-place "Sign in required" state). Hiding
   // them for guests removed the only discoverable sign-in path, so they stay.
 
@@ -74,6 +102,9 @@ export default function TabLayout() {
           <NativeTabs.Trigger key={key} name={route.name}>
             <NativeTabs.Trigger.Icon sf={route.sf} md={route.md} />
             <NativeTabs.Trigger.Label>{key === 'more' && !user ? GUEST_PROMPT_COPY.signIn : label}</NativeTabs.Trigger.Label>
+            {key === 'crew' && (
+              <NativeTabs.Trigger.Badge hidden={badge.label === null}>{badge.label || undefined}</NativeTabs.Trigger.Badge>
+            )}
           </NativeTabs.Trigger>
         );
       })}

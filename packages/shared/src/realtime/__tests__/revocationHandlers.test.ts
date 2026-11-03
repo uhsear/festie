@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { applyCrewAccessRevoked, applyCrewMemberKicked, applySessionRevoked } from '../revocationHandlers';
+import {
+  applyCrewAccessRevoked,
+  applyCrewDeleted,
+  applyCrewMemberKicked,
+  applySessionRevoked,
+} from '../revocationHandlers';
 import { useCrewStore } from '../../stores/crewStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useLiveLocationStore } from '../../stores/liveLocationStore';
@@ -80,6 +85,28 @@ describe('applyCrewAccessRevoked', () => {
     expect(s.crewMembers).toHaveLength(2);
     expect(s.polls).toHaveLength(1);
     expect(useLiveLocationStore.getState().crewId).toBe('crew-1');
+  });
+});
+
+describe('crew notices', () => {
+  it('kicked self returns the crew name, kicked other returns null', () => {
+    expect(applyCrewMemberKicked('crew-1', 'user-2')).toBeNull();
+    expect(applyCrewMemberKicked('crew-1', 'user-1')).toEqual({ crewName: 'Crew crew-1' });
+  });
+
+  it('applyCrewDeleted by me returns null and clears the active crew', () => {
+    expect(applyCrewDeleted('crew-1', 'user-1')).toBeNull();
+    expect(useCrewStore.getState().activeCrew).toBeNull();
+    expect(useCrewStore.getState().crews.map((c) => c.id)).toEqual(['crew-2']);
+  });
+
+  it('applyCrewDeleted by someone else returns the name and clears the active crew', () => {
+    expect(applyCrewDeleted('crew-1', 'user-2')).toEqual({ crewName: 'Crew crew-1' });
+    expect(useCrewStore.getState().activeCrew).toBeNull();
+  });
+
+  it('applyCrewDeleted with no deletedBy (admin delete) returns the name', () => {
+    expect(applyCrewDeleted('crew-2')).toEqual({ crewName: 'Crew crew-2' });
   });
 });
 

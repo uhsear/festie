@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail } from '../lib/email.js';
+import { sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -336,6 +336,7 @@ describe('email: re-engagement senders', () => {
     ['wrap ready', sendWrapReadyEmail, 'Wrap-up ready'],
     ['lineup drop', sendLineupDropEmail, 'New lineups'],
     ['crew reform', sendCrewReformEmail, 'Crew re-forms'],
+    ['set times out', sendSetTimesOutEmail, 'New lineups and set times'],
   ];
   for (const [name, fn, label] of cases) {
     it(`${name}: https List-Unsubscribe header and settings footer`, async () => {
@@ -350,4 +351,157 @@ describe('email: re-engagement senders', () => {
       assert.ok(msg.text.endsWith(`${sentence} Turn it off: https://festie.test/account`));
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// T32: account emails (change confirm, alerts, expiry text, contrast)
+// ---------------------------------------------------------------------------
+
+function captureClient() {
+  const send = mock.fn(async (_args: any) => ({ data: { id: 'm' }, error: null }));
+  const sent = () => (send.mock.calls as any[]).map((c) => c.arguments[0]);
+  return { _client: createMockClient(send), send, sent };
+}
+
+describe('email: sendEmailChangeConfirmEmail', () => {
+  it('confirms the new address with the configured lifetime, not a signup welcome', async () => {
+    const { _client, sent } = captureClient();
+    const ok = await sendEmailChangeConfirmEmail({
+      to: 'confirm48@example.com',
+      username: '<b>eve</b>',
+      verifyUrl: 'https://festie.us/api/v1/auth/verify-email?token=t',
+      config: createMockConfig({ EMAIL_VERIFY_TOKEN_TTL_HOURS: 48 }),
+      log: createMockLog(),
+      _client,
+    });
+    assert.equal(ok, true);
+    const msg = sent()[0];
+    assert.equal(msg.subject, 'Confirm your new Festie email');
+    assert.ok(msg.html.includes('Confirm new email'));
+    assert.ok(msg.html.includes('48 hours'));
+    assert.ok(msg.text.includes('48 hours'));
+    assert.ok(msg.text.includes('Confirm your new email: https://festie.us/api/v1/auth/verify-email?token=t'));
+    assert.ok(!msg.html.includes('Thanks for signing up'));
+    assert.ok(!msg.text.includes('Thanks for signing up'));
+    assert.ok(msg.html.includes('&lt;b&gt;eve&lt;/b&gt;'));
+    assert.ok(!msg.html.includes('<b>eve</b>'));
+    assert.ok(msg.html.includes('Your account email stays the same.'));
+  });
+});
+
+describe('email: verification expiry text', () => {
+  it('says "1 hour" when the lifetime is one hour', async () => {
+    const { _client, sent } = captureClient();
+    await sendVerificationEmail({
+      to: 'ttl1@example.com',
+      username: 'bob',
+      verifyUrl: 'https://festie.us/verify/t',
+      config: createMockConfig({ EMAIL_VERIFY_TOKEN_TTL_HOURS: 1 }),
+      log: createMockLog(),
+      _client,
+    });
+    const msg = sent()[0];
+    assert.ok(msg.html.includes('expires in 1 hour.'));
+    assert.ok(msg.text.includes('expires in 1 hour.'));
+    assert.ok(!msg.html.includes('24 hours'));
+  });
+});
+
+describe('email: sendEmailChangeNoticeEmail', () => {
+  const NOT_ME = "This wasn't me";
+
+  it('with resetUrl: offers a reset link that cancels the change', async () => {
+    const { _client, sent } = captureClient();
+    const resetUrl = 'https://festie.us/reset-password?token=abc';
+    await sendEmailChangeNoticeEmail({ to: 'old1@example.com', resetUrl, config: createMockConfig(), log: createMockLog(), _client });
+    const msg = sent()[0];
+    assert.ok(msg.html.includes(NOT_ME));
+    assert.ok(msg.html.includes(resetUrl));
+    assert.ok(msg.html.includes('That cancels the change and signs out every device.'));
+    assert.ok(msg.text.includes(`${NOT_ME}: ${resetUrl}`));
+    assert.ok(!msg.html.includes('change your password immediately'));
+  });
+
+  it('without resetUrl: keeps the old advice and has no button', async () => {
+    const { _client, sent } = captureClient();
+    await sendEmailChangeNoticeEmail({ to: 'old2@example.com', config: createMockConfig(), log: createMockLog(), _client });
+    const msg = sent()[0];
+    assert.ok(msg.html.includes('change your password immediately'));
+    assert.ok(!msg.html.includes(NOT_ME));
+    assert.ok(!msg.html.includes('<a href'));
+  });
+});
+
+describe('email: sendEmailChangedEmail', () => {
+  it('is never deduplicated: two sends in a row both reach the provider', async () => {
+    const { _client, send, sent } = captureClient();
+    const args = { to: 'old3@example.com', config: createMockConfig(), log: createMockLog(), _client };
+    assert.equal(await sendEmailChangedEmail(args), true);
+    assert.equal(await sendEmailChangedEmail(args), true);
+    assert.equal(send.mock.callCount(), 2);
+    const msg = sent()[0];
+    assert.equal(msg.subject, 'Your Festie email was changed');
+    assert.ok(msg.html.includes('Every device was signed out.'));
+    assert.ok(msg.html.includes('support@festie.us'));
+  });
+});
+
+describe('email: password reset names the username', () => {
+  it('states the username in HTML and text', async () => {
+    const { _client, sent } = captureClient();
+    await sendPasswordResetEmail({
+      to: 'named@example.com',
+      username: 'dana',
+      resetUrl: 'https://festie.us/reset-password?token=t',
+      config: createMockConfig(),
+      log: createMockLog(),
+      _client,
+    });
+    const msg = sent()[0];
+    assert.ok(msg.html.includes('Your username is <strong style="color:#e4e4e7">dana</strong>.'));
+    assert.ok(msg.text.includes('Your username is dana.'));
+  });
+});
+
+describe('email: readable footer and fallback text', () => {
+  it('uses #a1a1aa, not the faint rgba greys', async () => {
+    const { _client, sent } = captureClient();
+    await sendPasswordResetEmail({
+      to: 'contrast@example.com',
+      username: 'u',
+      resetUrl: 'https://festie.us/reset-password?token=t',
+      config: createMockConfig(),
+      log: createMockLog(),
+      _client,
+    });
+    const { html } = sent()[0];
+    assert.ok(html.includes('color:#a1a1aa;font-size:12px'), 'footer');
+    assert.ok(html.includes('color:#a1a1aa;font-size:13px'), 'link fallback line');
+    assert.ok(!html.includes('rgba(255,255,255,0.3)'));
+    assert.ok(!html.includes('rgba(255,255,255,0.4)'));
+  });
+});
+
+describe('email: sendSetTimesOutEmail', () => {
+  it('uses the set-times copy, links the festival and escapes the name', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    const ok = await sendSetTimesOutEmail({
+      to: 'u@example.com',
+      username: '<b>u</b>',
+      festivalName: 'EDC <Las Vegas>',
+      festivalId: 'edc 27',
+      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }),
+      log: createMockLog(),
+      _client: createMockClient(send),
+    });
+    assert.equal(ok, true);
+    const msg = (send.mock.calls as any[])[0].arguments[0];
+    assert.equal(msg.subject, 'EDC <Las Vegas> set times are out');
+    assert.ok(msg.html.includes('The set times for <strong style="color:#e4e4e7">EDC &lt;Las Vegas&gt;</strong> are out.'));
+    assert.ok(msg.html.includes('Pick your sets and spot clashes before the weekend.'));
+    assert.ok(msg.html.includes('See the schedule'));
+    assert.ok(msg.html.includes('https://festie.test/?festival=edc%2027'));
+    assert.ok(!msg.html.includes('<b>u</b>'));
+    assert.ok(msg.text.includes('The set times for EDC <Las Vegas> are out.'));
+  });
 });

@@ -4,15 +4,15 @@
 /**
  * MeetingPointCompass.tsx — M5 proximity compass (mobile-only).
  *
- * Points an on-screen arrow at a SAVED meeting-point coord and shows the
- * straight-line distance. Direction comes from the device magnetometer
- * (expo-sensors) for heading + a one-shot GPS read (expo-location) for the
- * viewer's position; the bearing/distance math is the pure shared geo util.
+ * Points an on-screen arrow at a SAVED meeting-point coord, or at a crewmate's
+ * last shared position (which they chose to share), and shows the
+ * straight-line distance. Heading (true north when known) and the viewer's
+ * position both come from expo-location watchers, so distance and arrow update
+ * as you walk; the bearing/distance math is the pure shared geo util.
  *
- * OFFLINE-HONEST: this is 100% on-device and uses ZERO network. The distance is
- * straight-line ("as the crow flies") to a point YOU saved, not a routed or
- * live position — the copy says so. It is never presented as real-time tracking
- * of another person.
+ * OFFLINE-HONEST: the compass itself is 100% on-device and uses ZERO network. The
+ * distance is straight-line ("as the crow flies"), not routed — the copy says so.
+ * For a crewmate the caller passes a note saying it is where they last shared.
  *
  * Graceful degradation: permission-denied, sensor-unavailable, and no-coords
  * (legacy free-text meeting point) states each render an honest explanation
@@ -21,10 +21,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Magnetometer } from 'expo-sensors';
 import * as Location from 'expo-location';
-import { bearing, haversineDistance, relativeArrowAngle, formatDistance } from '@festie/shared/utils';
+import { buildPursuit, relativeArrowAngle, formatDistance } from '@festie/shared/utils';
 import type { Coord } from '@festie/shared/utils';
+import { useFestivalModeStore } from '@festie/shared/stores';
+import { headingFromReading, needsCalibration, smoothHeading } from '../lib/compass';
+import Button from './Button';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import DisplayWords from './DisplayWords';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -38,48 +40,27 @@ export interface MeetingPointTarget {
 
 interface MeetingPointCompassProps {
   target: MeetingPointTarget;
-}
-
-/**
- * Convert a raw magnetometer (x, y) reading into a heading in degrees clockwise
- * from magnetic north [0, 360). Assumes the phone is held flat-ish (portrait);
- * this is a coarse heading, good enough to point a "this way" arrow, not a
- * survey-grade bearing. Kept local because it is tied to the sensor's frame.
- */
-function magnetometerHeading(x: number, y: number): number {
-  let angle = Math.atan2(y, x) * (180 / Math.PI);
-  angle = (angle + 360) % 360;
-  return angle;
-}
-
-/**
- * Exponential low-pass smoothing of a heading in degrees, done on the unit
- * circle so it wraps correctly across the 0/360 seam (naive averaging would
- * jump halfway around when crossing north). alpha in (0,1]; smaller = smoother.
- */
-function smoothHeading(prev: number | null, next: number, alpha: number): number {
-  if (prev == null || !Number.isFinite(prev)) return next;
-  const pr = (prev * Math.PI) / 180;
-  const nx = (next * Math.PI) / 180;
-  const sinv = (1 - alpha) * Math.sin(pr) + alpha * Math.sin(nx);
-  const cosv = (1 - alpha) * Math.cos(pr) + alpha * Math.cos(nx);
-  const deg = (Math.atan2(sinv, cosv) * 180) / Math.PI;
-  return (deg + 360) % 360;
+  /** Replaces the default honesty line. */
+  note?: string;
+  /** Extra line under the note, same style. */
+  subNote?: string;
 }
 
 const SMOOTHING_ALPHA = 0.15; // low-pass factor — small = calm needle
-const UPDATE_INTERVAL_MS = 100;
+const REDUCE_MOTION_INTERVAL_MS = 400;
+const NO_FIX_TIMEOUT_MS = 20_000;
+// A device without a magnetometer often subscribes fine and then never emits.
+const NO_HEADING_TIMEOUT_MS = 5_000;
 
-type Phase = 'init' | 'denied' | 'no-sensor' | 'no-coords' | 'ready';
+type Phase = 'init' | 'denied' | 'no-sensor' | 'no-fix' | 'no-coords' | 'ready';
 
-export default function MeetingPointCompass({ target }: MeetingPointCompassProps) {
+export default function MeetingPointCompass({ target, note, subNote }: MeetingPointCompassProps) {
   const t = useTokens();
   const styles = useStyles();
   const reduceMotion = useReduceMotion();
 
-  // Memoized on the coord primitives so its identity is stable across renders;
-  // this lets the sensor/GPS effects depend on `targetCoord` directly (they only
-  // re-subscribe when the actual lat/lng change, not on every render).
+  // Memoized on the coord primitives. The sensor/GPS effect depends only on
+  // `hasTarget`, so a moving target never restarts the watchers.
   const targetCoord: Coord | null = useMemo(
     () =>
       Number.isFinite(target.latitude) && Number.isFinite(target.longitude)
@@ -88,52 +69,37 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
     [target.latitude, target.longitude],
   );
 
+  const hasTarget = targetCoord != null;
+  const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
   const [phase, setPhase] = useState<Phase>(targetCoord ? 'init' : 'no-coords');
-  const [heading, setHeading] = useState<number>(0); // smoothed, degrees CW from north
+  // Smoothed, degrees CW from north; null until the first reading so the arrow
+  // never points as if the phone faced north.
+  const [heading, setHeading] = useState<number | null>(null);
   const [origin, setOrigin] = useState<Coord | null>(null);
+  const [calibrate, setCalibrate] = useState(false);
+  const [retry, setRetry] = useState(0);
   const smoothedRef = useRef<number | null>(null);
 
-  // ── Magnetometer subscription (heading) ──────────────────────────────────
+  // ── Permission, then GPS + heading watchers ──────────────────────────────
   useEffect(() => {
-    if (!targetCoord) return;
-    let sub: ReturnType<typeof Magnetometer.addListener> | null = null;
+    if (!hasTarget) return;
     let cancelled = false;
+    let hasOrigin = false;
+    let hasHeading = false;
+    let posSub: Location.LocationSubscription | null = null;
+    let headSub: Location.LocationSubscription | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let headingTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastHeadingAt = 0;
 
-    (async () => {
-      const available = await Magnetometer.isAvailableAsync().catch(() => false);
-      if (cancelled) return;
-      if (!available) {
-        setPhase((p) => (p === 'init' ? 'no-sensor' : p));
-        return;
-      }
-      // Reduce-motion: slow the needle to ~2.5fps so it still points correctly
-      // without the continuous fast rotation that can trigger vestibular nausea.
-      Magnetometer.setUpdateInterval(reduceMotion ? 400 : UPDATE_INTERVAL_MS);
-      sub = Magnetometer.addListener(({ x, y }) => {
-        const raw = magnetometerHeading(x, y);
-        const next = smoothHeading(smoothedRef.current, raw, SMOOTHING_ALPHA);
-        smoothedRef.current = next;
-        setHeading(next);
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-      sub?.remove();
-      sub = null;
+    const noFix = () => {
+      if (!cancelled && !hasOrigin) setPhase('no-fix');
     };
-  }, [targetCoord, reduceMotion]);
-
-  // ── One-shot GPS read (viewer position) ──────────────────────────────────
-  useEffect(() => {
-    if (!targetCoord) return;
-    let cancelled = false;
 
     (async () => {
       let granted = false;
       try {
-        const perm = await Location.requestForegroundPermissionsAsync();
-        granted = perm.granted;
+        granted = (await Location.requestForegroundPermissionsAsync()).granted;
       } catch {
         granted = false;
       }
@@ -142,27 +108,68 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
         setPhase('denied');
         return;
       }
-      try {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+
+      timer = setTimeout(noFix, NO_FIX_TIMEOUT_MS);
+      const onFix = (pos: Location.LocationObject) => {
         if (cancelled) return;
+        hasOrigin = true;
+        if (timer) clearTimeout(timer);
         setOrigin({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-        setPhase('ready');
+        setPhase((p) => (p === 'no-sensor' ? p : 'ready'));
+      };
+      const opts = lowPowerMode
+        ? { accuracy: Location.Accuracy.Balanced, distanceInterval: 3, timeInterval: 10000 }
+        : { accuracy: Location.Accuracy.High, distanceInterval: 3, timeInterval: 4000 };
+      try {
+        const sub = await Location.watchPositionAsync(opts, onFix, noFix);
+        if (cancelled) sub.remove();
+        else posSub = sub;
       } catch {
-        if (!cancelled) setPhase('denied');
+        noFix();
+      }
+      if (cancelled) return;
+
+      headingTimer = setTimeout(() => {
+        if (!cancelled && !hasHeading) setPhase((p) => (p === 'no-fix' ? p : 'no-sensor'));
+      }, NO_HEADING_TIMEOUT_MS);
+      try {
+        const sub = await Location.watchHeadingAsync((h) => {
+          if (cancelled) return;
+          if (!hasHeading) {
+            hasHeading = true;
+            if (headingTimer) clearTimeout(headingTimer);
+            setPhase((p) => (p === 'no-sensor' ? (hasOrigin ? 'ready' : 'init') : p));
+          }
+          const next = smoothHeading(smoothedRef.current, headingFromReading(h), SMOOTHING_ALPHA);
+          smoothedRef.current = next;
+          setCalibrate(needsCalibration(h.accuracy));
+          // Reduce-motion: slow the needle to ~2.5fps to avoid continuous fast rotation.
+          const now = Date.now();
+          if (reduceMotion && now - lastHeadingAt < REDUCE_MOTION_INTERVAL_MS) return;
+          lastHeadingAt = now;
+          setHeading(next);
+        });
+        if (cancelled) sub.remove();
+        else headSub = sub;
+      } catch {
+        if (headingTimer) clearTimeout(headingTimer);
+        if (!cancelled) setPhase((p) => (p === 'no-fix' ? p : 'no-sensor'));
       }
     })();
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
+      if (headingTimer) clearTimeout(headingTimer);
+      posSub?.remove();
+      headSub?.remove();
     };
-  }, [targetCoord]);
+  }, [hasTarget, reduceMotion, lowPowerMode, retry]);
 
   // ── Derived bearing / distance / arrow rotation ──────────────────────────
-  const brng = origin && targetCoord ? bearing(origin, targetCoord) : NaN;
-  const distanceM = origin && targetCoord ? haversineDistance(origin, targetCoord) : NaN;
-  const arrowAngle = relativeArrowAngle(brng, heading);
+  const p = buildPursuit(origin, targetCoord);
+  const distanceM = p.distanceM;
+  const arrowAngle = heading == null ? NaN : relativeArrowAngle(p.bearingDeg, heading);
   const hasFix = Number.isFinite(arrowAngle);
 
   // ── Non-ready states ─────────────────────────────────────────────────────
@@ -193,6 +200,21 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
     );
   }
 
+  if (phase === 'no-fix') {
+    return (
+      <View style={styles.stateCard}>
+        {/* hero exception: full-screen state glyph, not a token-scale icon */}
+        <Ionicons name="location-outline" size={40} color={t.colors.accent.amber} />
+        <Text style={styles.stateTitle}>Can’t get a GPS fix</Text>
+        <Text style={styles.stateBody}>Move into the open and try again.</Text>
+        <Button label="Try again" onPress={() => {
+            setPhase('init');
+            setRetry((n) => n + 1);
+          }} />
+      </View>
+    );
+  }
+
   if (phase === 'no-sensor') {
     return (
       <View style={styles.stateCard}>
@@ -200,7 +222,7 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
         <Ionicons name="compass-outline" size={40} color={t.colors.text.muted} />
         <Text style={styles.stateTitle}>No compass on this device</Text>
         <Text style={styles.stateBody}>
-          This device has no magnetometer, so the arrow can’t track which way you’re facing. The distance below is still
+          This device has no compass, so the arrow can’t show which way you’re facing. The distance below is still
           accurate.
         </Text>
         <Text
@@ -232,12 +254,12 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
 
       {/*
         a11y: The dial is a decorative, animated visual aid — the arrow rotates
-        with the live magnetometer heading, which a static image role/label can
+        with the live compass heading, which a static image role/label can
         neither convey nor keep current. So the dial itself is hidden from the
         a11y tree (importantForAccessibility/accessibilityElementsHidden) and the
         meaningful distance is surfaced as text below. It is not a live region:
         distance stays fixed during heading updates, so repeated announcements
-        on every magnetometer tick would drown out navigation.
+        on every heading tick would drown out navigation.
       */}
       <View style={styles.dial} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         <View style={[styles.arrow, { transform: [{ rotate: `${arrowAngle}deg` }] }]}>
@@ -253,7 +275,16 @@ export default function MeetingPointCompass({ target }: MeetingPointCompassProps
       >
         <DisplayWords text={formatDistance(distanceM)} fontSize={styles.distance.fontSize} />
       </Text>
-      <Text style={styles.honest}>Straight-line direction to a point you saved · on-device, no live tracking</Text>
+      {p.etaLabel !== '—' ? <Text style={styles.honest}>{`~${p.etaLabel} walk`}</Text> : null}
+      {calibrate ? (
+        <Text style={styles.calibrate} accessibilityRole="alert">
+          Move your phone in a figure 8 to calibrate the compass.
+        </Text>
+      ) : null}
+      <Text style={styles.honest}>
+        {note ?? 'Straight-line direction to a point you saved. Works without signal.'}
+      </Text>
+      {subNote ? <Text style={styles.honest}>{subNote}</Text> : null}
     </View>
   );
 }
@@ -291,6 +322,11 @@ const useStyles = makeStyles((t) => ({
   honest: {
     ...typeStyle('caption'),
     color: t.colors.text.muted,
+    textAlign: 'center',
+  },
+  calibrate: {
+    ...typeStyle('caption'),
+    color: t.colors.accent.amber,
     textAlign: 'center',
   },
   stateCard: {

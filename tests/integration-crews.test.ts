@@ -1,6 +1,8 @@
 import { afterEach, describe, test } from 'node:test';
+import createCrewsStore from '../lib/db/stores/crews.js';
 import {
   assert,
+  Pool,
   startServer,
   registerUser,
   joinFestivalProfile,
@@ -173,6 +175,15 @@ describe('Crew System', { concurrency: 1 }, () => {
     const aliceRole = transferred.members.find((m: any) => m.userId === alice.user.id);
     assert.equal(bobRole.role, 'owner');
     assert.equal(aliceRole.role, 'member');
+    assert.equal(transferred.owner, bob.user.id, 'the transfer response names the new owner');
+
+    // The old owner's next read shows Bob as owner, so Alice loses owner controls.
+    const aliceView = await server.request
+      .get(`/api/v1/crews/${crew.id}`)
+      .set('x-user-token', alice.token)
+      .expect(200);
+    assert.equal(aliceView.body.data.owner, bob.user.id);
+    assert.equal(aliceView.body.data.role, 'member');
 
     // 7. Alice leaves the crew
     const leaveRes = await server.request
@@ -234,21 +245,20 @@ describe('Crew System', { concurrency: 1 }, () => {
       .expect(404);
   });
 
-  test('non-festival member cannot create crew', async () => {
+  test('creating a crew joins the festival for a user without a profile', async () => {
     const server = await startServer();
     servers.push(server);
 
     const user = await registerUser(server, 'nomember');
-    // User did not join the festival
+    // User did not join the festival; create makes the profile.
 
     const res = await server.request
       .post('/api/v1/crews')
       .set('x-user-token', user.token)
-      .send({ name: 'Invalid Crew', festivalId: 'fest-1' })
-      .expect(403);
+      .send({ name: 'First Crew', festivalId: 'fest-1' })
+      .expect(201);
 
-    assert.equal(res.body.error.code, 'FORBIDDEN');
-    assert.match(res.body.error.message, /Join the festival/i);
+    assert.equal(res.body.data.role, 'owner');
   });
 
   test('cannot join with invalid invite code', async () => {
@@ -759,5 +769,100 @@ describe('Crew System', { concurrency: 1 }, () => {
       .post('/api/v1/crews/join')
       .send({ inviteCode: 'ABC123' })
       .expect(401);
+  });
+});
+
+// T54 (migration 096): the lock inside the join transaction, the Plan B rules
+// and the meeting-point edit trail, against the crews store directly.
+describe('Crew store -- lock, Plan B and edit trail (096)', { concurrency: 1 }, () => {
+  async function setup() {
+    const server = await startServer();
+    servers.push(server);
+    const alice = await registerUser(server, 'alice');
+    const bob = await registerUser(server, 'bob');
+    await joinFestivalProfile(server, alice.token, 'fest-1');
+    await joinFestivalProfile(server, bob.token, 'fest-1');
+    const crewRes = await server.request
+      .post('/api/v1/crews')
+      .set('x-user-token', alice.token)
+      .send({ name: 'Lock Crew', festivalId: 'fest-1' })
+      .expect(201);
+    const pool = new Pool({ connectionString: server.databaseUrl });
+    const { crews, meetingPoints } = createCrewsStore(pool as any, {});
+    return { server, pool, crews, meetingPoints, alice, bob, crew: crewRes.body.data };
+  }
+
+  test('an invite join of a locked crew returns locked and inserts nothing; other adds ignore the lock', async () => {
+    const { pool, crews, bob, crew } = await setup();
+    try {
+      await pool.query('UPDATE crews SET invite_locked = TRUE WHERE id = $1', [crew.id]);
+      const member = { crewId: crew.id, userId: bob.user.id, role: 'member' };
+
+      assert.equal(await crews.addMember(member, 30, { inviteJoin: true }), 'locked');
+      assert.equal(await crews.getMember(crew.id, bob.user.id), null);
+
+      assert.equal(await crews.addMember(member, 30), 'added');
+      assert.ok(await crews.getMember(crew.id, bob.user.id));
+    } finally {
+      await pool.end();
+    }
+  });
+
+  test('updateHomeBase keeps Plan B when it is omitted and clears it with the location', async () => {
+    const { pool, crews, crew } = await setup();
+    try {
+      let row = await crews.updateHomeBase(crew.id, { location: 'Big tree', time: '3 PM', planB: 'Top of each hour' });
+      assert.equal(row.homeBasePlanB, 'Top of each hour');
+
+      row = await crews.updateHomeBase(crew.id, { location: 'Small tree', time: '4 PM' });
+      assert.equal(row.homeBasePlanB, 'Top of each hour');
+      assert.equal(row.homeBaseLocation, 'Small tree');
+
+      row = await crews.updateHomeBase(crew.id, { location: null, time: null });
+      assert.equal(row.homeBasePlanB, null);
+
+      await crews.updateHomeBase(crew.id, { location: 'Big tree', time: null, planB: 'Again' });
+      row = await crews.updateHomeBase(crew.id, { location: 'Big tree', time: null, planB: null });
+      assert.equal(row.homeBasePlanB, null);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  test('meeting point edit trail round-trips and the editor name follows the account', async () => {
+    const { pool, meetingPoints, alice, bob, crew } = await setup();
+    try {
+      const mp = await meetingPoints.create({
+        id: `mp-${Date.now()}`,
+        crewId: crew.id,
+        createdBy: alice.user.id,
+        label: 'Meet',
+        location: 'North gate',
+      });
+      assert.equal(mp.edit_was, null);
+      assert.equal(mp.editor_name, null);
+
+      const editedAt = new Date().toISOString();
+      const updated = await meetingPoints.update(mp.id, {
+        location: 'South gate',
+        editedBy: bob.user.id,
+        editedAt,
+        editWas: { location: 'North gate' },
+      });
+      assert.deepEqual(updated.edit_was, { location: 'North gate' });
+      assert.equal(updated.edited_by, bob.user.id);
+      assert.equal(updated.editor_name, bob.user.username);
+
+      const listed = (await meetingPoints.listByCrew(crew.id)).find((p: any) => p.id === mp.id);
+      assert.equal(listed.editor_name, bob.user.username);
+      assert.deepEqual(listed.edit_was, { location: 'North gate' });
+
+      await pool.query('UPDATE users SET deleted_at = NOW() WHERE id = $1', [bob.user.id]);
+      const after = await meetingPoints.getById(mp.id);
+      assert.equal(after.editor_name, null);
+      assert.deepEqual(after.edit_was, { location: 'North gate' });
+    } finally {
+      await pool.end();
+    }
   });
 });

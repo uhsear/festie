@@ -6,7 +6,7 @@ import { View, Text, ScrollView } from 'react-native';
 import * as SMS from 'expo-sms';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
-import type { CrewMeetingPoint } from '@festie/shared/types';
+import { buildHandoffSms, pickShareMeetingPoint, resolveFestivalTimeZone } from '@festie/shared/utils';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
@@ -21,43 +21,6 @@ import EmptyState from './EmptyState';
 // app. We open the native composer only — we never send, and the OS does not
 // tell us if the message was delivered. The copy says so honestly.
 
-/** Soonest active meeting point with a coord; falls back to any active+coord one. */
-function pickMeetingPoint(points: CrewMeetingPoint[], nowMs: number): CrewMeetingPoint | null {
-  const withCoord = points.filter((p) => p.active && typeof p.latitude === 'number' && typeof p.longitude === 'number');
-  const future = withCoord
-    .filter((p) => p.meet_at)
-    .map((p) => ({ p, ms: new Date(p.meet_at as string).getTime() }))
-    .filter(({ ms }) => Number.isFinite(ms) && ms >= nowMs)
-    .sort((a, b) => a.ms - b.ms);
-  if (future.length > 0) return future[0]!.p;
-  return withCoord[0] ?? null;
-}
-
-/**
- * Build the SMS body: meeting point label, a Google Maps link to the coord, an
- * optional meet time, and an optional festie:// deep link. Plain text so it
- * renders in any SMS client with no escaping concerns.
- */
-function buildMessage(mp: CrewMeetingPoint, festivalId: string | null): string {
-  const lines: string[] = [];
-  lines.push(`Meet at: ${mp.label}`);
-  if (typeof mp.latitude === 'number' && typeof mp.longitude === 'number') {
-    lines.push(`https://maps.google.com/?q=${mp.latitude},${mp.longitude}`);
-  }
-  if (mp.meet_at) {
-    const when = new Date(mp.meet_at);
-    if (!Number.isNaN(when.getTime())) {
-      lines.push(`When: ${when.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`);
-    }
-  }
-  if (festivalId) {
-    // Opens the festival in Festie for crew who have the app installed.
-    lines.push(`Open in Festie: https://festie.us/festival/${festivalId}`);
-  }
-  lines.push('(Sent via Festie)');
-  return lines.join('\n');
-}
-
 /**
  * Renders the SMS-handoff CTA. Guards on SMS.isAvailableAsync so we never offer
  * a dead button on a device without SMS (tablet / simulator).
@@ -69,6 +32,11 @@ export default function SmsHandoff() {
 
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
   const currentFestivalId = useFestivalDataStore((s) => s.currentFestivalId);
+  const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  // A crew from another festival never leaks its Plan B into this festival's text.
+  const planB = activeCrew && activeCrew.festivalId === currentFestivalId ? activeCrew.homeBasePlanB ?? null : null;
+  const timeZone = resolveFestivalTimeZone(currentFestival);
 
   const [available, setAvailable] = useState<boolean | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -90,14 +58,14 @@ export default function SmsHandoff() {
   // Ticks so the active meeting point stays current without an impure Date.now()
   // in the memo factory (react-hooks/purity).
   const now = useNow();
-  const meetingPoint = useMemo(() => pickMeetingPoint(meetingPoints, now), [meetingPoints, now]);
+  const meetingPoint = useMemo(() => pickShareMeetingPoint(meetingPoints, now), [meetingPoints, now]);
   const message = useMemo(
-    () => (meetingPoint ? buildMessage(meetingPoint, currentFestivalId) : ''),
-    [meetingPoint, currentFestivalId],
+    () => buildHandoffSms({ meetingPoint, planB, festivalId: currentFestivalId, timeZone }),
+    [meetingPoint, planB, currentFestivalId, timeZone],
   );
 
   const openComposer = async () => {
-    if (!meetingPoint) return;
+    if (!message) return;
     setStatus(null);
     try {
       // No recipients — let the user pick from their contacts in the composer.
@@ -124,7 +92,7 @@ export default function SmsHandoff() {
     );
   }
 
-  if (!meetingPoint) {
+  if (!meetingPoint && !planB) {
     return (
       <EmptyState
         icon="location-outline"

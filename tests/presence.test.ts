@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it, beforeEach, mock } from 'node:test';
 
 import { createPresenceManager } from '../lib/presence';
@@ -60,13 +61,26 @@ function makeRedisPresence(overrides: any = {}) {
   };
 }
 
+function makeStores(users: any[] = [], profiles: any[] = []) {
+  const byId = new Map(users.map((u: any) => [u.id, u]));
+  return {
+    users: {
+      getByIds: mock.fn(async (ids: string[]) => new Map(ids.filter((id) => byId.has(id)).map((id) => [id, byId.get(id)]))),
+    },
+    profiles: {
+      getByUserId: mock.fn(async (userId: string) => profiles.filter((p: any) => p.userId === userId)),
+      readAll: mock.fn(async () => profiles),
+    },
+  };
+}
+
 function defaultDeps(overrides: any = {}) {
   return {
     state: overrides.state || makeState(),
     redisPresence: overrides.redisPresence || null,
     redis: overrides.redis || null,
     log: overrides.log || makeLog(),
-    getUserMap: overrides.getUserMap || (async () => new Map()),
+    stores: overrides.stores || makeStores(),
     buildAvatarUrl: overrides.buildAvatarUrl || ((user: any) => user?.avatarKey ? `/avatar/${user.avatarKey}` : null),
   };
 }
@@ -203,8 +217,7 @@ describe('presence: getPresenceList', () => {
   });
 
   it('returns online users for a festival (in-memory path)', async () => {
-    const userMap = new Map([['user-1', { id: 'user-1', avatarKey: 'abc' }]]);
-    const deps = defaultDeps({ getUserMap: async () => userMap });
+    const deps = defaultDeps({ stores: makeStores([{ id: 'user-1', avatarKey: 'abc' }]) });
     const pm = createPresenceManager(deps);
 
     await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
@@ -228,17 +241,17 @@ describe('presence: getPresenceList', () => {
   });
 
   it('uses redis path when redisPresence is configured', async () => {
-    const userMap = new Map([['user-1', { id: 'user-1', avatarKey: 'key1' }]]);
     const rp = makeRedisPresence({
       getOnline: mock.fn(async () => [{ userId: 'user-1', username: 'alice' }]),
     });
-    const deps = defaultDeps({ redisPresence: rp, getUserMap: async () => userMap });
+    const deps = defaultDeps({ redisPresence: rp, stores: makeStores([{ id: 'user-1', avatarKey: 'key1' }]) });
     const pm = createPresenceManager(deps);
 
     const result = await pm.getPresenceList('fest-1');
     assert.equal(rp.getOnline.mock.callCount(), 1);
     assert.equal(result.length, 1);
     assert.equal(result[0].userId, 'user-1');
+    assert.equal(result[0].avatarUrl, '/avatar/key1');
   });
 
   it('falls back to local state when redis getOnline fails', async () => {
@@ -253,6 +266,54 @@ describe('presence: getPresenceList', () => {
 
     assert.equal(result.length, 1);
     assert.equal(result[0].userId, 'user-1');
+  });
+});
+
+describe('presence: getPresenceList reads avatars in one batch', () => {
+  const users = Array.from({ length: 50 }, (_, i) => ({ id: `user-${i}`, avatarKey: i % 2 ? `k${i}` : null }));
+  const expected = users.map((u, i) => ({
+    userId: u.id,
+    username: `name-${i}`,
+    avatarUrl: u.avatarKey ? `/avatar/${u.avatarKey}` : null,
+  }));
+
+  it('in-memory path: one getByIds call, no getUserMap, same list as before', async () => {
+    const stores = makeStores(users);
+    const getUserMap = mock.fn(async () => new Map());
+    const pm = createPresenceManager({ ...defaultDeps({ stores }), getUserMap });
+    for (let i = 0; i < 50; i++) await pm.setSocketPresence('fest-1', `user-${i}`, `name-${i}`, `sock-${i}`);
+    // A second socket for one user must not duplicate the entry.
+    await pm.setSocketPresence('fest-1', 'user-3', 'name-3', 'sock-3b');
+
+    const result = await pm.getPresenceList('fest-1');
+    assert.equal(stores.users.getByIds.mock.callCount(), 1);
+    assert.equal(getUserMap.mock.callCount(), 0);
+    assert.equal(stores.users.getByIds.mock.calls[0]!.arguments[0].length, 50);
+    assert.deepEqual(result, expected);
+  });
+
+  it('redis path: one getByIds call with unique ids, same list as before', async () => {
+    const stores = makeStores(users);
+    const rp = makeRedisPresence({
+      getOnline: mock.fn(async () => users.map((u, i) => ({ userId: u.id, username: `name-${i}` }))),
+    });
+    const pm = createPresenceManager(defaultDeps({ stores, redisPresence: rp }));
+    const result = await pm.getPresenceList('fest-1');
+    assert.equal(stores.users.getByIds.mock.callCount(), 1);
+    assert.deepEqual(result, expected);
+  });
+
+  it('a user without a row (deleted) gets a null avatar', async () => {
+    const pm = createPresenceManager(defaultDeps({ stores: makeStores([]) }));
+    await pm.setSocketPresence('fest-1', 'user-gone', 'gone', 'sock-1');
+    assert.deepEqual(await pm.getPresenceList('fest-1'), [{ userId: 'user-gone', username: 'gone', avatarUrl: null }]);
+  });
+});
+
+describe('presence: socket join source check', () => {
+  it('routes/socket.ts has no always-false existingPresence check', () => {
+    const src = readFileSync(new URL('../routes/socket.ts', import.meta.url), 'utf8');
+    assert.equal(src.includes('existingPresence'), false);
   });
 });
 
@@ -521,21 +582,27 @@ describe('presence: emitPresence', () => {
 
 describe('presence: emitProfileIdentity', () => {
   it('emits profile:identity to all festivals the user belongs to', async () => {
-    const deps = defaultDeps();
-    const pm = createPresenceManager(deps);
-    const io = makeIo();
-
-    const user = { id: 'user-1', username: 'alice', avatarKey: 'abc' };
     const profiles = [
       { userId: 'user-1', festivalId: 'fest-1', id: 'prof-1' },
       { userId: 'user-1', festivalId: 'fest-2', id: 'prof-2' },
       { userId: 'user-2', festivalId: 'fest-1', id: 'prof-3' },
     ];
+    const stores = makeStores([], profiles);
+    const pm = createPresenceManager(defaultDeps({ stores }));
+    const io = makeIo();
 
-    await pm.emitProfileIdentity(user, io, async () => profiles);
+    const user = { id: 'user-1', username: 'alice', displayName: 'Alice', avatarKey: 'abc' };
 
-    // Should emit to fest-1 and fest-2 (2 profiles belong to user-1)
-    assert.ok(io.to.mock.callCount() >= 2);
+    await pm.emitProfileIdentity(user, io);
+
+    assert.equal(stores.profiles.readAll.mock.callCount(), 0);
+    assert.equal(stores.profiles.getByUserId.mock.callCount(), 1);
+    assert.deepEqual(stores.profiles.getByUserId.mock.calls[0]!.arguments, ['user-1']);
+    const identity = { username: 'alice', name: 'Alice', avatarUrl: '/avatar/abc' };
+    assert.deepEqual(io._emitted, [
+      ['profile:identity', { festivalId: 'fest-1', profileId: 'prof-1', ...identity }],
+      ['profile:identity', { festivalId: 'fest-2', profileId: 'prof-2', ...identity }],
+    ]);
     pm.clearPresenceTimers();
   });
 });

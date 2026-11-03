@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   festivalStatus,
   festivalPhase,
+  groupFestivalsByStatus,
   festivalTimeLabel,
+  festivalLoadState,
   isFestivalOver,
   hasSetStarted,
   isValidTimeZone,
@@ -243,6 +245,28 @@ describe('listTimeZones', () => {
   });
 });
 
+describe('groupFestivalsByStatus', () => {
+  const f = (id: string, startDate: string, endDate: string, name = id) => fest({ id, name, startDate, endDate });
+  it('groups and orders by status', () => {
+    const g = groupFestivalsByStatus(
+      [
+        f('p1', '2026-01-01', '2026-01-02'),
+        f('p2', '2026-03-01', '2026-03-02'),
+        f('u2', '2026-12-10', '2026-12-11'),
+        f('u1', '2026-11-20', '2026-11-21'),
+        f('live', '2026-10-30', '2026-11-02'),
+        f('zz', '', '', 'Zed'),
+        f('aa', '', '', 'Abe'),
+      ],
+      new Date('2026-11-01T12:00:00'),
+    );
+    expect(g.live.map((x) => x.id)).toEqual(['live']);
+    expect(g.upcoming.map((x) => x.id)).toEqual(['u1', 'u2']);
+    expect(g.past.map((x) => x.id)).toEqual(['p2', 'p1']);
+    expect(g.undated.map((x) => x.id)).toEqual(['aa', 'zz']);
+  });
+});
+
 describe('sortFestivalsForPicker / pickDefaultFestival', () => {
   const now = new Date(2026, 8, 5, 12, 0); // 2026-09-05 12:00 local
   const live = fest({ id: 'live', startDate: '2026-09-04', endDate: '2026-09-06' });
@@ -266,5 +290,33 @@ describe('sortFestivalsForPicker / pickDefaultFestival', () => {
 
   it('returns the most recent festival when all are past', () => {
     expect(pickDefaultFestival([oldPast, recentPast], now)?.id).toBe('recent');
+  });
+});
+
+describe('festivalLoadState', () => {
+  const base = { currentFestival: null, festivals: [{ id: 'a' }], isLoading: false, error: null };
+
+  it('is ready when a festival is current', () => {
+    expect(festivalLoadState({ ...base, currentFestival: { id: 'a' } })).toBe('ready');
+  });
+
+  it('is loading while the store loads', () => {
+    expect(festivalLoadState({ ...base, isLoading: true })).toBe('loading');
+  });
+
+  it('is error when the load failed', () => {
+    expect(festivalLoadState({ ...base, error: 'Network down' })).toBe('error');
+  });
+
+  it('is loading before the catalogue has arrived', () => {
+    expect(festivalLoadState({ ...base, festivals: [] })).toBe('loading');
+  });
+
+  it('is none when festivals exist but none is chosen', () => {
+    expect(festivalLoadState(base)).toBe('none');
+  });
+
+  it('a set currentFestival beats error and isLoading', () => {
+    expect(festivalLoadState({ ...base, currentFestival: { id: 'a' }, isLoading: true, error: 'x' })).toBe('ready');
   });
 });

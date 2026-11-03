@@ -49,10 +49,51 @@ export function createRatingsRoutes({
           return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
         }
 
-        const result = await stores.ratings.upsert(req.user.userId, setId, rating, (note || '').slice(0, 500));
+        // A missing note keeps the stored one; '' clears it.
+        const result = await stores.ratings.upsert(
+          req.user.userId,
+          setId,
+          rating,
+          note === undefined ? null : note.slice(0, 500),
+        );
         return sendSuccess(res, result);
       } catch (err: any) {
         log.error('rate set failed', { error: err.message, setId: req.validatedParams?.setId });
+        return sendError(res, 500, 'Internal server error', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // Mark a set as seen (true), skipped (false) or unknown (null)
+  router.put(
+    '/:setId/caught',
+    userAuth,
+    writeLimit,
+    validateParams(schemas.setIdParams),
+    validate(schemas.caughtUpdate),
+    async (req: any, res: any) => {
+      try {
+        const { setId } = req.validatedParams;
+        const setCheck = await stores.pool.query(
+          `
+  SELECT
+    fs.id
+  FROM
+    festival_sets fs
+    JOIN festivals f ON fs.festival_id = f.id
+    AND f.deleted_at IS NULL
+  WHERE
+    fs.id = $1
+`,
+          [setId],
+        );
+        if (setCheck.rows.length === 0) {
+          return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
+        }
+        const result = await stores.ratings.setCaught(req.user.userId, setId, req.validatedBody.caught);
+        return sendSuccess(res, result);
+      } catch (err: any) {
+        log.error('mark set caught failed', { error: err.message, setId: req.validatedParams?.setId });
         return sendError(res, 500, 'Internal server error', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -87,8 +128,8 @@ export function createRatingsRoutes({
   );
 
   // Get aggregate ratings for a festival (public — intentionally unauthenticated).
-  // This endpoint returns read-only aggregate data (average rating, count per set)
-  // with no PII. Keeping it public allows share pages and unauthenticated festival
+  // Returns only per-set counts and averages. No user ids and no notes.
+  // Keeping it public allows share pages and unauthenticated festival
   // browsers to display community sentiment without requiring login.
   router.get(
     '/festival/:festivalId/all',
@@ -146,8 +187,9 @@ export function createRatingsRoutes({
         // The wrap derives totalSplit/biggestSpender from the expense rows, not
         // balances: settling up zeroes every balance.
         const expenses = await stores.expenses.getByCrew(crewId);
+        const currency = await stores.expenses.getCurrency(crewId);
         const wrap = await stores.ratings.getCrewWrap(crewId, festivalId, { expenses });
-        return sendSuccess(res, { wrap });
+        return sendSuccess(res, { wrap: { ...wrap, currency } });
       } catch (err: any) {
         log.error('get crew wrap failed', { error: err.message, crewId: req.validatedParams?.crewId });
         return sendError(res, 500, 'Internal server error', ErrorCodes.INTERNAL_ERROR);
@@ -157,8 +199,9 @@ export function createRatingsRoutes({
 
   // Cross-festival year-over-year history (M3). No festival param — aggregates
   // the user's entire rating archive across every festival. userAuth-gated;
-  // only ever returns the requester's own data. Empty (zero ratings) returns
-  // clean zeroed totals + empty arrays, never a 500.
+  // only ever returns the requester's own data, including seenMost (artists
+  // seen at 2+ festivals). Empty (zero ratings) returns clean zeroed totals +
+  // empty arrays, never a 500.
   router.get('/lifetime', userAuth, readLimit, async (req: any, res: any) => {
     try {
       const result = await stores.ratings.getLifetimeStats(req.user.userId);
@@ -166,6 +209,7 @@ export function createRatingsRoutes({
         totals: result.totals,
         byFestival: result.byFestival,
         topArtists: result.topArtists,
+        seenMost: result.seenMost,
       });
     } catch (err: any) {
       log.error('get lifetime stats failed', { error: err.message, userId: req.user?.userId });
@@ -173,20 +217,42 @@ export function createRatingsRoutes({
     }
   });
 
-  // Get wrap stats for current user
+  // Get the current user's wrap: rating stats, picks and their crew. The crew
+  // is the one named by ?crewId= when the user is in it, else their oldest
+  // crew in this festival. crewAlso is a count only, never names or ids.
+  // caughtExtra lists the user's own caught = true sets that are not picks.
   router.get(
     '/wrap/:festivalId',
     userAuth,
     readLimit,
     validateParams(schemas.festivalIdParams),
+    validateQuery(schemas.wrapQuery),
     async (req: any, res: any) => {
       try {
-        const [stats, ratings] = await Promise.all([
-          stores.ratings.getWrapStats(req.user.userId, req.validatedParams.festivalId),
-          stores.ratings.getByUser(req.user.userId, req.validatedParams.festivalId),
+        const userId = req.user.userId;
+        const { festivalId } = req.validatedParams;
+        const festival = await stores.ratings.getWrapFestival(festivalId);
+        if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+
+        const crews = await stores.crews.listByUserAndFestival(userId, festivalId);
+        const crewRow = crews.find((c: any) => c.id === req.validatedQuery.crewId) ?? crews[0] ?? null;
+        const crew = crewRow
+          ? {
+              id: crewRow.id,
+              name: crewRow.name,
+              memberCount: Number(await stores.crews.getMemberCount(crewRow.id)),
+              photoAlbumUrl: crewRow.photoAlbumUrl ?? null,
+            }
+          : null;
+
+        const [stats, ratings, planned, caughtExtra] = await Promise.all([
+          stores.ratings.getWrapStats(userId, festivalId),
+          stores.ratings.getByUser(userId, festivalId),
+          stores.ratings.getPlannedForWrap(userId, festivalId, crew ? crew.id : null),
+          stores.ratings.getCaughtExtraForWrap(userId, festivalId),
         ]);
         const topSets = ratings.filter((r: any) => r.rating >= 4).slice(0, 5);
-        return sendSuccess(res, { stats, topSets, allRatings: ratings });
+        return sendSuccess(res, { stats, topSets, allRatings: ratings, festival, planned, caughtExtra, crew });
       } catch (err: any) {
         log.error('get wrap stats failed', { error: err.message, festivalId: req.validatedParams?.festivalId });
         return sendError(res, 500, 'Internal server error', ErrorCodes.INTERNAL_ERROR);

@@ -3,6 +3,7 @@
   "entry": [
     "server.ts",
     "lib/avatar-worker.ts",
+    "lib/instrument.ts",
     "scripts/*.{mjs,js}",
     "tests/**/*.test.ts"
   ],

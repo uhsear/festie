@@ -10,6 +10,8 @@ export interface PollOptionButtonProps {
   isMine: boolean;
   isWinning: boolean;
   isPending: boolean;
+  voterLine: string;
+  disabled?: boolean;
   onVote: (pollId: string, optionIndex: number) => void;
 }
 
@@ -21,12 +23,15 @@ export default function PollOptionButton({
   isMine,
   isWinning,
   isPending,
+  voterLine,
+  disabled = false,
   onVote,
 }: PollOptionButtonProps) {
   return (
     <button
       onClick={() => onVote(pollId, optionIndex)}
-      disabled={isPending}
+      disabled={isPending || disabled}
+      aria-label={`${text}, ${pct} percent${voterLine ? ', ' + voterLine : ''}`}
       aria-pressed={isMine ? 'true' : 'false'}
       aria-busy={isPending ? 'true' : 'false'}
       className={cn(
@@ -49,9 +54,12 @@ export default function PollOptionButton({
         style={{ width: `${pct}%` }}
       />
       <div className="relative flex items-center justify-between px-3 py-2">
-        <span className="text-sm text-text-primary flex items-center gap-2 truncate">
-          {isMine && <Check className="w-3.5 h-3.5 text-accent-aqua flex-shrink-0" />}
-          <span className="truncate">{text}</span>
+        <span className="min-w-0 flex flex-col">
+          <span className="text-sm text-text-primary flex items-center gap-2 truncate">
+            {isMine && <Check className="w-3.5 h-3.5 text-accent-aqua flex-shrink-0" />}
+            <span className="truncate">{text}</span>
+          </span>
+          {voterLine && <span className="text-xs text-text-muted truncate">{voterLine}</span>}
         </span>
         <span
           className={cn('text-xs font-medium flex-shrink-0 ml-2', isMine ? 'text-accent-aqua' : 'text-text-secondary')}

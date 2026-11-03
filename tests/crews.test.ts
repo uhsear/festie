@@ -19,12 +19,13 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import fs from 'fs';
 import path from 'path';
-import { afterEach, describe, test } from 'node:test';
+import { afterEach, describe, mock, test } from 'node:test';
+import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema } from './_test-schema';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,7 +39,6 @@ const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
-let testDbReady = false;
 const RUN_TAG = `crews-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
 function createFestivalFixture() {
@@ -55,35 +55,6 @@ function createFestivalFixture() {
       ],
     }],
   }];
-}
-
-async function ensureTestSchema() {
-  if (testDbReady) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    const { rows } = await pool.query(
-      "SELECT 1 FROM information_schema.tables WHERE table_name = 'users' LIMIT 1"
-    );
-    if (rows.length === 0) {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS citext');
-      const schema = fs.readFileSync(
-        path.join(__dirname, '..', 'migrations', '004_postgresql_baseline.sql'),
-        'utf8'
-      );
-      await pool.query(schema);
-    }
-    const migrationsDir = path.join(__dirname, '..', 'migrations');
-    const migrationFiles = fs.readdirSync(migrationsDir)
-      .filter((f: string) => f.endsWith('.sql') && !f.startsWith('004_'))
-      .sort();
-    for (const file of migrationFiles) {
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      await pool.query(sql).catch(() => {});
-    }
-    testDbReady = true;
-  } finally {
-    await pool.end();
-  }
 }
 
 async function truncateAllTables() {
@@ -140,7 +111,7 @@ async function seedTestData(festivals = createFestivalFixture()) {
 }
 
 async function startServer(overrides: any = {}) {
-  await ensureTestSchema();
+  await ensureTestSchema(TEST_DATABASE_URL!);
   await truncateAllTables();
   await seedTestData();
   const planner = await createFestivalPlanner({
@@ -252,7 +223,7 @@ describe('crews routes', { concurrency: 1, skip }, () => {
     assert.equal(res.status, 400);
   });
 
-  test('POST /api/v1/crews rejects non-festival-member with 403', async () => {
+  test('POST /api/v1/crews creates the festival profile for a user without one', async () => {
     const server = await startServer();
     servers.push(server);
     const user = await registerUser(server, uniqueUsername('noprofile'));
@@ -262,7 +233,34 @@ describe('crews routes', { concurrency: 1, skip }, () => {
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ name: 'NoProfile', festivalId: server.festivalId });
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 201);
+
+    const pool = new Pool({ connectionString: server.databaseUrl });
+    try {
+      const { rows } = await pool.query(
+        'SELECT 1 FROM festival_profiles WHERE user_id = $1 AND festival_id = $2 AND deleted_at IS NULL',
+        [user.id, server.festivalId],
+      );
+      assert.equal(rows.length, 1, 'create made the festival profile');
+    } finally {
+      await pool.end();
+    }
+  });
+
+  test('POST /api/v1/crews refuses a fourth crew in the same festival', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const user = await createMember(server, 'capped');
+    for (let i = 0; i < 3; i++) await createCrew(server, user.token);
+
+    const res = await server.request
+      .post('/api/v1/crews')
+      .set('x-user-token', user.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ name: 'Fourth', festivalId: server.festivalId });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'MAX_LIMIT_REACHED');
+    assert.equal(res.body.error.message, "You're already in 3 crews for this festival. Leave one to start another.");
   });
 
   test('GET /api/v1/crews/:crewId returns the crew for a member', async () => {
@@ -604,5 +602,189 @@ describe('crews routes', { concurrency: 1, skip }, () => {
       }
       await pool.end();
     }
+  });
+});
+
+// Mock-based: no database needed, so this block runs even when the DB suite above is skipped.
+describe('routes/crews.ts -- DELETE /:crewId feed push (mocked deps)', () => {
+  test('emits crew:deleted with deletedBy and pushes members except the owner', async () => {
+    const emit = mock.fn();
+    const io = { to: mock.fn(() => ({ emit })) };
+    const crewNotify = { toUsers: mock.fn(async () => {}) };
+    const crew = { id: 'crew-1', festivalId: 'fest-1', name: 'Desert Rats' };
+    const deps: any = {
+      express,
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      userAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'owner-1', username: 'boss' };
+        next();
+      },
+      sanitizeIdentifier: (v: any) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: any, msg: any) => res.status(status).json({ data: null, error: { message: msg } }),
+      ErrorCodes: {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      validate: () => (req: any, _res: any, next: any) => next(),
+      validateQuery: () => (_req: any, _res: any, next: any) => next(),
+      validateParams: () => (req: any, _res: any, next: any) => {
+        req.validatedParams = req.params;
+        next();
+      },
+      schemas: {},
+      io,
+      crewNotify,
+      stores: {
+        crews: {
+          getById: mock.fn(async () => crew),
+          getMember: mock.fn(async () => ({ userId: 'owner-1', role: 'owner' })),
+          getMembers: mock.fn(async () => [{ userId: 'owner-1' }, { userId: 'u2' }, { userId: 'u3' }]),
+          delete: mock.fn(async () => {}),
+        },
+      },
+    };
+    const { default: createCrewRoutes } = await import('../routes/crews.js');
+    const app = express();
+    app.use('/', createCrewRoutes(deps));
+
+    const res = await request(app).delete('/crew-1');
+
+    assert.equal(res.status, 200);
+    assert.deepEqual((emit.mock.calls as any[])[0].arguments, [
+      'crew:deleted',
+      { crewId: 'crew-1', festivalId: 'fest-1', deletedBy: 'owner-1' },
+    ]);
+    const push = (crewNotify.toUsers.mock.calls as any[])[0].arguments[0];
+    assert.deepEqual(push.userIds, ['u2', 'u3']);
+    assert.equal(push.text, 'Desert Rats was deleted by its owner.');
+  });
+});
+
+// T54: owner lock and Plan B on the serialized crew. Mock-based, no database.
+describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
+  async function buildApp(opts: { role?: string; previewCrew?: any } = {}) {
+    const { schemas } = await import('../lib/schemas.js');
+    const { ErrorCodes } = await import('../lib/response.js');
+    const emit = mock.fn();
+    const io = { to: mock.fn(() => ({ emit })) };
+    const crew: any = {
+      id: 'crew-1',
+      festivalId: 'fest-1',
+      name: 'Desert Rats',
+      createdBy: 'owner-1',
+      maxMembers: 10,
+      inviteCode: 'ABC123',
+      inviteExpiresAt: '2026-12-01T00:00:00.000Z',
+      inviteLocked: false,
+      homeBasePlanB: 'Here at the top of each hour',
+    };
+    const update = mock.fn(async (data: any) => {
+      for (const key of ['name', 'maxMembers', 'totemName', 'totemEmoji', 'inviteLocked']) {
+        if (data[key] !== undefined) crew[key] = data[key];
+      }
+      return { ...crew };
+    });
+    const info = mock.fn();
+    const deps: any = {
+      express,
+      log: { info, warn() {}, error() {}, debug() {} },
+      userAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'owner-1', username: 'boss' };
+        next();
+      },
+      sanitizeIdentifier: (v: any) => v,
+      sanitizeString: (v: any) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: any, message: any, code: any) =>
+        res.status(status).json({ data: null, error: { message, code } }),
+      ErrorCodes,
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      validate: (schema: any) => (req: any, res: any, next: any) => {
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ data: null, error: { code: 'VALIDATION_ERROR' } });
+        req.validatedBody = parsed.data;
+        next();
+      },
+      validateQuery: () => (_req: any, _res: any, next: any) => next(),
+      validateParams: () => (req: any, _res: any, next: any) => {
+        req.validatedParams = req.params;
+        next();
+      },
+      getFestivalById: async () => null,
+      schemas,
+      io,
+      stores: {
+        crews: {
+          getById: mock.fn(async () => ({ ...crew })),
+          getByInviteCode: mock.fn(async () => opts.previewCrew ?? null),
+          getExpiredByInviteCode: mock.fn(async () => null),
+          getMember: mock.fn(async () => ({ userId: 'owner-1', role: opts.role ?? 'owner' })),
+          getMembers: mock.fn(async () => [{ userId: 'owner-1', username: 'boss', role: 'owner' }]),
+          update,
+        },
+      },
+    };
+    const { default: createCrewRoutes } = await import('../routes/crews.js');
+    const app = express();
+    app.use(express.json());
+    app.use('/', createCrewRoutes(deps));
+    return { app, emit, update, info, crew };
+  }
+
+  test('the owner locks and unlocks without changing the invite code or expiry', async () => {
+    const { app, emit, update, info } = await buildApp();
+
+    const locked = await request(app).put('/crew-1').send({ inviteLocked: true });
+    assert.equal(locked.status, 200);
+    assert.equal(locked.body.data.inviteLocked, true);
+    assert.equal(locked.body.data.inviteCode, 'ABC123');
+    assert.equal(locked.body.data.inviteExpiresAt, '2026-12-01T00:00:00.000Z');
+    assert.equal((update.mock.calls as any[])[0].arguments[0].inviteLocked, true);
+    assert.ok(!('inviteCode' in (update.mock.calls as any[])[0].arguments[0]), 'the lock never writes the code');
+    assert.ok(
+      (info.mock.calls as any[]).some(
+        (c) => c.arguments[0] === 'crew:lock-changed' && c.arguments[1].inviteLocked === true,
+      ),
+    );
+
+    const [event, payload] = (emit.mock.calls as any[])[0].arguments;
+    assert.equal(event, 'crew:updated');
+    assert.equal(payload.inviteLocked, true);
+    assert.ok(!('inviteCode' in payload), 'the broadcast never carries the code');
+
+    const unlocked = await request(app).put('/crew-1').send({ inviteLocked: false });
+    assert.equal(unlocked.status, 200, '{ inviteLocked: false } alone passes the one-field refine');
+    assert.equal(unlocked.body.data.inviteLocked, false);
+    assert.equal(unlocked.body.data.inviteCode, 'ABC123');
+    assert.equal(unlocked.body.data.inviteExpiresAt, '2026-12-01T00:00:00.000Z');
+  });
+
+  test('a member cannot lock the crew', async () => {
+    const { app, update } = await buildApp({ role: 'member' });
+    const res = await request(app).put('/crew-1').send({ inviteLocked: true });
+    assert.equal(res.status, 403);
+    assert.equal(update.mock.callCount(), 0);
+  });
+
+  test('an update without inviteLocked leaves the lock alone', async () => {
+    const { app, update, info } = await buildApp();
+    await request(app).put('/crew-1').send({ name: 'Renamed' }).expect(200);
+    assert.ok(!('inviteLocked' in (update.mock.calls as any[])[0].arguments[0]));
+    assert.ok(!(info.mock.calls as any[]).some((c) => c.arguments[0] === 'crew:lock-changed'));
+  });
+
+  test('the serialized crew carries inviteLocked and homeBasePlanB', async () => {
+    const { app } = await buildApp();
+    const res = await request(app).put('/crew-1').send({ name: 'Renamed' }).expect(200);
+    assert.equal(res.body.data.inviteLocked, false);
+    assert.equal(res.body.data.homeBasePlanB, 'Here at the top of each hour');
+  });
+
+  test('GET /join-preview of a locked crew is 403 CREW_LOCKED with no crew data', async () => {
+    const { app } = await buildApp({ previewCrew: { id: 'crew-1', name: 'Desert Rats', inviteLocked: true } });
+    const res = await request(app).get('/join-preview/ABC123');
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'CREW_LOCKED');
+    assert.equal(res.body.error.message, "This crew isn't taking new members.");
+    assert.equal(res.body.data, null);
   });
 });

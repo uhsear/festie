@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatFestivalDate,
+  formatDateSpan,
   formatTime,
   timeToMinutes,
   minutesToTime,
   artistDisplayName,
   artistSubtitle,
   getSetLinks,
-  getSetHotness,
   formatFestivalDateRange,
 } from './format';
 import type { FestivalSet } from '../types/domain';
@@ -233,71 +234,30 @@ describe('getSetLinks', () => {
   });
 });
 
-describe('getSetHotness', () => {
-  // A set's date is its logical festival day: a start before 06:00 belongs to
-  // the previous calendar day, so date it there or the window lands a day late.
-  const logicalDate = (start: Date) => {
-    const d = new Date(start.getTime());
-    if (d.getHours() < 6) d.setDate(d.getDate() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-
-  it('returns 0 when no date', () => {
-    const set = makeSet({ date: undefined });
-    expect(getSetHotness(set)).toBe(0);
+describe('formatFestivalDate', () => {
+  it('formats a YYYY-MM-DD date without a timezone shift', () => {
+    expect(formatFestivalDate('2025-06-21')).toBe('Jun 21, 2025');
   });
-
-  it('returns 0 when no startTime', () => {
-    const set = makeSet({ date: '2026-01-01', startTime: undefined as unknown as string });
-    expect(getSetHotness(set)).toBe(0);
+  it('reads the calendar parts off a full ISO timestamp', () => {
+    expect(formatFestivalDate('2025-12-01T23:30:00.000Z')).toBe('Dec 1, 2025');
   });
-
-  it('returns 1000 for a currently-playing set', () => {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const startDate = new Date(now.getTime() - 30 * 60000);
-    const endDate = new Date(now.getTime() + 30 * 60000);
-    // Anchor the set's calendar date to its START instant, not `now`: when the
-    // test runs in the first 30 min after local midnight, `now - 30min` is the
-    // previous day, and dating the set by `now` would push the rolled-over
-    // window past `now` and report hotness 0. (Pre-existing flake, unrelated to
-    // the timezone change.)
-    const date = logicalDate(startDate);
-    const set = makeSet({
-      id: 'hotness-playing',
-      date,
-      startTime: `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`,
-      endTime: `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`,
-    });
-    expect(getSetHotness(set)).toBe(1000);
+  it('returns null for empty input and echoes an unparseable string', () => {
+    expect(formatFestivalDate(null)).toBeNull();
+    expect(formatFestivalDate('not-a-date')).toBe('not-a-date');
   });
+});
 
-  it('returns 0 for a set far in the future', () => {
-    const set = makeSet({
-      id: 'hotness-future',
-      date: '2099-12-31',
-      startTime: '23:00',
-      endTime: '23:59',
-    });
-    expect(getSetHotness(set)).toBe(0);
+describe('formatDateSpan', () => {
+  it('collapses a single-day festival to one date', () => {
+    expect(formatDateSpan('2025-06-21', '2025-06-21')).toBe('Jun 21, 2025');
   });
-
-  it('treats a past-midnight set (end <= start) as live when now is after midnight', () => {
-    // Set started yesterday at 23:30 and ends today at 00:30 — the rollover must
-    // push the end past midnight so a "now" just after midnight reads as playing.
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const start = new Date(now.getTime() - 30 * 60000); // 30m ago
-    const end = new Date(now.getTime() + 30 * 60000); // 30m from now
-    // Only meaningful as a rollover when "now" is shortly after local midnight,
-    // but the assertion holds in every TZ: a live window around `now` => 1000.
-    const date = logicalDate(start);
-    const set = makeSet({
-      id: 'hotness-rollover',
-      date,
-      startTime: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
-      endTime: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
-    });
-    expect(getSetHotness(set)).toBe(1000);
+  it('drops the repeated year inside a same-year span', () => {
+    expect(formatDateSpan('2025-06-21', '2025-06-23')).toBe('Jun 21 – Jun 23, 2025');
+  });
+  it('keeps both years when they differ', () => {
+    expect(formatDateSpan('2024-12-31', '2025-01-01')).toBe('Dec 31, 2024 – Jan 1, 2025');
+  });
+  it('returns null when both ends are missing', () => {
+    expect(formatDateSpan(null, null)).toBeNull();
   });
 });

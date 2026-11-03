@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, type TextInputInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@festie/shared/hooks';
-import { PASSWORD_CHANGED_MESSAGE } from '@festie/shared/stores';
+import { mapErrorToUserMessage, setPassword, withReauth } from '@festie/shared/services';
+import { PROVIDER_COPY } from '@festie/shared/constants';
+import { PASSWORD_CHANGED_MESSAGE, useAuthStore, useUIStore } from '@festie/shared/stores';
+import { PASSWORD_RULES, passwordPolicyError, validateNewPassword } from '@festie/shared/utils';
 import Button from './Button';
+import { useReauthPrompt } from './admin';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { passwordStrength } from '../lib/accountFormat';
@@ -13,14 +17,141 @@ import { passwordStrength } from '../lib/accountFormat';
  *
  * Wired to the shared useAuth().changePassword → authStore.changePassword,
  * which POSTs /auth/change-password with { currentPassword, newPassword, confirmPassword }.
- * The shared method is fully platform-neutral, so this is just the UI: two
- * secure fields, an 8-char minimum check, in-flight spinner, and inline errors.
+ * The shared method is fully platform-neutral, so this is just the UI: three
+ * secure fields, the shared password policy (PASSWORD_RULES) checked before
+ * submit, in-flight spinner, and inline errors.
  */
-export default function AccountPasswordSection() {
+interface AccountPasswordSectionProps {
+  /** null = still loading. The Account screen passes true when the load failed; the server still checks. */
+  hasPassword: boolean | null;
+  /** Reloads the shared sign-in methods after a password is set. */
+  onChanged: () => void;
+}
+
+export default function AccountPasswordSection({ hasPassword, onChanged }: AccountPasswordSectionProps) {
+  if (hasPassword === null) return null;
+  return hasPassword ? <ChangePasswordForm /> : <SetPasswordForm onDone={onChanged} />;
+}
+
+/** A provider-only account has no password to change; this adds one (POST /auth/set-password). */
+function SetPasswordForm({ onDone }: { onDone: () => void }) {
+  const t = useTokens();
+  const styles = useStyles();
+  const haptics = useHaptics();
+  const user = useAuthStore((s) => s.user);
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const { ask, reauthDialog } = useReauthPrompt();
+  const [open, setOpen] = useState(false);
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirmRef = useRef<TextInputInstance>(null);
+
+  const problems = validateNewPassword(next, confirm, { username: user?.username, email: user?.email });
+  const canSubmit = !problems.password && !problems.confirmPassword;
+
+  const submit = async () => {
+    if (!canSubmit) {
+      setError(problems.password ?? problems.confirmPassword ?? null);
+      haptics.warning();
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const done = await withReauth(() => setPassword({ newPassword: next, confirmPassword: confirm }), ask);
+      if (done === null) return;
+      haptics.success();
+      onDone();
+    } catch (err) {
+      haptics.warning();
+      setError(mapErrorToUserMessage(err, 'Could not set password.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.row}
+        onPress={() => setOpen((o) => !o)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={open ? 'Hide set password form' : PROVIDER_COPY.setPassword}
+        accessibilityState={{ expanded: open }}
+      >
+        <View style={styles.rowIcon}>
+          <Ionicons name="key-outline" size={20} color={t.colors.text.secondary} />
+        </View>
+        <View style={styles.rowBody}>
+          <Text style={styles.rowTitle}>{PROVIDER_COPY.setPassword}</Text>
+          <Text style={styles.rowHint}>So you can also sign in with a password</Text>
+        </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
+      </TouchableOpacity>
+      {open ? (
+        <View style={styles.form}>
+          <TextInput
+            style={styles.input}
+            value={next}
+            onChangeText={setNext}
+            placeholder="New password"
+            placeholderTextColor={t.colors.text.placeholder}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password-new"
+            textContentType="newPassword"
+            editable={!submitting}
+            accessibilityLabel="New password"
+            returnKeyType="next"
+            onSubmitEditing={() => confirmRef.current?.focus()}
+            blurOnSubmit={false}
+          />
+          <Text style={styles.rowHint}>{PASSWORD_RULES}</Text>
+          <TextInput
+            ref={confirmRef}
+            style={styles.input}
+            value={confirm}
+            onChangeText={setConfirm}
+            placeholder="Confirm new password"
+            placeholderTextColor={t.colors.text.placeholder}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password-new"
+            textContentType="newPassword"
+            editable={!submitting}
+            accessibilityLabel="Confirm new password"
+            returnKeyType="go"
+            onSubmitEditing={() => void submit()}
+          />
+          {error ? (
+            <Text style={styles.error} accessibilityLiveRegion="polite">
+              {error}
+            </Text>
+          ) : null}
+          <Button
+            label={PROVIDER_COPY.setPassword}
+            onPress={() => void submit()}
+            loading={submitting}
+            disabled={!canSubmit || offlineMode}
+            accessibilityLabel="Save new password"
+          />
+        </View>
+      ) : null}
+      {reauthDialog}
+    </View>
+  );
+}
+
+function ChangePasswordForm() {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
   const { changePassword } = useAuth();
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const user = useAuthStore((s) => s.user);
   // weak→strong. All four map exactly onto existing semantic tokens.
   const STRENGTH_COLORS = [t.colors.text.danger, t.colors.accent.amber, t.colors.accent.aqua, t.colors.accent.green];
 
@@ -65,9 +196,13 @@ export default function AccountPasswordSection() {
     });
   };
 
+  const policyError =
+    next.length >= 8 ? passwordPolicyError(next, { username: user?.username, email: user?.email }) : null;
+
   const validate = (): string | null => {
     if (!current) return 'Enter your current password.';
     if (next.length < 8) return 'New password must be at least 8 characters.';
+    if (policyError) return policyError;
     if (next !== confirm) return 'New passwords do not match.';
     if (next === current) return 'New password must differ from the current one.';
     return null;
@@ -96,7 +231,7 @@ export default function AccountPasswordSection() {
       }, 3000);
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not change password.');
+      setError(mapErrorToUserMessage(err, 'Could not change password.'));
     } finally {
       setSubmitting(false);
     }
@@ -124,7 +259,7 @@ export default function AccountPasswordSection() {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Change Password</Text>
-          <Text style={styles.rowHint}>At least 8 characters</Text>
+          <Text style={styles.rowHint}>Change your password</Text>
         </View>
         <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
       </TouchableOpacity>
@@ -166,7 +301,14 @@ export default function AccountPasswordSection() {
             blurOnSubmit={false}
           />
 
-          {/* Strength meter — UX guidance only; the 8-char rule is authoritative. */}
+          <Text style={styles.rowHint}>{PASSWORD_RULES}</Text>
+          {policyError && policyError !== error ? (
+            <Text style={styles.error} accessibilityLiveRegion="polite">
+              {policyError}
+            </Text>
+          ) : null}
+
+          {/* Strength meter — UX guidance only; the shared policy is authoritative. */}
           {next.length > 0 ? (
             <View style={styles.meterWrap} accessibilityRole="text" accessibilityLabel={`Password strength: ${strength.label}`}>
               <View style={styles.meterTrack}>
@@ -252,7 +394,7 @@ export default function AccountPasswordSection() {
             label="Update Password"
             onPress={() => void submit()}
             loading={submitting}
-            disabled={!canSubmit}
+            disabled={!canSubmit || offlineMode}
             accessibilityLabel="Save new password"
           />
         </View>

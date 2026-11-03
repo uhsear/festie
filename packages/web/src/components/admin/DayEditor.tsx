@@ -1,4 +1,6 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import type { Artist } from '@festie/shared/types';
+import type { SetEngagementMap } from '@festie/shared/services';
 import SetEditor, { SetRow, Stage } from './SetEditor';
 
 export interface Day {
@@ -11,6 +13,9 @@ export interface Day {
 export interface DayEditorProps {
   day: Day;
   stages: Stage[];
+  separator?: string;
+  /** Picks and reminders per set id; undefined until loaded (then no row shows). */
+  engagement?: SetEngagementMap;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onLabelChange: (value: string) => void;
@@ -19,6 +24,21 @@ export interface DayEditorProps {
   onAddSet: () => void;
   onRemoveSet: (setId: string) => void;
   onSetField: (setId: string, field: string, value: string | null) => void;
+  onSetArtists: (setId: string, artists: Artist[]) => void;
+  /** Day-level messages. */
+  issues?: string[];
+  /** Set-level messages by `set:{id}`. */
+  issueMap?: Map<string, string[]>;
+  /** Fields the set issues name, by set id. */
+  issueFields?: Map<string, string[]>;
+  changedSetIds?: Set<string>;
+  newSetIds?: Set<string>;
+  selected?: Set<string>;
+  onToggleSelect?: (setId: string) => void;
+  onSelectAll?: (ids: string[], on: boolean) => void;
+  /** Sets to render: day.sets after the filter and sort. */
+  visibleSets?: SetRow[];
+  filterQuery?: string;
 }
 
 /**
@@ -27,6 +47,8 @@ export interface DayEditorProps {
 export default function DayEditor({
   day,
   stages,
+  separator,
+  engagement,
   isExpanded,
   onToggleExpand,
   onLabelChange,
@@ -35,13 +57,26 @@ export default function DayEditor({
   onAddSet,
   onRemoveSet,
   onSetField,
+  onSetArtists,
+  issues = [],
+  issueMap,
+  issueFields,
+  changedSetIds,
+  newSetIds,
+  selected,
+  onToggleSelect,
+  onSelectAll,
+  visibleSets,
+  filterQuery = '',
 }: DayEditorProps) {
   const setCount = (day.sets || []).length;
+  const shown = visibleSets ?? day.sets ?? [];
+  const allShownSelected = shown.length > 0 && shown.every((s) => selected?.has(s.id));
 
   return (
     <div className="rounded-lg bg-bg-primary/40 border border-glass-border">
       {/* Day header row */}
-      <div className="flex gap-2 items-center p-3">
+      <div className="flex flex-wrap gap-2 items-center p-3">
         <button
           type="button"
           onClick={onToggleExpand}
@@ -62,48 +97,81 @@ export default function DayEditor({
           aria-label="Day label"
           value={day.label}
           onChange={(e) => onLabelChange(e.target.value)}
-          className="flex-1 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
         />
-        <input
-          type="date"
-          aria-label="Day date"
-          value={day.date}
-          onChange={(e) => onDateChange(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
-        />
-        <span className="text-xs text-text-muted whitespace-nowrap">
-          {setCount} {setCount === 1 ? 'artist' : 'artists'}
-        </span>
-        <button
-          onClick={onRemoveDay}
-          className="px-2 py-2 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
-        >
-          Remove
-        </button>
+        <div className="basis-full md:basis-auto flex items-center gap-2">
+          <input
+            type="date"
+            aria-label="Day date"
+            value={day.date}
+            onChange={(e) => onDateChange(e.target.value)}
+            className="px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          />
+          <span className="text-xs text-text-muted whitespace-nowrap">
+            {setCount} {setCount === 1 ? 'artist' : 'artists'}
+          </span>
+          <button
+            onClick={onRemoveDay}
+            className="px-2 py-2 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
+          >
+            Remove
+          </button>
+        </div>
       </div>
+      {issues.length > 0 && (
+        <div className="px-3 pb-2 space-y-0.5">
+          {issues.map((m, i) => (
+            <p key={i} className="text-xs text-accent-coral">
+              {m}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* Expanded: artists/sets list */}
       {isExpanded && (
         <div className="border-t border-glass-border p-3 space-y-2">
           {setCount === 0 ? (
             <p className="text-xs text-text-muted italic">
-              No artists yet. Click "Add Artist" to add one, or use the Import Lineup tab.
+              No artists yet. Click "Add Artist" to add one, or use Import on the festival list.
             </p>
+          ) : shown.length === 0 ? (
+            <p className="text-xs text-text-muted italic">No sets match "{filterQuery.trim()}".</p>
           ) : (
             <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_140px_90px_90px_auto] gap-2 text-xs text-text-muted px-1">
+              <div className="hidden md:grid grid-cols-[auto_1fr_140px_90px_90px_auto] gap-2 text-xs text-text-muted px-1">
+                <input
+                  type="checkbox"
+                  aria-label="Select all shown"
+                  checked={allShownSelected}
+                  onChange={(e) =>
+                    onSelectAll?.(
+                      shown.map((s) => s.id),
+                      e.target.checked,
+                    )
+                  }
+                />
                 <div>Artist</div>
                 <div>Stage</div>
                 <div>Start</div>
                 <div>End</div>
                 <div></div>
               </div>
-              {(day.sets || []).map((s) => (
+              {shown.map((s) => (
                 <SetEditor
                   key={s.id}
+                  selected={selected?.has(s.id) ?? false}
+                  onToggleSelect={() => onToggleSelect?.(s.id)}
+                  issues={issueMap?.get(`set:${s.id}`) ?? []}
+                  issueFields={issueFields?.get(s.id) ?? []}
+                  status={newSetIds?.has(s.id) ? 'new' : changedSetIds?.has(s.id) ? 'changed' : null}
                   set={s}
                   dayLabel={day.label}
                   stages={stages}
+                  separator={separator}
+                  onSetArtists={(artists) => onSetArtists(s.id, artists)}
+                  engagement={engagement?.[s.id]}
+                  showEngagement={engagement !== undefined}
                   onField={(field, value) => onSetField(s.id, field, value)}
                   onRemove={() => onRemoveSet(s.id)}
                 />

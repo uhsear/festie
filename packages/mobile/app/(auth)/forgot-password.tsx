@@ -225,6 +225,7 @@ export default function ForgotPasswordScreen() {
               </Text>
             ) : null}
             <Text style={styles.helper}>We'll send you a link to reset your password.</Text>
+            <Text style={styles.helper}>{AUTH_COPY.forgotUsernameHint}</Text>
 
             <Button
               label={AUTH_COPY.sendResetLink}

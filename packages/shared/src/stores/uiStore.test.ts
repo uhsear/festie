@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useUIStore, THEME_STORAGE_KEY } from './uiStore';
+import { useUIStore, THEME_STORAGE_KEY, themeModeOf } from './uiStore';
 import type { OnlineUser } from '../types/domain';
 
 describe('uiStore', () => {
@@ -212,16 +212,67 @@ describe('uiStore', () => {
     });
   });
 
+  describe('wrap handle preference', () => {
+    it('defaults to true, flips with setWrapShowHandle and persists', () => {
+      expect(useUIStore.getState().wrapShowHandle).toBe(true);
+      useUIStore.getState().setWrapShowHandle(false);
+      expect(useUIStore.getState().wrapShowHandle).toBe(false);
+      expect(JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!).state.wrapShowHandle).toBe(false);
+      useUIStore.getState().setWrapShowHandle(true);
+    });
+  });
+
   describe('theme preference', () => {
-    it('defaults to stage and persists only theme and hapticsEnabled', () => {
+    it('defaults to stage and persists only theme, followSystemTheme, hapticsEnabled and wrapShowHandle', () => {
       useUIStore.getState().setTheme('stage');
       expect(useUIStore.getState().theme).toBe('stage');
       useUIStore.getState().setTheme('daylight');
       useUIStore.getState().showToast('not persisted');
       expect(useUIStore.getState().theme).toBe('daylight');
       const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
-      expect(parsed.state).toEqual({ theme: 'daylight', hapticsEnabled: true, crewBadgeSeen: {} });
+      expect(parsed.state).toEqual({ theme: 'daylight', followSystemTheme: false, hapticsEnabled: true, wrapShowHandle: true, crewBadgeSeen: {} });
       useUIStore.getState().setTheme('stage');
+    });
+
+    it('setThemeMode(system) follows the OS scheme and setTheme leaves system mode', () => {
+      useUIStore.getState().setThemeMode('system');
+      expect(useUIStore.getState().followSystemTheme).toBe(true);
+      expect(themeModeOf(useUIStore.getState())).toBe('system');
+      useUIStore.getState().applySystemScheme('light');
+      expect(useUIStore.getState().theme).toBe('daylight');
+      useUIStore.getState().applySystemScheme('dark');
+      expect(useUIStore.getState().theme).toBe('stage');
+      useUIStore.getState().applySystemScheme('light');
+      useUIStore.getState().setTheme('stage');
+      expect(useUIStore.getState().followSystemTheme).toBe(false);
+      expect(themeModeOf(useUIStore.getState())).toBe('stage');
+    });
+
+    it('applySystemScheme changes nothing while followSystemTheme is false', () => {
+      useUIStore.getState().setTheme('stage');
+      useUIStore.getState().applySystemScheme('light');
+      expect(useUIStore.getState().theme).toBe('stage');
+    });
+
+    it('setThemeMode with a fixed theme sets it and clears system mode', () => {
+      useUIStore.getState().setThemeMode('system');
+      useUIStore.getState().setThemeMode('daylight');
+      expect(useUIStore.getState().theme).toBe('daylight');
+      expect(useUIStore.getState().followSystemTheme).toBe(false);
+      useUIStore.getState().setTheme('stage');
+    });
+  });
+
+  describe('introReplay', () => {
+    it('defaults to false, sets, and is never persisted', () => {
+      expect(useUIStore.getState().introReplay).toBe(false);
+      useUIStore.getState().setIntroReplay(true);
+      expect(useUIStore.getState().introReplay).toBe(true);
+      useUIStore.getState().setTheme('daylight');
+      const parsed = JSON.parse(localStorage.getItem(THEME_STORAGE_KEY)!);
+      expect(parsed.state).toEqual({ theme: 'daylight', followSystemTheme: false, hapticsEnabled: true, wrapShowHandle: true, crewBadgeSeen: {} });
+      useUIStore.getState().setTheme('stage');
+      useUIStore.getState().setIntroReplay(false);
     });
   });
 
@@ -240,6 +291,13 @@ describe('uiStore', () => {
       const kept = useUIStore.getState().crewBadgeSeen.c1.pollIds;
       expect(kept).toHaveLength(100);
       expect(kept[99]).toBe('p104');
+    });
+
+    it('keeps the same crewBadgeSeen object for an unchanged patch', () => {
+      useUIStore.getState().markCrewBadgeSeen('c1', { pollIds: ['p1'], balanceCents: 5 });
+      const before = useUIStore.getState().crewBadgeSeen;
+      useUIStore.getState().markCrewBadgeSeen('c1', { pollIds: ['p1'], balanceCents: 5 });
+      expect(useUIStore.getState().crewBadgeSeen).toBe(before);
     });
   });
 });

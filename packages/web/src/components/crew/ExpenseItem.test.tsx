@@ -14,6 +14,7 @@ function makeProps(overrides: Partial<ExpenseItemProps> = {}): ExpenseItemProps 
     paidByName: 'Alice',
     paidByMe: false,
     splitCount: 4,
+    canRemove: false,
     category: foodCategory,
     onRemove: vi.fn(),
     isRemoving: false,
@@ -72,33 +73,62 @@ describe('ExpenseItem', () => {
     expect(screen.queryByText(/split/)).not.toBeInTheDocument();
   });
 
-  it('shows remove button only when paidByMe is true', () => {
-    render(<ExpenseItem {...makeProps({ paidByMe: true })} />);
+  it('shows remove button when canRemove is true', () => {
+    render(<ExpenseItem {...makeProps({ canRemove: true })} />);
     expect(screen.getByRole('button', { name: 'Remove expense' })).toBeInTheDocument();
   });
 
-  it('hides remove button when paidByMe is false', () => {
-    render(<ExpenseItem {...makeProps({ paidByMe: false })} />);
+  it('hides remove button when canRemove is false, even for the payer', () => {
+    render(<ExpenseItem {...makeProps({ paidByMe: true, canRemove: false })} />);
     expect(screen.queryByRole('button', { name: 'Remove expense' })).not.toBeInTheDocument();
   });
 
   it('calls onRemove with the expense id when remove is clicked', async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();
-    render(<ExpenseItem {...makeProps({ paidByMe: true, id: 'exp-42', onRemove })} />);
+    render(<ExpenseItem {...makeProps({ canRemove: true, id: 'exp-42', onRemove })} />);
     await user.click(screen.getByRole('button', { name: 'Remove expense' }));
     expect(onRemove).toHaveBeenCalledWith('exp-42');
   });
 
   it('disables remove button when isRemoving is true', () => {
-    render(<ExpenseItem {...makeProps({ paidByMe: true, isRemoving: true })} />);
+    render(<ExpenseItem {...makeProps({ canRemove: true, isRemoving: true })} />);
     expect(screen.getByRole('button', { name: 'Remove expense' })).toBeDisabled();
   });
 
-  it('marks an offline-queued expense "Not sent yet" and offers no remove', () => {
-    render(<ExpenseItem {...makeProps({ paidByMe: true, optimistic: true, id: 'POST:/crews/c1/expenses:x' })} />);
+  it('marks an offline-queued expense "Not sent yet"', () => {
+    render(<ExpenseItem {...makeProps({ optimistic: true, id: 'POST:/crews/c1/expenses:x' })} />);
     expect(screen.getByText('Not sent yet')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove expense' })).not.toBeInTheDocument();
+  });
+
+  it('shows the edit button only when canEdit is true', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
+    const { rerender } = render(<ExpenseItem {...makeProps({ canEdit: false, onEdit })} />);
+    expect(screen.queryByRole('button', { name: 'Edit expense' })).not.toBeInTheDocument();
+    rerender(<ExpenseItem {...makeProps({ canEdit: true, id: 'exp-7', onEdit })} />);
+    await user.click(screen.getByRole('button', { name: 'Edit expense' }));
+    expect(onEdit).toHaveBeenCalledWith('exp-7');
+  });
+
+  it('renders the share, trail and status lines when given', () => {
+    render(
+      <ExpenseItem
+        {...makeProps({
+          shareLine: 'Your share $12.40',
+          trailLine: 'Added by Alex · Edited by Sam 2h ago',
+          statusLine: 'Sam confirmed it arrived.',
+        })}
+      />,
+    );
+    expect(screen.getByText('Your share $12.40')).toBeInTheDocument();
+    expect(screen.getByText('Added by Alex · Edited by Sam 2h ago')).toBeInTheDocument();
+    expect(screen.getByText('Sam confirmed it arrived.')).toBeInTheDocument();
+  });
+
+  it('formats the amount in the crew currency', () => {
+    render(<ExpenseItem {...makeProps({ amount: 12.4, currency: 'EUR' })} />);
+    expect(screen.getByText(/€12\.40/)).toBeInTheDocument();
   });
 
   it('renders with a different category', () => {

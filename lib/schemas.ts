@@ -68,31 +68,73 @@ export function isAtLeastYearsOld(iso: string, years: number): boolean {
 export const SIGNUP_REF_PATTERN = /^[a-z0-9_-]{1,40}$/;
 const signupRef = z.string().trim().toLowerCase().regex(SIGNUP_REF_PATTERN).optional().catch(undefined);
 
+const dateOfBirth = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter your date of birth')
+  .refine((s) => !Number.isNaN(Date.parse(s)), 'Invalid date of birth');
+const tosAccepted = z.literal(true, { error: 'You must accept the Terms of Service' });
+const adultRule = {
+  message: 'You must be at least 18 to use Festie',
+  path: ['dateOfBirth'],
+};
+
 export const registerSchema = z
   .object({
     username,
     password,
     confirmPassword: z.string(),
     email: email.optional(),
-    dateOfBirth: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter your date of birth')
-      .refine((s) => !Number.isNaN(Date.parse(s)), 'Invalid date of birth'),
-    tosAccepted: z.literal(true, { error: 'You must accept the Terms of Service' }),
+    dateOfBirth,
+    tosAccepted,
     ref: signupRef,
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: 'Passwords do not match',
     path: ['confirmPassword'],
   })
-  .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), {
-    message: 'You must be at least 18 to use Festie',
-    path: ['dateOfBirth'],
-  });
+  .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+// ── Sign in with Google and Apple (T45) ──
+const providerName = z.enum(['google', 'apple']);
+const idToken = z.string().min(20).max(4096);
+const oauthNonce = z.string().min(16).max(128).optional();
+const authorizationCode = z.string().max(512).optional(); // Apple only
+
+export const oauthProviderParams = z.object({ provider: providerName });
+
+export const oauthSignInSchema = z.object({
+  idToken,
+  nonce: oauthNonce,
+  authorizationCode,
+  redirectUri: z.string().url().max(300).optional(), // Apple web code exchange
+  name: z
+    .object({ givenName: z.string().max(50).optional(), familyName: z.string().max(50).optional() })
+    .optional(),
+});
+export type OAuthSignInInput = z.infer<typeof oauthSignInSchema>;
+
+// /register minus the password: the provider is the sign-in method.
+export const oauthCompleteSchema = z
+  .object({
+    signupToken: z.string().min(20).max(128),
+    username,
+    dateOfBirth,
+    tosAccepted,
+  })
+  .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
+export type OAuthCompleteInput = z.infer<typeof oauthCompleteSchema>;
+
+export const setPasswordSchema = z
+  .object({ newPassword: password, confirmPassword: z.string() })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+export type SetPasswordInput = z.infer<typeof setPasswordSchema>;
+
 export const loginSchema = z.object({
-  username: z.string().min(1, 'Username required').max(40),
+  username: z.string().trim().min(1, 'Username or email required').max(254),
   password: z.string().min(1, 'Password required').max(200),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -182,6 +224,7 @@ export const notificationPrefsSchema = z
     crewPolls: z.boolean().optional(),
     crewMoney: z.boolean().optional(),
     crewRides: z.boolean().optional(),
+    crewNudges: z.boolean().optional(),
     mustSeeReminderMinutes: z
       .union([z.literal(5), z.literal(10), z.literal(15), z.literal(30), z.literal(60)])
       .nullable()
@@ -255,13 +298,19 @@ export const publicScheduleSchema = z.object({
 export type PublicScheduleInput = z.infer<typeof publicScheduleSchema>;
 
 export const accountDeleteSchema = z.object({
-  password: z.string().min(1, 'Password confirmation required'),
+  // Optional: a provider-only account has no password and confirms with a recent re-auth.
+  password: z.string().min(1, 'Password confirmation required').optional(),
+  // Who takes over each crew the account owns. Optional: the server picks the
+  // earliest-joined active member when a choice is missing or invalid.
+  crewHandover: z.array(z.object({ crewId: identifier, newOwnerId: identifier })).max(50).optional(),
 });
 export type AccountDeleteInput = z.infer<typeof accountDeleteSchema>;
 
-export const reauthSchema = z.object({
-  password: z.string().min(1).max(200),
-});
+// A password, or a fresh token from a linked Google or Apple account.
+export const reauthSchema = z.union([
+  z.object({ password: z.string().min(1).max(200) }),
+  z.object({ provider: providerName, idToken, nonce: oauthNonce, authorizationCode }),
+]);
 export type ReauthInput = z.infer<typeof reauthSchema>;
 
 export const forgotPasswordSchema = z.object({
@@ -271,7 +320,8 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 
 export const updateEmailSchema = z.object({
   email: z.string().email('Valid email required').max(254),
-  password: z.string().min(1, 'Password confirmation required'),
+  // Optional: a provider-only account has no password and confirms with a recent re-auth.
+  password: z.string().min(1, 'Password confirmation required').optional(),
 });
 export type UpdateEmailInput = z.infer<typeof updateEmailSchema>;
 
@@ -455,6 +505,9 @@ export const festivalCreateSchema = z.object({
   timeZone: festivalTimeZone,
   stages: z.array(stageSchema).max(20).optional(),
   days: z.array(daySchema).max(10).optional(),
+  // Venue point the map and weather use. Sent only when the admin changes it.
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
   // Optional festival site-map. Nullable so an update can clear it; omitted on
   // legacy clients ⇒ map_config stays NULL and the festival renders unmapped.
   mapConfig: festivalMapConfigSchema.optional().nullable(),
@@ -476,6 +529,46 @@ export const festivalUpdateSchema = festivalCreateSchema
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
 
+// ── Lineup import (admin) ───────────────────────────────────────────
+// A field that is absent means "column not mapped, leave alone". An empty string means "clear".
+export const lineupImportRowSchema = z
+  .object({
+    row: z.number().int().min(1).max(100_000), // 1-based line number in the source file
+    setId: z.string().max(100).optional(), // a re-imported export matches by id first
+    artist: z.string().max(300),
+    day: z.string().max(100).optional(),
+    date: z.string().max(20).optional(),
+    stage: z.string().max(100).optional(),
+    startTime: z.string().max(20).optional(),
+    endTime: z.string().max(20).optional(),
+    stageColor: z.string().max(20).optional(),
+    link: z.string().max(500).optional(),
+  })
+  .strict();
+export type LineupImportRowInput = z.infer<typeof lineupImportRowSchema>;
+
+export const lineupImportRequestSchema = z
+  .object({
+    rows: z.array(lineupImportRowSchema).min(1).max(500),
+    updateExisting: z.boolean().default(false),
+    createMissing: z.boolean().default(true),
+    skipSpotify: z.boolean().default(false),
+  })
+  .strict();
+export type LineupImportRequestInput = z.infer<typeof lineupImportRequestSchema>;
+
+// ── Festival announcements (admin) ──────────────────────────────────
+// Title 80 and body 200 keep the push inside payload.ts MAX_TITLE_LENGTH and MAX_BODY_LENGTH.
+export const festivalAnnouncementSchema = z
+  .object({
+    severity: z.enum(['info', 'urgent']),
+    title: z.string().trim().min(1).max(80),
+    body: z.string().trim().min(1).max(200),
+    screen: z.enum(['home', 'map', 'timeline', 'picks', 'festival-mode', 'crew']).default('home'),
+    sendAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+
 // ── Crew schemas ─────────────────────────────────────────────────────
 export const crewCreateSchema = z.object({
   name: z.string().trim().min(1, 'Crew name required').max(60),
@@ -491,6 +584,7 @@ export const crewUpdateSchema = z
     maxMembers: z.number().int().min(2).max(30).optional(),
     totemName: z.string().trim().max(40).optional(),
     totemEmoji: z.string().trim().max(16).optional(),
+    inviteLocked: z.boolean().optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
@@ -504,7 +598,10 @@ export type CrewJoinInput = z.infer<typeof crewJoinSchema>;
 
 // Public join-preview path param: same alphanumeric 4-12 shape the invite page enforces.
 export const crewInviteCodeParams = z.object({
-  inviteCode: z.string().trim().regex(/^[a-zA-Z0-9]{4,12}$/, 'Invalid invite code'),
+  inviteCode: z
+    .string()
+    .trim()
+    .regex(/^[a-zA-Z0-9]{4,12}$/, 'Invalid invite code'),
 });
 export type CrewInviteCodeParams = z.infer<typeof crewInviteCodeParams>;
 
@@ -537,8 +634,34 @@ export const setLinkSchema = z.object({
     .nullable()
     .optional()
     .or(z.literal('')),
+  // Which artist of a B2B set the link belongs to (default 0).
+  artistIndex: z.number().int().min(0).max(3).optional(),
 });
 export type SetLinkInput = z.infer<typeof setLinkSchema>;
+
+// Spotify backfill body. All optional: old mobile bundles post no body.
+export const spotifyBackfillSchema = z
+  .object({
+    force: z.boolean().optional(),
+    skipSearch: z.boolean().optional(),
+    // Artist name -> verified link, preferred over search.
+    overrides: z
+      .record(
+        z.string().trim().min(1).max(200),
+        // url() alone accepts javascript: and data: links.
+        z
+          .string()
+          .url()
+          .max(500)
+          .refine((u) => u.startsWith('https://'), 'Must be an https URL'),
+      )
+      .refine((o) => Object.keys(o).length <= 500, 'At most 500 overrides')
+      .optional(),
+    // Limits the run to these sets.
+    setIds: z.array(identifier).max(500).optional(),
+  })
+  .default({});
+export type SpotifyBackfillInput = z.infer<typeof spotifyBackfillSchema>;
 
 // ── Meeting Point schemas (Phase 1B) ────────────────────────────
 
@@ -574,6 +697,28 @@ export const meetingPointUpdateSchema = z
     message: 'At least one field required',
   });
 export type MeetingPointUpdateInput = z.infer<typeof meetingPointUpdateSchema>;
+
+// 090: "I'll be there" on a meeting point. The member sets only their own tap.
+export const meetingPointComingSchema = z.object({ coming: z.boolean() });
+export type MeetingPointComingInput = z.infer<typeof meetingPointComingSchema>;
+
+// 090: the member's full set of day answers. A day left out is cleared; `days: []` clears all.
+// The route rejects a dayIndex at or past the festival's day count.
+export const crewDaysSchema = z
+  .object({
+    days: z
+      .array(
+        z.object({
+          dayIndex: z.number().int().min(0).max(60),
+          answer: z.enum(['going', 'maybe', 'no']),
+        }),
+      )
+      .max(61),
+  })
+  .refine((body) => new Set(body.days.map((d) => d.dayIndex)).size === body.days.length, {
+    message: 'Each day can appear only once.',
+  });
+export type CrewDaysInput = z.infer<typeof crewDaysSchema>;
 
 // ── Validation middleware factory ───────────────────────────────────
 export function validate(schema: z.ZodType<any>) {
@@ -847,6 +992,11 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
   // An explicit null clears it; undefined keeps whatever the festival already had.
   const mapConfig =
     input.mapConfig !== undefined ? (input.mapConfig ?? null) : (existingFestival?.mapConfig ?? null);
+  // Venue: neither sent keeps the stored point; a valid pair replaces it; anything else clears both.
+  const venueSent = input.latitude !== undefined || input.longitude !== undefined;
+  const venueLat = venueSent ? coord(input.latitude, 90) : (existingFestival?.latitude ?? null);
+  const venueLng = venueSent ? coord(input.longitude, 180) : (existingFestival?.longitude ?? null);
+  const venueValid = venueLat !== null && venueLng !== null;
   const storedSets = new Map<string, any>();
   for (const day of existingFestival?.days || []) {
     for (const set of day?.sets || []) if (set?.id) storedSets.set(set.id, set);
@@ -887,6 +1037,8 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
       }),
     })),
     mapConfig,
+    latitude: venueValid ? venueLat : null,
+    longitude: venueValid ? venueLng : null,
     createdAt: existingFestival?.createdAt || now,
     updatedAt: now,
   };
@@ -896,6 +1048,8 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
 export const crewHomeBaseSchema = z.object({
   location: z.string().trim().max(200).optional().nullable(),
   time: z.string().trim().max(100).optional().nullable(),
+  // T54: undefined keeps the stored Plan B; null or '' clears it.
+  planB: z.string().trim().max(140).optional().nullable(),
 });
 export type CrewHomeBaseInput = z.infer<typeof crewHomeBaseSchema>;
 
@@ -935,6 +1089,7 @@ export const pollCreateSchema = z
     options: z.array(z.string().trim().min(1).max(200)).min(2).max(4),
     closesAt: z.string().datetime().optional().nullable(),
     setRefs: z.array(pollSetRefSchema.nullable()).max(4).optional(),
+    multiAnswer: z.boolean().optional(),
   })
   .refine((d) => d.setRefs === undefined || d.setRefs.length === d.options.length, {
     message: 'setRefs must match options',
@@ -942,9 +1097,16 @@ export const pollCreateSchema = z
   });
 export type PollCreateInput = z.infer<typeof pollCreateSchema>;
 
-export const pollVoteSchema = z.object({
-  optionIndex: z.number().int().min(0).max(3),
-});
+// Exactly one field: optionIndex (old clients) or optionIndexes (an empty array takes the vote back).
+export const pollVoteSchema = z
+  .object({
+    optionIndex: z.number().int().min(0).max(3).optional(),
+    optionIndexes: z.array(z.number().int().min(0).max(3)).max(4).optional(),
+  })
+  .refine((b) => (b.optionIndex === undefined) !== (b.optionIndexes === undefined), {
+    message: 'Send optionIndex or optionIndexes',
+    path: ['optionIndexes'],
+  });
 export type PollVoteInput = z.infer<typeof pollVoteSchema>;
 
 // ── Crew packing-board schemas (M2 logistics) ───────────────────────
@@ -960,17 +1122,25 @@ export const packingUpdateSchema = z
     label: z.string().trim().min(1).max(200).optional(),
     broughtBy: z.string().trim().max(100).optional().nullable(),
     claimed: z.boolean().optional(),
+    packed: z.boolean().optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
   });
 export type PackingUpdateInput = z.infer<typeof packingUpdateSchema>;
 
+export const packingBatchSchema = z.object({
+  labels: z.array(z.string().trim().min(1).max(200)).min(1).max(30),
+});
+export type PackingBatchInput = z.infer<typeof packingBatchSchema>;
+
 // ── Crew member status schema (M5: on-my-way / ETA) ─────────────────
 // A last-synced, degraded-sync snapshot the member set (often offline) — NOT
 // live GPS. All fields optional/nullable so a member can post just a status,
 // just an ETA, or clear it. `status` is a small enum: 'on-my-way' | 'here' |
-// 'delayed' | null (clear). etaMinutes is bounded (0–1440 = up to a day).
+// 'delayed' | 'at-camp' | 'at-stage' | 'break' | 'lost' | null (clear).
+// 'at-stage' stores the stage name in `note`. The list must match
+// `CrewStatusKey` in packages/shared/src/types/domain.ts. etaMinutes is bounded (0–1440 = up to a day).
 // 055: optional last-known LOCATION breadcrumb the member captured (often
 // OFFLINE) and that delivers on the next signal blip. NOT live GPS — the UI
 // renders it with honest staleness ("last seen near X, as of N ago"). lat/lng
@@ -987,7 +1157,7 @@ const crewStatusPosition = z
 
 export const crewStatusSchema = z
   .object({
-    status: z.enum(['on-my-way', 'here', 'delayed']).optional().nullable(),
+    status: z.enum(['on-my-way', 'here', 'delayed', 'at-camp', 'at-stage', 'break', 'lost']).optional().nullable(),
     targetMeetingPointId: z.string().trim().max(100).optional().nullable(),
     etaMinutes: z.number().int().min(0).max(1440).optional().nullable(),
     note: z.string().trim().max(280).optional().nullable(),
@@ -1067,6 +1237,17 @@ export const locationStopSchema = z
   .strip();
 export type LocationStopInput = z.infer<typeof locationStopSchema>;
 
+// T41: one background fix posted over HTTP (POST /crews/:crewId/live-location),
+// because a locked phone has no socket. crewId comes from the path. expiresAt is
+// required so the server can enforce the share's time box.
+export const liveLocationFixSchema = liveCoord
+  .extend({
+    speed: z.number().min(0).max(1000).optional(),
+    expiresAt: z.string().datetime(),
+  })
+  .strip();
+export type LiveLocationFixInput = z.infer<typeof liveLocationFixSchema>;
+
 // OPTIONAL (Phase 1.5, Redis-backed late-joiner snapshot). Phase 1 omits the
 // server handler; the schema is registered so the type contract exists.
 export const locationSyncSchema = z
@@ -1080,18 +1261,18 @@ export type LocationSyncInput = z.infer<typeof locationSyncSchema>;
 // SOS raise: a member presses SOS. `message` is a short capped note; `position`
 // is the SINGLE intentional exception to ephemerality — it may be attached to
 // the durable crew_activity row + push so the crew can actually find them.
+const sosPositionSchema = z
+  .object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    accuracy: z.number().min(0).max(100000).optional(),
+    capturedAt: z.string().datetime(),
+  })
+  .strip();
 export const sosRaiseSchema = z
   .object({
     message: z.string().trim().max(280).optional(),
-    position: z
-      .object({
-        lat: z.number().min(-90).max(90),
-        lng: z.number().min(-180).max(180),
-        accuracy: z.number().min(0).max(100000).optional(),
-        capturedAt: z.string().datetime(),
-      })
-      .strip()
-      .optional(),
+    position: sosPositionSchema.optional(),
   })
   .strip();
 export type SosRaiseInput = z.infer<typeof sosRaiseSchema>;
@@ -1102,6 +1283,20 @@ export type SosRaiseInput = z.infer<typeof sosRaiseSchema>;
 export const sosClearSchema = z.object({ raiserId: z.string().trim().min(1).max(64).optional() }).strip();
 export type SosClearInput = z.infer<typeof sosClearSchema>;
 
+// SOS seen: a member acks that they saw `raiserId`'s active SOS.
+export const sosSeenSchema = z.object({ raiserId: z.string().trim().min(1).max(64) }).strip();
+export type SosSeenInput = z.infer<typeof sosSeenSchema>;
+
+// Check-in timer: if the member does not tap "I'm OK" within `minutes`, the crew
+// gets an SOS. `position` is the same coarse one-shot fix an SOS may carry.
+export const checkinStartSchema = z
+  .object({
+    minutes: z.number().int().min(10).max(240),
+    position: sosPositionSchema.optional(),
+  })
+  .strip();
+export type CheckinStartInput = z.infer<typeof checkinStartSchema>;
+
 // ── Crew carpool / ride-board schemas (M2 logistics) ────────────────
 export const rideCreateSchema = z.object({
   driver: z.string().trim().max(100).optional().nullable(),
@@ -1109,6 +1304,8 @@ export const rideCreateSchema = z.object({
   departFrom: z.string().trim().max(200).optional().nullable(),
   departAt: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
+  direction: z.enum(['to_festival', 'home']).optional().nullable(),
+  departTime: z.string().datetime().optional().nullable(),
 });
 export type RideCreateInput = z.infer<typeof rideCreateSchema>;
 
@@ -1119,6 +1316,8 @@ export const rideUpdateSchema = z
     departFrom: z.string().trim().max(200).optional().nullable(),
     departAt: z.string().trim().max(100).optional().nullable(),
     note: z.string().trim().max(500).optional().nullable(),
+    direction: z.enum(['to_festival', 'home']).optional().nullable(),
+    departTime: z.string().datetime().optional().nullable(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
@@ -1138,19 +1337,101 @@ export const ratingCreateSchema = z.object({
 });
 export type RatingCreateInput = z.infer<typeof ratingCreateSchema>;
 
-// ── Expense schemas ─────────────────────────────────────────────
-export const expenseCreateSchema = z.object({
-  description: z.string().min(1).max(200),
-  amount: z.number().positive(),
-  // User IDs are TEXT (e.g. "user-<uuid>"), not integers — clients send strings.
-  // Typing these as numbers 400'd every real expense create/settle.
-  splitWith: z.array(z.string().min(1)).min(1),
-  category: z.string().max(50).optional(),
-  // Budget = planned expenses. A planned row is a forecast and is EXCLUDED from
-  // the balance ledger / settle-up (see getBalances). Defaults to actual (false).
-  planned: z.boolean().optional(),
+// null clears the mark (back to unknown).
+export const caughtUpdateSchema = z.object({
+  caught: z.boolean().nullable(),
 });
+export type CaughtUpdateInput = z.infer<typeof caughtUpdateSchema>;
+
+// crewId picks which of the requester's crews the wrap reports on.
+export const wrapQuery = z.object({
+  crewId: identifier.optional(),
+});
+export type WrapQueryInput = z.infer<typeof wrapQuery>;
+
+// ── Expense schemas ─────────────────────────────────────────────
+// Keep in sync with CREW_CURRENCIES in packages/shared/src/constants/config.ts
+// (the backend cannot import @festie/shared, see lib/time-zone.ts). Every code
+// has 2 decimal places, so integer-cent ledger math stays valid.
+export const CREW_CURRENCIES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'CAD',
+  'AUD',
+  'NZD',
+  'MXN',
+  'CHF',
+  'SEK',
+  'NOK',
+  'DKK',
+  'PLN',
+  'CZK',
+  'BRL',
+] as const;
+
+export const expenseShareSchema = z.object({
+  userId: z.string().min(1).max(100),
+  cents: z.number().int().positive().max(9_999_999_999),
+});
+export type ExpenseShareInput = z.infer<typeof expenseShareSchema>;
+
+export const expenseCreateSchema = z
+  .object({
+    description: z.string().min(1).max(200),
+    amount: z.number().positive(),
+    // User IDs are TEXT (e.g. "user-<uuid>"), not integers — clients send strings.
+    // Typing these as numbers 400'd every real expense create/settle.
+    splitWith: z.array(z.string().min(1)).min(1),
+    category: z.string().max(50).optional(),
+    // Budget = planned expenses. A planned row is a forecast and is EXCLUDED from
+    // the balance ledger / settle-up (see getBalances). Defaults to actual (false).
+    planned: z.boolean().optional(),
+    // The member who paid. Defaults to the caller on the server.
+    paidBy: z.string().min(1).max(100).optional(),
+    // Uneven split in integer cents. Absent = equal split across splitWith.
+    shares: z.array(expenseShareSchema).min(1).max(30).optional(),
+  })
+  .superRefine((d, ctx) => {
+    // Payments come only from POST /expenses/settle; this blocks forged "A paid B" rows and edits into a payment.
+    if (d.category === 'settlement') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['category'],
+        message: 'Record a payment with Settle up, not as an expense.',
+      });
+    }
+    if (!d.shares) return;
+    const shareIds = d.shares.map((s) => s.userId);
+    const shareSet = new Set(shareIds);
+    if (shareSet.size !== shareIds.length) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Each person can appear once in the shares.' });
+    }
+    const splitSet = new Set(d.splitWith);
+    if (shareSet.size !== splitSet.size || [...shareSet].some((id) => !splitSet.has(id))) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Shares must list the same people as the split.' });
+    }
+    const sum = d.shares.reduce((acc, s) => acc + s.cents, 0);
+    if (sum !== Math.round(d.amount * 100)) {
+      ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Shares must add up to the total.' });
+    }
+  });
 export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
+
+// PUT is a full replacement: the edit form sends every field, so it reuses the
+// create schema (one validation path, last-write-wins offline replay).
+export const expenseUpdateSchema = expenseCreateSchema;
+export type ExpenseUpdateInput = z.infer<typeof expenseUpdateSchema>;
+
+export const expenseCurrencySchema = z.object({ currency: z.enum(CREW_CURRENCIES) });
+export type ExpenseCurrencyInput = z.infer<typeof expenseCurrencySchema>;
+
+export const expenseConfirmSchema = z.object({ received: z.boolean() });
+export type ExpenseConfirmInput = z.infer<typeof expenseConfirmSchema>;
+
+// `userId` is the member who owes the caller.
+export const expenseRemindSchema = z.object({ userId: z.string().min(1).max(100) });
+export type ExpenseRemindInput = z.infer<typeof expenseRemindSchema>;
 
 // ── Admin bulk schemas ──────────────────────────────────────────
 export const adminBulkDeactivateSchema = z.object({
@@ -1180,7 +1461,13 @@ export type PaginationQueryInput = z.infer<typeof paginationQuery>;
 const validDateString = z.string().refine((v) => !isNaN(new Date(v).getTime()), 'Must be a valid date string');
 export const adminAuditQuery = z.object({
   actor_id: z.string().trim().max(100).optional(),
-  action: z.string().trim().max(100).optional(),
+  // A comma list matches any item. A trailing `.*` on an item asks for a prefix match: `festival.*` matches `festival.created`.
+  action: z
+    .string()
+    .trim()
+    .max(200)
+    .regex(/^[a-z0-9_.:-]+(\.\*)?(,[a-z0-9_.:-]+(\.\*)?){0,4}$/i)
+    .optional(),
   resource_type: z.string().trim().max(100).optional(),
   cursor: z.string().trim().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
@@ -1188,8 +1475,15 @@ export const adminAuditQuery = z.object({
   to: validDateString.optional(),
   scope: z.enum(['admin', 'user', 'all']).default('admin'),
   actor: z.string().trim().max(100).optional(),
+  user: z.string().trim().max(100).optional(),
 });
 export type AdminAuditQueryInput = z.infer<typeof adminAuditQuery>;
+
+// ── Admin analytics query schema ──────────────────────────────
+export const adminAnalyticsQuery = z.object({
+  festivalId: z.string().trim().min(1).max(100).optional(),
+});
+export type AdminAnalyticsQueryInput = z.infer<typeof adminAnalyticsQuery>;
 
 // ── Admin sign-up ref counts query schema ─────────────────────
 export const adminRefCountsQuery = z.object({
@@ -1258,6 +1552,12 @@ export const crewIdMpIdParams = z.object({
 });
 export type CrewIdMpIdParams = z.infer<typeof crewIdMpIdParams>;
 
+export const crewIdUserIdParams = z.object({
+  crewId: z.string().min(1, 'Crew ID required').max(100),
+  userId: z.string().min(1, 'User ID required').max(100),
+});
+export type CrewIdUserIdParams = z.infer<typeof crewIdUserIdParams>;
+
 export const crewIdItemIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
   itemId: z.string().min(1, 'Item ID required').max(100),
@@ -1284,6 +1584,12 @@ export const genericIdParams = z.object({
   id: z.string().min(1, 'ID required').max(100),
 });
 export type GenericIdParams = z.infer<typeof genericIdParams>;
+
+export const alsoPickedParams = z.object({
+  festivalId: identifier,
+  setId: identifier,
+});
+export type AlsoPickedParams = z.infer<typeof alsoPickedParams>;
 
 export const profileIdParams = z.object({
   id: z.string().min(1, 'Profile ID required').max(100),
@@ -1313,6 +1619,10 @@ export const schemas = {
   publicSchedule: publicScheduleSchema,
   accountDelete: accountDeleteSchema,
   reauth: reauthSchema,
+  oauthSignIn: oauthSignInSchema,
+  oauthComplete: oauthCompleteSchema,
+  oauthProviderParams,
+  setPassword: setPasswordSchema,
   topicSubscription: topicSubscriptionSchema,
   festivalCreate: festivalCreateSchema,
   festivalUpdate: festivalUpdateSchema,
@@ -1325,33 +1635,48 @@ export const schemas = {
   crewTransfer: crewTransferSchema,
   crewAddMember: crewAddMemberSchema,
   setLink: setLinkSchema,
+  spotifyBackfill: spotifyBackfillSchema,
+  festivalAnnouncement: festivalAnnouncementSchema,
   crewHomeBase: crewHomeBaseSchema,
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,
   meetingPointUpdate: meetingPointUpdateSchema,
+  meetingPointComing: meetingPointComingSchema,
+  crewDays: crewDaysSchema,
   pollCreate: pollCreateSchema,
   pollVote: pollVoteSchema,
   packingCreate: packingCreateSchema,
   packingUpdate: packingUpdateSchema,
+  packingBatch: packingBatchSchema,
   crewStatus: crewStatusSchema,
   locationShare: locationShareSchema,
   locationUpdate: locationUpdateSchema,
   locationStop: locationStopSchema,
+  liveLocationFix: liveLocationFixSchema,
   locationSync: locationSyncSchema,
   sosRaise: sosRaiseSchema,
   sosClear: sosClearSchema,
+  sosSeen: sosSeenSchema,
+  checkinStart: checkinStartSchema,
   rideCreate: rideCreateSchema,
   rideUpdate: rideUpdateSchema,
   forgotPassword: forgotPasswordSchema,
   updateEmail: updateEmailSchema,
   refreshToken: refreshTokenSchema,
   ratingCreate: ratingCreateSchema,
+  caughtUpdate: caughtUpdateSchema,
+  wrapQuery,
   expenseCreate: expenseCreateSchema,
+  expenseUpdate: expenseUpdateSchema,
+  expenseCurrency: expenseCurrencySchema,
+  expenseConfirm: expenseConfirmSchema,
+  expenseRemind: expenseRemindSchema,
   adminBulkDeactivate: adminBulkDeactivateSchema,
   adminBulkArchive: adminBulkArchiveSchema,
   adminAddRole: adminAddRoleSchema,
   paginationQuery,
   adminAuditQuery,
+  adminAnalyticsQuery,
   adminRefCountsQuery,
   adminUserSearchQuery,
   festivalDepthQuery,
@@ -1363,10 +1688,12 @@ export const schemas = {
   crewIdExpenseIdParams,
   crewIdPollIdParams,
   crewIdMpIdParams,
+  crewIdUserIdParams,
   crewIdItemIdParams,
   setIdParams,
   crewIdFestivalIdParams,
   festivalIdParams,
   genericIdParams,
+  alsoPickedParams,
   profileIdParams,
 };

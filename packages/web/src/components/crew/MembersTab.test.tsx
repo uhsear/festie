@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { useFestivalStore } from '@festie/shared/stores';
 import MembersTab, { type MembersTabProps } from './MembersTab';
+
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 // Avatar depends on @festie/shared helpers — mock the module so tests
 // don't need the full shared package wiring.
@@ -33,7 +37,7 @@ describe('MembersTab', () => {
   it('renders all member names', () => {
     render(<MembersTab {...makeProps()} />);
     expect(screen.getByText('Alice')).toBeInTheDocument();
-    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.getByText('Bob (you)')).toBeInTheDocument();
     expect(screen.getByText('Charlie')).toBeInTheDocument();
   });
 
@@ -62,7 +66,7 @@ describe('MembersTab', () => {
   it('renders empty state when members list is empty', () => {
     render(<MembersTab {...makeProps({ members: [] })} />);
     expect(screen.getByText('No members yet')).toBeInTheDocument();
-    expect(screen.getByText(/Share the invite code below/)).toBeInTheDocument();
+    expect(screen.getByText(/Share the invite link/)).toBeInTheDocument();
   });
 
   it('hides admin force-add section for non-admin users', () => {
@@ -147,12 +151,71 @@ describe('MembersTab', () => {
     expect(screen.queryByRole('button', { name: 'Remove from crew' })).not.toBeInTheDocument();
   });
 
-  it('puts Delete crew in an owner-only danger area and Leave crew for members', () => {
-    const { rerender } = render(<MembersTab {...makeProps({ isOwner: true, currentUserId: 'u1', onDestroyCrew: vi.fn() })} />);
+  it('shows Leave crew to every member and Delete crew only to the owner', () => {
+    const { rerender } = render(
+      <MembersTab {...makeProps({ isOwner: true, currentUserId: 'u1', onLeaveCrew: vi.fn(), onDeleteCrew: vi.fn() })} />,
+    );
     expect(screen.getByRole('heading', { name: 'Danger zone' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Delete crew/ })).toBeInTheDocument();
-    rerender(<MembersTab {...makeProps({ onDestroyCrew: vi.fn() })} />);
+    expect(screen.getByRole('button', { name: /Leave crew/ })).toBeInTheDocument();
+    rerender(<MembersTab {...makeProps({ onLeaveCrew: vi.fn(), onDeleteCrew: vi.fn() })} />);
     expect(screen.queryByRole('button', { name: /Delete crew/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Leave crew/ })).toBeInTheDocument();
+  });
+
+  it('marks the current user with (you)', () => {
+    render(<MembersTab {...makeProps({ currentUserId: 'u2' })} />);
+    expect(screen.getByText('Bob (you)')).toBeInTheDocument();
+    expect(screen.queryByText('Alice (you)')).not.toBeInTheDocument();
+  });
+
+  it('renders a photo for a member with an avatar and initials for the rest', () => {
+    const members = [
+      { id: 'm1', userId: 'u1', name: 'Alice', username: 'alice', avatarKey: 'u1', avatarVersion: '3' },
+      { id: 'm2', userId: 'u2', name: 'Bob', username: 'bob' },
+    ];
+    render(<MembersTab {...makeProps({ members })} />);
+    const imgs = screen.getAllByRole('img');
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0]).toHaveAttribute('src', '/uploads/avatars/u1.webp?v=3');
+  });
+
+  it('shows the member count against the cap', () => {
+    const members = Array.from({ length: 28 }, (_, i) => ({ id: `m${i}`, userId: `u${i}`, name: `N${i}` }));
+    render(<MembersTab {...makeProps({ members, maxMembers: 30 })} />);
+    expect(screen.getByText('28 of 30 members')).toBeInTheDocument();
+  });
+
+  it('shows day chips with a group name for members who answered', () => {
+    useFestivalStore.setState({
+      currentFestival: { id: 'f1' } as never,
+      days: [
+        { id: 'd0', festivalId: 'f1', date: '2026-11-06', label: 'Friday' },
+        { id: 'd1', festivalId: 'f1', date: '2026-11-07', label: 'Saturday' },
+      ] as never,
+    });
+    useCrewStore.setState({
+      activeCrew: { id: 'c1', festivalId: 'f1' } as never,
+      crewDays: [
+        { userId: 'u1', dayIndex: 0, answer: 'going' },
+        { userId: 'u1', dayIndex: 1, answer: 'maybe' },
+      ],
+    } as never);
+    render(<MembersTab {...makeProps()} />);
+    expect(screen.getByRole('list', { name: 'Alice: going Friday; maybe Saturday' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: /^Charlie/ })).not.toBeInTheDocument();
+  });
+
+  it('shows no day chips while another festival is loaded', () => {
+    useFestivalStore.setState({
+      currentFestival: { id: 'f2' } as never,
+      days: [{ id: 'd0', festivalId: 'f2', date: '2026-12-01', label: 'Tuesday' }] as never,
+    });
+    useCrewStore.setState({
+      activeCrew: { id: 'c1', festivalId: 'f1' } as never,
+      crewDays: [{ userId: 'u1', dayIndex: 0, answer: 'going' }],
+    } as never);
+    render(<MembersTab {...makeProps()} />);
+    expect(screen.queryByRole('list', { name: /^Alice/ })).not.toBeInTheDocument();
   });
 });

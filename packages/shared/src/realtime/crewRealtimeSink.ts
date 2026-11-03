@@ -14,7 +14,8 @@
  * shared path later without behavior change).
  */
 
-import type { CrewMeetingPoint, CrewPoll, PeerLocation, SosEntry } from '../types/domain';
+import type { CrewMemberDay, CrewMeetingPoint, CrewPoll, PeerLocation, SosEntry } from '../types/domain';
+import { useUIStore } from '../stores/uiStore';
 
 /**
  * The minimal crewStore surface the store-sink adapter depends on. Declared
@@ -24,14 +25,19 @@ import type { CrewMeetingPoint, CrewPoll, PeerLocation, SosEntry } from '../type
 export interface CrewStoreSinkApi {
   getState: () => {
     activeCrew: { id: string } | null;
-    applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null }) => void;
+    applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => void;
     applyMeetingPointUpsert: (meetingPoint: CrewMeetingPoint) => void;
     applyMeetingPointRemoval: (mpId: string) => void;
+    applyCrewDays: (payload: { crewId: string; userId: string; days: CrewMemberDay[] }) => void;
     applyPollCreated: (poll: CrewPoll) => void;
-    applyPollVote: (pollId: string, userId: string, optionIndex: number) => void;
+    applyPollVote: (pollId: string, userId: string, optionIndexes: number[]) => void;
     applyPollClosed: (pollId: string) => void;
+    loadMeetingPoints: (crewId: string) => Promise<void>;
+    loadCrewDays: (crewId: string) => Promise<void>;
     loadPolls: (crewId: string) => Promise<void>;
     loadExpenses: (crewId: string) => Promise<void>;
+    loadPacking: (crewId: string) => Promise<void>;
+    loadRides: (crewId: string) => Promise<void>;
     loadActivity: (crewId: string) => Promise<void>;
   };
 }
@@ -53,9 +59,10 @@ export interface LiveLocationStoreSinkApi {
 }
 
 export interface CrewRealtimeSink {
-  onHomeBaseUpdated: (crewId: string, payload: { location: string | null; time: string | null }) => void;
+  onHomeBaseUpdated: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => void;
   onMeetingPointUpsert: (crewId: string, meetingPoint: CrewMeetingPoint) => void;
   onMeetingPointRemoved: (crewId: string, mpId: string) => void;
+  onDaysUpdated: (crewId: string, payload: { crewId: string; userId: string; days: CrewMemberDay[] }) => void;
   /**
    * Poll-created carries no full poll shape; the authoritative reload happens
    * in the hook's debounced path. `partial` carries the raw event fields for
@@ -70,9 +77,11 @@ export interface CrewRealtimeSink {
       createdBy: string;
     },
   ) => void;
-  onPollVoted: (crewId: string, pollId: string, userId: string, optionIndex: number) => void;
+  onPollVoted: (crewId: string, pollId: string, userId: string, optionIndexes: number[]) => void;
   onPollClosed: (crewId: string, pollId: string) => void;
   onExpensesChanged: (crewId: string) => void;
+  onPackingChanged: (crewId: string) => void;
+  onRidesChanged: (crewId: string) => void;
   onActivityLogged: (crewId: string) => void;
   // ── Live Location + SOS (full payloads; applied immediately, no debounce) ──
   onLocationPeerUpdate: (crewId: string, peer: PeerLocation) => void;
@@ -81,6 +90,12 @@ export interface CrewRealtimeSink {
   onSosCleared: (crewId: string, userId: string, clearedBy: string) => void;
   /** Re-read the active SOS list (socket (re)connect). Optional so older sink doubles still compile. */
   onSosResync?: (crewId: string) => void;
+  /**
+   * Re-read the crew sub-resources after a socket reconnect (events sent during
+   * the drop are lost). Sinks skip it while offline writes are still queued, so
+   * a mid-drain reload cannot drop optimistic rows. Optional for older doubles.
+   */
+  onReconnectResync?: (crewId: string) => void;
 }
 
 /**
@@ -111,6 +126,9 @@ export function createStoreSink(
     onMeetingPointRemoved: (_crewId, mpId) => {
       crewStoreApi.getState().applyMeetingPointRemoval(mpId);
     },
+    onDaysUpdated: (_crewId, payload) => {
+      crewStoreApi.getState().applyCrewDays(payload);
+    },
     onPollCreated: (crewId) => {
       // The event lacks the full poll shape; reload the authoritative list.
       if (!stillActive(crewId)) return;
@@ -119,8 +137,8 @@ export function createStoreSink(
         .loadPolls(crewId)
         .catch(() => {});
     },
-    onPollVoted: (_crewId, pollId, userId, optionIndex) => {
-      crewStoreApi.getState().applyPollVote(pollId, userId, optionIndex);
+    onPollVoted: (_crewId, pollId, userId, optionIndexes) => {
+      crewStoreApi.getState().applyPollVote(pollId, userId, optionIndexes);
     },
     onPollClosed: (_crewId, pollId) => {
       crewStoreApi.getState().applyPollClosed(pollId);
@@ -130,6 +148,20 @@ export function createStoreSink(
       void crewStoreApi
         .getState()
         .loadExpenses(crewId)
+        .catch(() => {});
+    },
+    onPackingChanged: (crewId) => {
+      if (!stillActive(crewId)) return;
+      void crewStoreApi
+        .getState()
+        .loadPacking(crewId)
+        .catch(() => {});
+    },
+    onRidesChanged: (crewId) => {
+      if (!stillActive(crewId)) return;
+      void crewStoreApi
+        .getState()
+        .loadRides(crewId)
         .catch(() => {});
     },
     onActivityLogged: (crewId) => {
@@ -157,6 +189,21 @@ export function createStoreSink(
     },
     onSosResync: (crewId) => {
       void liveLocationApi?.getState().loadActiveSos(crewId);
+    },
+    onReconnectResync: (crewId) => {
+      if (!stillActive(crewId) || useUIStore.getState().pendingSync > 0) return;
+      const s = crewStoreApi.getState();
+      for (const load of [
+        s.loadMeetingPoints,
+        s.loadPolls,
+        s.loadExpenses,
+        s.loadPacking,
+        s.loadRides,
+        s.loadActivity,
+        s.loadCrewDays,
+      ]) {
+        void load(crewId).catch((e: unknown) => console.warn('crew resync failed', e));
+      }
     },
   };
 }

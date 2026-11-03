@@ -19,11 +19,24 @@ vi.mock('../api', () => {
 });
 
 import { api, ApiClientError } from '../api';
-import { enqueueMutation, drainQueue, refreshPendingCount, retryFailed, clearQueue, type QueuedMutation } from '../offlineQueue';
+import {
+  enqueueMutation,
+  drainQueue,
+  refreshPendingCount,
+  retryFailed,
+  clearQueue,
+  dismissFailed,
+  hydrateFailedSync,
+  surfaceFailedSync,
+  type QueuedMutation,
+} from '../offlineQueue';
 import { useUIStore } from '../../stores/uiStore';
 import { getStorage, configureStorage } from '../../platform/storage';
 
 const QUEUE_KEY = 'festie-offline-queue';
+const FAILED_KEY = 'festie-offline-failed';
+
+const flush = () => new Promise((r) => setTimeout(r, 0));
 
 function readPersisted(): QueuedMutation[] {
   const raw = getStorage().getItem(QUEUE_KEY) as string | null;
@@ -48,6 +61,7 @@ function makeMutation(over: Partial<QueuedMutation> = {}): QueuedMutation {
 describe('offlineQueue', () => {
   beforeEach(() => {
     getStorage().removeItem(QUEUE_KEY);
+    getStorage().removeItem(FAILED_KEY);
     vi.clearAllMocks();
     useUIStore.setState({ offlineMode: false, pendingSync: 0, failedSync: [] });
   });
@@ -342,6 +356,64 @@ describe('offlineQueue', () => {
       expect(api.put).not.toHaveBeenCalled();
       expect(readPersisted()).toHaveLength(1);
       expect(useUIStore.getState().failedSync).toHaveLength(0);
+    });
+  });
+
+  describe('persisted failed items (F2)', () => {
+    const resetStore = () => useUIStore.setState({ failedSync: [] });
+
+    async function recordPermanentFailure(): Promise<void> {
+      seed([makeMutation({ clientId: 'a', label: 'Update picks' })]);
+      vi.mocked(api.put).mockRejectedValueOnce(new ApiClientError('Bad request', 400));
+      await drainQueue();
+      await flush(); // persistFailedSync is fire-and-forget
+      expect(useUIStore.getState().failedSync).toHaveLength(1);
+    }
+
+    it('surfaceFailedSync persists and adds to the store', async () => {
+      surfaceFailedSync({
+        clientId: 'x',
+        label: 'Add expense',
+        method: 'POST',
+        url: '/crews/c1/expenses',
+        error: 'Bad request',
+        at: 1,
+      });
+      await flush();
+      expect(useUIStore.getState().failedSync.map((f) => f.clientId)).toEqual(['x']);
+      resetStore();
+      await hydrateFailedSync();
+      expect(useUIStore.getState().failedSync.map((f) => f.clientId)).toEqual(['x']);
+    });
+
+    it('a dismissed failed item does not come back after hydrate', async () => {
+      await recordPermanentFailure();
+      await dismissFailed('a');
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
+      resetStore();
+      await hydrateFailedSync();
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
+    });
+
+    it('a retried item that syncs does not come back after hydrate', async () => {
+      await recordPermanentFailure();
+      vi.mocked(api.put).mockResolvedValueOnce(undefined);
+      await retryFailed(useUIStore.getState().failedSync[0]!);
+      await flush();
+      expect(api.put).toHaveBeenCalledTimes(2);
+      resetStore();
+      await hydrateFailedSync();
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
+    });
+
+    it('a retried item that fails again is persisted again', async () => {
+      await recordPermanentFailure();
+      vi.mocked(api.put).mockRejectedValueOnce(new ApiClientError('Bad request', 400));
+      await retryFailed(useUIStore.getState().failedSync[0]!);
+      await flush();
+      resetStore();
+      await hydrateFailedSync();
+      expect(useUIStore.getState().failedSync.map((f) => f.clientId)).toEqual(['a']);
     });
   });
 });

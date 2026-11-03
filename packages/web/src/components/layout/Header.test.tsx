@@ -17,7 +17,9 @@ vi.mock('@tanstack/react-router', () => ({
 // Mock auth store
 const mockAuthStore = vi.fn();
 let mockConnected = true;
+const mockFestival = { scheduleView: null as string | null, sets: [], days: [], currentFestival: null };
 vi.mock('@festie/shared', () => ({
+  useFestivalStore: (selector: (s: typeof mockFestival) => unknown) => selector(mockFestival),
   useAuthStore: (selector: (s: { user: unknown }) => unknown) => selector({ user: mockAuthStore() }),
   useUIStore: (selector: (s: { connected: boolean }) => unknown) => selector({ connected: mockConnected }),
 }));
@@ -36,7 +38,11 @@ vi.mock('../features/FestivalModeToggle', () => ({
   default: () => <div data-testid="festival-mode-toggle" />,
 }));
 
+const mockBadge = vi.hoisted(() => ({ value: { count: 0, dot: false, label: null as string | null } }));
+vi.mock('../../hooks/useCrewAttention', () => ({ useCrewAttention: () => mockBadge.value }));
+
 import Header from './Header';
+import { useInboxStore } from '@festie/shared/stores/inboxStore';
 import { useUIStore as useRealUIStore } from '@festie/shared/stores/uiStore';
 import { useLocation } from '@tanstack/react-router';
 
@@ -45,7 +51,42 @@ describe('Header', () => {
     vi.clearAllMocks();
     mockAuthStore.mockReturnValue(null);
     mockConnected = true;
+    mockFestival.scheduleView = null;
+    mockBadge.value = { count: 0, dot: false, label: null };
+    useInboxStore.setState({ items: [], seenAt: null });
     document.documentElement.removeAttribute('data-theme');
+  });
+
+  function unreadItems(n: number) {
+    return Array.from({ length: n }, (_, i) => ({
+      id: `n${i}`,
+      type: 'x',
+      title: 't',
+      body: 'b',
+      createdAt: '2026-11-02T00:00:00.000Z',
+      data: {},
+    }));
+  }
+
+  it('shows the inbox bell only when signed in', () => {
+    render(<Header />);
+    expect(screen.queryByRole('link', { name: /^Notifications/ })).not.toBeInTheDocument();
+  });
+
+  it('labels the bell with the unread count', () => {
+    mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
+    useInboxStore.setState({ items: unreadItems(3), seenAt: '2026-11-01T00:00:00.000Z' });
+    render(<Header />);
+    const bell = screen.getByRole('link', { name: 'Notifications, 3 unread' });
+    expect(bell).toHaveAttribute('href', '/inbox');
+    expect(bell).toHaveTextContent('3');
+  });
+
+  it('caps the bell count at 9+', () => {
+    mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
+    useInboxStore.setState({ items: unreadItems(12), seenAt: '2026-11-01T00:00:00.000Z' });
+    render(<Header />);
+    expect(screen.getByRole('link', { name: 'Notifications, 12 unread' })).toHaveTextContent('9+');
   });
 
   it('renders the FESTIE logo', () => {
@@ -80,10 +121,10 @@ describe('Header', () => {
   });
 
   describe('desktop tabs for guest users', () => {
-    it('shows Lineup, My Plan, Crew and Map but no More button', () => {
+    it('shows Lineup, Picks, Crew and Map but no More button', () => {
       mockAuthStore.mockReturnValue(null);
       render(<Header />);
-      for (const name of ['Lineup', 'My Plan', 'Crew', 'Map']) {
+      for (const name of ['Lineup', 'Picks', 'Crew', 'Map']) {
         expect(screen.getByRole('link', { name })).toBeInTheDocument();
       }
       expect(screen.queryByRole('link', { name: 'More' })).not.toBeInTheDocument();
@@ -98,7 +139,7 @@ describe('Header', () => {
       const nav = screen.getByRole('navigation', { name: 'Main navigation' });
       expect(within(nav).getAllByRole('link').map((b) => b.textContent)).toEqual([
         'Lineup',
-        'My Plan',
+        'Picks',
         'Crew',
         'Map',
         'More',
@@ -110,6 +151,12 @@ describe('Header', () => {
       render(<Header />);
       expect(screen.queryByRole('link', { name: 'Wrap' })).not.toBeInTheDocument();
     });
+  });
+
+  it('sends the Lineup tab to the remembered view', () => {
+    mockFestival.scheduleView = 'grid';
+    render(<Header />);
+    expect(screen.getByRole('link', { name: 'Lineup' })).toHaveAttribute('href', '/grid');
   });
 
   describe('active tab detection', () => {
@@ -142,7 +189,7 @@ describe('Header', () => {
     it('renders tabs as real links', () => {
       mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
       render(<Header />);
-      expect(screen.getByRole('link', { name: 'My Plan' })).toHaveAttribute('href', '/picks');
+      expect(screen.getByRole('link', { name: 'Picks' })).toHaveAttribute('href', '/picks');
     });
   });
 

@@ -7,9 +7,17 @@ import {
   buildPicksShareUrl,
   buildPublicScheduleUrl,
   buildHomeUrl,
+  buildFestivalPageUrl,
   buildAppDeepLink,
+  primarySpotifyArtist,
+  buildPlanQrUrl,
+  extractPlanSnapshotText,
+  buildCalendarLinks,
   safeReturnPath,
 } from './links';
+import { FESTIVAL_SHARE_COPY } from '../constants/copy';
+import type { FestivalSet } from '../types/domain';
+import { encodePlanSnapshot, decodePlanSnapshot } from './planSnapshot';
 
 describe('links — buildJoinUrl', () => {
   it('builds the production join link by default', () => {
@@ -85,6 +93,65 @@ describe('links — buildPublicScheduleUrl', () => {
   });
 });
 
+describe('links — primarySpotifyArtist', () => {
+  const set = (artists: Array<{ name: string; links?: Record<string, string> }>) =>
+    ({ id: 's', festivalId: 'f', stageId: 'st', startTime: '', endTime: '', createdAt: '', updatedAt: '', artists }) as FestivalSet;
+  it('skips a Spotify link that is not an artist URL', () => {
+    const s = set([
+      { name: 'A', links: { spotify: 'https://open.spotify.com/user/abc' } },
+      { name: 'B', links: { spotify: 'https://open.spotify.com/artist/xyz789' } },
+    ]);
+    expect(primarySpotifyArtist(s)).toEqual({ name: 'B', url: 'https://open.spotify.com/artist/xyz789' });
+  });
+  it('returns null when no artist qualifies', () => {
+    expect(primarySpotifyArtist(set([{ name: 'A' }, { name: 'B', links: { instagram: 'x' } }]))).toBeNull();
+    expect(primarySpotifyArtist({ ...set([]), artists: undefined })).toBeNull();
+  });
+});
+
+describe('links - plan QR url', () => {
+  it('puts the snapshot in the hash', () => {
+    expect(buildPlanQrUrl('abc_-1')).toBe('https://festie.us/p#abc_-1');
+    expect(buildPlanQrUrl('x', 'http://localhost:5173/')).toBe('http://localhost:5173/p#x');
+  });
+
+  it('extracts the hash text from the URL form', () => {
+    expect(extractPlanSnapshotText('https://festie.us/p#abc_-1')).toBe('abc_-1');
+    expect(extractPlanSnapshotText('  https://festie.us/p/#abc  ')).toBe('abc');
+  });
+
+  it('returns anything else unchanged', () => {
+    expect(extractPlanSnapshotText('eyJ2IjoxfQ')).toBe('eyJ2IjoxfQ');
+    expect(extractPlanSnapshotText('https://evil.example/x#abc')).toBe('https://evil.example/x#abc');
+    expect(extractPlanSnapshotText('https://festie.us/p#abc?x=1')).toBe('https://festie.us/p#abc?x=1');
+    expect(extractPlanSnapshotText(42)).toBe(42);
+  });
+
+  it('round-trips an encoded snapshot', () => {
+    const encoded = encodePlanSnapshot({
+      festivalId: 'f1',
+      festivalName: 'Fest',
+      picks: [{ setId: 's1', priority: 'must' }],
+    });
+    const decoded = decodePlanSnapshot(extractPlanSnapshotText(buildPlanQrUrl(encoded)));
+    expect(decoded.ok).toBe(true);
+  });
+});
+
+describe('links - buildCalendarLinks', () => {
+  it('maps https and http feeds to webcal and Google', () => {
+    for (const scheme of ['https', 'http']) {
+      const feed = `${scheme}://festie.us/cal/tok.ics`;
+      const links = buildCalendarLinks(feed);
+      expect(links.httpsUrl).toBe(feed);
+      expect(links.webcalUrl).toBe('webcal://festie.us/cal/tok.ics');
+      expect(links.googleUrl).toBe(
+        `https://calendar.google.com/calendar/render?cid=${encodeURIComponent('webcal://festie.us/cal/tok.ics')}`,
+      );
+    }
+  });
+});
+
 describe('links — safeReturnPath', () => {
   it.each(['/set/abc', '/picks?day=2', '/(tabs)/picks'])('accepts the in-app path %s', (path) => {
     expect(safeReturnPath(path)).toBe(path);
@@ -111,5 +178,28 @@ describe('links — safeReturnPath', () => {
   it('accepts a path of exactly 512 characters', () => {
     const path = `/${'a'.repeat(511)}`;
     expect(safeReturnPath(path)).toBe(path);
+  });
+});
+
+describe('links — buildFestivalPageUrl', () => {
+  it('builds the production page link by default', () => {
+    expect(buildFestivalPageUrl('edc-orlando-2026')).toBe('https://festie.us/f/edc-orlando-2026');
+  });
+
+  it('uses an origin override and collapses its trailing slash', () => {
+    expect(buildFestivalPageUrl('edc-orlando-2026', 'http://localhost:5173/')).toBe(
+      'http://localhost:5173/f/edc-orlando-2026',
+    );
+  });
+
+  it('percent-encodes the slug', () => {
+    expect(buildFestivalPageUrl('a b')).toMatch(/\/f\/a%20b$/);
+  });
+});
+
+describe('FESTIVAL_SHARE_COPY', () => {
+  it('builds the share text and accessible name', () => {
+    expect(FESTIVAL_SHARE_COPY.text('X')).toBe('X lineup and set times on Festie');
+    expect(FESTIVAL_SHARE_COPY.a11y('X')).toBe('Share X');
   });
 });

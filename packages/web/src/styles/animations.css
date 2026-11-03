@@ -170,17 +170,6 @@
   }
 }
 
-/* Grid NOW-indicator pulse */
-@keyframes fk-grid-now-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 /* R11 — Scroll-driven timeline beam. A 2px aqua beam in the timeline's left
    gutter that fills from the top of the scroll content to the current scroll
    position. Native scroll-driven animation (Baseline 2026) is preferred; the

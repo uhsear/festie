@@ -4,12 +4,13 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, useCrewStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
 import { useJoinCrewByInvite } from '@festie/shared/hooks';
-import type { InviteStatus } from '@festie/shared/utils';
+import { inviteIsDead, type InviteStatus } from '@festie/shared/utils';
 import type { InvitePreview } from '@festie/shared/types';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
 import DisplayWords from '../../components/DisplayWords';
+import { useHaptics } from '../../hooks/useHaptics';
 import { isValidInviteCode, setPendingInvite } from '../../lib/pendingInvite';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
@@ -46,11 +47,13 @@ export default function JoinInviteScreen() {
   const styles = useStyles();
   const t = useTokens();
   const router = useRouter();
+  const haptics = useHaptics();
   const insets = useSafeAreaInsets();
   const { code } = useLocalSearchParams<{ code?: string }>();
   const user = useAuthStore((s) => s.user);
   const joinByInvite = useJoinCrewByInvite();
   const currentFestivalId = useFestivalStore((s) => s.currentFestival?.id);
+  const selectFestival = useFestivalStore((s) => s.selectFestival);
   const crewLoading = useCrewStore((s) => s.crewLoading);
   const error = useCrewStore((s) => s.error);
   const setError = useCrewStore((s) => s.setError);
@@ -63,7 +66,7 @@ export default function JoinInviteScreen() {
     setPreview(p);
   }, []);
   // Loading and unreachable still allow Join; only a confirmed-dead invite hides the actions.
-  const inviteDead = inviteStatus === 'invalid' || inviteStatus === 'expired';
+  const inviteDead = inviteIsDead(inviteStatus);
   const inviteUsable = !!validCode && !inviteDead;
   const full = preview?.spotsLeft === 0;
   const switchesFestival = !!preview?.festivalId && !!preview.festivalName && preview.festivalId !== currentFestivalId;
@@ -79,9 +82,17 @@ export default function JoinInviteScreen() {
     try {
       const outcome = await joinByInvite(validCode);
       setPendingInvite(null);
+      if (outcome.kind === 'joined') {
+        haptics.success();
+        router.replace({ pathname: '/(tabs)/crew', params: { tab: 'members', joined: outcome.crew.id } });
+        return;
+      }
       if (outcome.kind === 'already') {
         AccessibilityInfo.announceForAccessibility(`You're already in ${outcome.crew.name}`);
-      } else if (outcome.kind === 'queued') {
+        router.replace({ pathname: '/(tabs)/crew', params: { tab: 'members' } });
+        return;
+      }
+      if (outcome.kind === 'queued') {
         // A toast, not screen text: the global Toaster outlives the replace below.
         useUIStore.getState().showToast("We'll join you when you're back online.", { kind: 'info' });
       }
@@ -150,7 +161,7 @@ export default function JoinInviteScreen() {
             label="Type an invite code"
             onPress={() => {
               setPendingInvite(null);
-              router.replace('/(tabs)/crew');
+              router.replace({ pathname: '/(tabs)/crew', params: { sheet: 'join' } });
             }}
           />
         ) : null}
@@ -169,6 +180,20 @@ export default function JoinInviteScreen() {
               onPress={() => router.push('/(auth)/login')}
               style={styles.secondary}
             />
+            {preview?.festivalId ? (
+              <Button
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                label="See the lineup first"
+                variant="ghost"
+                onPress={() => {
+                  // The pending invite stays so sign-up returns to this screen.
+                  selectFestival(preview.festivalId!)
+                    .catch(() => {})
+                    .finally(() => router.replace('/(tabs)'));
+                }}
+                style={styles.secondary}
+              />
+            ) : null}
           </>
         ) : null}
 

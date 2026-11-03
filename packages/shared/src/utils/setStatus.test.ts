@@ -206,6 +206,7 @@ describe('getSetStatus with festival timeZone', () => {
     // 2026-09-04 20:30 UTC — inside [20:00, 21:00] UTC.
     const now = new Date(Date.UTC(2026, 8, 4, 20, 30, 0));
     expect(getSetStatus(set, now, [], 'UTC').status).toBe('live');
+    expect(getSetStatus(set, now, [], 'UTC').label).toBe('Playing');
   });
 
   it('reports past just after the wall-clock end in the festival zone (UTC)', () => {

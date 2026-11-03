@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
+import { useFestivalStore } from '@festie/shared/stores';
 import { useInvitePreview } from '@festie/shared/hooks';
 import { describeInvitePreview, inviteStatusMessage } from '@festie/shared/utils';
+import Button from '../ui/Button';
 import { readPendingInviteCode } from './invite';
 
 /**
@@ -10,6 +13,7 @@ import { readPendingInviteCode } from './invite';
 export default function InviteBanner() {
   const [code] = useState(readPendingInviteCode);
   const { status, preview } = useInvitePreview(code);
+  const navigate = useNavigate();
 
   if (!code || status === 'loading') return null;
 
@@ -33,6 +37,19 @@ export default function InviteBanner() {
       <p className={line}>{stateLine}</p>
       {festivalLine && <p className={line}>{festivalLine}</p>}
       {ownerLine && <p className={line}>{ownerLine}</p>}
+      {preview.festivalId && (
+        <Button
+          variant="secondary"
+          className="mt-3 w-full"
+          onClick={async () => {
+            // The pending join code stays in sessionStorage so the join resumes after sign-up.
+            await useFestivalStore.getState().selectFestival(preview.festivalId!).catch(() => {});
+            navigate({ to: '/cards' });
+          }}
+        >
+          See the lineup first
+        </Button>
+      )}
       <p className="mt-2 text-[length:var(--font-size-14)] text-text-secondary">
         Create an account or sign in, then confirm to join this crew.
       </p>

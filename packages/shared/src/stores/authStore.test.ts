@@ -2,8 +2,20 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAuthStore, accountDeletionNotice } from './authStore';
 import { api, setAuthToken, clearAuthToken, getAuthToken } from '../services/api';
 import type { User } from '../types/domain';
+import { AVATAR_COPY } from '../constants/accountSettings';
 
 vi.mock('../services/api', () => ({
+  ApiClientError: class ApiClientError extends Error {
+    status: number;
+    code?: string;
+    isNetworkError?: boolean;
+    constructor(message: string, status: number, code?: string, _retryAfter?: unknown, isNetworkError?: boolean) {
+      super(message);
+      this.status = status;
+      this.code = code;
+      this.isNetworkError = isNetworkError;
+    }
+  },
   api: {
     get: vi.fn(),
     post: vi.fn(),
@@ -18,6 +30,11 @@ vi.mock('../services/api', () => ({
 
 vi.mock('./resetStores', () => ({
   resetAllStores: vi.fn(),
+}));
+
+const mergeGuestPicks = vi.hoisted(() => vi.fn());
+vi.mock('./festivalDataStore', () => ({
+  useFestivalDataStore: { getState: () => ({ mergeGuestPicks }) },
 }));
 
 const mockUser: User = {
@@ -46,6 +63,31 @@ describe('authStore', () => {
   beforeEach(() => {
     resetStore();
     vi.clearAllMocks();
+    mergeGuestPicks.mockResolvedValue(undefined);
+  });
+
+  describe('guest pick merge', () => {
+    it('runs once after login, register and checkSession', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, token: 't' });
+      await useAuthStore.getState().login({ username: 'alice', password: 'pass' });
+      expect(mergeGuestPicks).toHaveBeenCalledTimes(1);
+
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, token: 't' });
+      await useAuthStore
+        .getState()
+        .register({ username: 'alice', email: 'a@test.com', password: 'pass', confirmPassword: 'pass' } as never);
+      expect(mergeGuestPicks).toHaveBeenCalledTimes(2);
+
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser });
+      await useAuthStore.getState().checkSession();
+      expect(mergeGuestPicks).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not run after a failed login', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('Bad credentials'));
+      await expect(useAuthStore.getState().login({ username: 'alice', password: 'x' })).rejects.toThrow();
+      expect(mergeGuestPicks).not.toHaveBeenCalled();
+    });
   });
 
   describe('initial state', () => {
@@ -120,7 +162,7 @@ describe('authStore', () => {
     it('handles non-Error thrown values', async () => {
       vi.mocked(api.post).mockRejectedValueOnce('string error');
       await expect(useAuthStore.getState().login({ username: 'a', password: 'b' })).rejects.toBe('string error');
-      expect(useAuthStore.getState().error).toBe('Login failed');
+      expect(useAuthStore.getState().error).toBe("Couldn't sign in. Try again.");
     });
 
     it('handles login response without token', async () => {
@@ -193,6 +235,65 @@ describe('authStore', () => {
       expect(state.user).toEqual(mockUser);
       expect(state.userToken).toBeNull();
       expect(setAuthToken).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('provider sign-in', () => {
+    const idToken = 'x'.repeat(30);
+    it('signed-in sets user and token', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({
+        status: 'signed-in',
+        user: mockUser,
+        token: 'tok',
+        roles: ['admin'],
+        reactivated: true,
+      });
+      const res = await useAuthStore.getState().signInWithProvider('google', { idToken });
+      expect(res).toEqual({ status: 'signed-in', reactivated: true });
+      expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/auth/oauth/google');
+      expect(setAuthToken).toHaveBeenCalledWith('tok');
+      expect(useAuthStore.getState().user?.id).toBe('user-1');
+      expect(useAuthStore.getState().userToken).toBe('tok');
+      expect(useAuthStore.getState().isAdmin).toBe(true);
+    });
+    it('needs-signup leaves user null', async () => {
+      const payload = {
+        status: 'needs-signup',
+        signupToken: 's'.repeat(30),
+        suggestedUsername: 'al',
+        email: null,
+        name: null,
+      };
+      vi.mocked(api.post).mockResolvedValueOnce(payload);
+      const res = await useAuthStore.getState().signInWithProvider('apple', { idToken });
+      expect(res).toEqual(payload);
+      expect(useAuthStore.getState().user).toBeNull();
+    });
+    it('completeProviderSignup sets the user', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, token: 'tok2' });
+      await useAuthStore.getState().completeProviderSignup({
+        signupToken: 's'.repeat(30),
+        username: 'alice',
+        dateOfBirth: '1990-01-01',
+        tosAccepted: true,
+      });
+      expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/auth/oauth/complete');
+      expect(useAuthStore.getState().user?.id).toBe('user-1');
+      expect(useAuthStore.getState().userToken).toBe('tok2');
+    });
+    it('rejections rethrow and leave error null', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('nope'));
+      await expect(useAuthStore.getState().signInWithProvider('google', { idToken })).rejects.toThrow('nope');
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('nope2'));
+      await expect(
+        useAuthStore.getState().completeProviderSignup({
+          signupToken: 's'.repeat(30),
+          username: 'a',
+          dateOfBirth: '1990-01-01',
+          tosAccepted: true,
+        }),
+      ).rejects.toThrow('nope2');
+      expect(useAuthStore.getState().error).toBeNull();
     });
   });
 
@@ -449,6 +550,18 @@ describe('authStore', () => {
         deletionDate: '2026-11-30T00:00:00.000Z',
       });
     });
+
+    it('sends crewHandover only when it is non-empty', async () => {
+      vi.mocked(api.delete).mockResolvedValue({ success: true });
+      vi.mocked(api.post).mockResolvedValue({});
+      const choices = [{ crewId: 'c1', newOwnerId: 'u2' }];
+      await useAuthStore.getState().deleteAccount('pw', choices);
+      expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: { password: 'pw', crewHandover: choices } });
+      await useAuthStore.getState().deleteAccount('pw', []);
+      expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: { password: 'pw' } });
+      await useAuthStore.getState().deleteAccount('pw');
+      expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: { password: 'pw' } });
+    });
   });
 
   describe('accountDeletionNotice', () => {
@@ -497,9 +610,9 @@ describe('authStore', () => {
       };
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(mockResponse as unknown as Response);
 
-      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow('Upload failed');
+      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow(AVATAR_COPY.uploadFailed);
       expect(useAuthStore.getState().user!.avatarUrl).toBe('old-avatar.jpg');
-      expect(useAuthStore.getState().error).toBe('Upload failed');
+      expect(useAuthStore.getState().error).toBe(AVATAR_COPY.uploadFailed);
       expect(useAuthStore.getState().isLoading).toBe(false);
 
       vi.mocked(globalThis.fetch).mockRestore();
@@ -510,22 +623,57 @@ describe('authStore', () => {
       const mockBlob = new Blob(['img'], { type: 'image/png' });
       vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
 
-      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow('Network error');
+      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow('You appear to be offline');
       expect(useAuthStore.getState().user!.avatarUrl).toBeUndefined();
-      expect(useAuthStore.getState().error).toBe('Network error');
+      expect(useAuthStore.getState().error).toBe("You're offline. Check your connection and try again.");
 
       vi.mocked(globalThis.fetch).mockRestore();
     });
 
-    it('handles non-Error thrown values on failure', async () => {
+    it('sends the file under the avatar field', async () => {
       useAuthStore.setState({ user: mockUser });
       const mockBlob = new Blob(['img'], { type: 'image/png' });
-      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce('string error');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { user: { ...mockUser, avatarUrl: 'u' } }, error: null }),
+      } as unknown as Response);
 
-      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toBe('string error');
-      expect(useAuthStore.getState().error).toBe('Avatar upload failed');
+      await useAuthStore.getState().uploadAvatar(mockBlob);
 
-      vi.mocked(globalThis.fetch).mockRestore();
+      const body = fetchSpy.mock.calls[0]![1]!.body as FormData;
+      expect(body.has('avatar')).toBe(true);
+      expect(body.has('file')).toBe(false);
+      fetchSpy.mockRestore();
+    });
+
+    it('rejects with the server message and status on a 400', async () => {
+      useAuthStore.setState({ user: mockUser });
+      const mockBlob = new Blob(['img'], { type: 'image/png' });
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: 'Avatar must be 5MB or smaller', code: 'INVALID_INPUT' } }),
+      } as unknown as Response);
+
+      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toMatchObject({
+        message: 'Avatar must be 5MB or smaller',
+        status: 400,
+        code: 'INVALID_INPUT',
+      });
+      fetchSpy.mockRestore();
+    });
+
+    it('rejects an oversize file before any request', async () => {
+      useAuthStore.setState({ user: mockUser, error: null });
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      await expect(
+        useAuthStore.getState().uploadAvatar({ uri: 'file:///a.png', name: 'a.png', type: 'image/png', size: 6_000_000 }),
+      ).rejects.toThrow(AVATAR_COPY.tooBig);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(useAuthStore.getState().isLoading).toBe(false);
+      expect(useAuthStore.getState().error).toBeNull();
+      fetchSpy.mockRestore();
     });
 
     it('includes Authorization header when bearer token exists', async () => {
@@ -572,6 +720,50 @@ describe('authStore', () => {
     });
   });
 
+  describe('account settings actions', () => {
+    it('updatePaymentHandles trims, PUTs and merges the three fields', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.put).mockResolvedValueOnce({
+        user: { venmoHandle: 'sam', cashappCashtag: null, paypalHandle: 'sp' },
+      });
+      const res = await useAuthStore
+        .getState()
+        .updatePaymentHandles({ venmoHandle: ' sam ', cashappCashtag: '', paypalHandle: 'sp ' });
+      expect(api.put).toHaveBeenCalledWith('/account/payment-handles', {
+        venmoHandle: 'sam',
+        cashappCashtag: '',
+        paypalHandle: 'sp',
+      });
+      expect(res.venmoHandle).toBe('sam');
+      expect(useAuthStore.getState().user).toMatchObject({ venmoHandle: 'sam', cashappCashtag: null, paypalHandle: 'sp' });
+    });
+
+    it('setPublicSchedule PUTs and sets the flag', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.put).mockResolvedValueOnce({ user: { publicSchedule: true } });
+      await useAuthStore.getState().setPublicSchedule(true);
+      expect(api.put).toHaveBeenCalledWith('/account/public-schedule', { publicSchedule: true });
+      expect(useAuthStore.getState().user!.publicSchedule).toBe(true);
+    });
+
+    it('changeEmail returns the server message', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ message: 'Check your inbox' });
+      await expect(useAuthStore.getState().changeEmail('new@test.com', 'pw')).resolves.toBe('Check your inbox');
+      expect(api.post).toHaveBeenCalledWith('/account/email', { email: 'new@test.com', password: 'pw' });
+    });
+
+    it('a rejected call leaves isLoading false and error null', async () => {
+      useAuthStore.setState({ user: mockUser, isLoading: false, error: null });
+      const boom = new Error('nope');
+      vi.mocked(api.put).mockRejectedValueOnce(boom);
+      vi.mocked(api.post).mockRejectedValueOnce(boom);
+      await expect(useAuthStore.getState().setPublicSchedule(true)).rejects.toBe(boom);
+      await expect(useAuthStore.getState().changeEmail('a@b.co', 'pw')).rejects.toBe(boom);
+      expect(useAuthStore.getState().isLoading).toBe(false);
+      expect(useAuthStore.getState().error).toBeNull();
+    });
+  });
+
   describe('removeAvatar', () => {
     it('clears avatar from user on success', async () => {
       useAuthStore.setState({ user: { ...mockUser, avatarUrl: 'old.jpg' } });
@@ -613,6 +805,23 @@ describe('authStore', () => {
       useAuthStore.getState().setError('err');
       useAuthStore.getState().setError(null);
       expect(useAuthStore.getState().error).toBeNull();
+    });
+  });
+
+  describe('requestEmailChange', () => {
+    it('posts the trimmed email and returns the server message', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({ message: 'Sent' });
+      const msg = await useAuthStore.getState().requestEmailChange(' a@b.co ', 'x');
+      expect(api.post).toHaveBeenCalledWith('/account/email', { email: 'a@b.co', password: 'x' });
+      expect(msg).toBe('Sent');
+    });
+
+    it('rethrows and leaves error and user unchanged', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('nope'));
+      await expect(useAuthStore.getState().requestEmailChange('a@b.co', 'x')).rejects.toThrow('nope');
+      expect(useAuthStore.getState().error).toBeNull();
+      expect(useAuthStore.getState().user).toEqual(mockUser);
     });
   });
 });

@@ -15,195 +15,22 @@ import type {
   paymentHandlesSchema,
   updateEmailSchema,
 } from '../lib/schemas';
-import { sendEmailChangeNoticeEmail, sendVerificationEmail } from '../lib/email';
-
-type ExportRow = Record<string, unknown>;
-
-const isoOrNull = (value: unknown) => (value ? new Date(value as string).toISOString() : null);
-
-// split_with is JSONB, but older rows can come back as a JSON string (see expenses.getByCrew).
-function parseSplitWith(value: unknown): string[] {
-  if (Array.isArray(value)) return value as string[];
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from '../lib/email';
+import { revokeAppleForUser } from '../lib/oauth/revoke-user';
+import type { Identity } from '../lib/db/stores/identities';
+import { collectAuthoredRecords, isoOrNull } from '../lib/account-export-records';
 
 /**
- * Records the user wrote in crews and on sets: ratings, expenses they paid or
- * share, poll votes, and the packing items, ride offers and meeting points they
- * created. Each section fails on its own and is then exported as [].
- */
-async function collectAuthoredRecords(pool: RouteDeps['stores']['pool'], userId: string, log: RouteDeps['log']) {
-  const section = async (name: string, sql: string, mapRow: (r: ExportRow) => Record<string, unknown>) => {
-    try {
-      const { rows } = await pool.query(sql, [userId]);
-      return (rows as ExportRow[]).map(mapRow);
-    } catch (error) {
-      log.warn('gdpr-export:partial-failure', { section: name, userId, error: (error as Error).message });
-      return [];
-    }
-  };
-
-  const ratings = await section(
-    'ratings',
-    `
-  SELECT
-    r.set_id,
-    s.festival_id,
-    s.artist,
-    r.rating,
-    r.note,
-    r.created_at,
-    r.updated_at
-  FROM
-    set_ratings r
-    LEFT JOIN festival_sets s ON s.id = r.set_id
-  WHERE
-    r.user_id = $1
-  ORDER BY
-    r.created_at
-`,
-    (r) => ({
-      setId: r.set_id,
-      festivalId: r.festival_id ?? null,
-      artist: r.artist ?? null,
-      rating: r.rating,
-      note: r.note ?? null,
-      createdAt: isoOrNull(r.created_at),
-      updatedAt: isoOrNull(r.updated_at),
-    }),
-  );
-  const expenses = await section(
-    'expenses',
-    `
-  SELECT
-    id,
-    crew_id,
-    description,
-    amount,
-    category,
-    planned,
-    paid_by,
-    split_with,
-    created_at
-  FROM
-    crew_expenses
-  WHERE
-    paid_by = $1
-    OR split_with @> jsonb_build_array($1::text)
-  ORDER BY
-    created_at
-`,
-    (r) => ({
-      id: r.id,
-      crewId: r.crew_id,
-      description: r.description,
-      amount: Number(r.amount),
-      category: r.category ?? null,
-      planned: r.planned ?? false,
-      paidByYou: r.paid_by === userId,
-      splitWith: parseSplitWith(r.split_with),
-      createdAt: isoOrNull(r.created_at),
-    }),
-  );
-  const pollVotes = await section(
-    'pollVotes',
-    `
-  SELECT
-    v.poll_id,
-    p.crew_id,
-    p.question,
-    p.options ->> v.option_index AS option,
-    v.voted_at
-  FROM
-    crew_poll_votes v
-    JOIN crew_polls p ON p.id = v.poll_id
-  WHERE
-    v.user_id = $1
-  ORDER BY
-    v.voted_at
-`,
-    (r) => ({
-      pollId: r.poll_id,
-      crewId: r.crew_id,
-      question: r.question,
-      option: r.option ?? null,
-      votedAt: isoOrNull(r.voted_at),
-    }),
-  );
-  const packingItems = await section(
-    'packingItems',
-    'SELECT id, crew_id, label, claimed, brought_by, created_at FROM crew_packing_items WHERE created_by = $1',
-    (r) => ({
-      id: r.id,
-      crewId: r.crew_id,
-      label: r.label,
-      claimed: r.claimed ?? false,
-      broughtBy: r.brought_by ?? null,
-      createdAt: isoOrNull(r.created_at),
-    }),
-  );
-  const rides = await section(
-    'rides',
-    'SELECT id, crew_id, driver, seats, depart_from, depart_at, note, created_at FROM crew_ride_offers WHERE created_by = $1',
-    (r) => ({
-      id: r.id,
-      crewId: r.crew_id,
-      driver: r.driver ?? null,
-      seats: r.seats ?? null,
-      departFrom: r.depart_from ?? null,
-      // depart_at is free TEXT (migration 047), not a timestamp, so it is exported as stored.
-      departAt: r.depart_at ?? null,
-      note: r.note ?? null,
-      createdAt: isoOrNull(r.created_at),
-    }),
-  );
-  const meetingPoints = await section(
-    'meetingPoints',
-    `
-  SELECT
-    id,
-    crew_id,
-    label,
-    location,
-    latitude,
-    longitude,
-    type,
-    meet_at,
-    created_at
-  FROM
-    crew_meeting_points
-  WHERE
-    created_by = $1
-`,
-    (r) => ({
-      id: r.id,
-      crewId: r.crew_id,
-      label: r.label,
-      location: r.location ?? null,
-      latitude: r.latitude ?? null,
-      longitude: r.longitude ?? null,
-      type: r.type ?? null,
-      meetAt: isoOrNull(r.meet_at),
-      createdAt: isoOrNull(r.created_at),
-    }),
-  );
-
-  return { ratings, expenses, pollVotes, packingItems, rides, meetingPoints };
-}
-
-/**
- * Collect all user data for GDPR export. Gathers profiles, device tokens,
- * crews, sessions, notification preferences, topic subscriptions, Spotify
- * linkage, payment handles, email, display name, date of birth, the crew
- * statuses the user has posted (with their stored location), and the records
- * the user wrote: set ratings, expenses, poll votes, packing items, ride
- * offers and meeting points.
+ * Collect all user data for GDPR export (exportVersion 1.2). Gathers the
+ * account (email, display name, date of birth, payment handles, sharing
+ * settings), profiles with picks, notes and reminders, device tokens, crews,
+ * sessions with their device label, notification preferences, topic
+ * subscriptions, Spotify linkage, linked Google and Apple sign-ins, and the
+ * crew statuses the user has posted (with their stored location). Then the
+ * records the user wrote (lib/account-export-records.ts): ratings, caught
+ * sets, followed festivals, expenses, polls created, poll votes, packing
+ * items, ride offers and seats, meeting points, crew activity, calendar feeds,
+ * payment reminders sent, crew days and meet-up "I'll be there" taps.
  */
 async function collectGdprData(
   userId: string,
@@ -248,6 +75,16 @@ async function collectGdprData(
     profiles: [],
     deviceTokens: [],
   };
+
+  // Sharing settings (063 public page, 075 last picks-link reset).
+  try {
+    const sharing = await stores.shareLinks.getStatus(userId);
+    if (!sharing) throw new Error('user not found');
+    exportData.user.sharing = { publicSchedule: sharing.publicSchedule, linksResetAt: sharing.linksResetAt };
+  } catch (error) {
+    log.warn('gdpr-export:partial-failure', { section: 'sharing', userId, error: (error as Error).message });
+    exportData.user.sharing = { publicSchedule: false, linksResetAt: null };
+  }
 
   // Get profiles for this user — use targeted query when available
   const userProfiles = stores?.profiles?.getByUserId
@@ -300,10 +137,13 @@ async function collectGdprData(
   if (stores?.sessions?.listUserSessions) {
     try {
       const sessions = await stores.sessions.listUserSessions(userId);
-      exportData.sessions = sessions.map((s: { createdAt: string | number; lastAccess: string | number }) => ({
-        createdAt: new Date(s.createdAt).toISOString(),
-        lastAccess: new Date(s.lastAccess).toISOString(),
-      }));
+      exportData.sessions = sessions.map(
+        (s: { createdAt: string | number; lastAccess: string | number; deviceLabel?: string | null }) => ({
+          createdAt: new Date(s.createdAt).toISOString(),
+          lastAccess: new Date(s.lastAccess).toISOString(),
+          deviceLabel: s.deviceLabel ?? null,
+        }),
+      );
     } catch (error) {
       log.warn('gdpr-export:partial-failure', { section: 'sessions', userId, error: (error as Error).message });
       exportData.sessions = [];
@@ -360,6 +200,20 @@ async function collectGdprData(
     exportData.spotifyAccount = null;
   }
 
+  // Linked Google and Apple accounts (T45). Never the encrypted Apple token.
+  try {
+    const identities: Identity[] = await stores.identities.listByUser(userId);
+    exportData.identities = identities.map((i) => ({
+      provider: i.provider,
+      email: i.email,
+      createdAt: i.createdAt,
+      lastUsedAt: i.lastUsedAt,
+    }));
+  } catch (error) {
+    log.warn('gdpr-export:partial-failure', { section: 'identities', userId, error: (error as Error).message });
+    exportData.identities = [];
+  }
+
   // Get crew status snapshots the user has authored (M5 offline-sync snapshots),
   // with the stored status location: it persists and crewmates can see it.
   if (stores?.crewStatus?.listByUser) {
@@ -404,6 +258,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     setNoStore,
     serializePublicUser,
     sanitizeString,
+    sanitizeIdentifier,
     rateLimit,
     sendSuccess,
     sendError,
@@ -481,6 +336,31 @@ export default function createAccountRoutes(deps: RouteDeps) {
     } catch (error) {
       log.warn('account:export-limit-release-failed', { userId, error: (error as Error).message });
     }
+  }
+
+  // Password users re-enter their password. A provider-only account has none, so
+  // it needs a recent re-auth (POST /auth/reauth with a provider token) instead.
+  // Returns true when it already sent the refusal.
+  async function refuseUnconfirmed(
+    req: Request,
+    res: Response,
+    passwordHash: string | null | undefined,
+    password: string | undefined,
+    wrongStatus: number,
+  ): Promise<boolean> {
+    if (!passwordHash) {
+      if (deps.hasRecentAuth(req)) return false;
+      sendError(res, 403, 'Confirm it is you to continue.', ErrorCodes.REAUTH_REQUIRED);
+      return true;
+    }
+    if (!password) {
+      sendError(res, 400, 'Password confirmation required', ErrorCodes.MISSING_FIELD);
+      return true;
+    }
+    if (await deps.verifyPassword(password, passwordHash)) return false;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    sendError(res, wrongStatus, 'That password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
+    return true;
   }
 
   // ── POST /avatar — upload avatar ──────────────────────────────────────
@@ -686,14 +566,83 @@ export default function createAccountRoutes(deps: RouteDeps) {
       if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
       invalidateUserCache();
 
-      const cleared: Array<{ crew_id: string }> = await stores.crewStatus.clearLocationsForUser(userId);
-      for (const row of cleared) io.to('crew:' + row.crew_id).emit('crew:status-updated', { status: row });
+      // Every row is cleared, but only crews the user still belongs to hear about it:
+      // clients add unknown rows, so a left crew would see the member's status again.
+      const cleared: Array<{ crew_id: string; still_member: boolean }> =
+        await stores.crewStatus.clearLocationsForUser(userId);
+      for (const { still_member: stillMember, ...status } of cleared) {
+        if (stillMember) io.to('crew:' + status.crew_id).emit('crew:status-updated', { status });
+      }
 
       log.info('account:stop-sharing', { userId, clearedStatusLocations: cleared.length });
       return sendSuccess(res, { user: serializePublicUser(user), clearedStatusLocations: cleared.length });
     } catch (error) {
       log.error('account stop-sharing failed', { error: (error as Error).message, userId });
       return sendError(res, 500, "Couldn't stop sharing. Try again.", ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── POST /share-link/:festivalId — revocable picks link for one festival ─
+  router.post('/share-link/:festivalId', userAuth, rateLimit(20, 'share-link'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const festivalId = sanitizeIdentifier(req.params.festivalId);
+      if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
+      const profile = await stores.profiles.readByUserAndFestival(req.user.userId, festivalId);
+      const token = profile ? await stores.shareLinks.getOrCreateToken(profile.id) : null;
+      if (!token) {
+        return sendError(res, 404, 'Pick a set at this festival first, then share your picks.', ErrorCodes.NOT_FOUND);
+      }
+      return sendSuccess(res, { token });
+    } catch (error) {
+      log.error('share link failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to create share link', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── GET /sharing — public page status and last link reset ──────────────
+  router.get('/sharing', userAuth, rateLimit(60, 'sharing-status'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const status = await stores.shareLinks.getStatus(req.user.userId);
+      if (!status) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+      const newest = status.publicSchedule ? await stores.shareLinks.newestProfile(req.user.userId) : null;
+      // Left out (never []) when the query fails, so clients fall back to local data
+      // instead of showing a false "None". Never the coordinates.
+      let statusLocations: Array<{ crewId: string; crewName: string; capturedAt: string | null }> | undefined;
+      try {
+        const rows: Array<{ crew_id: string; crew_name: string; location_captured_at: unknown }> =
+          await stores.crewStatus.listLocationsForUser(req.user.userId);
+        statusLocations = rows.map((r) => ({
+          crewId: r.crew_id,
+          crewName: r.crew_name,
+          capturedAt: isoOrNull(r.location_captured_at),
+        }));
+      } catch (error) {
+        log.warn('sharing status locations failed', { error: (error as Error).message, userId: req.user.userId });
+      }
+      return sendSuccess(res, {
+        publicSchedule: status.publicSchedule,
+        publicFestival: newest ? { id: newest.festivalId, name: newest.festivalName } : null,
+        linksResetAt: status.linksResetAt,
+        ...(statusLocations ? { statusLocations } : {}),
+      });
+    } catch (error) {
+      log.error('sharing status failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to load sharing status', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── POST /sharing/reset — stop every picks link and calendar feed sent ──
+  router.post('/sharing/reset', userAuth, rateLimit(5, 'share-reset'), async (req: Request, res: Response) => {
+    try {
+      setNoStore(res);
+      const linksResetAt = await stores.shareLinks.resetForUser(req.user.userId);
+      log.info('account:share-links-reset', { userId: req.user.userId });
+      return sendSuccess(res, { linksResetAt });
+    } catch (error) {
+      log.error('share links reset failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, "Couldn't reset your links. Try again.", ErrorCodes.INTERNAL_ERROR);
     }
   });
 
@@ -707,7 +656,10 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // until GET /api/v1/auth/verify-email promotes it via `updateUserEmail`, so a
   // stolen session cannot move the login identity on request alone. The address
   // currently on file is notified that a change was requested, by a sender that
-  // opts out of the dedup guard so the alert cannot be suppressed.
+  // opts out of the dedup guard so the alert cannot be suppressed. When that
+  // address is verified, the notice carries a single-use password-reset link
+  // ("This wasn't me"): a reset cancels the pending change and signs out every
+  // device. An unverified address gets no link, so no recovery path widens.
   //
   // Two rate-limit tiers: `rateLimit(3, 'email-change')` caps how often one
   // account may ask; `emailChangeRecipientLimit` caps how much Festie-branded
@@ -737,15 +689,10 @@ export default function createAccountRoutes(deps: RouteDeps) {
         // the token insert or the uniqueness check silently misses.
         const cleanEmail = email.trim().toLowerCase();
 
-        const { verifyPassword } = deps;
         const currentUser = await getUserById(req.user.userId);
         if (!currentUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
 
-        const passwordValid = await verifyPassword(password, currentUser.passwordHash);
-        if (!passwordValid) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          return sendError(res, 400, 'Incorrect password', ErrorCodes.PASSWORD_INCORRECT);
-        }
+        if (await refuseUnconfirmed(req, res, currentUser.passwordHash, password, 400)) return undefined;
 
         if (await stores.emailTokens.checkEmailExists(cleanEmail, req.user.userId)) {
           log.warn('account:email-change-rejected', { userId: req.user.userId, reason: 'address-unavailable' });
@@ -769,7 +716,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
         );
 
         const verifyUrl = `${deps.config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
-        await sendVerificationEmail({
+        await sendEmailChangeConfirmEmail({
           to: cleanEmail,
           username: currentUser.username,
           verifyUrl,
@@ -779,8 +726,21 @@ export default function createAccountRoutes(deps: RouteDeps) {
 
         // Notify the address on file so a user whose session was stolen finds
         // out. The sender opts out of the idempotency guard — see lib/email.ts.
+        // The reset token lives as long as the change link. Other reset tokens
+        // are left alone: a forgot-password link in flight must keep working.
         if (currentUser.email) {
-          await sendEmailChangeNoticeEmail({ to: currentUser.email, config: deps.config, log });
+          let resetUrl: string | undefined;
+          if (currentUser.emailVerifiedAt) {
+            const resetToken = crypto.randomBytes(32).toString('hex');
+            const resetHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+            await stores.emailTokens.createResetToken(
+              req.user.userId,
+              resetHash,
+              deps.config.EMAIL_VERIFY_TOKEN_TTL_HOURS,
+            );
+            resetUrl = `${deps.config.PUBLIC_ORIGIN}/reset-password?token=${resetToken}`;
+          }
+          await sendEmailChangeNoticeEmail({ to: currentUser.email, resetUrl, config: deps.config, log });
         }
 
         log.info('account:email-change-requested', { userId: req.user.userId });
@@ -800,9 +760,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
     validate(schemas.accountDelete),
     async (req: Request, res: Response) => {
       try {
-        const { password } = req.validatedBody as z.infer<typeof accountDeleteSchema>;
+        const { password, crewHandover } = req.validatedBody as z.infer<typeof accountDeleteSchema>;
 
-        const { verifyPassword, invalidateUserSessions, disconnectUserSockets, getRequestIp } = deps;
+        const { invalidateUserSessions, disconnectUserSockets, getRequestIp } = deps;
         const currentUser = await getUserById(req.user.userId);
         if (!currentUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
 
@@ -811,17 +771,19 @@ export default function createAccountRoutes(deps: RouteDeps) {
           return sendError(res, 400, 'Account is already scheduled for deletion', ErrorCodes.INVALID_INPUT);
         }
 
-        const passwordValid = await verifyPassword(password, currentUser.passwordHash);
-        if (!passwordValid) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-          return sendError(res, 403, 'Incorrect password', ErrorCodes.PASSWORD_INCORRECT);
-        }
+        if (await refuseUnconfirmed(req, res, currentUser.passwordHash, password, 403)) return undefined;
 
         // Soft-delete: set deleted_at and hide the profiles. Picks and notes stay
         // until the 30-day purge, so a sign-in before then restores them.
         // Sessions, refresh tokens and device tokens go now.
         // Retry once on deadlock (PG 40P01) — concurrent test cleanup can trigger this.
+        // Owned crews are handed over first, so a failure there deletes nothing,
+        // and a retry finds no owned crew with members left to hand over.
+        const handedOver: Array<{ crewId: string; newOwnerId: string }> = [];
         const performSoftDelete = async () => {
+          if (stores.crews) {
+            handedOver.push(...(await stores.crews.handOverOwnedCrews(req.user.userId, crewHandover ?? [])));
+          }
           await stores.users.update(req.user.userId, { deletedAt: new Date().toISOString() });
           invalidateUserCache();
           await invalidateUserSessions(req.user.userId);
@@ -831,6 +793,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
             await stores.profiles.deleteByUserId(req.user.userId, { reason: 'account-deleted', keepPicks: true });
           }
           disconnectUserSockets(req.user.userId, io);
+          // Apple requires the revoke on delete. Best effort, never throws. The identity
+          // rows stay, so a sign-in with Apple inside the 30 days restores the account.
+          await revokeAppleForUser(req.user.userId, deps);
         };
         try {
           await performSoftDelete();
@@ -846,6 +811,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           userId: req.user.userId,
           username: currentUser.username,
           ip: getRequestIp(req),
+          crewsHandedOver: handedOver.length,
         });
         deps.clearUserSessionCookie(res);
         const deletionDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -855,6 +821,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           success: true,
           message: `Your account will be deleted on ${deletionDay}. Sign in before then to keep it.`,
           deletionDate: deletionDate.toISOString(),
+          handedOver,
         });
       } catch (error) {
         log.error('account soft-delete failed', { error: (error as Error).message, userId: req.user.userId });
@@ -877,13 +844,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
       if (retryMs > 0) {
         const nextAvailable = new Date(Date.now() + retryMs);
         res.setHeader('Retry-After', String(Math.max(1, Math.ceil(retryMs / 1000))));
-        return sendError(
-          res,
-          429,
-          'You can download your data once a day. Try again later.',
-          ErrorCodes.RATE_LIMITED,
-          { retryAt: nextAvailable.toISOString() },
-        );
+        return sendError(res, 429, 'You can download your data once a day. Try again later.', ErrorCodes.RATE_LIMITED, {
+          retryAt: nextAvailable.toISOString(),
+        });
       }
       reserved = true;
 
