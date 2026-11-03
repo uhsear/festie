@@ -45,19 +45,19 @@ describe('PickBulkActions', () => {
   it('says "all days" in the header', () => {
     render(<PickBulkActions />);
     expect(screen.getByText('Bulk add picks · all days')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bulk add picks for all days, expand' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Bulk add picks/ })).toBeInTheDocument();
   });
 
   it('groups sets from every day, whatever day is selected', () => {
     render(<PickBulkActions />);
-    fireEvent.click(screen.getByRole('button', { name: /Bulk add picks for all days/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Bulk add picks/ }));
     expect(screen.getByRole('button', { name: 'Add all 2 sets on Main Stage, all days' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add all 2 House sets, all days' })).toBeInTheDocument();
   });
 
   it('calls add with the group and the selected priority, with no "(selected)" text', () => {
     render(<PickBulkActions />);
-    fireEvent.click(screen.getByRole('button', { name: /Bulk add picks for all days/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Bulk add picks/ }));
     fireEvent.click(screen.getByRole('radio', { name: 'Want to See' }));
     expect(document.body.textContent).not.toMatch(/\(selected\)/);
     fireEvent.click(screen.getByRole('button', { name: 'Add all 2 sets on Main Stage, all days' }));

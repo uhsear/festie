@@ -19,6 +19,9 @@ async function gotoSchedule(
   // also avoids Chromium's screenshot animation fast-forward leaving
   // content-visibility/staggered cards in an unpainted first frame.
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  // The fixture festivals are dated June 2026. Once both are past, the picker opens the
+  // newest one (fest-2), so pin the page clock before them to keep fest-1 the default.
+  await page.clock.setFixedTime(new Date('2026-06-01T12:00:00'));
   await page.goto(`${app.baseUrl}${route}`);
   await expect(page.locator('#app')).toBeVisible();
   await expect(page.locator('[data-testid="festival-select"]')).toHaveAttribute('data-festival-id', 'fest-1');
