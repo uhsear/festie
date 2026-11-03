@@ -1296,6 +1296,45 @@ describe('routes/spotify.js', () => {
     }
   });
 
+  it('serves artist embed and logs warn when the Spotify token request fails', async () => {
+    const deps = makeDeps({
+      config: { SPOTIFY_CLIENT_ID: '', SPOTIFY_CLIENT_SECRET: '', SPOTIFY_CACHE_TTL_MS: 86_400_000, SPOTIFY_CACHE_MAX: 500 },
+      stores: {
+        pool: makePool([
+          {
+            rows: [
+              {
+                id: 'set-tokfail',
+                artists: [{ name: 'Tok Artist', links: { spotify: 'https://open.spotify.com/artist/tok999' } }],
+              },
+            ],
+          },
+        ]),
+      },
+    });
+
+    const origFetch = global.fetch;
+    // getToken caches at module level, so fail every fetch: token or top-tracks, either throws.
+    global.fetch = mock.fn(async () => { throw new Error('fetch failed'); }) as any;
+
+    try {
+      const router = createSpotifyRoutes(deps);
+      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
+      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+      const res = { json: mock.fn(), status: mock.fn(function (this: any) { return this; }) };
+      await handler({ params: { setId: 'set-tokfail' } }, res);
+      assert.equal(deps.sendError.mock.calls.length, 0);
+      assert.equal(deps.sendSuccess.mock.calls.length, 1);
+      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      assert.equal(data.embedType, 'artist');
+      assert.equal(data.artistId, 'tok999');
+      assert.equal(deps.log.warn.mock.calls.length, 1);
+      assert.equal(deps.log.error.mock.calls.length, 0);
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
+
   it('handles error in route handler gracefully', async () => {
     const deps = makeDeps({
       stores: {

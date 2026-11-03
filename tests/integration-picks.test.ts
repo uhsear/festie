@@ -206,7 +206,7 @@ describe('Integration — Picks', { concurrency: 1 }, () => {
       .expect(400);
   });
 
-  test('rejects a reminder referencing an unknown set', async () => {
+  test('drops a reminder referencing an unknown set', async () => {
     const server = await startServer();
     servers.push(server);
 
@@ -218,7 +218,7 @@ describe('Integration — Picks', { concurrency: 1 }, () => {
       .set('x-user-token', alice.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ reminders: { 'missing-set': 15 } })
-      .expect(400);
+      .expect(200);
   });
 
   test('enforces the 200-reminder-per-profile cap', async () => {

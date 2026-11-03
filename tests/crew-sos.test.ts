@@ -26,7 +26,8 @@ import request from 'supertest';
 
 import { validate, validateParams, schemas } from '../lib/schemas.js';
 import { sendSuccess, sendError, ErrorCodes } from '../lib/response.js';
-import { SOS_RAISE_LIMIT } from '../lib/rate-limiting.js';
+import { SOS_RAISE_LIMIT, SOS_RAISE_MIN_GAP } from '../lib/rate-limiting.js';
+const passGap = () => (SOS_RAISE_MIN_GAP as any)._reset();
 import { sanitizeIdentifier } from '../lib/helpers/sanitize.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────
@@ -148,6 +149,7 @@ function makeFakeRedis() {
 // Reset it before each test so the per-user throttle starts fresh.
 beforeEach(() => {
   (SOS_RAISE_LIMIT as any)._reset();
+    passGap();
 });
 
 // =====================================================================
@@ -285,6 +287,7 @@ describe('routes/crew-sos.ts — POST /:crewId/sos', () => {
     assert.equal((sendFn.mock.calls as any[])[0].arguments[0].body, 'Tap to get directions to their last location.');
 
     (SOS_RAISE_LIMIT as any)._reset();
+    passGap();
     sendFn.mock.resetCalls();
     await request(app).post('/crew-1/sos').send({});
     await new Promise((r) => setTimeout(r, 20));
@@ -394,6 +397,43 @@ describe('routes/crew-sos.ts — POST /:crewId/sos', () => {
     assert.equal(second.status, 429);
     assert.equal(second.body.error.code, 'RATE_LIMITED');
     assert.ok(second.headers['retry-after'], 'sets a Retry-After header');
+    assert.match(second.body.error.message, /^You just sent an SOS\. Wait \d+ seconds before sending another\.$/);
+  });
+
+  test('throttle is per crew: raising in another crew is allowed', async () => {
+    const { app } = await buildApp();
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+    passGap();
+    assert.equal((await request(app).post('/crew-2/sos').send({})).status, 200);
+  });
+
+  test('clearing the SOS resets the throttle so it can be raised again', async () => {
+    const { app } = await buildApp();
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 429);
+    assert.equal((await request(app).post('/crew-1/sos/clear').send({})).status, 200);
+    passGap();
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+  });
+
+  test('clearing does not bypass the 15 s floor between raises', async () => {
+    const { app } = await buildApp();
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+    assert.equal((await request(app).post('/crew-1/sos/clear').send({})).status, 200);
+    const res = await request(app).post('/crew-1/sos').send({});
+    assert.equal(res.status, 429);
+    assert.ok(Number(res.headers['retry-after']) <= 15);
+  });
+
+  test('re-raise is allowed when Redis shows no active SOS, even if this worker never saw the clear', async () => {
+    const redis = makeFakeRedis();
+    const { app } = await buildApp({ redis });
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 429);
+    // Another PM2 worker handled the clear: Redis is empty, this worker's bucket is still full.
+    redis.hashes.clear();
+    passGap();
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
   });
 
   // ── Feature flag ────────────────────────────────────────────────────
@@ -820,6 +860,7 @@ describe('routes/crew-sos.ts — POST /:crewId/sos/seen', () => {
     await redis.hset('sos:seen:crew-1:user-1', 'user-2', 'sam');
 
     (SOS_RAISE_LIMIT as any)._reset();
+    passGap();
     const again = await request(app).post('/crew-1/sos').send({});
     assert.equal(again.status, 200);
 

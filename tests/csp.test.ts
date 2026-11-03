@@ -190,7 +190,7 @@ describe('csp: buildCspPolicies', () => {
 describe('csp: Cross-Origin-Opener-Policy', () => {
   const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
-  async function coopFor(config: Record<string, any>) {
+  async function headersFor(config: Record<string, any>) {
     const app = express();
     const ctx = {
       express,
@@ -225,8 +225,17 @@ describe('csp: Cross-Origin-Opener-Policy', () => {
     };
     configureMiddleware(app as any, ctx as any);
     const res = await request(app).get('/health/live');
-    return res.headers['cross-origin-opener-policy'];
+    return res.headers;
   }
+
+  const coopFor = async (config: Record<string, any>) => (await headersFor(config))['cross-origin-opener-policy'];
+
+  it('sends Permissions-Policy allowing geolocation and wake lock for self only', async () => {
+    const policy = String((await headersFor({}))['permissions-policy']);
+    assert.match(policy, /(^|, )geolocation=\(self\)/);
+    assert.match(policy, /screen-wake-lock=\(self\)/);
+    assert.match(policy, /camera=\(\)/);
+  });
 
   it('stays same-origin when no provider is enabled', async () => {
     assert.equal(await coopFor({}), 'same-origin');

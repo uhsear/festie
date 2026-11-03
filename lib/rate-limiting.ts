@@ -590,6 +590,9 @@ function _createSocketEventLimiter(name: string, max: number, windowMs: number) 
       }
       return this.consume(userId);
     },
+    release(key: any) {
+      buckets.delete(key);
+    },
     _reset() {
       buckets.clear();
     },
@@ -614,6 +617,9 @@ const LOCATION_UPDATE_LIMIT = _createSocketEventLimiter('location-update', 12, 6
 // drift to ~4/120s cluster-wide; a coarse Redis-backed rateLimit() middleware on
 // the route bounds the worst case. Exact precision isn't safety-critical here.
 const SOS_RAISE_LIMIT = _createSocketEventLimiter('sos-raise', 1, 120_000);
+// Floor between any two raises by one user, across crews. Clearing never resets it,
+// so raise/clear loops cannot spam crew pushes.
+const SOS_RAISE_MIN_GAP = _createSocketEventLimiter('sos-raise-gap', 1, 15_000);
 
 const socketEventLimits = {
   PICK_SET_LIMIT,
@@ -622,6 +628,7 @@ const socketEventLimits = {
   PRESENCE_UPDATE_LIMIT,
   LOCATION_UPDATE_LIMIT,
   SOS_RAISE_LIMIT,
+  SOS_RAISE_MIN_GAP,
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -836,6 +843,7 @@ export {
   PRESENCE_UPDATE_LIMIT,
   LOCATION_UPDATE_LIMIT,
   SOS_RAISE_LIMIT,
+  SOS_RAISE_MIN_GAP,
   socketEventLimits,
   // Live-location concurrent-sharing cap (M3) + SOS active-state tracking (L3)
   registerSharingSocket,
