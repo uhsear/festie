@@ -15,8 +15,8 @@ export default function FestivalModeToggle() {
     <Link
       to="/festival-mode"
       onClick={select}
-      // Same name as mobile's Now & Next screen; it contains the visible
-      // "Now" (WCAG 2.5.3).
+      // Same name as mobile's Now & Next screen; it equals the visible text
+      // when shown (WCAG 2.5.3).
       aria-label={COPY.nowNext.name}
       aria-current={active ? 'page' : undefined}
       title={COPY.nowNext.name}
@@ -30,7 +30,8 @@ export default function FestivalModeToggle() {
     >
       <div className="flex items-center gap-1.5">
         <NowNextIcon className="w-5 h-5" aria-hidden="true" />
-        <span className="text-sm font-semibold">{COPY.nowNext.name}</span>
+        {/* Icon only below 360px so the header keeps the whole logo; aria-label keeps the name. */}
+        <span className="text-sm font-semibold max-[359px]:hidden">{COPY.nowNext.name}</span>
       </div>
     </Link>
   );

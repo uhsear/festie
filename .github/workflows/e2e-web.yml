@@ -137,7 +137,8 @@ jobs:
         run: |
           args=()
           if [[ "$UPDATE_SNAPSHOTS" == "true" ]]; then
-            args+=(--update-snapshots)
+            # "all" rewrites every baseline; the default "changed" keeps ones inside maxDiffPixelRatio.
+            args+=(--update-snapshots=all)
           fi
           npx playwright test --project=chromium tests/e2e/responsive-design.spec.ts "${args[@]}"
 
