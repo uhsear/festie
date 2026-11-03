@@ -80,6 +80,42 @@ describe('LiveLocationSharing', () => {
     expect(useLiveLocationStore.getState().shareEndedReason).toBeNull();
   });
 
+  describe('geolocation errors', () => {
+    function startWatch() {
+      let onErr: (e: unknown) => void = () => {};
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        value: {
+          watchPosition: (_ok: unknown, err: (e: unknown) => void) => {
+            onErr = err;
+            return 1;
+          },
+          clearWatch: vi.fn(),
+        },
+      });
+      render(<LiveLocationSharing />);
+      const { watchPosition } = sessionSpy.mock.calls[0][0];
+      const onError = vi.fn();
+      watchPosition(vi.fn(), onError);
+      return { onError, fail: (code: number) => onErr({ code, PERMISSION_DENIED: 1 }) };
+    }
+
+    it('keeps sharing on TIMEOUT / POSITION_UNAVAILABLE and hints once', () => {
+      const { onError, fail } = startWatch();
+      fail(3);
+      fail(2);
+      expect(onError).not.toHaveBeenCalled();
+      expect(toastSpy).toHaveBeenCalledTimes(1);
+      expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/weak gps/i), 'info');
+    });
+
+    it('PERMISSION_DENIED still reaches onError', () => {
+      const { onError, fail } = startWatch();
+      fail(1);
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('toasts failures as errors', () => {
     render(<LiveLocationSharing />);
     begin();

@@ -152,6 +152,14 @@ export default function createCrewInviteRoutes(deps: any) {
         const inviteExpiresAt = inviteExpiryFor(await getFestivalById(resolved.crew.festivalId));
         await stores.crews.regenerateInviteCode(crewId, newCode, inviteExpiresAt);
 
+        // Members hold the old code; the payload carries no code, so they refetch it.
+        if (io) {
+          const crew = (await stores.crews.getById(crewId)) ?? resolved.crew;
+          const broadcastData = serializeCrewWithMembers(crew, await stores.crews.getMembers(crewId), null);
+          delete broadcastData.inviteCode;
+          io.to(`crew:${crewId}`).emit('crew:updated', broadcastData);
+        }
+
         log.info('crew:invite-regenerated', { crewId, userId: req.user.userId });
         return sendSuccess(res, { inviteCode: newCode, inviteExpiresAt });
       } catch (error: any) {

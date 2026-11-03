@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Text, TextInput, TouchableOpacity, View, type TextInputInstance } from 'react-native';
+import { Text, TextInput, TouchableOpacity, View, type TextInputInstance } from 'react-native';
 import { useCreateCrew } from '@festie/shared/hooks';
 import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import type { Crew } from '@festie/shared/types';
@@ -7,14 +7,13 @@ import { crewCapState, crewCopy, crewFestivalChoices, festivalLabel } from '@fes
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
+import FestivalChoiceSheet from './FestivalChoiceSheet';
 
 interface CreateCrewFormProps {
   onCreated?: (crew: Crew) => void;
   /** Focus the name field when this turns true (the intro's "Start a crew" route). */
   autoFocus?: boolean;
 }
-
-const MAX_CHOICES = 10;
 
 /** Create-a-crew form. A crew belongs to one festival, so the festival is chosen here, not assumed. */
 export default function CreateCrewForm({ onCreated, autoFocus }: CreateCrewFormProps) {
@@ -31,6 +30,7 @@ export default function CreateCrewForm({ onCreated, autoFocus }: CreateCrewFormP
   const nameInputRef = useRef<TextInputInstance>(null);
   const [name, setName] = useState('');
   const [pickedId, setPickedId] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,11 +51,6 @@ export default function CreateCrewForm({ onCreated, autoFocus }: CreateCrewFormP
   const trimmed = name.trim();
   const canSubmit = !!chosen && !cap.atCap && !!trimmed && !busy;
 
-  const changeFestival = () =>
-    Alert.alert('Choose a festival', undefined, [
-      ...choices.slice(0, MAX_CHOICES).map((f) => ({ text: festivalLabel(f), onPress: () => setPickedId(f.id) })),
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
 
   const submit = async () => {
     if (!chosen || !canSubmit) return;
@@ -99,7 +94,7 @@ export default function CreateCrewForm({ onCreated, autoFocus }: CreateCrewFormP
           </Text>
           {choices.length >= 2 ? (
             <TouchableOpacity
-              onPress={changeFestival}
+              onPress={() => setChoosing(true)}
               style={styles.changeButton}
               activeOpacity={0.7}
               accessibilityRole="button"
@@ -134,6 +129,16 @@ export default function CreateCrewForm({ onCreated, autoFocus }: CreateCrewFormP
         accessibilityLabel="Create crew"
         onPress={submit}
         disabled={!canSubmit}
+      />
+      <FestivalChoiceSheet
+        visible={choosing}
+        title="Choose a festival"
+        options={choices.map((f) => ({ id: f.id, label: festivalLabel(f) }))}
+        onSelect={(id) => {
+          setPickedId(id);
+          setChoosing(false);
+        }}
+        onClose={() => setChoosing(false)}
       />
     </View>
   );

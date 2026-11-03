@@ -34,11 +34,10 @@ export default function Header() {
   // color. index.html does the same before first paint; this tracks changes.
   useThemeSync();
 
-  // Connection status — reflects the live realtime-socket state (driven by
-  // useRealtimeSync via uiStore.setConnected). Only meaningful when signed in;
-  // logged-out pages have no socket, so don't show a misleading "Disconnected".
-  const socketConnected = useUIStore((state) => state.connected);
-  const connected = socketConnected;
+  // Connection status — reflects real network state (uiStore.offlineMode, driven by
+  // useOffline and API failures), not the realtime socket: HTTP can work while the
+  // socket is down. Only shown when signed in.
+  const connected = !useUIStore((state) => state.offlineMode);
 
   // R13: shrinking sticky header. A single scroll listener on the main content
   // scroll container toggles `.shrunk` once scrollTop passes 80px; the header
@@ -140,7 +139,7 @@ export default function Header() {
                   role="status"
                   aria-label={connected ? 'Connected' : 'Disconnected'}
                 />
-                {!connected && <span className="type-micro text-accent-amber">Offline</span>}
+                {!connected && <span className="type-micro text-accent-amber max-[480px]:hidden">Offline</span>}
               </>
             )}
             <Link to="/" aria-label="FESTIE home" className="text-[inherit] no-underline">

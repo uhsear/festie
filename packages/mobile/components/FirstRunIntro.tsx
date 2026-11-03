@@ -124,32 +124,42 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
     [screenWidth],
   );
 
+  // Leaving the festival step by any route (Next, swipe, a11y action) applies the choice.
+  const commitFestival = useCallback(() => {
+    if (selectedId && selectedId !== currentFestival?.id) {
+      // The store error shows on the schedule, as in FestivalList.
+      selectFestival(selectedId).catch(() => {});
+    }
+  }, [selectedId, currentFestival?.id, selectFestival]);
+
   // Update the dot indicator when a swipe lands on a page boundary.
   const handleMomentumScrollEnd = useCallback(
     (e: { nativeEvent: { contentOffset: { x: number } } }) => {
       const page = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
       const target = steps[page];
-      if (target) setStepKey(target);
+      if (!target) return;
+      if (stepKey === 'festival' && target !== 'festival') commitFestival();
+      setStepKey(target);
     },
-    [screenWidth, steps],
+    [screenWidth, steps, stepKey, commitFestival],
   );
 
   const goTo = useCallback(
     (target: IntroStepKey | null) => {
       if (!target) return;
+      if (stepKey === 'festival' && target !== 'festival') commitFestival();
       setStepKey(target);
       scrollToPage(steps.indexOf(target));
     },
-    [steps, scrollToPage],
+    [steps, scrollToPage, stepKey, commitFestival],
   );
 
-  const handleNext = useCallback(() => {
-    if (stepKey === 'festival' && selectedId && selectedId !== currentFestival?.id) {
-      // The store error shows on the schedule, as in FestivalList.
-      selectFestival(selectedId).catch(() => {});
-    }
-    goTo(nextIntroStep(steps, stepKey));
-  }, [stepKey, selectedId, currentFestival?.id, selectFestival, goTo, steps]);
+  const handleNext = useCallback(() => goTo(nextIntroStep(steps, stepKey)), [stepKey, goTo, steps]);
+
+  const handleSkip = useCallback(() => {
+    if (stepKey === 'festival' && pickedId) commitFestival();
+    onDone();
+  }, [stepKey, pickedId, commitFestival, onDone]);
 
   const handleCrewChoice = useCallback(
     (choice: IntroCrewChoice) => {
@@ -294,7 +304,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
         <TouchableOpacity
           testID="intro-skip"
           style={styles.skipButton}
-          onPress={onDone}
+          onPress={handleSkip}
           accessibilityRole="button"
           accessibilityLabel={ONBOARDING_COPY.skipA11y}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

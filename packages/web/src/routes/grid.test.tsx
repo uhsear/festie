@@ -268,6 +268,25 @@ describe('GridView', () => {
     expect(screen.getByText('Show all sets')).toBeInTheDocument();
   });
 
+  it('says where the artist plays when a search finds nothing on this day', () => {
+    const setSelectedDay = vi.fn();
+    Object.assign(storeState, {
+      searchQuery: 'daft',
+      selectedDay: 0,
+      setSelectedDay,
+      days: [
+        { index: 0, dayIndex: 0, label: 'Friday', date: '2026-06-12' },
+        { index: 1, dayIndex: 1, label: 'Saturday', date: '2026-06-13' },
+      ],
+      sets: [{ id: 's9', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', endTime: '15:00', dayIndex: 1 }],
+    });
+    setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+    render(<GridView />);
+    expect(screen.getByText('Also on Saturday')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Daft Punk/ }));
+    expect(setSelectedDay).toHaveBeenCalledWith(1);
+  });
+
   it('shows "No sets scheduled" when timeBounds is null', () => {
     setFilters({
       allDaySets: [{ id: 's1', artist: 'Test', stageId: 'st1', dayIndex: 0 }],

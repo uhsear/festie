@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -10,6 +10,7 @@ import {
   resolveStageColor,
   artistDisplayName,
   festivalLoadState,
+  searchOtherDays,
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
 } from '@festie/shared/utils';
@@ -19,6 +20,7 @@ import TimelineGrid from '../features/TimelineGrid';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
+import OtherDayMatches from '../components/features/OtherDayMatches';
 import TBASection from '../components/timeline/TBASection';
 import TimelineLegend from '../components/timeline/TimelineLegend';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
@@ -39,6 +41,9 @@ import { useToast } from '../lib/toastContext';
 
 const JumpToNowIcon = CONCEPT_ICON.jumpToNow;
 
+// A reader who scrolled away is left alone this long before the clock pulls back to now.
+const USER_SCROLL_HOLD_MS = 120_000;
+
 export default function GridView() {
   return (
     <>
@@ -53,6 +58,9 @@ export default function GridView() {
 function GridViewInner() {
   const user = useAuthStore((state) => state.user);
   const days = useFestivalStore((state) => state.days);
+  const sets = useFestivalStore((state) => state.sets);
+  const searchQuery = useFestivalStore((state) => state.searchQuery);
+  const setSelectedDay = useFestivalStore((state) => state.setSelectedDay);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   // Low-power mode backs off the per-tick auto-scroll-to-now (an aggressive,
   // battery-costing reflow loop). The manual "Now" button stays available.
@@ -78,6 +86,16 @@ function GridViewInner() {
     conflictIds,
     timeBounds,
   } = useTimelineFilters();
+
+  // Matches on the other days, so a search that finds nothing here says where the artist plays.
+  const otherDayGroups = useMemo(
+    () => (searchQuery.trim() ? searchOtherDays(sets, searchQuery, selectedDay, stages) : []),
+    [sets, searchQuery, selectedDay, stages],
+  );
+  const dayLabels = useMemo(
+    () => Object.fromEntries((days ?? []).map((d) => [d.dayIndex, d.label || d.date])) as Record<number, string>,
+    [days],
+  );
 
   const { vpW } = useTimelineViewport();
   const { nowIndicator, gridRef, scrollToNow } = useNowIndicator(timeBounds, selectedDay);
@@ -110,7 +128,7 @@ function GridViewInner() {
 
   // Track active user scrolling so the tick-driven auto-scroll never fights a
   // user who is reading another part of the timeline. Any scroll on the
-  // container arms the flag for 8s; while armed, the tick won't yank the view.
+  // container arms the flag for 2 min; while armed, the tick won't yank the view.
   const recentlyScrolledRef = useRef(false);
   const scrollArmTimerRef = useRef<number | null>(null);
 
@@ -119,7 +137,7 @@ function GridViewInner() {
     if (scrollArmTimerRef.current !== null) window.clearTimeout(scrollArmTimerRef.current);
     scrollArmTimerRef.current = window.setTimeout(() => {
       recentlyScrolledRef.current = false;
-    }, 8_000);
+    }, USER_SCROLL_HOLD_MS);
   }, []);
 
   useEffect(
@@ -236,6 +254,17 @@ function GridViewInner() {
               title: 'No sets scheduled for this day',
               description: 'Try switching days above to find scheduled sets.',
             }}
+            otherDayMatches={
+              otherDayGroups.length > 0 ? (
+                <OtherDayMatches
+                  groups={otherDayGroups}
+                  dayLabels={dayLabels}
+                  stages={stages}
+                  b2bSeparator={currentFestival?.b2bSeparator}
+                  onSelectDay={setSelectedDay}
+                />
+              ) : undefined
+            }
           />
         )}
       </RefreshableView>

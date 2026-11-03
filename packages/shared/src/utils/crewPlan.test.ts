@@ -101,6 +101,18 @@ describe('buildSlots', () => {
     expect(slot!.picks[0]!.set.id).toBe('a2');
   });
 
+  it('counts only start times the crew picked and skips sets already started', () => {
+    const sets = [
+      set('x1', '12:30', '13:30'), // unpicked
+      set('x2', '12:45', '13:45'), // unpicked
+      set('x3', '13:00', '14:00'), // unpicked
+      set('live', '11:00', '13:00'), // started, picked
+      set('mine', '19:00', '20:00'),
+    ];
+    const slots = buildSlots(sets, days, [profile('m1', 'Ann', { live: 'must', mine: 'must' })], nowMs);
+    expect(slots.map((s) => s.startTime)).toEqual(['19:00']);
+  });
+
   it('honors a custom slot limit', () => {
     const sets = [set('a', '13:00', '14:00'), set('b', '15:00', '16:00')];
     const profiles = [profile('m1', 'Ann', { a: 'must', b: 'must' })];

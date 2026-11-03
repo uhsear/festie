@@ -36,6 +36,8 @@ export default function LiveLocationSharing() {
   const endedReason = useLiveLocationStore((s) => s.shareEndedReason);
   const festivalId = useFestivalStore((s) => s.currentFestivalId);
   const batteryRef = useRef<number | undefined>(undefined);
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
 
   useEffect(() => {
     const nav = (typeof navigator !== 'undefined' ? navigator : undefined) as NavigatorWithBattery | undefined;
@@ -68,8 +70,10 @@ export default function LiveLocationSharing() {
         onError?.(new Error('GEO_UNSUPPORTED'));
         return () => {};
       }
+      let hinted = false;
       const id = navigator.geolocation.watchPosition(
-        (pos) =>
+        (pos) => {
+          hinted = false;
           onFix({
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
@@ -78,8 +82,18 @@ export default function LiveLocationSharing() {
             speed: pos.coords.speed ?? undefined,
             battery: batteryRef.current,
             capturedAt: new Date(pos.timestamp).toISOString(),
-          }),
-        (err) => onError?.(err),
+          });
+        },
+        (err) => {
+          // Only a denied permission is fatal. TIMEOUT / POSITION_UNAVAILABLE are
+          // transient and watchPosition keeps retrying, so keep sharing and hint once.
+          if (err.code !== err.PERMISSION_DENIED) {
+            if (!hinted) toastRef.current(LIVE_SHARE_COPY.weakGps, 'info');
+            hinted = true;
+            return;
+          }
+          onError?.(err);
+        },
         { enableHighAccuracy: false, maximumAge: 10_000, timeout: 20_000 },
       );
       return () => navigator.geolocation.clearWatch(id);

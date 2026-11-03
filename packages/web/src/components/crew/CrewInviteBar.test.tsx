@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useCrewStore } from '@festie/shared/stores';
 
@@ -33,6 +33,24 @@ describe('CrewInviteBar', () => {
   it('labels the copy button "Copy link"', () => {
     renderBar();
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+  });
+
+  it('shows Copied only after the clipboard write succeeds', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
+    renderBar();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(await screen.findByText('Copied')).toBeInTheDocument();
+  });
+
+  it('offers the link to select when the clipboard write fails', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true });
+    const prompt = vi.fn();
+    vi.stubGlobal('prompt', prompt);
+    renderBar();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    await waitFor(() => expect(prompt).toHaveBeenCalledWith('Copy this invite link', expect.stringContaining('/join/K7XQ2M')));
+    expect(screen.queryByText('Copied')).toBeNull();
+    vi.unstubAllGlobals();
   });
 
   it('hides regenerate from a non-owner and shows it to the owner', () => {

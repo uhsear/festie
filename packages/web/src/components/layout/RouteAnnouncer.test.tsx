@@ -16,6 +16,9 @@ describe('routeTitle', () => {
     expect(routeTitle('/')).toEqual({ page: 'Schedule', festival: true });
     expect(routeTitle('/set/abc')).toEqual({ page: 'Set', festival: true });
     expect(routeTitle('/account')).toEqual({ page: 'Account', festival: false });
+    for (const path of ['/map', '/rate', '/caught', '/inbox', '/friend-picks', '/p', '/signup/finish', '/reset-password']) {
+      expect(routeTitle(path).page).not.toBe('Page not found');
+    }
     expect(routeTitle('/nope')).toEqual({ page: 'Page not found', festival: false });
   });
 });

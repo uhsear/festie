@@ -129,6 +129,26 @@ describe('festivalUIStore', () => {
       expect(ui().activeStages).toEqual(['s1']);
     });
 
+    it('follows today on a refresh unless a day was picked in the last 30 minutes', () => {
+      vi.useFakeTimers();
+      try {
+        ui().restoreForFestival('A', scope);
+        ui().setSelectedDay(0);
+        const live = { stageIds: ['s1'], dayCount: 3, todayIdx: 2, isLive: true };
+        ui().restoreForFestival('A', live);
+        expect(ui().selectedDay).toBe(0);
+        vi.advanceTimersByTime(31 * 60 * 1000);
+        ui().restoreForFestival('A', live);
+        expect(ui().selectedDay).toBe(2);
+        ui().setSelectedDay(1);
+        vi.advanceTimersByTime(31 * 60 * 1000);
+        ui().restoreForFestival('A', { ...live, isLive: false });
+        expect(ui().selectedDay).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('moves selectedDay when hiding it', () => {
       ui().restoreForFestival('A', scope);
       ui().setSelectedDay(0);

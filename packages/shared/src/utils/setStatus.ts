@@ -286,7 +286,7 @@ export function getSetStatus(
   if (minutesUntil > 30 && minutesUntil <= 120) {
     const hours = Math.floor(minutesUntil / 60);
     const mins = minutesUntil % 60;
-    const label = mins > 0 ? `In ${hours}h ${mins}m` : `In ${hours}h`;
+    const label = hours === 0 ? `In ${mins}m` : mins > 0 ? `In ${hours}h ${mins}m` : `In ${hours}h`;
     return { status: 'upcoming', label, minutesUntil, progress: 0 };
   }
 

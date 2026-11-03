@@ -33,6 +33,22 @@ export async function reportLocalRemindersFestival(festivalId: string | null): P
   }
 }
 
+/**
+ * Sign-out cleanup, run BEFORE the session is revoked so DELETE /notifications/token
+ * is still authenticated: drop this device's token server-side, forget it locally,
+ * and cancel on-device reminders so the next account does not get them. Never throws.
+ */
+export async function unregisterPushOnSignOut(): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    if (token) await api.delete('/notifications/token', { body: { token } }).catch(() => {});
+    await AsyncStorage.multiRemove([TOKEN_KEY, LOCAL_FESTIVAL_KEY]);
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch (e) {
+    Sentry.captureException(e);
+  }
+}
+
 // Show a banner for notifications that arrive while the app is foregrounded.
 // Time-critical local set reminders (scheduled with sound:true + data.kind
 // 'local-set-reminder') must still CHIME when foregrounded — the user may be on

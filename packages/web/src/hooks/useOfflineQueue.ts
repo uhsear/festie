@@ -4,6 +4,7 @@ import {
   MAX_RETRIES,
   MAX_QUEUE_AGE_MS,
   extractRealId,
+  parseRetryAfterMs,
   hydrateFailedSync,
   surfaceFailedSync,
 } from '@festie/shared/services';
@@ -16,6 +17,7 @@ const RETRY_BACKOFF_BASE = 1000;
 interface QueuedMutation {
   id?: number;
   clientId: string;
+  idempotencyKey?: string;
   type: 'api' | 'socket';
   url?: string;
   method?: string;
@@ -520,7 +522,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
                 body: mutation.body,
                 // Dedup a replay across tabs: same clientId → server no-ops the
                 // duplicate instead of double-writing (e.g. two expense POSTs).
-                idempotencyKey: mutation.clientId,
+                idempotencyKey: mutation.idempotencyKey ?? mutation.clientId,
               });
               // Remove on success — use IDB path if the entry has a numeric id,
               // otherwise fall back to clientId-based localStorage removal so that
@@ -586,9 +588,16 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
               }
               break;
             }
-            const retries = (mutation.retries || 0) + 1;
             const status =
               err instanceof Error && 'status' in err ? (err as Error & { status: number }).status : undefined;
+            if (status === 429) {
+              // Rate limited: transient. Keep it queued, honour Retry-After (capped),
+              // and do not consume a retry; the 24h prune still bounds it.
+              const waitMs = parseRetryAfterMs((err as { retryAfter?: number | string | null }).retryAfter) ?? RETRY_BACKOFF_BASE;
+              await new Promise((r) => setTimeout(r, Math.min(waitMs, 30_000)));
+              continue;
+            }
+            const retries = (mutation.retries || 0) + 1;
             const isClientError = status !== undefined && status >= 400 && status < 500;
             const isConflict = status === 409;
 

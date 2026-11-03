@@ -22,6 +22,8 @@ const state = {
   currentFestival: null as { id: string; name: string } | null,
   selectFestival: vi.fn(async (_id: string) => {}),
   isLoading: false,
+  error: null as string | null,
+  loadFestivals: vi.fn(async () => {}),
 };
 
 vi.mock('@festie/shared/stores', () => ({
@@ -54,6 +56,7 @@ afterEach(() => {
   state.festivals = [];
   state.currentFestival = null;
   state.isLoading = false;
+  state.error = null;
   vi.clearAllMocks();
 });
 
@@ -121,6 +124,15 @@ describe('FestivalPicker dialog', () => {
     fireEvent.click(screen.getByTestId('festival-option-b'));
     expect(state.selectFestival).toHaveBeenCalledWith('b');
     await waitFor(() => expect(screen.queryByTestId('festival-option-b')).not.toBeInTheDocument());
+  });
+
+  it('shows the load error with Retry instead of "No festivals yet."', () => {
+    state.error = 'Failed to load festivals';
+    render(<FestivalPicker />);
+    fireEvent.click(screen.getByTestId('festival-select'));
+    expect(screen.queryByText('No festivals yet.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(state.loadFestivals).toHaveBeenCalled();
   });
 
   it('says "No festivals yet." for an empty loaded list', () => {

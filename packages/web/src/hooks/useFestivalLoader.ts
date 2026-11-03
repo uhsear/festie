@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '@festie/shared';
-import { useFestivalStore } from '@festie/shared/stores';
+import { useFestivalStore, followTodayOnResume } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { pickDefaultFestival } from '@festie/shared/utils';
 import { PENDING_JOIN_KEY } from '../components/auth/invite';
@@ -109,13 +109,25 @@ export function useFestivalLoader() {
           selectFestival(linkedId).catch(() => {});
           return;
         }
-        if (fests.length > 0 && !useFestivalStore.getState().currentFestival) {
+        const cached = useFestivalStore.getState().currentFestival;
+        // Signed-in users revalidate in the effect below; guests would otherwise keep the cache forever.
+        if (cached && !useAuthStore.getState().user) selectFestival(cached.id).catch(() => {});
+        if (fests.length > 0 && !cached) {
           const pick = pickDefaultFestival(fests);
           if (pick) selectFestival(pick.id).catch(() => {});
         }
       })
       .catch(() => {});
-  }, [loadFestivals, selectFestival]);
+  }, [loadFestivals, selectFestival, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- refetch after sign-in/out: logout resets the stores
+
+  // Tab back to the app on a later day: move the day tab to today (no fetch).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') followTodayOnResume();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   // Load crews whenever auth state transitions to logged-in
   useEffect(() => {

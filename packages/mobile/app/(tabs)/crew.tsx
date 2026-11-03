@@ -54,6 +54,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import Avatar from '../../components/Avatar';
 import CreateCrewForm from '../../components/CreateCrewForm';
 import CrewSwitcherSheet from '../../components/CrewSwitcherSheet';
+import FestivalChoiceSheet from '../../components/FestivalChoiceSheet';
 import HandOverSheet from '../../components/HandOverSheet';
 import CrewTabBar, { type CrewTabKey } from '../../components/CrewTabBar';
 import EmptyState from '../../components/EmptyState';
@@ -177,6 +178,7 @@ export default function CrewScreen() {
   const [forceAddName, setForceAddName] = useState('');
   const [forceAddBusy, setForceAddBusy] = useState(false);
   const [reformBusy, setReformBusy] = useState(false);
+  const [reformChoice, setReformChoice] = useState<{ sourceCrewId: string; options: { id: string; label: string }[] } | null>(null);
   const [managingMemberId, setManagingMemberId] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherMode, setSwitcherMode] = useState<'list' | 'join'>('list');
@@ -470,18 +472,7 @@ export default function CrewScreen() {
           Alert.alert('No other festivals', 'There are no other festivals to reform this crew for yet.');
           return;
         }
-        Alert.alert(
-          'Reform crew',
-          'Choose a festival to start this crew fresh for. Members already in that festival are added ' +
-            'automatically; share the invite link with everyone else.',
-          [
-            ...options.slice(0, 10).map((f) => ({
-              text: f.name,
-              onPress: () => performReform(sourceCrewId, f.id, f.name),
-            })),
-            { text: 'Cancel', style: 'cancel' as const },
-          ],
-        );
+        setReformChoice({ sourceCrewId, options: options.map((f) => ({ id: f.id, label: f.name })) });
       };
       if (festivals.length === 0) {
         loadFestivals()
@@ -491,7 +482,7 @@ export default function CrewScreen() {
         open();
       }
     },
-    [festivals, loadFestivals, performReform],
+    [festivals, loadFestivals],
   );
 
   const handleToggleOverlap = async (crewId: string) => {
@@ -867,6 +858,20 @@ export default function CrewScreen() {
         visible={switcherOpen}
         initialMode={switcherMode}
         onClose={() => setSwitcherOpen(false)}
+      />
+
+      <FestivalChoiceSheet
+        visible={reformChoice !== null}
+        title="Reform crew"
+        message="Choose a festival to start this crew fresh for. Members already in that festival are added automatically; share the invite link with everyone else."
+        options={reformChoice?.options ?? []}
+        onSelect={(id) => {
+          const choice = reformChoice;
+          setReformChoice(null);
+          const target = choice?.options.find((o) => o.id === id);
+          if (choice && target) performReform(choice.sourceCrewId, id, target.label);
+        }}
+        onClose={() => setReformChoice(null)}
       />
 
       <HandOverSheet

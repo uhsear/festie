@@ -92,6 +92,16 @@ describe('useFestivalLoader session probe', () => {
     h.state.cb?.(); // simulate onFinishHydration firing
     expect(h.checkSession).toHaveBeenCalledTimes(1);
   });
+  it('refetches festivals when the auth user changes (sign-out)', async () => {
+    h.state.user = { id: 'u1' };
+    const { rerender } = renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    h.loadFestivals.mockClear();
+    h.state.user = null;
+    rerender();
+    await act(async () => {});
+    expect(h.loadFestivals).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('useFestivalLoader ?joinCrew consent gate', () => {

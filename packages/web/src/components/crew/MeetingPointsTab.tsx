@@ -25,6 +25,7 @@ import SyncMarker from './SyncMarker';
 import { useUndoableRemove } from './useUndoableRemove';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
+import StaleNote from './StaleNote';
 import Skeleton from '../ui/Skeleton';
 import {
   MapPin,
@@ -377,7 +378,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       </div>
     );
   }
-  if (isError) {
+  if (isError && points.length === 0) {
     return (
       <div className="px-4">
         <EmptyState
@@ -392,6 +393,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
   return (
     <div className="space-y-3 px-4">
+      <StaleNote show={isError} onRetry={() => void refetch()} />
       {/* Live Location + SOS (ephemeral, always visible so the share toggle / SOS /
           active-SOS banner are reachable in both list & map views). First on the
           tab: an emergency control belongs above the status card. No build-time

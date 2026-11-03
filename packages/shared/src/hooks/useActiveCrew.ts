@@ -38,7 +38,8 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
   // Same deps as the old web crew page, so a failed select does not loop.
   const firstCrewId = crews[0]?.id;
   useEffect(() => {
-    if (user && !crew && firstCrewId) track(useCrewStore.getState().selectCrew(firstCrewId));
+    // A pending select of another crew clears activeCrew; do not override it with the first crew.
+    if (user && !crew && firstCrewId && !useCrewStore.getState().crewLoading) track(useCrewStore.getState().selectCrew(firstCrewId));
   }, [user, crew, firstCrewId, track]);
 
   const retry = useCallback(() => {

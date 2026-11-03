@@ -6,6 +6,8 @@ import { useCrewRealtime } from '@festie/shared/hooks/useCrewRealtime';
 import { useRevocationRealtime } from '@festie/shared/hooks';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
+import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
+import { useAuthStore } from '@festie/shared/stores/authStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useToast } from '../lib/toastContext';
 import { useCrewQuerySink } from './useCrewQuerySink';
@@ -48,6 +50,8 @@ export interface UseRealtimeSyncReturn {
 export function useRealtimeSync(): UseRealtimeSyncReturn {
   const socketRef = useRef<Socket | null>(null);
   const currentFestivalId = useFestivalStore((state) => state.currentFestivalId);
+  const isMember = useFestivalDataStore((state) => state.currentProfile != null);
+  const isGuest = useAuthStore((state) => !state.user);
   const connected = useUIStore((state) => state.connected);
   const setConnected = useUIStore((state) => state.setConnected);
   const setOnlineUsers = useUIStore((state) => state.setOnlineUsers);
@@ -208,7 +212,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     let disconnectedAt: number | null = null;
     const handleConnect = () => {
       setConnected(true);
-      if (currentFestivalId) {
+      if (currentFestivalId && (isGuest || isMember)) {
         socket.emit('join:festival', currentFestivalId, { _v: 1 }, () => {});
       }
       if (connectedBefore) {
@@ -279,7 +283,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
         delete timersSnapshot[k];
       }
     };
-  }, [socket, currentFestivalId, setConnected, setOnlineUsers]);
+  }, [socket, currentFestivalId, isGuest, isMember, setConnected, setOnlineUsers]);
 
   return {
     connected,

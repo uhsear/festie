@@ -6,6 +6,7 @@ import { FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
 import Dialog from '../ui/Dialog';
 import FollowButton from '../features/FollowButton';
+import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { useToast } from '../../lib/toastContext';
 import { cn } from '../../lib/utils';
@@ -22,6 +23,8 @@ export default function FestivalPicker() {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const selectFestival = useFestivalStore((s) => s.selectFestival);
   const isLoading = useFestivalStore((s) => s.isLoading);
+  const loadError = useFestivalStore((s) => s.error);
+  const loadFestivals = useFestivalStore((s) => s.loadFestivals);
   const { toast, toastError } = useToast();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -164,6 +167,13 @@ export default function FestivalPicker() {
               {[0, 1, 2].map((i) => (
                 <div key={i} className="skeleton-shimmer h-[52px] rounded-xl" />
               ))}
+            </div>
+          ) : loadError ? (
+            <div role="alert" className="space-y-2 text-sm text-text-muted">
+              <p>{loadError}</p>
+              <Button variant="secondary" size="sm" onClick={() => void loadFestivals().catch(() => {})}>
+                Retry
+              </Button>
             </div>
           ) : (
             <p className="text-sm text-text-muted">No festivals yet.</p>
