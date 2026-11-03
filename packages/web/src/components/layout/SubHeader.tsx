@@ -543,15 +543,16 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             id="subheader-search"
             ref={searchBoxRef}
             className={cn(
-              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[220px]',
+              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
               !searchOpen && searchQuery === '' && 'max-md:hidden',
             )}
             role="search"
           >
-            <div className="relative w-full sm:max-w-[clamp(100px,30vw,180px)] lg:max-w-none">
+            {/* Sized so the full placeholder fits from 640px up. */}
+            <div className="relative w-full sm:max-w-[clamp(100px,34vw,240px)] lg:max-w-none">
               <Input
                 variant="search"
-                className="min-h-[44px] w-full pr-11 text-[length:var(--font-size-14)]"
+                className={cn('min-h-[44px] w-full text-[length:var(--font-size-14)]', searchQuery !== '' && 'pr-11')}
                 placeholder="Search artists or stages"
                 value={searchQuery}
                 aria-label="Search festival artists"

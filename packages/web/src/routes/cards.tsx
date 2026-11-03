@@ -243,7 +243,8 @@ function CardsViewInner() {
           // for every route, so the grid (and the empty-state branch above)
           // share one origin instead of stacking an extra grid pad on top.
           style={{
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
+            // 300px keeps the Must/Want/Maybe row inside the card; 260px clipped Maybe.
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
             gap: 'var(--cards-gap, var(--space-3))',
           }}
           role="region"
