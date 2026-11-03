@@ -1,5 +1,6 @@
 import { View, Text, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { Stack } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -8,12 +9,18 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
  * Privacy Policy screen — a self-contained native mirror of the canonical
  * static document served on web at /privacy.html.
  *
+ * Checked against the code and the applicable rules in an AI-assisted review
+ * on November 3, 2026. No attorney has reviewed it.
+ *
  * The web policy remains the single source of truth; this screen reproduces
- * its section content (effective May 31, 2026) as a typed data array so it
+ * its text word for word (effective November 3, 2026) as a typed data array so it
  * renders like the rest of the app and works offline. Emails open the mail
- * client and the Terms reference opens the web Terms of Service.
+ * client and the Terms reference opens the web Terms of Service in an in-app
+ * browser sheet.
  */
 
+const EFFECTIVE_DATE = 'November 3, 2026';
+const OPERATOR_NAME = 'Asir Khan';
 const CONTACT_EMAIL = 'privacy@festie.us';
 const SERVICE_URL = 'https://festie.us';
 const TERMS_URL = 'https://festie.us/terms.html';
@@ -26,8 +33,14 @@ const openService = () => {
   void Linking.openURL(SERVICE_URL);
 };
 
-const openTerms = () => {
-  void Linking.openURL(TERMS_URL);
+// An in-app sheet, with the system browser as fallback.
+const openTerms = async () => {
+  try {
+    await WebBrowser.openBrowserAsync(TERMS_URL);
+  } catch (err) {
+    console.warn('terms: in-app browser failed', err);
+    void Linking.openURL(TERMS_URL);
+  }
 };
 
 interface Subsection {
@@ -39,372 +52,457 @@ interface Subsection {
 interface PolicySection {
   title: string;
   body?: string[];
+  bullets?: string[];
   subsections?: Subsection[];
 }
 
+const SUMMARY: string[] = [
+  'Festie stores what you give it: your account, your picks and notes, your crews, and what you post to a crew.',
+  'Your crews see your name, photo, picks, status and payment handles. People outside your crews see nothing, unless you turn on your public schedule page or send a picks link.',
+  'Live location is off until you turn it on for one crew. We do not save it.',
+  'We do not use tracking or advertising cookies.',
+  'You can download your data or delete your account in Account at any time. Account › Privacy shows who can see what.',
+];
+
 const SECTIONS: PolicySection[] = [
   {
-    title: 'Data Controller & Contact Information',
+    title: 'Who runs Festie',
     body: [
-      'Festie is operated by Asir Khan, who serves as the data controller for personal data processed through the service. The service is self-hosted on-premise infrastructure.',
-      'For privacy-related inquiries, requests to exercise data subject rights, or concerns about your personal data, please contact the email address below. We will respond to all requests within 30 days.',
+      'Festie is run by an individual developer, Asir Khan, in Florida, United States. In this policy, "we" and "us" mean Asir Khan. Under EU and UK data protection law, Asir Khan is the controller of your personal data.',
+      'Email privacy@festie.us with any privacy question or request. Send security reports to security@festie.us. We answer privacy requests within 30 days.',
     ],
   },
   {
-    title: 'Categories of Personal Data Collected',
-    body: ['Festie collects and processes the following categories of personal data:'],
-    subsections: [
-      {
-        heading: 'Account Information',
-        bullets: [
-          'Username: User-selected identifier for account access and display within the platform',
-          'Password Hash: Passwords are hashed using Scrypt before storage and are never accessible to us or stored in plaintext',
-          'Avatar Image: Optional profile picture uploaded by the user in WebP format for display in the app',
-          'Email Address: Optional email provided during registration, used for password recovery and account verification',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Date of Birth: Collected at registration to enforce the minimum-age requirement (18+ gate). Counsel to confirm: lawful basis; whether DOB must be retained post-verification or deleted; CCPA classification; and whether self-declaration satisfies applicable standard in target markets.',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Payment Handles: Optional peer-payment identifiers — Venmo handle, CashApp cashtag, and PayPal handle — that users may add to their profile. Visible to crew members. Used solely for peer payment coordination within crews. Festie does not transmit these to payment processors or initiate transactions. Counsel to confirm lawful basis and CCPA financial-information category applicability.',
-        ],
-      },
-      {
-        heading: 'Festival Coordination Data',
-        bullets: [
-          'Festival Picks: Musical acts, performances, or attractions selected and saved by the user',
-          'Personal Notes: User-generated notes and scheduling information associated with selected acts',
-          'Crew Memberships: Groups or crews the user is a member of and their associated role or permissions within those groups',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Location / GPS Data: Festie stores two categories of geospatial coordinates. (1) Crew member location snapshot — your device\'s last-known latitude and longitude captured as a degraded-sync breadcrumb when you report status while offline; visible to all crew members. (2) Meeting point coordinates — latitude and longitude of crew meeting points you create. Both are precision geospatial data linked to your user ID and a capture timestamp. Purpose: crew safety and coordination. Counsel to confirm: lawful basis (LIA or consent); GDPR Recital 75 risk assessment; CCPA sensitive geolocation category; SOS opt-out scope; and deletion cascade on account removal.',
-        ],
-      },
-      {
-        heading: 'Communication Data',
-        bullets: [
-          'Device Tokens: Push notification tokens used exclusively for sending festival-related notifications and schedule updates',
-        ],
-      },
-      // DRAFT: pending legal review
-      {
-        heading: '[DRAFT — pending legal review] Third-Party Account Linkage',
-        bullets: [
-          '[DRAFT — pending legal review] Spotify Account Linkage: If you connect your Spotify account, Festie stores your Spotify user ID, an AES-256-GCM encrypted OAuth refresh token, the OAuth scopes you granted, and linkage timestamps. Spotify access tokens are not persisted. Used to personalise artist and lineup content. Counsel to confirm: Spotify Developer Policy compliance; lawful basis (consent); whether Spotify is a controller or processor for the OAuth exchange.',
-        ],
-      },
-      {
-        heading: 'Technical Data',
-        bullets: [
-          'IP Address: Your IP address is collected for security purposes, rate limiting, and abuse prevention',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Audit Log IP Address: The security audit log retains the full, unmasked client IP address for each security-relevant event (login, logout, account changes, and similar actions). The full IP is retained — rather than a pseudonymised or truncated form — for security monitoring, fraud and abuse prevention, and incident investigation under GDPR Art. 6(1)(f) (legitimate interest). Retention period: [counsel to confirm — suggested 12 months per automated cleanup, pending legal sign-off]. Audit log data may be used as part of our incident-response process and may be disclosed to law enforcement where required by law.',
-          'Session Data: Session identifiers and authentication tokens to maintain your logged-in state',
-        ],
-      },
-    ],
-  },
-  {
-    title: 'Legal Basis for Processing',
-    body: ['We process your personal data under the following lawful bases:'],
-    subsections: [
-      {
-        heading: 'Contract Performance',
-        paragraphs: [
-          'The collection and processing of account data, festival picks, notes, and crew memberships is necessary for the performance of the contract between you and us. These data are essential to provide the core festival coordination service you are using.',
-        ],
-      },
-      {
-        heading: 'Consent',
-        paragraphs: [
-          'We process device tokens for push notifications based on your explicit consent. You grant this consent when you authorize push notifications during account setup or in your device settings. You may withdraw this consent at any time through your account settings.',
-        ],
-      },
-      {
-        heading: 'Legitimate Interest',
-        paragraphs: [
-          'We process IP addresses and session data based on our legitimate interest in maintaining service security, preventing fraud and abuse, enforcing our terms of service, and monitoring and improving platform performance and reliability. We have balanced these interests against your privacy rights and have implemented appropriate safeguards.',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Specifically, the security audit log retains the full, unmasked client IP address for each security-relevant event under GDPR Art. 6(1)(f) (legitimate interest). Purposes: (a) security monitoring and threat detection; (b) fraud and abuse prevention; (c) incident investigation and forensic analysis. A pseudonymised or truncated IP would materially impair our ability to correlate attack patterns and respond to incidents; the full IP is therefore necessary and proportionate. Retention period: [counsel to confirm — current automated cleanup suggests 12 months]. Audit log data may be disclosed to law enforcement in connection with our incident-response process where required or permitted by law.',
-        ],
-      },
-    ],
-  },
-  {
-    title: 'Data Retention Periods',
+    title: 'What we collect',
     body: [
-      'We retain personal data only for as long as necessary to fulfill the purposes for which it was collected or as required by law:',
+      'We collect what you give us, what your device sends when you use a feature, and what your crews add. We do not buy data about you from anyone.',
     ],
     subsections: [
       {
-        heading: 'Account Data',
+        heading: 'Your account',
         bullets: [
-          'Duration: Retained for the lifetime of your account',
-          'Upon Deletion: Your account deletion request initiates a 30-day grace period during which your data is accessible for restoration. After 30 days, all account data (username, password hash, avatar) is permanently deleted',
+          'Username: You choose it when you sign up. It is how you sign in, and other people in Festie see it.',
+          'Sign in with Apple or Google (optional): If you use it, we store the account ID that Apple or Google gives us, the email address it shares with us and whether that address is verified. For Apple we also keep an encrypted Apple sign-in token.',
+          'Password: We store only a scrypt hash of it, never the password itself.',
+          'Date of birth: You give it when you sign up so we can check that you are 18 or older. We keep it with your account.',
+          'Email address (optional): We use it to verify your address, reset your password, warn you when someone asks to change it, and send the notification emails you leave on.',
+          'Display name and photo (optional): Your crews see them. We store your photo on our server.',
+          'Payment handles (optional): Your Venmo, Cash App and PayPal names. Members of your crews can see them so they can pay you back. Festie never sends money and never shares these names with a payment company.',
+          'Terms acceptance: when you accepted the Terms of Service, and which version.',
         ],
       },
       {
-        heading: 'Backups & Disaster Recovery',
+        heading: 'Festival and crew data',
         bullets: [
-          'Duration: Automated backups are retained for a maximum of 28 days (4 weekly backup cycles)',
-          'Purging Schedule: Backups older than 28 days are automatically purged and permanently deleted from backup systems',
+          'Picks and notes: the sets you pick, how much you want to see each one, and your notes.',
+          'Ratings: the ratings and notes you give sets.',
+          'Caught sets and followed festivals: the sets you mark as seen, and the festivals you follow for lineup and set-time news.',
+          'Crews: the crews you create or join, and your role in each.',
+          'Crew plans: which days you are coming, the meeting points you say you will be at, and the rides you join.',
+          'What you post to a crew: statuses, expenses and payment reminders, polls and votes, packing items, rides and meeting points. Your crew sees them, and the crew activity feed records them.',
+          'Sharing settings: whether your public schedule page is on, and the picks links you create.',
+          'Calendar links: if you add a festival to your calendar, the private feed link for it.',
         ],
       },
       {
-        heading: 'Session Data & Authentication Tokens',
+        heading: 'Location',
         bullets: [
-          'Duration: Session data and authentication tokens are retained for 24 hours',
-          'Automatic Expiration: Sessions automatically expire after 24 hours of inactivity for security purposes',
+          'Location (optional): (1) Status location: when you use your location for the ETA in a crew status, the status keeps where you were. Your crew sees it until a later status replaces it with a newer position, or until you use Stop all sharing in Account. (2) Meeting points: the place of a meeting point you create. (3) Live location: when you turn it on for a crew, that crew sees where you are until the time you pick. With each position the app sends its accuracy, direction and speed, and your battery level if you turn on Show my battery level. If your battery runs low while you share, your crew feed notes it once. We do not save live location. The server holds your latest position for about two minutes so crewmates who open the app can see you.',
+          'SOS: When you send an SOS, it can include one rough position, rounded to about 11 metres. Your crew sees it in the SOS alert and in the crew activity. We keep it with the crew activity until the crew or your account is deleted.',
+          'Check-in timer: If you set a check-in timer for your crew, our server runs the timer and can keep one rough position, rounded to about 11 metres. If you do not check in by then, your crew gets an alert. We delete the timer and the position one hour after the timer ends.',
+          'When we ask: The app asks for your location while it is open, and only when you use one of these features. If you choose to keep sharing live location while your phone is locked, the app asks for background location and sends your position to that crew until the time you picked. Then it stops on its own. The app never tracks you in the background in any other case.',
+          'Camera: The app uses the camera only to scan a plan QR code. The picture stays on your phone.',
         ],
       },
       {
-        heading: 'Avatar Images',
+        heading: 'Notifications and email',
         bullets: [
-          'Duration: Retained while your account is active',
-          'Upon Deletion: Permanently deleted upon account deletion after the 30-day grace period',
+          'Device Tokens: the push address that your phone or browser gives us, so we can send you notifications. We delete a push address after 60 days without use.',
+          'Notification history: the title and text of notifications we send you, so you can read them later in the app.',
+          'Notification settings: which kinds of notification you want, your quiet hours and your time zone.',
+        ],
+      },
+      {
+        heading: 'Technical data',
+        bullets: [
+          'Security log: We record your IP address with sign-ins, sign-outs and account changes. We use it to find and stop attacks and abuse. We keep these records for up to one year.',
+          'IP address: We also use it to limit how fast requests can arrive and to block abuse. These counters are short-lived.',
+          'Sign-in sessions: a session token, when the session started and when it was last used, and a device name worked out from your browser or app, so you can tell your sessions apart. We store only a hash of each token.',
+          'Error reports: When Festie hits an error, Sentry receives the error details, timings of a small sample of screens and requests, and the app or browser version. Reports from our server also carry your user ID, but never your cookies or sign-in token.',
+          'Usage counts: The website reports page-speed measurements. It also counts when the install prompt is shown, accepted or dismissed, with the user-agent text that your browser sends. None of this is linked to your account.',
+          'Sign-up source: If you sign up from a link with a source tag, we add one to a daily count for that tag. The count holds nothing about you.',
         ],
       },
     ],
   },
   {
-    title: 'Your Data Subject Rights',
-    body: ['Under applicable data protection laws, you have the following rights regarding your personal data:'],
+    title: 'How we use your data and why',
+    body: [
+      'We use your data only to run Festie, keep it safe and follow the law. We never use it for advertising or profiling. Under EU and UK law, each use has one of these legal bases.',
+    ],
     subsections: [
       {
-        heading: 'Right of Access',
+        heading: 'To provide Festie (contract)',
         paragraphs: [
-          'You have the right to access all personal data we hold about you. You can export a complete copy of your data in JSON format via the API endpoint GET /api/v1/account/export within your account settings. This export includes your account profile (username, avatar, preferences), festival picks and notes, crew memberships, registered device tokens, active sessions, and notification and topic-subscription preferences.',
+          'We need your account, picks, crews and what you post to a crew to give you the service you signed up for. We need your date of birth to check that you can use Festie.',
         ],
       },
       {
-        heading: 'Right of Rectification',
+        heading: 'With your permission (consent)',
         paragraphs: [
-          'You have the right to correct or update inaccurate personal data. You can modify your profile information, username, and avatar directly within your account settings at any time.',
+          'We send push notifications, use your location and turn on your public schedule page only after you choose to. You can take back your consent at any time in Account or in your device settings. This does not affect what we did before.',
         ],
       },
       {
-        heading: 'Right to Erasure (Right to be Forgotten)',
+        heading: 'To keep Festie safe and working (legitimate interests)',
         paragraphs: [
-          'You have the right to request deletion of your personal data by initiating account deletion through your account settings. We will delete your account and associated data after a 30-day grace period. This grace period allows you to restore your account if deletion was accidental. After 30 days, all data is permanently deleted and cannot be recovered.',
+          'We keep the security log, error reports and usage counts to protect accounts, stop abuse and fix problems. We send notification emails about festivals and crews you are in, and you can turn them off at any time.',
+          'We keep the full IP address in the security log because a shortened address would make attacks much harder to trace. We keep it for up to one year. We may share it with the police when the law requires it.',
         ],
       },
       {
-        heading: 'Right to Data Portability',
+        heading: 'To follow the law (legal obligation)',
         paragraphs: [
-          'You have the right to receive your personal data in a structured, commonly-used, machine-readable format. You can export your data in JSON format using the API endpoint GET /api/v1/account/export, enabling you to transfer your data to another service or retain a copy.',
-        ],
-      },
-      {
-        heading: 'Right to Restrict Processing',
-        paragraphs: [
-          'You have the right to restrict our processing of your personal data in certain circumstances. You may disable push notifications, restrict data sharing within crew groups, or limit how your data is used by contacting us at the email below.',
-        ],
-      },
-      {
-        heading: 'Right to Object',
-        paragraphs: [
-          'You have the right to object to certain types of processing based on our legitimate interest. To exercise this right, contact us at the email address below.',
-        ],
-      },
-      {
-        heading: 'Exercising Your Rights',
-        paragraphs: [
-          'To exercise any of these rights, contact us at the email below with your request. We will respond within 30 days. Some requests may take up to 60 days depending on complexity. We will verify your identity before processing requests to ensure we are sharing information only with authorized individuals.',
+          'We keep or disclose data when the law requires it, for example to answer a valid court order.',
         ],
       },
     ],
   },
   {
-    title: 'Cookies & Session Management',
-    body: ['Festie uses HTTP-only session cookies strictly for authentication and session management purposes only.'],
+    title: 'Who can see your data',
     subsections: [
       {
-        heading: 'Cookie Usage',
+        heading: 'People and companies',
         bullets: [
-          'Session Cookies: HTTP-only cookies are used to maintain your authenticated session',
-          'No Tracking Cookies: We do not use tracking cookies, analytics cookies, or third-party cookies for behavioral tracking',
-          'No Analytics: We do not deploy cookies for analytics, advertising, or user behavior profiling',
+          'Your crews: Members of a crew see your name, photo, picks, status, payment handles and what you post to that crew. Live location and status location go only to the crew you share them with.',
+          'Anyone with a link: If you turn on your public schedule page, anyone with its link can see your picks. It is off by default. A picks link you send works the same way for one festival, until you reset your links in Account › Privacy. These pages tell search engines not to list them.',
+          'Our service providers: the companies in the next section, only to run Festie for us.',
+          'Police and courts: only when the law requires it.',
+          'A new owner: If Festie is sold or merged, your data passes to the new owner under this policy, and we tell you first.',
         ],
       },
       {
-        heading: 'Cookie Consent',
+        heading: 'Nobody else',
         paragraphs: [
-          'No consent banner is required because our session cookies are exempt under ePrivacy Directive Article 5(3) as "strictly necessary" for the functioning of the service. These cookies are essential to authentication and do not require prior consent.',
-        ],
-      },
-      {
-        heading: 'Cookie Management',
-        paragraphs: [
-          'Session cookies are automatically deleted when you log out or after 24 hours of inactivity. You can clear cookies from your browser settings, though this will log you out of the service.',
+          'We do not sell your personal information. We do not share it for cross-context behavioral advertising.',
         ],
       },
     ],
   },
   {
-    title: 'Data Sub-Processors & Third Parties',
-    body: ['Festie uses limited third-party services to provide specific functionality:'],
+    title: 'Service providers',
+    body: [
+      'These companies process data for us. Each one gets only what it needs to do its job.',
+    ],
     subsections: [
       {
         heading: 'Cloudflare',
         bullets: [
-          'Purpose: Content delivery network (CDN) and secure tunnel infrastructure for the application',
-          'Data Processed: IP addresses, request metadata, security headers',
-          'Privacy Policy: https://www.cloudflare.com/privacy/',
+          'Purpose: Carries all traffic to and from Festie and protects it from attacks.',
+          'Data processed: IP addresses and request details.',
+          'Privacy policy: https://www.cloudflare.com/privacy/',
         ],
       },
       {
-        heading: 'Firebase Cloud Messaging (FCM)',
+        heading: 'Firebase Cloud Messaging (Google)',
         bullets: [
-          'Purpose: Push notification delivery for festival schedule updates and crew sync alerts',
-          'Data Processed: Device tokens and notification payloads',
-          'Privacy Policy: https://firebase.google.com/support/privacy',
+          'Purpose: Delivers push notifications to Android phones and web browsers.',
+          'Data processed: Device tokens and the notification content.',
+          'Privacy policy: https://firebase.google.com/support/privacy',
+        ],
+      },
+      {
+        heading: 'Apple Push Notification service',
+        bullets: [
+          'Purpose: Delivers push notifications to iPhones. Our server connects to Apple directly.',
+          'Data processed: The iPhone device token and the notification content.',
+          'Privacy policy: https://www.apple.com/legal/privacy/',
+        ],
+      },
+      {
+        heading: 'Browser push services',
+        bullets: [
+          'Purpose: Delivers notifications to web browsers that do not use Firebase, such as Firefox and Safari. Our server sends each notification to the push service of your browser maker.',
+          'Data processed: The browser push address and the notification content, encrypted so the push service cannot read it.',
+          'Privacy policy: the privacy policy of your browser maker.',
+        ],
+      },
+      {
+        heading: 'Sign in with Apple and Google',
+        bullets: [
+          'Purpose: Lets you sign in with your Apple or Google account, if you choose to.',
+          'Data processed: Apple or Google confirms who you are and sends us your account ID and email address. We send them nothing else about you.',
+          'Privacy policy: https://www.apple.com/legal/privacy/ and https://policies.google.com/privacy',
         ],
       },
       {
         heading: 'Sentry (Functional Software, Inc.)',
         bullets: [
-          'Purpose: Application error tracking and performance monitoring to diagnose crashes and reliability issues',
-          'Data Processed: Error and exception details, stack traces, and request metadata (sensitive headers such as cookies and authorization tokens are filtered out before transmission)',
-          'Privacy Policy: https://sentry.io/privacy/',
+          'Purpose: Error reports, so we can find and fix crashes.',
+          'Data processed: Error details, performance timings, app or browser version, and on server errors your user ID.',
+          'Privacy policy: https://sentry.io/privacy/',
         ],
       },
-      // DRAFT: pending legal review
       {
-        heading: '[DRAFT — pending legal review] Resend',
+        heading: 'Resend',
         bullets: [
-          '[DRAFT — pending legal review] Purpose: Transactional and re-engagement email delivery — password reset, email verification, lineup-drop alerts, wrap-ready notifications, and crew-reform notifications',
-          'Data Processed: Recipient email address, username, and notification content (festival name, crew name, invitation URLs)',
-          'Privacy Policy: https://resend.com/legal/privacy-policy',
+          'Purpose: Sends our emails.',
+          'Data processed: Your email address, your username and the content of the email.',
+          'Privacy policy: https://resend.com/legal/privacy-policy',
         ],
       },
-      // DRAFT: pending legal review
       {
-        heading: '[DRAFT — pending legal review] Apple Push Notification service (APNs)',
+        heading: 'GitHub (Microsoft)',
         bullets: [
-          '[DRAFT — pending legal review] Purpose: Push notification delivery to iOS devices via a direct HTTP/2 connection to Apple\'s APNs gateway (api.push.apple.com), independently of Firebase Cloud Messaging',
-          'Data Processed: APNs device token (iOS only), notification payload (title, body, category, badge count, sound)',
-          'Privacy Policy: https://www.apple.com/legal/privacy/',
+          'Purpose: Stores encrypted copies of our database off site.',
+          'Data processed: Encrypted backup files only. We encrypt each backup before it leaves our server, so GitHub cannot read it. We keep a limited number of recent backups.',
+          'Privacy policy: https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement',
         ],
       },
-      // DRAFT: pending legal review
       {
-        heading: '[DRAFT — pending legal review] Spotify',
+        heading: 'Spotify',
         bullets: [
-          '[DRAFT — pending legal review] Purpose: Artist metadata retrieval for lineup display (server-side, no user data) and user OAuth account linkage to personalise content',
-          'Data Processed: For lineup import: artist metadata only. For user OAuth: Spotify user ID and granted OAuth scopes exchanged during the OAuth flow; Festie retains an encrypted refresh token and Spotify user ID',
-          'Privacy Policy: https://www.spotify.com/legal/privacy-policy/',
+          'Purpose: We look up artist names, photos and genres for festival lineups.',
+          'Data processed: Artist names only. No information about you is sent to Spotify.',
+          'Privacy policy: https://www.spotify.com/legal/privacy-policy/',
         ],
       },
-      // DRAFT: pending legal review
       {
-        heading: '[DRAFT — pending legal review] GitHub / Microsoft (encrypted off-site backup)',
+        heading: 'Services your device contacts directly',
+        paragraphs: [
+          'Some parts of Festie load straight from other services. Those services see your IP address and what your device asks for.',
+        ],
         bullets: [
-          '[DRAFT — pending legal review] Purpose: Off-site encrypted backup storage. Full PostgreSQL database dumps are encrypted with AES-256 (GPG symmetric encryption) before transmission and stored in a private GitHub repository. Up to 14 encrypted dumps are retained. GitHub is operated by GitHub, Inc., a subsidiary of Microsoft Corporation (United States)',
-          'Data Processed: AES-256-encrypted database dump files. GitHub receives only ciphertext and cannot access plaintext personal data without the encryption key',
-          'Privacy Policy: https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement',
+          'OpenFreeMap: the map tiles on festival and crew maps.',
+          'Expo: the app downloads its updates from Expo.',
+          'Google Fonts: the fonts on the website.',
+          "Spotify: artist photos, and the Spotify player when you open it on a set. Spotify's own privacy policy applies to the player.",
+        ],
+      },
+      {
+        heading: 'Services that get no data about you',
+        paragraphs: [
+          "Our server looks up festival venues with OpenStreetMap Nominatim and festival weather with Open-Meteo. It sends them only the festival's place, never anything about you.",
         ],
       },
     ],
   },
   {
-    title: 'International Data Transfers',
+    title: 'Email',
     body: [
-      'Your personal data is primarily stored on self-hosted infrastructure operated by us. However, certain sub-processors may process your data internationally:',
+      'We send two kinds of email, and only when you have given us an address.',
+    ],
+    bullets: [
+      'Account email: verifying your address, resetting your password, and security alerts when someone asks to change your email and when it changes. These are needed to run your account.',
+      'Notification email: your festival wrap-up is ready, a festival lineup or its set times are out, or a crew you were in formed again. Each one names the setting that controls it and links to where you turn it off.',
+      'No advertising: We do not send advertising email, and we never give your address to anyone to market to you.',
+    ],
+  },
+  {
+    title: 'Cookies, device storage and tracking',
+    subsections: [
+      {
+        heading: 'What we store',
+        paragraphs: [
+          "The website uses one HTTP-only cookie to keep you signed in. The app keeps its sign-in token in your phone's secure storage. Both keep your settings and a copy of your festival data on your device, so Festie works offline.",
+        ],
+      },
+      {
+        heading: 'No tracking',
+        paragraphs: [
+          'We do not use tracking or advertising cookies. We do not track you across other apps or websites, and we do not use advertising IDs.',
+        ],
+      },
+      {
+        heading: 'Do Not Track and Global Privacy Control',
+        paragraphs: [
+          'We do not track you or sell your data, so these browser signals have nothing to turn off. Festie treats every visitor as if the signal were on.',
+        ],
+      },
+      {
+        heading: 'No cookie banner',
+        paragraphs: [
+          'The sign-in cookie is strictly necessary to run the service, so the website does not need a cookie banner.',
+        ],
+      },
+    ],
+  },
+  {
+    title: 'How long we keep data',
+    bullets: [
+      'Your account and what you post: until you delete your account, plus the 30-day grace period below.',
+      'Live location: about two minutes on the server, and never in our database.',
+      'SOS position: with the crew activity, until the crew or your account is deleted.',
+      'Security log: up to one year.',
+      'Sign-in sessions: A website session ends 24 hours after you sign in. The app renews its session with a refresh token that lasts up to 90 days.',
+      'Notification history: while your account exists. The inbox shows the newest 50.',
+      'Backups: Encrypted backups rotate on a fixed schedule. Data you delete leaves the backups when the last backup that holds it is deleted.',
     ],
     subsections: [
       {
-        heading: 'Sub-Processors',
-        bullets: [
-          'Cloudflare: May process data in the United States and other countries',
-          'Firebase Cloud Messaging: Operated by Google, may process data in the United States and other locations',
-          'Sentry: Operated by Functional Software, Inc., may process error and performance data in the United States',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Resend: Resend, Inc. may process email addresses and notification content in the United States',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Apple Push Notification service: Apple Inc. may process iOS device tokens and notification payloads in the United States and other countries where Apple operates infrastructure',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Spotify: Spotify AB (Sweden) and its group companies may process Spotify user IDs and OAuth scope data in the European Economic Area and the United States',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] GitHub / Microsoft (encrypted backup): Encrypted PostgreSQL backup dumps are stored on GitHub infrastructure (GitHub, Inc. / Microsoft Corporation, United States). All data is AES-256 encrypted before transmission; GitHub receives only ciphertext. Counsel to confirm: SCCs with Microsoft under GDPR Chapter V; whether encryption satisfies EDPB supplementary measure requirements',
-        ],
-      },
-      {
-        heading: 'Safeguards',
+        heading: 'When you delete your account',
         paragraphs: [
-          'Where data is transferred to countries outside your country of residence, including the United States, we rely on Standard Contractual Clauses (SCCs) to ensure adequate safeguards for your data protection rights. We have implemented appropriate technical and organizational measures to protect your data during international transfers.',
-          // DRAFT: pending legal review
-          '[DRAFT — pending legal review] Counsel to confirm SCCs / UK IDTA addenda are executed for Resend, Apple, Spotify, and GitHub/Microsoft before this section is finalised.',
+          'In Account, choose Delete account and confirm with your password. You are signed out everywhere, your devices stop getting notifications and your festival plans are hidden from others at once.',
+          "If you sign in again within 30 days, your account comes back. After 30 days we delete your account and its data for good. A crew you created passes to its longest-standing member, or is deleted if you were the only member. An expense another member paid and split with you stays in that crew's records.",
         ],
       },
     ],
   },
   {
-    title: 'Security Measures',
-    body: ['We implement comprehensive technical and organizational security measures to protect your personal data:'],
-    subsections: [
-      {
-        heading: 'Data in Transit',
-        bullets: [
-          'TLS 1.2+ Encryption: All data transmitted between your device and our servers is encrypted using TLS 1.2 or higher',
-          'HTTPS Only: The entire application operates over secure HTTPS connections',
-        ],
-      },
-      {
-        heading: 'Data at Rest',
-        bullets: [
-          'Password Security: Passwords are hashed using Scrypt, a memory-hard key derivation function resistant to brute-force attacks',
-          'Token Security: Authentication tokens are hashed using SHA-256 before storage',
-          'Access Controls: Strict access controls limit internal access to personal data',
-        ],
-      },
-      {
-        heading: 'Application Security',
-        bullets: [
-          'Rate Limiting: API endpoints implement rate limiting to prevent brute-force attacks and abuse',
-          'Input Validation: All user inputs are validated using Zod schemas to prevent injection attacks and malformed data',
-          'Content Security Policy: CSP headers are implemented to prevent cross-site scripting (XSS) and other injection attacks',
-          'CSRF Protection: Cross-site request forgery protection is implemented for state-changing operations',
-        ],
-      },
-    ],
-  },
-  {
-    title: "Children's Privacy",
+    title: 'Your rights and choices',
     body: [
-      'Festie is not directed to children under 13 years of age in the United States (per COPPA requirements) or under 16 years of age in certain European Union member states (per GDPR provisions).',
-      'Age Requirements: By using the service, you confirm that you are at least 13 years old in the United States, or at least 16 years old in EU member states where such age restrictions apply.',
-      "We do not knowingly collect personal data from children below these age thresholds. If we become aware that a child below the applicable age threshold has provided us with personal data, we will take steps to delete such information and terminate the child's account.",
-      'If you believe a child has created an account in violation of these age requirements, please contact us at the email below.',
-    ],
-  },
-  {
-    title: 'Policy Changes & Updates',
-    body: [
-      'We may update this Privacy Policy from time to time to reflect changes in our practices, technology, legal requirements, or other factors.',
+      'Everyone gets these rights, wherever you live. Most of them work in the app, without emailing us.',
     ],
     subsections: [
       {
-        heading: 'Material Changes',
+        heading: 'Right of access',
         paragraphs: [
-          "For material changes that affect your privacy rights or how we process your data, we will provide you with at least 30 days' notice via the Festie application interface. Your continued use of the service after the 30-day notice period constitutes your acceptance of the updated Privacy Policy.",
+          'In Account › Your data, choose Download my data. You get a JSON file with your account, linked sign-ins, picks and notes, caught sets, followed festivals, crews, crew days, ratings, expenses and payment reminders, polls and votes, packing items, rides, meeting points, crew activity, crew statuses (with any status location), calendar links, devices, sessions and notification settings. You can download it once a day.',
         ],
       },
       {
-        heading: 'Minor Updates',
+        heading: 'Right of rectification',
         paragraphs: [
-          'We may update this policy for minor clarifications or non-substantive changes without notice. The effective date at the top of this document reflects the last major update.',
+          'You can change your display name, photo, email and payment handles in Account at any time. Your username cannot be changed.',
+        ],
+      },
+      {
+        heading: 'Right to erasure',
+        paragraphs: [
+          'Delete your account in the app or at https://festie.us/account. The section above says what happens next. If you cannot sign in, email privacy@festie.us.',
+        ],
+      },
+      {
+        heading: 'Right to data portability',
+        paragraphs: [
+          'The file from Download my data is JSON, a common machine-readable format, so you can keep it or move it to another service.',
+        ],
+      },
+      {
+        heading: 'Control what you share',
+        paragraphs: [
+          'Turn off notification types, set quiet hours, stop live location, turn off your public schedule page, or use Stop all sharing in Account › Privacy. You can also turn off location, notifications and photo access for Festie in your device settings.',
+        ],
+      },
+      {
+        heading: 'Right to object and to restrict processing',
+        paragraphs: [
+          'You can object to a use based on our legitimate interests, or ask us to limit how we use your data. Email privacy@festie.us. We stop unless we have strong legitimate grounds or need the data for a legal claim.',
+        ],
+      },
+      {
+        heading: 'How we handle requests',
+        paragraphs: [
+          'We answer within 30 days. Before we act on an emailed request, we check that it comes from the account owner, usually from the email address on the account. Someone you authorise can ask for you, with your signed permission. Using a right never costs you anything, and we never treat you differently for it.',
+        ],
+      },
+      {
+        heading: 'Appeals',
+        paragraphs: [
+          'If we turn down a request, reply to our answer to appeal. We decide an appeal within 45 days and explain the result. If you still disagree, you can contact your state attorney general or your data protection authority.',
         ],
       },
     ],
   },
   {
-    title: 'Additional Legal Documents',
-    body: [
-      'Please also review our Terms of Service, which govern your use of Festie and contain important limitations of liability and dispute resolution provisions.',
+    title: 'EU and UK users',
+    bullets: [
+      'Your rights: Under the GDPR and the UK GDPR you can ask for access, rectification, erasure, restriction and data portability, object to processing, and take back your consent at any time. The section above says how.',
+      'Automated decisions: We make no decisions about you by automated means that have legal or similarly significant effects.',
+      "Complaints: You can complain to the data protection authority where you live or work. In the UK, that is the Information Commissioner's Office (https://ico.org.uk). We would like the chance to help first at privacy@festie.us.",
+      "International transfers: Festie's server is in the United States, and most of our providers process data there. For data from the EU or UK, we rely on the Standard Contractual Clauses (with the UK addendum) in our providers' data processing terms, or on the EU-US Data Privacy Framework where a provider is certified.",
+      'What you must give: A username, a password and your date of birth are needed to create an account. Everything else is optional.',
     ],
   },
   {
-    title: 'Contact & Support',
+    title: 'US state privacy rights',
     body: [
-      'If you have questions, concerns, or requests regarding this Privacy Policy or our privacy practices, please contact us using the details below.',
-      'We will respond to all privacy-related inquiries within 30 days. For data subject requests (access, deletion, portability), we will provide our response within 30 days, or up to 60 days for complex requests.',
+      "This section covers the California Consumer Privacy Act, as amended by the California Privacy Rights Act, and similar laws in Virginia, Colorado, Connecticut, Utah, Texas, Oregon and other states. We give these rights to everyone, even where a law does not apply to a service of Festie's size.",
+    ],
+    subsections: [
+      {
+        heading: 'Categories we collect',
+        bullets: [
+          'Identifiers: username, email address, Apple or Google account ID, IP address and device tokens.',
+          'Customer records: display name, photo and payment handles.',
+          'Age: date of birth.',
+          'Internet activity: the security log, error reports and sign-in sessions.',
+          'Precise geolocation: status location, meeting points, live location and SOS position, only when you choose to share them.',
+          'Content you create: picks, notes, ratings and what you post to a crew.',
+          'Inferences: none. We build no profile of you.',
+        ],
+      },
+      {
+        heading: 'Sources and purposes',
+        paragraphs: [
+          'We get this data from you, from your device when you use a feature, and from your crew members, for example when they split an expense with you. We use it to run Festie, keep it secure, fix problems and follow the law.',
+        ],
+      },
+      {
+        heading: 'Disclosures',
+        paragraphs: [
+          'We disclose personal information for business purposes only to the service providers listed above, under terms that limit their use of it.',
+        ],
+      },
+      {
+        heading: 'No sale or sharing',
+        paragraphs: [
+          'We do not sell personal information, and we do not share it for cross-context behavioral advertising. We have not done either in the past 12 months. We have no actual knowledge of selling or sharing the data of anyone under 16.',
+        ],
+      },
+      {
+        heading: 'Sensitive personal information',
+        paragraphs: [
+          'Precise geolocation and your sign-in details count as sensitive. We use them only to provide Festie, and we use precise geolocation only after you choose to share it. We do not use sensitive data to infer anything about you, and we never sell it.',
+        ],
+      },
+      {
+        heading: 'Your rights under these laws',
+        paragraphs: [
+          'You can ask to know what we collect and why, get a copy, delete it, correct it, and opt out of sale, sharing, targeted advertising and profiling. We do none of those last four, so there is nothing to opt out of. We will not discriminate against you for using any right. Use Download my data and Delete account in the app, or email privacy@festie.us.',
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Age requirement and children',
+    body: [
+      'You must be 18 or older to use Festie. We check your date of birth when you sign up and do not create an account for anyone under 18.',
+      'Festie is not directed to children under 13, and we do not knowingly collect data from them.',
+      'If we learn that an account belongs to someone under 18, we close the account and delete its data. If you think a child is using Festie, email privacy@festie.us.',
+    ],
+  },
+  {
+    title: 'Security',
+    bullets: [
+      'Encryption: All traffic to and from Festie uses HTTPS. Backups are encrypted before they leave our server.',
+      'Passwords and tokens: We store passwords only as scrypt hashes, and sign-in tokens only as SHA-256 hashes.',
+      'Protection: Requests are rate limited, all input is checked, and the website uses a strict Content Security Policy.',
+      'Breaches: No system is perfectly secure. If a breach puts your data at risk, we will tell you and the authorities as the law requires. Florida law gives us at most 30 days to do so.',
+    ],
+  },
+  {
+    title: 'App stores',
+    body: [
+      "Festie's App Store and Google Play listings link to this policy. You can delete your account inside the app (Account, then Delete account) or on the web at https://festie.us/account.",
+    ],
+  },
+  {
+    title: 'Changes to this policy',
+    body: [
+      'The effective date at the top shows when this policy last changed. Before a change that affects how we use your data takes effect, we tell you in the app or by email. If a change needs your consent, we ask for it first.',
+    ],
+  },
+  {
+    title: 'Other documents',
+    body: [
+      'Our Terms of Service set the rules for using Festie.',
+    ],
+  },
+  {
+    title: 'Contact',
+    body: [
+      'Email privacy@festie.us with questions or requests about this policy or your data. We answer within 30 days.',
     ],
   },
 ];
@@ -425,8 +523,8 @@ function ContactCard() {
   return (
     <View style={styles.contactCard}>
       <View style={styles.contactRow}>
-        <Text style={styles.contactLabel}>Data Controller</Text>
-        <Text style={styles.contactValue}>Asir Khan</Text>
+        <Text style={styles.contactLabel}>Run by</Text>
+        <Text style={styles.contactValue}>{OPERATOR_NAME}</Text>
       </View>
       <TouchableOpacity
         style={styles.contactRow}
@@ -471,7 +569,15 @@ export default function PrivacyScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.effective}>Effective May 31, 2026</Text>
+        <Text style={styles.effective}>Effective {EFFECTIVE_DATE}</Text>
+        <View style={styles.contactCard}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            In short
+          </Text>
+          {SUMMARY.map((line, i) => (
+            <Bullet key={i} text={line} />
+          ))}
+        </View>
         {SECTIONS.map((section, index) => (
           <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle} accessibilityRole="header">
@@ -484,8 +590,12 @@ export default function PrivacyScreen() {
               </Text>
             ))}
 
-            {/* The Data Controller box mirrors the web's bordered contact box. */}
+            {/* The operator box mirrors the web's bordered contact box. */}
             {index === 0 ? <ContactCard /> : null}
+
+            {section.bullets?.map((bullet, i) => (
+              <Bullet key={i} text={bullet} />
+            ))}
 
             {section.subsections?.map((sub) => (
               <View key={sub.heading} style={styles.subsection}>
@@ -501,14 +611,14 @@ export default function PrivacyScreen() {
               </View>
             ))}
 
-            {/* Tappable Terms link for the Additional Legal Documents section. */}
-            {section.title === 'Additional Legal Documents' ? (
+            {/* Tappable Terms link for the Other documents section. */}
+            {section.title === 'Other documents' ? (
               <TouchableOpacity
                 style={styles.linkRow}
-                onPress={openTerms}
+                onPress={() => void openTerms()}
                 activeOpacity={0.7}
                 accessibilityRole="link"
-                accessibilityLabel="Open Terms of Service"
+                accessibilityLabel="Read the Terms of Service"
               >
                 <Ionicons name="document-text-outline" size={18} color={t.colors.accent.aqua} />
                 <Text style={styles.linkText}>Terms of Service</Text>
@@ -516,8 +626,8 @@ export default function PrivacyScreen() {
               </TouchableOpacity>
             ) : null}
 
-            {/* Contact box for the final Contact & Support section. */}
-            {section.title === 'Contact & Support' ? <ContactCard /> : null}
+            {/* Contact box for the final Contact section. */}
+            {section.title === 'Contact' ? <ContactCard /> : null}
           </View>
         ))}
       </ScrollView>

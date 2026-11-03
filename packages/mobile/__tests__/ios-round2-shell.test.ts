@@ -37,6 +37,8 @@ describe('ios round 2 shell source guards', () => {
     }
   });
   it('privacy shows the effective date', () => {
-    expect(read('app/privacy.tsx')).toContain('Effective May 31, 2026');
+    const src = read('app/privacy.tsx');
+    expect(src).toMatch(/const EFFECTIVE_DATE = '[^']+';/);
+    expect(src).toContain('Effective {EFFECTIVE_DATE}');
   });
 });
