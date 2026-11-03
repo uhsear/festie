@@ -13,7 +13,7 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'notification_preferences' AND column_name = 'crew_nudges'
   ) THEN
-    ALTER TABLE notification_preferences ADD COLUMN crew_nudges INTEGER DEFAULT 1;
+    ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS crew_nudges INTEGER DEFAULT 1;
     UPDATE notification_preferences SET crew_nudges = 0 WHERE crew_updates = 0;
   END IF;
 END $$;
