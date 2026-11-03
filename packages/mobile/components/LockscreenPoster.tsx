@@ -107,8 +107,8 @@ export default function LockscreenPoster({ model, page }: Props) {
           ) : null}
         </View>
         <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-          <T style={txt(u, 2.9, GROTESK_500, p.text2, { textAlign: 'right' })}>{pm.header.metaTop}</T>
-          <T style={txt(u, 2.9, GROTESK_700, p.text, { textAlign: 'right' })}>{pm.header.metaBottom}</T>
+          <T style={txt(u, pm.header.metaSizeU, GROTESK_500, p.text2, { textAlign: 'right' })} lines={1}>{pm.header.metaTop}</T>
+          <T style={txt(u, pm.header.metaSizeU, GROTESK_700, p.text, { textAlign: 'right' })} lines={1}>{pm.header.metaBottom}</T>
         </View>
       </View>
       <View
@@ -181,7 +181,7 @@ export default function LockscreenPoster({ model, page }: Props) {
           {body.blocks.map((b) => (
             <GridBlock key={`${b.setId}-${b.y}`} b={b} u={u} p={p} />
           ))}
-          <View style={{ position: 'absolute', left: side, top: body.legendY * u }}>
+          <View style={{ position: 'absolute', left: body.legendX * u, top: body.legendY * u }}>
             <T style={txt(u, 2.4, GROTESK_500, p.muted)} lines={1}>
               {body.legend}
             </T>
@@ -263,12 +263,16 @@ function ListRow({
         </View>
       ) : null}
       <View style={{ width: layout.artistWidth * u, marginRight: 'auto' }}>
-        <Text
-          allowFontScaling={false}
-          style={txt(u, artistU, must ? CLASH_700 : CLASH_600, artistColor)}
-        >
-          {row.artistLines.join('\n')}
-        </Text>
+        {row.artistLines.map((line, n) => (
+          <Text
+            key={n}
+            allowFontScaling={false}
+            numberOfLines={1}
+            style={txt(u, artistU, must ? CLASH_700 : CLASH_600, artistColor)}
+          >
+            {line}
+          </Text>
+        ))}
         {compact ? null : (
           <T style={txt(u, 3.0, GROTESK_600, row.stageText)} lines={1}>
             {row.stage}
@@ -344,9 +348,11 @@ function GridBlock({ b, u, p }: { b: LockscreenGridBlock; u: number; p: Lockscre
               {b.time}
             </T>
           ) : null}
-          <Text allowFontScaling={false} style={txt(u, b.artistSizeU, CLASH_600, b.ink)}>
-            {b.artistLines.join('\n')}
-          </Text>
+          {b.artistLines.map((line, n) => (
+            <Text key={n} allowFontScaling={false} numberOfLines={1} style={txt(u, b.artistSizeU, CLASH_600, b.ink)}>
+              {line}
+            </Text>
+          ))}
         </>
       )}
       {corner && b.priority ? (

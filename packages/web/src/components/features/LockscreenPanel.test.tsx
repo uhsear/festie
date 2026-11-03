@@ -30,7 +30,7 @@ vi.mock('../../lib/toastContext', () => ({
 import LockscreenPanel from './LockscreenPanel';
 
 const fakePage = (n: number, count: number) => ({
-  header: { day: 'FRIDAY', daySizeU: 7.4, pageChip: count > 1 ? `${n}/${count}` : null, metaTop: 'Fest · Jun 10', metaBottom: 'x', y: 38, height: 11 },
+  header: { day: 'FRIDAY', daySizeU: 7.4, pageChip: count > 1 ? `${n}/${count}` : null, metaTop: 'Fest · Jun 10', metaBottom: 'x', metaSizeU: 2.9, y: 38, height: 11 },
   footer: { text: 'festie.us', showMark: true, y: 80 },
   body: { kind: 'list', tier: 'M', artistSizeU: 5.6, timeSizeU: 5.4, rows: [], divider: null },
   dayIndex: 0,
