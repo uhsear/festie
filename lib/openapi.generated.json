@@ -2408,6 +2408,9 @@
           "crewRides": {
             "type": "number"
           },
+          "crewNudges": {
+            "type": "number"
+          },
           "mustSeeReminderMinutes": {
             "nullable": true,
             "type": "number"
@@ -2437,6 +2440,7 @@
           "crewPolls",
           "crewMoney",
           "crewRides",
+          "crewNudges",
           "mustSeeReminderMinutes",
           "dndStart",
           "dndEnd",

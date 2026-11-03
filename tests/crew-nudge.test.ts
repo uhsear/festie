@@ -221,19 +221,23 @@ describe('notifications/send: crew_nudge', () => {
   }
   const QUIET = { dndStart: '00:00', dndEnd: '23:59' };
 
-  test('is an allowed type and delivers when crew notifications are on', async () => {
+  test('is an allowed type and delivers when nudges are on', async () => {
     const { ALLOWED_NOTIFICATION_TYPES } = await import('../lib/notifications/payload.js');
     assert.ok(ALLOWED_NOTIFICATION_TYPES.has('crew_nudge'));
-    assert.equal((await sendWith({ crewUpdates: 1 })).sent, 1);
+    assert.equal((await sendWith({ crewUpdates: 1, crewNudges: 1 })).sent, 1);
   });
 
-  test('is filtered when the crew switch is off', async () => {
-    assert.equal((await sendWith({ crewUpdates: 0 })).reason, 'user_disabled');
+  test('is filtered when the nudges switch is off', async () => {
+    assert.equal((await sendWith({ crewUpdates: 1, crewNudges: 0 })).reason, 'user_disabled');
+  });
+
+  test('still sends when only the crew picks switch is off', async () => {
+    assert.equal((await sendWith({ crewUpdates: 0, crewNudges: 1 })).sent, 1);
   });
 
   test('skips quiet hours, while crew_update stays held back', async () => {
-    assert.equal((await sendWith({ crewUpdates: 1, ...QUIET })).sent, 1);
-    assert.equal((await sendWith({ crewUpdates: 1, ...QUIET }, 'crew_update')).reason, 'dnd_active');
+    assert.equal((await sendWith({ crewUpdates: 1, crewNudges: 1, ...QUIET })).sent, 1);
+    assert.equal((await sendWith({ crewUpdates: 1, crewNudges: 1, ...QUIET }, 'crew_update')).reason, 'dnd_active');
   });
 });
 

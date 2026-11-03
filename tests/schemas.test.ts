@@ -872,7 +872,7 @@ describe('responseSchemas: serialized payloads parse', () => {
 
   it('notificationPrefsResponseSchema parses the get() shape (0/1 ints, nullable DND)', () => {
     // Default (no-row) shape: every toggle is the integer 1, DND null.
-    const defaults = { userId: 'user-1', crewUpdates: 1, setReminders: 1, scheduleChanges: 1, lineupDrops: 1, crewReformed: 1, wrapReady: 1, crewMeetingPoints: 1, crewPolls: 1, crewMoney: 1, crewRides: 1, mustSeeReminderMinutes: null, dndStart: null, dndEnd: null, dndTimeZone: null };
+    const defaults = { userId: 'user-1', crewUpdates: 1, setReminders: 1, scheduleChanges: 1, lineupDrops: 1, crewReformed: 1, wrapReady: 1, crewMeetingPoints: 1, crewPolls: 1, crewMoney: 1, crewRides: 1, crewNudges: 1, mustSeeReminderMinutes: null, dndStart: null, dndEnd: null, dndTimeZone: null };
     const parsed = notificationPrefsResponseSchema.parse(wire(defaults));
     assert.equal(parsed.crewUpdates, 1);
     assert.equal(parsed.dndStart, null);

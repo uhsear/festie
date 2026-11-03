@@ -418,13 +418,21 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             ],
           );
 
-          // Delete old stages and batch-insert new ones
-          await client.query('DELETE FROM festival_stages WHERE festival_id = $1', [festival.id]);
+          // Upsert stages as update() does: deleting a stage row cascades into its sets
+          // (festival_sets_stage_fkey) before replaceChildRows can carry their user data across.
           const children = collectFestivalChildren(festival.id, festival);
-          await insertStagesBatch(client, children.stageRows);
+          await upsertStagesBatch(client, children.stageRows);
 
           // Replace days, sets, picks, and ratings in batch
           await replaceChildRows(client, festival.id, children);
+
+          await client.query(
+            `DELETE FROM festival_stages st
+             WHERE st.festival_id = $1
+               AND NOT (st.id = ANY($2::text[]))
+               AND NOT EXISTS (SELECT 1 FROM festival_sets s WHERE s.festival_id = st.festival_id AND s.stage_id = st.id)`,
+            [festival.id, (festival.stages || []).map((stage: any) => stage.id)],
+          );
         }
       });
     },
