@@ -47,6 +47,7 @@ describe('initSentry across two bundled copies', () => {
       first.initSentry({ dsn: DSN });
       const adopted = second.initSentry({ dsn: DSN });
       assert.equal(calls, 1);
+      assert.equal(SentryNode.getClient().getOptions().traceLifecycle, 'static');
       assert.equal(adopted, SentryNode);
       assert.equal(second.sentry.available, true);
     } finally {
