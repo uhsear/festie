@@ -20,8 +20,8 @@ describe('GET /profiles/:festivalId crew-only picks', { skip, concurrency: 1 }, 
   let bob: any;
   let carl: any;
 
-  const pick = async (user: any, profile: any, picks: Record<string, string>) =>
-    server.request.put(`/api/v1/profiles/${profile.id}`).set('x-user-token', user.token).send({ picks }).expect(200);
+  const pick = async (user: any, profile: any, picks: Record<string, string>, extra: Record<string, unknown> = {}) =>
+    server.request.put(`/api/v1/profiles/${profile.id}`).set('x-user-token', user.token).send({ picks, ...extra }).expect(200);
 
   const list = async (user: any) =>
     (await server.request.get('/api/v1/profiles/fest-1').set('x-user-token', user.token).expect(200)).body;
@@ -49,7 +49,7 @@ describe('GET /profiles/:festivalId crew-only picks', { skip, concurrency: 1 }, 
       .send({ inviteCode: crew.inviteCode })
       .expect(200);
 
-    await pick(alice, aliceProfile, { 'set-a': 'must' });
+    await pick(alice, aliceProfile, { 'set-a': 'must' }, { notes: { 'set-a': 'front left' }, reminders: { 'set-a': 15 } });
     await pick(bob, bobProfile, { 'set-a': 'maybe', 'set-b': 'must' });
     await pick(carl, carlProfile, { 'set-a': 'want-to-see' });
   });
@@ -77,6 +77,15 @@ describe('GET /profiles/:festivalId crew-only picks', { skip, concurrency: 1 }, 
     assert.deepEqual(byUser(body, carl).picks, {});
     assert.deepEqual(byUser(body, bob).picks, { 'set-a': 'maybe', 'set-b': 'must' });
     assert.deepEqual(body.meta.pickCounts, { 'set-a': 2 });
+  });
+
+  test('only the viewer gets notes and reminders', async () => {
+    const own = byUser(await list(alice), alice);
+    assert.deepEqual(own.notes, { 'set-a': 'front left' });
+    assert.deepEqual(own.reminders, { 'set-a': 15 });
+    const seenByBob = byUser(await list(bob), alice);
+    assert.equal('notes' in seenByBob, false);
+    assert.equal('reminders' in seenByBob, false);
   });
 
   test('the paginated form carries pickCounts beside pagination', async () => {

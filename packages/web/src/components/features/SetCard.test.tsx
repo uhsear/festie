@@ -7,16 +7,23 @@ import type { FestivalSet } from '@festie/shared/types';
 const clearPickMock = vi.fn();
 const moveMock = vi.hoisted(() => ({ value: null as null | { chip: string; line: string; a11y: string } }));
 const pickSyncMock = { sync: undefined as { state: string; priority: string | null } | undefined, retry: vi.fn(() => Promise.resolve()) };
-vi.mock('@festie/shared/hooks', () => ({
-  usePickSync: () => pickSyncMock,
-  usePickClear: () => clearPickMock,
-  useSetMove: () => moveMock.value,
-  usePicks: vi.fn(() => ({
+vi.mock('@festie/shared/hooks', () => {
+  const usePicks = vi.fn(() => ({
     getMyPick: vi.fn(() => null),
     savePick: vi.fn(),
     getMyNote: vi.fn(() => ''),
-  })),
-}));
+  }));
+  return {
+    usePickSync: () => pickSyncMock,
+    usePickClear: () => clearPickMock,
+    useSetMove: () => moveMock.value,
+    usePicks,
+    // The per-set hooks read through the usePicks mock so each test seeds one place.
+    useMyPick: (id: string) => usePicks().getMyPick(id),
+    useMyNote: (id: string) => usePicks().getMyNote(id),
+    usePickActions: () => ({ savePick: usePicks().savePick }),
+  };
+});
 
 // Mutable store snapshots so individual tests can seed allProfiles / crewMembers
 // for the crew-overlap avatar join without re-mocking the module.

@@ -19,6 +19,8 @@ import { buildSchedulePushes } from './schedule-diff.js';
 
 const EVENT_VERSION = 1;
 const SCHEDULE_PUSH_CHUNK = 20;
+/** A pick change sends at most one silent sync per festival per window (per process). */
+export const SILENT_SYNC_COALESCE_MS = 60_000;
 
 export function createSocketEmitter({ io, log, notificationService, buildAvatarUrl, _getUserById, stores, config }: any) {
 
@@ -73,6 +75,21 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     }, CREW_PUSH_DIGEST_MS);
     timer.unref?.();
     _crewPushTimers.set(key, timer);
+  }
+
+  // One trailing silent sync per festival per window; later pick changes inside the window ride along.
+  // No excludeUserIds: with several authors in one window, excluding one of them is wrong.
+  const _silentSyncTimers = new Map();
+
+  function queueSilentSync(festivalId: any) {
+    if (_shuttingDown || typeof notificationService?.sendSilentSync !== 'function' || _silentSyncTimers.has(festivalId)) return;
+    const timer = setTimeout(() => {
+      _silentSyncTimers.delete(festivalId);
+      notificationService.sendSilentSync({ festivalId, syncType: 'profiles' })
+        .catch((err: any) => log.warn('silent sync push failed', { error: err.message }));
+    }, SILENT_SYNC_COALESCE_MS);
+    timer.unref?.();
+    _silentSyncTimers.set(festivalId, timer);
   }
 
   // Profile update batching — coalesce rapid pick/status changes into a single broadcast
@@ -169,11 +186,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       queueCrewPickPush(profile);
 
       // #30: Silent push for background data sync (no visible notification)
-      notificationService.sendSilentSync?.({
-        festivalId: profile.festivalId,
-        syncType: 'profiles',
-        excludeUserIds: [profile.userId],
-      }).catch((err: any) => log.warn('silent sync push failed', { error: err.message }));
+      queueSilentSync(profile.festivalId);
     }
   }
 
@@ -262,6 +275,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     for (const timer of _crewPushTimers.values()) clearTimeout(timer);
     _crewPushTimers.clear();
     _crewPushPending.clear();
+    for (const timer of _silentSyncTimers.values()) clearTimeout(timer);
+    _silentSyncTimers.clear();
   }
 
   function crewExpenseAdded({ crewId, expense }: any) {

@@ -2,7 +2,7 @@ import React, { memo, useRef, useState, useMemo } from 'react';
 import { Play, AlertTriangle, StickyNote, Clock, ArrowRightLeft } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
-import { usePicks, usePickSync, usePickClear, useSetMove } from '@festie/shared/hooks';
+import { useMyPick, useMyNote, usePickActions, usePickSync, usePickClear, useSetMove } from '@festie/shared/hooks';
 import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { useSetStatus } from '@/hooks/useSetStatus';
@@ -35,7 +35,10 @@ interface SetCardProps {
   b2bSeparator?: string;
 }
 
-const PRI_MAP: Record<string, string> = {
+const NO_PROFILES: ReturnType<typeof useFestivalStore.getState>['allProfiles'] = [];
+const NO_MEMBERS: ReturnType<typeof useCrewStore.getState>['crewMembers'] = [];
+
+const PRI_MAP:Record<string, string> = {
   must: 'must',
   'want-to-see': 'want',
   maybe: 'maybe',
@@ -53,14 +56,18 @@ function SetCard({
   clashLabel,
   b2bSeparator,
 }: SetCardProps) {
-  const { getMyPick, savePick, getMyNote } = usePicks();
+  const myPick = useMyPick(set.id);
+  const myNote = useMyNote(set.id);
+  const { savePick } = usePickActions();
   const { sync: pickSync, retry: retryPick } = usePickSync(set.id);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   // Read-only joins for the crew-overlap cluster: profiles supply the
   // profileId -> userId link, crew members supply the avatar image. Both are
   // already persisted (Foundations F1), so the cluster renders offline.
-  const allProfiles = useFestivalStore((state) => state.allProfiles);
-  const crewMembers = useCrewStore((state) => state.crewMembers);
+  // Only a card that shows friends reads them, so a crew mate's pick re-renders just those cards.
+  const hasFriends = friendProfiles.length > 0;
+  const allProfiles = useFestivalStore((state) => (hasFriends ? state.allProfiles : NO_PROFILES));
+  const crewMembers = useCrewStore((state) => (hasFriends ? state.crewMembers : NO_MEMBERS));
   const clearPick = usePickClear(useUndoNotifier());
   const { tap, select, warning } = useHaptics();
   const [saving, setSaving] = useState(false);
@@ -90,8 +97,6 @@ function SetCard({
     setSpotlightPos({ x: '50%', y: '50%' });
   };
 
-  const myPick = getMyPick(set.id);
-  const myNote = getMyNote(set.id);
   const artistName = artistDisplayName(set, b2bSeparator);
   const subtitle = artistSubtitle(set, b2bSeparator);
 

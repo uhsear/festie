@@ -22,7 +22,6 @@ import { useCrewRealtime, useRevocationRealtime } from '@festie/shared/hooks';
 // package `exports` map resolves. It is the package itself (not a transitive
 // dep), so it is safe for the mobile typecheck and the Metro bundle.
 import { createStoreSink } from '@festie/shared';
-import type { OnlineUser } from '@festie/shared/types';
 import type {
   ProfileUpdatedPayload,
   ProfileDeletedPayload,
@@ -39,7 +38,6 @@ const RECONNECT_FESTIVAL_RELOAD_GAP_MS = 60_000;
 
 export interface UseRealtimeSyncReturn {
   connected: boolean;
-  onlineUsers: OnlineUser[];
 }
 
 /**
@@ -52,6 +50,8 @@ export interface UseRealtimeSyncReturn {
  *
  * Socket events flow into the shared Zustand stores (festivalDataStore,
  * crewStore, uiStore) so the rest of the app reacts automatically.
+ * festival:updated reloads only when its id is the current festival. Presence
+ * fills uiStore but is not returned, so the tab layout does not re-render on it.
  */
 export function useRealtimeSync(): UseRealtimeSyncReturn {
   const socketRef = useRef<Socket | null>(null);
@@ -65,7 +65,6 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
   const activeCrewId = useCrewStore((s) => s.activeCrew?.id ?? null);
   const connected = useUIStore((s) => s.connected);
   const setConnected = useUIStore((s) => s.setConnected);
-  const onlineUsers = useUIStore((s) => s.onlineUsers);
   const setOnlineUsers = useUIStore((s) => s.setOnlineUsers);
 
   // ── Crew sub-feature + Live Location/SOS realtime ────────────────────────
@@ -226,7 +225,9 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     };
 
     // Festival / sets -> festivalDataStore full reload
-    const handleFestivalUpdated = (_data: FestivalIdPayload) => reloadFestival();
+    const handleFestivalUpdated = (data: FestivalIdPayload) => {
+      if (data?.id === useFestivalDataStore.getState().currentFestivalId) reloadFestival();
+    };
     const handleSetAdded = (_data: FestivalIdPayload) => reloadFestival();
     const handleSetUpdated = (_data: FestivalIdPayload) => reloadFestival();
 
@@ -394,5 +395,5 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     };
   }, [userToken, currentFestivalId, activeCrewId, setConnected, setOnlineUsers]);
 
-  return { connected, onlineUsers };
+  return { connected };
 }

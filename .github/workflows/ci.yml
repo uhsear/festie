@@ -496,8 +496,11 @@ jobs:
           name: web-dist
           path: packages/web/dist
       - name: Check bundle size
-        continue-on-error: true
         working-directory: packages/web
+        # The BundleMon GitHub app is not installed, so remote mode fails to start.
+        # Local mode still enforces maxSize. maxPercentIncrease needs a stored base, so it is not enforced.
+        env:
+          BUNDLEMON_REMOTE: 'false'
         run: pnpm exec bundlemon
 
   docker:
