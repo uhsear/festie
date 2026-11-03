@@ -100,6 +100,10 @@ const queryClient = new QueryClient({
       retry: 1,
       refetchOnWindowFocus: false,
     },
+    // The api client owns offline writes: it queues replay-safe ones and fails the rest.
+    // React Query's default 'online' mode would pause the mutation offline before it ever
+    // reaches the client, leaving the button spinning with nothing queued.
+    mutations: { networkMode: 'always' },
   },
 });
 
