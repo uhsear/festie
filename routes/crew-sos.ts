@@ -9,6 +9,7 @@ import type { RouteDeps } from '../lib/types';
 import type { crewIdParams, sosClearSchema, sosRaiseSchema, sosSeenSchema } from '../lib/schemas';
 import {
   SOS_RAISE_LIMIT,
+  SOS_RAISE_MIN_GAP,
   clearSosActive,
   listActiveSos,
   isSosActive,
@@ -93,7 +94,8 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         if ((await isSosActive(redis, crewId, userId)) === false) {
           SOS_RAISE_LIMIT.release(`${crewId}:${userId}`);
         }
-        const limit = SOS_RAISE_LIMIT.consume(`${crewId}:${userId}`);
+        const gap = SOS_RAISE_MIN_GAP.consume(userId);
+        const limit = gap.allowed ? SOS_RAISE_LIMIT.consume(`${crewId}:${userId}`) : gap;
         if (!limit.allowed) {
           const waitSeconds = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
           res.setHeader('Retry-After', String(waitSeconds));
