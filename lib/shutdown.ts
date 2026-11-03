@@ -180,6 +180,24 @@ function createBackgroundTasks(ctx: any, { io }: any) {
   _auditCleanupTimer.unref();
   state.timers.push(_auditCleanupTimer);
 
+  // Retention (migration 060): hard-deletes accounts 30 days after soft delete,
+  // festivals 90 days after delete, and old metrics/audit rows. Production has no
+  // pg_cron, so the app runs it. The privacy policy promises the 30-day delete.
+  const _retentionTimer = setInterval(
+    async () => {
+      try {
+        await stores.pool.query('SELECT retention_cleanup()');
+        recordJobRun('retention_cleanup', true);
+      } catch (err: any) {
+        recordJobRun('retention_cleanup', false);
+        log.warn('retention cleanup failed', { error: err.message });
+      }
+    },
+    24 * 60 * 60 * 1000,
+  );
+  _retentionTimer.unref();
+  state.timers.push(_retentionTimer);
+
   // Memory pressure monitoring — log warnings when heap grows large
   const _memoryCheckTimer = setInterval(() => {
     const mem = process.memoryUsage();

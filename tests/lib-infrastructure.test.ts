@@ -444,10 +444,10 @@ describe('lib/shutdown.js', () => {
       for (const t of ctx.state.timers) clearInterval(t);
     });
 
-    it('registers 6 timers in state.timers', () => {
+    it('registers 7 timers in state.timers', () => {
       createBackgroundTasks(ctx, { io: ioStub });
-      // session, avatar, token, audit, memory, meeting-point = 6
-      assert.equal(ctx.state.timers.length, 6);
+      // session, avatar, token, audit, retention, memory, meeting-point = 7
+      assert.equal(ctx.state.timers.length, 7);
     });
 
     it('all timers are unref-ed (no timer should keep process alive)', () => {
