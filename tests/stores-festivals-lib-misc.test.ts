@@ -347,22 +347,23 @@ describe('lib/db/stores/festivals.js', () => {
     it('deletes all festivals when passed empty array', async () => {
       const { pool, client } = makeTransactionPool([
         { rows: [] }, // BEGIN
-        { rows: [] }, // DELETE FROM festivals
-        { rows: [] }, // COMMIT
+        { rows: [{ id: 'f1' }] }, // SELECT unlisted festivals
       ]);
       const utils = { buildFestivalRecords: mock.fn() };
       const store = createFestivalsStore(pool, utils);
       await store.replaceAll([]);
-      const deleteCall = client.query.mock.calls.find(
-        (c: any) => typeof c.arguments[0] === 'string' && c.arguments[0].includes('DELETE FROM festivals'),
-      );
-      assert.ok(deleteCall, 'should delete all festivals');
+      const sql = client.query.mock.calls.map((c: any) => c.arguments[0]);
+      const daysAt = sql.indexOf('DELETE FROM festival_days WHERE festival_id = $1');
+      const festAt = sql.indexOf('DELETE FROM festivals WHERE id = $1');
+      assert.ok(daysAt > 0, 'should delete the festival days first');
+      assert.ok(festAt > daysAt, 'should delete the festival after its days');
+      assert.ok(!sql.some((q: any) => typeof q === 'string' && q.includes('INSERT INTO festivals')), 'should insert nothing');
     });
 
     it('replaces festivals with upserts', async () => {
       const { pool, client } = makeTransactionPool([
         { rows: [] }, // BEGIN
-        { rows: [] }, // DELETE WHERE id NOT IN
+        { rows: [] }, // SELECT unlisted festivals
         { rows: [] }, // INSERT/upsert festival
         { rows: [] }, // DELETE stages
         { rows: [] }, // INSERT stages
