@@ -9,17 +9,18 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
  * Privacy Policy screen — a self-contained native mirror of the canonical
  * static document served on web at /privacy.html.
  *
- * Draft for legal review — not legal advice.
+ * Checked against the code and the applicable rules in an AI-assisted review
+ * on November 3, 2026. No attorney has reviewed it.
  *
  * The web policy remains the single source of truth; this screen reproduces
- * its text word for word (effective {PUBLISH DATE}) as a typed data array so it
+ * its text word for word (effective November 3, 2026) as a typed data array so it
  * renders like the rest of the app and works offline. Emails open the mail
  * client and the Terms reference opens the web Terms of Service in an in-app
  * browser sheet.
  */
 
-const EFFECTIVE_DATE = '{PUBLISH DATE}';
-const OPERATOR_NAME = '[YOUR NAME]';
+const EFFECTIVE_DATE = 'November 3, 2026';
+const OPERATOR_NAME = 'Asir Khan';
 const CONTACT_EMAIL = 'privacy@festie.us';
 const SERVICE_URL = 'https://festie.us';
 const TERMS_URL = 'https://festie.us/terms.html';
@@ -32,7 +33,7 @@ const openService = () => {
   void Linking.openURL(SERVICE_URL);
 };
 
-// Same behaviour as the sign-up screen: an in-app sheet, the system browser as fallback.
+// An in-app sheet, with the system browser as fallback.
 const openTerms = async () => {
   try {
     await WebBrowser.openBrowserAsync(TERMS_URL);
@@ -67,7 +68,7 @@ const SECTIONS: PolicySection[] = [
   {
     title: 'Who runs Festie',
     body: [
-      'Festie is run by an individual developer, [YOUR NAME]. In this policy, "we" and "us" mean [YOUR NAME]. Under EU and UK data protection law, [YOUR NAME] is the controller of your personal data.',
+      'Festie is run by an individual developer, Asir Khan, in Florida, United States. In this policy, "we" and "us" mean Asir Khan. Under EU and UK data protection law, Asir Khan is the controller of your personal data.',
       'Email privacy@festie.us with any privacy question or request. Send security reports to security@festie.us. We answer privacy requests within 30 days.',
     ],
   },
@@ -81,6 +82,7 @@ const SECTIONS: PolicySection[] = [
         heading: 'Your account',
         bullets: [
           'Username: You choose it when you sign up. It is how you sign in, and other people in Festie see it.',
+          'Sign in with Apple or Google (optional): If you use it, we store the account ID that Apple or Google gives us, the email address it shares with us and whether that address is verified. For Apple we also keep an encrypted Apple sign-in token.',
           'Password: We store only a scrypt hash of it, never the password itself.',
           'Date of birth: You give it when you sign up so we can check that you are 18 or older. We keep it with your account.',
           'Email address (optional): We use it to verify your address, reset your password, warn you when someone asks to change it, and send the notification emails you leave on.',
@@ -94,8 +96,10 @@ const SECTIONS: PolicySection[] = [
         bullets: [
           'Picks and notes: the sets you pick, how much you want to see each one, and your notes.',
           'Ratings: the ratings and notes you give sets.',
+          'Caught sets and followed festivals: the sets you mark as seen, and the festivals you follow for lineup and set-time news.',
           'Crews: the crews you create or join, and your role in each.',
-          'What you post to a crew: statuses, expenses, polls and votes, packing items, rides and meeting points. Your crew sees them, and the crew activity feed records them.',
+          'Crew plans: which days you are coming, the meeting points you say you will be at, and the rides you join.',
+          'What you post to a crew: statuses, expenses and payment reminders, polls and votes, packing items, rides and meeting points. Your crew sees them, and the crew activity feed records them.',
           'Sharing settings: whether your public schedule page is on, and the picks links you create.',
           'Calendar links: if you add a festival to your calendar, the private feed link for it.',
         ],
@@ -103,16 +107,17 @@ const SECTIONS: PolicySection[] = [
       {
         heading: 'Location',
         bullets: [
-          'Location (optional): (1) Status location: when you use your location for the ETA in a crew status, the status keeps where you were. Your crew sees it until a later status replaces it with a newer position, or until you use Stop all sharing in Account. (2) Meeting points: the place of a meeting point you create. (3) Live location: when you turn it on for a crew, that crew sees where you are until the time you pick. We do not save live location. The server holds your latest position for about two minutes so crewmates who open the app can see you.',
+          'Location (optional): (1) Status location: when you use your location for the ETA in a crew status, the status keeps where you were. Your crew sees it until a later status replaces it with a newer position, or until you use Stop all sharing in Account. (2) Meeting points: the place of a meeting point you create. (3) Live location: when you turn it on for a crew, that crew sees where you are until the time you pick. With each position the app sends its accuracy, direction and speed, and your battery level if you turn on Show my battery level. If your battery runs low while you share, your crew feed notes it once. We do not save live location. The server holds your latest position for about two minutes so crewmates who open the app can see you.',
           'SOS: When you send an SOS, it can include one rough position, rounded to about 11 metres. Your crew sees it in the SOS alert and in the crew activity. We keep it with the crew activity until the crew or your account is deleted.',
-          'When we ask: The app asks for your location only while it is open, and only when you use one of these features. It never tracks you in the background.',
+          'Check-in timer: If you set a check-in timer for your crew, our server runs the timer and can keep one rough position, rounded to about 11 metres. If you do not check in by then, your crew gets an alert. We delete the timer and the position one hour after the timer ends.',
+          'When we ask: The app asks for your location while it is open, and only when you use one of these features. If you choose to keep sharing live location while your phone is locked, the app asks for background location and sends your position to that crew until the time you picked. Then it stops on its own. The app never tracks you in the background in any other case.',
           'Camera: The app uses the camera only to scan a plan QR code. The picture stays on your phone.',
         ],
       },
       {
         heading: 'Notifications and email',
         bullets: [
-          'Device Tokens: the push address that your phone or browser gives us, so we can send you notifications.',
+          'Device Tokens: the push address that your phone or browser gives us, so we can send you notifications. We delete a push address after 60 days without use.',
           'Notification history: the title and text of notifications we send you, so you can read them later in the app.',
           'Notification settings: which kinds of notification you want, your quiet hours and your time zone.',
         ],
@@ -120,11 +125,11 @@ const SECTIONS: PolicySection[] = [
       {
         heading: 'Technical data',
         bullets: [
-          'Security log: We record your IP address with sign-ins, sign-outs and account changes. We use it to find and stop attacks and abuse. We keep these records for one year.',
+          'Security log: We record your IP address with sign-ins, sign-outs and account changes. We use it to find and stop attacks and abuse. We keep these records for up to one year.',
           'IP address: We also use it to limit how fast requests can arrive and to block abuse. These counters are short-lived.',
-          'Sign-in sessions: a session token, when the session started and when it was last used. We store only a hash of each token.',
-          'Error reports: When Festie hits an error, Sentry receives the error details and the app or browser version. Reports from our server also carry your user ID, but never your cookies or sign-in token.',
-          'Usage counts: The website reports page-speed measurements. It also counts when the install prompt is shown, accepted or dismissed, with the browser type. None of this is linked to your account.',
+          'Sign-in sessions: a session token, when the session started and when it was last used, and a device name worked out from your browser or app, so you can tell your sessions apart. We store only a hash of each token.',
+          'Error reports: When Festie hits an error, Sentry receives the error details, timings of a small sample of screens and requests, and the app or browser version. Reports from our server also carry your user ID, but never your cookies or sign-in token.',
+          'Usage counts: The website reports page-speed measurements. It also counts when the install prompt is shown, accepted or dismissed, with the user-agent text that your browser sends. None of this is linked to your account.',
           'Sign-up source: If you sign up from a link with a source tag, we add one to a daily count for that tag. The count holds nothing about you.',
         ],
       },
@@ -152,7 +157,7 @@ const SECTIONS: PolicySection[] = [
         heading: 'To keep Festie safe and working (legitimate interests)',
         paragraphs: [
           'We keep the security log, error reports and usage counts to protect accounts, stop abuse and fix problems. We send notification emails about festivals and crews you are in, and you can turn them off at any time.',
-          'We keep the full IP address in the security log because a shortened address would make attacks much harder to trace. We keep it for one year. We may share it with the police when the law requires it.',
+          'We keep the full IP address in the security log because a shortened address would make attacks much harder to trace. We keep it for up to one year. We may share it with the police when the law requires it.',
         ],
       },
       {
@@ -170,7 +175,7 @@ const SECTIONS: PolicySection[] = [
         heading: 'People and companies',
         bullets: [
           'Your crews: Members of a crew see your name, photo, picks, status, payment handles and what you post to that crew. Live location and status location go only to the crew you share them with.',
-          'Anyone with a link: If you turn on your public schedule page, anyone with its link can see your picks. It is off by default. A picks link you send works the same way for one festival. These pages tell search engines not to list them.',
+          'Anyone with a link: If you turn on your public schedule page, anyone with its link can see your picks. It is off by default. A picks link you send works the same way for one festival, until you reset your links in Account › Privacy. These pages tell search engines not to list them.',
           'Our service providers: the companies in the next section, only to run Festie for us.',
           'Police and courts: only when the law requires it.',
           'A new owner: If Festie is sold or merged, your data passes to the new owner under this policy, and we tell you first.',
@@ -215,10 +220,26 @@ const SECTIONS: PolicySection[] = [
         ],
       },
       {
+        heading: 'Browser push services',
+        bullets: [
+          'Purpose: Delivers notifications to web browsers that do not use Firebase, such as Firefox and Safari. Our server sends each notification to the push service of your browser maker.',
+          'Data processed: The browser push address and the notification content, encrypted so the push service cannot read it.',
+          'Privacy policy: the privacy policy of your browser maker.',
+        ],
+      },
+      {
+        heading: 'Sign in with Apple and Google',
+        bullets: [
+          'Purpose: Lets you sign in with your Apple or Google account, if you choose to.',
+          'Data processed: Apple or Google confirms who you are and sends us your account ID and email address. We send them nothing else about you.',
+          'Privacy policy: https://www.apple.com/legal/privacy/ and https://policies.google.com/privacy',
+        ],
+      },
+      {
         heading: 'Sentry (Functional Software, Inc.)',
         bullets: [
           'Purpose: Error reports, so we can find and fix crashes.',
-          'Data processed: Error details, app or browser version, and on server errors your user ID.',
+          'Data processed: Error details, performance timings, app or browser version, and on server errors your user ID.',
           'Privacy policy: https://sentry.io/privacy/',
         ],
       },
@@ -234,7 +255,7 @@ const SECTIONS: PolicySection[] = [
         heading: 'GitHub (Microsoft)',
         bullets: [
           'Purpose: Stores encrypted copies of our database off site.',
-          'Data processed: Encrypted backup files only. We encrypt each backup before it leaves our server, so GitHub cannot read it. We keep a limited number of backups and delete older ones.',
+          'Data processed: Encrypted backup files only. We encrypt each backup before it leaves our server, so GitHub cannot read it. We keep a limited number of recent backups.',
           'Privacy policy: https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement',
         ],
       },
@@ -253,6 +274,7 @@ const SECTIONS: PolicySection[] = [
         ],
         bullets: [
           'OpenFreeMap: the map tiles on festival and crew maps.',
+          'Expo: the app downloads its updates from Expo.',
           'Google Fonts: the fonts on the website.',
           "Spotify: artist photos, and the Spotify player when you open it on a set. Spotify's own privacy policy applies to the player.",
         ],
@@ -271,8 +293,8 @@ const SECTIONS: PolicySection[] = [
       'We send two kinds of email, and only when you have given us an address.',
     ],
     bullets: [
-      'Account email: verifying your address, resetting your password, and a security alert when someone asks to change your email. These are needed to run your account.',
-      'Notification email: your festival wrap-up is ready, a festival lineup is out, or a crew you were in formed again. Each one names the setting that controls it and links to where you turn it off.',
+      'Account email: verifying your address, resetting your password, and security alerts when someone asks to change your email and when it changes. These are needed to run your account.',
+      'Notification email: your festival wrap-up is ready, a festival lineup or its set times are out, or a crew you were in formed again. Each one names the setting that controls it and links to where you turn it off.',
       'No advertising: We do not send advertising email, and we never give your address to anyone to market to you.',
     ],
   },
@@ -311,7 +333,7 @@ const SECTIONS: PolicySection[] = [
       'Your account and what you post: until you delete your account, plus the 30-day grace period below.',
       'Live location: about two minutes on the server, and never in our database.',
       'SOS position: with the crew activity, until the crew or your account is deleted.',
-      'Security log: one year.',
+      'Security log: up to one year.',
       'Sign-in sessions: A website session ends 24 hours after you sign in. The app renews its session with a refresh token that lasts up to 90 days.',
       'Notification history: while your account exists. The inbox shows the newest 50.',
       'Backups: Encrypted backups rotate on a fixed schedule. Data you delete leaves the backups when the last backup that holds it is deleted.',
@@ -335,7 +357,7 @@ const SECTIONS: PolicySection[] = [
       {
         heading: 'Right of access',
         paragraphs: [
-          'In Account › Your data, choose Download my data. You get a JSON file with your account, picks and notes, crews, ratings, expenses, poll votes, packing items, rides, meeting points, crew statuses (with any status location), devices, sessions and notification settings. You can download it once a day.',
+          'In Account › Your data, choose Download my data. You get a JSON file with your account, linked sign-ins, picks and notes, caught sets, followed festivals, crews, crew days, ratings, expenses and payment reminders, polls and votes, packing items, rides, meeting points, crew activity, crew statuses (with any status location), calendar links, devices, sessions and notification settings. You can download it once a day.',
         ],
       },
       {
@@ -401,7 +423,7 @@ const SECTIONS: PolicySection[] = [
       {
         heading: 'Categories we collect',
         bullets: [
-          'Identifiers: username, email address, IP address and device tokens.',
+          'Identifiers: username, email address, Apple or Google account ID, IP address and device tokens.',
           'Customer records: display name, photo and payment handles.',
           'Age: date of birth.',
           'Internet activity: the security log, error reports and sign-in sessions.',
@@ -431,7 +453,7 @@ const SECTIONS: PolicySection[] = [
       {
         heading: 'Sensitive personal information',
         paragraphs: [
-          'Precise geolocation and your sign-in details count as sensitive. We use them only to provide Festie, and we use precise geolocation only after you choose to share it. We do not use sensitive data to infer anything about you.',
+          'Precise geolocation and your sign-in details count as sensitive. We use them only to provide Festie, and we use precise geolocation only after you choose to share it. We do not use sensitive data to infer anything about you, and we never sell it.',
         ],
       },
       {
@@ -456,7 +478,7 @@ const SECTIONS: PolicySection[] = [
       'Encryption: All traffic to and from Festie uses HTTPS. Backups are encrypted before they leave our server.',
       'Passwords and tokens: We store passwords only as scrypt hashes, and sign-in tokens only as SHA-256 hashes.',
       'Protection: Requests are rate limited, all input is checked, and the website uses a strict Content Security Policy.',
-      'Breaches: No system is perfectly secure. If a breach puts your data at risk, we will tell you and the authorities as the law requires.',
+      'Breaches: No system is perfectly secure. If a breach puts your data at risk, we will tell you and the authorities as the law requires. Florida law gives us at most 30 days to do so.',
     ],
   },
   {

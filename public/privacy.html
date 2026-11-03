@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <!--
-  Draft for legal review — not legal advice.
+  Published November 3, 2026. The text was checked against the code and against Florida,
+  US federal, California, EU/UK and app-store rules in an AI-assisted review.
+  No attorney has reviewed it.
   Every statement must match what the code does. packages/mobile/app/privacy.tsx
   mirrors this text word for word; change both together.
-  Before publishing, the owner fills in the effective date and the operator name.
 -->
 <html lang="en">
 <head>
@@ -103,7 +104,7 @@
 
     <header>
         <h1>Privacy Policy</h1>
-        <p class="effective-date">Effective Date: {PUBLISH DATE}</p>
+        <p class="effective-date">Effective Date: November 3, 2026</p>
     </header>
 
     <main>
@@ -120,10 +121,10 @@
 
         <section class="section">
             <h2>1. Who runs Festie</h2>
-            <p>Festie is run by an individual developer, [YOUR NAME]. In this policy, "we" and "us" mean [YOUR NAME]. Under EU and UK data protection law, [YOUR NAME] is the controller of your personal data.</p>
+            <p>Festie is run by an individual developer, Asir Khan, in Florida, United States. In this policy, "we" and "us" mean Asir Khan. Under EU and UK data protection law, Asir Khan is the controller of your personal data.</p>
             <p>Email <a href="mailto:privacy@festie.us">privacy@festie.us</a> with any privacy question or request. Send security reports to <a href="mailto:security@festie.us">security@festie.us</a>. We answer privacy requests within 30 days.</p>
             <div class="contact-info">
-                <p><strong>Run by:</strong> [YOUR NAME]</p>
+                <p><strong>Run by:</strong> Asir Khan</p>
                 <p><strong>Email:</strong> <a href="mailto:privacy@festie.us">privacy@festie.us</a></p>
                 <p><strong>Service:</strong> <a href="https://festie.us">https://festie.us</a></p>
             </div>
@@ -135,6 +136,7 @@
             <h3>Your account</h3>
             <ul>
                 <li><strong>Username:</strong> You choose it when you sign up. It is how you sign in, and other people in Festie see it.</li>
+                <li><strong>Sign in with Apple or Google (optional):</strong> If you use it, we store the account ID that Apple or Google gives us, the email address it shares with us and whether that address is verified. For Apple we also keep an encrypted Apple sign-in token.</li>
                 <li><strong>Password:</strong> We store only a scrypt hash of it, never the password itself.</li>
                 <li><strong>Date of birth:</strong> You give it when you sign up so we can check that you are 18 or older. We keep it with your account.</li>
                 <li><strong>Email address (optional):</strong> We use it to verify your address, reset your password, warn you when someone asks to change it, and send the notification emails you leave on.</li>
@@ -146,31 +148,34 @@
             <ul>
                 <li><strong>Picks and notes:</strong> the sets you pick, how much you want to see each one, and your notes.</li>
                 <li><strong>Ratings:</strong> the ratings and notes you give sets.</li>
+                <li><strong>Caught sets and followed festivals:</strong> the sets you mark as seen, and the festivals you follow for lineup and set-time news.</li>
                 <li><strong>Crews:</strong> the crews you create or join, and your role in each.</li>
-                <li><strong>What you post to a crew:</strong> statuses, expenses, polls and votes, packing items, rides and meeting points. Your crew sees them, and the crew activity feed records them.</li>
+                <li><strong>Crew plans:</strong> which days you are coming, the meeting points you say you will be at, and the rides you join.</li>
+                <li><strong>What you post to a crew:</strong> statuses, expenses and payment reminders, polls and votes, packing items, rides and meeting points. Your crew sees them, and the crew activity feed records them.</li>
                 <li><strong>Sharing settings:</strong> whether your public schedule page is on, and the picks links you create.</li>
                 <li><strong>Calendar links:</strong> if you add a festival to your calendar, the private feed link for it.</li>
             </ul>
             <h3>Location</h3>
             <ul>
-                <li><strong>Location (optional):</strong> (1) Status location: when you use your location for the ETA in a crew status, the status keeps where you were. Your crew sees it until a later status replaces it with a newer position, or until you use Stop all sharing in Account. (2) Meeting points: the place of a meeting point you create. (3) Live location: when you turn it on for a crew, that crew sees where you are until the time you pick. We do not save live location. The server holds your latest position for about two minutes so crewmates who open the app can see you.</li>
+                <li><strong>Location (optional):</strong> (1) Status location: when you use your location for the ETA in a crew status, the status keeps where you were. Your crew sees it until a later status replaces it with a newer position, or until you use Stop all sharing in Account. (2) Meeting points: the place of a meeting point you create. (3) Live location: when you turn it on for a crew, that crew sees where you are until the time you pick. With each position the app sends its accuracy, direction and speed, and your battery level if you turn on Show my battery level. If your battery runs low while you share, your crew feed notes it once. We do not save live location. The server holds your latest position for about two minutes so crewmates who open the app can see you.</li>
                 <li><strong>SOS:</strong> When you send an SOS, it can include one rough position, rounded to about 11 metres. Your crew sees it in the SOS alert and in the crew activity. We keep it with the crew activity until the crew or your account is deleted.</li>
-                <li><strong>When we ask:</strong> The app asks for your location only while it is open, and only when you use one of these features. It never tracks you in the background.</li>
+                <li><strong>Check-in timer:</strong> If you set a check-in timer for your crew, our server runs the timer and can keep one rough position, rounded to about 11 metres. If you do not check in by then, your crew gets an alert. We delete the timer and the position one hour after the timer ends.</li>
+                <li><strong>When we ask:</strong> The app asks for your location while it is open, and only when you use one of these features. If you choose to keep sharing live location while your phone is locked, the app asks for background location and sends your position to that crew until the time you picked. Then it stops on its own. The app never tracks you in the background in any other case.</li>
                 <li><strong>Camera:</strong> The app uses the camera only to scan a plan QR code. The picture stays on your phone.</li>
             </ul>
             <h3>Notifications and email</h3>
             <ul>
-                <li><strong>Device Tokens:</strong> the push address that your phone or browser gives us, so we can send you notifications.</li>
+                <li><strong>Device Tokens:</strong> the push address that your phone or browser gives us, so we can send you notifications. We delete a push address after 60 days without use.</li>
                 <li><strong>Notification history:</strong> the title and text of notifications we send you, so you can read them later in the app.</li>
                 <li><strong>Notification settings:</strong> which kinds of notification you want, your quiet hours and your time zone.</li>
             </ul>
             <h3>Technical data</h3>
             <ul>
-                <li><strong>Security log:</strong> We record your IP address with sign-ins, sign-outs and account changes. We use it to find and stop attacks and abuse. We keep these records for one year.</li>
+                <li><strong>Security log:</strong> We record your IP address with sign-ins, sign-outs and account changes. We use it to find and stop attacks and abuse. We keep these records for up to one year.</li>
                 <li><strong>IP address:</strong> We also use it to limit how fast requests can arrive and to block abuse. These counters are short-lived.</li>
-                <li><strong>Sign-in sessions:</strong> a session token, when the session started and when it was last used. We store only a hash of each token.</li>
-                <li><strong>Error reports:</strong> When Festie hits an error, Sentry receives the error details and the app or browser version. Reports from our server also carry your user ID, but never your cookies or sign-in token.</li>
-                <li><strong>Usage counts:</strong> The website reports page-speed measurements. It also counts when the install prompt is shown, accepted or dismissed, with the browser type. None of this is linked to your account.</li>
+                <li><strong>Sign-in sessions:</strong> a session token, when the session started and when it was last used, and a device name worked out from your browser or app, so you can tell your sessions apart. We store only a hash of each token.</li>
+                <li><strong>Error reports:</strong> When Festie hits an error, Sentry receives the error details, timings of a small sample of screens and requests, and the app or browser version. Reports from our server also carry your user ID, but never your cookies or sign-in token.</li>
+                <li><strong>Usage counts:</strong> The website reports page-speed measurements. It also counts when the install prompt is shown, accepted or dismissed, with the user-agent text that your browser sends. None of this is linked to your account.</li>
                 <li><strong>Sign-up source:</strong> If you sign up from a link with a source tag, we add one to a daily count for that tag. The count holds nothing about you.</li>
             </ul>
         </section>
@@ -184,7 +189,7 @@
             <p>We send push notifications, use your location and turn on your public schedule page only after you choose to. You can take back your consent at any time in Account or in your device settings. This does not affect what we did before.</p>
             <h3>To keep Festie safe and working (legitimate interests)</h3>
             <p>We keep the security log, error reports and usage counts to protect accounts, stop abuse and fix problems. We send notification emails about festivals and crews you are in, and you can turn them off at any time.</p>
-            <p>We keep the full IP address in the security log because a shortened address would make attacks much harder to trace. We keep it for one year. We may share it with the police when the law requires it.</p>
+            <p>We keep the full IP address in the security log because a shortened address would make attacks much harder to trace. We keep it for up to one year. We may share it with the police when the law requires it.</p>
             <h3>To follow the law (legal obligation)</h3>
             <p>We keep or disclose data when the law requires it, for example to answer a valid court order.</p>
         </section>
@@ -194,7 +199,7 @@
             <h3>People and companies</h3>
             <ul>
                 <li><strong>Your crews:</strong> Members of a crew see your name, photo, picks, status, payment handles and what you post to that crew. Live location and status location go only to the crew you share them with.</li>
-                <li><strong>Anyone with a link:</strong> If you turn on your public schedule page, anyone with its link can see your picks. It is off by default. A picks link you send works the same way for one festival. These pages tell search engines not to list them.</li>
+                <li><strong>Anyone with a link:</strong> If you turn on your public schedule page, anyone with its link can see your picks. It is off by default. A picks link you send works the same way for one festival, until you reset your links in Account › Privacy. These pages tell search engines not to list them.</li>
                 <li><strong>Our service providers:</strong> the companies in the next section, only to run Festie for us.</li>
                 <li><strong>Police and courts:</strong> only when the law requires it.</li>
                 <li><strong>A new owner:</strong> If Festie is sold or merged, your data passes to the new owner under this policy, and we tell you first.</li>
@@ -224,10 +229,22 @@
                 <li><strong>Data processed:</strong> The iPhone device token and the notification content.</li>
                 <li><strong>Privacy policy:</strong> <a href="https://www.apple.com/legal/privacy/" target="_blank" rel="noopener noreferrer">https://www.apple.com/legal/privacy/</a></li>
             </ul>
+            <h3>Browser push services</h3>
+            <ul>
+                <li><strong>Purpose:</strong> Delivers notifications to web browsers that do not use Firebase, such as Firefox and Safari. Our server sends each notification to the push service of your browser maker.</li>
+                <li><strong>Data processed:</strong> The browser push address and the notification content, encrypted so the push service cannot read it.</li>
+                <li><strong>Privacy policy:</strong> the privacy policy of your browser maker.</li>
+            </ul>
+            <h3>Sign in with Apple and Google</h3>
+            <ul>
+                <li><strong>Purpose:</strong> Lets you sign in with your Apple or Google account, if you choose to.</li>
+                <li><strong>Data processed:</strong> Apple or Google confirms who you are and sends us your account ID and email address. We send them nothing else about you.</li>
+                <li><strong>Privacy policy:</strong> <a href="https://www.apple.com/legal/privacy/" target="_blank" rel="noopener noreferrer">https://www.apple.com/legal/privacy/</a> and <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">https://policies.google.com/privacy</a></li>
+            </ul>
             <h3>Sentry (Functional Software, Inc.)</h3>
             <ul>
                 <li><strong>Purpose:</strong> Error reports, so we can find and fix crashes.</li>
-                <li><strong>Data processed:</strong> Error details, app or browser version, and on server errors your user ID.</li>
+                <li><strong>Data processed:</strong> Error details, performance timings, app or browser version, and on server errors your user ID.</li>
                 <li><strong>Privacy policy:</strong> <a href="https://sentry.io/privacy/" target="_blank" rel="noopener noreferrer">https://sentry.io/privacy/</a></li>
             </ul>
             <h3>Resend</h3>
@@ -239,7 +256,7 @@
             <h3>GitHub (Microsoft)</h3>
             <ul>
                 <li><strong>Purpose:</strong> Stores encrypted copies of our database off site.</li>
-                <li><strong>Data processed:</strong> Encrypted backup files only. We encrypt each backup before it leaves our server, so GitHub cannot read it. We keep a limited number of backups and delete older ones.</li>
+                <li><strong>Data processed:</strong> Encrypted backup files only. We encrypt each backup before it leaves our server, so GitHub cannot read it. We keep a limited number of recent backups.</li>
                 <li><strong>Privacy policy:</strong> <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement</a></li>
             </ul>
             <h3>Spotify</h3>
@@ -252,6 +269,7 @@
             <p>Some parts of Festie load straight from other services. Those services see your IP address and what your device asks for.</p>
             <ul>
                 <li><strong>OpenFreeMap:</strong> the map tiles on festival and crew maps.</li>
+                <li><strong>Expo:</strong> the app downloads its updates from Expo.</li>
                 <li><strong>Google Fonts:</strong> the fonts on the website.</li>
                 <li><strong>Spotify:</strong> artist photos, and the Spotify player when you open it on a set. Spotify's own privacy policy applies to the player.</li>
             </ul>
@@ -263,8 +281,8 @@
             <h2>6. Email</h2>
             <p>We send two kinds of email, and only when you have given us an address.</p>
             <ul>
-                <li><strong>Account email:</strong> verifying your address, resetting your password, and a security alert when someone asks to change your email. These are needed to run your account.</li>
-                <li><strong>Notification email:</strong> your festival wrap-up is ready, a festival lineup is out, or a crew you were in formed again. Each one names the setting that controls it and links to where you turn it off.</li>
+                <li><strong>Account email:</strong> verifying your address, resetting your password, and security alerts when someone asks to change your email and when it changes. These are needed to run your account.</li>
+                <li><strong>Notification email:</strong> your festival wrap-up is ready, a festival lineup or its set times are out, or a crew you were in formed again. Each one names the setting that controls it and links to where you turn it off.</li>
                 <li><strong>No advertising:</strong> We do not send advertising email, and we never give your address to anyone to market to you.</li>
             </ul>
         </section>
@@ -287,7 +305,7 @@
                 <li><strong>Your account and what you post:</strong> until you delete your account, plus the 30-day grace period below.</li>
                 <li><strong>Live location:</strong> about two minutes on the server, and never in our database.</li>
                 <li><strong>SOS position:</strong> with the crew activity, until the crew or your account is deleted.</li>
-                <li><strong>Security log:</strong> one year.</li>
+                <li><strong>Security log:</strong> up to one year.</li>
                 <li><strong>Sign-in sessions:</strong> A website session ends 24 hours after you sign in. The app renews its session with a refresh token that lasts up to 90 days.</li>
                 <li><strong>Notification history:</strong> while your account exists. The inbox shows the newest 50.</li>
                 <li><strong>Backups:</strong> Encrypted backups rotate on a fixed schedule. Data you delete leaves the backups when the last backup that holds it is deleted.</li>
@@ -301,7 +319,7 @@
             <h2>9. Your rights and choices</h2>
             <p>Everyone gets these rights, wherever you live. Most of them work in the app, without emailing us.</p>
             <h3>Right of access</h3>
-            <p>In Account › Your data, choose Download my data. You get a JSON file with your account, picks and notes, crews, ratings, expenses, poll votes, packing items, rides, meeting points, crew statuses (with any status location), devices, sessions and notification settings. You can download it once a day.</p>
+            <p>In Account › Your data, choose Download my data. You get a JSON file with your account, linked sign-ins, picks and notes, caught sets, followed festivals, crews, crew days, ratings, expenses and payment reminders, polls and votes, packing items, rides, meeting points, crew activity, crew statuses (with any status location), calendar links, devices, sessions and notification settings. You can download it once a day.</p>
             <h3>Right of rectification</h3>
             <p>You can change your display name, photo, email and payment handles in Account at any time. Your username cannot be changed.</p>
             <h3>Right to erasure</h3>
@@ -334,7 +352,7 @@
             <p>This section covers the California Consumer Privacy Act, as amended by the California Privacy Rights Act, and similar laws in Virginia, Colorado, Connecticut, Utah, Texas, Oregon and other states. We give these rights to everyone, even where a law does not apply to a service of Festie's size.</p>
             <h3>Categories we collect</h3>
             <ul>
-                <li><strong>Identifiers:</strong> username, email address, IP address and device tokens.</li>
+                <li><strong>Identifiers:</strong> username, email address, Apple or Google account ID, IP address and device tokens.</li>
                 <li><strong>Customer records:</strong> display name, photo and payment handles.</li>
                 <li><strong>Age:</strong> date of birth.</li>
                 <li><strong>Internet activity:</strong> the security log, error reports and sign-in sessions.</li>
@@ -349,7 +367,7 @@
             <h3>No sale or sharing</h3>
             <p>We do not sell personal information, and we do not share it for cross-context behavioral advertising. We have not done either in the past 12 months. We have no actual knowledge of selling or sharing the data of anyone under 16.</p>
             <h3>Sensitive personal information</h3>
-            <p>Precise geolocation and your sign-in details count as sensitive. We use them only to provide Festie, and we use precise geolocation only after you choose to share it. We do not use sensitive data to infer anything about you.</p>
+            <p>Precise geolocation and your sign-in details count as sensitive. We use them only to provide Festie, and we use precise geolocation only after you choose to share it. We do not use sensitive data to infer anything about you, and we never sell it.</p>
             <h3>Your rights under these laws</h3>
             <p>You can ask to know what we collect and why, get a copy, delete it, correct it, and opt out of sale, sharing, targeted advertising and profiling. We do none of those last four, so there is nothing to opt out of. We will not discriminate against you for using any right. Use Download my data and Delete account in the app, or email <a href="mailto:privacy@festie.us">privacy@festie.us</a>.</p>
         </section>
@@ -367,7 +385,7 @@
                 <li><strong>Encryption:</strong> All traffic to and from Festie uses HTTPS. Backups are encrypted before they leave our server.</li>
                 <li><strong>Passwords and tokens:</strong> We store passwords only as scrypt hashes, and sign-in tokens only as SHA-256 hashes.</li>
                 <li><strong>Protection:</strong> Requests are rate limited, all input is checked, and the website uses a strict Content Security Policy.</li>
-                <li><strong>Breaches:</strong> No system is perfectly secure. If a breach puts your data at risk, we will tell you and the authorities as the law requires.</li>
+                <li><strong>Breaches:</strong> No system is perfectly secure. If a breach puts your data at risk, we will tell you and the authorities as the law requires. Florida law gives us at most 30 days to do so.</li>
             </ul>
         </section>
 
@@ -390,7 +408,7 @@
             <h2>17. Contact</h2>
             <p>Email <a href="mailto:privacy@festie.us">privacy@festie.us</a> with questions or requests about this policy or your data. We answer within 30 days.</p>
             <div class="contact-info">
-                <p><strong>Run by:</strong> [YOUR NAME]</p>
+                <p><strong>Run by:</strong> Asir Khan</p>
                 <p><strong>Email:</strong> <a href="mailto:privacy@festie.us">privacy@festie.us</a></p>
                 <p><strong>Service:</strong> <a href="https://festie.us">https://festie.us</a></p>
             </div>
