@@ -579,6 +579,14 @@ export default function GridScreen() {
         <ClashChip count={clashCount} picked={picked} />
         <View style={styles.zoomButtons}>
           <TouchableOpacity
+            onPress={() => router.push('/picks-image?mode=full')}
+            accessibilityRole="button"
+            accessibilityLabel="Lock screen image"
+            style={styles.zoomButton}
+          >
+            <Ionicons name="phone-portrait-outline" size={t.iconSize.md} color={t.colors.text.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => changeZoom(zoom - 1)}
             disabled={zoom === 0}
             accessibilityRole="button"

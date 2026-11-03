@@ -1,5 +1,6 @@
 import type { FestivalDay, FestivalSet, Priority, Stage } from '../types/domain';
 import { artistDisplayName, formatTime } from './format';
+import type { LockscreenMode } from './lockscreen';
 import { byStartTime, formatDayChip } from './scheduleFormat';
 
 export type ScheduleImageFormat = 'story' | 'lockscreen' | 'print';
@@ -120,17 +121,22 @@ export function buildScheduleImageModel(args: {
   return { festivalName: festival.name, dayLabel, rows, hiddenCount, tbaCount, footer: footerText(hiddenCount, tbaCount) };
 }
 
-/** The selected day when it has a timed pick, else the first day that does; null when none does. */
+/**
+ * The selected day when it has something to show, else the first day that does; null when none does.
+ * Picks and crew need a timed pick. Full and stages need a timed set.
+ */
 export function defaultScheduleImageDay(args: {
   sets: FestivalSet[];
   picks: Record<string, Priority> | undefined;
   selectedDay: number;
+  mode?: LockscreenMode;
 }): number | null {
-  const withTimedPicks = new Set(
-    args.sets.filter((s) => args.picks?.[s.id] && hasStart(s)).map((s) => s.dayIndex ?? 0),
+  const needsPick = !args.mode || args.mode === 'picks' || args.mode === 'crew';
+  const withTimedSets = new Set(
+    args.sets.filter((s) => (!needsPick || args.picks?.[s.id]) && hasStart(s)).map((s) => s.dayIndex ?? 0),
   );
-  if (withTimedPicks.has(args.selectedDay)) return args.selectedDay;
-  const days = [...withTimedPicks].sort((a, b) => a - b);
+  if (withTimedSets.has(args.selectedDay)) return args.selectedDay;
+  const days = [...withTimedSets].sort((a, b) => a - b);
   return days.length ? days[0]! : null;
 }
 
