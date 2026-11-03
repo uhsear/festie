@@ -304,7 +304,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                     {chip.date && (
                       <>
                         {' '}
-                        <span className="font-medium opacity-75">{chip.date}</span>
+                        <span className="font-medium">{chip.date}</span>
                       </>
                     )}
                     {isToday && <span className="sr-only">, today</span>}
