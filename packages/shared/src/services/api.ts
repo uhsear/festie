@@ -152,16 +152,18 @@ async function enqueueOfflineMutation<T>(path: string, method: string, options: 
   const clientId = options.clientId ?? (method === 'POST' ? `POST:${path}:${randomId()}` : `${method}:${path}`);
   const label = options.offlineLabel ?? `${method} ${path}`;
   const body = options.body;
+  const idempotencyKey = Object.entries(options.headers || {}).find(([k]) => k.toLowerCase() === 'idempotency-key')?.[1];
 
   // Web PWA: hand off to the IndexedDB-backed bridge so the web + RN paths share
   // one durable queue surface per platform.
   if (typeof window !== 'undefined' && window.__festieQueue?.queueMutation) {
-    await window.__festieQueue.queueMutation({ type: 'api', url: path, method, body, clientId });
+    await window.__festieQueue.queueMutation({ type: 'api', url: path, method, body, clientId, idempotencyKey });
   } else {
     // Native: dynamic import avoids the api <-> offlineQueue module cycle.
     const { enqueueMutation } = await import('./offlineQueue');
     await enqueueMutation({
       clientId,
+      idempotencyKey,
       url: path,
       method: method as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
       body,
@@ -286,6 +288,19 @@ export { isApiClientError, parseRetryAfterMs, mapErrorToUserMessage, isResetLink
 
 async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = false): Promise<T> {
   const method = String(options.method || 'GET').toUpperCase();
+
+  // Fix the clientId and a per-call Idempotency-Key before the first send, so a
+  // POST that timed out but reached the server is re-queued under the SAME key
+  // and the replay dedups instead of creating it twice. The key is random, not the
+  // clientId: a deterministic clientId (join code, settle amount) would make the
+  // server replay a cached result for a legitimate repeat within its TTL.
+  // POST only: PUT/PATCH/DELETE clientIds are per-resource, not per-intent.
+  if (!_isRetry && !options._bypassOfflineQueue && method === 'POST' && isOfflineEligible(path)) {
+    const clientId = options.clientId ?? `POST:${path}:${randomId()}`;
+    const headers = options.headers || {};
+    const hasKey = Object.keys(headers).some((k) => k.toLowerCase() === 'idempotency-key');
+    options = { ...options, clientId, headers: hasKey ? headers : { ...headers, 'Idempotency-Key': randomId() } };
+  }
 
   // Offline write path: when offline AND the path is replay-safe, queue the
   // mutation and return a synthetic optimistic result instead of fetching. This

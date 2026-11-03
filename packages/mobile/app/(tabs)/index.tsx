@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   BackHandler,
+  AppState,
   Platform,
   useWindowDimensions,
   type ListRenderItem,
@@ -24,6 +25,7 @@ import {
   useCrewStore,
   useUIStore,
   selectMyPicks,
+  followTodayOnResume,
 } from '@festie/shared/stores';
 import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady, useViewAs } from '@festie/shared/hooks';
 import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
@@ -217,6 +219,22 @@ export default function TimelineScreen() {
       selectFestival(currentFestivalId).catch(() => {});
     }
   }, [currentFestivalId, currentFestival, isLoading, selectFestival]);
+
+  // A cached festival shows at once, but a cold start must still revalidate it in
+  // the background. Resume moves the day tab to today (no fetch).
+  const revalidatedRef = useRef(false);
+  useEffect(() => {
+    if (revalidatedRef.current || !currentFestivalId || !currentFestival || isLoading) return;
+    revalidatedRef.current = true;
+    selectFestival(currentFestivalId).catch(() => {});
+  }, [currentFestivalId, currentFestival, isLoading, selectFestival]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') followTodayOnResume();
+    });
+    return () => sub.remove();
+  }, []);
 
   // When a guest signs in while a festival is already selected, the profiles
   // weren't fetched (selectFestival skips them for guests). Load them now so

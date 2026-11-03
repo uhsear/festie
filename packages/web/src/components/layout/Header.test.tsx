@@ -21,7 +21,7 @@ const mockFestival = { scheduleView: null as string | null, sets: [], days: [], 
 vi.mock('@festie/shared', () => ({
   useFestivalStore: (selector: (s: typeof mockFestival) => unknown) => selector(mockFestival),
   useAuthStore: (selector: (s: { user: unknown }) => unknown) => selector({ user: mockAuthStore() }),
-  useUIStore: (selector: (s: { connected: boolean }) => unknown) => selector({ connected: mockConnected }),
+  useUIStore: (selector: (s: { offlineMode: boolean }) => unknown) => selector({ offlineMode: !mockConnected }),
 }));
 
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
@@ -107,7 +107,7 @@ describe('Header', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('shows an Offline label next to the dot when a signed-in user is disconnected', () => {
+  it('shows an Offline label next to the dot when a signed-in user is offline', () => {
     mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
     mockConnected = false;
     render(<Header />);

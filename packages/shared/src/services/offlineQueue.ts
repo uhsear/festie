@@ -1,4 +1,5 @@
 import { api, ApiClientError } from './api';
+import { parseRetryAfterMs } from './errors';
 import { getStorage } from '../platform/storage';
 import { useUIStore, type FailedSyncItem } from '../stores/uiStore';
 
@@ -29,6 +30,8 @@ export type QueuedMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface QueuedMutation {
   clientId: string;
+  /** Key sent as Idempotency-Key on replay; falls back to clientId. */
+  idempotencyKey?: string;
   url: string;
   method: QueuedMethod;
   body?: unknown;
@@ -37,6 +40,8 @@ export interface QueuedMutation {
   createdAt: number;
   /** Transient-failure replay count; at MAX_RETRIES the write is surfaced + dropped. */
   retries?: number;
+  /** Epoch ms before which drain skips this entry (set from a 429 Retry-After). */
+  notBefore?: number;
 }
 
 async function readQueueRaw(): Promise<QueuedMutation[]> {
@@ -233,7 +238,30 @@ export function enqueueMutation(mutation: Omit<QueuedMutation, 'createdAt'> & { 
   });
 }
 
-/** True for an ApiClientError-shaped permanent client failure (4xx incl. 409). */
+const DEFAULT_RATE_LIMIT_WAIT_MS = 30_000;
+
+function isRateLimited(err: unknown): boolean {
+  return (err as { status?: number } | null)?.status === 429;
+}
+
+/** Fetch rejected or aborted (ApiClientError status 0, isNetworkError). */
+function isNetworkTimeout(err: unknown): boolean {
+  return (err as { isNetworkError?: boolean } | null)?.isNetworkError === true;
+}
+
+/** Merge fields into a still-queued entry (no-op if it was removed meanwhile). */
+function patchQueued(clientId: string, patch: Partial<QueuedMutation>): Promise<void> {
+  return withQueueLock(async () => {
+    const queue = await readQueue();
+    const idx = queue.findIndex((q) => q.clientId === clientId);
+    if (idx >= 0) {
+      queue[idx] = { ...queue[idx]!, ...patch };
+      await writeQueue(queue);
+    }
+  });
+}
+
+/** True for an ApiClientError-shaped permanent client failure (4xx incl. 409; 429 is handled apart). */
 function isPermanentFailure(err: unknown): boolean {
   const status = (err as { status?: number } | null)?.status;
   return typeof status === 'number' && status >= 400 && status < 500;
@@ -277,7 +305,7 @@ async function replay(m: QueuedMutation): Promise<unknown> {
   // a write that gets replayed more than once (e.g. two clients draining the
   // same queue) instead of double-applying it. Server honors this on all
   // non-GET /api/v1 routes (lib/middleware.ts idempotency middleware).
-  const opts = { ...BYPASS, headers: { 'Idempotency-Key': m.clientId } };
+  const opts = { ...BYPASS, headers: { 'Idempotency-Key': m.idempotencyKey ?? m.clientId } };
   switch (m.method) {
     case 'POST':
       return api.post(m.url, m.body, opts);
@@ -326,6 +354,7 @@ export async function drainQueue(): Promise<void> {
   try {
     const snapshot = (await withQueueLock(() => readQueue())).sort((a, b) => a.createdAt - b.createdAt);
     for (const m of snapshot) {
+      if ((m.notBefore ?? 0) > Date.now()) continue;
       try {
         const serverResponse = await replay(m);
         await withQueueLock(async () => {
@@ -360,7 +389,14 @@ export async function drainQueue(): Promise<void> {
         }
       } catch (err) {
         if (isOffline()) break;
-        if (isPermanentFailure(err)) {
+        if (isRateLimited(err)) {
+          // Transient: wait out Retry-After, no retry consumed (24h age-out still bounds it).
+          const waitMs = parseRetryAfterMs((err as { retryAfter?: number | string | null }).retryAfter) ?? DEFAULT_RATE_LIMIT_WAIT_MS;
+          await patchQueued(m.clientId, { notBefore: Date.now() + waitMs });
+        } else if (isNetworkTimeout(err)) {
+          // Weak signal, not a server verdict: keep the entry untouched, retry next drain.
+          break;
+        } else if (isPermanentFailure(err)) {
           await withQueueLock(async () => {
             const queue = (await readQueue()).filter((q) => q.clientId !== m.clientId);
             await writeQueue(queue);

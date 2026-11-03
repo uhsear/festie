@@ -310,6 +310,9 @@ function StageColumn({
   );
 }
 
+// A reader who scrolled away is left alone this long before the clock pulls back to now.
+const USER_SCROLL_HOLD_MS = 120_000;
+
 /**
  * Touch-adapted timeline: a horizontally-paged carousel of stage columns, each
  * a vertical 15-min slotted timeline (mirroring the web grid's information per
@@ -387,7 +390,7 @@ export default function TimelineView({
     return { eta, name: artistDisplayName(nextPick.set, b2bSeparator) };
   }, [nextPick, nowMs, b2bSeparator]);
 
-  // Don't fight active user scrolling: any drag arms the flag for 8s, during
+  // Don't fight active user scrolling: any drag arms the flag for 2 min, during
   // which the tick-driven auto-scroll holds off.
   const recentlyScrolledRef = useRef(false);
   const scrollArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -396,7 +399,7 @@ export default function TimelineView({
     if (scrollArmTimerRef.current) clearTimeout(scrollArmTimerRef.current);
     scrollArmTimerRef.current = setTimeout(() => {
       recentlyScrolledRef.current = false;
-    }, 8_000);
+    }, USER_SCROLL_HOLD_MS);
   }, []);
   useEffect(
     () => () => {

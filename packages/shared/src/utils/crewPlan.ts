@@ -68,11 +68,13 @@ export function buildSlots(
   limit: number = CREW_PLAN_SLOTS,
   timeZone?: string,
 ): Slot[] {
-  // Resolve each set's bounds once; keep only sets that haven't ended yet.
+  // Resolve each set's bounds once; keep only upcoming sets some crew member picked, so
+  // the slot limit counts the crew's start times, not the whole lineup's.
+  const pickedIds = new Set(profiles.flatMap((p) => Object.keys(p.picks || {})));
   const timed = sets
     .map((set) => ({ set, bounds: getSetTimeBounds(set, days, timeZone) }))
     .filter((x): x is { set: FestivalSet; bounds: { startMs: number; endMs: number } } => x.bounds != null)
-    .filter((x) => x.bounds.endMs > nowMs);
+    .filter((x) => x.bounds.endMs > nowMs && x.bounds.startMs >= nowMs && pickedIds.has(x.set.id));
 
   // Distinct start times become "slots", soonest first, capped to `limit`.
   const startTimes = Array.from(new Set(timed.map((x) => x.bounds.startMs)))

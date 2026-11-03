@@ -600,10 +600,10 @@ describe('crewStore', () => {
       vi.mocked(api.post).mockResolvedValueOnce({});
       vi.mocked(api.get).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
       await useCrewStore.getState().settleExpense('crew-1', { toUserId: 'user-2', amount: 10 });
-      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/expenses/settle', {
-        toUserId: 'user-2',
-        amount: 10,
-      });
+      expect(api.post).toHaveBeenCalledWith(
+        '/crews/crew-1/expenses/settle',
+        { toUserId: 'user-2', amount: 10 },
+      );
     });
   });
 

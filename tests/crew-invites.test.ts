@@ -543,6 +543,23 @@ describe('routes/crew-invites.js — POST /:crewId/invite', () => {
     assert.equal(regenerateInviteCode.mock.calls.length, 1);
   });
 
+  test('broadcasts crew:updated without the code so members refetch', async () => {
+    const ioObj = makeIo();
+    const { app } = await buildInviteApp({
+      io: ioObj,
+      stores: { crews: { getById: mock.fn(async () => ({ ...DEFAULT_CREW })), getByInviteCode: mock.fn(async () => null) } },
+      resolveCrewOwnership: mock.fn(async () => ({ crew: { ...DEFAULT_CREW }, membership: { role: 'owner' } })),
+    });
+
+    const res = await request(app).post('/crew-1/invite');
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(ioObj.to.mock.calls[0].arguments, ['crew:crew-1']);
+    const [event, payload] = ioObj._emit.mock.calls[0].arguments as any[];
+    assert.equal(event, 'crew:updated');
+    assert.equal(payload.inviteCode, undefined);
+  });
+
   test('passes inviteExpiryFor(crew festival) to the store', async () => {
     const regenerateInviteCode = mock.fn(async () => {});
     const lastDay = new Date(Date.now() + 30 * DAY_MS).toISOString().slice(0, 10);

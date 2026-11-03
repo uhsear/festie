@@ -38,9 +38,15 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
     };
   }, []);
 
-  const handleCopy = useCallback(() => {
+  const handleCopy = useCallback(async () => {
     const url = buildJoinUrl(inviteCode, window.location.origin);
-    navigator.clipboard?.writeText(url);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Clipboard blocked or missing: prompt() shows the link pre-selected.
+      window.prompt('Copy this invite link', url);
+      return;
+    }
     setCopiedCode(true);
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
     copyTimerRef.current = setTimeout(() => setCopiedCode(false), 2000);

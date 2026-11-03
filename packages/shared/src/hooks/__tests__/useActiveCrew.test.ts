@@ -57,6 +57,13 @@ describe('useActiveCrew', () => {
     expect(result.current.status).toBe('loading');
   });
 
+  it('does not override a pending select of another crew with crews[0]', async () => {
+    useCrewStore.setState({ crews: [crew('c1'), crew('c2')], crewLoading: true });
+    renderHook(() => useActiveCrew());
+    await Promise.resolve();
+    expect(selectCrew).not.toHaveBeenCalled();
+  });
+
   it('loads crews once when there are none', async () => {
     const { result, rerender } = renderHook(() => useActiveCrew());
     await waitFor(() => expect(loadCrews).toHaveBeenCalledTimes(1));

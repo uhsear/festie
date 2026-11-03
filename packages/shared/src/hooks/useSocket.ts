@@ -4,6 +4,7 @@ import { createSocket } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
 import { useFestivalStore } from '../stores/festivalStore';
+import { useFestivalDataStore } from '../stores/festivalDataStore';
 import { OnlineUser } from '../types';
 
 export interface UseSocketReturn {
@@ -30,6 +31,10 @@ export function useSocket(festivalId?: string): UseSocketReturn {
   const removeOnlineUser = useUIStore((state) => state.removeOnlineUser);
   const onlineUsers = useUIStore((state) => state.onlineUsers);
   const currentFestivalId = useFestivalStore((state) => state.currentFestivalId);
+  // The server rejects crew realtime for signed-in non-members; join only once a profile exists.
+  const isMember = useFestivalDataStore((state) => state.currentProfile != null);
+  // Boolean, not the user object: checkSession/profile edits replace `user` and would recreate the socket.
+  const canJoin = useAuthStore((state) => !state.user) || isMember;
 
   useEffect(() => {
     const socket = createSocket(userToken || undefined, undefined, () => {
@@ -48,7 +53,7 @@ export function useSocket(festivalId?: string): UseSocketReturn {
         })
         .catch((e) => console.warn('socket token refresh failed; realtime paused until the next request', e));
     });
-    const joinedFestivalId = festivalId || currentFestivalId;
+    const joinedFestivalId = canJoin ? festivalId || currentFestivalId : undefined;
     // Sync the ref BEFORE wiring handlers so handleConnect reads the
     // right id and cleanup can leave the right room.
     joinedFestivalIdRef.current = joinedFestivalId ?? null;
@@ -110,7 +115,7 @@ export function useSocket(festivalId?: string): UseSocketReturn {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [userToken, festivalId, currentFestivalId, setConnected, setOnlineUsers, addOnlineUser, removeOnlineUser]);
+  }, [userToken, festivalId, currentFestivalId, canJoin, setConnected, setOnlineUsers, addOnlineUser, removeOnlineUser]);
 
   return {
     socket: socketRef.current,

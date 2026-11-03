@@ -163,6 +163,15 @@ describe('api offline interception', () => {
       expect(useUIStore.getState().offlineMode).toBe(true);
     });
 
+    it('sends the first POST with an Idempotency-Key and re-queues under that same key', async () => {
+      useUIStore.setState({ offlineMode: false });
+      fetchSpy.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      await api.post('/crews/c1/meeting-points', { label: 'Main gate' });
+      const sentKey = (fetchSpy.mock.calls[0]![1] as { headers: Record<string, string> }).headers['Idempotency-Key'];
+      expect(sentKey).toBeTruthy();
+      expect(vi.mocked(enqueueMutation).mock.calls[0]![0].idempotencyKey).toBe(sentKey);
+    });
+
     it('still throws the network error for an INELIGIBLE mutation (not lost-silently elsewhere)', async () => {
       useUIStore.setState({ offlineMode: false });
       fetchSpy.mockRejectedValueOnce(new TypeError('Failed to fetch'));

@@ -120,13 +120,14 @@ describe('JoinCrewSheet', () => {
     expect(h.navigate).not.toHaveBeenCalled();
   });
 
-  it('toasts the store error when the join fails', async () => {
+  it('keeps the sheet open and shows the error when the join fails', async () => {
     h.join.mockRejectedValue(new Error('boom'));
     h.storeError = 'Crew is full';
     const onClose = renderSheet();
     fireEvent.click(screen.getByRole('button', { name: 'Join crew' }));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(h.toast).toHaveBeenCalledWith('Crew is full', 'error', 5000);
+    await waitFor(() => expect(h.toast).toHaveBeenCalledWith('Crew is full', 'error', 5000));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Crew is full');
     expect(h.navigate).not.toHaveBeenCalled();
   });
 });

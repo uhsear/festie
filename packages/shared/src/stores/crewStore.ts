@@ -1737,6 +1737,8 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   settleExpense: async (crewId: string, request: SettleCrewExpenseRequest) => {
     set({ error: null });
     try {
+      // Random per-call key (api.ts): a repeat settle of the same amount is a real second payment.
+      // The timeout re-queue reuses the call's key; the UI must block double taps while in flight.
       const res = await api.post(`/crews/${crewId}/expenses/settle`, request);
       // Queued offline: nothing was recorded server-side yet, and a refetch
       // would fail offline anyway.

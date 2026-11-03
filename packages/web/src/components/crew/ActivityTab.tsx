@@ -6,6 +6,7 @@ import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import type { CrewActivityEntry } from '@festie/shared/types';
 import { timeAgo, describeCrewActivity, visibleCrewActivity } from '@festie/shared/utils';
 import EmptyState from '../ui/EmptyState';
+import StaleNote from './StaleNote';
 import Avatar from '../ui/Avatar';
 import Skeleton from '../ui/Skeleton';
 import Button from '../ui/Button';
@@ -57,7 +58,7 @@ export default function ActivityTab({ crewId }: Props) {
       </div>
     );
   }
-  if (isError) {
+  if (isError && items.length === 0) {
     return (
       <div className="px-4">
         <EmptyState
@@ -83,6 +84,7 @@ export default function ActivityTab({ crewId }: Props) {
 
   return (
     <div className="space-y-2 px-4">
+      <StaleNote show={isError} onRetry={() => void refetch()} />
       {items.map((it, idx) => {
         const { verb, detail, action } = describeCrewActivity(it, timeZone, { members, activeSosUserIds });
         return (

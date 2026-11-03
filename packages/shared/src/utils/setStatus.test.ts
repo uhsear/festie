@@ -223,6 +223,11 @@ describe('getSetStatus with festival timeZone', () => {
     expect(result.minutesUntil).toBe(90);
   });
 
+  it('labels 31-59 minutes as minutes only, without a 0h part', () => {
+    const now = new Date(Date.UTC(2026, 8, 4, 19, 2, 0)); // 58m before 20:00 UTC
+    expect(getSetStatus(set, now, [], 'UTC').label).toBe('In 58m');
+  });
+
   it('LIVE/past badge is correct for a festival in America/New_York (EDT = UTC-4)', () => {
     // 2026-09-04 is in EDT (UTC-4): wall-clock 20:00 EDT = 00:00 UTC 2026-09-05.
     // A set 20:00-21:00 EDT; at 20:30 EDT (= 00:30 UTC next day) it should be LIVE.

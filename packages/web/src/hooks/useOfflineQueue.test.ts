@@ -316,6 +316,28 @@ describe('useOfflineQueue — localStorage fallback', () => {
     expect(ui.failedSync).toEqual([]);
   });
 
+  it('a 429 stays queued after Retry-After without consuming a retry or surfacing', async () => {
+    const { result } = renderHook(() => useOfflineQueue());
+    await act(async () => {
+      await result.current.queueMutation({ clientId: 'rl-1', type: 'api', url: '/crews/abc/polls', method: 'POST', body: {} });
+    });
+    const apiFn = vi.fn().mockRejectedValue(Object.assign(new Error('Slow down'), { status: 429, retryAfter: '1' }));
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      for (let i = 0; i < MAX_RETRIES + 1; i++) {
+        await act(async () => {
+          const pass = result.current.processQueue(apiFn);
+          await vi.runAllTimersAsync();
+          await pass;
+        });
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')[0]).toMatchObject({ clientId: 'rl-1', retries: 0 });
+    expect(ui.failedSync).toEqual([]);
+  });
+
   it('a 5xx still retries with backoff and surfaces after MAX_RETRIES', async () => {
     const { result } = renderHook(() => useOfflineQueue());
     await act(async () => {
