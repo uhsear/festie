@@ -8,7 +8,8 @@ import { Pool } from 'pg';
 import createNotificationsStore from '../lib/db/stores/notifications.js';
 
 // Migration 100 adds notification_preferences.crew_nudges, the own opt-out for
-// crew nudges. It runs twice without error and defaults to 1. The store reads a
+// crew nudges. It runs twice without error, defaults to 1 and copies a
+// crew_updates opt-out on its first run. The store reads a
 // row saved before it (NULL) as opted in.
 // Run it only on a private Postgres (port 5434 or higher), never 5432 or 5433.
 
@@ -41,6 +42,30 @@ describe('migration 100 crew nudge preference', { skip }, () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].data_type, 'integer');
     assert.equal(rows[0].column_default, '1');
+  });
+
+  test('first run keeps a crew_updates opt-out; a re-run keeps later choices', async () => {
+    const off = `mig100-off-${Date.now()}`;
+    const on = `mig100-on-${Date.now()}`;
+    for (const id of [off, on]) {
+      await pool.query('INSERT INTO users (id, username, created_at) VALUES ($1, $2, NOW())', [id, id]);
+    }
+    try {
+      await pool.query('ALTER TABLE notification_preferences DROP COLUMN IF EXISTS crew_nudges');
+      await pool.query('INSERT INTO notification_preferences (user_id, crew_updates) VALUES ($1, 0), ($2, 1)', [off, on]);
+      await pool.query(SQL);
+      const read = async (id: string) =>
+        (await pool.query('SELECT crew_nudges FROM notification_preferences WHERE user_id = $1', [id])).rows[0].crew_nudges;
+      assert.equal(await read(off), 0);
+      assert.equal(await read(on), 1);
+
+      await pool.query('UPDATE notification_preferences SET crew_nudges = 1 WHERE user_id = $1', [off]);
+      await pool.query(SQL);
+      assert.equal(await read(off), 1);
+    } finally {
+      await pool.query('DELETE FROM notification_preferences WHERE user_id = ANY($1)', [[off, on]]);
+      await pool.query('DELETE FROM users WHERE id = ANY($1)', [[off, on]]);
+    }
   });
 
   test('the store reads NULL as on and round-trips off', async () => {
