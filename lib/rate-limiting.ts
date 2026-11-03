@@ -169,7 +169,13 @@ function createRateLimiters({
   }
 
   // anonIpCap: false only for app-level mounts, which run before userAuth so signed-in traffic has no req.user.
-  function rateLimit(max = config.RATE_LIMIT_MAX, scope = '', { anonIpCap = true } = {}) {
+  // keyFromBody: account identifier from the raw body (runs before validation). Anonymous callers get a
+  // per-IP-per-identifier bucket plus the IP-wide cap, so one NAT'd venue IP is not locked out by many accounts.
+  function rateLimit(
+    max = config.RATE_LIMIT_MAX,
+    scope = '',
+    { anonIpCap = true, keyFromBody }: { anonIpCap?: boolean; keyFromBody?: (req: any) => unknown } = {},
+  ) {
     return async (req: any, res: any, next: any) => {
       const ip = getRequestIp(req);
       let rateLimitKey = ip;
@@ -181,6 +187,12 @@ function createRateLimiters({
         if (token && token.length >= 16) {
           rateLimitKey = `tok:${hashSessionToken(token)}`;
           anonToken = anonIpCap;
+        }
+        const ident = anonIpCap && keyFromBody ? keyFromBody(req) : undefined;
+        if (typeof ident === 'string' && ident.trim()) {
+          const identHash = crypto.createHash('sha256').update(ident.trim().toLowerCase()).digest('hex').slice(0, 32);
+          rateLimitKey = `id:${ip}:${identHash}`;
+          anonToken = true;
         }
       }
 
