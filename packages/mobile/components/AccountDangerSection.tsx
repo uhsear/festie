@@ -4,15 +4,18 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   useAuthStore,
   useCrewStore,
+  useUIStore,
   ACCOUNT_DELETION_EXPLAINER,
   accountDeletionNotice,
 } from '@festie/shared/stores';
 import type { CrewMember } from '@festie/shared/types';
 import { crewCopy, ownedCrewsForDeletion, type OwnedCrewHandover } from '@festie/shared/utils';
-import { api, withReauth } from '@festie/shared/services';
+import { api, exportErrorMessage, withReauth } from '@festie/shared/services';
+import { DATA_COPY } from '@festie/shared/constants';
 import { useReauthPrompt } from './admin';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { shareAccountExport } from '../lib/exportData';
 
 interface AccountDangerSectionProps {
   /** Called after a successful delete (store + token already cleared) so the
@@ -48,12 +51,14 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
   const user = useAuthStore((s) => s.user);
   const crews = useCrewStore((s) => s.crews);
   const loadCrews = useCrewStore((s) => s.loadCrews);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const { ask, reauthDialog } = useReauthPrompt();
 
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // crewId -> chosen new owner; a crew with no entry uses its default (first joiner).
   const [chosenOwners, setChosenOwners] = useState<Record<string, string>>({});
@@ -109,6 +114,18 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
         },
       ],
     );
+  };
+
+  const downloadFirst = async () => {
+    setDownloading(true);
+    try {
+      await shareAccountExport();
+    } catch (err) {
+      haptics.warning();
+      Alert.alert(DATA_COPY.title, exportErrorMessage(err));
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -197,6 +214,25 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
             </View>
           ) : null}
           {soloCount > 0 ? <Text style={styles.calloutText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteSolo(soloCount)}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.download, (downloading || submitting || offlineMode) && styles.submitDisabled]}
+            onPress={() => void downloadFirst()}
+            disabled={downloading || submitting || offlineMode}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={DATA_COPY.downloadFirst}
+            accessibilityState={{ disabled: downloading || submitting || offlineMode, busy: downloading }}
+          >
+            {downloading ? (
+              <ActivityIndicator size="small" color={t.colors.accent.aqua} />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={16} color={t.colors.accent.aqua} style={styles.submitIcon} />
+                <Text style={styles.downloadText}>{DATA_COPY.downloadFirst}</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
           {hasPassword ? (
           <TextInput
@@ -356,6 +392,20 @@ const useStyles = makeStyles((t) => ({
     borderRadius: t.radii.default,
     minHeight: 48,
     paddingHorizontal: t.spacing[4],
+  },
+  download: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.accent.aqua,
+    minHeight: 44,
+    paddingHorizontal: t.spacing[4],
+  },
+  downloadText: {
+    ...typeStyle('body'),
+    color: t.colors.accent.aqua,
   },
   submitDisabled: {
     opacity: 0.6,

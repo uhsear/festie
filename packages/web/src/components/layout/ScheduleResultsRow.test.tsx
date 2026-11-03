@@ -20,7 +20,11 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (selector: (s: typeof storeState) => unknown) => selector(storeState),
 }));
 
+let viewAs: { name: string } | null = null;
+const clearViewAs = vi.fn();
+
 vi.mock('@festie/shared/hooks', () => ({
+  useViewAs: () => ({ target: viewAs, clear: clearViewAs }),
   useFestival: () => ({
     getFilteredSets: () => [
       { id: 'a', startTime: '2026-05-29T20:00:00Z', endTime: '2026-05-29T21:00:00Z' },
@@ -36,6 +40,7 @@ vi.mock('@tanstack/react-router', () => ({
 afterEach(() => {
   storeState.activeStages = [];
   storeState.activeGenres = [];
+  viewAs = null;
   vi.clearAllMocks();
 });
 
@@ -62,5 +67,13 @@ describe('ScheduleResultsRow', () => {
     expect(screen.getByText('2 sets · 1 genre')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
     expect(storeState.setActiveGenres).toHaveBeenCalledWith([]);
+  });
+
+  it('shows with only View as on, names the member, and Clear all ends it', () => {
+    viewAs = { name: 'Ana' };
+    render(<ScheduleResultsRow />);
+    expect(screen.getByText("2 sets · Ana's picks")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
+    expect(clearViewAs).toHaveBeenCalledOnce();
   });
 });

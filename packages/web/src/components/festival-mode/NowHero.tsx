@@ -9,6 +9,7 @@ import {
   fmtZonedDayClock,
   type DayOfSet,
   type NowNextSelection,
+  type StageWalk,
 } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
@@ -30,6 +31,8 @@ interface Props {
   onOpenSet: (set: FestivalSet) => void;
   onBrowse: () => void;
   onWrap?: () => void;
+  /** Walk to the next set's stage, when a recent fix exists. */
+  walk?: StageWalk | null;
 }
 
 const DAY_MS = 86_400_000;
@@ -73,6 +76,7 @@ export default function NowHero({
   onOpenSet,
   onBrowse,
   onWrap,
+  walk,
 }: Props) {
   const { phase, current, upcoming, todayCount, startsAt } = selection;
   const live = current.length > 0;
@@ -156,7 +160,7 @@ export default function NowHero({
         type="button"
         data-testid="fm-next-hero"
         onClick={() => onOpenSet(next.set)}
-        aria-label={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${fmtStartsIn(next.start, nowMs, timeZone)}. Open details`}
+        aria-label={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${fmtStartsIn(next.start, nowMs, timeZone)}${walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : ''}. Open details`}
         className={cn(card, 'border-border')}
       >
         <span className="block type-micro text-text-secondary">Next</span>
@@ -167,14 +171,14 @@ export default function NowHero({
           {stage && (
             <span className="flex items-center gap-1.5 type-label text-text-primary min-w-0">
               <Footprints className="w-4 h-4 shrink-0 text-accent-aqua" aria-hidden="true" />
-              <span className="break-words">Head to {stage}</span>
+              <span className="break-words">Head to {stage}{walk ? ` · ${walk.label}` : ''}</span>
             </span>
           )}
           <span className="flex items-baseline gap-2">
             <span
               className={cn(
                 'text-2xl font-semibold tabular-nums leading-none',
-                imminent ? 'text-accent-coral font-bold' : 'text-accent-aqua',
+                imminent || walk?.late ? 'text-accent-coral font-bold' : 'text-accent-aqua',
               )}
             >
               {fmtStartsIn(next.start, nowMs, timeZone)}

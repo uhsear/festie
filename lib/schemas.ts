@@ -224,6 +224,7 @@ export const notificationPrefsSchema = z
     crewPolls: z.boolean().optional(),
     crewMoney: z.boolean().optional(),
     crewRides: z.boolean().optional(),
+    crewNudges: z.boolean().optional(),
     mustSeeReminderMinutes: z
       .union([z.literal(5), z.literal(10), z.literal(15), z.literal(30), z.literal(60)])
       .nullable()
@@ -583,6 +584,7 @@ export const crewUpdateSchema = z
     maxMembers: z.number().int().min(2).max(30).optional(),
     totemName: z.string().trim().max(40).optional(),
     totemEmoji: z.string().trim().max(16).optional(),
+    inviteLocked: z.boolean().optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
@@ -1046,6 +1048,8 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
 export const crewHomeBaseSchema = z.object({
   location: z.string().trim().max(200).optional().nullable(),
   time: z.string().trim().max(100).optional().nullable(),
+  // T54: undefined keeps the stored Plan B; null or '' clears it.
+  planB: z.string().trim().max(140).optional().nullable(),
 });
 export type CrewHomeBaseInput = z.infer<typeof crewHomeBaseSchema>;
 
@@ -1457,12 +1461,12 @@ export type PaginationQueryInput = z.infer<typeof paginationQuery>;
 const validDateString = z.string().refine((v) => !isNaN(new Date(v).getTime()), 'Must be a valid date string');
 export const adminAuditQuery = z.object({
   actor_id: z.string().trim().max(100).optional(),
-  // A trailing `.*` asks for a prefix match: `festival.*` matches `festival.created`.
+  // A comma list matches any item. A trailing `.*` on an item asks for a prefix match: `festival.*` matches `festival.created`.
   action: z
     .string()
     .trim()
-    .max(100)
-    .regex(/^[a-z0-9_.:-]+(\.\*)?$/i)
+    .max(200)
+    .regex(/^[a-z0-9_.:-]+(\.\*)?(,[a-z0-9_.:-]+(\.\*)?){0,4}$/i)
     .optional(),
   resource_type: z.string().trim().max(100).optional(),
   cursor: z.string().trim().max(200).optional(),
@@ -1547,6 +1551,12 @@ export const crewIdMpIdParams = z.object({
   mpId: z.string().min(1, 'Meeting point ID required').max(100),
 });
 export type CrewIdMpIdParams = z.infer<typeof crewIdMpIdParams>;
+
+export const crewIdUserIdParams = z.object({
+  crewId: z.string().min(1, 'Crew ID required').max(100),
+  userId: z.string().min(1, 'User ID required').max(100),
+});
+export type CrewIdUserIdParams = z.infer<typeof crewIdUserIdParams>;
 
 export const crewIdItemIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
@@ -1678,6 +1688,7 @@ export const schemas = {
   crewIdExpenseIdParams,
   crewIdPollIdParams,
   crewIdMpIdParams,
+  crewIdUserIdParams,
   crewIdItemIdParams,
   setIdParams,
   crewIdFestivalIdParams,

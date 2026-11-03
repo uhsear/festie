@@ -5,13 +5,23 @@ import { useFocusEffect, useRouter, Stack } from 'expo-router';
 import { useAuthStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
 import type { FestivalSet } from '@festie/shared/types';
-import { festivalTimeLabel, fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
+import {
+  festivalTimeLabel,
+  fmtZonedClock,
+  isFixRecent,
+  resolveFestivalTimeZone,
+  selectNowNext,
+  stageCoord,
+  walkToStage,
+} from '@festie/shared/utils';
 import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
+import { useLastKnownFix } from '../hooks/useLastKnownFix';
 import EmptyState from '../components/EmptyState';
 import FreshnessChip from '../components/FreshnessChip';
 import OfflineStatusChip from '../components/OfflineStatusChip';
 import WeatherStrip from '../components/WeatherStrip';
+import CaughtNowCard from '../components/CaughtNowCard';
 import { DaylightToggle, LowPowerToggle, LowPowerIndicator } from '../components/LowPowerControls';
 import { CrewNow, CrewPrompt, CrewWrapUp, MeetNow, NowHero, UpNext } from '../components/NowSurface';
 import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref } from '../lib/dayOfRoutes';
@@ -47,6 +57,13 @@ export default function FestivalModeScreen() {
     () => selectNowNext({ sets, days, picks: lineupMode ? undefined : (picks ?? {}), nowMs, timeZone }),
     [sets, days, picks, lineupMode, nowMs, timeZone],
   );
+  const stages = useFestivalDataStore((s) => s.stages);
+  const fix = useLastKnownFix();
+  const next = selection.upcoming[0];
+  const walk =
+    next && isFixRecent(fix.at, nowMs)
+      ? walkToStage(fix.coord, stageCoord(stages, next.set.stageId), next.start, nowMs)
+      : null;
   const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
   const after = selection.phase === 'after';
   const crewId = crew?.id;
@@ -118,9 +135,21 @@ export default function FestivalModeScreen() {
             onOpenSet={openSet}
             onBrowse={() => router.navigate(SCHEDULE_HREF)}
             onWrap={user ? () => router.push('/wrap') : undefined}
+            walk={walk}
           />
 
           <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
+
+          {user ? (
+            <CaughtNowCard
+              key={currentFestival.id}
+              festivalId={currentFestival.id}
+              nowMs={nowMs}
+              timeZone={timeZone}
+              getStageName={getStageName}
+              b2bSeparator={currentFestival.b2bSeparator}
+            />
+          ) : null}
 
           {!user ? (
             <CrewPrompt

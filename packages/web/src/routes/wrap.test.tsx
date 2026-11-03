@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   search: { festival: 'past1' } as { festival?: string },
   cards: [] as unknown[],
   toRate: [] as unknown[],
+  summarizePlan: vi.fn(() => ({ planned: 0, mustSees: 0, stages: 0, days: 0, hours: 0, clashes: [] })),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -36,7 +37,7 @@ vi.mock('@festie/shared/utils', () => ({
   buildWrapCards: () => mocks.cards,
   isWrapUnlocked: () => true,
   selectSetsToRate: () => mocks.toRate,
-  summarizePlan: () => ({ planned: 0, mustSees: 0, stages: 0, days: 0, hours: 0, clashes: [] }),
+  summarizePlan: mocks.summarizePlan,
   wrapByline: () => null,
 }));
 vi.mock('../components/features/GuestTeaser', () => ({ default: () => null }));
@@ -78,6 +79,7 @@ describe('WrapPage', () => {
     mocks.search = { festival: 'past1' };
     mocks.cards = [];
     mocks.toRate = [];
+    mocks.summarizePlan.mockClear();
   });
 
   it('requests the wrap of the festival in the search param', async () => {
@@ -104,5 +106,23 @@ describe('WrapPage', () => {
     renderPage();
     expect(await screen.findByText('2 sets still to rate')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Rate your night' }).getAttribute('href')).toBe('/rate?festival=past1');
+  });
+
+  it('links the What you caught list and counts added sets in the hero', async () => {
+    mocks.cards = [{ kind: 'plan', kicker: 'YOUR PLAN', headline: '2 sets planned' }];
+    const extra = [{ setId: 'x', caught: true }];
+    mocks.get.mockResolvedValue({ ...response, planned: [{ setId: 'a' }], caughtExtra: extra });
+    renderPage();
+    expect((await screen.findByRole('link', { name: 'What you caught' })).getAttribute('href')).toBe(
+      '/caught?festival=past1',
+    );
+    expect(mocks.summarizePlan).toHaveBeenCalledWith([{ setId: 'a' }], extra);
+  });
+
+  it('labels the handle switch with its row text', async () => {
+    mocks.cards = [{ kind: 'plan', kicker: 'YOUR PLAN', headline: '2 sets planned' }];
+    renderPage();
+    const sw = await screen.findByRole('switch', { name: 'Show @asir on cards' });
+    expect(sw).toHaveAttribute('aria-checked', 'true');
   });
 });

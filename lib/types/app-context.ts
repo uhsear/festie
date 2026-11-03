@@ -141,7 +141,7 @@ export interface AppContext {
   // Auth / rate limiting middleware
   userAuth: Middleware;
   adminAuth: Middleware;
-  rateLimit: (max: number, key: string) => Middleware;
+  rateLimit: (max: number, key: string, opts?: { anonIpCap?: boolean }) => Middleware;
 
   // Stores
   stores: Stores;
@@ -184,6 +184,7 @@ export interface CrewNotify {
     userIds: string[];
     text: string;
     kind: 'member' | 'poll';
+    type?: 'crew_update' | 'crew_nudge';
   }): Promise<void>;
   flushAll(): Promise<void>;
 }

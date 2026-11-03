@@ -65,4 +65,41 @@ describe('useGeolocationWatch', () => {
     act(() => setVisibility('visible'));
     expect(watchPosition).not.toHaveBeenCalled();
   });
+
+  it('treats a refusal (code 1) as denied and stops the watch', () => {
+    const { result } = renderHook(() => useGeolocationWatch());
+    act(() => result.current.enableLocation());
+    act(() => watchPosition.mock.calls[0][1]({ code: 1 }));
+    expect(result.current.geoState).toBe('denied');
+    expect(clearWatch).toHaveBeenCalledWith(1);
+  });
+
+  it('treats a timeout (code 3) as unavailable and keeps watching, then recovers on a fix', () => {
+    const { result } = renderHook(() => useGeolocationWatch());
+    act(() => result.current.enableLocation());
+    act(() => watchPosition.mock.calls[0][1]({ code: 3 }));
+    expect(result.current.geoState).toBe('unavailable');
+    expect(clearWatch).not.toHaveBeenCalled();
+
+    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 12.4 } }));
+    expect(result.current.geoState).toBe('on');
+    expect(result.current.selfCoord).toEqual({ latitude: 28.5, longitude: -81.4 });
+    expect(result.current.accuracyM).toBe(12.4);
+  });
+
+  it('retryLocation clears the watch, then starts a new one', () => {
+    const { result } = renderHook(() => useGeolocationWatch());
+    act(() => result.current.enableLocation());
+    act(() => result.current.retryLocation());
+    expect(clearWatch).toHaveBeenCalledWith(1);
+    expect(watchPosition).toHaveBeenCalledTimes(2);
+    expect(clearWatch.mock.invocationCallOrder[0]).toBeLessThan(watchPosition.mock.invocationCallOrder[1]);
+  });
+
+  it('reports unavailable when the browser has no geolocation API', () => {
+    Object.defineProperty(global.navigator, 'geolocation', { configurable: true, value: undefined });
+    const { result } = renderHook(() => useGeolocationWatch());
+    act(() => result.current.enableLocation());
+    expect(result.current.geoState).toBe('unavailable');
+  });
 });

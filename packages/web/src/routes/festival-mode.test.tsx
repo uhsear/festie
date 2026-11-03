@@ -35,11 +35,24 @@ vi.mock('../components/crew/SosRaiseButton', () => ({
 }));
 vi.mock('../components/features/LowPowerToggle', () => ({ default: () => <div data-testid="low-power-toggle" /> }));
 vi.mock('../components/festival-mode/WeatherStrip', () => ({ default: () => <div data-testid="weather-strip" /> }));
+vi.mock('../components/festival-mode/CaughtNowCard', () => ({ default: () => <div data-testid="caught-now" /> }));
 vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => <div data-testid="offline-chip" /> }));
 vi.mock('../components/features/LowPowerIndicator', () => ({ default: () => null }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
+
+const heroProps = vi.hoisted(() => ({ walk: undefined as unknown }));
+vi.mock('../hooks/useLastKnownFix', () => ({ useLastKnownFix: () => ({ coord: null, at: null }) }));
+vi.mock('../components/festival-mode/NowHero', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../components/festival-mode/NowHero')>();
+  return {
+    default: (props: React.ComponentProps<typeof actual.default>) => {
+      heroProps.walk = props.walk;
+      return <actual.default {...props} />;
+    },
+  };
+});
 
 import FestivalModeView from './festival-mode';
 
@@ -55,12 +68,17 @@ const SETS = [
   { id: 's3', artist: 'Bicep', stageId: 'main', dayIndex: 1, startTime: '21:00', endTime: '22:00' },
 ];
 
-function setup(opts: { festival?: unknown; picks?: Record<string, string> | null; user?: boolean } = {}) {
+function setup(opts: { festival?: unknown; picks?: Record<string, string> | null; user?: boolean; error?: string } = {}) {
   state = {
     currentFestival: opts.festival === undefined ? FESTIVAL : opts.festival,
     sets: SETS,
     days: DAYS,
     currentProfile: opts.picks === null ? null : { picks: opts.picks ?? {} },
+    festivals: [],
+    isLoading: false,
+    error: opts.error ?? null,
+    loadFestivals: vi.fn(),
+    selectFestival: vi.fn(),
   };
   authUser = opts.user ? { id: 'me' } : null;
 }
@@ -81,6 +99,15 @@ describe('FestivalModeView (Now surface)', () => {
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Choose a festival' }));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' });
+  });
+
+  it('shows the load error and a retry when the festival list failed', () => {
+    setup({ festival: null, error: 'Network down' });
+    render(<FestivalModeView />);
+    expect(screen.getByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByText('No festival selected')).toBeNull();
   });
 
   it('guest: shows what is live on the lineup and a sign-in prompt for crew', () => {
@@ -105,6 +132,12 @@ describe('FestivalModeView (Now surface)', () => {
     // The hero holds the first upcoming pick; the list holds the rest.
     expect(screen.getAllByTestId('fm-next-card')).toHaveLength(1);
     expect(screen.getByText('No crew yet')).toBeInTheDocument();
+  });
+
+  it('passes walk: null to the hero when there is no fix', () => {
+    setup({ user: true, picks: { s2: 'must' } });
+    render(<FestivalModeView />);
+    expect(heroProps.walk).toBeNull();
   });
 
   it('signed in with no picks today: says so and offers the lineup', () => {

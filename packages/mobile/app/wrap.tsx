@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { View, Text, ScrollView, FlatList, Switch, TouchableOpacity, ActivityIndicator, Share, useWindowDimensions, type HostInstance } from 'react-native';
+import { View, Text, ScrollView, FlatList, TouchableOpacity, ActivityIndicator, Share, useWindowDimensions, type HostInstance } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { buildWrapCards, formatAmount, isWrapUnlocked, selectSetsToRate, wrapByl
 import type { WrapRatedSet, WrapResponse } from '@festie/shared/types';
 import { COPY, RATING_LABEL } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
+import AppSwitch from '../components/AppSwitch';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { RATING_IONICON } from '../lib/ratingIcon';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
@@ -182,7 +183,7 @@ export default function WrapScreen() {
           <Text style={styles.handleLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {handleText}
           </Text>
-          <Switch value={showHandle} onValueChange={setShowHandle} accessibilityLabel={handleText} />
+          <AppSwitch value={showHandle} onValueChange={setShowHandle} accessibilityLabel={handleText} />
         </View>
 
         {toRate > 0 ? (
@@ -198,6 +199,15 @@ export default function WrapScreen() {
             </TouchableOpacity>
           </View>
         ) : null}
+
+        <TouchableOpacity
+          onPress={() => router.push({ pathname: '/caught', params: { festival: festivalId } })}
+          style={styles.momentLink}
+          accessibilityRole="link"
+          accessibilityLabel="What you caught"
+        >
+          <Text style={styles.momentLinkText}>What you caught</Text>
+        </TouchableOpacity>
 
         <Hero value={heroValue} label={heroLabel} />
 
@@ -684,12 +694,9 @@ function CrewWrapTab({
                   Off by default. When on, the poster shows the crew&apos;s total and who fronted the most.
                 </Text>
               </View>
-              <Switch
+              <AppSwitch
                 value={showMoney}
                 onValueChange={setShowMoney}
-                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-                ios_backgroundColor={t.colors.text.muted}
-                thumbColor={t.colors.text.onAccent}
                 accessibilityLabel="Show money on poster"
                 accessibilityState={{ checked: showMoney }}
               />

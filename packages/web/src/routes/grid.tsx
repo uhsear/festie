@@ -1,21 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useReducedMotion } from 'motion/react';
+import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { usePicks, useFestival, useDayClashes, usePickClear } from '@festie/shared/hooks';
+import { usePicks, useFestival, useDayClashes, usePickClear, useViewAs } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   resolveStageColor,
   artistDisplayName,
+  festivalLoadState,
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
-  pickClashTarget,
 } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import TimelineGrid from '../features/TimelineGrid';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import TBASection from '../components/timeline/TBASection';
@@ -80,8 +81,9 @@ function GridViewInner() {
 
   const { vpW } = useTimelineViewport();
   const { nowIndicator, gridRef, scrollToNow } = useNowIndicator(timeBounds, selectedDay);
-  const { count: clashCount, marks: clashMarks, groups: clashGroups } = useDayClashes();
-  const reducedMotion = useReducedMotion();
+  const { count: clashCount, marks: clashMarks, picked } = useDayClashes();
+  const { target: viewAsTarget } = useViewAs();
+  const navigate = useNavigate();
   const { exporting, exportGrid } = useGridExport(
     gridRef,
     selectedDay,
@@ -146,20 +148,7 @@ function GridViewInner() {
     handleUserScroll();
   }, [rowHeight, scrollRef, handleUserScroll]);
 
-  const showFirstClash = useCallback(() => {
-    const target = pickClashTarget(clashGroups, new Set(visibleStages.map((s) => s.id)));
-    if (!target) return;
-    const cell = target.visible
-      ? gridRef.current?.querySelector<HTMLElement>(`[data-set-id="${CSS.escape(target.set.id)}"]`)
-      : null;
-    if (!cell) {
-      setDetailSet(target.set);
-      return;
-    }
-    cell.scrollIntoView({ block: 'center', inline: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
-    cell.querySelector<HTMLElement>('[data-open]')?.focus({ preventScroll: true });
-    handleUserScroll();
-  }, [clashGroups, visibleStages, gridRef, setDetailSet, reducedMotion, handleUserScroll]);
+  const openClashes = useCallback(() => navigate({ to: '/picks', hash: 'clashes' }), [navigate]);
 
   // Auto-scroll to now on each tick — but only when the user isn't actively
   // scrolling and a now-line exists for the current day.
@@ -191,12 +180,14 @@ function GridViewInner() {
     [currentFestival, savePick, clearPick, allDaySets, toast],
   );
 
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
+    if (loadState === 'error') return <FestivalLoadError />;
     return (
       <EmptyState
         icon={<CalendarX className="w-12 h-12" aria-hidden="true" />}
-        title="No festival loaded"
-        description="Choose a festival from the top menu to see the schedule grid."
+        title={COPY.festivalLoad.noneTitle}
+        description="Choose a festival on the Lineup tab to see the schedule grid."
       />
     );
   }
@@ -289,7 +280,9 @@ function GridViewInner() {
               <div className="flex items-center gap-1.5 flex-wrap pr-3 py-0.5">
                 <GridToolbar
                   clashCount={clashCount}
-                  onShowClash={showFirstClash}
+                  pickedCount={picked}
+                  viewAsOn={viewAsTarget !== null}
+                  onShowClash={openClashes}
                   zoom={zoom}
                   onZoom={handleZoom}
                   exporting={exporting}
@@ -335,7 +328,7 @@ function GridViewInner() {
                 'shadow-[var(--shadow-glow-aqua),0_1px_3px_rgba(0,0,0,0.25)]',
                 'transition-[transform,box-shadow] duration-150',
                 'ease-out',
-                'hover:shadow-[0_8px_24px_rgba(0,232,208,0.45),0_1px_4px_rgba(0,0,0,0.3)]',
+                'hover:shadow-[0_8px_24px_var(--color-aqua-a4),0_1px_4px_rgba(0,0,0,0.3)]',
                 'active:scale-[0.96]',
               )}
               aria-label={COPY.jumpToNow.a11y}

@@ -142,6 +142,23 @@ export function pickDefaultFestival<T extends Festival>(festivals: readonly T[],
   return sortFestivalsForPicker(festivals, now)[0];
 }
 
+export type FestivalLoadState = 'ready' | 'loading' | 'error' | 'none';
+
+/** What a festival screen shows when it has no data yet: a spinner, the load error, or "no festival". */
+export function festivalLoadState(s: {
+  currentFestival: unknown;
+  festivals: readonly unknown[];
+  isLoading: boolean;
+  error: string | null;
+}): FestivalLoadState {
+  if (s.currentFestival) return 'ready';
+  if (s.isLoading) return 'loading';
+  if (s.error) return 'error';
+  // shortcut: boot has not run yet, or no festival is published; add a loaded flag to the store if an empty catalogue ever ships.
+  if (s.festivals.length === 0) return 'loading';
+  return 'none';
+}
+
 /**
  * Lifecycle phase of a festival, used to re-prioritize the home/landing surface:
  *  - 'pre'  — before it starts (lean into picks / lineup / crew invites / Spotify)

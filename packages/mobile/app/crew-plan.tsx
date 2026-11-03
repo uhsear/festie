@@ -170,7 +170,7 @@ export default function CrewPlanScreen() {
             ) : (
               hub.howWeDid.map((e) => mixRow(e.set, `${e.count} of ${e.total} picked it`))
             )}
-            <Button label="See your Wrap" variant="secondary" size="sm" onPress={() => router.push('/wrap')} />
+            <Button label={COPY.wrap.open} variant="secondary" size="sm" onPress={() => router.push('/wrap')} />
           </View>
         ) : (
           <View style={styles.card}>

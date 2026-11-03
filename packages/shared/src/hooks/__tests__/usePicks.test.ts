@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { usePicks, usePickSync, useCanPick } from '../usePicks';
+import { usePicks, usePickSync, useCanPick, useMyPick, useMyNote, useMyReminder, usePickActions } from '../usePicks';
 import { useFestivalStore } from '../../stores/festivalStore';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -26,6 +26,7 @@ function resetStore() {
     days: [],
     currentProfile: null,
     allProfiles: [],
+    pickCounts: {},
     isLoading: false,
     error: null,
   });
@@ -148,6 +149,21 @@ describe('usePicks hook', () => {
       });
       const { result } = renderHook(() => usePicks());
       expect(result.current.getMyNote('set-1')).toBeUndefined();
+    });
+  });
+
+  describe('getPickCount', () => {
+    it('reads the anonymous server count and is 0 for an unknown set', () => {
+      useFestivalStore.setState({ pickCounts: { 'set-1': 4 } });
+      const { result } = renderHook(() => usePicks());
+      expect(result.current.getPickCount('set-1')).toBe(4);
+      expect(result.current.getPickCount('set-2')).toBe(0);
+    });
+
+    it('is 0 when a rehydrated client has no pickCounts', () => {
+      useFestivalStore.setState({ pickCounts: undefined as unknown as Record<string, number> });
+      const { result } = renderHook(() => usePicks());
+      expect(result.current.getPickCount('set-1')).toBe(0);
     });
   });
 
@@ -295,6 +311,56 @@ describe('usePicks hook', () => {
       useFestivalStore.setState({ pickSync: {} } as never);
       const { result } = renderHook(() => usePickSync('set-9'));
       expect(result.current.sync).toBeUndefined();
+    });
+  });
+
+  describe('per-set hooks', () => {
+    const profile = (picks: Record<string, string>, notes: Record<string, string> = {}) =>
+      ({ id: 'p1', userId: 'u1', festivalId: 'f1', picks, notes, reminders: { a: 15 }, updatedAt: '2026-01-01T00:00:00Z' }) as never;
+
+    it('useMyPick: undefined when canPick is false, null for no pick, the priority for a pick', () => {
+      expect(renderHook(() => useMyPick('a')).result.current).toBeUndefined();
+      useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: profile({ a: 'must' }) });
+      expect(renderHook(() => useMyPick('a')).result.current).toBe('must');
+      expect(renderHook(() => useMyPick('b')).result.current).toBeNull();
+    });
+
+    it('useMyPick: a guest sees the guest pick for the chosen festival', () => {
+      useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: null, guestPicks: { f1: { a: 'maybe' } } } as never);
+      expect(renderHook(() => useMyPick('a')).result.current).toBe('maybe');
+    });
+
+    it('useMyNote and useMyReminder read this set, undefined without a profile', () => {
+      expect(renderHook(() => useMyNote('a')).result.current).toBeUndefined();
+      expect(renderHook(() => useMyReminder('a')).result.current).toBeUndefined();
+      useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: profile({}, { a: 'hi' }) });
+      expect(renderHook(() => useMyNote('a')).result.current).toBe('hi');
+      expect(renderHook(() => useMyReminder('a')).result.current).toBe(15);
+    });
+
+    it('a write to another set does not re-render useMyPick', () => {
+      useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: profile({ a: 'must' }) });
+      let renders = 0;
+      const { result } = renderHook(() => {
+        renders++;
+        return useMyPick('a');
+      });
+      const before = renders;
+      act(() => useFestivalStore.setState({ currentProfile: profile({ a: 'must', b: 'maybe' }) }));
+      expect(renders).toBe(before);
+      act(() => useFestivalStore.setState({ currentProfile: profile({ a: 'maybe', b: 'maybe' }) }));
+      expect(result.current).toBe('maybe');
+    });
+
+    it('usePickActions keeps stable references across data writes and forwards requests', async () => {
+      const savePick = vi.fn().mockResolvedValue(undefined);
+      useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: profile({}), savePick } as never);
+      const { result } = renderHook(() => usePickActions());
+      const first = result.current;
+      act(() => useFestivalStore.setState({ currentProfile: profile({ a: 'must' }) }));
+      expect(result.current).toBe(first);
+      await result.current.savePick('f1', 'a', 'must');
+      expect(savePick).toHaveBeenCalledWith({ festivalId: 'f1', setId: 'a', priority: 'must' });
     });
   });
 });

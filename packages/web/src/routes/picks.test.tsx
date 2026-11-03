@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
+let mockHash = '';
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ hash: mockHash }),
 }));
 
 vi.mock('@festie/shared/services/api', async (orig) => ({
@@ -66,7 +68,7 @@ vi.mock('../components/features/PlanNotesList', () => ({
   ),
 }));
 vi.mock('../components/features/PickConflicts', () => ({
-  default: ({ groups }: { groups?: unknown[] }) => <div data-testid="pick-conflicts">{groups?.length ?? 0}</div>,
+  default: ({ groups }: { groups?: unknown[] }) => <div id="clashes" tabIndex={-1} data-testid="pick-conflicts">{groups?.length ?? 0}</div>,
 }));
 
 vi.mock('../components/features/GuestPicksBanner', () => ({
@@ -124,6 +126,7 @@ interface StateOpts {
   profile?: unknown;
   sets?: unknown[];
   selectedDay?: number;
+  error?: string | null;
 }
 
 function setStoreState(opts: StateOpts = {}) {
@@ -139,13 +142,29 @@ function setStoreState(opts: StateOpts = {}) {
     stages: STAGES as never,
     days: DAYS as never,
     selectedDay: opts.selectedDay ?? 0,
+    festivals: [],
+    isLoading: false,
+    error: opts.error ?? null,
   });
 }
 
 describe('PicksView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockHash = '';
     setStoreState();
+  });
+
+  it('opens the plan view, scrolls to the clash cards and clears the hash for #clashes', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    mockHash = 'clashes';
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledOnce());
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById('clashes'));
+    expect(document.activeElement).toBe(document.getElementById('clashes'));
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/picks', hash: undefined, replace: true });
   });
 
   it('lists a guest pick under its priority with the banner, not a teaser', () => {
@@ -161,6 +180,15 @@ describe('PicksView', () => {
     setStoreState({ festival: null });
     render(<PicksView />);
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
+  });
+
+  it('shows the load error and a retry when the festival list failed', () => {
+    setStoreState({ festival: null, error: 'Network down' });
+    render(<PicksView />);
+    expect(screen.getByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
+    expect(screen.queryByText('No festival selected')).toBeNull();
   });
 
   it('shows "No picks yet" when no profile', () => {

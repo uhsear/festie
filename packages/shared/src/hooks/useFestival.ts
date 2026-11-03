@@ -3,6 +3,7 @@ import { useFestivalStore } from '../stores/festivalStore';
 import { FestivalSet } from '../types';
 import { STAGE_COLOR_FALLBACK } from '../utils/stageColor';
 import { filterScheduleSets } from '../utils/scheduleFilters';
+import { useViewAs } from './useViewAs';
 
 export interface UseFestivalReturn {
   getDays: () => { index: number; date: string; label?: string }[];
@@ -22,6 +23,7 @@ export function useFestival(): UseFestivalReturn {
   const searchQuery = useFestivalStore((state) => state.searchQuery);
   const onlyMine = useFestivalStore((state) => state.onlyMine);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
+  const { target } = useViewAs();
 
   const getDays = useCallback(() => {
     return days.map((day, index) => ({
@@ -46,8 +48,9 @@ export function useFestival(): UseFestivalReturn {
         onlyMine,
         picks: currentProfile?.picks,
         query: searchQuery,
+        viewAsPicks: target?.picks,
       }),
-    [getCurrentDaySets, activeStages, activeGenres, searchQuery, stages, onlyMine, currentProfile],
+    [getCurrentDaySets, activeStages, activeGenres, searchQuery, stages, onlyMine, currentProfile, target],
   );
 
   // Use actual stage.color from API response. When a stage has no color we

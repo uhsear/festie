@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useFestivalStore, useFestivalDataStore, selectMyPicks } from '../stores/festivalStore';
 import type { PickSyncEntry } from '../stores/festivalDataStore';
 import { Priority, SavePickRequest, SaveNoteRequest, SaveReminderRequest } from '../types';
@@ -35,7 +35,47 @@ export interface UsePicksReturn {
   getMyPick: (setId: string) => Priority | null | undefined;
   getMyNote: (setId: string) => string | undefined;
   getMyReminder: (setId: string) => number | undefined;
+  /** Crew mates' picks of a set: the server sends other attendees' picks only to their crew mates. */
   getOtherPicks: (setId: string) => Array<{ profileId: string; priority: Priority; name?: string }>;
+  /** How many other attendees picked a set, crew or not (anonymous; 0 when unknown). */
+  getPickCount: (setId: string) => number;
+}
+
+/** This set's pick for the signed-in user (or guest). Re-renders only when this value changes. */
+export function useMyPick(setId: string): Priority | null | undefined {
+  return useFestivalStore((state) => {
+    if (!state.currentProfile && !state.currentFestivalId) return undefined;
+    return selectMyPicks(state)?.[setId] ?? null;
+  });
+}
+
+export function useMyNote(setId: string): string | undefined {
+  return useFestivalStore((state) => state.currentProfile?.notes?.[setId]);
+}
+
+export function useMyReminder(setId: string): number | undefined {
+  return useFestivalStore((state) => state.currentProfile?.reminders?.[setId]);
+}
+
+/** Stable action references only. Never re-renders on data writes. */
+export function usePickActions(): Pick<UsePicksReturn, 'canPick' | 'savePick' | 'removePick' | 'saveNote' | 'saveReminder'> {
+  const canPick = useCanPick();
+  const savePick = useFestivalStore((state) => state.savePick);
+  const removePick = useFestivalStore((state) => state.removePick);
+  const saveNote = useFestivalStore((state) => state.saveNote);
+  const saveReminder = useFestivalStore((state) => state.saveReminder);
+  return useMemo(
+    () => ({
+      canPick,
+      savePick: (festivalId: string, setId: string, priority: Priority | null) =>
+        savePick({ festivalId, setId, priority }),
+      removePick: (festivalId: string, setId: string) => removePick(festivalId, setId),
+      saveNote: (festivalId: string, setId: string, note: string) => saveNote({ festivalId, setId, note }),
+      saveReminder: (festivalId: string, setId: string, minutes: number | null) =>
+        saveReminder({ festivalId, setId, minutes }),
+    }),
+    [canPick, savePick, removePick, saveNote, saveReminder],
+  );
 }
 
 export function usePicks(): UsePicksReturn {
@@ -49,6 +89,7 @@ export function usePicks(): UsePicksReturn {
   const myNotes = useFestivalStore((state) => state.currentProfile?.notes ?? null);
   const myReminders = useFestivalStore((state) => state.currentProfile?.reminders ?? null);
   const allProfiles = useFestivalStore((state) => state.allProfiles);
+  const pickCounts = useFestivalStore((state) => state.pickCounts);
   const savePick = useFestivalStore((state) => state.savePick);
   const removePick = useFestivalStore((state) => state.removePick);
   const saveNoteStore = useFestivalStore((state) => state.saveNote);
@@ -146,6 +187,8 @@ export function usePicks(): UsePicksReturn {
     [currentProfileId, allProfiles],
   );
 
+  const getPickCount = useCallback((setId: string): number => pickCounts?.[setId] ?? 0, [pickCounts]);
+
   return {
     canPick,
     savePick: handleSavePick,
@@ -156,5 +199,6 @@ export function usePicks(): UsePicksReturn {
     getMyNote,
     getMyReminder,
     getOtherPicks,
+    getPickCount,
   };
 }

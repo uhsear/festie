@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '@festie/shared/services/api';
+import { api, mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   addCrewMember,
   fetchAdminCrews,
@@ -37,6 +37,7 @@ function memberAvatarUrl(m: CrewMember): string | null {
 export default function AdminCrews() {
   const [crews, setCrews] = useState<AdminCrewRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [{ q }, setAdminSearch] = useAdminSearch();
   // The box keeps what was typed (the URL value is trimmed); the URL follows after a pause.
   const [searchQuery, setSearchQuery] = useState(q ?? '');
@@ -71,9 +72,11 @@ export default function AdminCrews() {
   const loadCrews = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const result = await fetchAdminCrews();
       setCrews(Array.isArray(result) ? result : []);
     } catch (err: unknown) {
+      setLoadError(err);
       toastError(err, "Couldn't load crews. Try again.");
     } finally {
       setLoading(false);
@@ -182,7 +185,21 @@ export default function AdminCrews() {
     : null;
 
   if (loading) {
-    return <div className="text-center py-12 text-text-muted">Loading crews…</div>;
+    return (
+      <div role="status" className="text-center py-12 text-text-muted">
+        Loading crews…
+      </div>
+    );
+  }
+
+  if (loadError && crews.length === 0) {
+    return (
+      <EmptyState
+        title="Couldn't load crews"
+        description={mapErrorToUserMessage(loadError, 'Check your connection, then try again.')}
+        cta={{ label: 'Retry', onClick: () => void loadCrews() }}
+      />
+    );
   }
 
   return (

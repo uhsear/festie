@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
+import { planMoveMarks } from '../../set-moves';
 
 /**
  * Build a multi-row VALUES clause with parameterized placeholders.
@@ -204,12 +205,76 @@ async function restoreRatingsBatch(
   );
 }
 
+/** Old days and set slots with their marks, read before the delete. Null for a draft, which gets no marks. */
+async function readPriorSlots(client: any, festivalId: string) {
+  const fest = await client.query('SELECT published_at FROM festivals WHERE id = $1', [festivalId]);
+  if (!fest.rows[0]?.published_at) return null;
+  const days = await client.query(
+    'SELECT day_index AS "dayIndex", label, date FROM festival_days WHERE festival_id = $1',
+    [festivalId],
+  );
+  const sets = await client.query(
+    `
+  SELECT
+    id,
+    day_index AS "dayIndex",
+    stage_id AS "stageId",
+    start_time AS "start",
+    end_time AS "end",
+    moved_at AS "movedAt",
+    moved_from AS "movedFrom"
+  FROM
+    festival_sets
+  WHERE
+    festival_id = $1
+`,
+    [festivalId],
+  );
+  return { days: days.rows, sets: sets.rows };
+}
+
+/** Compute and write the "moved" marks for sets that survive the save, in one statement. */
+async function writeMoveMarks(client: any, festivalId: string, prior: any, children: any) {
+  if (!prior) return;
+  const newDays = children.dayRows.map((r: any[]) => ({ dayIndex: r[1], label: r[2], date: r[3] }));
+  const newSets = children.setRows.map((r: any[]) => ({
+    id: r[0],
+    dayIndex: r[2],
+    stageId: r[4],
+    start: r[5],
+    end: r[6],
+  }));
+  const marks = planMoveMarks(prior.days, prior.sets, newDays, newSets, new Date());
+  if (marks.length === 0) return;
+  await client.query(
+    `
+  UPDATE festival_sets AS fs
+  SET
+    moved_at = m.moved_at,
+    moved_from = m.moved_from
+  FROM
+    unnest($2::text[], $3::timestamptz[], $4::jsonb[]) AS m (id, moved_at, moved_from)
+  WHERE
+    fs.festival_id = $1
+    AND fs.id = m.id
+`,
+    [
+      festivalId,
+      marks.map((m) => m.id),
+      marks.map((m) => m.movedAt.toISOString()),
+      marks.map((m) => JSON.stringify(m.movedFrom)),
+    ],
+  );
+}
+
 /**
  * Preserve picks, ratings, notes, and caught marks, delete old child rows,
- * batch-insert new days/sets, then restore them. Used by replaceAll and update.
+ * batch-insert new days/sets, then restore them and write "moved" marks.
+ * Used by replaceAll and update.
  */
 async function replaceChildRows(client: any, festivalId: string, children: any) {
   const { dayRows, setRows, newSetIds, setIdentityMap } = children;
+  const priorSlots = await readPriorSlots(client, festivalId);
 
   // Preserve picks before deleting sets
   const existingPicks = await client.query(
@@ -296,6 +361,57 @@ async function replaceChildRows(client: any, festivalId: string, children: any) 
   await restorePicksBatch(client, existingPicks.rows, newSetIds);
   await restoreRatingsBatch(client, existingRatings.rows, newSetIds, setIdentityMap);
   await restoreNotesAndCaughtBatch(client, keptNotesAndCaught, newSetIds);
+  await writeMoveMarks(client, festivalId, priorSlots, children);
+}
+
+/** Deletes one festival and every row that references it. Runs inside the caller's transaction. */
+async function deleteFestivalRows(client: any, festivalId: string) {
+  // Crew grandchild rows (FK CASCADE from crews, but crews FK is RESTRICT from festivals)
+  await client.query(
+    'DELETE FROM crew_poll_votes WHERE poll_id IN (SELECT id FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1))',
+    [festivalId],
+  );
+  await client.query('DELETE FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
+    festivalId,
+  ]);
+  await client.query(
+    'DELETE FROM crew_meeting_points WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)',
+    [festivalId],
+  );
+  await client.query('DELETE FROM crew_expenses WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
+    festivalId,
+  ]);
+  await client.query('DELETE FROM crew_activity WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
+    festivalId,
+  ]);
+  await client.query('DELETE FROM crew_members WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
+    festivalId,
+  ]);
+  // Crews (FK RESTRICT from festivals)
+  await client.query('DELETE FROM crews WHERE festival_id = $1', [festivalId]);
+  // Child rows of festival_sets (FK RESTRICT — must delete before sets)
+  await client.query(
+    'DELETE FROM set_ratings WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
+    [festivalId],
+  );
+  await client.query(
+    'DELETE FROM festival_profile_picks WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
+    [festivalId],
+  );
+  await client.query(
+    'DELETE FROM festival_profile_notes WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
+    [festivalId],
+  );
+  // Festival child tables
+  await client.query('DELETE FROM festival_sets WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM festival_stages WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM festival_days WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM festival_profiles WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM calendar_tokens WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM notification_counts WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM notification_topic_subs WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM lineup_imports WHERE festival_id = $1', [festivalId]);
+  await client.query('DELETE FROM festivals WHERE id = $1', [festivalId]);
 }
 
 export default function createFestivalsStore(pool: Pool, utils: any) {
@@ -308,16 +424,13 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
 
     async replaceAll(nextFestivals: any[]) {
       return withTransaction(pool, async (client) => {
-        if (nextFestivals.length === 0) {
-          await client.query('DELETE FROM festivals');
-          return;
-        }
-
+        // Unlisted festivals go through the same cascade as hardDelete; a bare DELETE fails on their days.
         const festivalIds = nextFestivals.map((festival: any) => festival.id);
-        await client.query(
-          `DELETE FROM festivals WHERE id NOT IN (${festivalIds.map((_: any, i: number) => `$${i + 1}`).join(',')})`,
+        const { rows: unlisted } = await client.query('SELECT id FROM festivals WHERE NOT (id = ANY($1::text[]))', [
           festivalIds,
-        );
+        ]);
+        for (const row of unlisted) await deleteFestivalRows(client, row.id);
+        if (nextFestivals.length === 0) return;
 
         for (const festival of nextFestivals) {
           const createdAt = festival.createdAt || new Date().toISOString();
@@ -352,13 +465,21 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             ],
           );
 
-          // Delete old stages and batch-insert new ones
-          await client.query('DELETE FROM festival_stages WHERE festival_id = $1', [festival.id]);
+          // Upsert stages as update() does: deleting a stage row cascades into its sets
+          // (festival_sets_stage_fkey) before replaceChildRows can carry their user data across.
           const children = collectFestivalChildren(festival.id, festival);
-          await insertStagesBatch(client, children.stageRows);
+          await upsertStagesBatch(client, children.stageRows);
 
           // Replace days, sets, picks, and ratings in batch
           await replaceChildRows(client, festival.id, children);
+
+          await client.query(
+            `DELETE FROM festival_stages st
+             WHERE st.festival_id = $1
+               AND NOT (st.id = ANY($2::text[]))
+               AND NOT EXISTS (SELECT 1 FROM festival_sets s WHERE s.festival_id = st.festival_id AND s.stage_id = st.id)`,
+            [festival.id, (festival.stages || []).map((stage: any) => stage.id)],
+          );
         }
       });
     },
@@ -387,24 +508,70 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       return result.rows[0] || null;
     },
 
-    // Keeps an earlier published_at, so a second publish changes nothing visible.
-    async publish(festivalId: string, userId: string | null = null) {
-      const result = await pool.query(
-        `
+    // Keeps an earlier published_at and slug, so a second publish changes nothing visible.
+    async publish(
+      festivalId: string,
+      userId: string | null = null,
+    ): Promise<{ publishedAt: string; slug: string | null } | null> {
+      const run = () =>
+        pool.query(
+          `
   UPDATE festivals
   SET
     published_at = COALESCE(published_at, NOW()),
+    slug = COALESCE(slug, festival_next_slug (id)),
     updated_at = NOW(),
     updated_by = $2
   WHERE
     id = $1
     AND deleted_at IS NULL
   RETURNING
-    published_at AS "publishedAt"
+    published_at AS "publishedAt",
+    slug
 `,
-        [festivalId, userId],
-      );
+          [festivalId, userId],
+        );
+      let result;
+      try {
+        result = await run();
+      } catch (error: any) {
+        // Two publishes raced to one free slug; the retry sees the winner's row.
+        if (error?.code !== '23505') throw error;
+        result = await run();
+      }
       return result.rows[0] || null;
+    },
+
+    /** The festival id behind a public page slug: published and not archived, else null. */
+    async findPublicIdBySlug(slug: string): Promise<string | null> {
+      const result = await pool.query(
+        'SELECT id FROM festivals WHERE slug = $1 AND deleted_at IS NULL AND published_at IS NOT NULL',
+        [slug],
+      );
+      return result.rows[0]?.id ?? null;
+    },
+
+    /** Slugs of every public festival, for the sitemap. */
+    async listPublicSlugs(): Promise<Array<{ slug: string; updatedAt: string }>> {
+      const result = await pool.query(
+        `
+  SELECT
+    slug,
+    updated_at AS "updatedAt"
+  FROM
+    festivals
+  WHERE
+    slug IS NOT NULL
+    AND deleted_at IS NULL
+    AND published_at IS NOT NULL
+  ORDER BY
+    published_at,
+    id
+  LIMIT
+    5000
+`,
+      );
+      return result.rows.map((row: any) => ({ slug: row.slug, updatedAt: new Date(row.updatedAt).toISOString() }));
     },
 
     async listDeleted() {
@@ -474,6 +641,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           f.created_at AS "createdAt",
           f.updated_at AS "updatedAt",
           f.published_at AS "publishedAt",
+          f.slug,
           COALESCE(
             (SELECT json_agg(
               json_build_object(
@@ -494,7 +662,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
                  COALESCE(d.date, '') AS date,
                  COALESCE(
                    (SELECT json_agg(
-                     json_build_object(
+                     (json_build_object(
                        'id', fs.id,
                        'artist', fs.artist,
                        'artists', COALESCE(fs.artists, '[]'::jsonb),
@@ -502,7 +670,9 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
                        'startTime', fs.start_time,
                        'endTime', fs.end_time,
                        'linkUrl', fs.link_url
-                     )
+                     )::jsonb
+                       || CASE WHEN fs.moved_at IS NULL THEN '{}'::jsonb
+                               ELSE jsonb_build_object('movedAt', fs.moved_at, 'movedFrom', fs.moved_from) END)
                      ORDER BY fs.sort_order ASC
                    )
                    FROM festival_sets fs
@@ -524,54 +694,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
     },
 
     async hardDelete(festivalId: string) {
-      return withTransaction(pool, async (client) => {
-        // Crew grandchild rows (FK CASCADE from crews, but crews FK is RESTRICT from festivals)
-        await client.query(
-          'DELETE FROM crew_poll_votes WHERE poll_id IN (SELECT id FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1))',
-          [festivalId],
-        );
-        await client.query('DELETE FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
-          festivalId,
-        ]);
-        await client.query(
-          'DELETE FROM crew_meeting_points WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)',
-          [festivalId],
-        );
-        await client.query('DELETE FROM crew_expenses WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
-          festivalId,
-        ]);
-        await client.query('DELETE FROM crew_activity WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
-          festivalId,
-        ]);
-        await client.query('DELETE FROM crew_members WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1)', [
-          festivalId,
-        ]);
-        // Crews (FK RESTRICT from festivals)
-        await client.query('DELETE FROM crews WHERE festival_id = $1', [festivalId]);
-        // Child rows of festival_sets (FK RESTRICT — must delete before sets)
-        await client.query(
-          'DELETE FROM set_ratings WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
-          [festivalId],
-        );
-        await client.query(
-          'DELETE FROM festival_profile_picks WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
-          [festivalId],
-        );
-        await client.query(
-          'DELETE FROM festival_profile_notes WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)',
-          [festivalId],
-        );
-        // Festival child tables
-        await client.query('DELETE FROM festival_sets WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM festival_stages WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM festival_days WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM festival_profiles WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM calendar_tokens WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM notification_counts WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM notification_topic_subs WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM lineup_imports WHERE festival_id = $1', [festivalId]);
-        await client.query('DELETE FROM festivals WHERE id = $1', [festivalId]);
-      });
+      return withTransaction(pool, (client) => deleteFestivalRows(client, festivalId));
     },
 
     async create(festival: any) {
@@ -604,6 +727,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         await insertStagesBatch(client, stageRows);
         await insertDaysBatch(client, dayRows);
         await insertSetsBatch(client, setRows);
+        // After the days, so the slug takes the first day's year. Drafts stay without one.
+        await client.query(
+          'UPDATE festivals SET slug = festival_next_slug(id) WHERE id = $1 AND slug IS NULL AND published_at IS NOT NULL',
+          [festival.id],
+        );
 
         const result = await client.query(
           `
@@ -617,7 +745,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             map_config AS "mapConfig",
             created_at AS "createdAt",
             updated_at AS "updatedAt",
-            published_at AS "publishedAt"
+            published_at AS "publishedAt",
+            slug
           FROM
             festivals
           WHERE

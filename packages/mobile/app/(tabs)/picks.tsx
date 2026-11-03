@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   View,
   Text,
   FlatList,
@@ -17,7 +18,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, useCrewStore, useFestivalDataStore, useUIStore, selectMyPicks } from '@festie/shared/stores';
 import { usePicks, useFestival, usePicksPlan, usePickClear, useBulkAddPicks } from '@festie/shared/hooks';
@@ -42,7 +43,7 @@ import {
   fmtZonedClock,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
-import { COPY, PRIORITY_SYMBOLS } from '@festie/shared/constants';
+import { COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
@@ -142,6 +143,17 @@ export default function PicksScreen() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [listenOpen, setListenOpen] = useState(false);
   const listRef = useRef<FlatList<Row>>(null);
+  // The clash chip on the schedule opens this tab with show=clashes.
+  const { show } = useLocalSearchParams<{ show?: string }>();
+  const [clashY, setClashY] = useState<number | null>(null);
+  useEffect(() => {
+    if (show !== 'clashes' || clashY === null) return;
+    listRef.current?.scrollToOffset({ offset: clashY, animated: !reduceMotion });
+    AccessibilityInfo.announceForAccessibility(
+      conflictGroups.length ? clashCount(conflictGroups.length) : COPY.clash.none,
+    );
+    router.setParams({ show: undefined });
+  }, [show, clashY, reduceMotion, conflictGroups.length, router]);
 
   const { getMyPick, savePick, getMyNote, getMyReminder } = usePicks();
   const { getDays, getStageColor, getStageName } = useFestival();
@@ -1013,7 +1025,9 @@ export default function PicksScreen() {
       {searchField}
       <CrewSuggestionStrip />
       <RateNightBanner />
-      <ClashCards groups={conflictGroups} days={days} />
+      <View onLayout={(e) => setClashY(e.nativeEvent.layout.y)}>
+        <ClashCards groups={conflictGroups} days={days} />
+      </View>
       {bulkPanel}
       {listenSection}
     </View>
@@ -1053,7 +1067,7 @@ export default function PicksScreen() {
       <EmptyState
         icon="checkmark-circle-outline"
         title={COPY.clash.none}
-        message="Nothing on your plan overlaps — you're all set."
+        message={COPY.clash.noneBody}
         action={{ label: 'Show all picks', onPress: clearFilters }}
       />
     ) : (

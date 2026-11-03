@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   GRID_ZOOM_LEVELS, buildClashMarks, defaultZoomIndex, gridNeighbour, groupUntimedByStage,
-  nextPickInCycle, pickClashTarget, twoUpColumnWidth,
+  nextPickInCycle, twoUpColumnWidth,
 } from './scheduleGrid';
 import type { ConflictGroup, ConflictPick } from './pickConflicts';
 import type { FestivalSet, Stage } from '../types/domain';
@@ -69,23 +69,6 @@ describe('buildClashMarks', () => {
   it('merges segments from two partners covering the same slice', () => {
     const marks = buildClashMarks([group(pick('a', 0, 60), pick('b', 30, 60), pick('c', 30, 90))], label);
     expect(marks.get('a')!.segments).toEqual([{ from: 0.5, to: 1 }]);
-  });
-});
-
-describe('pickClashTarget', () => {
-  const early = group(pick('a', 0, 60, { stageId: 's1' }), pick('b', 30, 90, { stageId: 's2' }));
-  const late = group(pick('c', 120, 180, { stageId: 's1' }), pick('d', 150, 200, { stageId: 's1' }));
-  it('returns null with no groups', () => {
-    expect(pickClashTarget([], new Set(['s1']))).toBeNull();
-  });
-  it('chooses the earliest overlap', () => {
-    expect(pickClashTarget([late, early], new Set(['s1', 's2']))).toEqual({ set: early.picks[0]!.set, visible: true });
-  });
-  it('falls back to the other pick when the first stage is hidden', () => {
-    expect(pickClashTarget([early], new Set(['s2']))!.set.id).toBe('b');
-  });
-  it('reports visible false when every pick is hidden', () => {
-    expect(pickClashTarget([early], new Set())).toEqual({ set: early.picks[0]!.set, visible: false });
   });
 });
 

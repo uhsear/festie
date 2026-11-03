@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminCommandPalette from './AdminCommandPalette';
 
 const setAdminSearch = vi.fn();
@@ -52,5 +52,20 @@ describe('AdminCommandPalette', () => {
     const input = openPalette();
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(screen.queryByPlaceholderText(PLACEHOLDER)).toBeNull();
+  });
+
+  it('returns focus to the opener on Escape', async () => {
+    render(
+      <>
+        <button type="button">Find</button>
+        <AdminCommandPalette />
+      </>,
+    );
+    const opener = screen.getByRole('button', { name: 'Find' });
+    opener.focus();
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    fireEvent.keyDown(screen.getByPlaceholderText(PLACEHOLDER), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByPlaceholderText(PLACEHOLDER)).toBeNull());
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });

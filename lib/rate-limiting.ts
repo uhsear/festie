@@ -26,6 +26,8 @@ import { loadConfig } from './config.js';
 import { redisRateCheck as redisRateCheckFn } from './redis.js';
 
 const FALLBACK_WARN_INTERVAL_MS = 30_000;
+// Guests behind one festival IP keep their own token buckets; one caller cycling tokens is capped per IP.
+const ANON_TOKEN_IP_MULTIPLIER = 10;
 
 function resolveClusterSize(config: any) {
   if (config && Number.isFinite(config.CLUSTER_SIZE)) {
@@ -166,29 +168,47 @@ function createRateLimiters({
     };
   }
 
-  function rateLimit(max = config.RATE_LIMIT_MAX, scope = '') {
+  // anonIpCap: false only for app-level mounts, which run before userAuth so signed-in traffic has no req.user.
+  function rateLimit(max = config.RATE_LIMIT_MAX, scope = '', { anonIpCap = true } = {}) {
     return async (req: any, res: any, next: any) => {
       const ip = getRequestIp(req);
       let rateLimitKey = ip;
+      let anonToken = false;
       if (req.user?.userId) {
         rateLimitKey = `user:${req.user.userId}`;
       } else {
         const { token } = resolveRequestToken(req, 'x-user-token', config.USER_SESSION_COOKIE);
         if (token && token.length >= 16) {
           rateLimitKey = `tok:${hashSessionToken(token)}`;
+          anonToken = anonIpCap;
         }
       }
 
       if (scope) {
-        const result = await tryRedisRateCheck({
-          redisClient: redis,
-          redisKey: `rl:${scope}:${rateLimitKey}`,
-          max,
-          windowMs: config.RATE_LIMIT_WINDOW,
-          fallbackMap: state.routeRateLimits,
-          fallbackKey: `${scope}:${rateLimitKey}`,
-          tier: 'scoped',
-        });
+        const checkScoped = (key: string, limit: number) =>
+          tryRedisRateCheck({
+            redisClient: redis,
+            redisKey: `rl:${scope}:${key}`,
+            max: limit,
+            windowMs: config.RATE_LIMIT_WINDOW,
+            fallbackMap: state.routeRateLimits,
+            fallbackKey: `${scope}:${key}`,
+            tier: 'scoped',
+          });
+        let result = await checkScoped(rateLimitKey, max);
+        // An unvalidated token is caller-chosen, so also cap the real client IP.
+        if (anonToken) {
+          const ipKey = `ip:${ip}`;
+          const ipResult = await checkScoped(ipKey, max * ANON_TOKEN_IP_MULTIPLIER);
+          const ipCloser =
+            ipResult.limited !== result.limited
+              ? ipResult.limited
+              : ipResult.remaining / ipResult.limit < result.remaining / result.limit;
+          if (ipCloser) {
+            result = ipResult;
+            rateLimitKey = ipKey;
+          }
+        }
 
         res.setHeader('X-RateLimit-Limit', String(result.limit));
         res.setHeader('X-RateLimit-Remaining', String(result.remaining));
@@ -204,6 +224,7 @@ function createRateLimiters({
             });
           }
           res.setHeader('Retry-After', String(result.retryAfter));
+          promMetrics?.rateLimitHitsCounter?.inc({ tier: 'route', action: scope });
           return sendError(res, 429, 'Too many requests', ErrorCodes.RATE_LIMITED);
         }
         return next();
@@ -233,6 +254,7 @@ function createRateLimiters({
           });
         }
         res.setHeader('Retry-After', String(result.retryAfter));
+        promMetrics?.rateLimitHitsCounter?.inc({ tier: 'route', action: 'default' });
         return sendError(res, 429, 'Too many requests', ErrorCodes.RATE_LIMITED);
       }
       return next();
@@ -249,6 +271,7 @@ function createRateLimiters({
             if (result.limited) {
               log.warn('rate-limit:exceeded', { scope: `auth:${ip}`, ip, path: req.path, userId: req.user?.userId });
               res.set('Retry-After', String(Math.max(1, Math.ceil(result.resetMs / 1000))));
+              promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
               return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
             }
             return next();
@@ -277,6 +300,7 @@ function createRateLimiters({
         });
         const retryAfter = Math.ceil((entry.start + config.AUTH_RATE_LIMIT_WINDOW - now) / 1000);
         res.set('Retry-After', String(Math.max(1, retryAfter)));
+        promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
         return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
       }
       return next();

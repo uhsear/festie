@@ -20,7 +20,8 @@ export interface InvitePreview {
 export type InvitePreviewResult =
   | { status: 'ok'; preview: InvitePreview }
   | { status: 'expired' }
-  | { status: 'invalid' };
+  | { status: 'invalid' }
+  | { status: 'locked' };
 
 const INVITE_CODE_PATTERN = /^[A-Z0-9]{4,12}$/;
 
@@ -36,6 +37,8 @@ export async function loadInvitePreview(
     const expired = await stores.crews.getExpiredByInviteCode(code);
     return { status: expired ? 'expired' : 'invalid' };
   }
+  // T54: a locked crew shows only its status, so no member read happens.
+  if (crew.inviteLocked) return { status: 'locked' };
 
   const [members, festival] = await Promise.all([
     stores.crews.getMembers(crew.id),

@@ -1,5 +1,6 @@
 import { useCrewStore } from './crewStore';
 import { useUIStore } from './uiStore';
+import { useInboxStore } from './inboxStore';
 import { useFestivalDataStore } from './festivalDataStore';
 import { useFestivalUIStore } from './festivalUIStore';
 import { useFestivalModeStore } from './festivalModeStore';
@@ -16,6 +17,7 @@ export function resetAllStores(): void {
     currentFestival: null,
     currentProfile: null,
     allProfiles: [],
+    pickCounts: {},
     sets: [],
     stages: [],
     days: [],
@@ -37,6 +39,7 @@ export function resetAllStores(): void {
     scheduleGroupBy: null,
     prefsFestivalId: null,
     byFestival: {},
+    viewAsProfileId: null,
   });
   useCrewStore.setState({
     crews: [],
@@ -66,7 +69,9 @@ export function resetAllStores(): void {
     failedSync: [],
     onlineUsers: [],
     toasts: [],
+    crewBadgeSeen: {},
   });
+  useInboxStore.setState({ items: [], seenAt: null, loaded: false, loading: false, error: null });
   useFestivalModeStore.setState({ lowPowerMode: false });
   useLiveLocationStore.getState().reset();
   // Offline-readiness (disk-persisted per-festival download state) and

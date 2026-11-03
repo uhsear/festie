@@ -15,6 +15,7 @@ import createCrewDaysRoutes from './crew-days.js';
 import createSosRoutes from './crew-sos.js';
 import createLiveLocationRoutes from './crew-live-location.js';
 import createCheckinRoutes from './crew-checkin.js';
+import createCrewNudgeRoutes from './crew-nudge.js';
 import createCrewMemberRoutes from './crew-members.js';
 
 /**
@@ -150,6 +151,9 @@ export default function createCrewRoutes(deps: any) {
       // Crew totem: crowd-finding sign name + emoji. Snake-cased on the wire.
       totem_name: crew.totemName ?? null,
       totem_emoji: crew.totemEmoji ?? null,
+      // T54: members see the lock live through crew:updated; Plan B never leaves the crew room.
+      inviteLocked: !!crew.inviteLocked,
+      homeBasePlanB: crew.homeBasePlanB ?? null,
     };
     // Every member can share the invite; only the owner can regenerate it.
     // Broadcasts pass no requester, so they never carry the code.
@@ -199,6 +203,8 @@ export default function createCrewRoutes(deps: any) {
         const result = await loadInvitePreview({ stores, getFestivalById }, req.validatedParams.inviteCode);
         if (result.status === 'expired') return sendError(res, 410, 'Invite code has expired', ErrorCodes.NOT_FOUND);
         if (result.status === 'invalid') return sendError(res, 404, 'Invalid invite code', ErrorCodes.NOT_FOUND);
+        if (result.status === 'locked')
+          return sendError(res, 403, "This crew isn't taking new members.", ErrorCodes.CREW_LOCKED);
         res.setHeader('Cache-Control', 'no-store');
         return sendSuccess(res, result.preview);
       } catch (error: any) {
@@ -219,6 +225,7 @@ export default function createCrewRoutes(deps: any) {
   const sosRoutes = createSosRoutes(subDeps);
   const liveLocationRoutes = createLiveLocationRoutes(subDeps);
   const checkinRoutes = createCheckinRoutes(subDeps);
+  const nudgeRoutes = createCrewNudgeRoutes(subDeps);
   const memberRoutes = createCrewMemberRoutes(subDeps);
 
   router.use('/', inviteRoutes);
@@ -231,6 +238,7 @@ export default function createCrewRoutes(deps: any) {
   router.use('/', sosRoutes);
   router.use('/', liveLocationRoutes);
   router.use('/', checkinRoutes);
+  router.use('/', nudgeRoutes);
   router.use('/', memberRoutes);
 
   // ── Crew creation helpers ────────────────────────────────────────
@@ -629,8 +637,14 @@ export default function createCrewRoutes(deps: any) {
         } else {
           updateData.totemEmoji = crew.totemEmoji ?? null;
         }
+        // Lock: only written when sent. It never touches invite_code or invite_expires_at.
+        const inviteLocked = req.validatedBody.inviteLocked;
+        if (inviteLocked !== undefined) updateData.inviteLocked = inviteLocked;
 
         await stores.crews.update(updateData);
+        if (inviteLocked !== undefined && inviteLocked !== !!crew.inviteLocked) {
+          log.info('crew:lock-changed', { crewId, userId: req.user.userId, inviteLocked });
+        }
         const updated = await stores.crews.getById(crewId);
         const members = await stores.crews.getMembers(crewId);
 

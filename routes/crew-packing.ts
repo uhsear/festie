@@ -80,7 +80,7 @@ export default function createCrewPackingRoutes(deps: any) {
         await stores.activity
           .log(activity)
           .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+          .catch((err: any) => log.warn('packing-created activity log failed', { crewId, error: err.message }));
         return sendSuccess(res, { item });
       } catch (err: any) {
         log.error('create packing item error', { error: err.message });
@@ -134,7 +134,7 @@ export default function createCrewPackingRoutes(deps: any) {
         await stores.activity
           .log(activity)
           .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+          .catch((err: any) => log.warn('packing-created activity log failed', { crewId, error: err.message }));
         return sendSuccess(res, { items });
       } catch (err: any) {
         log.error('batch packing items error', { error: err.message });

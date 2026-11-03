@@ -104,7 +104,7 @@ function makeInviteDeps(overrides: any = {}) {
   const deps = {
     express,
     config: { NODE_ENV: 'test', PUBLIC_ORIGIN: 'http://localhost:3000', MAX_PROFILES_PER_FESTIVAL: 100 },
-    log: noopLog,
+    log: overrides.log || noopLog,
     // ensureFestivalProfile (lib/festival-profile.ts) reads these.
     getUserFestivalProfile: overrides.getUserFestivalProfile || mock.fn(async () => ({ id: 'prof-1', userId: 'user-1' })),
     getUserById: mock.fn(async (id: any) => ({ id, username: 'testuser' })),
@@ -126,6 +126,7 @@ function makeInviteDeps(overrides: any = {}) {
       ALREADY_EXISTS: 'ALREADY_EXISTS',
       MAX_LIMIT_REACHED: 'MAX_LIMIT_REACHED',
       INTERNAL_ERROR: 'INTERNAL_ERROR',
+      CREW_LOCKED: 'CREW_LOCKED',
     },
     rateLimit: overrides.rateLimit || (() => (_req: any, _res: any, next: any) => next()),
     validate: overrides.validate || (() => (req: any, _res: any, next: any) => { req.validatedBody = req.body; next(); }),
@@ -850,5 +851,93 @@ describe('routes/crew-invites.js -- feed row and push on join', () => {
       kind: 'member',
       text: 'testuser joined',
     });
+  });
+});
+
+describe('routes/crew-invites.js -- locked crew (T54)', () => {
+  const LOCKED = "This crew isn't taking new members.";
+
+  test('refuses a new user with 403 CREW_LOCKED and creates no profile or membership', async () => {
+    const addMember = mock.fn(async () => 'added');
+    const getUserFestivalProfile = mock.fn(async () => null);
+    const create = mock.fn(async (p: any) => p);
+    const log = { ...noopLog, info: mock.fn() };
+    const ioObj = makeIo();
+    const { app } = await buildInviteApp({
+      log,
+      io: ioObj,
+      getUserFestivalProfile,
+      stores: {
+        crews: { getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW, inviteLocked: true })), addMember },
+        profiles: { create },
+      },
+    });
+
+    const res = await request(app).post('/join').send({ inviteCode: 'ABC123' });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'CREW_LOCKED');
+    assert.equal(res.body.error.message, LOCKED);
+    assert.equal(addMember.mock.calls.length, 0);
+    assert.equal(getUserFestivalProfile.mock.calls.length, 0);
+    assert.equal(create.mock.calls.length, 0);
+    assert.equal(ioObj._emit.mock.calls.length, 0);
+    const logged = (log.info.mock.calls as any[]).map((c) => c.arguments);
+    assert.deepEqual(logged, [['crew:join-refused-locked', { crewId: 'crew-1', userId: 'user-1' }]]);
+  });
+
+  test('a member replaying the join still gets 200 alreadyMember', async () => {
+    const { app } = await buildInviteApp({
+      stores: {
+        crews: {
+          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW, inviteLocked: true })),
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+        },
+      },
+    });
+
+    const res = await request(app).post('/join').send({ inviteCode: 'ABC123' });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.alreadyMember, true);
+  });
+
+  test('a lock that lands before the insert maps addMember locked to 403', async () => {
+    const ioObj = makeIo();
+    const activity = { log: mock.fn(async () => 'act-1') };
+    const { app } = await buildInviteApp({
+      io: ioObj,
+      activity,
+      stores: {
+        crews: {
+          getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          addMember: mock.fn(async () => 'locked'),
+        },
+      },
+    });
+
+    const res = await request(app).post('/join').send({ inviteCode: 'ABC123' });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'CREW_LOCKED');
+    assert.equal(res.body.error.message, LOCKED);
+    assert.equal(ioObj._emit.mock.calls.length, 0);
+    assert.equal(activity.log.mock.calls.length, 0);
+  });
+
+  test('an unlocked crew joins and passes inviteJoin to addMember', async () => {
+    const addMember = mock.fn(async () => 'added');
+    const { app } = await buildInviteApp({
+      stores: {
+        crews: { getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW, inviteLocked: false })), addMember },
+      },
+    });
+
+    const res = await request(app).post('/join').send({ inviteCode: 'ABC123' });
+
+    assert.equal(res.status, 200);
+    const args = (addMember.mock.calls as any[])[0].arguments;
+    assert.equal(args[1], DEFAULT_CREW.maxMembers);
+    assert.deepEqual(args[2], { inviteJoin: true });
   });
 });

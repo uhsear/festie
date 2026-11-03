@@ -14,6 +14,7 @@ import {
   dropLivePosition,
   writeLivePosition,
 } from '../lib/live-location-cache.js';
+import { noteBatteryLevel } from '../lib/battery-low.js';
 
 /**
  * Crew live location over HTTP (background sharing, T41).
@@ -50,6 +51,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
     validateParams,
     io,
     redis,
+    emitter,
   } = deps;
 
   const router = Router({ mergeParams: true });
@@ -113,6 +115,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
         };
         if (io) io.to('crew:' + crewId).emit('location:peer-update', payload);
         void writeLivePosition(redis, crewId, payload);
+        void noteBatteryLevel({ redis, stores, emitter, log }, payload);
         return sendSuccess(res, { serverAt });
       } catch (err) {
         log.error('live location fix failed', {

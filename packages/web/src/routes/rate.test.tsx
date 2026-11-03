@@ -104,6 +104,20 @@ describe('RatePage', () => {
     expect(screen.getByRole('link', { name: 'See your wrap' })).toHaveAttribute('href', '/wrap?festival=f1');
   });
 
+  it('links the full list from the flow, the All rated state and the empty state', async () => {
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(screen.getByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
+  });
+
+  it('links the full list from the nothing-to-rate state', async () => {
+    mocks.toRate = [];
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
+  });
+
   it('marks a rated set as seen', async () => {
     renderPage();
     fireEvent.click(await screen.findByText('rate-five'));

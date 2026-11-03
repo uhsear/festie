@@ -101,6 +101,7 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     'currentFestival',
     'currentProfile',
     'allProfiles',
+    'pickCounts',
     'sets',
     'stages',
     'days',

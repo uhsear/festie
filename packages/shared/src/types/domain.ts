@@ -82,6 +82,8 @@ export interface Festival {
   b2bSeparator?: string;
   /** null = draft, visible to admins only. */
   publishedAt?: string | null;
+  /** Public page slug (festie.us/f/<slug>); null or absent for drafts and old servers. */
+  slug?: string | null;
   /**
    * Optional IANA time-zone id (e.g. `America/New_York`). When present, set
    * reminders are anchored in the festival's zone so they fire at the right
@@ -150,6 +152,13 @@ export interface Artist {
 // serialized set (nullable `startTime`/`endTime`/`stageId`, no `festivalId`/
 // `stageName`/`date`/`dayIndex`/`createdAt`/`updatedAt`); this domain model is a
 // superset with required times. Kept hand-written.
+export interface SetMovedFrom {
+  dayIndex: number;
+  stageId: string | null;
+  start: string | null;
+  end: string | null;
+}
+
 export interface FestivalSet {
   id: string;
   festivalId: string;
@@ -162,6 +171,10 @@ export interface FestivalSet {
   artist?: string;
   artists?: Artist[];
   linkUrl?: string;
+  /** T46: present only for 48 hours after an admin moved the set. */
+  movedAt?: string;
+  /** T46: present only for 48 hours after an admin moved the set. */
+  movedFrom?: SetMovedFrom;
   createdAt: string;
   updatedAt: string;
 }
@@ -270,6 +283,10 @@ export interface Crew {
   // was reformed from, or null/absent for a normally-created crew. Surfaced by
   // routes/crews.ts so the UI can show "your crew last year". Additive/optional.
   reformedFrom?: string | null;
+  /** T54: owner "Lock crew". While true the invite code joins nobody; the code itself is kept. */
+  inviteLocked?: boolean;
+  /** T54: Home Base "Plan B" line ("If we lose each other: ..."). Null when unset or Home Base has no location. */
+  homeBasePlanB?: string | null;
   createdAt: string;
   updatedAt: string;
   /**
@@ -430,6 +447,13 @@ export interface CrewMeetingPoint {
   creator_name?: string;
   /** T43: user ids who tapped "I'll be there", oldest first. Absent on old servers and the past list. */
   coming?: string[];
+  /** T54: the member who made the last time or place edit. Written only by the server. */
+  edited_by?: string | null;
+  edited_at?: string | null;
+  /** T54: the values before that edit; a key is present only for the field that changed. `meetAt: null` means there was no time. */
+  edit_was?: { location?: string; meetAt?: string | null } | null;
+  /** T54: the editor's username; null when the editor's account is gone. */
+  editor_name?: string | null;
   active: boolean;
   created_at: string;
   /** Client-only optimistic-offline flag (see CrewPoll._optimistic). */

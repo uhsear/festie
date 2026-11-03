@@ -16,6 +16,8 @@ import { useSharedSocket } from '../../lib/socketContext';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
+import Switch from '../ui/Switch';
+import { useReturnFocus } from '../../hooks/useReturnFocus';
 import SosRaiseButton from './SosRaiseButton';
 import CheckInCard from './CheckInCard';
 import { BeaconButton } from './BeaconOverlay';
@@ -70,6 +72,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
   // mobile — the raiser's phone may be dead), but a stray tap must not silently
   // clear a live emergency, so clearing is confirm-gated like the raise. null = closed.
   const [clearTarget, setClearTarget] = useState<SosEntry | null>(null);
+  const returnFocus = useReturnFocus();
 
   function toggleSharing() {
     if (isSharingThisCrew) {
@@ -205,25 +208,14 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
               {lowPowerMode ? LOW_POWER_COPY.livePaused : LIVE_SHARE_COPY.ruleWeb}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isSharingThisCrew}
-            aria-label={LIVE_SHARE_COPY.switchA11y}
-            aria-describedby="live-share-desc"
-            onClick={toggleSharing}
+          <Switch
+            checked={isSharingThisCrew}
+            onChange={() => toggleSharing()}
+            label={LIVE_SHARE_COPY.switchA11y}
+            describedBy="live-share-desc"
             disabled={lowPowerMode}
             data-testid="live-share-toggle"
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua disabled:opacity-40 disabled:cursor-not-allowed ${
-              isSharingThisCrew ? 'bg-accent-aqua' : 'bg-border-light'
-            }`}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                isSharingThisCrew ? 'translate-x-[22px]' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
         </div>
         {lowPowerMode && (
           <Button variant="outline" size="sm" onClick={() => setLowPowerMode(false)}>
@@ -290,8 +282,8 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
           not silently resolve a live emergency) ────────────────────────────── */}
       <Dialog.Root open={!!clearTarget} onOpenChange={(o: boolean) => !clearBusy && !o && setClearTarget(null)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
+          <Dialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
+          <Dialog.Content {...returnFocus} className="fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
             {clearTarget && (
               <>
                 <div className="flex items-start justify-between gap-3">

@@ -143,4 +143,18 @@ describe('FestivalAnnouncements', () => {
     expect(await screen.findByText(/^Sent /)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Take down banner' })).not.toBeInTheDocument();
   });
+
+  it('load fails, shows the error, disables submit, Retry reloads', async () => {
+    const user = userEvent.setup();
+    api.adminList.mockRejectedValueOnce(new Error('down'));
+    renderIt();
+    expect(await screen.findByText("Couldn't load announcements")).toBeInTheDocument();
+    expect(screen.queryByText(/No announcements/i)).not.toBeInTheDocument();
+    await fill(user);
+    expect(screen.getByRole('button', { name: /^Send to/ })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByText("Couldn't load announcements")).not.toBeInTheDocument());
+    expect(api.adminList).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Send to 3 people' })).toBeEnabled();
+  });
 });

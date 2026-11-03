@@ -1,4 +1,46 @@
-import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref, sosPushCrewId } from './dayOfRoutes';
+import {
+  CREW_MEET_HREF,
+  SCHEDULE_HREF,
+  compassHref,
+  peerCompassHref,
+  meetHref,
+  meetingPointPrefillHref,
+  sosPushCrewId,
+  stageMapHref,
+} from './dayOfRoutes';
+
+describe('map entry routes', () => {
+  it('builds the stage map href', () => {
+    expect(stageMapHref('s1')).toEqual({ pathname: '/(tabs)/map', params: { focusStage: 's1' } });
+  });
+
+  it('stringifies compass coordinates, negatives included', () => {
+    expect(compassHref('Mainstage', { latitude: 35.5, longitude: -86.25 })).toEqual({
+      pathname: '/compass',
+      params: { label: 'Mainstage', latitude: '35.5', longitude: '-86.25' },
+    });
+  });
+
+  it('builds the peer compass href', () => {
+    expect(peerCompassHref('u1')).toEqual({ pathname: '/compass', params: { peer: 'u1' } });
+  });
+
+  it('builds the meeting-point prefill href, with an empty stage reference for an amenity', () => {
+    const coord = { latitude: 35.5, longitude: -86.25 };
+    expect(meetingPointPrefillHref({ id: 's1', kind: 'stage', name: 'Mainstage', kindLabel: 'Stage', coord })).toEqual({
+      pathname: '/meeting-point-new',
+      params: {
+        lat: '35.5',
+        lng: '-86.25',
+        label: 'Meet at Mainstage',
+        location: 'Mainstage',
+        stageReference: 'Mainstage',
+      },
+    });
+    const amenity = meetingPointPrefillHref({ id: 'a1', kind: 'amenity', name: 'Water', kindLabel: 'Water', coord });
+    expect((amenity as { params: Record<string, string> }).params.stageReference).toBe('');
+  });
+});
 
 describe('day-of routes', () => {
   it('sends Browse lineup to the schedule tab, not the missing /schedule route', () => {

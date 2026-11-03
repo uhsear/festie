@@ -45,7 +45,6 @@ export default function PickBulkActions() {
         type="button"
         className="flex items-center gap-2 w-full px-4 py-3 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-xl"
         aria-expanded={open}
-        aria-label={`Bulk add picks for all days, ${open ? 'collapse' : 'expand'}`}
         onClick={() => setOpen((v) => !v)}
       >
         <Sparkles className="w-4 h-4 text-accent-aqua" aria-hidden="true" />

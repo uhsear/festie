@@ -2,7 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, AlertTriangle, Navigation, X } from 'lucide-react';
+import { MapPin, AlertTriangle, Navigation, X, LocateFixed } from 'lucide-react';
 import {
   extractMeetingPointPins,
   extractStagePins,
@@ -12,9 +12,21 @@ import {
   amenityGlyph,
   pickFestivalCamera,
   buildPursuit,
-  nearestPin,
   pickMapStyle,
   hasOfflineBasemap,
+  MAP_AMENITY_CATEGORIES,
+  NEAREST_AMENITY_TYPES,
+  MAP_COPY,
+  humanizeAmenityType,
+  locationPromptCopy,
+  nearestMissingCopy,
+  nearestStep,
+  nearestTarget,
+  placeFromPin,
+  placeTarget,
+  findMapPin,
+  type MapPlace,
+  type NearestStep,
   type MapPin as Pin,
 } from '@festie/shared/utils';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -22,11 +34,14 @@ import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, Amenity
 import EmptyState from '../ui/EmptyState';
 import { type MapLibre, type PursueTarget } from './crew-map/mapDom';
 import { useGeolocationWatch } from './crew-map/useGeolocationWatch';
+import { useSelfMarker } from './crew-map/useSelfMarker';
+import PlaceCard from './crew-map/PlaceCard';
 import { useMeetingPointMarkers } from './crew-map/useMeetingPointMarkers';
 import { useStageMarkers } from './crew-map/useStageMarkers';
 import { useAmenityMarkers } from './crew-map/useAmenityMarkers';
 import { usePeerMarkers } from './crew-map/usePeerMarkers';
 import { useSosMarkers } from './crew-map/useSosMarkers';
+import PeerNudgeButton from './crew-map/PeerNudgeButton';
 import { useZoneLayer } from './crew-map/useZoneLayer';
 import { useSiteplanLayer } from './crew-map/useSiteplanLayer';
 import { useDraftMarkers } from './crew-map/useDraftMarkers';
@@ -112,29 +127,13 @@ interface Props {
   draftPoints?: { latitude: number; longitude: number }[];
   /** Height classes for the map canvas. Defaults to the 288 px crew-tab size. */
   canvasClassName?: string;
+  /** A stage pin id to fly to and open on arrival (from "Show stage on map"). */
+  focusPinId?: string | null;
+  /** Called once the focus was applied, so the caller can clear its search param. */
+  onFocusHandled?: () => void;
+  /** Offers "Set as meeting point" on a place card. Omit for guests. */
+  onSetMeetingPoint?: (place: MapPlace) => void;
 }
-
-// Amenity categories the filter chips can toggle, in display order. Mirrors the
-// AmenityType union; each renders a token chip carrying its shared glyph.
-const AMENITY_CATEGORIES: AmenityType[] = [
-  'water',
-  'medical',
-  'toilet',
-  'food',
-  'atm',
-  'entrance',
-  'exit',
-  'info',
-  'charging',
-];
-
-// The "nearest X" quick targets — the amenity categories crew most often need to
-// reach fast. Each finds the closest pin of that type and pursues it.
-const NEAREST_TARGETS: { type: AmenityType; label: string }[] = [
-  { type: 'medical', label: 'medical' },
-  { type: 'water', label: 'water' },
-  { type: 'toilet', label: 'toilet' },
-];
 
 // One-shot guard for the process-global `maplibregl.addProtocol('pmtiles', …)`
 // registration below (see the map-lifecycle effect). It holds the in-flight
@@ -163,6 +162,9 @@ export default function CrewMap({
   draftPoints,
   authoring = false,
   canvasClassName = 'h-72',
+  focusPinId,
+  onFocusHandled,
+  onSetMeetingPoint,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // 'pending' until we know whether the GL library mounted; flips to 'error' on
@@ -198,16 +200,27 @@ export default function CrewMap({
   // Hidden amenity categories — toggled off via the filter chips. Default: all
   // shown (empty set). Component-local only, never persisted to the backend.
   const [hiddenAmenities, setHiddenAmenities] = useState<Set<AmenityType>>(() => new Set());
+  // Place card + Nearest state. The card and the pursue bar share one slot.
+  const interactive = !authoring;
+  const [place, setPlace] = useState<MapPlace | null>(null);
+  const [pendingNearest, setPendingNearest] = useState<AmenityType | null>(null);
+  const [nearestNotice, setNearestNotice] = useState<{ kind: 'missing'; type: AmenityType } | null>(null);
 
   // Select (or toggle off) a pursue target. Stable identity so the marker
   // effects don't re-run just because this changed.
   const selectPursue = useCallback((next: PursueTarget) => {
     setPursue((prev) => (prev && prev.id === next.id ? null : next));
+    setPlace(null);
   }, []);
   const clearPursue = useCallback(() => setPursue(null), []);
 
   // Browser geolocation watch — the user's own GPS fix for pursue / nearest-X.
-  const { selfCoord, geoState, enableLocation } = useGeolocationWatch();
+  const { selfCoord, accuracyM, geoState, enableLocation, retryLocation } = useGeolocationWatch();
+  // A weak signal or a blocked prompt needs a fresh watch; otherwise just start one.
+  const locate = useCallback(() => {
+    if (geoState === 'unavailable' || geoState === 'denied') retryLocation();
+    else enableLocation();
+  }, [geoState, retryLocation, enableLocation]);
 
   const pins = useMemo<Pin[]>(
     () => extractMeetingPointPins(meetingPoints as unknown as CrewMeetingPoint[]),
@@ -364,28 +377,95 @@ export default function CrewMap({
     [selfCoord, liveTarget],
   );
 
-  // "Nearest X": find the closest amenity of a category to self, select it as the
-  // pursue target. Searches the FULL amenity set (ignores filter visibility) so
-  // "nearest medical" still works when medical is toggled off.
-  const pursueNearest = useCallback(
-    (type: AmenityType, label: string) => {
-      if (!selfCoord) {
-        enableLocation();
+  // Tapping a marker opens its place card. Remember the marker so closing the card
+  // can return focus to it.
+  const openerRef = useRef<HTMLElement | null>(null);
+  const selectPlace = useCallback((pin: Pin) => {
+    const active = document.activeElement;
+    openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    setPlace(placeFromPin(pin));
+    setPursue(null);
+  }, []);
+  const closePlace = useCallback(() => {
+    setPlace(null);
+    const opener = openerRef.current;
+    (opener?.isConnected ? opener : containerRef.current)?.focus();
+  }, []);
+
+  // "Nearest X": find the closest amenity of a category to self and show the way.
+  // Searches the FULL amenity set (ignores filter visibility) so "nearest medical"
+  // works when medical is toggled off. With no fix it asks for one and finishes
+  // when the fix arrives (see the effect below).
+  const applyNearestStep = useCallback(
+    (step: NearestStep) => {
+      if (step.kind === 'missing') {
+        setNearestNotice({ kind: 'missing', type: step.type });
+        setPendingNearest(null);
         return;
       }
-      const found = nearestPin(selfCoord, amenityPins, (p) => p.amenityType === type);
-      if (!found) return;
-      setPursue({
-        id: `amenity:${found.pin.id}`,
-        label: found.pin.label || label,
-        coord: { latitude: found.pin.latitude, longitude: found.pin.longitude },
-      });
-      // Frame the chosen pin if the map is up.
-      const map = mapRef.current;
-      if (map) map.flyTo({ center: [found.pin.longitude, found.pin.latitude], zoom: 16, duration: 600 });
+      if (step.kind === 'need-fix') {
+        if (selfCoord) return; // a fix exists but no pin is reachable: nothing to wait for
+        setNearestNotice(null);
+        setPendingNearest(step.type);
+        locate();
+        return;
+      }
+      setPursue(nearestTarget(step));
+      setPlace(null);
+      setNearestNotice(null);
+      setPendingNearest(null);
+      mapRef.current?.flyTo({ center: [step.pin.longitude, step.pin.latitude], zoom: 16, duration: 600 });
     },
-    [selfCoord, amenityPins, enableLocation],
+    [selfCoord, locate],
   );
+  const pursueNearest = useCallback(
+    (type: AmenityType) => applyNearestStep(nearestStep(type, amenityPins, selfCoord)),
+    [applyNearestStep, amenityPins, selfCoord],
+  );
+  useEffect(() => {
+    if (!selfCoord || !pendingNearest) return;
+    const type = pendingNearest;
+    setPendingNearest(null);
+    applyNearestStep(nearestStep(type, amenityPins, selfCoord));
+  }, [selfCoord, pendingNearest, amenityPins, applyNearestStep]);
+
+  // "Show my location": fly to the fix now, or ask for one and fly when it lands.
+  const flyToSelfRef = useRef(false);
+  const showMyLocation = useCallback(() => {
+    if (selfCoord) {
+      mapRef.current?.flyTo({ center: [selfCoord.longitude, selfCoord.latitude], zoom: 16, duration: 600 });
+      return;
+    }
+    flyToSelfRef.current = true;
+    locate();
+  }, [selfCoord, locate]);
+  useEffect(() => {
+    if (!flyToSelfRef.current || !selfCoord) return;
+    flyToSelfRef.current = false;
+    mapRef.current?.flyTo({ center: [selfCoord.longitude, selfCoord.latitude], zoom: 16, duration: 600 });
+  }, [selfCoord]);
+
+  // Close the card when its pin is gone (stage deleted, festival or crew changed).
+  // A filtered-out amenity keeps its card: the check uses the full pin list.
+  const allPinsKey = [pinsKey, stagesKey, allAmenitiesKey].join('|');
+  const allPinsRef = useRef<Pin[]>([]);
+  allPinsRef.current = [...pins, ...stagePins, ...amenityPins];
+  useEffect(() => {
+    if (place && !findMapPin(place.kind, place.id, allPinsRef.current)) setPlace(null);
+  }, [place, allPinsKey]);
+  // Authoring turns the map non-interactive: drop everything that needs a tap.
+  useEffect(() => {
+    if (interactive) return;
+    setPlace(null);
+    setPendingNearest(null);
+    setNearestNotice(null);
+  }, [interactive]);
+  const festivalId = festival?.id;
+  useEffect(() => {
+    setPlace(null);
+    setPendingNearest(null);
+    setNearestNotice(null);
+  }, [festivalId]);
 
   // Keep the latest camera for the lazy map creation without making it an effect
   // dep (which would recreate the map on every position tick).
@@ -519,11 +599,13 @@ export default function CrewMap({
   //    reads its live data through a ref → honest deps, no suppressions). ──────
   useSiteplanLayer(mapRef, glRef, status, siteplan, siteplanKey);
   useZoneLayer(mapRef, glRef, status, zones, zonesKey, zoneLabelMarkersRef);
-  useMeetingPointMarkers(mapRef, glRef, status, pins, pinsKey, mpMarkersRef);
-  useStageMarkers(mapRef, glRef, status, stagePins, stagesKey, stageMarkersRef);
-  useAmenityMarkers(mapRef, glRef, status, visibleAmenityPins, amenitiesKey, amenityMarkersRef);
-  usePeerMarkers(mapRef, glRef, status, peers, peersKey, peerMarkersRef, selectPursue);
+  const onSelectPlace = interactive ? selectPlace : undefined;
+  useMeetingPointMarkers(mapRef, glRef, status, pins, pinsKey, mpMarkersRef, onSelectPlace);
+  useStageMarkers(mapRef, glRef, status, stagePins, stagesKey, stageMarkersRef, onSelectPlace);
+  useAmenityMarkers(mapRef, glRef, status, visibleAmenityPins, amenitiesKey, amenityMarkersRef, onSelectPlace);
+  usePeerMarkers(mapRef, glRef, status, peers, peersKey, stagePins, stagesKey, peerMarkersRef, selectPursue);
   useSosMarkers(mapRef, glRef, status, sosList, sosIdsKey, sosCoordsKey, sosMarkersRef, sosFramedRef, selectPursue);
+  useSelfMarker(mapRef, glRef, status, selfCoord, accuracyM, interactive);
   useDraftMarkers(mapRef, glRef, status, draftPoints, draftPointsKey, draftMarkersRef);
   useMapFraming(
     mapRef,
@@ -534,6 +616,27 @@ export default function CrewMap({
     cameraRef,
     fittedRef,
   );
+
+  // Fly to a stage and open its card when the route asks. It runs after the first
+  // fit so the fit does not undo it; the ref stops a re-run from re-focusing.
+  const focusedRef = useRef<string | null>(null);
+  const stagePinsRef = useRef(stagePins);
+  stagePinsRef.current = stagePins;
+  const onFocusHandledRef = useRef(onFocusHandled);
+  onFocusHandledRef.current = onFocusHandled;
+  useEffect(() => {
+    if (!focusPinId) {
+      focusedRef.current = null;
+      return;
+    }
+    if (status !== 'ready' || !interactive || focusedRef.current === focusPinId) return;
+    const pin = findMapPin('stage', focusPinId, stagePinsRef.current);
+    if (!pin) return;
+    focusedRef.current = focusPinId;
+    mapRef.current?.flyTo({ center: [pin.longitude, pin.latitude], zoom: 17, duration: 600 });
+    selectPlace(pin);
+    onFocusHandledRef.current?.();
+  }, [status, focusPinId, stagesKey, interactive, selectPlace]);
 
   // ── Empty state: nothing to plot ───────────────────────────────────────────
   if (!shouldRenderMap) {
@@ -564,7 +667,10 @@ export default function CrewMap({
   // Pursue is SOS-flavored (coral) only for the SOS target; peers + amenities
   // use the aqua selection accent.
   const pursueIsSos = !!liveTarget && liveTarget.id.startsWith('sos:');
-  const showPursueOverlay = status === 'ready' && !!liveTarget;
+  const showPlaceCard = interactive && !!place && status === 'ready';
+  const nudgePeer =
+    liveTarget && liveTarget.id.startsWith('peer:') ? peers.find((p) => `peer:${p.userId}` === liveTarget.id) : undefined;
+  const showPursueOverlay = status === 'ready' && !!liveTarget && !showPlaceCard;
 
   return (
     <div className="space-y-2">
@@ -578,10 +684,10 @@ export default function CrewMap({
           aria-describedby="festie-map-help"
         />
         <p id="festie-map-help" className="sr-only">
-          Interactive map. Use Tab to reach map markers, then Enter or Space to open one. Live crew-member markers show
-          when they shared their location and how long ago. Tap a live crew member or the SOS marker to pursue them — a
-          direction arrow, distance and walking ETA appear. While the map is focused, use the arrow keys to pan and the
-          plus and minus keys to zoom. The List view below shows every meeting point and is fully keyboard accessible.
+          Interactive map. Use Tab to reach map markers, then Enter or Space to open one. Tap a crew member, stage,
+          amenity or meeting point to see what it is and how far it is. Choose Show the way for a direction arrow,
+          distance and walking time. While the map is focused, use the arrow keys to pan and the plus and minus keys to
+          zoom. The List view shows every meeting point and is fully keyboard accessible.
         </p>
         {status === 'pending' && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-text-secondary bg-bg-secondary/80">
@@ -597,13 +703,38 @@ export default function CrewMap({
           </div>
         )}
 
+        {interactive && status === 'ready' && (
+          <button
+            type="button"
+            onClick={showMyLocation}
+            className="absolute left-2 top-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-elevated/95 text-text-primary shadow-lg hover:border-accent-aqua"
+            aria-label={MAP_COPY.showMyLocation}
+          >
+            <LocateFixed className="w-5 h-5" aria-hidden="true" />
+          </button>
+        )}
+
+        {/* ── Place card: what a tapped pin is, how far, and what to do next. */}
+        {showPlaceCard && place && (
+          <PlaceCard
+            place={place}
+            selfCoord={selfCoord}
+            geoState={geoState}
+            onShowWay={() => {
+              setPursue(placeTarget(place));
+              setPlace(null);
+            }}
+            onSetMeetingPoint={onSetMeetingPoint}
+            onLocate={locate}
+            onClose={closePlace}
+          />
+        )}
+
         {/* ── Pursue overlay: directional arrow + label "Alex · 210 m NE · ~3 min". */}
         {showPursueOverlay && (
           <div
-            className="absolute left-2 bottom-2 right-2 z-10 flex items-center gap-3 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
+            className="absolute left-2 bottom-2 right-2 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
             style={{ borderColor: pursueIsSos ? 'var(--color-accent-coral)' : 'var(--color-accent-aqua)' }}
-            role="status"
-            aria-live="polite"
           >
             {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (
               <Navigation
@@ -620,7 +751,7 @@ export default function CrewMap({
             ) : (
               <Navigation className="w-7 h-7 shrink-0 text-text-muted opacity-50" aria-hidden="true" />
             )}
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1" role="status" aria-live="polite">
               {selfCoord && pursuit ? (
                 <p className="truncate text-sm text-text-primary">
                   <span className="font-semibold">{liveTarget.label}</span>
@@ -634,22 +765,19 @@ export default function CrewMap({
               ) : (
                 <button
                   type="button"
-                  onClick={enableLocation}
+                  onClick={locate}
                   className="text-left text-sm text-accent-aqua underline-offset-2 hover:underline"
                 >
-                  {geoState === 'denied'
-                    ? 'Location blocked — enable it to pursue'
-                    : geoState === 'locating'
-                      ? 'Locating you…'
-                      : `Enable location to pursue ${liveTarget.label}`}
+                  {locationPromptCopy(geoState, liveTarget.label)}
                 </button>
               )}
             </div>
+            {nudgePeer && <PeerNudgeButton crewId={nudgePeer.crewId} userId={nudgePeer.userId} name={liveTarget.label} />}
             <button
               type="button"
               onClick={clearPursue}
               className="shrink-0 rounded p-1 min-h-11 min-w-11 inline-flex items-center justify-center text-text-muted hover:text-text-primary"
-              aria-label="Stop pursuing"
+              aria-label={MAP_COPY.stopShowingWay}
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -657,33 +785,62 @@ export default function CrewMap({
         )}
       </div>
 
-      {/* ── Nearest-X quick controls: pursue the closest medical / water / toilet. */}
+      {/* ── Nearest-X quick controls: show the way to the closest medical / water / toilet. */}
       {hasAmenities && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-text-muted">Nearest</span>
-          {NEAREST_TARGETS.map(({ type, label }) => {
+          <span className="text-xs text-text-muted">{MAP_COPY.nearest}</span>
+          {NEAREST_AMENITY_TYPES.map((type) => {
             const { glyph } = amenityGlyph(type);
+            const name = humanizeAmenityType(type);
             return (
               <button
                 key={type}
                 type="button"
-                onClick={() => pursueNearest(type, label)}
+                onClick={() => pursueNearest(type)}
                 className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-secondary px-2.5 py-1 min-h-11 text-xs text-text-secondary hover:border-accent-aqua hover:text-text-primary"
-                aria-label={`Find and pursue the nearest ${label}`}
+                aria-label={`Show the way to the nearest ${name.toLowerCase()}`}
               >
                 <span aria-hidden="true">{glyph}</span>
-                {label}
+                {name}
               </button>
             );
           })}
         </div>
       )}
+      {interactive && nearestNotice?.kind === 'missing' && (
+        <p role="status" className="text-xs text-text-secondary">
+          {nearestMissingCopy(nearestNotice.type)}
+          {nearestNotice.type === 'medical' && (
+            <>
+              {' '}
+              <a href="tel:911" className="text-accent-aqua underline">
+                {MAP_COPY.call911}
+              </a>
+            </>
+          )}
+        </p>
+      )}
+      {interactive && !nearestNotice && pendingNearest && (
+        <p role="status" className="text-xs text-text-secondary">
+          {geoState === 'denied' || geoState === 'unavailable' ? (
+            <>
+              {locationPromptCopy(geoState)}{' '}
+              <button type="button" onClick={retryLocation} className="text-accent-aqua underline">
+                {MAP_COPY.tryAgain}
+              </button>
+            </>
+          ) : (
+            locationPromptCopy('locating')
+          )}
+        </p>
+      )}
 
       {/* ── Amenity filter chips: toggle each category on/off (local only). */}
       {hasAmenities && (
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter amenities by category">
-          {AMENITY_CATEGORIES.filter((type) => amenityPins.some((p) => p.amenityType === type)).map((type) => {
+          {MAP_AMENITY_CATEGORIES.filter((type) => amenityPins.some((p) => p.amenityType === type)).map((type) => {
             const { glyph } = amenityGlyph(type);
+            const name = humanizeAmenityType(type);
             const on = !hiddenAmenities.has(type);
             return (
               <button
@@ -698,6 +855,7 @@ export default function CrewMap({
                   })
                 }
                 aria-pressed={on}
+                aria-label={`${on ? 'Hide' : 'Show'} ${name}`}
                 className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 min-h-11 text-xs ${
                   on
                     ? 'border-accent-aqua bg-accent-aqua/10 text-text-primary'
@@ -707,7 +865,7 @@ export default function CrewMap({
                 <span aria-hidden="true" className={on ? '' : 'opacity-40'}>
                   {glyph}
                 </span>
-                {type}
+                {name}
               </button>
             );
           })}

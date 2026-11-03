@@ -35,6 +35,14 @@ describe('FestivalModeToggle', () => {
     expect(link).not.toHaveAttribute('aria-current');
   });
 
+  it('keeps its name when the text hides below 360px', () => {
+    mockPathname = '/cards';
+    render(<FestivalModeToggle />);
+    const link = screen.getByTestId('festival-mode-toggle');
+    expect(link).toHaveAccessibleName('Now & Next');
+    expect(screen.getByText('Now & Next')).toHaveClass('max-[359px]:hidden');
+  });
+
   it('marks aria-current=page on /festival-mode', () => {
     mockPathname = '/festival-mode';
     render(<FestivalModeToggle />);

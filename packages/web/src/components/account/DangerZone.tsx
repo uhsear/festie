@@ -10,13 +10,15 @@ import { crewCopy, ownedCrewsForDeletion } from '@festie/shared/utils/crewManage
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { withReauth } from '@festie/shared/services/admin';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { ACCOUNT_COPY } from '@festie/shared/constants';
+import { ACCOUNT_COPY, DATA_COPY } from '@festie/shared/constants';
+import { exportErrorMessage } from '@festie/shared/services/account';
 import { useToast } from '../../lib/toastContext';
 import { useIdentities } from '../../lib/useIdentities';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
+import { downloadExport } from '../../lib/downloadExport';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function DangerZone() {
@@ -38,6 +40,7 @@ export default function DangerZone() {
   const [deletePassword, setDeletePassword] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const deleteFormRef = useRef<HTMLFormElement>(null);
 
@@ -55,6 +58,18 @@ export default function DangerZone() {
   useEffect(() => {
     if (showDeleteConfirm) deleteFormRef.current?.querySelector('input')?.focus();
   }, [showDeleteConfirm]);
+
+  const handleDownloadFirst = async () => {
+    setDownloading(true);
+    try {
+      await downloadExport();
+      toast(DATA_COPY.done, 'success');
+    } catch (err) {
+      toast(exportErrorMessage(err), 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!providerOnly && !deletePassword) return;
@@ -156,6 +171,19 @@ export default function DangerZone() {
             {providerOnly && deleteError && (
               <p role="alert" className="text-sm text-accent-coral">{deleteError}</p>
             )}
+
+            <Button
+              type="button"
+              variant="outline"
+              fullWidth
+              isLoading={downloading}
+              disabled={deleting || offlineMode}
+              onClick={handleDownloadFirst}
+              className="min-h-[44px]"
+            >
+              <Download className="w-4 h-4 mr-2" aria-hidden="true" />
+              {DATA_COPY.downloadFirst}
+            </Button>
 
             <div className="flex gap-2">
               <Button

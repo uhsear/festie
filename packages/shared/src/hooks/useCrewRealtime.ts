@@ -20,6 +20,7 @@ import { useEffect } from 'react';
 import type { Socket } from '../services/socket';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
 import { useAuthStore } from '../stores/authStore';
+import { useCrewStore } from '../stores/crewStore';
 import {
   routeHomeBaseUpdated,
   routeMeetingPointUpsert,
@@ -81,6 +82,9 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
   // Re-run when the socket identity or the active crew id changes so we leave
   // the old crew room and join the new one. getActiveCrewId is read both for
   // the dependency snapshot and live inside handlers.
+  // Subscribe to the open crew so a crew change re-renders this hook. The getter
+  // alone is a snapshot, so the room join waited for an unrelated render.
+  useCrewStore((s) => s.activeCrew?.id);
   const activeCrewId = getActiveCrewId();
 
   useEffect(() => {
@@ -103,6 +107,7 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
         sink.onHomeBaseUpdated(intent.crewId, {
           location: intent.location,
           time: intent.time,
+          ...('planB' in intent ? { planB: intent.planB } : {}),
         });
       }
     };
@@ -238,13 +243,18 @@ export function useCrewRealtime({ socket, getActiveCrewId, sink, joinRoom = true
     // Join on connect AND immediately (the socket may already be connected when
     // this effect runs, in which case 'connect' won't fire again).
     const joinId = getActiveCrewId();
+    // A 'connect' on a socket that was connected before is a reconnect: crew
+    // events sent during the drop are lost, so the sink re-reads the lists.
+    let connectedBefore = socket.connected;
     const handleConnect = () => {
       if (!joinRoom) return;
       const id = getActiveCrewId();
       if (id) {
         socket.emit('join:crew', { _v: 1, crewId: id }, () => {});
         sink.onSosResync?.(id);
+        if (connectedBefore) sink.onReconnectResync?.(id);
       }
+      connectedBefore = true;
     };
     socket.on('connect', handleConnect);
     if (joinRoom && joinId && socket.connected) {

@@ -900,7 +900,7 @@ describe('createNotificationsStore — deviceTokens', () => {
     assert.deepStrictEqual(await deviceTokens.listByUsers(undefined as any), []);
   });
 
-  it('listByUsers builds IN clause for multiple ids', async () => {
+  it('listByUsers passes every id as one array parameter', async () => {
     const pool = mockPool([
       {
         rows: [{ id: 'dt1', userId: 'u1', token: 't1', platform: 'ios' }],
@@ -911,10 +911,9 @@ describe('createNotificationsStore — deviceTokens', () => {
     const result = await deviceTokens.listByUsers(['u1', 'u2', 'u3']);
 
     assert.strictEqual(result.length, 1);
-    assert.ok(pool.queries[0].sql.includes('$1'));
-    assert.ok(pool.queries[0].sql.includes('$2'));
-    assert.ok(pool.queries[0].sql.includes('$3'));
-    assert.deepStrictEqual(pool.queries[0].params, ['u1', 'u2', 'u3']);
+    assert.ok(pool.queries[0].sql.includes('user_id = ANY($1)'));
+    assert.ok(!pool.queries[0].sql.includes('$2'));
+    assert.deepStrictEqual(pool.queries[0].params, [['u1', 'u2', 'u3']]);
   });
 
   it('deleteByUser removes all tokens for user', async () => {
@@ -1106,23 +1105,49 @@ describe('createNotificationsStore — notificationLog', () => {
     assert.strictEqual(p[8], null);
   });
 
-  it('listByUser returns entries with default limit 50', async () => {
+  it('listInbox reads only inbox rows with default limit 50', async () => {
     const pool = mockPool([{ rows: [{ id: 'n1' }, { id: 'n2' }] }]);
     const { notificationLog } = createNotificationsStore(pool, mockUtils);
 
-    const result = await notificationLog.listByUser('u1');
+    const result = await notificationLog.listInbox('u1');
 
     assert.strictEqual(result.length, 2);
+    assert.ok(norm(pool.queries[0].sql).includes("platform = 'inbox'"));
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 50]);
   });
 
-  it('listByUser accepts custom limit', async () => {
+  it('listInbox accepts custom limit', async () => {
     const pool = mockPool([{ rows: [] }]);
     const { notificationLog } = createNotificationsStore(pool, mockUtils);
 
-    await notificationLog.listByUser('u1', 10);
+    await notificationLog.listInbox('u1', 10);
 
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 10]);
+  });
+
+  it('countRecentPushes passes user ids and exempt types and maps counts by user', async () => {
+    const pool = mockPool([{ rows: [{ userId: 'u1', n: 6 }, { userId: 'u2', n: 1 }] }]);
+    const { notificationLog } = createNotificationsStore(pool, mockUtils);
+
+    const counts = await notificationLog.countRecentPushes(['u1', 'u2', 'u3'], ['crew_sos', 'set_reminder']);
+
+    const sql = norm(pool.queries[0].sql);
+    assert.ok(sql.includes("platform = 'inbox'"));
+    assert.ok(sql.includes("status = 'inbox'"));
+    assert.deepStrictEqual(pool.queries[0].params, [['u1', 'u2', 'u3'], ['crew_sos', 'set_reminder']]);
+    assert.strictEqual(counts.get('u1'), 6);
+    assert.strictEqual(counts.get('u2'), 1);
+    assert.strictEqual(counts.has('u3'), false);
+  });
+
+  it('countRecentPushes returns an empty map for no user ids without a query', async () => {
+    const pool = mockPool([]);
+    const { notificationLog } = createNotificationsStore(pool, mockUtils);
+
+    const counts = await notificationLog.countRecentPushes([], ['crew_sos']);
+
+    assert.strictEqual(counts.size, 0);
+    assert.strictEqual(pool.queries.length, 0);
   });
 
   it('updateStatus sets status and delivered_at', async () => {

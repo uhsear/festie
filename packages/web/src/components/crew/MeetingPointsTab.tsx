@@ -17,6 +17,7 @@ import {
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
+import { meetingPointEditLine, meetingPointPrefill, type MapPlace } from '@festie/shared/utils';
 import { useCurrentPosition } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useToast } from '../../lib/toastContext';
@@ -113,6 +114,16 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   const [recursDaily, setRecursDaily] = useState(false);
   // F4: optional captured GPS coords. null = no coord (free-text only).
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // Form values when an edit began, so submit sends only what the user changed.
+  const editBaseline = useRef<{
+    label: string;
+    location: string;
+    type: string;
+    stageRef: string;
+    meetAt: string;
+    recursDaily: boolean;
+    coords: { lat: number; lng: number } | null;
+  } | null>(null);
   const { locating, getCurrentPosition } = useCurrentPosition();
   // List vs Map view. Map is lazy + reveals <CrewMap/> only when chosen.
   const [view, setView] = useState<'list' | 'map'>(focusSosUserId ? 'map' : 'list');
@@ -202,7 +213,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   });
 
   const updatePoint = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: MeetingPointPayload }) =>
+    mutationFn: ({ id, payload }: { id: string; payload: Partial<MeetingPointPayload> }) =>
       api.put(`/crews/${crewId}/meeting-points/${id}`, payload),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['meeting-points', crewId] });
@@ -253,18 +264,36 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     });
   }
 
+  function handleSetMeetingPoint(place: MapPlace) {
+    startCreateAt(place.coord);
+    const prefill = meetingPointPrefill(place);
+    setLabel(prefill.label);
+    setLocation(prefill.location);
+    setStageRef(prefill.stageReference);
+  }
+
   function startEdit(p: CrewMeetingPoint) {
+    const startCoords =
+      typeof p.latitude === 'number' && typeof p.longitude === 'number' ? { lat: p.latitude, lng: p.longitude } : null;
+    const startMeetAt = p.meet_at ? meetAtToWallInput(p.meet_at, festivalTimeZone) : '';
+    editBaseline.current = {
+      label: p.label,
+      location: p.location,
+      type: meetingPointKind(p.type).type,
+      stageRef: p.stage_reference || '',
+      meetAt: startMeetAt,
+      recursDaily: !!p.recurs_daily,
+      coords: startCoords,
+    };
     setEditingId(p.id);
     setLabel(p.label);
     setLocation(p.location);
     setStageRef(p.stage_reference || '');
     setType(meetingPointKind(p.type).type);
     // datetime-local wants "YYYY-MM-DDTHH:mm", shown in the festival zone.
-    setMeetAt(p.meet_at ? meetAtToWallInput(p.meet_at, festivalTimeZone) : '');
+    setMeetAt(startMeetAt);
     setRecursDaily(!!p.recurs_daily);
-    setCoords(
-      typeof p.latitude === 'number' && typeof p.longitude === 'number' ? { lat: p.latitude, lng: p.longitude } : null,
-    );
+    setCoords(startCoords);
     setShowForm(true);
   }
 
@@ -313,7 +342,26 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       recursDaily: meetAt ? recursDaily : false,
     };
     if (editingId) {
-      updatePoint.mutate({ id: editingId, payload });
+      const base = editBaseline.current;
+      if (!base) return;
+      // A re-sent minute-precision time can differ from the stored instant, so
+      // untouched fields stay out of the body.
+      const changed: Partial<MeetingPointPayload> = {};
+      if (label.trim() !== base.label) changed.label = payload.label;
+      if (location.trim() !== base.location) changed.location = payload.location;
+      if (type !== base.type) changed.type = type;
+      if (stageRef.trim() !== base.stageRef) changed.stageReference = payload.stageReference;
+      if (meetAt !== base.meetAt) changed.meetAt = payload.meetAt;
+      if ((meetAt ? recursDaily : false) !== base.recursDaily) changed.recursDaily = payload.recursDaily;
+      if (coords?.lat !== base.coords?.lat || coords?.lng !== base.coords?.lng) {
+        changed.latitude = payload.latitude;
+        changed.longitude = payload.longitude;
+      }
+      if (Object.keys(changed).length === 0) {
+        reset();
+        return;
+      }
+      updatePoint.mutate({ id: editingId, payload: changed });
     } else {
       createPoint.mutate(payload);
     }
@@ -561,6 +609,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         >
           <CrewMap meetingPoints={current} peers={peers} activeSosList={sosList} festival={mapFestival} focusSosUserId={focusSosUserId}
             onMapClick={placing ? startCreateAt : undefined}
+            onSetMeetingPoint={handleSetMeetingPoint}
             authoring={placing}
             draftPoints={showForm && !editingId && coords ? [{ latitude: coords.lat, longitude: coords.lng }] : undefined}
           />
@@ -627,6 +676,10 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
                               {meetingTimeDisplay(p.meet_at, false, festivalDays, new Date(), festivalTimeZone).label}
                             </div>
                           ))}
+                        {(() => {
+                          const editLine = meetingPointEditLine(p, { timeZone: festivalTimeZone, now: new Date(nowMs) });
+                          return editLine ? <div className="text-xs text-text-muted mt-0.5">{editLine}</div> : null;
+                        })()}
                         {!isPending(p) && (
                           <div className="mt-2 flex items-center gap-2">
                             <button

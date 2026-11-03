@@ -52,14 +52,24 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         if (member.role !== 'owner') return sendError(res, 403, 'Only owner can set home base', ErrorCodes.FORBIDDEN);
 
-        const { location, time } = body;
-        const updated = await stores.crews.updateHomeBase(crewId, { location, time });
-        io.to('crew:' + crewId).emit('crew:home-base-updated', { crewId, location, time });
+        const { location, time, planB } = body;
+        // planB undefined keeps the stored Plan B; the store clears it when location is empty.
+        // shortcut: the Stores type in lib/types/app-context.ts lacks planB, so pass a variable; add it there.
+        const homeBase = { location, time, planB };
+        const updated = (await stores.crews.updateHomeBase(crewId, homeBase)) as {
+          homeBasePlanB?: string | null;
+        } | null;
+        io.to('crew:' + crewId).emit('crew:home-base-updated', {
+          crewId,
+          location,
+          time,
+          planB: updated?.homeBasePlanB ?? null,
+        });
         const activity = { crewId, userId: req.user.userId, type: 'home-base-updated', detail: location || null };
         await stores.activity
           .log(activity)
           .then((id: unknown) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+          .catch((err: Error) => log.warn('home-base-updated activity log failed', { crewId, error: err.message }));
         return sendSuccess(res, { crew: updated });
       } catch (err) {
         log.error('set home base failed', { error: (err as Error).message });
@@ -93,7 +103,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         await stores.activity
           .log(activity)
           .then((id: unknown) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch(() => {});
+          .catch((err: Error) => log.warn('photo-album-updated activity log failed', { crewId, error: err.message }));
         return sendSuccess(res, { crew: updated });
       } catch (err) {
         log.error('set photo album failed', { error: (err as Error).message });
@@ -180,7 +190,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           expiresAt = new Date(new Date(meetAt).getTime() + 30 * 60_000).toISOString();
         }
 
-        const point = (await stores.crews.meetingPoints.create({
+        const point = await stores.crews.meetingPoints.create({
           id,
           crewId,
           createdBy: req.user.userId,
@@ -194,7 +204,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           longitude: longitude ?? null,
           // 055: optional daily recurrence; defaults FALSE in the store when omitted.
           recursDaily: recursDaily ?? false,
-        }));
+        });
 
         io.to('crew:' + crewId).emit('crew:meeting-point-created', point);
         await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'meeting-point-added', detail: label });
@@ -252,16 +262,34 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           expiresAt = new Date(new Date(effMeetAt).getTime() + 30 * 60_000).toISOString();
         }
 
-        const updated = await stores.crews.meetingPoints.update(mpId, { ...body, expiresAt });
+        // pg returns TIMESTAMPTZ as a Date and the body sends an ISO string, so compare instants.
+        const timeChanged =
+          body.meetAt !== undefined &&
+          (body.meetAt ? Date.parse(body.meetAt) : null) !==
+            (existing.meet_at ? new Date(existing.meet_at as string | Date).getTime() : null);
+        const placeChanged = body.location !== undefined && body.location !== existing.location;
+        // Only a time or place change writes the edit trail; any other edit leaves an earlier trail in place.
+        const trail =
+          timeChanged || placeChanged
+            ? {
+                editedBy: req.user.userId,
+                editedAt: new Date().toISOString(),
+                editWas: {
+                  ...(placeChanged ? { location: existing.location as string } : {}),
+                  ...(timeChanged
+                    ? { meetAt: existing.meet_at ? new Date(existing.meet_at as string | Date).toISOString() : null }
+                    : {}),
+                },
+              }
+            : {};
+
+        const updated = await stores.crews.meetingPoints.update(mpId, { ...body, expiresAt, ...trail });
         io.to('crew:' + crewId).emit('crew:meeting-point-updated', updated);
         const label = String((updated as { label?: string } | null)?.label ?? existing.label);
         await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'meeting-point-updated', detail: label });
         const moved =
-          // pg returns TIMESTAMPTZ as a Date and the body sends an ISO string, so compare instants.
-          (body.meetAt !== undefined &&
-            (body.meetAt ? Date.parse(body.meetAt) : null) !==
-              (existing.meet_at ? new Date(existing.meet_at as string | Date).getTime() : null)) ||
-          (body.location !== undefined && body.location !== existing.location) ||
+          timeChanged ||
+          placeChanged ||
           (body.latitude !== undefined && body.latitude !== existing.latitude) ||
           (body.longitude !== undefined && body.longitude !== existing.longitude);
         if (moved) {

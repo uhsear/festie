@@ -2,63 +2,56 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DataExportSection from './DataExportSection';
+import { useUIStore } from '@festie/shared/stores/uiStore';
+import { ApiClientError } from '@festie/shared/services/api';
+import { DATA_COPY } from '@festie/shared/constants';
 
 const mockToast = vi.fn();
 vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
-const mockApiGet = vi.fn();
-vi.mock('@festie/shared/services/api', () => ({
-  api: {
-    get: (...args: unknown[]) => mockApiGet(...args),
-  },
-  mapErrorToUserMessage: (_err: unknown, fallback: string) => fallback,
+const mockDownload = vi.fn();
+vi.mock('../../lib/downloadExport', () => ({
+  downloadExport: () => mockDownload(),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockApiGet.mockResolvedValue({ profile: {} });
-  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock');
-  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  mockDownload.mockResolvedValue(undefined);
+  useUIStore.setState({ offlineMode: false });
 });
 
 describe('DataExportSection', () => {
-  it('renders the Export Data section', () => {
+  it('renders the Download my data card', () => {
     render(<DataExportSection />);
-    expect(screen.getByText('Export Data')).toBeInTheDocument();
-    expect(screen.getByText('Download My Data')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: DATA_COPY.title })).toBeInTheDocument();
+    expect(screen.getByText(DATA_COPY.hint)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: DATA_COPY.button })).toBeInTheDocument();
   });
 
-  it('triggers data export download on click', async () => {
+  it('downloads and toasts done', async () => {
     const user = userEvent.setup();
-    const clickSpy = vi.fn();
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      if (tag === 'a') {
-        const anchor = { href: '', download: '', click: clickSpy } as unknown as HTMLElement;
-        return anchor;
-      }
-      return document.createElementNS('http://www.w3.org/1999/xhtml', tag) as HTMLElement;
-    });
-
     render(<DataExportSection />);
-    await user.click(screen.getByText('Download My Data'));
-
-    await waitFor(() => {
-      expect(clickSpy).toHaveBeenCalled();
-    });
-    expect(mockToast).toHaveBeenCalledWith('Export downloaded', 'success');
+    await user.click(screen.getByRole('button', { name: DATA_COPY.button }));
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith(DATA_COPY.done, 'success'));
+    expect(mockDownload).toHaveBeenCalledTimes(1);
   });
 
-  it('shows error toast when export fails', async () => {
+  it('toasts the limit text for a 429 with retryAfter', async () => {
     const user = userEvent.setup();
-    mockApiGet.mockRejectedValue(new Error('boom'));
-
+    mockDownload.mockRejectedValue(new ApiClientError('limit', 429, 'RATE_LIMITED', 3600));
     render(<DataExportSection />);
-    await user.click(screen.getByText('Download My Data'));
+    await user.click(screen.getByRole('button', { name: DATA_COPY.button }));
+    await waitFor(() => expect(mockToast).toHaveBeenCalled());
+    const [msg, kind] = mockToast.mock.calls[0];
+    expect(msg).toMatch(/^You can download your data once a day\. Try again (today|tomorrow) at /);
+    expect(kind).toBe('error');
+  });
 
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith("Couldn't export data. Try again.", 'error');
-    });
+  it('is disabled offline', () => {
+    useUIStore.setState({ offlineMode: true });
+    render(<DataExportSection />);
+    expect(screen.getByRole('button', { name: DATA_COPY.button })).toBeDisabled();
   });
 });

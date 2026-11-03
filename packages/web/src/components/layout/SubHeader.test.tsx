@@ -43,6 +43,7 @@ vi.mock('@festie/shared/stores', () => ({
 vi.mock('@festie/shared/hooks', () => ({
   useFestival: () => ({ getStageColor: () => '#00e8d0', getFilteredSets: () => [] }),
   useSaveStatus: () => ({ kind: 'saved', label: 'Saved' }),
+  useViewAs: () => ({ target: null, canView: () => false, start: vi.fn(), clear: vi.fn() }),
 }));
 
 let mockPathname = '/cards';
@@ -106,7 +107,7 @@ describe('SubHeader layout density', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     const tabs = screen.getByRole('group', { name: 'Festival days' });
     expect(tabs.className).toContain('gap-[var(--space-3)]');
-    expect(screen.getByRole('button', { name: 'Day: Fri, May 29' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fri May 29' })).toBeInTheDocument();
   });
 
   it('hides day tabs and search when festivalOnly is set (behavior preserved)', () => {
@@ -165,10 +166,11 @@ describe('SubHeader day chips and picks placeholder', () => {
     vi.clearAllMocks();
   });
 
-  it('shows the date beside the label and puts it in the aria-label', () => {
+  it('shows the date beside the label and names the chip by its visible text', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    const chip = screen.getByRole('button', { name: 'Day: Fri, May 29' });
-    expect(chip).toHaveTextContent('FriMay 29');
+    const chip = screen.getByRole('button', { name: 'Fri May 29' });
+    expect(chip).toHaveTextContent('Fri May 29');
+    expect(chip).not.toHaveAttribute('aria-label');
   });
 
   it('holds the My picks place with a placeholder while the profile loads', () => {
@@ -268,14 +270,14 @@ describe('SubHeader guarded My picks and hidden days', () => {
     storeState.hiddenDays = [0];
     storeState.selectedDay = 1;
     const { unmount } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(screen.queryByRole('button', { name: 'Day: Fri, May 29' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Fri May 29' })).not.toBeInTheDocument();
     expect(screen.getByText('+1 hidden')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show 1 hidden day' }));
+    fireEvent.click(screen.getByRole('button', { name: '+1 hidden day, show all' }));
     expect(storeState.setHiddenDays).toHaveBeenCalledWith([]);
     unmount();
     mockPathname = '/picks';
     render(<SubHeader dayOnly={true} festivalOnly={false} />);
-    expect(screen.getByRole('button', { name: 'Day: Fri, May 29' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fri May 29' })).toBeInTheDocument();
   });
 });
 

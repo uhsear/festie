@@ -40,6 +40,9 @@ if (import.meta.env.VITE_SENTRY_DSN) {
         breadcrumb.data.from = scrubToken(breadcrumb.data.from);
         breadcrumb.data.to = scrubToken(breadcrumb.data.to);
       }
+      if ((breadcrumb.category === 'fetch' || breadcrumb.category === 'xhr') && breadcrumb.data) {
+        breadcrumb.data.url = scrubToken(breadcrumb.data.url);
+      }
       return breadcrumb;
     },
   });
@@ -97,6 +100,10 @@ const queryClient = new QueryClient({
       retry: 1,
       refetchOnWindowFocus: false,
     },
+    // The api client owns offline writes: it queues replay-safe ones and fails the rest.
+    // React Query's default 'online' mode would pause the mutation offline before it ever
+    // reaches the client, leaving the button spinning with nothing queued.
+    mutations: { networkMode: 'always' },
   },
 });
 
@@ -130,7 +137,13 @@ root.render(
   <React.StrictMode>
     <GlobalErrorBoundary>
       <LazyMotion features={() => import('motion/react').then((m) => m.domAnimation)} strict>
-        <PersistQueryClientProvider client={queryClient} persistOptions={buildPersistOptions()}>
+        <PersistQueryClientProvider
+          client={queryClient}
+          persistOptions={buildPersistOptions()}
+          // The snapshot is for offline reads. It can predate the last write (the persister
+          // throttles) and still look fresh, so refetch it once restored; offline the refetch waits.
+          onSuccess={() => void queryClient.invalidateQueries()}
+        >
           <ToastProvider>
             <RouterProvider router={router} />
             <Toast />

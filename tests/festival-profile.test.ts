@@ -25,23 +25,24 @@ function makeDeps(opts: { existing?: any; orphan?: any; count?: number; max?: nu
 }
 
 describe('ensureFestivalProfile', () => {
-  it('returns the existing profile without creating one', async () => {
+  it('returns the existing profile without creating or re-announcing it', async () => {
     const existing = { id: 'prof-1', userId: 'user-1', festivalId: 'fest-1' };
     const { deps, create, claimOrphan, profileCreated } = makeDeps({ existing });
     const result = await ensureFestivalProfile(deps, REQ_USER, 'fest-1');
     assert.deepEqual(result, { profile: existing, user: USER });
     assert.equal(create.mock.callCount(), 0);
     assert.equal(claimOrphan.mock.callCount(), 0);
-    assert.equal(profileCreated.mock.callCount(), 1);
+    assert.equal(profileCreated.mock.callCount(), 0);
   });
 
   it('claims an orphan profile matching the username', async () => {
     const orphan = { id: 'prof-orphan', userId: 'user-1', festivalId: 'fest-1' };
-    const { deps, create, claimOrphan } = makeDeps({ orphan });
+    const { deps, create, claimOrphan, profileCreated } = makeDeps({ orphan });
     const result = await ensureFestivalProfile(deps, REQ_USER, 'fest-1');
     assert.deepEqual(result, { profile: orphan, user: USER });
     assert.deepEqual((claimOrphan.mock.calls[0] as any).arguments, ['fest-1', 'user-1', 'testuser']);
     assert.equal(create.mock.callCount(), 0);
+    assert.equal(profileCreated.mock.callCount(), 1);
   });
 
   it('returns limit when the festival is at its profile cap', async () => {

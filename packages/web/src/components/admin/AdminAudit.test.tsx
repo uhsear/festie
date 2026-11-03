@@ -142,6 +142,18 @@ describe('AdminAudit', () => {
     await waitFor(() => expect(screen.getByLabelText('Search the audit log')).toHaveValue('actor:asir'));
   });
 
+  it('the Passwords chip sends both password prefixes', async () => {
+    renderAudit();
+    await screen.findByText('Festival updated');
+    await userEvent.click(screen.getByRole('button', { name: 'Passwords' }));
+    await waitFor(() =>
+      expect(mockFetchPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ action: 'user.password.*,user.password_reset_link.*' }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Passwords' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('keeps a trailing space typed before the debounce commits', async () => {
     renderAudit();
     await screen.findByText('Festival updated');

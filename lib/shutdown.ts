@@ -5,6 +5,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import { recordJobRun } from './metrics.js';
+
 /**
  * Create background periodic timers — session cleanup, avatar orphan removal,
  * expired token purge, memory pressure monitoring.
@@ -74,7 +76,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         disconnectSocket(socket, io, presenceTargets);
       }
       for (const festivalId of presenceTargets) emitPresence(festivalId, io);
+      recordJobRun('session_cleanup', true);
     } catch (err: any) {
+      recordJobRun('session_cleanup', false);
       log.error('session cleanup failed', { error: err.message });
     }
   }, config.SESSION_CLEANUP_INTERVAL_MS);
@@ -90,7 +94,10 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     async () => {
       try {
         const avatarDir = avatarDirPath();
-        if (!fs.existsSync(avatarDir)) return;
+        if (!fs.existsSync(avatarDir)) {
+          recordJobRun('avatar_cleanup', true);
+          return;
+        }
         const files = fs.readdirSync(avatarDir);
         const { rows: keyRows } = await stores.pool.query(
           'SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL',
@@ -108,7 +115,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
             }
           }
         }
+        recordJobRun('avatar_cleanup', true);
       } catch (err: any) {
+        recordJobRun('avatar_cleanup', false);
         log.warn('avatar cleanup failed', { error: err.message });
       }
     },
@@ -133,7 +142,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         if (resetPurged > 0 || verifyPurged > 0 || refreshPurged > 0) {
           log.info('token cleanup', { resetPurged, verifyPurged, refreshPurged });
         }
+        recordJobRun('token_cleanup', true);
       } catch (err: any) {
+        recordJobRun('token_cleanup', false);
         log.warn('token cleanup failed', { error: err.message });
       }
     },
@@ -145,25 +156,47 @@ function createBackgroundTasks(ctx: any, { io }: any) {
   // Audit log cleanup — purge entries older than retention threshold
   const _auditCleanupTimer = setInterval(
     async () => {
+      let ok = true;
       try {
         const deleted = await stores.auditLog.cleanup(config.AUDIT_LOG_RETENTION_DAYS);
         if (deleted > 0) {
           log.info('audit log cleanup', { deleted, retentionDays: config.AUDIT_LOG_RETENTION_DAYS });
         }
       } catch (err: any) {
+        ok = false;
         log.warn('audit log cleanup failed', { error: err.message });
       }
       try {
         const purged = await stores.identities.purgeExpiredStates();
         if (purged > 0) log.info('oauth state cleanup', { purged });
       } catch (err: any) {
+        ok = false;
         log.warn('oauth state cleanup failed', { error: err.message });
       }
+      recordJobRun('audit_cleanup', ok);
     },
     6 * 60 * 60 * 1000,
   );
   _auditCleanupTimer.unref();
   state.timers.push(_auditCleanupTimer);
+
+  // Retention (migration 060): hard-deletes accounts 30 days after soft delete,
+  // festivals 90 days after delete, and old metrics/audit rows. Production has no
+  // pg_cron, so the app runs it. The privacy policy promises the 30-day delete.
+  const _retentionTimer = setInterval(
+    async () => {
+      try {
+        await stores.pool.query('SELECT retention_cleanup()');
+        recordJobRun('retention_cleanup', true);
+      } catch (err: any) {
+        recordJobRun('retention_cleanup', false);
+        log.warn('retention cleanup failed', { error: err.message });
+      }
+    },
+    24 * 60 * 60 * 1000,
+  );
+  _retentionTimer.unref();
+  state.timers.push(_retentionTimer);
 
   // Memory pressure monitoring — log warnings when heap grows large
   const _memoryCheckTimer = setInterval(() => {
@@ -203,7 +236,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         const { rowCount } = await stores.crews.meetingPoints.expireStale();
         if (rowCount > 0) log.debug('expired meeting points', { count: rowCount });
       }
+      recordJobRun('meeting_point_expiry', true);
     } catch (err: any) {
+      recordJobRun('meeting_point_expiry', false);
       log.warn('meeting point expiry failed', { error: err.message });
     }
   }, config.TOKEN_CLEANUP_INTERVAL_MS);
@@ -216,7 +251,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
       try {
         const count = await ctx.pollCloser.sweepExpired();
         if (count > 0) log.debug('ended expired polls', { count });
+        recordJobRun('poll_expiry', true);
       } catch (err: any) {
+        recordJobRun('poll_expiry', false);
         log.warn('poll expiry sweep failed', { error: err.message });
       }
     }, 60 * 1000);
@@ -230,7 +267,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
       try {
         const count = await ctx.announcer.deliverDue();
         if (count > 0) log.debug('delivered festival announcements', { count });
+        recordJobRun('announcements', true);
       } catch (err: any) {
+        recordJobRun('announcements', false);
         log.warn('announcement sweep failed', { error: err.message });
       }
     }, 60 * 1000);
@@ -269,7 +308,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
           }
         }
         if (rows.length > 0) log.debug('wrap_ready sweep complete', { festivals: rows.length });
+        recordJobRun('wrap_ready', true);
       } catch (err: any) {
+        recordJobRun('wrap_ready', false);
         log.warn('wrap_ready sweep failed', { error: err.message });
       }
     };
@@ -305,7 +346,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
           }
         }
         if (rows.length > 0) log.debug('rate_prompt sweep complete', { festivals: rows.length });
+        recordJobRun('rate_prompt', true);
       } catch (err: any) {
+        recordJobRun('rate_prompt', false);
         log.warn('rate_prompt sweep failed', { error: err.message });
       }
     };

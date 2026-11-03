@@ -46,6 +46,7 @@ export default function createUtils(pool: Pool) {
         f.created_at AS "createdAt",
         f.updated_at AS "updatedAt",
         f.published_at AS "publishedAt",
+        f.slug,
         COALESCE(
           (SELECT json_agg(
             json_build_object(
@@ -66,7 +67,7 @@ export default function createUtils(pool: Pool) {
                COALESCE(d.date, '') AS date,
                COALESCE(
                  (SELECT json_agg(
-                   json_build_object(
+                   (json_build_object(
                      'id', fs.id,
                      'artist', fs.artist,
                      'artists', COALESCE(fs.artists, '[]'::jsonb),
@@ -74,7 +75,9 @@ export default function createUtils(pool: Pool) {
                      'startTime', fs.start_time,
                      'endTime', fs.end_time,
                      'linkUrl', fs.link_url
-                   )
+                   )::jsonb
+                     || CASE WHEN fs.moved_at IS NULL THEN '{}'::jsonb
+                             ELSE jsonb_build_object('movedAt', fs.moved_at, 'movedFrom', fs.moved_from) END)
                    ORDER BY fs.sort_order ASC
                  )
                  FROM festival_sets fs

@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createStoreSink } from '../crewRealtimeSink';
 import { useCrewStore } from '../../stores/crewStore';
 import { useLiveLocationStore } from '../../stores/liveLocationStore';
+import { useUIStore } from '../../stores/uiStore';
 import type { SosEntry } from '../../types/domain';
 
 const CREW = 'crew-1';
@@ -48,6 +49,18 @@ describe('crewRealtimeSink: sos:cleared clears only the raiser it names', () => 
     sink.onSosCleared(CREW, 'user-a', 'Alice');
 
     expect(useLiveLocationStore.getState().activeSosList).toHaveLength(1);
+  });
+});
+
+describe('crewRealtimeSink: onHomeBaseUpdated', () => {
+  it('passes planB through and omits it when the payload has none', () => {
+    const applyHomeBaseUpdate = vi.fn();
+    const api = { getState: () => ({ applyHomeBaseUpdate }) } as never;
+    const sink = createStoreSink(api);
+    sink.onHomeBaseUpdated('c1', { location: 'Gate', time: null, planB: 'Top of the hour' });
+    expect(applyHomeBaseUpdate).toHaveBeenLastCalledWith('c1', { location: 'Gate', time: null, planB: 'Top of the hour' });
+    sink.onHomeBaseUpdated('c1', { location: 'Gate', time: null });
+    expect(applyHomeBaseUpdate.mock.calls.at(-1)?.[1]).not.toHaveProperty('planB');
   });
 });
 
@@ -103,5 +116,54 @@ describe('crewRealtimeSink: packing and rides reloads', () => {
     sink.onRidesChanged(CREW);
     expect(loadPacking).not.toHaveBeenCalled();
     expect(loadRides).not.toHaveBeenCalled();
+  });
+});
+
+describe('crewRealtimeSink: onReconnectResync', () => {
+  const LOADERS = [
+    'loadMeetingPoints',
+    'loadPolls',
+    'loadExpenses',
+    'loadPacking',
+    'loadRides',
+    'loadActivity',
+    'loadCrewDays',
+  ] as const;
+  const makeApi = (activeId: string | null) => {
+    const loaders = Object.fromEntries(LOADERS.map((k) => [k, vi.fn().mockResolvedValue(undefined)]));
+    const storeApi = { getState: () => ({ activeCrew: activeId ? { id: activeId } : null, ...loaders }) };
+    return { loaders, sink: createStoreSink(storeApi as never) };
+  };
+
+  afterEach(() => {
+    useUIStore.setState({ pendingSync: 0 });
+  });
+
+  it('reloads the seven crew lists for the active crew', () => {
+    const { loaders, sink } = makeApi('c1');
+    sink.onReconnectResync?.('c1');
+    for (const k of LOADERS) expect(loaders[k]).toHaveBeenCalledWith('c1');
+  });
+
+  it('reloads nothing while offline writes are still queued', () => {
+    useUIStore.setState({ pendingSync: 1 });
+    const { loaders, sink } = makeApi('c1');
+    sink.onReconnectResync?.('c1');
+    for (const k of LOADERS) expect(loaders[k]).not.toHaveBeenCalled();
+  });
+
+  it('reloads nothing when the crew is no longer active', () => {
+    const { loaders, sink } = makeApi('c2');
+    sink.onReconnectResync?.('c1');
+    for (const k of LOADERS) expect(loaders[k]).not.toHaveBeenCalled();
+  });
+
+  it('logs a failed reload instead of swallowing it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { loaders, sink } = makeApi('c1');
+    loaders.loadPolls.mockRejectedValueOnce(new Error('offline'));
+    sink.onReconnectResync?.('c1');
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('crew resync failed', expect.any(Error)));
+    warn.mockRestore();
   });
 });

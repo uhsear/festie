@@ -2,6 +2,7 @@ import { api, ApiClientError } from './api';
 import { buildFestivalPreview, type FestivalPreviewInput } from '../utils/admin';
 import { auditEntriesToCsv } from '../utils/auditActions';
 import { normalizeAnalytics, type AnalyticsData } from '../utils/analyticsNormalize';
+import type { PickInsight } from '../utils/pickInsight';
 import type { AdminHealth, DashboardStats } from '../utils/adminDashboard';
 
 export interface AuditEntry {
@@ -360,4 +361,8 @@ export function addCrewMember(crewId: string, userId: string): Promise<unknown> 
 export async function fetchFestivalPreview(festivalId: string) {
   const detail = await api.get<FestivalPreviewInput>(`/festivals/${enc(festivalId)}`);
   return buildFestivalPreview(detail);
+}
+
+export function fetchAdminPickInsight(festivalId: string): Promise<PickInsight> {
+  return api.get<PickInsight>(`/admin/analytics/festivals/${encodeURIComponent(festivalId)}/picks`);
 }

@@ -1,5 +1,6 @@
-import { useMemo, useState, lazy, Suspense } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useLocation, useNavigate } from '@tanstack/react-router';
+import { useReducedMotion } from 'motion/react';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useFestivalStore, useAuthStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -7,9 +8,10 @@ import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
-import { buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
+import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
 import RefreshableView from '../components/layout/RefreshableView';
@@ -61,6 +63,8 @@ const chipClass = (active: boolean) =>
 
 function PicksViewInner() {
   const navigate = useNavigate();
+  const hash = useLocation().hash;
+  const reducedMotion = useReducedMotion();
   const user = useAuthStore((state) => state.user);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
   const myPicks = useFestivalStore(selectMyPicks);
@@ -89,6 +93,19 @@ function PicksViewInner() {
     clashIds,
     rows,
   } = usePicksPlan();
+
+  // The clash chip on the schedule links here with #clashes. Show the clash cards, scroll to them, then drop the hash.
+  useEffect(() => {
+    if (hash.replace(/^#/, '') !== 'clashes') return;
+    setView('plan');
+    const id = window.requestAnimationFrame(() => {
+      const el = document.getElementById('clashes');
+      el?.scrollIntoView({ block: 'start', behavior: reducedMotion ? 'auto' : 'smooth' });
+      el?.focus({ preventScroll: true });
+      void navigate({ to: '/picks', hash: undefined, replace: true });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [hash, reducedMotion, navigate]);
 
   // True when the profile has any pick at all, which gates the calendar export
   // independently of the active filters.
@@ -130,14 +147,15 @@ function PicksViewInner() {
 
   const guestBanner = user ? null : <GuestPicksBanner />;
 
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
     return (
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
-        <EmptyState
+        {loadState === 'error' ? <FestivalLoadError /> : <EmptyState
           icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
           title="No festival selected"
           description="Choose a festival from the top menu to start saving picks."
-        />
+        />}
       </div>
     );
   }
@@ -361,7 +379,7 @@ function PicksViewInner() {
             title={clashOnlyEmpty ? COPY.clash.none : 'No matching picks'}
             description={
               clashOnlyEmpty
-                ? "Nothing on your plan overlaps — you're all set."
+                ? COPY.clash.noneBody
                 : trimmedSearch
                   ? `Nothing matches “${trimmedSearch}”.`
                   : 'No picks in this view.'

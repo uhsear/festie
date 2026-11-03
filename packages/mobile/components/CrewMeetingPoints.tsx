@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Linking, Switch, AccessibilityInfo } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform, Linking, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -8,6 +8,7 @@ import { useCrewStore, useUIStore } from '@festie/shared/stores';
 import { COPY, MEETING_POINT_KINDS, meetingPointKind } from '@festie/shared/constants';
 import {
   meetingTimeDisplay,
+  meetingPointEditLine,
   meetAtForFestivalDay,
   festivalDayTimeOf,
   resolveFestivalTimeZone,
@@ -24,6 +25,7 @@ import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { useHaptics } from '../hooks/useHaptics';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useNow } from '../hooks/useNow';
+import AppSwitch from './AppSwitch';
 import Button from './Button';
 import EmptyState from './EmptyState';
 import CrewSyncMarker from './CrewSyncMarker';
@@ -48,7 +50,7 @@ interface CrewMeetingPointsProps {
    * pair arrives, the create form opens prefilled with these coords — the user
    * still fills the label and confirms "Add", so no write happens automatically.
    */
-  prefillCoords?: { lat: number; lng: number } | null;
+  prefillCoords?: { lat: number; lng: number; label?: string; location?: string; stageReference?: string } | null;
   /** Render only the create form (the map's meeting-point sheet): no toggle, list or Past group. */
   formOnly?: boolean;
   /** Called when the form closes (saved or cancelled) in `formOnly` mode. */
@@ -182,13 +184,13 @@ export default function CrewMeetingPoints({
   const lastPrefillRef = useRef<string | null>(null);
   useEffect(() => {
     if (!prefillCoords) return;
-    const key = `${prefillCoords.lat},${prefillCoords.lng}`;
+    const key = `${prefillCoords.lat},${prefillCoords.lng},${prefillCoords.label ?? ''}`;
     if (lastPrefillRef.current === key) return;
     lastPrefillRef.current = key;
     setEditingId(null);
-    setLabel('');
-    setLocation('');
-    setStageRef('');
+    setLabel(prefillCoords.label ?? '');
+    setLocation(prefillCoords.location ?? '');
+    setStageRef(prefillCoords.stageReference ?? '');
     setType(MEETING_POINT_KINDS[0].type);
     setRecursDaily(false);
     setDayIndex(null);
@@ -326,6 +328,7 @@ export default function CrewMeetingPoints({
     // 055: resolve the point's display time honoring daily recurrence.
     // Recurring → "daily 3:00 PM"; one-shot → "Sat 3:00 PM"; no meetAt → ''.
     const timeDisplay = meetingTimeDisplay(point.meet_at, point.recurs_daily, days, new Date(), timeZone);
+    const editLine = meetingPointEditLine(point, { timeZone, now: new Date() });
     return (
       <View
         key={point.id}
@@ -360,6 +363,11 @@ export default function CrewMeetingPoints({
                 {timeDisplay.label}
               </Text>
             </View>
+          ) : null}
+          {editLine ? (
+            <Text style={styles.pointEditLine} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {editLine}
+            </Text>
           ) : null}
           {!isPast && !isPending(point) ? (
             <View style={styles.comingRow}>
@@ -619,15 +627,12 @@ export default function CrewMeetingPoints({
                   Meet here at the same time every festival day.
                 </Text>
               </View>
-              <Switch
+              <AppSwitch
                 value={recursDaily}
                 onValueChange={(v) => {
                   setRecursDaily(v);
                   setTimeTouched(true);
                 }}
-                trackColor={{ false: t.colors.text.muted, true: t.colors.accent.aqua }}
-                ios_backgroundColor={t.colors.text.muted}
-                thumbColor={t.colors.text.onAccent}
                 accessibilityLabel="Repeats daily"
               />
             </View>
@@ -915,5 +920,9 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('micro'),
     color: t.colors.accent.aqua,
     flexShrink: 1,
+  },
+  pointEditLine: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
   },
 }));

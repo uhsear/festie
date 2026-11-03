@@ -14,6 +14,7 @@ import SignInMethodsSection from '../components/account/SignInMethodsSection';
 import NotificationSection from '../components/account/NotificationSection';
 import NotificationPrefsSection from '../components/account/NotificationPrefsSection';
 import PublicScheduleSection from '../components/account/PublicScheduleSection';
+import PrivacySection from '../components/account/PrivacySection';
 import DevicesSection from '../components/account/DevicesSection';
 import HelpSection from '../components/account/HelpSection';
 import ThemeSection from '../components/account/ThemeSection';
@@ -82,7 +83,12 @@ function AccountPageInner() {
         <NotificationPrefsSection />
       </>
     ),
-    privacy: <PublicScheduleSection />,
+    privacy: (
+      <>
+        <PrivacySection />
+        <PublicScheduleSection />
+      </>
+    ),
     offline: (
       <>
         <LowPowerToggle />

@@ -294,7 +294,7 @@ function makeDeps(overrides: any = {}) {
         getByUser: mock.fn(async () => [{ festivalId: 'f1', unreadUpdates: 3 }]),
       },
       notificationLog: {
-        listByUser: mock.fn(async () => [{ id: 'n1', title: 'Test', createdAt: '2026-01-01' }]),
+        listInbox: mock.fn(async () => [{ id: 'n1', title: 'Test', createdAt: '2026-01-01' }]),
       },
       topicSubscriptions: {
         getForUser: mock.fn(async () => ({ crew: true, schedule: false })),
@@ -727,10 +727,12 @@ describe('routes/admin-audit.js', () => {
     await request(app).get('/audit?actor_id=user-1&action=user.role.granted&limit=10').expect(200);
 
     const callArgs = deps.stores.auditLog.query.mock.calls[0]!.arguments[0];
+    const countArgs = deps.stores.auditLog.count.mock.calls[0]!.arguments[0];
     assert.equal(callArgs.actorId, 'user-1');
-    assert.equal(callArgs.action, 'user.role.granted');
-    assert.equal(callArgs.actionPrefix, null);
-    assert.equal(deps.stores.auditLog.count.mock.calls[0]!.arguments[0].action, 'user.role.granted');
+    assert.deepEqual(callArgs.actions, ['user.role.granted']);
+    assert.equal(callArgs.actionPrefixes, null);
+    assert.deepEqual(countArgs.actions, ['user.role.granted']);
+    assert.equal(countArgs.actionPrefixes, null);
   });
 
   test('GET /audit turns a trailing .* into a prefix match up to the dot', async () => {
@@ -739,10 +741,52 @@ describe('routes/admin-audit.js', () => {
     await request(app).get('/audit?action=user.role.*').expect(200);
 
     const callArgs = deps.stores.auditLog.query.mock.calls[0]!.arguments[0];
-    assert.equal(callArgs.action, null);
-    assert.equal(callArgs.actionPrefix, 'user.role.');
-    assert.equal(deps.stores.auditLog.count.mock.calls[0]!.arguments[0].actionPrefix, 'user.role.');
+    const countArgs = deps.stores.auditLog.count.mock.calls[0]!.arguments[0];
+    assert.equal(callArgs.actions, null);
+    assert.deepEqual(callArgs.actionPrefixes, ['user.role.']);
+    assert.equal(countArgs.actions, null);
+    assert.deepEqual(countArgs.actionPrefixes, ['user.role.']);
   });
+
+  test('GET /audit splits a comma list into prefixes', async () => {
+    const { app, deps } = await buildAuditApp();
+
+    await request(app).get(`/audit?action=${encodeURIComponent('user.password.*,user.password_reset_link.*')}`).expect(200);
+
+    for (const mockFn of [deps.stores.auditLog.query, deps.stores.auditLog.count]) {
+      const args = mockFn.mock.calls[0]!.arguments[0];
+      assert.equal(args.actions, null);
+      assert.deepEqual(args.actionPrefixes, ['user.password.', 'user.password_reset_link.']);
+    }
+  });
+
+  test('GET /audit splits a mixed comma list into exact names and prefixes', async () => {
+    const { app, deps } = await buildAuditApp();
+
+    await request(app).get('/audit?action=user.role.granted,festival.*,crew.deleted').expect(200);
+
+    for (const mockFn of [deps.stores.auditLog.query, deps.stores.auditLog.count]) {
+      const args = mockFn.mock.calls[0]!.arguments[0];
+      assert.deepEqual(args.actions, ['user.role.granted', 'crew.deleted']);
+      assert.deepEqual(args.actionPrefixes, ['festival.']);
+    }
+  });
+
+  for (const bad of ['a,b,c,d,e,f', 'a, b', 'a,,b', 'user.%']) {
+    test(`GET /audit rejects action=${JSON.stringify(bad)} with 400 and no store call`, async () => {
+      const { adminAuditQuery, validateQuery } = await import('../lib/schemas.js');
+      const deps = makeDeps();
+      deps.validateQuery = validateQuery;
+      deps.schemas.adminAuditQuery = adminAuditQuery;
+      const { app } = await buildAuditApp(deps);
+
+      const res = await request(app).get(`/audit?action=${encodeURIComponent(bad)}`).expect(400);
+
+      assert.equal(res.body.error.code, 'VALIDATION_ERROR');
+      assert.equal(deps.stores.auditLog.query.mock.calls.length, 0);
+      assert.equal(deps.stores.auditLog.count.mock.calls.length, 0);
+    });
+  }
 
   test('GET /audit resolves user= to a target id, case-insensitive', async () => {
     const { app, deps } = await buildAuditApp();

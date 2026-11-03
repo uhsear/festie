@@ -232,7 +232,7 @@ describe('CrewPlanView', () => {
     Object.assign(hubState, baseHub({ isPast: true, upNext: [], howWeDid: [{ set: setS1, count: 2, total: 2 }] }));
     render(<CrewPlanView />);
     expect(screen.getByText('How the crew did')).toBeInTheDocument();
-    expect(screen.getByText('See your Wrap')).toBeInTheDocument();
+    expect(screen.getByText('See your Festival Wrap')).toBeInTheDocument();
     expect(screen.getByText(/2 of 2 picked it/)).toBeInTheDocument();
     expect(screen.queryByText('Browse the lineup')).not.toBeInTheDocument();
   });

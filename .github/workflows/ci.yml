@@ -92,7 +92,9 @@ jobs:
         run: pnpm --filter @festie/shared lint
       - name: Dependency boundaries (dependency-cruiser)
         run: npm run depcruise
-      - name: Dead-code report (knip, non-blocking)
+      - name: Unused files and dependencies (knip, blocking)
+        run: npx knip --include files,dependencies,devDependencies,unlisted
+      - name: Dead-code report (knip exports, non-blocking)
         run: npm run knip
         continue-on-error: true
 
@@ -184,21 +186,27 @@ jobs:
           path: coverage/tmp/
           retention-days: 1
 
-  # Keeps the required check name "test (22)". Passes only when every shard
-  # passed, then enforces the .c8rc.json floors on the merged coverage.
+  # Keeps the required check name "test (22)". Passes only when every shard,
+  # the web build, the web/shared vitest run and the mobile typecheck and tests
+  # passed (a path-filtered "skipped" job passes), then enforces the .c8rc.json
+  # floors on the merged coverage.
   test:
     if: always()
-    needs: [test-shard, web-build]
+    needs: [test-shard, web-build, frontend-tests, mobile-typecheck, mobile-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       matrix:
         node-version: [22]
     steps:
-      - name: Fail unless every shard and the web build passed
-        if: needs.test-shard.result != 'success' || needs.web-build.result != 'success'
+      - name: Fail unless every shard, the build, the frontend tests and the mobile checks passed
+        if: >-
+          needs.test-shard.result != 'success' || needs.web-build.result != 'success' ||
+          contains(fromJSON('["failure","cancelled"]'), needs.frontend-tests.result) ||
+          contains(fromJSON('["failure","cancelled"]'), needs.mobile-typecheck.result) ||
+          contains(fromJSON('["failure","cancelled"]'), needs.mobile-tests.result)
         run: |
-          echo "test-shard: ${{ needs.test-shard.result }}, web-build: ${{ needs.web-build.result }}"
+          echo "test-shard: ${{ needs.test-shard.result }}, web-build: ${{ needs.web-build.result }}, frontend-tests: ${{ needs.frontend-tests.result }}, mobile-typecheck: ${{ needs.mobile-typecheck.result }}, mobile-tests: ${{ needs.mobile-tests.result }}"
           exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -488,8 +496,11 @@ jobs:
           name: web-dist
           path: packages/web/dist
       - name: Check bundle size
-        continue-on-error: true
         working-directory: packages/web
+        # The BundleMon GitHub app is not installed, so remote mode fails to start.
+        # Local mode still enforces maxSize. maxPercentIncrease needs a stored base, so it is not enforced.
+        env:
+          BUNDLEMON_REMOTE: 'false'
         run: pnpm exec bundlemon
 
   docker:

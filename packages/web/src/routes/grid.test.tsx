@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { ConflictGroup } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
@@ -34,7 +34,10 @@ vi.mock('../components/features/LowPowerIndicator', () => ({
   default: () => null,
 }));
 
-const noClashes = { count: 0, marks: new Map(), groups: [] as ConflictGroup[] };
+const mockNavigate = vi.fn();
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => mockNavigate }));
+
+const noClashes = { count: 0, marks: new Map(), groups: [] as ConflictGroup[], picked: 0 };
 
 // getFilteredSets runs the real shared filter against the store fixture.
 vi.mock('@festie/shared/hooks', async () => {
@@ -69,6 +72,7 @@ vi.mock('@festie/shared/hooks', async () => {
       },
     })),
     useDayClashes: vi.fn(() => noClashes),
+    useViewAs: () => ({ target: null, canView: () => false, start: vi.fn(), clear: vi.fn() }),
   };
 });
 
@@ -190,6 +194,11 @@ describe('GridView', () => {
       stages: [{ id: 'st1', name: 'Main Stage' }],
       days: [{ index: 0, label: 'Friday', date: '2026-06-12' }],
       activeStages: [],
+      festivals: [],
+      error: null,
+      isLoading: false,
+      loadFestivals: vi.fn(),
+      selectFestival: vi.fn(),
       searchQuery: '',
       onlyMine: false,
       currentProfile: null,
@@ -211,12 +220,21 @@ describe('GridView', () => {
     expect(container).toBeTruthy();
   });
 
-  it('shows "No festival loaded" when no festival is selected', () => {
+  it('shows "No festival selected" when no festival is selected', () => {
     setFilters({ currentFestival: null });
     render(<GridView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
-    expect(screen.getByText('No festival loaded')).toBeInTheDocument();
-    expect(screen.getByText('Choose a festival from the top menu to see the schedule grid.')).toBeInTheDocument();
+    expect(screen.getByText('No festival selected')).toBeInTheDocument();
+    expect(screen.getByText('Choose a festival on the Lineup tab to see the schedule grid.')).toBeInTheDocument();
+  });
+
+  it('shows the load error and a retry when the festival list failed', () => {
+    storeState.error = 'Network down';
+    setFilters({ currentFestival: null });
+    render(<GridView />);
+    expect(screen.getByText("Couldn't load festivals")).toBeInTheDocument();
+    expect(screen.getByText('Network down')).toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
   });
 
   it('shows the TBA section with the "times aren\'t out yet" heading when only timeless sets exist', () => {
@@ -373,43 +391,17 @@ describe('GridView', () => {
       recommendedKeepId: 'alpha',
       overlapMin: 30,
     };
-    const scrollIntoView = vi.fn();
 
     beforeEach(() => {
-      Element.prototype.scrollIntoView = scrollIntoView;
-      storeState.setDetailSet = vi.fn();
-      vi.mocked(useDayClashes).mockReturnValue({ count: 1, marks: new Map(), groups: [group] });
-    });
-    afterEach(() => {
-      delete storeState.setDetailSet;
+      mockNavigate.mockClear();
+      vi.mocked(useDayClashes).mockReturnValue({ count: 1, marks: new Map(), groups: [group], picked: 2 });
     });
 
-    it('scrolls to and focuses the first clashing set', () => {
-      setFilters({
-        ...timedDay,
-        allDaySets: [alpha, beta],
-        timedSets: [alpha, beta],
-        visibleStages: [
-          { id: 'st1', name: 'Main Stage' },
-          { id: 'st2', name: 'Forest' },
-        ],
-      });
+    it('opens Picks at the clash cards', () => {
+      setFilters({ ...timedDay, allDaySets: [alpha, beta], timedSets: [alpha, beta] });
       render(<GridView />);
-      fireEvent.click(screen.getByRole('button', { name: 'You have 1 schedule clash. Show it.' }));
-      expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'center', inline: 'center' }));
-      expect(scrollIntoView.mock.contexts.at(-1)).toBe(document.querySelector('[data-set-id="alpha"]'));
-      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Alpha' }));
-      expect(storeState.setDetailSet).not.toHaveBeenCalled();
-    });
-
-    it('opens the set detail when every stage of the clash is hidden', () => {
-      setFilters({
-        ...timedDay,
-        visibleStages: [{ id: 'st3', name: 'Bass' }],
-      });
-      render(<GridView />);
-      fireEvent.click(screen.getByRole('button', { name: 'You have 1 schedule clash. Show it.' }));
-      expect(storeState.setDetailSet).toHaveBeenCalledWith(alpha);
+      fireEvent.click(screen.getByRole('button', { name: 'You have 1 schedule clash. Open it in Picks.' }));
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/picks', hash: 'clashes' });
     });
   });
 });

@@ -45,7 +45,7 @@ test.describe('accessibility (axe) — key routes', () => {
         const summary = results.violations.map((v) => ({
           id: v.id,
           impact: v.impact,
-          nodes: v.nodes.length,
+          nodes: v.nodes.map((n) => ({ target: n.target, html: n.html })),
           help: v.helpUrl,
         }));
         // eslint-disable-next-line no-console

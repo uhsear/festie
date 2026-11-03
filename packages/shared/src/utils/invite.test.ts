@@ -6,6 +6,7 @@ import {
   formatInviteExpiry,
   inviteErrorStatus,
   inviteStatusMessage,
+  inviteIsDead,
   type InviteStatus,
 } from './invite';
 import type { InvitePreview } from '../types/api';
@@ -105,6 +106,20 @@ describe('inviteErrorStatus', () => {
     expect(inviteErrorStatus({ status: 429 })).toBe('unreachable');
     expect(inviteErrorStatus(new TypeError('Failed to fetch'))).toBe('unreachable');
     expect(inviteErrorStatus(null)).toBe('unreachable');
+  });
+});
+
+describe('locked invites', () => {
+  it('maps 403 to locked with the locked message', () => {
+    expect(inviteErrorStatus({ status: 403 })).toBe('locked');
+    expect(inviteStatusMessage('locked', true)).toBe("This crew isn't taking new members.");
+    expect(inviteStatusMessage('locked', false)).toBe("This crew isn't taking new members.");
+  });
+  it('inviteIsDead is true only for invalid, expired and locked', () => {
+    const dead: InviteStatus[] = ['invalid', 'expired', 'locked'];
+    const alive: InviteStatus[] = ['loading', 'ready', 'unreachable'];
+    for (const s of dead) expect(inviteIsDead(s)).toBe(true);
+    for (const s of alive) expect(inviteIsDead(s)).toBe(false);
   });
 });
 

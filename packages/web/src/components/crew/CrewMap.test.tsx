@@ -1,25 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, renderHook, waitFor } from '@testing-library/react';
-import type { SosEntry } from '@festie/shared/types';
+import { act, fireEvent, render, screen, renderHook, waitFor } from '@testing-library/react';
+import type { Festival, PeerLocation, SosEntry } from '@festie/shared/types';
 import { useSosMarkers } from './crew-map/useSosMarkers';
+import { usePeerMarkers } from './crew-map/usePeerMarkers';
+import { useStageMarkers } from './crew-map/useStageMarkers';
 import type { GlRefObject, MapRefObject, GlMarker } from './crew-map/mapDom';
 
 // --- Mocks ---
 // Guard the maplibre-gl import: the component dynamic-import()s it inside an
 // effect, and on the has-pins path that effect runs. We stub the GL library so
 // no WebGL/canvas is ever touched in jsdom. The CSS side-import is stubbed too.
-const mapInstances: Array<{ on: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> }> = [];
+const mapInstances: Array<{
+  on: ReturnType<typeof vi.fn>;
+  remove: ReturnType<typeof vi.fn>;
+  flyTo: ReturnType<typeof vi.fn>;
+}> = [];
+const markerElements: HTMLElement[] = [];
 vi.mock('maplibre-gl', () => {
   class Map {
     on = vi.fn();
     remove = vi.fn();
     addControl = vi.fn();
     fitBounds = vi.fn();
+    flyTo = vi.fn();
+    getZoom = () => 15;
+    off = vi.fn();
     constructor() {
-      mapInstances.push(this as unknown as { on: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> });
+      mapInstances.push(this as unknown as (typeof mapInstances)[number]);
     }
   }
   class Marker {
+    constructor(opts?: { element?: HTMLElement }) {
+      if (opts?.element) markerElements.push(opts.element);
+    }
+    remove() {}
     setLngLat() {
       return this;
     }
@@ -54,19 +68,24 @@ vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({ default: 
 
 // Drive pin-derivation deterministically: the real shared util is pure, but
 // mocking it keeps this test focused on CrewMap's own branching (empty vs map).
-const { extractMeetingPointPins, hasOfflineBasemap, pmtilesImport } = vi.hoisted(() => ({
+const { extractMeetingPointPins, extractStagePins, extractAmenityPins, hasOfflineBasemap, pmtilesImport } = vi.hoisted(
+  () => ({
   extractMeetingPointPins: vi.fn(),
+  extractStagePins: vi.fn(() => [] as unknown[]),
+  extractAmenityPins: vi.fn(() => [] as unknown[]),
   hasOfflineBasemap: vi.fn(() => false),
   pmtilesImport: vi.fn(),
-}));
+  }),
+);
 // The pmtiles protocol is registered by a dynamic import inside the map-lifecycle
 // effect. Stub the module so the offline-basemap branch can be driven, and so a
 // failed chunk load — the normal offline-first failure — can be simulated.
 vi.mock('pmtiles', () => pmtilesImport());
-vi.mock('@festie/shared/utils', () => ({
+vi.mock('@festie/shared/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/utils')>()),
   extractMeetingPointPins,
-  extractStagePins: () => [],
-  extractAmenityPins: () => [],
+  extractStagePins,
+  extractAmenityPins,
   extractZones: () => [],
   zonesGeoJSON: () => ({ type: 'FeatureCollection', features: [] }),
   zoneLabels: () => [],
@@ -88,12 +107,14 @@ vi.mock('@festie/shared/utils', () => ({
   pickMapStyle: () => ({ version: 8, sources: {}, layers: [] }),
   hasOfflineBasemap,
   buildPursuit: () => null,
-  nearestPin: () => null,
 }));
 
 vi.mock('lucide-react', () => ({
   MapPin: () => <span data-testid="map-pin-icon" />,
   AlertTriangle: () => <span data-testid="alert-icon" />,
+  Navigation: () => <span />,
+  X: () => <span />,
+  LocateFixed: () => <span />,
 }));
 
 import CrewMap from './CrewMap';
@@ -111,7 +132,10 @@ const POINT_NO_COORDS = { id: 'mp2', label: 'Food court', location: 'Center', ac
 beforeEach(() => {
   vi.clearAllMocks();
   mapInstances.length = 0;
+  markerElements.length = 0;
   hasOfflineBasemap.mockReturnValue(false);
+  extractStagePins.mockReturnValue([]);
+  extractAmenityPins.mockReturnValue([]);
 });
 
 describe('CrewMap', () => {
@@ -324,5 +348,207 @@ describe('useSosMarkers keyboard accessibility', () => {
       label: 'Dana — SOS',
       coord: { latitude: 41.88, longitude: -87.62 },
     });
+  });
+});
+
+// --- Place card, Nearest, self dot and focus (T49) ---
+const FESTIVAL = { id: 'f1' } as unknown as Festival;
+const STAGE_PIN = { id: 's1', kind: 'stage', label: 'Mainstage', latitude: 28.5, longitude: -81.4 };
+const amenity = (id: string, amenityType: string, label: string) => ({
+  id,
+  kind: 'amenity',
+  label,
+  amenityType,
+  latitude: 28.5,
+  longitude: -81.4,
+});
+
+const watchPosition = vi.fn();
+function stubGeolocation() {
+  watchPosition.mockReset().mockReturnValue(1);
+  Object.defineProperty(global.navigator, 'geolocation', {
+    configurable: true,
+    value: { watchPosition, clearWatch: vi.fn() },
+  });
+}
+
+async function renderReadyMap(props: Partial<React.ComponentProps<typeof CrewMap>> = {}) {
+  // One meeting pin so the map renders even when no stages or amenities are mapped.
+  extractMeetingPointPins.mockReturnValue([
+    { id: 'mp1', kind: 'meeting-point', label: 'Main Gate', sublabel: '', latitude: 41.88, longitude: -87.62 },
+  ]);
+  const view = render(<CrewMap meetingPoints={[]} festival={FESTIVAL} {...props} />);
+  await waitFor(() => expect(mapInstances).toHaveLength(1));
+  const load = mapInstances[0].on.mock.calls.find((c) => c[0] === 'load')![1] as () => void;
+  act(() => load());
+  return view;
+}
+
+describe('CrewMap place card and Nearest', () => {
+  beforeEach(stubGeolocation);
+
+  it('labels filter chips with readable names, never the raw enum or the word pursue', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    extractAmenityPins.mockReturnValue([amenity('a1', 'atm', 'ATM'), amenity('a2', 'info', 'Info')]);
+    render(<CrewMap meetingPoints={[]} festival={FESTIVAL} />);
+    expect(screen.getByRole('button', { name: 'Hide ATM' })).toHaveTextContent('ATM');
+    expect(screen.getByRole('button', { name: 'Hide Info' })).toHaveTextContent('Info');
+    expect(screen.queryByText(/pursu/i)).toBeNull();
+    expect(document.body.innerHTML).not.toMatch(/pursu/i);
+  });
+
+  it('says so when no medical pin is mapped and offers Call 911', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    extractAmenityPins.mockReturnValue([amenity('a1', 'water', 'Water')]);
+    render(<CrewMap meetingPoints={[]} festival={FESTIVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show the way to the nearest medical' }));
+    expect(screen.getByText(/No medical tent is mapped/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Call 911' })).toHaveAttribute('href', 'tel:911');
+    expect(watchPosition).not.toHaveBeenCalled();
+  });
+
+  it('starts location and shows Finding you when a medical pin exists and there is no fix', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    extractAmenityPins.mockReturnValue([amenity('a1', 'medical', 'First aid')]);
+    render(<CrewMap meetingPoints={[]} festival={FESTIVAL} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show the way to the nearest medical' }));
+    expect(watchPosition).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Finding you…')).toBeInTheDocument();
+  });
+
+  it('shows no Show my location button while authoring', async () => {
+    await renderReadyMap({ authoring: true });
+    expect(screen.queryByRole('button', { name: 'Show my location' })).toBeNull();
+  });
+
+  it('adds the self dot only once a fix exists', async () => {
+    await renderReadyMap();
+    expect(markerElements.some((el) => el.classList.contains('festie-self-marker'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+    expect(watchPosition).toHaveBeenCalledTimes(1);
+    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 20 } }));
+    const dot = markerElements.find((el) => el.classList.contains('festie-self-marker'));
+    expect(dot).toBeDefined();
+    expect(dot!.getAttribute('aria-label')).toBe('You are here, accurate to about 20 m');
+    expect(mapInstances[0].flyTo).toHaveBeenCalled();
+  });
+
+  it('opens the card for a mapped focusPinId once and reports it handled', async () => {
+    extractStagePins.mockReturnValue([STAGE_PIN]);
+    const onFocusHandled = vi.fn();
+    await renderReadyMap({ focusPinId: 's1', onFocusHandled });
+    expect(await screen.findByRole('dialog', { name: 'Mainstage' })).toBeInTheDocument();
+    expect(onFocusHandled).toHaveBeenCalledTimes(1);
+    expect(mapInstances[0].flyTo).toHaveBeenCalledWith(expect.objectContaining({ zoom: 17 }));
+  });
+
+  it('does nothing for an unknown focusPinId', async () => {
+    extractStagePins.mockReturnValue([STAGE_PIN]);
+    const onFocusHandled = vi.fn();
+    await renderReadyMap({ focusPinId: 'nope', onFocusHandled });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(onFocusHandled).not.toHaveBeenCalled();
+  });
+});
+
+describe('useStageMarkers place selection', () => {
+  class FakeMarker {
+    element: HTMLElement;
+    popup = false;
+    constructor(opts: { element: HTMLElement }) {
+      this.element = opts.element;
+    }
+    setLngLat() {
+      return this;
+    }
+    setPopup() {
+      this.popup = true;
+      return this;
+    }
+    addTo() {
+      return this;
+    }
+  }
+
+  function setup(onSelectPlace?: (pin: unknown) => void) {
+    const mapRef = { current: {} } as unknown as MapRefObject;
+    const glRef = { current: { Marker: FakeMarker } } as unknown as GlRefObject;
+    const markersRef = { current: [] as GlMarker[] };
+    renderHook(() =>
+      useStageMarkers(mapRef, glRef, 'ready', [STAGE_PIN] as never, 's1', markersRef, onSelectPlace as never),
+    );
+    return markersRef.current[0] as unknown as FakeMarker;
+  }
+
+  it('calls the callback on click and Enter, with no popup', () => {
+    const onSelect = vi.fn();
+    const marker = setup(onSelect);
+    marker.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    marker.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledWith(STAGE_PIN);
+    expect(marker.popup).toBe(false);
+  });
+
+  it('adds no click listener without a callback, so taps reach the map', () => {
+    const marker = setup();
+    const parentClick = vi.fn();
+    const parent = document.createElement('div');
+    parent.addEventListener('click', parentClick);
+    parent.appendChild(marker.element);
+    marker.element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(parentClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('usePeerMarkers near-stage label', () => {
+  class FakeMarker {
+    element: HTMLElement;
+    constructor(opts: { element: HTMLElement }) {
+      this.element = opts.element;
+    }
+    setLngLat() {
+      return this;
+    }
+    setPopup() {
+      return this;
+    }
+    addTo() {
+      return this;
+    }
+    remove() {}
+    togglePopup() {}
+  }
+  class FakePopup {
+    setDOMContent() {
+      return this;
+    }
+  }
+  const peer: PeerLocation = {
+    crewId: 'c1',
+    userId: 'u1',
+    username: 'Ana',
+    lat: 41.88,
+    lng: -87.62,
+    serverAt: new Date().toISOString(),
+  } as PeerLocation;
+
+  function labelWithStageAt(dLat: number): string {
+    const mapRef = { current: {} } as unknown as MapRefObject;
+    const glRef = { current: { Marker: FakeMarker, Popup: FakePopup } } as unknown as GlRefObject;
+    const markersRef = { current: [] as GlMarker[] };
+    const stage = { id: 's1', kind: 'stage', label: 'Main Stage', sublabel: '', latitude: 41.88 + dLat, longitude: -87.62 };
+    renderHook(() =>
+      usePeerMarkers(mapRef, glRef, 'ready', [peer], 'k', [stage] as never, 's1', markersRef, vi.fn()),
+    );
+    return (markersRef.current[0] as unknown as FakeMarker).element.getAttribute('aria-label') ?? '';
+  }
+
+  it('adds near Main Stage within 150 m', () => {
+    expect(labelWithStageAt(0.0009)).toContain('near Main Stage'); // ~100 m
+  });
+
+  it('omits it at 200 m', () => {
+    expect(labelWithStageAt(0.0018)).not.toContain('near Main Stage'); // ~200 m
   });
 });

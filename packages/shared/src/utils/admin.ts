@@ -109,7 +109,7 @@ export function filterAdminCrews<
 export const AUDIT_ACTION_FILTERS: ReadonlyArray<{ label: string; prefix: string }> = [
   { label: 'All', prefix: '' },
   { label: 'Roles', prefix: 'user.role.*' },
-  { label: 'Passwords', prefix: 'user.password.*' },
+  { label: 'Passwords', prefix: 'user.password.*,user.password_reset_link.*' },
   { label: 'Reset links', prefix: 'user.password_reset_link.*' },
   { label: 'Deleted users', prefix: 'user.deleted' },
   { label: 'Logouts', prefix: 'user.sessions.*' },

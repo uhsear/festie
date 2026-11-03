@@ -4,6 +4,7 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import { usePicks, useFestival, useCanPick, useFestivalReady } from '@festie/shared/hooks';
 import {
   getHomeActions,
+  festivalLoadState,
   resolveFestivalTimeZone,
   splitCardsByNow,
   detectConflicts,
@@ -23,6 +24,7 @@ import OtherDayMatches from '../components/features/OtherDayMatches';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import SetTimesBanner from '../components/features/SetTimesBanner';
 import DiscoverRow from '../components/features/DiscoverRow';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -150,7 +152,9 @@ function CardsViewInner() {
   // Show layout-matched skeleton while festivals are being fetched on boot
   // — same component the router uses for the chunk-load fallback so the
   // visual is continuous across route-transition → data-fetch.
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
+    if (loadState === 'error') return <FestivalLoadError />;
     return <CardsSkeleton />;
   }
 
@@ -239,7 +243,8 @@ function CardsViewInner() {
           // for every route, so the grid (and the empty-state branch above)
           // share one origin instead of stacking an extra grid pad on top.
           style={{
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
+            // 300px keeps the Must/Want/Maybe row inside the card; 260px clipped Maybe.
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
             gap: 'var(--cards-gap, var(--space-3))',
           }}
           role="region"

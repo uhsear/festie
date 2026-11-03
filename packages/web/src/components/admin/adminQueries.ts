@@ -9,6 +9,7 @@ export const adminKeys = {
   crews: ['admin', 'crews'] as const,
   audit: (filters: unknown, cursor: unknown) => ['admin', 'audit', filters, cursor] as const,
   analytics: (festivalId?: string | null) => ['admin', 'analytics', festivalId ?? 'all'] as const,
+  pickInsight: (festivalId: string) => ['admin', 'pick-insight', festivalId] as const,
 };
 
 /** Admin reads stay fresh for a minute and are never retried or persisted. */

@@ -115,9 +115,10 @@ test.describe('festival planner browser regression', () => {
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toBeVisible();
 
     await openSet(page, 'Alpha');
-    // Guests see the sign-in prompt with both auth buttons, never a Join Festival button.
+    // Guests pick on this device (T39), so the panel prompts sign-up for the account-only
+    // extras with both auth buttons, never a Join Festival button.
     const panel = page.locator('[aria-label="Set detail panel"]');
-    await expect(panel).toContainText('Sign in to save picks');
+    await expect(panel).toContainText('Create a free account to keep private notes');
     await expect(panel.getByRole('button', { name: 'Create account' })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Sign in' })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Join Festival' })).toHaveCount(0);
@@ -223,7 +224,7 @@ test.describe('festival planner browser regression', () => {
     await expect(page).toHaveURL(/\/grid$/);
   });
 
-  test('the grid clash chip focuses the first clashing set', async ({ app, page }) => {
+  test('the grid clash chip opens the clash cards in Picks', async ({ app, page }) => {
     await registerUser(page, app, `clasher_${Date.now()}`);
 
     // Alpha (10:00-11:00, Main) and Beta (10:30-11:30, Forest) overlap.
@@ -236,10 +237,11 @@ test.describe('festival planner browser regression', () => {
     }
 
     await openScheduleView(page, 'Grid');
-    const chip = page.getByRole('button', { name: 'You have 1 schedule clash. Show it.' });
+    const chip = page.getByRole('button', { name: 'You have 1 schedule clash. Open it in Picks.' });
     await expect(chip).toBeVisible();
     await chip.click();
-    await expect(page.locator('[data-set-id="set-a"] [data-open]')).toBeFocused();
+    await expect(page).toHaveURL(/\/picks$/);
+    await expect(page.locator('#clashes')).toBeFocused();
   });
 
   test('switching the day filter changes the visible sets', async ({ app, page }) => {
@@ -266,10 +268,17 @@ test.describe('festival planner browser regression', () => {
   });
 
   test('guests see an in-place sign-up teaser on protected tabs', async ({ app, page }) => {
-    // /picks no longer redirects; it renders <GuestTeaser mode="picks"/> in place.
+    // Guests can pick on this device (T39), so /picks shows the sign-up banner over their local picks.
     await page.goto(`${app.baseUrl}/picks`);
     await expect(page).toHaveURL(/\/picks$/);
-    await expect(page.getByRole('heading', { name: 'Save your festival picks' })).toBeVisible();
+    const banner = page.getByRole('region', { name: 'Save your picks' });
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole('button', { name: 'Create free account' })).toBeVisible();
+
+    // /crew still renders <GuestTeaser mode="crew"/> in place instead of redirecting.
+    await page.goto(`${app.baseUrl}/crew`);
+    await expect(page).toHaveURL(/\/crew$/);
+    await expect(page.getByRole('heading', { name: 'Plan with your crew' })).toBeVisible();
   });
 });
 

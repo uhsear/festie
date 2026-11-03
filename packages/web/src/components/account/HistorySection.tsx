@@ -13,7 +13,8 @@ import { RATING_META } from '../../lib/ratingIcon';
 //               daysAttended, totalHours },
 //     byFestival: [{ festivalId, festivalName, startDate, endDate, totalRated,
 //                    avgRating, stagesVisited, daysAttended, totalHours }],
-//     topArtists: [{ artist, timesRated, bestRating, avgRating }] }
+//     topArtists: [{ artist, timesRated, bestRating, avgRating }],
+//     seenMost?: [{ artist, festivals }] }   // absent on an older server
 interface LifetimeTotals {
   totalRated: number;
   avgRating: number | null;
@@ -43,6 +44,7 @@ interface LifetimeResponse {
   totals: LifetimeTotals;
   byFestival: FestivalRow[];
   topArtists: TopArtist[];
+  seenMost?: Array<{ artist: string; festivals: number }>;
 }
 
 /**
@@ -87,9 +89,10 @@ export default function HistorySection() {
   const totals = data?.totals;
   const byFestival = data?.byFestival ?? [];
   const topArtists = data?.topArtists ?? [];
+  const seenMost = (data?.seenMost ?? []).slice(0, 5);
 
   if (!totals || totals.totalRated === 0) {
-    return (
+    const empty = (
       <EmptyState
         icon={<History className="w-10 h-10" aria-hidden="true" />}
         title="No festival history yet"
@@ -103,6 +106,13 @@ export default function HistorySection() {
             : undefined
         }
       />
+    );
+    if (seenMost.length === 0) return empty;
+    return (
+      <div className="space-y-4">
+        {empty}
+        <SeenMost rows={seenMost} />
+      </div>
     );
   }
 
@@ -194,7 +204,32 @@ export default function HistorySection() {
           </div>
         </section>
       )}
+
+      {seenMost.length > 0 && <SeenMost rows={seenMost} />}
     </div>
+  );
+}
+
+function SeenMost({ rows }: { rows: Array<{ artist: string; festivals: number }> }) {
+  return (
+    <section>
+      <h3 className="flex items-center gap-2 text-xs uppercase tracking-[var(--letter-spacing-caps)] text-text-secondary mb-3">
+        <span className="w-2 h-2 rounded-full bg-accent-aqua" aria-hidden="true" />
+        Artists you&apos;ve seen most
+      </h3>
+      <ul className="rounded-xl bg-bg-card border border-border p-4">
+        {rows.map((r) => (
+          <li
+            key={r.artist}
+            aria-label={`${r.artist}, ${r.festivals} festivals`}
+            className="flex items-center gap-3 py-2 border-b border-border last:border-b-0 first:pt-0 last:pb-0"
+          >
+            <span className="flex-1 text-sm text-text-primary truncate">{r.artist}</span>
+            <span className="text-xs text-text-muted">{r.festivals} festivals</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

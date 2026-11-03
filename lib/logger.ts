@@ -2,9 +2,24 @@
  * Festie logger — Pino-backed structured logging with request IDs + PII redaction.
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { loadConfig } from './config.js';
 
 const _cfg = loadConfig();
+
+type RequestContext = { reqId: string; traceId?: string };
+
+// Per-request ids for every log line the request writes (set by lib/middleware.ts).
+const requestContext = new AsyncLocalStorage<RequestContext>();
+
+function runWithRequestContext<T>(ctx: RequestContext, fn: () => T): T {
+  return requestContext.run(ctx, fn);
+}
+
+function getRequestContext(): RequestContext | undefined {
+  return requestContext.getStore();
+}
 
 const REDACT_KEYS = new Set([
   'password', 'pass', 'pwd', 'secret', 'token', 'auth',
@@ -68,6 +83,7 @@ try {
     timestamp: pino.stdTimeFunctions.isoTime,
     redact: { paths: redactPaths, censor: '[REDACTED]', remove: false },
     messageKey: 'msg',
+    mixin: () => getRequestContext() ?? {},
     formatters: {
       level: (label: string) => ({ level: label }),
     },
@@ -101,7 +117,7 @@ const envLevel = _cfg.LOG_LEVEL || (_cfg.NODE_ENV === 'production' ? 'info' : 'd
 function formatConsole(level: string, prefix: string, bindings: any, message: string, meta: any) {
   const ts = new Date().toISOString();
   const scope = prefix ? `[${prefix}]` : '';
-  const body = { ...bindings, ...(meta ? sanitizeLogMeta(meta) : {}) };
+  const body = { ...getRequestContext(), ...bindings, ...(meta ? sanitizeLogMeta(meta) : {}) };
   const suffix = Object.keys(body).length ? ` ${JSON.stringify(body)}` : '';
   return `${ts} ${level.toUpperCase()} ${scope} ${message}${suffix}`.trim();
 }
@@ -164,4 +180,4 @@ function getPinoRoot() {
   return pinoRoot;
 }
 
-export { createLogger, sanitizeLogMeta, getPinoRoot, pinoAvailable };
+export { createLogger, sanitizeLogMeta, getPinoRoot, pinoAvailable, runWithRequestContext, getRequestContext };

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { searchAdminTargets, type AdminTarget } from '@festie/shared/utils';
+import { useReturnFocus } from '../../hooks/useReturnFocus';
 import { useAdminCrews, useAdminFestivals } from './adminQueries';
 import { useAdminSearch, type AdminSearch } from './useAdminSearch';
 
@@ -23,6 +24,7 @@ export default function AdminCommandPalette() {
   const [, setAdminSearch] = useAdminSearch();
   const festivals = useAdminFestivals();
   const crews = useAdminCrews(open);
+  const returnFocus = useReturnFocus();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -88,6 +90,7 @@ export default function AdminCommandPalette() {
         <RadixDialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-sm" />
         <RadixDialog.Content
           aria-describedby={undefined}
+          {...returnFocus}
           className="fixed left-1/2 top-[15vh] z-[var(--z-modal)] w-[92vw] max-w-lg -translate-x-1/2 rounded-2xl bg-bg-card border border-border-light shadow-2xl p-4 space-y-3"
         >
           <RadixDialog.Title className="sr-only">Find</RadixDialog.Title>

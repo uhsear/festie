@@ -137,6 +137,8 @@ export interface CrewActions {
   // body; the snake_case totem_name/totem_emoji come back on the returned crew,
   // merged onto activeCrew + the crews list (mirrors updateHomeBase).
   updateCrew: (crewId: string, request: UpdateCrewRequest) => Promise<Crew>;
+  // Owner-only lock switch (PUT /crews/:id { inviteLocked }). Not offline-eligible.
+  setCrewLocked: (crewId: string, locked: boolean) => Promise<Crew>;
   joinByCode: (request: JoinCrewRequest) => Promise<JoinCrewResponse | null>;
   leaveCrew: (crewId: string) => Promise<void>;
   kickMember: (crewId: string, memberId: string) => Promise<void>;
@@ -232,7 +234,7 @@ export interface CrewActions {
   loadActivity: (crewId: string) => Promise<void>;
   loadOlderActivity: (crewId: string) => Promise<void>;
   // Home base (owner-only PUT /crews/:id/home-base).
-  updateHomeBase: (crewId: string, payload: { location: string | null; time: string | null }) => Promise<void>;
+  updateHomeBase: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => Promise<void>;
   // M6 Crew Photo Wall (Phase 1, link-out): set/clear the crew shared-album URL
   // (member-gated PUT /crews/:id/photo-album). Pass null to clear.
   updatePhotoAlbum: (crewId: string, payload: { photoAlbumUrl: string | null }) => Promise<void>;
@@ -241,7 +243,7 @@ export interface CrewActions {
   // active crew. They mutate the in-memory polls / meetingPoints / activeCrew
   // home base so the open crew screen reflects remote changes live, without an
   // API round-trip. All are guarded by the caller against crew mismatch.
-  applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null }) => void;
+  applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => void;
   // M6: merge a remote photo-album change onto the active crew + crews list.
   applyPhotoAlbumUpdate: (crewId: string, payload: { photoAlbumUrl: string | null }) => void;
   applyMeetingPointUpsert: (meetingPoint: CrewMeetingPoint) => void;
@@ -419,6 +421,8 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
       throw err;
     }
   },
+
+  setCrewLocked: (crewId: string, locked: boolean) => get().updateCrew(crewId, { inviteLocked: locked }),
 
   // POST /crews/join -> the joined crew. Offline: queue the join and insert an
   // optimistic placeholder crew so the user sees "joined" immediately; the
@@ -1793,7 +1797,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   // ── Home base ──────────────────────────────────────────────────
   // PUT /crews/:crewId/home-base -> { crew }. Owner-only server-side. Merge the
   // returned crew so activeCrew/crews reflect the new home base immediately.
-  updateHomeBase: async (crewId: string, payload: { location: string | null; time: string | null }) => {
+  updateHomeBase: async (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => {
     set({ error: null });
     try {
       const { crew } = await api.put<{ crew: Crew }>(`/crews/${crewId}/home-base`, payload);
@@ -1841,7 +1845,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   // Merge a remote home-base change onto the active crew + crews list. The
   // socket payload carries `location` / `time`; map them onto the serialized
   // crew's homeBaseLocation / homeBaseTime fields.
-  applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null }) => {
+  applyHomeBaseUpdate: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => {
     set((state) => ({
       activeCrew:
         state.activeCrew?.id === crewId
@@ -1849,10 +1853,18 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
               ...state.activeCrew,
               homeBaseLocation: payload.location,
               homeBaseTime: payload.time,
+              ...('planB' in payload ? { homeBasePlanB: payload.planB ?? null } : {}),
             }
           : state.activeCrew,
       crews: state.crews.map((c) =>
-        c.id === crewId ? { ...c, homeBaseLocation: payload.location, homeBaseTime: payload.time } : c,
+        c.id === crewId
+          ? {
+              ...c,
+              homeBaseLocation: payload.location,
+              homeBaseTime: payload.time,
+              ...('planB' in payload ? { homeBasePlanB: payload.planB ?? null } : {}),
+            }
+          : c,
       ),
     }));
   },

@@ -290,6 +290,7 @@ describe('createRatingsStore.getLifetimeStats — SQL wiring', () => {
           { artist: 'Bonobo', timesRated: 3, bestRating: 5, avgRating: 4.3 },
         ],
       },
+      { rows: [{ artist: 'Bonobo', festivals: 3 }] },
     ]);
     const store = createRatingsStore(pool);
     const result = await store.getLifetimeStats('user-1');
@@ -300,11 +301,16 @@ describe('createRatingsStore.getLifetimeStats — SQL wiring', () => {
     assert.strictEqual(result.byFestival.length, 2);
     assert.strictEqual(result.byFestival[0].festivalId, 'f2'); // newest first
     assert.strictEqual(result.topArtists.length, 2);
+    assert.deepStrictEqual(result.seenMost, [{ artist: 'Bonobo', festivals: 3 }]);
 
     // Every query is scoped to the user id only — no festival param.
     assert.deepStrictEqual(pool.queries[0].params, ['user-1']);
     assert.deepStrictEqual(pool.queries[1].params, ['user-1']);
     assert.deepStrictEqual(pool.queries[2].params, ['user-1']);
+    assert.deepStrictEqual(pool.queries[3].params, ['user-1']);
+    // seenMost guards a null or scalar `artists` and skips deleted festivals.
+    assert.ok(pool.queries[3].sql.includes('jsonb_typeof(s.artists)'));
+    assert.ok(pool.queries[3].sql.includes('f.deleted_at IS NULL'));
     // Totals query must NOT carry a festival filter (un-festival-scoped scan).
     assert.ok(!pool.queries[0].sql.includes('s.festival_id ='));
     // Soft-delete filters replicated from sibling queries.
@@ -324,6 +330,7 @@ describe('createRatingsStore.getLifetimeStats — SQL wiring', () => {
       },
       { rows: [] },
       { rows: [] },
+      { rows: [] },
     ]);
     const store = createRatingsStore(pool);
     const result = await store.getLifetimeStats('user-1');
@@ -333,14 +340,16 @@ describe('createRatingsStore.getLifetimeStats — SQL wiring', () => {
     assert.strictEqual(result.totals.totalHours, 0);
     assert.deepStrictEqual(result.byFestival, []);
     assert.deepStrictEqual(result.topArtists, []);
+    assert.deepStrictEqual(result.seenMost, []);
   });
 
   it('handles a totally empty totals result set without throwing', async () => {
-    const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [] }]);
+    const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [] }, { rows: [] }]);
     const store = createRatingsStore(pool);
     const result = await store.getLifetimeStats('user-1');
     assert.strictEqual(result.totals.totalRated, 0);
     assert.strictEqual(result.totals.festivalsAttended, 0);
+    assert.deepStrictEqual(result.seenMost, []);
   });
 });
 

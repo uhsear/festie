@@ -3,7 +3,7 @@ import { describe, it, mock } from 'node:test';
 
 import express from 'express';
 import createActivityRoutes from '../routes/activity';
-import { createActivityStore } from '../lib/db/stores/activity';
+import { createActivityStore, logCrewActivity } from '../lib/db/stores/activity';
 
 function mockReq(overrides: any = {}): any {
   return {
@@ -268,5 +268,24 @@ describe('activity store: getByCrew cursor', () => {
     const store = createActivityStore({ query } as any);
     await store.getByCrew('crew-1', { cursor: 'old-style-id', limit: 5 });
     assert.deepEqual((query.mock.calls as any[])[0].arguments[1], ['crew-1', 6]);
+  });
+});
+
+describe('logCrewActivity', () => {
+  it('logs a failed feed write with the crew id and type and never throws', async () => {
+    const warn = mock.fn();
+    const deps = {
+      stores: { activity: { log: mock.fn(async () => { throw new Error('db down'); }) } },
+      emitter: { crewActivityLogged: mock.fn() },
+      log: { warn },
+    };
+    await assert.doesNotReject(() =>
+      logCrewActivity(deps, { crewId: 'crew-1', userId: 'user-1', type: 'member-joined' }),
+    );
+    assert.equal(warn.mock.calls.length, 1);
+    const [msg, meta] = (warn.mock.calls as any[])[0].arguments;
+    assert.equal(msg, 'crew activity log failed');
+    assert.deepEqual(meta, { crewId: 'crew-1', type: 'member-joined', error: 'db down' });
+    assert.equal(deps.emitter.crewActivityLogged.mock.calls.length, 0);
   });
 });

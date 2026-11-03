@@ -6,14 +6,13 @@ import { useUIStore } from './uiStore';
 import { api } from '../services/api';
 import type { Festival, Profile } from '../types/domain';
 
-vi.mock('../services/api', () => ({
-  api: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+vi.mock('../services/api', () => {
+  const get = vi.fn();
+  // The profiles list reads meta.pickCounts through getEnvelope; route it through
+  // the get mock so each test's queued responses still apply in order.
+  const getEnvelope = vi.fn(async (path: string) => ({ data: await get(path), meta: {} }));
+  return { api: { get, getEnvelope, post: vi.fn(), put: vi.fn(), delete: vi.fn() } };
+});
 
 const mockFestival: Festival = {
   id: 'fest-1',
@@ -431,6 +430,19 @@ describe('festivalDataStore', () => {
   });
 
   describe('loadProfiles', () => {
+    it('stores the anonymous pickCounts from the response meta', async () => {
+      vi.mocked(api.getEnvelope).mockResolvedValueOnce({ data: [mockProfile], meta: { pickCounts: { 'set-1': 3 } } });
+      await useFestivalDataStore.getState().loadProfiles('fest-1');
+      expect(useFestivalDataStore.getState().pickCounts).toEqual({ 'set-1': 3 });
+    });
+
+    it('falls back to empty pickCounts when the server sends none', async () => {
+      useFestivalDataStore.setState({ pickCounts: { 'set-1': 9 } });
+      vi.mocked(api.get).mockResolvedValueOnce([mockProfile]);
+      await useFestivalDataStore.getState().loadProfiles('fest-1');
+      expect(useFestivalDataStore.getState().pickCounts).toEqual({});
+    });
+
     it('loads profiles and sets currentProfile matching user', async () => {
       useAuthStore.setState({
         user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' },
@@ -1220,14 +1232,18 @@ describe('festivalDataStore', () => {
       });
       const cachedProfiles = [mockProfile];
       useFestivalDataStore.setState({ allProfiles: cachedProfiles, _cachedFestivalId: 'fest-1' });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const detailResponse = { ...mockFestival, stages: [], days: [] };
+      const offline = new Error('Network request failed');
       vi.mocked(api.get)
         .mockResolvedValueOnce(detailResponse)
-        .mockRejectedValueOnce(new Error('Network request failed')); // /profiles offline
+        .mockRejectedValueOnce(offline); // /profiles offline
 
       await useFestivalDataStore.getState().selectFestival('fest-1');
       expect(useFestivalDataStore.getState().allProfiles).toEqual(cachedProfiles);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('profiles fetch failed'), 'fest-1', offline);
+      warn.mockRestore();
     });
 
     it('DROPS a persisted allProfiles snapshot from a DIFFERENT festival (staleness guard)', async () => {

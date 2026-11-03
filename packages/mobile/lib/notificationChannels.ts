@@ -3,7 +3,7 @@ import type { NotificationBoolKey } from '@festie/shared/utils';
 // keep in sync with TYPE_CHANNEL_MAP in lib/notifications/send.ts
 export const CHANNEL_PREF_KEYS: Record<string, NotificationBoolKey[]> = {
   'set-reminders': ['setReminders'],
-  crew: ['crewUpdates', 'crewReformed', 'crewMeetingPoints', 'crewPolls', 'crewMoney', 'crewRides'],
+  crew: ['crewUpdates', 'crewReformed', 'crewMeetingPoints', 'crewPolls', 'crewMoney', 'crewRides', 'crewNudges'],
   updates: ['scheduleChanges', 'lineupDrops', 'wrapReady'],
 };
 

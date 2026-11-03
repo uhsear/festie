@@ -4,18 +4,20 @@
 /**
  * Production bundle build.
  *
- * Bundles the server entrypoint AND the two worker-thread entrypoints so the
- * dist/ artifact is fully runnable. The workers are spawned at runtime via
+ * Bundles the server entrypoint, the Sentry preload (lib/instrument.ts) AND the
+ * two worker-thread entrypoints so the dist/ artifact is fully runnable.
+ * dist/instrument.js is loaded with `node --import ./dist/instrument.js` so
+ * Sentry initializes before express is imported. The workers are spawned at runtime via
  * `new Worker(new URL('./avatar-worker.<ext>', import.meta.url))` etc.; in the
  * bundled output `import.meta.url` ends in `.js`, so the workers must exist as
  * dist/avatar-worker.js and dist/export-worker.js next to dist/server.js.
  *
- * All three entrypoints use identical esbuild flags:
+ * All four entrypoints use identical esbuild flags:
  *   --bundle --platform=node --format=esm --target=node22 --packages=external --sourcemap
  */
 import { build } from 'esbuild';
 
-const entryPoints = ['server.ts', 'lib/avatar-worker.ts', 'lib/export-worker.ts'];
+const entryPoints = ['server.ts', 'lib/instrument.ts', 'lib/avatar-worker.ts', 'lib/export-worker.ts'];
 
 await build({
   entryPoints,
@@ -31,4 +33,4 @@ await build({
   entryNames: '[name]',
 });
 
-console.log('build ok: dist/server.js, dist/avatar-worker.js, dist/export-worker.js');
+console.log('build ok: dist/server.js, dist/instrument.js, dist/avatar-worker.js, dist/export-worker.js');

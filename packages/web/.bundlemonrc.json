@@ -1,6 +1,11 @@
 {
   "baseDir": "dist",
+  "pathLabels": { "hash": "[a-zA-Z0-9_-]+" },
   "files": [
+    { "path": "assets/index-<hash>.js", "maxSize": "55kb", "maxPercentIncrease": 5 },
+    { "path": "assets/festie-shared-<hash>.js", "maxSize": "127kb", "maxPercentIncrease": 5 },
+    { "path": "assets/react-core-<hash>.js", "maxSize": "77kb", "maxPercentIncrease": 5 },
+    { "path": "assets/router-<hash>.js", "maxSize": "44kb", "maxPercentIncrease": 5 },
     { "path": "assets/**/*.js", "maxSize": "250kb" },
     { "path": "assets/**/*.css", "maxSize": "50kb" }
   ],

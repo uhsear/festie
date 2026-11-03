@@ -199,8 +199,9 @@ export function createRatingsRoutes({
 
   // Cross-festival year-over-year history (M3). No festival param — aggregates
   // the user's entire rating archive across every festival. userAuth-gated;
-  // only ever returns the requester's own data. Empty (zero ratings) returns
-  // clean zeroed totals + empty arrays, never a 500.
+  // only ever returns the requester's own data, including seenMost (artists
+  // seen at 2+ festivals). Empty (zero ratings) returns clean zeroed totals +
+  // empty arrays, never a 500.
   router.get('/lifetime', userAuth, readLimit, async (req: any, res: any) => {
     try {
       const result = await stores.ratings.getLifetimeStats(req.user.userId);
@@ -208,6 +209,7 @@ export function createRatingsRoutes({
         totals: result.totals,
         byFestival: result.byFestival,
         topArtists: result.topArtists,
+        seenMost: result.seenMost,
       });
     } catch (err: any) {
       log.error('get lifetime stats failed', { error: err.message, userId: req.user?.userId });
@@ -218,6 +220,7 @@ export function createRatingsRoutes({
   // Get the current user's wrap: rating stats, picks and their crew. The crew
   // is the one named by ?crewId= when the user is in it, else their oldest
   // crew in this festival. crewAlso is a count only, never names or ids.
+  // caughtExtra lists the user's own caught = true sets that are not picks.
   router.get(
     '/wrap/:festivalId',
     userAuth,
@@ -242,13 +245,14 @@ export function createRatingsRoutes({
             }
           : null;
 
-        const [stats, ratings, planned] = await Promise.all([
+        const [stats, ratings, planned, caughtExtra] = await Promise.all([
           stores.ratings.getWrapStats(userId, festivalId),
           stores.ratings.getByUser(userId, festivalId),
           stores.ratings.getPlannedForWrap(userId, festivalId, crew ? crew.id : null),
+          stores.ratings.getCaughtExtraForWrap(userId, festivalId),
         ]);
         const topSets = ratings.filter((r: any) => r.rating >= 4).slice(0, 5);
-        return sendSuccess(res, { stats, topSets, allRatings: ratings, festival, planned, crew });
+        return sendSuccess(res, { stats, topSets, allRatings: ratings, festival, planned, caughtExtra, crew });
       } catch (err: any) {
         log.error('get wrap stats failed', { error: err.message, festivalId: req.validatedParams?.festivalId });
         return sendError(res, 500, 'Internal server error', ErrorCodes.INTERNAL_ERROR);

@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Platform } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useAuthStore, useCrewStore, useLiveLocationStore, useFestivalDataStore } from '@festie/shared/stores';
+import { FIND_FRIEND_COPY, LIVE_LOCATION } from '@festie/shared/constants';
+import { isPeerStale } from '@festie/shared/utils';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
+import { useNow } from '../../hooks/useNow';
 import { useSosRaise } from '../../hooks/useSosRaise';
-import { CREW_MEET_HREF } from '../../lib/dayOfRoutes';
+import { CREW_MEET_HREF, meetingPointPrefillHref } from '../../lib/dayOfRoutes';
 import OfflineMap from '../../components/OfflineMap';
 import FreshnessChip from '../../components/FreshnessChip';
 import OfflineStatusChip from '../../components/OfflineStatusChip';
@@ -50,6 +53,7 @@ export default function MapScreen() {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
+  const { focusStage } = useLocalSearchParams<{ focusStage?: string }>();
 
   const user = useAuthStore((s) => s.user);
   const activeCrew = useCrewStore((s) => s.activeCrew);
@@ -129,13 +133,15 @@ export default function MapScreen() {
 
   const crewLayers = Boolean(user && activeCrew);
   const hasCompassPoint = crewLayers && (meetingPoints ?? []).some((p) => p && p.active !== false && hasCoords(p));
-  const compassButton = hasCompassPoint ? (
+  const now = useNow();
+  const hasLivePeer = peers.some((p) => p.userId !== user?.id && !isPeerStale(p.serverAt, now, LIVE_LOCATION.STALE_MS));
+  const compassButton = crewLayers && (hasCompassPoint || hasLivePeer) ? (
     <TouchableOpacity
       testID="map-compass"
       style={styles.compassButton}
       onPress={() => router.push('/compass')}
       accessibilityRole="button"
-      accessibilityLabel="Open the meeting-point compass"
+      accessibilityLabel={FIND_FRIEND_COPY.openCompassButton}
     >
       <Ionicons name="navigate-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
     </TouchableOpacity>
@@ -176,6 +182,9 @@ export default function MapScreen() {
         peers={crewLayers ? peers : []}
         activeSosList={crewLayers ? crewSosList : []}
         onMapPress={crewLayers ? handleMapPress : undefined}
+        onSetMeetingPoint={crewLayers ? (place) => router.push(meetingPointPrefillHref(place)) : undefined}
+        focusPinId={focusStage || null}
+        onFocusHandled={() => router.setParams({ focusStage: undefined })}
         festival={mapFestival}
         bottomInset={Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT : 0}
       />

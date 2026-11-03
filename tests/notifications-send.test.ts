@@ -895,7 +895,9 @@ describe('notifications/send: web push, channels and recipients', () => {
       tag: 'set_reminder',
     });
     assert.deepEqual(opts, { ttl: 3600, urgency: 'high' });
-    const logged = stores.notificationLog.insert.mock.calls[0]!.arguments[0];
+    const [inbox, logged] = stores.notificationLog.insert.mock.calls.map((c: any) => c.arguments[0]);
+    assert.equal(inbox.platform, 'inbox');
+    assert.equal(inbox.status, 'inbox');
     assert.equal(logged.platform, 'web');
     assert.equal(logged.status, 'sent');
   });
@@ -1056,5 +1058,236 @@ describe('notifications/index: createNotificationService isConfigured', () => {
       log: fakeLog,
     });
     assert.equal(svc.isConfigured, true);
+  });
+});
+
+// ── notifications/send: batched fan-out reads ───────────────────────────
+
+describe('notifications/send: batched fan-out reads', () => {
+  const fakeLog = { info() {}, warn() {}, error() {}, debug() {} };
+  const config = {
+    PUBLIC_ORIGIN: 'https://festie.us',
+    APNS_KEY_PATH: '/k.p8',
+    APNS_KEY_ID: 'K',
+    APNS_TEAM_ID: 'T',
+    APNS_BUNDLE_ID: 'us.festie.app',
+  };
+  const userIds = Array.from({ length: 200 }, (_, i) => `u${String(i).padStart(3, '0')}`);
+
+  // Mixed audience: Android, iOS and web devices, a second device on some users, users
+  // with no device, preferences off, quiet hours, a spent budget and varied unread totals.
+  function devicesOf(uid: string, i: number) {
+    if (i % 11 === 0) return [];
+    const kind = ['android', 'ios', 'web'][i % 3]!;
+    const token =
+      kind === 'web' ? JSON.stringify({ endpoint: `https://push.example/${uid}`, keys: {} }) : `${kind}-${uid}-`.padEnd(64, 'x');
+    const devices = [{ userId: uid, token, platform: kind, localRemindersFestivalId: null }];
+    if (i % 7 === 0) {
+      devices.push({ userId: uid, token: `android2-${uid}-`.padEnd(64, 'y'), platform: 'android', localRemindersFestivalId: null });
+    }
+    return devices;
+  }
+  const prefsOf = (i: number) =>
+    i % 10 === 9 ? { crewUpdates: 0 } : i % 17 === 0 ? { crewUpdates: 1, dndStart: '00:00', dndEnd: '23:59' } : null;
+  const unreadOf = (i: number) => i % 5;
+
+  function makeStores({ batched }: { batched: boolean }) {
+    const index = new Map(userIds.map((uid, i) => [uid, i]));
+    const at = (uid: string) => index.get(uid)!;
+    const stores: any = {
+      notificationPrefs: { get: mock.fn(async (uid: string) => prefsOf(at(uid))) },
+      deviceTokens: {
+        listByUser: mock.fn(async (uid: string) => devicesOf(uid, at(uid))),
+        unregister: mock.fn(async () => {}),
+      },
+      notificationCounts: {
+        getByUser: mock.fn(async (uid: string) => [{ festivalId: 'f1', unreadUpdates: unreadOf(at(uid)) }]),
+        increment: mock.fn(async () => {}),
+      },
+      notificationLog: {
+        insert: mock.fn(async (_row: any) => null),
+        countRecentPushes: mock.fn(async (ids: string[]) => new Map(ids.filter((uid) => at(uid) % 13 === 0).map((uid) => [uid, 6]))),
+      },
+      profiles: { userIdsByFestival: mock.fn(async () => userIds) },
+      topicSubscriptions: { getUnsubscribedUsers: mock.fn(async () => new Set<string>()) },
+    };
+    if (batched) {
+      stores.notificationPrefs.getMany = mock.fn(async (ids: string[]) => new Map(ids.map((uid) => [uid, prefsOf(at(uid))])));
+      stores.deviceTokens.listByUsers = mock.fn(async (ids: string[]) => ids.flatMap((uid) => devicesOf(uid, at(uid))));
+      stores.notificationCounts.unreadTotals = mock.fn(
+        async (ids: string[]) => new Map(ids.filter((uid) => unreadOf(at(uid)) > 0).map((uid) => [uid, unreadOf(at(uid))])),
+      );
+    }
+    return stores;
+  }
+
+  function build(stores: any) {
+    const messaging = {
+      send: mock.fn(async (_m: any) => 'fcm-id'),
+      sendEach: mock.fn(async (batch: any[]) => ({ responses: batch.map(() => ({ success: true })) })),
+    };
+    const apnsProvider = {
+      send: mock.fn(async (_t: string, _p: any, _o: any) => ({ sent: true, stale: false })),
+      close() {},
+      _resetTokenCache() {},
+    };
+    const webPush = { publicKey: 'pk', send: mock.fn(async (_t: string, _p: any, _o: any) => ({ sent: true, stale: false })) };
+    const svc = createSendService({ stores, config, log: fakeLog, messaging, retryQueue: { enqueue() {} }, apnsProvider, webPush });
+    return { svc, messaging, apnsProvider, webPush };
+  }
+
+  async function fanOut(batched: boolean) {
+    const stores = makeStores({ batched });
+    const { svc, messaging, apnsProvider, webPush } = build(stores);
+    const result = await svc.sendToOfflineUsers({
+      festivalId: 'f1',
+      type: 'crew_update',
+      title: 'Crew update',
+      body: 'Something changed',
+      data: { festivalId: 'f1', deepLink: 'https://festie.us/compare' },
+      topic: 'crew',
+      threadId: 'crew-f1',
+    });
+    const calls = (fn: any) => fn.mock.calls.map((c: any) => c.arguments);
+    return {
+      stores,
+      result,
+      fcm: calls(messaging.sendEach),
+      apns: calls(apnsProvider.send),
+      web: calls(webPush.send),
+      logged: stores.notificationLog.insert.mock.calls.map(({ arguments: [{ id: _id, ...row }] }: any) => row),
+      increments: calls(stores.notificationCounts.increment),
+    };
+  }
+
+  it('sendToOfflineUsers to 200 users reads each store once', async () => {
+    const { stores, result } = await fanOut(true);
+    assert.ok(result.sent > 0);
+    assert.equal(stores.notificationPrefs.get.mock.callCount(), 0);
+    assert.equal(stores.notificationPrefs.getMany.mock.callCount(), 1);
+    assert.equal(stores.deviceTokens.listByUser.mock.callCount(), 0);
+    assert.equal(stores.deviceTokens.listByUsers.mock.callCount(), 1);
+    assert.equal(stores.notificationCounts.getByUser.mock.callCount(), 0);
+    assert.equal(stores.notificationCounts.unreadTotals.mock.callCount(), 1);
+    const reads = [
+      stores.notificationPrefs.get,
+      stores.notificationPrefs.getMany,
+      stores.deviceTokens.listByUser,
+      stores.deviceTokens.listByUsers,
+      stores.notificationCounts.getByUser,
+      stores.notificationCounts.unreadTotals,
+      stores.notificationLog.countRecentPushes,
+      stores.topicSubscriptions.getUnsubscribedUsers,
+      stores.profiles.userIdsByFestival,
+    ].reduce((n: number, fn: any) => n + fn.mock.callCount(), 0);
+    assert.ok(reads <= 6, `expected at most 6 store reads, got ${reads}`);
+  });
+
+  it('sends the same messages, badges and inbox rows as the per-user path', async () => {
+    const perUser = await fanOut(false);
+    const batched = await fanOut(true);
+    assert.ok(perUser.stores.notificationPrefs.get.mock.callCount() >= 200, 'the reference run reads per user');
+    assert.ok(perUser.fcm.length > 0 && perUser.apns.length > 0 && perUser.web.length > 0);
+    assert.deepEqual(batched.result, perUser.result);
+    assert.deepEqual(batched.fcm, perUser.fcm);
+    assert.deepEqual(batched.apns, perUser.apns);
+    assert.deepEqual(batched.web, perUser.web);
+    assert.deepEqual(batched.logged, perUser.logged);
+    assert.deepEqual(batched.increments, perUser.increments);
+    const badges = new Set(batched.apns.map(([, payload]: any) => payload.aps.badge));
+    assert.deepEqual([...badges].sort(), [1, 2, 3, 4], 'zero or missing totals read as 1');
+  });
+
+  // Copy of the per-user loop in sendToOfflineUsers at ffc40fcb (before batching), reduced to
+  // what it decided: which inbox rows to write and which device got which badge, in order.
+  async function perUserLoopAtFfc40fcb(stores: any) {
+    const pushCounts = await stores.notificationLog.countRecentPushes(userIds);
+    const inbox: [string, string][] = [];
+    const fcm: [string, number][] = [];
+    const apns: [string, number][] = [];
+    const web: string[] = [];
+    for (const userId of userIds) {
+      const prefs = await stores.notificationPrefs.get(userId);
+      if (prefs && !prefs.crewUpdates) continue;
+      const held = isInDndWindow(prefs) || (pushCounts.get(userId) ?? 0) >= 6;
+      inbox.push([userId, held ? 'held' : 'inbox']);
+      if (held) continue;
+      const tokens = await stores.deviceTokens.listByUser(userId);
+      const counts = await stores.notificationCounts.getByUser(userId);
+      const badge = counts.reduce((sum: number, c: any) => sum + (c.unreadUpdates || 0), 0) || 1;
+      for (const device of tokens) {
+        if (device.platform === 'ios') apns.push([device.token, badge]);
+        else if (device.platform === 'web') web.push(device.token);
+        else fcm.push([device.token, badge]);
+      }
+    }
+    return { inbox, fcm, apns, web };
+  }
+
+  it('makes the same inbox, device and badge decisions as the per-user loop at ffc40fcb', async () => {
+    const expected = await perUserLoopAtFfc40fcb(makeStores({ batched: false }));
+    const batched = await fanOut(true);
+    assert.ok(expected.fcm.length > 0 && expected.apns.length > 0 && expected.web.length > 0);
+    assert.deepEqual(
+      batched.logged.filter((row: any) => row.platform === 'inbox').map((row: any) => [row.userId, row.status]),
+      expected.inbox,
+    );
+    assert.deepEqual(
+      batched.fcm.flatMap(([msgs]: any) => msgs.map((m: any) => [m.token, m.apns.payload.aps.badge])),
+      expected.fcm,
+    );
+    assert.deepEqual(
+      batched.apns.map(([token, payload]: any) => [token, payload.aps.badge]),
+      expected.apns,
+    );
+    assert.deepEqual(
+      batched.web.map(([token]: any) => token),
+      expected.web,
+    );
+  });
+
+  it('writes an inbox row for a user with no device and for held users, none for opted-out users', async () => {
+    const { logged } = await fanOut(true);
+    const inbox = logged.filter((row: any) => row.platform === 'inbox');
+    const byUser = new Map(inbox.map((row: any) => [row.userId, row.status]));
+    assert.equal(byUser.get('u011'), 'inbox', 'no device, still in the inbox');
+    assert.equal(byUser.get('u017'), 'held', 'quiet hours');
+    assert.equal(byUser.get('u013'), 'held', 'budget');
+    assert.equal(byUser.has('u009'), false, 'preference off');
+    assert.deepEqual(
+      inbox.map((row: any) => row.userId),
+      userIds.filter((uid) => byUser.has(uid)),
+      'inbox rows keep batch order',
+    );
+  });
+
+  it('a failed unread total reads as badge 1; a failed prefs read throws', async () => {
+    const stores = makeStores({ batched: true });
+    stores.notificationCounts.unreadTotals = mock.fn(async () => {
+      throw new Error('db down');
+    });
+    const { svc, apnsProvider } = build(stores);
+    await svc.sendToOfflineUsers({ festivalId: 'f1', type: 'crew_update', title: 't', body: 'b', data: { festivalId: 'f1' } });
+    assert.ok(apnsProvider.send.mock.callCount() > 0);
+    for (const [, payload] of apnsProvider.send.mock.calls.map((c: any) => c.arguments)) assert.equal(payload.aps.badge, 1);
+
+    const failing = makeStores({ batched: true });
+    failing.notificationPrefs.getMany = mock.fn(async () => {
+      throw new Error('db down');
+    });
+    await assert.rejects(
+      build(failing).svc.sendToOfflineUsers({ festivalId: 'f1', type: 'crew_update', title: 't', body: 'b' }),
+      /db down/,
+    );
+  });
+
+  it('sendSilentSync to 200 users reads tokens once', async () => {
+    const stores = makeStores({ batched: true });
+    const { svc, messaging, apnsProvider } = build(stores);
+    const result = await svc.sendSilentSync({ festivalId: 'f1', syncType: 'profiles' });
+    assert.equal(stores.deviceTokens.listByUsers.mock.callCount(), 1);
+    assert.equal(stores.deviceTokens.listByUser.mock.callCount(), 0);
+    assert.equal(result.sent, messaging.send.mock.callCount() + apnsProvider.send.mock.callCount());
+    assert.ok(result.sent > 0);
   });
 });

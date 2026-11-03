@@ -283,13 +283,12 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                             'active',
                             // Accent rule: aqua = selection/primary, dark ink = text.onLightAccent.
                             'bg-day-tab-active text-[var(--text-on-light-accent)] border-day-tab-active font-bold',
-                            'shadow-[0_0_0_1px_rgba(0,232,208,0.45),var(--shadow-glow-aqua),0_4px_12px_rgba(0,0,0,0.25)]',
+                            'shadow-[0_0_0_1px_var(--color-aqua-a4),var(--shadow-glow-aqua),0_4px_12px_rgba(0,0,0,0.25)]',
                           ]
                         : 'bg-bg-card border border-border-light text-text-secondary',
                     )}
                     type="button"
                     aria-pressed={isActive}
-                    aria-label={`Day: ${chip.a11y}${isToday ? ' (today)' : ''}`}
                     onClick={() => handleDaySelect(i)}
                   >
                     {isToday && (
@@ -302,7 +301,13 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                       />
                     )}
                     {chip.label}
-                    {chip.date && <span className="font-medium opacity-75">{chip.date}</span>}
+                    {chip.date && (
+                      <>
+                        {' '}
+                        <span className="font-medium">{chip.date}</span>
+                      </>
+                    )}
+                    {isToday && <span className="sr-only">, today</span>}
                   </button>
                 );
               })}
@@ -315,7 +320,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                     'bg-bg-card border border-border-light text-text-secondary',
                     'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                   )}
-                  aria-label={`Show ${hiddenDays.length} hidden ${hiddenDays.length === 1 ? 'day' : 'days'}`}
+                  aria-label={`+${hiddenDays.length} hidden ${hiddenDays.length === 1 ? 'day' : 'days'}, show all`}
                   onClick={() => {
                     selectHaptic();
                     setHiddenDays([]);
@@ -538,15 +543,16 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             id="subheader-search"
             ref={searchBoxRef}
             className={cn(
-              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[220px]',
+              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
               !searchOpen && searchQuery === '' && 'max-md:hidden',
             )}
             role="search"
           >
-            <div className="relative w-full sm:max-w-[clamp(100px,30vw,180px)] lg:max-w-none">
+            {/* Sized so the full placeholder fits from 640px up. */}
+            <div className="relative w-full sm:max-w-[clamp(100px,34vw,240px)] lg:max-w-none">
               <Input
                 variant="search"
-                className="min-h-[44px] w-full pr-11 text-[length:var(--font-size-14)]"
+                className={cn('min-h-[44px] w-full text-[length:var(--font-size-14)]', searchQuery !== '' && 'pr-11')}
                 placeholder="Search artists or stages"
                 value={searchQuery}
                 aria-label="Search festival artists"

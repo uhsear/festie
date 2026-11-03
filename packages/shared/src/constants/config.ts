@@ -91,6 +91,7 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
   sos_cleared: 'cleared an SOS',
   'checkin-started': 'started a check-in timer',
   'checkin-done': 'checked in safe',
+  'battery-low': 'is low on battery',
 };
 
 // ── Crew money and packing ─────────────────────────────────────────────────
@@ -333,7 +334,7 @@ export const LIVE_SHARE_COPY = {
   chooserTitle: 'Share your location for…',
   restOfToday: (clock: string) => `Rest of today (until ${clock})`,
   battery: 'Show my battery level',
-  batteryHint: 'Helps your crew see why your dot went quiet.',
+  batteryHint: 'Helps your crew see why your dot went quiet. At 10% or less, your crew feed says so once.',
   cancel: 'Not now',
   sharingTitle: "You're sharing your live location",
   sharingSub: (countdown: string, clock: string) => `Ends in ${countdown} · ${clock}`,
@@ -394,6 +395,33 @@ export const BEACON_COPY = {
   footer: 'Turn your screen brightness all the way up.',
   done: 'Done',
   a11y: 'Beacon is on. Your screen is flashing so friends can spot you. Tap Done to stop.',
+} as const;
+
+/** T52 find-your-friends copy: the compass "Point to" row, "Looking for you", near-stage and the battery line. */
+export const FIND_FRIEND_COPY = {
+  pointTo: 'Point to',
+  pointToA11y: (label: string) => `Point the compass at ${label}`,
+  peerNote: (name: string) => `Straight-line direction to where ${name} last shared. It moves when they do.`,
+  peerAge: (age: string) => `Location ${age}`, // age from formatStaleness: "as of 2m ago"
+  peerGoneTitle: (name: string) => `${name} isn't sharing their location now`,
+  peerGoneBody: 'The compass needs them to share. You can still tell them you are looking.',
+  emptyTitle: 'Nothing to point at yet',
+  emptyBody: 'Save a meeting point with a map pin, or ask a crewmate to share their live location.',
+  openCompassButton: 'Open the compass',
+  nudge: 'Looking for you',
+  nudgeA11y: (name: string) => `Tell ${name} you are looking for them`,
+  nudgeHint: (name: string) => `Sends ${name} a push. It never shares where you are.`,
+  nudgeSent: (name: string) => `Sent. ${name} gets a push if their crew notifications are on.`,
+  nudgeLimited: (name: string) => `You told ${name} in the last 5 minutes. Try again later.`,
+  nudgeGone: (name: string) => `${name} is no longer in this crew.`,
+  nudgeUnavailable: '"Looking for you" is not available right now.',
+  nudgeOffline: 'No signal. Nothing was sent.',
+  nudgeFailed: "Couldn't send it. Try again.",
+  openCompass: 'Compass',
+  openCompassA11y: (name: string) => `Open the compass pointing at ${name}`,
+  nearStage: (stage: string) => `near ${stage}`,
+  batteryVerb: (pct: number) => `has ${pct}% battery left`,
+  batteryDetail: (clock: string) => `last location update ${clock}`,
 } as const;
 
 /** Intro slides, single-sourced for web and mobile (design-system-23). Slide 1 names the three priorities. */
@@ -478,8 +506,8 @@ export const GUEST_PROMPT_COPY = {
       message: 'Create a free account to invite friends, compare picks and find the sets you all want to see.',
     },
     wrap: {
-      title: 'See your festival recap',
-      message: 'Create a free account to rate sets and get a recap of your festival to share.',
+      title: 'See your Festival Wrap',
+      message: 'Create a free account to rate sets and get a Festival Wrap to share.',
     },
   },
 } as const;

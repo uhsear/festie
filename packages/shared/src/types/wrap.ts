@@ -35,6 +35,21 @@ export interface WrapPlannedSet {
   caught: boolean | null;
 }
 
+/** A set the user marked caught but did not pick (their own marks only). */
+export interface WrapCaughtSet {
+  setId: string;
+  artist: string | null;
+  stageId: string | null;
+  stageName: string | null;
+  dayIndex: number | null;
+  startTime: string | null;
+  endTime: string | null;
+  rating: number | null;
+  note: string | null;
+  /** Always true from the server; the client sets null after Remove. */
+  caught: boolean | null;
+}
+
 export interface WrapFestival {
   id: string;
   name: string;
@@ -55,6 +70,8 @@ export interface WrapResponse {
   allRatings: WrapRatedSet[];
   festival: WrapFestival;
   planned: WrapPlannedSet[];
+  /** Absent from servers that predate T53. */
+  caughtExtra?: WrapCaughtSet[];
   crew: WrapCrew | null;
 }
 

@@ -3,14 +3,26 @@ import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
-import { festivalTimeLabel, fmtZonedClock, resolveFestivalTimeZone, selectNowNext } from '@festie/shared/utils';
+import {
+  festivalLoadState,
+  festivalTimeLabel,
+  fmtZonedClock,
+  isFixRecent,
+  resolveFestivalTimeZone,
+  selectNowNext,
+  stageCoord,
+  walkToStage,
+} from '@festie/shared/utils';
 import LowPowerToggle from '../components/features/LowPowerToggle';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
+import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
+import { useLastKnownFix } from '../hooks/useLastKnownFix';
 import NowHero from '../components/festival-mode/NowHero';
 import UpNextList from '../components/festival-mode/UpNextList';
 import WeatherStrip from '../components/festival-mode/WeatherStrip';
+import CaughtNowCard from '../components/festival-mode/CaughtNowCard';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
 import { CrewNowSection, CrewPrompt, CrewWrapUpCard, MeetNowCard } from '../components/festival-mode/CrewNow';
@@ -38,6 +50,7 @@ function FestivalModeViewInner() {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
+  const stages = useFestivalStore((s) => s.stages);
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { getStageName } = useFestival();
@@ -56,6 +69,12 @@ function FestivalModeViewInner() {
     () => selectNowNext({ sets, days, picks: lineupMode ? undefined : (picks ?? {}), nowMs, timeZone }),
     [sets, days, picks, lineupMode, nowMs, timeZone],
   );
+  const fix = useLastKnownFix();
+  const next = selection.upcoming[0];
+  const walk =
+    next && isFixRecent(fix.at, nowMs)
+      ? walkToStage(fix.coord, stageCoord(stages, next.set.stageId), next.start, nowMs)
+      : null;
   const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
   const after = selection.phase === 'after';
   const crewId = crew?.id;
@@ -66,7 +85,15 @@ function FestivalModeViewInner() {
     if (after && crewId) useCrewStore.getState().loadExpenses(crewId).catch(() => {});
   }, [after, crewId]);
 
+  const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
+    if (loadState === 'error') {
+      return (
+        <div className={PAGE}>
+          <FestivalLoadError />
+        </div>
+      );
+    }
     return (
       <div className={PAGE}>
         <EmptyState
@@ -117,11 +144,24 @@ function FestivalModeViewInner() {
               onOpenSet={setDetailSet}
               onBrowse={() => navigate({ to: '/cards' })}
               onWrap={user ? () => navigate({ to: '/wrap' }) : undefined}
+              walk={walk}
             />
           </div>
           <div className="order-1">
             <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
           </div>
+          {user ? (
+            <div className="order-1">
+              <CaughtNowCard
+                key={currentFestival.id}
+                festivalId={currentFestival.id}
+                nowMs={nowMs}
+                timeZone={timeZone}
+                getStageName={getStageName}
+                b2bSeparator={currentFestival.b2bSeparator}
+              />
+            </div>
+          ) : null}
           <div className="order-4">
             <UpNextList
               items={upNext}

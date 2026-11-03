@@ -70,10 +70,10 @@ export default function LiveBadge({ status, label, className }: LiveBadgeProps) 
   // R6 UP NEXT (upcoming): transparent bg, 1px aqua outline at 40% opacity, aqua text.
   if (status === 'upcoming') {
     return (
-      <div className={cn(PILL_BASE, 'border border-[rgba(0,232,208,0.4)] text-accent-aqua', className)}>{label}</div>
+      <div className={cn(PILL_BASE, 'border border-[var(--color-aqua-a4)] text-accent-aqua', className)}>{label}</div>
     );
   }
 
-  // R6 PAST / TBA / Later: neutral surface #3a3a3a, muted text #686868.
-  return <div className={cn(PILL_BASE, 'bg-[#3a3a3a] text-[#686868]', className)}>{label}</div>;
+  // R6 PAST / TBA / Later: neutral surface and muted text tokens.
+  return <div className={cn(PILL_BASE, 'bg-bg-secondary text-text-muted', className)}>{label}</div>;
 }

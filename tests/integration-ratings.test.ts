@@ -464,4 +464,146 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
     const wrap = await getWrap(server, user.token);
     assert.equal(wrap.planned.find((p: any) => p.setId === 'set-a').caught, true);
   });
+
+  test('caughtExtra lists caught non-picks only', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const user = await registerUser(server, 'wrap-extra-' + Date.now());
+    const profile = await joinFestivalProfile(server, user.token);
+    await savePicks(server, user.token, profile.id, { 'set-a': 'must' });
+    await markCaught(server, user.token, 'set-a', true);
+    await markCaught(server, user.token, 'set-b', true);
+    await markCaught(server, user.token, 'set-c', false);
+
+    const wrap = await getWrap(server, user.token);
+    assert.deepEqual(
+      wrap.planned.map((p: any) => p.setId),
+      ['set-a'],
+    );
+    assert.deepEqual(
+      wrap.caughtExtra.map((s: any) => [s.setId, s.stageName, s.caught]),
+      [['set-b', 'Forest Stage', true]],
+    );
+    // set-a (main) and set-b (forest), 1 h each.
+    assert.equal(wrap.stats.stagesVisited, 2);
+    assert.equal(wrap.stats.totalHours, 2);
+  });
+
+  test('caughtExtra is per user', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const stamp = Date.now();
+    const alice = await registerUser(server, 'wrap-extra-a-' + stamp);
+    const bob = await registerUser(server, 'wrap-extra-b-' + stamp);
+    await joinFestivalProfile(server, alice.token);
+    await joinFestivalProfile(server, bob.token);
+    await markCaught(server, bob.token, 'set-d', true);
+
+    const aliceWrap = await getWrap(server, alice.token);
+    assert.deepEqual(aliceWrap.caughtExtra, []);
+    const bobWrap = await getWrap(server, bob.token);
+    assert.deepEqual(
+      bobWrap.caughtExtra.map((s: any) => s.setId),
+      ['set-d'],
+    );
+  });
+
+  test('lifetime seenMost counts festivals per artist', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const stamp = Date.now();
+    const fest2 = `fest-t53-${stamp}`;
+    const id = (suffix: string) => `${fest2}-${suffix}`;
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      const insertSet = (setId: string, festivalId: string, artist: string, artists: string | null, sort: number) =>
+        pool.query(
+          'INSERT INTO festival_sets (id, festival_id, day_index, artist, stage_id, start_time, end_time, sort_order, artists) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)',
+          [setId, festivalId, 0, artist, 'main', '18:00', '19:00', sort, artists],
+        );
+      // Extra fest-1 sets: a NULL `artists` and a padded lower-case name.
+      await insertSet(id('zed-1'), 'fest-1', 'Zed', null, 20);
+      await insertSet(id('omega-1'), 'fest-1', ' omega ', '[]', 21);
+
+      await pool.query(
+        'INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
+        [fest2, 'T53 Fest', 'Somewhere'],
+      );
+      await pool.query(
+        'INSERT INTO festival_stages (festival_id, id, name, color, sort_order) VALUES ($1, $2, $3, $4, $5)',
+        [fest2, 'main', 'Main Stage', '#ff3b8b', 0],
+      );
+      await pool.query(
+        'INSERT INTO festival_days (festival_id, day_index, label, date) VALUES ($1, $2, $3, $4)',
+        [fest2, 0, 'Friday', '2027-06-04'],
+      );
+      await insertSet(id('alpha'), fest2, 'Alpha', '[]', 0);
+      await insertSet(id('b2b'), fest2, 'Alpha b2b Zed', '[{"name":"Alpha"},{"name":"Zed"}]', 1);
+      await insertSet(id('gamma'), fest2, 'Gamma', '[]', 2);
+      await insertSet(id('beta'), fest2, 'Beta', '[]', 3);
+      await insertSet(id('delta'), fest2, 'Delta', '[]', 4);
+      await insertSet(id('omega'), fest2, 'Omega', null, 5);
+    } catch (err) {
+      await pool.end();
+      throw err;
+    }
+
+    try {
+      const user = await registerUser(server, 'seen-most-' + stamp);
+      const other = await registerUser(server, 'seen-most-other-' + stamp);
+      const profile = await joinFestivalProfile(server, user.token);
+      const rate = (setId: string, rating: number) =>
+        server.request
+          .post(`/api/v1/ratings/${setId}`)
+          .set('x-user-token', user.token)
+          .send({ rating })
+          .expect(200);
+
+      // fest-1: Alpha rated, Zed rated, Gamma and omega caught, Beta rated
+      // but marked skipped, Delta only picked.
+      await rate('set-a', 5);
+      await rate(id('zed-1'), 4);
+      await markCaught(server, user.token, 'set-c', true);
+      await markCaught(server, user.token, id('omega-1'), true);
+      await rate('set-b', 4);
+      await markCaught(server, user.token, 'set-b', false);
+      await savePicks(server, user.token, profile.id, { 'set-d': 'must' });
+
+      // fest2: Alpha twice (solo rated + B2B caught), Gamma, Beta, Delta, Omega.
+      await rate(id('alpha'), 3);
+      await markCaught(server, user.token, id('b2b'), true);
+      await markCaught(server, user.token, id('gamma'), true);
+      await rate(id('beta'), 2);
+      await markCaught(server, user.token, id('delta'), true);
+      await markCaught(server, user.token, id('omega'), true);
+
+      // Another user's marks never count for this user.
+      await markCaught(server, other.token, 'set-b', true);
+      await markCaught(server, other.token, 'set-d', true);
+
+      const getSeenMost = async () => {
+        const res = await server.request.get('/api/v1/ratings/lifetime').set('x-user-token', user.token).expect(200);
+        return res.body.data.seenMost;
+      };
+
+      const seenMost = await getSeenMost();
+      assert.ok(seenMost.every((row: any) => row.festivals === 2));
+      assert.ok(seenMost.every((row: any) => row.artist === row.artist.trim()));
+      assert.deepEqual(
+        seenMost.map((row: any) => row.artist.toLowerCase()).sort(),
+        ['alpha', 'gamma', 'omega', 'zed'],
+      );
+      assert.ok(!seenMost.some((row: any) => row.artist === 'Alpha b2b Zed'));
+
+      await pool.query('UPDATE festivals SET deleted_at = NOW() WHERE id = $1', [fest2]);
+      const afterDelete = await getSeenMost();
+      assert.ok(!afterDelete.some((row: any) => row.artist === 'Alpha'));
+      assert.deepEqual(afterDelete, []);
+    } finally {
+      await pool.end();
+    }
+  });
 });

@@ -42,6 +42,7 @@ const loadGrid = () => import('./routes/grid');
 const loadFestivalMode = () => import('./routes/festival-mode');
 const loadWrap = () => import('./routes/wrap');
 const loadRate = () => import('./routes/rate');
+const loadCaught = () => import('./routes/caught');
 const loadAdmin = () => import('./routes/admin');
 const loadLogin = () => import('./routes/login');
 const loadRegister = () => import('./routes/register');
@@ -49,6 +50,7 @@ const loadFinishSignup = () => import('./routes/finish-signup');
 const loadForgot = () => import('./routes/forgot-password');
 const loadReset = () => import('./routes/reset-password');
 const loadAccount = () => import('./routes/account');
+const loadInbox = () => import('./routes/inbox');
 const loadCompare = () => import('./routes/compare');
 const loadSet = () => import('./routes/set');
 const loadFriendPicks = () => import('./routes/friend-picks');
@@ -90,7 +92,9 @@ const GridView = withSkeleton(gridLazy, TimelineSkeleton);
 const FestivalModeView = withSkeleton(festivalModeLazy, FestivalModeSkeleton);
 const WrapView = withSkeleton(wrapLazy, WrapSkeleton);
 const RateView = withSkeleton(lazyRouteComponent(loadRate), MinimalFallback);
+const CaughtView = withSkeleton(lazyRouteComponent(loadCaught), MinimalFallback);
 const AccountPage = withSkeleton(accountLazy, AccountSkeleton);
+const InboxView = withSkeleton(lazyRouteComponent(loadInbox), MinimalFallback);
 const CompareView = withSkeleton(lazyRouteComponent(loadCompare), MinimalFallback);
 const FriendPicksView = withSkeleton(lazyRouteComponent(loadFriendPicks), MinimalFallback);
 const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton);
@@ -124,7 +128,7 @@ const rootRoute = new RootRoute({
   component: AppShell,
 });
 
-// Shared by /wrap and /rate: a festival id from a push or history link, or nothing.
+// Shared by /wrap, /rate and /caught: a festival id from a push or history link, or nothing.
 const festivalSearch = (s: Record<string, unknown>): { festival?: string } => ({
   festival: typeof s.festival === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(s.festival) ? s.festival : undefined,
 });
@@ -155,8 +159,8 @@ const picksRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/picks',
   component: PicksView,
-  // No guest guard: /picks renders <GuestTeaser mode="picks"/> in place for
-  // unauthenticated visitors (parity with the always-visible nav tabs).
+  // No guest guard: guests pick on this device, and /picks shows them
+  // <GuestPicksBanner/> to sign up (parity with the always-visible nav tabs).
 });
 
 const gridRoute = new Route({
@@ -184,6 +188,17 @@ const rateRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/rate',
   component: RateView,
+  validateSearch: festivalSearch,
+  beforeLoad: async ({ location }) => {
+    await authReady();
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
+  },
+});
+
+const caughtRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/caught',
+  component: CaughtView,
   validateSearch: festivalSearch,
   beforeLoad: async ({ location }) => {
     await authReady();
@@ -264,6 +279,10 @@ const mapRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/map',
   component: MapView,
+  validateSearch: (s: Record<string, unknown>): { focusStage?: string } =>
+    typeof s.focusStage === 'string' && s.focusStage.length > 0 && s.focusStage.length <= 100
+      ? { focusStage: s.focusStage }
+      : {},
 });
 
 // /crew-plan — one-screen offline-native "what's my crew's plan" digest.
@@ -281,6 +300,16 @@ const accountRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/account',
   component: AccountPage,
+  beforeLoad: async ({ location }) => {
+    await authReady();
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
+  },
+});
+
+const inboxRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/inbox',
+  component: InboxView,
   beforeLoad: async ({ location }) => {
     await authReady();
     if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
@@ -366,7 +395,9 @@ const routeTree = rootRoute.addChildren([
   festivalModeRoute,
   wrapRoute,
   rateRoute,
+  caughtRoute,
   accountRoute,
+  inboxRoute,
   meRoute,
   compareRoute,
   setRoute,
@@ -396,13 +427,21 @@ export const router = new Router({
 // startup) doesn't yank focus to #main-content — only genuine in-app
 // navigations, where nextPath differs from the seeded path, move focus.
 let lastPath = router.state.location.pathname;
+let focusedBefore: Element | null = null;
+router.subscribe('onBeforeNavigate', () => {
+  focusedBefore = document.activeElement;
+});
 router.subscribe('onResolved', () => {
   const nextPath = router.state.location.pathname;
   if (nextPath === lastPath) return;
   lastPath = nextPath;
+  const before = focusedBefore;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const main = document.getElementById('main-content');
+      // The new page already placed focus itself (for example /picks#clashes): keep it.
+      const placed = document.activeElement;
+      if (main && placed !== before && placed !== document.body && main.contains(placed)) return;
       if (main) {
         // tabIndex=-1 allows focus without adding to tab order
         if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');

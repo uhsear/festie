@@ -267,6 +267,38 @@
           "linkUrl": {
             "nullable": true,
             "type": "string"
+          },
+          "movedAt": {
+            "type": "string"
+          },
+          "movedFrom": {
+            "type": "object",
+            "properties": {
+              "dayIndex": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "stageId": {
+                "nullable": true,
+                "type": "string"
+              },
+              "start": {
+                "nullable": true,
+                "type": "string"
+              },
+              "end": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "dayIndex",
+              "stageId",
+              "start",
+              "end"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -389,6 +421,38 @@
                       "endTime": {
                         "nullable": true,
                         "type": "string"
+                      },
+                      "movedAt": {
+                        "type": "string"
+                      },
+                      "movedFrom": {
+                        "type": "object",
+                        "properties": {
+                          "dayIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "stageId": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "start": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "end": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "dayIndex",
+                          "stageId",
+                          "start",
+                          "end"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -410,6 +474,10 @@
               ],
               "additionalProperties": false
             }
+          },
+          "slug": {
+            "nullable": true,
+            "type": "string"
           },
           "mapConfig": {
             "nullable": true,
@@ -1351,6 +1419,38 @@
                       "linkUrl": {
                         "nullable": true,
                         "type": "string"
+                      },
+                      "movedAt": {
+                        "type": "string"
+                      },
+                      "movedFrom": {
+                        "type": "object",
+                        "properties": {
+                          "dayIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "stageId": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "start": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "end": {
+                            "nullable": true,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "dayIndex",
+                          "stageId",
+                          "start",
+                          "end"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -1374,6 +1474,10 @@
               ],
               "additionalProperties": false
             }
+          },
+          "slug": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -1442,6 +1546,13 @@
             "type": "string"
           },
           "totem_emoji": {
+            "nullable": true,
+            "type": "string"
+          },
+          "inviteLocked": {
+            "type": "boolean"
+          },
+          "homeBasePlanB": {
             "nullable": true,
             "type": "string"
           },
@@ -1525,6 +1636,8 @@
           "photoAlbumUrl",
           "totem_name",
           "totem_emoji",
+          "inviteLocked",
+          "homeBasePlanB",
           "members",
           "memberCount"
         ],
@@ -1632,6 +1745,32 @@
             "items": {
               "type": "string"
             }
+          },
+          "edited_by": {
+            "nullable": true,
+            "type": "string"
+          },
+          "edited_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "edit_was": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string"
+              },
+              "meetAt": {
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "editor_name": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -1676,6 +1815,10 @@
             "type": "string"
           },
           "endDate": {
+            "nullable": true,
+            "type": "string"
+          },
+          "slug": {
             "nullable": true,
             "type": "string"
           }
@@ -2265,6 +2408,9 @@
           "crewRides": {
             "type": "number"
           },
+          "crewNudges": {
+            "type": "number"
+          },
           "mustSeeReminderMinutes": {
             "nullable": true,
             "type": "number"
@@ -2294,6 +2440,7 @@
           "crewPolls",
           "crewMoney",
           "crewRides",
+          "crewNudges",
           "mustSeeReminderMinutes",
           "dndStart",
           "dndEnd",
@@ -2925,7 +3072,7 @@
         "tags": [
           "Profiles"
         ],
-        "summary": "List profiles for festival",
+        "summary": "List profiles for festival (picks of other users only for crew mates; meta.pickCounts holds anonymous per-set counts of other attendees)",
         "security": [
           {
             "bearerAuth": []
@@ -3086,6 +3233,9 @@
         "responses": {
           "200": {
             "description": "Joined crew"
+          },
+          "403": {
+            "description": "CREW_LOCKED: the crew is not taking new members"
           }
         }
       }
@@ -4741,11 +4891,47 @@
           "200": {
             "description": "Invite page with crew-specific Open Graph tags"
           },
+          "403": {
+            "description": "CREW_LOCKED: the crew is not taking new members"
+          },
           "404": {
             "description": "No crew has this code"
           },
           "410": {
             "description": "The invite code has expired"
+          }
+        }
+      }
+    },
+    "/join/{code}/save.ics": {
+      "get": {
+        "tags": [
+          "Deep Links"
+        ],
+        "summary": "Save a crew invite for later (one all-day calendar event for the festival dates)",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Calendar file",
+            "content": {
+              "text/calendar": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Redirect to the invite page when the invite cannot be saved"
           }
         }
       }

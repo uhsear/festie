@@ -31,6 +31,8 @@ export const ALLOWED_NOTIFICATION_TYPES = new Set([
   'crew_poll',
   'crew_money',
   'crew_ride',
+  // T52 "Looking for you" nudge (routes/crew-nudge.ts). Opt-out via PREF_MAP; skips quiet hours (send.ts).
+  'crew_nudge',
   // Safety-critical crew SOS. Deliberately NOT added to PREF_MAP (send.ts) — an
   // emergency has no per-type opt-out and bypasses DND (see CRITICAL_TYPES).
   'crew_sos',

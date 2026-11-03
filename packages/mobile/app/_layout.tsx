@@ -8,8 +8,8 @@ import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigatio
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
-import { useAuthStore, useCrewStore, useFestivalStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
-import { resolvePushTarget } from '@festie/shared/utils';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { scrubSensitiveUrl } from '@festie/shared/utils';
 import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
 import {
@@ -22,6 +22,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UIProvider } from '../contexts/UIContext';
 import OfflineBanner from '../components/OfflineBanner';
@@ -41,8 +42,7 @@ import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
 import { isGuestBlocked } from '../lib/authRoutes';
 import { setReturnTo, takeReturnTo } from '../lib/returnTo';
-import { CREW_MEET_HREF, sosPushCrewId } from '../lib/dayOfRoutes';
-import { pushTargetHref } from '../lib/pushRoutes';
+import { routeNotification } from '../lib/routeNotification';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
@@ -79,6 +79,22 @@ if (SENTRY_DSN && !isExpoGo) {
   Sentry.init({
     dsn: SENTRY_DSN,
     tracesSampleRate: Number(process.env.EXPO_PUBLIC_SENTRY_TRACES_RATE ?? 0.05),
+    environment: Updates.channel || (__DEV__ ? 'development' : 'production'),
+    sendDefaultPii: false,
+    // Reset links carry ?token=: keep tokens and invite codes out of Sentry.
+    beforeSend(event) {
+      if (event.request) event.request.url = scrubSensitiveUrl(event.request.url);
+      return event;
+    },
+    beforeBreadcrumb(breadcrumb) {
+      const d = breadcrumb.data;
+      if (d) {
+        if (d.url) d.url = scrubSensitiveUrl(d.url);
+        if (d.from) d.from = scrubSensitiveUrl(d.from);
+        if (d.to) d.to = scrubSensitiveUrl(d.to);
+      }
+      return breadcrumb;
+    },
   });
 }
 
@@ -104,27 +120,6 @@ configureApi({
     }
   },
 });
-
-// Route a tapped notification's data payload to its deep-link target. Shared by
-// the warm-tap listener and the cold-start useLastNotificationResponse handler
-// so both paths route identically.
-function routeNotification(r: ReturnType<typeof useRouter>, data: Record<string, unknown> | undefined) {
-  const sosCrewId = sosPushCrewId(data);
-  if (sosCrewId) {
-    // Open that crew's Find tab, where CrewSos shows the banner with "Get directions".
-    if (sosCrewId !== useCrewStore.getState().activeCrew?.id) {
-      useCrewStore.getState().selectCrew(sosCrewId).catch(() => {});
-    } else {
-      void useLiveLocationStore.getState().loadActiveSos(sosCrewId);
-    }
-    r.push(CREW_MEET_HREF);
-    return;
-  }
-  const target = resolvePushTarget(data);
-  if (!target) return;
-  if (target.kind === 'festival') useFestivalStore.getState().selectFestival(target.festivalId).catch(() => {});
-  r.push(pushTargetHref(target));
-}
 
 function AuthGate() {
   const { colors } = useTokens();

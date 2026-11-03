@@ -2,12 +2,10 @@
 import { defineConfig, mergeConfig } from 'vite';
 import viteConfig from './vite.config';
 
-// Coverage thresholds are set ~3 pts below actuals measured 2026-09-07 with
+// Coverage thresholds sit 3 pts below (rounded down) the actuals measured 2026-11-02 with
 // `pnpm --filter @festie/web test:coverage`:
-//   statements=39.68%, branches=35.69%, functions=38.72%, lines=39.57%
+//   statements=71.65%, branches=68.23%, functions=67%, lines=72.99%
 // They only enforce when COVERAGE=1, to avoid slowing ordinary local runs.
-// Branches stays at 31: its actual is 35.7%, a 4.7 pt gap, under the 5 pt
-// margin this ratchet requires before raising a floor.
 const withThresholds = process.env.COVERAGE === '1';
 
 export default mergeConfig(
@@ -26,10 +24,10 @@ export default mergeConfig(
         exclude: ['src/**/*.test.*', 'src/**/*.spec.*', 'src/test-setup.ts', 'src/routeTree.gen.ts'],
         ...(withThresholds && {
           thresholds: {
-            statements: 36,
-            branches: 31,
-            functions: 35,
-            lines: 36,
+            statements: 68,
+            branches: 65,
+            functions: 64,
+            lines: 69,
           },
         }),
       },

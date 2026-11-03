@@ -15,6 +15,8 @@
 import { createCacheInvalidationBus } from '../redis';
 
 const CACHE_TTL_MS = 60_000;
+// MAX_USERS defaults to 2000; clearing at this cap bounds memory.
+const MAX_USER_BY_ID_ENTRIES = 5000;
 
 /**
  * Build cache helpers + data-access helpers bound to the supplied deps.
@@ -90,9 +92,28 @@ export function createCacheHelpers({ stores, redis, log }: { stores: any; redis:
     return _userMapCache;
   }
 
+  // Per-id cache: a sign-in bumps the version on every worker, so a full
+  // users.readAll() here would rescan the table after each sign-in.
+  const _userById = new Map<any, any>();
+  let _userByIdVersion = 0;
+  let _userByIdAt = 0;
+
   async function getUserById(userId: any) {
-    const userMap = await getUserMap();
-    return userMap.get(userId) || null;
+    if (Date.now() - _userByIdAt > CACHE_TTL_MS || _userByIdVersion !== _userDataVersion) {
+      _userById.clear();
+      _userByIdVersion = _userDataVersion;
+      _userByIdAt = Date.now();
+    }
+    const cached = _userById.get(userId);
+    if (cached) return cached;
+    const version = _userDataVersion;
+    const user = await stores.users.getById(userId);
+    // Null is not cached, so a new account is found at once. A read that
+    // raced an invalidation is dropped, so it cannot pin a stale row.
+    if (!user || version !== _userDataVersion) return user || null;
+    if (_userById.size >= MAX_USER_BY_ID_ENTRIES) _userById.clear();
+    _userById.set(userId, user);
+    return user;
   }
 
   function invalidateUserCache() {

@@ -14,6 +14,8 @@ const resolver = {
   keep: vi.fn(),
   split: vi.fn(),
   clearSplit: vi.fn(),
+  catchOption: vi.fn<(g: unknown) => unknown>(() => null),
+  catchInstead: vi.fn(),
 };
 const toast = vi.fn();
 const toastUndo = vi.fn();
@@ -124,6 +126,7 @@ describe('PickConflicts', () => {
     buildPickConflicts.mockReturnValue([]);
     resolver.splitPlan.mockReturnValue(null);
     resolver.plannedSplit.mockReturnValue(null);
+    resolver.catchOption.mockReturnValue(null);
     resolver.keep.mockResolvedValue({ message: 'Kept A.', undo: vi.fn() });
     resolver.split.mockResolvedValue({ message: 'Split plan saved.', undo: vi.fn() });
     setState();
@@ -261,5 +264,42 @@ describe('PickConflicts', () => {
     expect(screen.getByText('See all of A.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear plan' }));
     expect(resolver.clearSplit).toHaveBeenCalled();
+  });
+
+  describe('catch instead', () => {
+    const option = {
+      fromSetId: 's2',
+      priority: 'want-to-see',
+      artist: 'Odesza',
+      to: { set: makeSet('s3'), when: 'Sun 9:00 PM', day: 'Sun' },
+    };
+
+    it('puts the catch button first and runs it with an undo toast', async () => {
+      const user = userEvent.setup();
+      resolver.catchOption.mockReturnValue(option);
+      const undo = vi.fn().mockResolvedValue(undefined);
+      resolver.catchInstead.mockResolvedValue({ message: 'Catching Odesza Sun 9:00 PM instead.', undo });
+      render(<PickConflicts groups={[twoPickGroup()]} />);
+      const buttons = screen.getAllByRole('button').filter((b) => /Catch|Keep/.test(b.textContent ?? ''));
+      expect(buttons[0]).toHaveTextContent('Catch Odesza on Sun instead');
+      expect(buttons[0]).toHaveAccessibleName(
+        'Catch Odesza Sun 9:00 PM instead, and remove this set from your picks',
+      );
+      await user.click(buttons[0]);
+      expect(resolver.catchInstead).toHaveBeenCalledWith(expect.anything());
+      expect(toastUndo).toHaveBeenCalledWith('Catching Odesza Sun 9:00 PM instead.', expect.any(Function));
+    });
+
+    it('shows no catch button when there is no option', () => {
+      render(<PickConflicts groups={[twoPickGroup()]} />);
+      expect(screen.queryByText(/Catch .* instead/)).not.toBeInTheDocument();
+    });
+
+    it('gives the section id clashes for the Picks jump', () => {
+      render(<PickConflicts groups={[twoPickGroup()]} />);
+      const section = screen.getByLabelText('Schedule clashes');
+      expect(section).toHaveAttribute('id', 'clashes');
+      expect(section).toHaveAttribute('tabindex', '-1');
+    });
   });
 });

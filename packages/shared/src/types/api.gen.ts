@@ -1765,6 +1765,13 @@ export type paths = {
                     };
                     content?: never;
                 };
+                /** @description CREW_LOCKED: the crew is not taking new members */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -2182,7 +2189,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List profiles for festival */
+        /** List profiles for festival (picks of other users only for crew mates; meta.pickCounts holds anonymous per-set counts of other attendees) */
         get: {
             parameters: {
                 query?: never;
@@ -2352,6 +2359,13 @@ export type paths = {
                     };
                     content?: never;
                 };
+                /** @description CREW_LOCKED: the crew is not taking new members */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
                 /** @description No crew has this code */
                 404: {
                     headers: {
@@ -2361,6 +2375,51 @@ export type paths = {
                 };
                 /** @description The invite code has expired */
                 410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/join/{code}/save.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Save a crew invite for later (one all-day calendar event for the festival dates) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Calendar file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/calendar": string;
+                    };
+                };
+                /** @description Redirect to the invite page when the invite cannot be saved */
+                302: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2409,11 +2468,13 @@ export type components = {
             createdBy: string;
             festivalId: string;
             homeBaseLocation: string | null;
+            homeBasePlanB: string | null;
             homeBaseTime: string | null;
             homeBaseUpdatedAt: string | null;
             id: string;
             inviteCode?: string;
             inviteExpiresAt?: string | null;
+            inviteLocked: boolean;
             joinedAt?: string;
             maxMembers?: number;
             memberCount: number;
@@ -2592,6 +2653,13 @@ export type components = {
                     endTime: string | null;
                     id: string;
                     linkUrl: string | null;
+                    movedAt?: string;
+                    movedFrom?: {
+                        dayIndex: number;
+                        end: string | null;
+                        stageId: string | null;
+                        start: string | null;
+                    };
                     stageId: string | null;
                     startTime: string | null;
                 }[];
@@ -2653,6 +2721,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            slug?: string | null;
             stages: {
                 color: string | null;
                 id: string;
@@ -2678,6 +2747,13 @@ export type components = {
                     }[];
                     endTime: string | null;
                     id: string;
+                    movedAt?: string;
+                    movedFrom?: {
+                        dayIndex: number;
+                        end: string | null;
+                        stageId: string | null;
+                        start: string | null;
+                    };
                     stageId: string | null;
                     startTime: string | null;
                 }[];
@@ -2739,6 +2815,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            slug?: string | null;
             stages: {
                 color: string | null;
                 id: string;
@@ -2754,6 +2831,7 @@ export type components = {
             id: string;
             location: string;
             name: string;
+            slug?: string | null;
             stageCount: number;
             startDate: string | null;
         };
@@ -2768,6 +2846,13 @@ export type components = {
             endTime: string | null;
             id: string;
             linkUrl: string | null;
+            movedAt?: string;
+            movedFrom?: {
+                dayIndex: number;
+                end: string | null;
+                stageId: string | null;
+                start: string | null;
+            };
             stageId: string | null;
             startTime: string | null;
         };
@@ -2778,6 +2863,13 @@ export type components = {
             created_by: string;
             creator_name?: string;
             crew_id: string;
+            edit_was?: {
+                location?: string;
+                meetAt?: string | null;
+            } | null;
+            edited_at?: string | null;
+            edited_by?: string | null;
+            editor_name?: string | null;
             expires_at: string | null;
             id: string;
             label: string;
@@ -2793,6 +2885,7 @@ export type components = {
         NotificationPrefs: {
             crewMeetingPoints: number;
             crewMoney: number;
+            crewNudges: number;
             crewPolls: number;
             crewReformed: number;
             crewRides: number;

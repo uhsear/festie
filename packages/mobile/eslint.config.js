@@ -22,6 +22,24 @@ module.exports = [
     },
   },
   {
+    // AppSwitch is the one file that may wrap the raw React Native Switch.
+    ignores: ['components/AppSwitch.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react-native',
+              importNames: ['Switch'],
+              message: 'Use components/AppSwitch: it sets the theme track and the iOS off colour.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // expo-notifications 58 re-exports AndroidImportance through
     // `export * from './NotificationChannelManager.types'`, which
     // eslint-plugin-import cannot follow, so import/namespace reports the enum

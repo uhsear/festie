@@ -105,20 +105,33 @@ describe('map document place taps and camera padding', () => {
     expect(html).not.toContain('padding: 64');
   });
 
-  // The popup stays until the RN place card (T27 P7) handles place-select, so a
-  // tap never does nothing; the click must not stop propagation, or MapLibre
-  // never toggles the popup.
-  it('posts place-select from place markers and keeps their popup', () => {
+  // The RN place card replaces the popup. A place tap stops propagation only while
+  // PLACE_TAPS is on, so placement and authoring still reach map.on('click') on a pin.
+  it('posts place-select from place markers behind PLACE_TAPS, with no popup', () => {
     expect(body('renderPins')).toContain("kind: 'meeting-point'");
-    expect(body('renderMapData')).toContain("type: 'place-select'");
-    expect(body('renderPins')).toContain('setPopup');
-    expect(body('renderMapData')).toContain('setPopup');
-    expect(body('renderPins')).not.toContain('stopPropagation');
-    expect(body('renderMapData')).not.toContain('stopPropagation');
+    for (const name of ['renderPins', 'renderMapData']) {
+      expect(body(name)).toContain('place-select');
+      expect(body(name)).toContain('if (!PLACE_TAPS) return;');
+      expect(body(name)).toContain('stopPropagation');
+      expect(body(name)).not.toContain('setPopup');
+    }
   });
 
-  it('keeps pursue-select on live markers', () => {
+  it('keeps pursue-select and the popup on live markers', () => {
     expect(body('renderLive')).toContain("type: 'pursue-select'");
+    expect(body('renderLive')).toContain('setPopup');
+  });
+
+  it('keeps PLACE_TAPS in step with placement and authoring', () => {
+    expect(html).toContain('var PLACE_TAPS = true;');
+    const setter = (name: string) => {
+      const start = html.indexOf(`window.${name} = function`);
+      return html.slice(start, html.indexOf('\n        };', start));
+    };
+    expect(setter('__festieSetPlacement')).toContain("PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';");
+    expect(setter('__festieSetAuthoring')).toContain("PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';");
+    const click = html.slice(html.indexOf("map.on('click'"), html.indexOf('window.__festieFlyTo'));
+    expect(click).toContain("PLACE_TAPS = !PLACEMENT && AUTHORING === 'off';");
   });
 });
 

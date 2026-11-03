@@ -1,8 +1,8 @@
 import React, { memo, useRef, useState, useMemo } from 'react';
-import { Play, AlertTriangle, StickyNote, Clock } from 'lucide-react';
+import { Play, AlertTriangle, StickyNote, Clock, ArrowRightLeft } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
-import { usePicks, usePickSync, usePickClear } from '@festie/shared/hooks';
+import { useMyPick, useMyNote, usePickActions, usePickSync, usePickClear, useSetMove } from '@festie/shared/hooks';
 import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { useSetStatus } from '@/hooks/useSetStatus';
@@ -35,7 +35,10 @@ interface SetCardProps {
   b2bSeparator?: string;
 }
 
-const PRI_MAP: Record<string, string> = {
+const NO_PROFILES: ReturnType<typeof useFestivalStore.getState>['allProfiles'] = [];
+const NO_MEMBERS: ReturnType<typeof useCrewStore.getState>['crewMembers'] = [];
+
+const PRI_MAP:Record<string, string> = {
   must: 'must',
   'want-to-see': 'want',
   maybe: 'maybe',
@@ -53,18 +56,23 @@ function SetCard({
   clashLabel,
   b2bSeparator,
 }: SetCardProps) {
-  const { getMyPick, savePick, getMyNote } = usePicks();
+  const myPick = useMyPick(set.id);
+  const myNote = useMyNote(set.id);
+  const { savePick } = usePickActions();
   const { sync: pickSync, retry: retryPick } = usePickSync(set.id);
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   // Read-only joins for the crew-overlap cluster: profiles supply the
   // profileId -> userId link, crew members supply the avatar image. Both are
   // already persisted (Foundations F1), so the cluster renders offline.
-  const allProfiles = useFestivalStore((state) => state.allProfiles);
-  const crewMembers = useCrewStore((state) => state.crewMembers);
+  // Only a card that shows friends reads them, so a crew mate's pick re-renders just those cards.
+  const hasFriends = friendProfiles.length > 0;
+  const allProfiles = useFestivalStore((state) => (hasFriends ? state.allProfiles : NO_PROFILES));
+  const crewMembers = useCrewStore((state) => (hasFriends ? state.crewMembers : NO_MEMBERS));
   const clearPick = usePickClear(useUndoNotifier());
   const { tap, select, warning } = useHaptics();
   const [saving, setSaving] = useState(false);
   const setStatus = useSetStatus(set);
+  const move = useSetMove(set);
   const days = useFestivalStore((state) => state.days);
   // Dim ended sets only while the festival is running; before/after, every set reads the same.
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
@@ -89,8 +97,6 @@ function SetCard({
     setSpotlightPos({ x: '50%', y: '50%' });
   };
 
-  const myPick = getMyPick(set.id);
-  const myNote = getMyNote(set.id);
   const artistName = artistDisplayName(set, b2bSeparator);
   const subtitle = artistSubtitle(set, b2bSeparator);
 
@@ -165,7 +171,7 @@ function SetCard({
         // Hover — gentle lift + surface shift + light glow (no heavy drop shadow).
         // R12: Aqua spotlight effect with 200ms ease-out transition.
         'hover:bg-bg-card-hover hover:-translate-y-0.5',
-        'hover:shadow-[0_0_12px_rgba(0,232,208,0.25),0_0_1px_rgba(0,232,208,0.4)]',
+        'hover:shadow-[0_0_12px_var(--color-aqua-a25),0_0_1px_var(--color-aqua-a4)]',
         'transition-shadow duration-200 ease-out',
         // R12: Radial spotlight gradient via ::after pseudo-element.
         'after:content-[""] after:absolute after:inset-0 after:rounded-[inherit]',
@@ -206,7 +212,7 @@ function SetCard({
         )}
         aria-label={`${artistName} — ${stageName}, ${
           set.startTime && set.endTime ? `${formatTime(set.startTime)} to ${formatTime(set.endTime)}` : 'time TBA'
-        }`}
+        }${move ? `, ${move.a11y}` : ''}`}
         onClick={() => {
           tap();
           onTap();
@@ -314,6 +320,17 @@ function SetCard({
             <span className="max-w-full truncate">{clashLabel}</span>
           </span>
         )}
+        {move && (
+          <span
+            data-testid="set-moved-chip"
+            aria-hidden="true"
+            title={move.line}
+            className="inline-flex items-center gap-1 text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight border border-border text-text-secondary"
+          >
+            <ArrowRightLeft className="w-3 h-3 shrink-0" aria-hidden="true" />
+            {move.chip}
+          </span>
+        )}
       </div>
 
       {/* Live badge */}
@@ -340,7 +357,8 @@ function SetCard({
                   key={p}
                   className={cn(
                     'card-priority-btn',
-                    'h-11 min-w-11 min-h-11 px-3 gap-1.5 rounded-full',
+                    // Below 360px the single-column card is too narrow for px-3 on all three.
+                    'h-11 min-w-11 min-h-11 px-3 max-[359px]:px-2 gap-1.5 rounded-full',
                     'flex items-center justify-center',
                     'bg-[var(--color-overlay-3)] border border-border-light',
                     'text-sm text-text-muted cursor-pointer',
@@ -458,6 +476,7 @@ function setCardPropsAreEqual(prev: Readonly<SetCardProps>, next: Readonly<SetCa
   if (prev.set.updatedAt !== next.set.updatedAt) return false;
   if (prev.set.startTime !== next.set.startTime) return false;
   if (prev.set.endTime !== next.set.endTime) return false;
+  if (prev.set.movedAt !== next.set.movedAt) return false;
 
   // Visual props
   if (prev.stageColor !== next.stageColor) return false;

@@ -9,7 +9,14 @@ const processQueue = vi.fn<(adapter: unknown, socket: unknown, onSent?: OnSent) 
 vi.mock('./useOfflineQueue', () => ({
   useOfflineQueue: () => ({ queueMutation: vi.fn(), processQueue }),
 }));
-vi.mock('@festie/shared/services', () => ({ api: {} }));
+const api = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  put: vi.fn(),
+  patch: vi.fn(),
+  delete: vi.fn(),
+}));
+vi.mock('@festie/shared/services', () => ({ api }));
 
 import { useOfflineQueueBridge, queryKeysForSentUrl } from './useOfflineQueueBridge';
 
@@ -53,5 +60,49 @@ describe('useOfflineQueueBridge post-send invalidation', () => {
     spy.mockClear();
     onSent({ url: '/profiles/p1/picks', method: 'PUT' });
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+type Adapter = (url: string, init: { method?: string; body?: unknown; idempotencyKey?: string }) => Promise<unknown>;
+
+describe('useOfflineQueueBridge replay adapter', () => {
+  beforeEach(() => {
+    processQueue.mockReset().mockResolvedValue(undefined);
+    for (const fn of Object.values(api)) fn.mockReset().mockResolvedValue({ id: 'real-1' });
+  });
+
+  async function getAdapter(): Promise<Adapter> {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useOfflineQueueBridge(), { wrapper });
+    await window.__festieQueue!.processQueue();
+    return processQueue.mock.calls.at(-1)![0] as Adapter;
+  }
+
+  const expected = { _bypassOfflineQueue: true, headers: { 'Idempotency-Key': 'k1' } };
+
+  it('sends POST and PUT/PATCH with the bypass flag and the Idempotency-Key, and returns the api result', async () => {
+    const adapter = await getAdapter();
+    await expect(adapter('/crews/c1/expenses', { method: 'POST', body: { a: 1 }, idempotencyKey: 'k1' })).resolves.toEqual({
+      id: 'real-1',
+    });
+    expect(api.post).toHaveBeenCalledWith('/crews/c1/expenses', { a: 1 }, expected);
+    await adapter('/crews/c1/polls/p1', { method: 'put', body: { b: 2 }, idempotencyKey: 'k1' });
+    expect(api.put).toHaveBeenCalledWith('/crews/c1/polls/p1', { b: 2 }, expected);
+    await adapter('/crews/c1/polls/p1', { method: 'PATCH', body: { c: 3 }, idempotencyKey: 'k1' });
+    expect(api.patch).toHaveBeenCalledWith('/crews/c1/polls/p1', { c: 3 }, expected);
+  });
+
+  it('sends DELETE with the bypass flag and the Idempotency-Key', async () => {
+    const adapter = await getAdapter();
+    await adapter('/crews/c1/meeting-points/m1', { method: 'DELETE', idempotencyKey: 'k1' });
+    expect(api.delete).toHaveBeenCalledWith('/crews/c1/meeting-points/m1', expected);
+  });
+
+  it('still bypasses the offline queue when no key is given', async () => {
+    const adapter = await getAdapter();
+    await adapter('/crews/c1/expenses', { body: { a: 1 } });
+    expect(api.post).toHaveBeenCalledWith('/crews/c1/expenses', { a: 1 }, { _bypassOfflineQueue: true });
   });
 });

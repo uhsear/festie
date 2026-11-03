@@ -25,7 +25,7 @@ export function useDetailPanelData(set: FestivalSet) {
   const sets = useFestivalStore((s) => s.sets);
   const activeCrew = useCrewStore((s) => s.activeCrew);
 
-  const { getMyPick, savePick, saveNote, getOtherPicks, saveReminder, getMyReminder } = usePicks();
+  const { getMyPick, savePick, saveNote, getOtherPicks, getPickCount, saveReminder, getMyReminder } = usePicks();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)');
@@ -83,8 +83,11 @@ export function useDetailPanelData(set: FestivalSet) {
         ? `${activeCrew.name} (${others.length} going)`
         : `No one in ${activeCrew.name} going yet`;
     }
-    return others.length > 0 ? `Who's Going (${others.length})` : 'Nobody else going yet';
-  }, [activeCrew, others.length]);
+    if (others.length > 0) return `Who's Going (${others.length})`;
+    // Non-crew picks arrive only as an anonymous count, so show the number without names.
+    const total = getPickCount(set.id);
+    return total > 0 ? `${total} going` : 'Nobody else going yet';
+  }, [activeCrew, others.length, getPickCount, set.id]);
 
   return {
     currentFestival,

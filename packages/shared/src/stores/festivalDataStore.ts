@@ -36,6 +36,13 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
     }
   }
 }
+
+/** GET /profiles/:festivalId with its anonymous meta.pickCounts ({} from a server without it). */
+async function fetchProfiles(festivalId: string): Promise<{ profiles: Profile[]; pickCounts: Record<string, number> }> {
+  const { data, meta } = await api.getEnvelope<Profile[]>(`/profiles/${festivalId}`);
+  const raw = meta.pickCounts;
+  return { profiles: data, pickCounts: raw && typeof raw === 'object' ? (raw as Record<string, number>) : {} };
+}
 import {
   Festival,
   FestivalSet,
@@ -67,6 +74,12 @@ export interface FestivalDataState {
   currentFestival: Festival | null;
   currentProfile: Profile | null;
   allProfiles: Profile[];
+  /**
+   * Anonymous per-set pick counts of the other attendees (GET /profiles/:festivalId
+   * meta.pickCounts). allProfiles carries picks only for crew mates, so a count
+   * of everyone reads this. Empty from an older server: counts degrade to zero.
+   */
+  pickCounts: Record<string, number>;
   sets: FestivalSet[];
   stages: Stage[];
   days: FestivalDay[];
@@ -337,6 +350,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   currentFestival: null,
   currentProfile: null,
   allProfiles: [],
+  pickCounts: {},
   sets: [],
   stages: [],
   days: [],
@@ -376,13 +390,15 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       // Festival detail is public; profiles require auth (401 for guests).
       const detail = await withRetry(() => api.get<FestivalDetailResponse>(`/festivals/${festivalId}`));
       let profiles: Profile[] = [];
+      let pickCounts: Record<string, number> | null = null;
       let profilesFetchFailed = false;
       if (useAuthStore.getState().user) {
         try {
-          profiles = await api.get<Profile[]>(`/profiles/${festivalId}`);
-        } catch (_) {
+          ({ profiles, pickCounts } = await fetchProfiles(festivalId));
+        } catch (err) {
           // Offline (the /profiles endpoint is not service-worker-cached) or a
           // session blip. Don't trust the empty list — see currentProfile below.
+          console.warn('festival load: profiles fetch failed; keeping cached profiles', festivalId, err);
           profilesFetchFailed = true;
         }
       }
@@ -441,6 +457,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         stages,
         days,
         allProfiles: preservedAllProfiles,
+        pickCounts: pickCounts ?? (prevState._cachedFestivalId === festivalId ? prevState.pickCounts : {}),
         currentProfile,
         isLoading: false,
         _festivalCachedAt: Date.now(),
@@ -470,7 +487,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   loadProfiles: async (festivalId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const profiles = await api.get<Profile[]>(`/profiles/${festivalId}`);
+      const { profiles, pickCounts } = await fetchProfiles(festivalId);
       const userId = useAuthStore.getState().user?.id;
       const serverProfile = userId ? profiles.find((p) => p.userId === userId) || null : null;
       const prevState = get();
@@ -491,6 +508,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
           : serverProfile;
       set({
         allProfiles: profiles,
+        pickCounts,
         currentProfile,
         isLoading: false,
         _profilesCachedAt: Date.now(),

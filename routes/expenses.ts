@@ -141,7 +141,7 @@ export default function createExpenseRoutes(deps: any) {
             type: 'expense-added',
             detail: `${expense.description} ${formatMoney(toCents(amount), currency)}${paidByNote}`,
           })
-          .catch(() => {});
+          .catch((err: any) => log.warn('expense-added activity log failed', { crewId, error: err.message }));
         res.status(201);
         return sendSuccess(res, expense);
       } catch (err: any) {

@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
+import { Bell } from 'lucide-react';
 import { useAuthStore, useUIStore } from '@festie/shared';
-import { APP_SECTIONS } from '@festie/shared/utils';
+import { useInboxStore, selectInboxUnread } from '@festie/shared/stores/inboxStore';
+import { APP_SECTIONS, badgeA11yLabel } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
+import { INBOX_COPY, inboxBadgeLabel } from '@festie/shared/constants/inboxCopy';
 import { cn } from '@/lib/utils';
 import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
@@ -11,11 +14,15 @@ import DaylightToggle from '../features/DaylightToggle';
 import { useThemeSync } from '../../lib/theme';
 import { SECTION_HREF, activeSection } from './sections';
 import { useLineupHref } from '../../hooks/useLineupHref';
+import { useCrewAttention } from '../../hooks/useCrewAttention';
 import { postInstallEvent } from '../../lib/installAnalytics';
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
+  const crewBadge = useCrewAttention();
+  const unread = useInboxStore(selectInboxUnread);
+  const unreadLabel = inboxBadgeLabel(unread);
 
   // Desktop nav tabs: the five shared sections. Guests skip More because the
   // "Sign in" button in the right section already covers it.
@@ -154,7 +161,7 @@ export default function Header() {
             <Button
               variant="util"
               type="button"
-              aria-label="Install Festie app"
+              aria-label="Install App for Festie"
               data-testid="install-app-btn"
               icon={
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -187,7 +194,7 @@ export default function Header() {
               href="https://paypal.me/uhsear"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Support the project via PayPal"
+              aria-label="Support Me via PayPal"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
@@ -204,11 +211,13 @@ export default function Header() {
           <div className="hidden lg:flex gap-1 ml-6">
             {desktopTabs.map((tab) => {
               const active = current === tab.key;
+              const badged = tab.key === 'crew' && crewBadge.label !== null;
               return (
                 <Link
                   key={tab.key}
                   to={tab.key === 'lineup' ? lineupHref : SECTION_HREF[tab.key]}
                   aria-current={active ? 'page' : undefined}
+                  aria-label={badged ? badgeA11yLabel(tab.label, crewBadge) : undefined}
                   className={cn(
                     'px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
                     'transition-colors duration-[250ms] ease-standard tracking-[0.3px]',
@@ -218,6 +227,17 @@ export default function Header() {
                   )}
                 >
                   {tab.label}
+                  {badged &&
+                    (crewBadge.label === '' ? (
+                      <span aria-hidden="true" className="inline-block ml-1 w-1.5 h-1.5 rounded-full bg-accent-coral" />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="inline-block ml-1 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[10px] font-semibold leading-none text-center"
+                      >
+                        {crewBadge.label}
+                      </span>
+                    ))}
                 </Link>
               );
             })}
@@ -235,6 +255,27 @@ export default function Header() {
           'max-[380px]:[&_.btn-ghost.btn-sm]:hidden',
         )}
       >
+        {user && (
+          <Link
+            to="/inbox"
+            aria-label={unread > 0 ? INBOX_COPY.bellLabelUnread(unread) : INBOX_COPY.bellLabel}
+            aria-current={location.pathname === '/inbox' ? 'page' : undefined}
+            className={cn(
+              'inline-flex items-center justify-center relative min-h-11 min-w-11 rounded-lg text-text-secondary hover:text-text-primary',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
+            )}
+          >
+            <Bell size={20} aria-hidden="true" />
+            {unreadLabel && (
+              <span
+                aria-hidden="true"
+                className="absolute top-1 right-1 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[10px] font-semibold leading-none text-center"
+              >
+                {unreadLabel}
+              </span>
+            )}
+          </Link>
+        )}
         <DaylightToggle />
 
         {/* Festival Mode toggle — flips store flag + navigates to /festival-mode */}

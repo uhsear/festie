@@ -162,7 +162,7 @@ describe('authStore', () => {
     it('handles non-Error thrown values', async () => {
       vi.mocked(api.post).mockRejectedValueOnce('string error');
       await expect(useAuthStore.getState().login({ username: 'a', password: 'b' })).rejects.toBe('string error');
-      expect(useAuthStore.getState().error).toBe('Login failed');
+      expect(useAuthStore.getState().error).toBe("Couldn't sign in. Try again.");
     });
 
     it('handles login response without token', async () => {

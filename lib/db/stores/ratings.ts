@@ -422,7 +422,7 @@ export function createRatingsStore(pool: Pool) {
      * scans every set the user has ever rated (kept fast by the
      * `set_ratings(user_id)` index added in migration 044).
      *
-     * Returns three slices:
+     * Returns four slices:
      *   - totals: lifetime aggregates across ALL festivals (same per-row math
      *     as getWrapStats so lifetime totals = sum of per-festival stats and
      *     there's no TZ drift — the hours math reuses SET_HOURS_EXPR).
@@ -430,6 +430,12 @@ export function createRatingsStore(pool: Pool) {
      *     carrying the festival name + its date span (MIN/MAX of festival_days,
      *     which is the only date source — `festivals` has no start/end columns).
      *   - topArtists: the user's highest-loved artists across every festival.
+     *   - seenMost: artists the user saw at 2 or more festivals, max 10,
+     *     festivals desc then artist asc. A set counts as seen when it is marked
+     *     caught = true, or rated and not marked caught = false; a pick alone
+     *     never counts. Each named element of festival_sets.artists counts
+     *     (B2B), else festival_sets.artist. Names group case-insensitively after
+     *     trimming and show MIN(name); a festival counts once per artist.
      *
      * Soft-deleted festivals and users are excluded (deleted_at IS NULL),
      * matching the filters sibling queries (getCrewWrap roster, the rate-set
@@ -441,7 +447,7 @@ export function createRatingsStore(pool: Pool) {
       // numbers sum to the lifetime total with no timezone drift.
       const HOURS_EXPR = `SUM(${SET_HOURS_EXPR})::float`;
 
-      const [totalsRes, byFestivalRes, topArtistsRes] = await Promise.all([
+      const [totalsRes, byFestivalRes, topArtistsRes, seenMostRes] = await Promise.all([
         // Lifetime totals across every (non-deleted) festival the user rated in.
         pool.query(
           `
@@ -502,6 +508,44 @@ export function createRatingsStore(pool: Pool) {
         `,
           [userId],
         ),
+        // Artists seen at 2+ festivals. jsonb_typeof guards a null or scalar
+        // `artists`: jsonb_array_length raises on a scalar and OR does not
+        // short-circuit. array_agg over zero names is NULL, so COALESCE falls
+        // back to the headline artist.
+        pool.query(
+          `
+          WITH seen AS (
+            SELECT c.set_id FROM set_caught c WHERE c.user_id = $1 AND c.caught
+            UNION
+            SELECT r.set_id FROM set_ratings r
+            WHERE r.user_id = $1
+              AND NOT EXISTS (SELECT 1 FROM set_caught c2 WHERE c2.user_id = $1 AND c2.set_id = r.set_id AND NOT c2.caught)
+          ),
+          names AS (
+            SELECT s.festival_id, btrim(n.name) AS name
+            FROM seen
+            JOIN festival_sets s ON s.id = seen.set_id
+            JOIN festivals f ON f.id = s.festival_id AND f.deleted_at IS NULL
+            CROSS JOIN LATERAL (
+              SELECT COALESCE(
+                (SELECT array_agg(e->>'name')
+                   FROM jsonb_array_elements(CASE WHEN jsonb_typeof(s.artists) = 'array' THEN s.artists ELSE '[]'::jsonb END) e
+                  WHERE jsonb_typeof(e) = 'object' AND btrim(COALESCE(e->>'name', '')) <> ''),
+                ARRAY[s.artist]
+              ) AS list
+            ) a
+            CROSS JOIN LATERAL unnest(a.list) AS n(name)
+            WHERE n.name IS NOT NULL AND btrim(n.name) <> ''
+          )
+          SELECT MIN(name) AS "artist", COUNT(DISTINCT festival_id)::int AS "festivals"
+          FROM names
+          GROUP BY lower(name)
+          HAVING COUNT(DISTINCT festival_id) >= 2
+          ORDER BY "festivals" DESC, MIN(name) ASC
+          LIMIT 10
+        `,
+          [userId],
+        ),
       ]);
 
       const totals = totalsRes.rows[0] || {};
@@ -516,6 +560,7 @@ export function createRatingsStore(pool: Pool) {
         },
         byFestival: byFestivalRes.rows,
         topArtists: topArtistsRes.rows,
+        seenMost: seenMostRes.rows,
       };
     },
 
@@ -651,6 +696,34 @@ export function createRatingsStore(pool: Pool) {
         ORDER BY s.day_index NULLS LAST, s.start_time NULLS LAST
       `,
         [userId, festivalId, crewId],
+      );
+      return result.rows;
+    },
+
+    /**
+     * Sets in this festival that the requester marked caught = true and did
+     * not pick, with their own rating. Returns only the requester's own marks.
+     * The NOT EXISTS mirrors getPlannedForWrap's join, so a set is in one list.
+     */
+    async getCaughtExtraForWrap(userId: string, festivalId: string) {
+      const result = await pool.query(
+        `
+        SELECT s.id AS "setId", s.artist, s.stage_id AS "stageId", st.name AS "stageName",
+               s.day_index AS "dayIndex", s.start_time AS "startTime", s.end_time AS "endTime",
+               r.rating, r.note, c.caught
+        FROM set_caught c
+        JOIN festival_sets s ON s.id = c.set_id AND s.festival_id = $2
+        LEFT JOIN festival_stages st ON st.festival_id = s.festival_id AND st.id = s.stage_id
+        LEFT JOIN set_ratings r ON r.user_id = $1 AND r.set_id = s.id
+        WHERE c.user_id = $1 AND c.caught
+          AND NOT EXISTS (
+            SELECT 1 FROM festival_profiles p
+            JOIN festival_profile_picks pp ON pp.profile_id = p.id
+            WHERE p.user_id = $1 AND p.festival_id = $2 AND p.deleted_at IS NULL AND pp.set_id = s.id
+          )
+        ORDER BY s.day_index NULLS LAST, s.start_time NULLS LAST
+      `,
+        [userId, festivalId],
       );
       return result.rows;
     },

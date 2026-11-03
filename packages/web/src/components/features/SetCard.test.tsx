@@ -5,16 +5,25 @@ import type { FestivalSet } from '@festie/shared/types';
 
 // Mock dependencies
 const clearPickMock = vi.fn();
+const moveMock = vi.hoisted(() => ({ value: null as null | { chip: string; line: string; a11y: string } }));
 const pickSyncMock = { sync: undefined as { state: string; priority: string | null } | undefined, retry: vi.fn(() => Promise.resolve()) };
-vi.mock('@festie/shared/hooks', () => ({
-  usePickSync: () => pickSyncMock,
-  usePickClear: () => clearPickMock,
-  usePicks: vi.fn(() => ({
+vi.mock('@festie/shared/hooks', () => {
+  const usePicks = vi.fn(() => ({
     getMyPick: vi.fn(() => null),
     savePick: vi.fn(),
     getMyNote: vi.fn(() => ''),
-  })),
-}));
+  }));
+  return {
+    usePickSync: () => pickSyncMock,
+    usePickClear: () => clearPickMock,
+    useSetMove: () => moveMock.value,
+    usePicks,
+    // The per-set hooks read through the usePicks mock so each test seeds one place.
+    useMyPick: (id: string) => usePicks().getMyPick(id),
+    useMyNote: (id: string) => usePicks().getMyNote(id),
+    usePickActions: () => ({ savePick: usePicks().savePick }),
+  };
+});
 
 // Mutable store snapshots so individual tests can seed allProfiles / crewMembers
 // for the crew-overlap avatar join without re-mocking the module.
@@ -88,6 +97,7 @@ describe('SetCard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    moveMock.value = null;
     pickSyncMock.sync = undefined;
     festivalStoreState.allProfiles = [];
     crewStoreState.crewMembers = [];
@@ -102,6 +112,26 @@ describe('SetCard', () => {
       savePick: vi.fn(),
       getMyNote: vi.fn(() => ''),
     });
+  });
+
+  it('shows the moved chip and reads the old slot in the accessible name', () => {
+    moveMock.value = { chip: 'Moved', line: 'Moved from Sat 10:00 PM, Sahara', a11y: 'Moved from Saturday 10:00 PM, Sahara' };
+    render(<SetCard {...defaultProps} />);
+    expect(screen.getByTestId('set-moved-chip')).toHaveTextContent('Moved');
+    expect(screen.getByRole('button', { name: /, Moved from Saturday 10:00 PM, Sahara$/ })).toBeInTheDocument();
+  });
+
+  it('hides the moved chip when the set has no fresh move', () => {
+    render(<SetCard {...defaultProps} />);
+    expect(screen.queryByTestId('set-moved-chip')).toBeNull();
+  });
+
+  it('re-renders when movedAt changes', () => {
+    const { rerender } = render(<SetCard {...defaultProps} />);
+    expect(screen.queryByTestId('set-moved-chip')).toBeNull();
+    moveMock.value = { chip: 'Moved', line: 'Moved', a11y: 'Moved' };
+    rerender(<SetCard {...defaultProps} set={makeSet({ movedAt: '2026-01-02T00:00:00Z' })} />);
+    expect(screen.getByTestId('set-moved-chip')).toBeInTheDocument();
   });
 
   it('renders the artist name', () => {

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { api, ApiClientError } from '@festie/shared/services/api';
 
+const toast = vi.fn();
 vi.mock('../../lib/toastContext', () => ({
-  useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
+  useToast: () => ({ toast, toastError: vi.fn() }),
 }));
 
 const navigate = vi.fn();
@@ -108,9 +110,53 @@ describe('AdminUsers', () => {
     expect(screen.getByLabelText('Search users by username or email')).toHaveValue('sam');
   });
 
+  describe('reset link needs a recent password', () => {
+    const reauthRequired = () => new ApiClientError('Confirm your password to continue.', 403, 'REAUTH_REQUIRED');
+    const link = { resetUrl: 'https://festie.test/reset/abc', username: 'bob', expiresAt: '2026-11-02T12:00:00Z' };
+    const writeText = vi.fn();
+
+    beforeEach(() => {
+      writeText.mockReset().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    });
+
+    const openResetConfirm = async () => {
+      render(<AdminUsers />);
+      await userEvent.click(screen.getAllByRole('button', { name: 'Copy reset link' })[1]);
+      await userEvent.click(await screen.findByRole('button', { name: 'Create link' }));
+    };
+
+    it('prompts on REAUTH_REQUIRED, then copies the link', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(reauthRequired()).mockResolvedValueOnce({}).mockResolvedValueOnce(link);
+      await openResetConfirm();
+      await userEvent.type(await screen.findByPlaceholderText('Password'), 'hunter2');
+      await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(link.resetUrl));
+      expect(api.post).toHaveBeenCalledWith('/auth/reauth', { password: 'hunter2' });
+    });
+
+    it('cancel on the prompt makes no second request and shows no toast', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(reauthRequired());
+      await openResetConfirm();
+      await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+      expect(api.post).toHaveBeenCalledTimes(1);
+      expect(writeText).not.toHaveBeenCalled();
+      expect(toast).not.toHaveBeenCalled();
+    });
+  });
+
   it('selecting a user shows the selection bar', async () => {
     render(<AdminUsers />);
     await userEvent.click(screen.getByLabelText('Select bob'));
     expect(screen.getByRole('region', { name: 'Selection' })).toHaveTextContent('1 selected');
+  });
+
+  it('load error shows the alert and a Retry that calls refresh', async () => {
+    const refresh = vi.fn();
+    listState = { ...listState, users: [], total: 0, error: 'Network down', refresh };
+    render(<AdminUsers />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Network down');
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

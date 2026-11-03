@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-import { test, expect, DEFAULT_PASSWORD } from './fixtures.js';
+import { test, expect, DEFAULT_PASSWORD, FIXTURE_NOW, signIn } from './fixtures.js';
 
 const viewports = [
   { name: 'iphone-se', width: 320, height: 568 },
@@ -19,6 +19,9 @@ async function gotoSchedule(
   // also avoids Chromium's screenshot animation fast-forward leaving
   // content-visibility/staggered cards in an unpainted first frame.
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  // The page fixture already starts the clock before the June fixture dates; freeze it
+  // there so time-driven chrome renders the same in every screenshot.
+  await page.clock.setFixedTime(FIXTURE_NOW);
   await page.goto(`${app.baseUrl}${route}`);
   await expect(page.locator('#app')).toBeVisible();
   await expect(page.locator('[data-testid="festival-select"]')).toHaveAttribute('data-festival-id', 'fest-1');
@@ -35,7 +38,6 @@ async function gotoSchedule(
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   );
-  await page.waitForTimeout(100);
 }
 
 async function createJoinedUser(page: Page, app: { baseUrl: string }) {
@@ -59,14 +61,10 @@ async function createJoinedUser(page: Page, app: { baseUrl: string }) {
   });
   expect(join.ok(), `festival join failed (${join.status()})`).toBe(true);
 
-  // APIRequestContext shares cookies with the page, but the app's in-memory
-  // auth store still starts as a guest. Sign in through the UI so this test
-  // exercises the same profile-loading path that exposes pick controls.
-  await page.goto(`${app.baseUrl}/login`);
-  await page.getByLabel('Username').fill(username);
-  await page.getByLabel('Password', { exact: true }).fill(DEFAULT_PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/cards$/);
+  // The registration cookie would make /login redirect a signed-in user away, so
+  // signIn clears it and signs in through the form. This exercises the same
+  // profile-loading path that exposes pick controls.
+  await signIn(page, app, username);
 }
 
 async function expectViewportScreenshot(page: Page, name: string) {
@@ -162,9 +160,15 @@ test.describe('responsive design', () => {
     await expect(drawer).toBeVisible();
     expect(await drawer.evaluate((el) => getComputedStyle(el, '::after').display)).toBe('none');
 
+    // Visible fires on the first frame, while vaul can still hold the panel at its off-screen start.
+    await expect
+      .poll(async () => {
+        const b = await drawer.boundingBox();
+        return b && Math.round(b.x + b.width);
+      })
+      .toBe(1440);
     const box = await drawer.boundingBox();
     expect(box).not.toBeNull();
-    expect(Math.round(box!.x + box!.width)).toBe(1440);
     expect(Math.round(box!.y)).toBe(0);
     expect(Math.round(box!.height)).toBe(900);
   });
@@ -189,6 +193,8 @@ test.describe('responsive design', () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await gotoSchedule(page, app);
 
+    // Below md the search folds behind a Search toggle.
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
     const searchInput = page.getByLabel('Search festival artists');
     await expect(searchInput).toBeVisible();
     const box = await searchInput.boundingBox();

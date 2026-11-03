@@ -1,5 +1,5 @@
 import type { Festival, FestivalDay, FestivalSet, Priority } from '../types/domain';
-import type { WrapCard, WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
+import type { WrapCaughtSet, WrapCard, WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
 import { ConflictDetected, detectConflicts } from './conflicts';
 import { formatFestivalDateRange, timeToMinutes } from './format';
 import { isFestivalOver, resolveFestivalTimeZone } from './festivalTime';
@@ -48,7 +48,10 @@ export function selectSetsToRate(
     .map((x) => x.set);
 }
 
-export function summarizePlan(planned: WrapPlannedSet[]): {
+export function summarizePlan(
+  planned: WrapPlannedSet[],
+  extra: WrapCaughtSet[] = [],
+): {
   planned: number;
   mustSees: number;
   stages: number;
@@ -57,7 +60,11 @@ export function summarizePlan(planned: WrapPlannedSet[]): {
   clashes: ConflictDetected[];
 } {
   // Once the user marked any set, hours and stages count only the sets they saw (as the server's stats do).
-  const seen = anyCaughtMark(planned) ? planned.filter((s) => s.caught === true) : planned;
+  // Added sets (caught, not picked) count as seen.
+  const seen: Array<WrapPlannedSet | WrapCaughtSet> =
+    anyCaughtMark(planned) || extra.length > 0
+      ? [...planned.filter((s) => s.caught === true), ...extra.filter((s) => s.caught === true)]
+      : planned;
   let minutes = 0;
   for (const s of seen) {
     if (s.startTime && s.endTime) {
@@ -110,7 +117,8 @@ function distinctCount(values: Array<string | number | null>): number {
 
 export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
   const { planned, topSets, allRatings, stats, crew } = wrap;
-  const plan = summarizePlan(planned);
+  const extra = wrap.caughtExtra ?? [];
+  const plan = summarizePlan(planned, extra);
   const cards: WrapCard[] = [];
 
   const mustSees = planned.filter((s) => s.priority === 'must').sort(byDayThenStart);
@@ -170,11 +178,11 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
     });
   }
 
-  if (cards.length === 0) return [];
+  if (cards.length === 0 && !extra.some((s) => s.caught === true)) return [];
 
-  const everyone = [...planned, ...allRatings];
-  const hours = plan.planned > 0 ? plan.hours : stats.totalHours;
-  const stages = anyCaughtMark(planned) ? plan.stages : distinctCount(everyone.map((s) => s.stageId));
+  const everyone = [...planned, ...extra, ...allRatings];
+  const hours = plan.planned > 0 || extra.length > 0 ? plan.hours : stats.totalHours;
+  const stages = anyCaughtMark(planned) || extra.length > 0 ? plan.stages : distinctCount(everyone.map((s) => s.stageId));
   cards.push({
     kind: 'summary',
     kicker: 'YOUR FESTIVAL WRAP',

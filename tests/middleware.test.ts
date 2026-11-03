@@ -20,6 +20,7 @@ import request from 'supertest';
 import createAuditMiddleware from '../lib/audit-middleware.js';
 import { configureMiddleware, createIdempotencyMiddleware } from '../lib/middleware.js';
 import { sendError, ErrorCodes } from '../lib/response.js';
+import { createRequestHelpers } from '../lib/app-context/request-helpers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -29,7 +30,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
  * and the request-timeout block can be exercised as actually registered,
  * instead of via a hand-copied reimplementation of their logic.
  */
-function makeMiddlewareApp(overrides: { isAllowedOrigin?: (origin: string, host?: string) => boolean; config?: Record<string, any> } = {}) {
+function makeMiddlewareApp(overrides: { isAllowedOrigin?: (origin: string, host?: string) => boolean; config?: Record<string, any>; ctx?: Record<string, any> } = {}) {
   const app = express();
   const ctx = {
     express,
@@ -64,6 +65,7 @@ function makeMiddlewareApp(overrides: { isAllowedOrigin?: (origin: string, host?
     ErrorCodes,
     generateOpenAPISpec: () => ({}),
     stores: { auditLog: { insert: async () => {} } },
+    ...overrides.ctx,
   };
   const result = configureMiddleware(app as any, ctx as any);
   return { app, ...result };
@@ -511,6 +513,168 @@ describe('middleware: idempotency key logic', () => {
     assert.equal(executions, 2, 'duplicate must execute after the original disconnects');
     assert.equal(resB.body?.ok, true);
     assert.equal(resB.replayed, null, 'nothing to replay from a disconnected original');
+  });
+
+  function mkIdemRes() {
+    const res: any = {
+      statusCode: 200,
+      replayed: null,
+      body: null,
+      setHeader(k: string, v: string) { if (k === 'X-Idempotency-Replayed') res.replayed = v; },
+      status(s: number) { res.statusCode = s; return res; },
+      json(b: any) { res.body = b; return b; },
+      on() {},
+    };
+    return res;
+  }
+
+  it('two users on one IP with the same key both execute', async () => {
+    const users = ['u1', 'u2'];
+    const { middleware } = createIdempotencyMiddleware({
+      ttl: 5 * 60 * 1000,
+      maxEntries: 5000,
+      resolveUserId: async () => users.shift() ?? null,
+    });
+    const req = { method: 'POST', headers: { 'idempotency-key': 'POST:/crews/join:join-ABC' }, ip: '1.2.3.4' };
+    let executions = 0;
+    const res1 = mkIdemRes();
+    await middleware(req, res1, () => { executions += 1; res1.json({ joined: 'u1' }); });
+    const res2 = mkIdemRes();
+    await middleware(req, res2, () => { executions += 1; res2.json({ joined: 'u2' }); });
+    assert.equal(executions, 2);
+    assert.deepEqual(res1.body, { joined: 'u1' });
+    assert.deepEqual(res2.body, { joined: 'u2' });
+    assert.equal(res2.replayed, null);
+  });
+
+  it('one user on two IPs replays', async () => {
+    const { middleware } = createIdempotencyMiddleware({
+      ttl: 5 * 60 * 1000,
+      maxEntries: 5000,
+      resolveUserId: async () => 'u1',
+    });
+    let executions = 0;
+    const res1 = mkIdemRes();
+    await middleware({ method: 'POST', headers: { 'idempotency-key': 'k-ip' }, ip: '10.0.0.1' }, res1, () => {
+      executions += 1;
+      res1.json({ id: 'e1' });
+    });
+    const res2 = mkIdemRes();
+    await middleware({ method: 'POST', headers: { 'idempotency-key': 'k-ip' }, ip: '172.16.0.9' }, res2, () => {
+      executions += 1;
+      res2.json({ id: 'e2' });
+    });
+    assert.equal(executions, 1);
+    assert.equal(res2.replayed, 'true');
+    assert.deepEqual(res2.body, { id: 'e1' });
+  });
+
+  it('a 500 is not cached', () => {
+    const { middleware } = makeIdem();
+    const req = { method: 'POST', headers: { 'idempotency-key': 'k-500' }, ip: '1.2.3.4' };
+    let executions = 0;
+    const res1 = mkIdemRes();
+    res1.statusCode = 500;
+    middleware(req, res1, () => { executions += 1; res1.json({ error: 'boom' }); });
+    const res2 = mkIdemRes();
+    middleware(req, res2, () => { executions += 1; res2.json({ ok: true }); });
+    assert.equal(executions, 2);
+    assert.deepEqual(res2.body, { ok: true });
+    assert.equal(res2.replayed, null);
+  });
+
+  it('a waiting duplicate of a 500 runs itself', async () => {
+    const { middleware } = makeIdem();
+    const req = { method: 'POST', headers: { 'idempotency-key': 'k-500-dup' }, ip: '1.2.3.4' };
+    let executions = 0;
+    let finishA: any;
+    const resA = mkIdemRes();
+    middleware(req, resA, () => {
+      executions += 1;
+      finishA = () => resA.status(503).json({ error: 'unavailable' });
+    });
+    const resB = mkIdemRes();
+    middleware(req, resB, () => { executions += 1; resB.json({ ok: true, id: 'expense-1' }); });
+    assert.equal(executions, 1, 'B waits while A is in flight');
+
+    finishA();
+    await new Promise((r) => setImmediate(r));   // let B's waiter resolve
+    assert.equal(executions, 2, 'B executes after A failed with a 5xx');
+    assert.deepEqual(resB.body, { ok: true, id: 'expense-1' });
+    assert.equal(resB.replayed, null);
+  });
+
+  it('an entry older than ttl re-executes', async () => {
+    const { middleware } = createIdempotencyMiddleware({ ttl: 50, maxEntries: 5000 });
+    const req = { method: 'POST', headers: { 'idempotency-key': 'k-ttl' }, ip: '1.2.3.4' };
+    let executions = 0;
+    const res1 = mkIdemRes();
+    middleware(req, res1, () => { executions += 1; res1.json({ ok: 1 }); });
+    await new Promise((r) => setTimeout(r, 60));
+    const res2 = mkIdemRes();
+    middleware(req, res2, () => { executions += 1; res2.json({ ok: 2 }); });
+    assert.equal(executions, 2);
+    assert.equal(res2.replayed, null);
+  });
+
+  it('a resolver throw falls back to IP and still dedups', async () => {
+    const { middleware } = createIdempotencyMiddleware({
+      ttl: 5 * 60 * 1000,
+      maxEntries: 5000,
+      resolveUserId: async () => { throw new Error('db down'); },
+    });
+    const req = { method: 'POST', headers: { 'idempotency-key': 'k-throw' }, ip: '1.2.3.4' };
+    let executions = 0;
+    const res1 = mkIdemRes();
+    await middleware(req, res1, () => { executions += 1; res1.json({ id: 'e1' }); });
+    const res2 = mkIdemRes();
+    await middleware(req, res2, () => { executions += 1; res2.json({ id: 'e2' }); });
+    assert.equal(executions, 1);
+    assert.equal(res2.replayed, 'true');
+    assert.deepEqual(res2.body, { id: 'e1' });
+  });
+
+  it('the mount uses getRequestIp', async () => {
+    // T57 F1: under TRUST_PROXY, req.ip follows a forgeable X-Forwarded-For.
+    const config = { TRUST_PROXY: true, IDEMPOTENCY_TTL: 300_000, IDEMPOTENCY_MAX_ENTRIES: 5000 };
+    const { getRequestIp } = createRequestHelpers({ config, log: { warn() {} }, sendError, ErrorCodes });
+    const { app } = makeMiddlewareApp({ config, ctx: { getRequestIp } });
+    let executions = 0;
+    app.post('/api/v1/__idem__', (_req: any, res: any) => { executions += 1; res.json({ n: executions }); });
+
+    const send = (xff: string) =>
+      request(app)
+        .post('/api/v1/__idem__')
+        .set('Idempotency-Key', 'k-mount')
+        .set('cf-connecting-ip', '203.0.113.7')
+        .set('X-Forwarded-For', xff);
+    const first = await send('198.51.100.1');
+    const second = await send('198.51.100.2');
+    assert.equal(executions, 1);
+    assert.equal(second.headers['x-idempotency-replayed'], 'true');
+    assert.deepEqual(second.body, first.body);
+  });
+
+  it('the mount keys by the session user', async () => {
+    const sessions: Record<string, string> = { ['a'.repeat(64)]: 'u1', ['b'.repeat(64)]: 'u2' };
+    const { app } = makeMiddlewareApp({
+      config: { IDEMPOTENCY_TTL: 300_000, IDEMPOTENCY_MAX_ENTRIES: 5000, USER_SESSION_COOKIE: 'sid' },
+      ctx: {
+        resolveRequestToken: (req: any, header: string) => ({ token: req.get(header) || null, source: 'header' }),
+        validateUserSession: async (token: string) => (sessions[token] ? { userId: sessions[token] } : null),
+      },
+    });
+    let executions = 0;
+    app.post('/api/v1/__idem__', (_req: any, res: any) => { executions += 1; res.json({ n: executions }); });
+
+    const send = (token: string) =>
+      request(app).post('/api/v1/__idem__').set('Idempotency-Key', 'k-user').set('X-User-Token', token);
+    await send('a'.repeat(64));
+    await send('b'.repeat(64));
+    const again = await send('a'.repeat(64));
+    assert.equal(executions, 2, 'two users on one IP each execute');
+    assert.equal(again.headers['x-idempotency-replayed'], 'true');
+    assert.deepEqual(again.body, { n: 1 });
   });
 });
 
