@@ -459,18 +459,20 @@ describe('profiles: reminders write path', { concurrency: 1 }, () => {
     assert.deepEqual(mine.reminders, { [setId]: 15 });
   });
 
-  test('rejects reminder referencing an unknown set with 400', async () => {
+  test('drops reminders for sets no longer in the lineup instead of rejecting the save', async () => {
     const server = await startServer();
     servers.push(server);
     const user = await registerUser(server, `rem-badset-${Date.now()}`);
     const profile = await joinFestival(server, user.token, server.festival.id);
+    const setId = server.festival.days[0]!.sets[0]!.id;
 
     const res = await server.request
       .put(`/api/v1/profiles/${profile.id}`)
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ reminders: { 'set-does-not-exist': 15 } });
-    assert.equal(res.status, 400);
+      .send({ reminders: { 'set-does-not-exist': 15, [setId]: 10 } });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data.reminders, { [setId]: 10 });
   });
 
   test('enforces the 200-reminder cap with 400', async () => {

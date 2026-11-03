@@ -85,12 +85,24 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         const membership = await stores.crews.getMember(crewId, userId);
         if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
-        // Precise per-user throttle (1 per 120s). Defense-in-depth on top of the
-        // coarse Redis-backed rateLimit() middleware above.
-        const limit = SOS_RAISE_LIMIT.consume(userId);
+        // Precise per-user-per-crew throttle (1 per 120s), reset when the SOS is
+        // cleared. Defense-in-depth on top of the coarse Redis-backed rateLimit()
+        // middleware above.
+        // The bucket is per PM2 worker, so a clear handled by another worker
+        // cannot reset it; Redis is the cluster-wide source of truth.
+        if ((await isSosActive(redis, crewId, userId)) === false) {
+          SOS_RAISE_LIMIT.release(`${crewId}:${userId}`);
+        }
+        const limit = SOS_RAISE_LIMIT.consume(`${crewId}:${userId}`);
         if (!limit.allowed) {
-          res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000))));
-          return sendError(res, 429, 'SOS already raised — wait before raising again', ErrorCodes.RATE_LIMITED);
+          const waitSeconds = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+          res.setHeader('Retry-After', String(waitSeconds));
+          return sendError(
+            res,
+            429,
+            `You just sent an SOS. Wait ${waitSeconds} seconds before sending another.`,
+            ErrorCodes.RATE_LIMITED,
+          );
         }
 
         // L1: run the SOS message through sanitizeString (NFC + strip control/
@@ -164,6 +176,8 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
           return sendError(res, 409, 'No active SOS to clear', ErrorCodes.ALREADY_EXISTS);
         }
         await clearSosSeen(redis, crewId, raiserId);
+        // Cleared SOS: the raiser may raise again right away (e.g. a false alarm).
+        SOS_RAISE_LIMIT.release(`${crewId}:${raiserId}`);
 
         // user_id = the clearer; detail = the raiser's username when someone
         // else cleared it, null for a self-clear.

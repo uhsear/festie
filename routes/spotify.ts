@@ -89,24 +89,30 @@ export default function createSpotifyRoutes(deps: any) {
         return sendSuccess(res, r);
       }
 
-      const token = await getToken(config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET);
-
       // Use the artist's top tracks by stored id, never a name search. Return a track
       // only when it lists this artist id; otherwise fall back to the artist embed.
-      const topRes = await fetch(
-        'https://api.spotify.com/v1/artists/' + artistId + '/top-tracks?market=US',
-        { headers: { 'Authorization': 'Bearer ' + token } }
-      );
+      // Upstream failure (missing credentials, token or API error) must not 500:
+      // the artist embed needs no API call, so serve it uncached and retry next time.
+      try {
+        const token = await getToken(config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET);
+        const topRes = await fetch(
+          'https://api.spotify.com/v1/artists/' + artistId + '/top-tracks?market=US',
+          { headers: { 'Authorization': 'Bearer ' + token } }
+        );
 
-      if (topRes.ok) {
-        const topData = await topRes.json();
-        const tracks = Array.isArray(topData.tracks) ? topData.tracks : [];
-        const track = tracks.find((t: any) => t.artists?.some((a: any) => a.id === artistId));
-        if (track) {
-          const r = trackEmbed(track, artistId, artistName!);
-          setCachedPreview(setId, r);
-          return sendSuccess(res, r);
+        if (topRes.ok) {
+          const topData = await topRes.json();
+          const tracks = Array.isArray(topData.tracks) ? topData.tracks : [];
+          const track = tracks.find((t: any) => t.artists?.some((a: any) => a.id === artistId));
+          if (track) {
+            const r = trackEmbed(track, artistId, artistName!);
+            setCachedPreview(setId, r);
+            return sendSuccess(res, r);
+          }
         }
+      } catch (upstreamErr: any) {
+        log.warn('spotify preview upstream failed, serving artist embed', { error: upstreamErr.message, setId });
+        return sendSuccess(res, artistEmbed(artistId, artistName!));
       }
 
       // Fallback: artist embed
@@ -114,7 +120,7 @@ export default function createSpotifyRoutes(deps: any) {
       setCachedPreview(setId, r);
       return sendSuccess(res, r);
     } catch (err: any) {
-      log.error('spotify preview error', { error: err.message, setId: req.validatedParams?.setId });
+      log.error('spotify preview error', { error: err.message, setId: req.params?.setId });
       return sendError(res, 500, 'Failed to fetch preview', ErrorCodes.INTERNAL_ERROR);
     }
   });

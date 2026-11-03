@@ -58,7 +58,7 @@ describe('sosErrorMessage', () => {
   });
 
   it('429 on send', () => {
-    expect(sosErrorMessage(err(429), 'send')).toBe('Your SOS is already active. Your crew can see it.');
+    expect(sosErrorMessage(err(429), 'send')).toBe('You just sent an SOS. Wait a moment before sending another.');
   });
 
   it('503', () => {

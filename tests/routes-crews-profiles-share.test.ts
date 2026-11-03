@@ -1706,7 +1706,8 @@ describe('routes/profiles.js', () => {
       assert.equal(res.status, 400);
     });
 
-    test('returns 400 when reminders reference unknown set', async () => {
+    test('drops reminders that reference an unknown set', async () => {
+      const update = mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' }));
       const { app } = await buildProfileApp({
         normalizeReminderPayload: mock.fn((r) => ({ value: r })),
         stores: {
@@ -1714,13 +1715,15 @@ describe('routes/profiles.js', () => {
           profiles: {
             ...makeProfileDeps().stores.profiles,
             getById: mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' })),
+            update,
           },
         },
       });
       const res = await request(app)
         .put('/profiles/p1')
         .send({ reminders: { 'unknown-set': 5 } });
-      assert.equal(res.status, 400);
+      assert.equal(res.status, 200);
+      assert.deepEqual(((update.mock.calls[0] as any).arguments as any[])[1].reminders, {});
     });
 
     test('returns 409 on version mismatch (If-Match)', async () => {

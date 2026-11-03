@@ -394,6 +394,31 @@ describe('routes/crew-sos.ts — POST /:crewId/sos', () => {
     assert.equal(second.status, 429);
     assert.equal(second.body.error.code, 'RATE_LIMITED');
     assert.ok(second.headers['retry-after'], 'sets a Retry-After header');
+    assert.match(second.body.error.message, /^You just sent an SOS\. Wait \d+ seconds before sending another\.$/);
+  });
+
+  test('throttle is per crew: raising in another crew is allowed', async () => {
+    const { app } = await buildApp();
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+    assert.equal((await request(app).post('/crew-2/sos').send({})).status, 200);
+  });
+
+  test('clearing the SOS resets the throttle so it can be raised again', async () => {
+    const { app } = await buildApp();
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 429);
+    assert.equal((await request(app).post('/crew-1/sos/clear').send({})).status, 200);
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+  });
+
+  test('re-raise is allowed when Redis shows no active SOS, even if this worker never saw the clear', async () => {
+    const redis = makeFakeRedis();
+    const { app } = await buildApp({ redis });
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 429);
+    // Another PM2 worker handled the clear: Redis is empty, this worker's bucket is still full.
+    redis.hashes.clear();
+    assert.equal((await request(app).post('/crew-1/sos').send({})).status, 200);
   });
 
   // ── Feature flag ────────────────────────────────────────────────────

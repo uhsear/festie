@@ -590,6 +590,9 @@ function _createSocketEventLimiter(name: string, max: number, windowMs: number) 
       }
       return this.consume(userId);
     },
+    release(key: any) {
+      buckets.delete(key);
+    },
     _reset() {
       buckets.clear();
     },

@@ -171,8 +171,9 @@ export default function createProfilesRoutes(deps: any) {
       if (nextNotes !== undefined && Object.keys(nextNotes).some((setId) => !validSetIds.has(setId))) {
         return sendError(res, 400, 'Note references an unknown set', ErrorCodes.INVALID_INPUT);
       }
-      if (nextReminders !== undefined && Object.keys(nextReminders).some((setId) => !validSetIds.has(setId))) {
-        return sendError(res, 400, 'Reminder references an unknown set', ErrorCodes.INVALID_INPUT);
+      // Drop reminders for sets removed from the lineup; rejecting would make every later save fail.
+      if (nextReminders !== undefined) {
+        nextReminders = Object.fromEntries(Object.entries(nextReminders).filter(([setId]) => validSetIds.has(setId)));
       }
 
       // Build update fields
