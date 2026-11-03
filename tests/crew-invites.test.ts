@@ -554,8 +554,8 @@ describe('routes/crew-invites.js — POST /:crewId/invite', () => {
     const res = await request(app).post('/crew-1/invite');
 
     assert.equal(res.status, 200);
-    assert.deepEqual(ioObj.to.mock.calls[0].arguments, ['crew:crew-1']);
-    const [event, payload] = ioObj._emit.mock.calls[0].arguments as any[];
+    assert.deepEqual(ioObj.to.mock.calls[0]?.arguments, ['crew:crew-1']);
+    const [event, payload] = (ioObj._emit.mock.calls[0]?.arguments ?? []) as any[];
     assert.equal(event, 'crew:updated');
     assert.equal(payload.inviteCode, undefined);
   });
