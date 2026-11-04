@@ -17,7 +17,6 @@
 
 import { useAuthStore } from '../stores/authStore';
 import { useCrewStore } from '../stores/crewStore';
-import { useLiveLocationStore } from '../stores/liveLocationStore';
 
 /** The signed-in user id, or null when signed out / not yet hydrated. */
 function currentUserId(): string | null {
@@ -41,35 +40,7 @@ function readCrewName(crewId: string): string | null {
  * and expenses from local storage.
  */
 export function applyCrewAccessRevoked(crewId: string): void {
-  if (!crewId) return;
-  useCrewStore.setState((state) => {
-    const wasActive = state.activeCrew?.id === crewId;
-    const base = { crews: state.crews.filter((c) => c.id !== crewId) };
-    if (!wasActive) return base;
-    return {
-      ...base,
-      activeCrew: null,
-      crewMembers: [],
-      polls: [],
-      meetingPoints: [],
-      packingItems: [],
-      rideOffers: [],
-      crewStatuses: [],
-      expenses: [],
-      expenseBalances: [],
-      settlements: [],
-      activity: [],
-      activityNextCursor: null,
-      crewOverlap: {},
-      _cachedAt: null,
-      _cachedCrewId: null,
-    };
-  });
-  // Ephemeral peer markers + SOS for that crew (setActiveCrew(null) resets them
-  // and any in-flight sharing).
-  if (useLiveLocationStore.getState().crewId === crewId) {
-    useLiveLocationStore.getState().setActiveCrew(null);
-  }
+  useCrewStore.getState().forgetCrew(crewId);
 }
 
 /**

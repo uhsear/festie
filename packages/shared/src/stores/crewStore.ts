@@ -7,6 +7,7 @@ import { getStorage } from '../platform/storage';
 import { writeOutcomeOf, type WriteOutcome } from '../utils/crewWrites';
 import { crewCopy } from '../utils/crewManage';
 import { useAuthStore } from './authStore';
+import { useLiveLocationStore } from './liveLocationStore';
 import {
   Crew,
   CrewMember,
@@ -154,6 +155,8 @@ export interface CrewActions {
   // CrewInviteBar. Online-only (a fresh crew can't be created offline).
   reformCrew: (sourceCrewId: string, targetFestivalId: string) => Promise<ReformCrewResponse>;
   deleteCrew: (crewId: string) => Promise<void>;
+  // Drop a crew I can no longer reach (deleted, kicked, revoked) from local state.
+  forgetCrew: (crewId: string) => void;
   loadOverlap: (crewId: string, festivalId: string) => Promise<void>;
   forceAddMember: (crewId: string, userId: string) => Promise<void>;
   // Admin add by exact username. Returns the matched username.
@@ -377,9 +380,49 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
       // Fire and forget: a failed days read must not fail the crew load.
       void Promise.resolve(get().loadCrewDays(crewId)).catch(() => {});
     } catch (err) {
+      // 404/403: the crew was deleted or I lost access while this device missed
+      // the socket event. Forget the saved copy instead of retrying it forever.
+      const status = (err as { status?: number } | null)?.status;
+      if (status === 404 || status === 403) {
+        get().forgetCrew(crewId);
+        set({ crewLoading: false });
+        return;
+      }
       const message = mapErrorToUserMessage(err, 'Failed to load crew');
       set({ error: message, crewLoading: false });
       throw err;
+    }
+  },
+
+  forgetCrew: (crewId: string) => {
+    if (!crewId) return;
+    set((state) => {
+      const base = { crews: state.crews.filter((c) => c.id !== crewId) };
+      if (state.activeCrew?.id !== crewId && state._cachedCrewId !== crewId) return base;
+      // _cachedAt / _cachedCrewId are persisted: clearing them stops a cold start
+      // rehydrating the lost crew's meeting points, polls and expenses.
+      return {
+        ...base,
+        activeCrew: null,
+        crewMembers: [],
+        polls: [],
+        meetingPoints: [],
+        packingItems: [],
+        rideOffers: [],
+        crewStatuses: [],
+        expenses: [],
+        expenseBalances: [],
+        settlements: [],
+        activity: [],
+        activityNextCursor: null,
+        crewOverlap: {},
+        error: null,
+        _cachedAt: null,
+        _cachedCrewId: null,
+      };
+    });
+    if (useLiveLocationStore.getState().crewId === crewId) {
+      useLiveLocationStore.getState().setActiveCrew(null);
     }
   },
 
