@@ -94,17 +94,17 @@ export default function MyDayList({ myDay, onOpenSet, timeZone }: MyDayListProps
     <div>
       {myDay.sections.map((section) => (
         <section key={section.part} aria-label={section.title} className="mb-4">
-          <h3 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
+          <h2 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
             {section.title}
-          </h3>
+          </h2>
           {section.items.map(renderItem)}
         </section>
       ))}
       {myDay.unscheduled.length > 0 && (
         <section aria-label={COPY.myDay.unscheduled} className="mb-4">
-          <h3 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
+          <h2 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
             {COPY.myDay.unscheduled}
-          </h3>
+          </h2>
           {myDay.unscheduled.map((set) => (
             <button
               key={set.id}

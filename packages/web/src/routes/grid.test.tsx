@@ -345,6 +345,12 @@ describe('GridView', () => {
     expect(screen.getByRole('button', { name: 'Zoom in' })).toBeInTheDocument();
   });
 
+  it('lets the legend and toolbar scroll away so the sticky stage header row keeps the top edge', () => {
+    setFilters(timedDay);
+    render(<GridView />);
+    expect(screen.getByTestId('timeline-legend').closest('.sticky')).toBeNull();
+  });
+
   it('renders the grid region with the "Schedule grid" label', () => {
     setFilters(timedDay);
     render(<GridView />);

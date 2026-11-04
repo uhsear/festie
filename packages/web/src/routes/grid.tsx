@@ -293,8 +293,8 @@ function GridViewInner() {
           handleBeamScroll();
         }}
         className="timeline-scroll relative overflow-auto h-full [-webkit-overflow-scrolling:touch] overscroll-contain [scroll-snap-type:both_proximity]"
-        // shortcut: 96px approximates the sticky toolbar + stage header; measure it if snapped hours land under the header
-        style={{ scrollPaddingLeft: gutterW, scrollPaddingTop: 96 }}
+        // shortcut: 40px approximates the two-line sticky stage header; measure it if snapped hours land under it
+        style={{ scrollPaddingLeft: gutterW, scrollPaddingTop: 40 }}
         role="region"
         aria-label={COPY.grid.regionLabel}
         data-scroll-sentinel
@@ -304,7 +304,8 @@ function GridViewInner() {
             scroll position in the left gutter. */}
         <div className="timeline-content relative min-h-full max-w-[1440px] mx-auto">
           <div className="timeline-beam" aria-hidden="true" />
-          <div className="sticky top-0 z-20 bg-bg-sticky shadow-sticky [backdrop-filter:saturate(140%)_blur(8px)]">
+          {/* Not sticky: it scrolls away so the stage header row owns the top edge (stage names stay visible). */}
+          <div className="bg-bg-sticky">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <TimelineLegend />
               <div className="flex items-center gap-1.5 flex-wrap pr-3 py-0.5">

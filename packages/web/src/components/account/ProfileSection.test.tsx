@@ -54,6 +54,11 @@ describe('ProfileSection — rendering', () => {
     expect(input.value).toBe('Ada Lovelace');
   });
 
+  it('exposes the display-name input by its accessible name', () => {
+    render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
+    expect(screen.getByLabelText('Display name')).toBeInTheDocument();
+  });
+
   it('shows the read-only @username and the immutable hint', () => {
     render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
     expect(screen.getByText('@ada')).toBeInTheDocument();
