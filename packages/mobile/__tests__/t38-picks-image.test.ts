@@ -36,7 +36,7 @@ describe('T38 mobile Save image', () => {
     expect(screen).toContain("'Save without crew'");
     expect(screen).toContain("const OPTIONS_KEY = 'festie.lockscreen.options.v1';");
     // Mode and phone size are never stored.
-    expect(screen).toContain('JSON.stringify({ theme, lockStyle, priorities, tallClock })');
+    expect(screen).toContain('JSON.stringify({ theme, lockStyle, priorities, clock })');
     for (const text of [
       'Set it as your wallpaper',
       'Tap Share, then Use as Wallpaper.',
@@ -45,13 +45,27 @@ describe('T38 mobile Save image', () => {
       'You only need to redo this if set times change.',
       'How to set it as wallpaper',
       'Settings › Notifications › Display As › Count.',
-      'Leave room for a big clock',
+      'Clock + widgets',
+      'Preview only. The clock and buttons are not in your saved image.',
+      'Fit on 1 image: hide ${maybeOnDay} Maybe',
+      'Only sets still to come',
+      'Times as of ${clockTime(fetchedAt)}',
+      '(estimated)',
       'You have no picks yet.',
       'Show full lineup',
       'Showing ${shownPicks} of ${timedPicks} picks',
     ]) {
       expect(screen).toContain(text);
     }
+  });
+
+  it('stamps the image at tap time, records it for the out-of-date banner and keeps the overlay out of the capture', () => {
+    expect(screen).toContain("const fresh = shape === 'lockscreen' ? lockFor(lockDay) : null;");
+    expect(screen).toContain('recordSaved(fresh)');
+    expect(screen).toContain('lockscreenSnapshot(');
+    const capture = screen.slice(screen.indexOf('styles.offscreen'));
+    expect(capture.slice(0, capture.indexOf('</ScrollView>'))).not.toContain('LockscreenOverlay');
+    expect(picks).toContain('<LockscreenStaleBanner />');
   });
 
   it('never tells Android users to tap Save Image', () => {

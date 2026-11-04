@@ -43,7 +43,7 @@ const optionClass = (active: boolean) =>
  */
 export default function ScheduleImageDialog({ initialMode }: { initialMode?: LockscreenMode } = {}) {
   const [open, setOpen] = useState(false);
-  const [format, setFormat] = useState<ScheduleImageFormat>('story');
+  const [format, setFormat] = useState<ScheduleImageFormat>('lockscreen');
   const [dayChoice, setDayChoice] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [printBusy, setPrintBusy] = useState(false);
@@ -154,7 +154,7 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
         title="Save your picks as an image"
         description="One day per image. If your picks don't all fit, Must See picks come first."
       >
-        {model && dayIndex !== null ? (
+        {format === 'lockscreen' || (model && dayIndex !== null) ? (
           <div className="space-y-4">
             <span id="schedule-image-shape" className="block text-sm text-text-secondary">
               Shape
@@ -174,7 +174,7 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
             </div>
             {format === 'lockscreen' ? (
               <LockscreenPanel initialMode="picks" />
-            ) : (
+            ) : model && dayIndex !== null ? (
               <>
               <label className="flex items-center gap-2 text-sm text-text-secondary">
                 Day
@@ -222,6 +222,10 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
                 </Button>
               )}
               </>
+            ) : (
+              <p className="text-sm text-text-secondary">
+                None of your picks have a set time yet, so there is nothing to draw.
+              </p>
             )}
           </div>
         ) : (
