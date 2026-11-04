@@ -132,4 +132,16 @@ export const FESTIE_RUNTIME_CACHING: RuntimeCachingRule[] = [
     handler: 'CacheFirst',
     options: { cacheName: OFFLINE_MAP_CACHE, rangeRequests: true, cacheableResponse: { statuses: [200] } },
   },
+  {
+    // A festival's site-plan overlay image (immutable, content-addressed), so the
+    // official festival map still draws over the basemap offline.
+    urlPattern: ({ url, request }: { url: URL; request: Request }) =>
+      request.method === 'GET' && url.pathname.startsWith('/uploads/siteplans/'),
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'siteplan-cache',
+      expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 30 },
+      cacheableResponse: { statuses: [200] },
+    },
+  },
 ];

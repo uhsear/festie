@@ -228,3 +228,28 @@ describe('vendored runtime', () => {
     }
   });
 });
+
+describe('map document — saved archive embedded as bytes', () => {
+  const url = 'file:///cache/festie-basemaps/abc.pmtiles';
+  const html = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'stage', { url, base64: 'UE1UaWxlcw==' });
+
+  it('carries the bytes and serves them through the pmtiles protocol', () => {
+    expect(html).toContain('<script id="festie-basemap" type="text/plain">UE1UaWxlcw==</script>');
+    expect(html).toContain(`var INLINE_ARCHIVE_URL = "${url}";`);
+    expect(html).toContain('var USE_PMTILES = true;');
+  });
+
+  it('widens nothing: no file: scheme and no remote origin', () => {
+    const csp = cspOf(html);
+    for (const value of Object.values(csp)) expect(value).not.toContain('file:');
+    expect(csp['connect-src']).not.toContain('https://festie.us');
+  });
+
+  it('cannot be broken out of by a hostile payload', () => {
+    const hostile = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'stage', {
+      url,
+      base64: 'AA==</script><script>alert(1)</script>',
+    });
+    expect(hostile).not.toContain('<script>alert(1)');
+  });
+});

@@ -55,7 +55,7 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
 import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '../lib/webviewBridge';
 import type { AuthoringMode } from '../lib/webviewBridge';
-import { ensureBasemapCached, basemapCacheDir } from '../lib/basemapCache';
+import { ensureBasemapCached, readCachedBase64 } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
 import { peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
@@ -156,22 +156,16 @@ const MAP_ORIGIN_WHITELIST = [
  * active festival needs and no wider; with no offline basemap it's null and the
  * guard is byte-for-byte the prior behaviour.
  *
- * Phase 3B: `allowFile` permits the `file://` scheme — and ONLY when true (a
- * local cached archive backs THIS festival's map). The WebView's
- * `allowingReadAccessToURL` is independently scoped to the basemaps cache dir, so
- * even with the scheme allowed here, reads are confined to that one folder. With
- * no local cache `allowFile` is false and `file://` is rejected like any other
- * off-origin navigation (default-deny preserved).
+ * `file://` is always rejected: a saved archive reaches the document as bytes.
  */
-function makeShouldStartLoad(extraHost: string | string[] | null, allowFile: boolean = false) {
+function makeShouldStartLoad(extraHost: string | string[] | null) {
   return function onShouldStartLoadWithRequest(req: ShouldStartLoadRequest): boolean {
     const url = req.url || '';
     // The inline HTML document itself (no real origin) + data URIs MapLibre uses.
     if (url === 'about:blank' || url.startsWith('about:') || url.startsWith('data:') || url.startsWith('blob:')) {
       return true;
     }
-    // Local cached PMTiles archive (Phase 3B): only when a local basemap is active.
-    if (url.startsWith('file://')) return allowFile;
+    if (url.startsWith('file://')) return false;
     let host = '';
     try {
       host = new URL(url).hostname;
@@ -635,12 +629,16 @@ export default function OfflineMap({
   // We store the cached result TAGGED with the URL it was cached for; a switch to
   // a different festival is handled by comparing that tag against the current URL
   // during render (below) — no synchronous reset-in-effect needed.
-  const [cachedBasemap, setCachedBasemap] = useState<{ url: string; uri: string } | null>(null);
+  // The document gets the archive's BYTES, not its file:// URI: WebKit's fetch
+  // rejects file://, so on iOS every tile failed and the map drew pins on a blank
+  // ground. Keyed by the local URI, which the style's pmtiles:// source names.
+  const [cachedBasemap, setCachedBasemap] = useState<{ url: string; uri: string; base64: string } | null>(null);
   useEffect(() => {
     let cancelled = false;
     if (!remotePmtilesUrl) return;
-    void ensureBasemapCached(remotePmtilesUrl).then((uri) => {
-      if (!cancelled && uri) setCachedBasemap({ url: remotePmtilesUrl, uri });
+    void ensureBasemapCached(remotePmtilesUrl).then(async (uri) => {
+      const base64 = uri ? await readCachedBase64(remotePmtilesUrl) : null;
+      if (!cancelled && uri && base64) setCachedBasemap({ url: remotePmtilesUrl, uri, base64 });
     });
     return () => {
       cancelled = true;
@@ -651,8 +649,9 @@ export default function OfflineMap({
   // it was cached for the CURRENTLY configured URL (so a stale file from another
   // festival never leaks across); else the remote https URL (Phase 3A); else no
   // offline basemap. Derived during render — no effect/setState churn.
-  const localBasemapUri =
-    cachedBasemap && remotePmtilesUrl && cachedBasemap.url === remotePmtilesUrl ? cachedBasemap.uri : null;
+  const localArchive =
+    cachedBasemap && remotePmtilesUrl && cachedBasemap.url === remotePmtilesUrl ? cachedBasemap : null;
+  const localBasemapUri = localArchive?.uri ?? null;
   const usingLocalBasemap = localBasemapUri != null;
 
   // Can this map actually draw a BASEMAP right now? The MapLibre runtime is
@@ -676,8 +675,8 @@ export default function OfflineMap({
   }, [usingLocalBasemap, localBasemapUri, basemapAttribution, festival, theme]);
 
   // The remote host is permitted in the CSP/allowlist ONLY while we're still
-  // reading the remote archive. Once the local file is in use, no remote origin
-  // is needed (and isn't added) — the map reads purely from file://.
+  // reading the remote archive. Once the local copy is in use, no remote origin
+  // is needed (and isn't added) — the map reads the embedded bytes.
   const offlineBasemapHost = usingLocalBasemap ? null : remoteBasemapHost;
 
   // Phase 4B: the host of the configured site-plan image, if any. Threaded into
@@ -697,54 +696,35 @@ export default function OfflineMap({
   // basemap style, and the site-plan image host (for the CSP) — so it rebuilds
   // only when those change (pins/zones/siteplan data flow in via injectJavaScript).
   const html = useMemo(
-    () => buildMapHtml(center, mapStyle, offlineBasemapHost, usingLocalBasemap, siteplanImageHost, theme),
-    [center, mapStyle, offlineBasemapHost, usingLocalBasemap, siteplanImageHost, theme],
+    () =>
+      buildMapHtml(
+        center,
+        mapStyle,
+        offlineBasemapHost,
+        false,
+        siteplanImageHost,
+        theme,
+        localArchive ? { url: localArchive.uri, base64: localArchive.base64 } : null,
+      ),
+    [center, mapStyle, offlineBasemapHost, siteplanImageHost, theme, localArchive],
   );
 
   // Navigation guard + origin whitelist, widened by EXACTLY the festival's
-  // PMTiles host (remote mode) and/or the site-plan image host, OR the file://
-  // scheme (local-cache mode) — default-deny preserved; only configured origins
-  // are ever added.
+  // PMTiles host (remote mode) and/or the site-plan image host — default-deny
+  // preserved; only configured origins are ever added. The WebView never needs
+  // file access: a saved archive arrives as bytes inside the document.
   const extraHosts = useMemo(
     () => [offlineBasemapHost, siteplanImageHost].filter((h): h is string => !!h),
     [offlineBasemapHost, siteplanImageHost],
   );
-  const shouldStartLoad = useMemo(
-    () => makeShouldStartLoad(extraHosts, usingLocalBasemap),
-    [extraHosts, usingLocalBasemap],
-  );
+  const shouldStartLoad = useMemo(() => makeShouldStartLoad(extraHosts), [extraHosts]);
   const originWhitelist = useMemo(() => {
-    const base = usingLocalBasemap ? [...MAP_ORIGIN_WHITELIST, 'file://'] : [...MAP_ORIGIN_WHITELIST];
+    const base = [...MAP_ORIGIN_WHITELIST];
     for (const h of extraHosts) base.push(`https://${h}`);
     return base;
-  }, [extraHosts, usingLocalBasemap]);
+  }, [extraHosts]);
 
-  // Scope native file access to EXACTLY the basemaps cache dir (and only when a
-  // local archive is active). `allowingReadAccessToURL` (iOS) confines reads to
-  // this subtree; `allowFileAccess` (Android) gates file:// at all. Both are off
-  // unless a local basemap is in use — so the no-basemap + remote paths keep the
-  // WebView with no filesystem access whatsoever (default-deny preserved).
-  const basemapCacheDirUri = useMemo(() => {
-    if (!usingLocalBasemap) return undefined;
-    try {
-      return basemapCacheDir().uri;
-    } catch {
-      return undefined;
-    }
-  }, [usingLocalBasemap]);
-
-  // In local-cache mode, give the inline document a `file://` ORIGIN (via baseUrl)
-  // that matches the cache dir, so the pmtiles client's same-origin `file://`
-  // Range fetch of the archive succeeds under the standard `allowFileAccess` —
-  // WITHOUT enabling the much broader allowUniversalAccessFromFileURLs. With no
-  // local basemap, baseUrl is undefined and the doc loads at about:blank exactly
-  // as before (online + remote-basemap paths unchanged). If the local read still
-  // fails on some platform, map.on('error') falls us back to the honest list — a
-  // blank map is never shown and the online path is never regressed.
-  const source = useMemo(
-    () => (usingLocalBasemap && basemapCacheDirUri ? { html, baseUrl: basemapCacheDirUri } : { html }),
-    [html, usingLocalBasemap, basemapCacheDirUri],
-  );
+  const source = useMemo(() => ({ html }), [html]);
 
   // 'loading' → WebView mounted, waiting for MapLibre; 'map' → interactive map up;
   // 'fallback' → CDN/offline failure, render the honest list instead. Start in
@@ -956,7 +936,27 @@ export default function OfflineMap({
   // up and whenever it changes. A null payload tears the layer down. The image
   // URL is config-derived (https, host already in the CSP); same hardened
   // serializer. Independent of every other layer.
-  const siteplanJson = useMemo(() => safeJsonForScript(siteplanImageSource(siteplan)), [siteplan]);
+  // Offline, the https image cannot load, so a saved copy goes in as a data: URL
+  // (img-src already allows data:).
+  const siteplanUrl = siteplan?.imageUrl ?? null;
+  const [cachedSiteplan, setCachedSiteplan] = useState<{ url: string; dataUrl: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!siteplanUrl) return;
+    void ensureBasemapCached(siteplanUrl).then(async (uri) => {
+      const base64 = uri ? await readCachedBase64(siteplanUrl) : null;
+      const mime = /\.png$/i.test(siteplanUrl) ? 'image/png' : /\.jpe?g$/i.test(siteplanUrl) ? 'image/jpeg' : 'image/webp';
+      if (!cancelled && base64) setCachedSiteplan({ url: siteplanUrl, dataUrl: `data:${mime};base64,${base64}` });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [siteplanUrl]);
+  const siteplanJson = useMemo(() => {
+    const src = siteplanImageSource(siteplan);
+    const local = src && cachedSiteplan?.url === src.url ? cachedSiteplan.dataUrl : null;
+    return safeJsonForScript(src && local ? { ...src, url: local } : src);
+  }, [siteplan, cachedSiteplan]);
   useEffect(() => {
     if (phase !== 'map' || !webRef.current) return;
     webRef.current.injectJavaScript(`window.__festieSetSiteplan && window.__festieSetSiteplan(${siteplanJson}); true;`);
@@ -1261,16 +1261,6 @@ export default function OfflineMap({
         javaScriptEnabled
         domStorageEnabled
         startInLoadingState={false}
-        // Phase 3B: native file access for the LOCAL cached PMTiles archive only.
-        // `allowFileAccess` (Android) is enabled ONLY when a local basemap is in
-        // use; `allowingReadAccessToURL` (iOS) confines reads to the basemaps cache
-        // dir. We deliberately leave allowFileAccessFromFileURLs /
-        // allowUniversalAccessFromFileURLs at their secure defaults (off): the doc
-        // is an about:blank inline page reading file:// via pmtiles fetch under the
-        // CSP, which does not require cross-file-origin access. With no local
-        // basemap both props are off and the WebView has zero filesystem access.
-        allowFileAccess={usingLocalBasemap}
-        allowingReadAccessToURL={basemapCacheDirUri}
       />
       {phase === 'loading' ? (
         <View style={styles.loadingOverlay} pointerEvents="none">

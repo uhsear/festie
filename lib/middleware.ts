@@ -250,6 +250,18 @@ function configureMiddleware(app: Application, ctx: any) {
     next();
   });
 
+  // Basemap archives are public, credential-free files. The phone map reads them
+  // from an opaque origin, and WebKit preflights its Range reads; the CORS gate
+  // below refuses any preflight from an unlisted origin, so answer it here.
+  app.use('/uploads/basemaps', (req: any, res: any, next: any) => {
+    if (req.method !== 'OPTIONS') return next();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    return res.status(204).end();
+  });
+
   // ── CORS ──────────────────────────────────────────────────────────────
   app.use((req: any, res: any, next: any) => {
     const origin = req.headers.origin;
@@ -360,6 +372,10 @@ function configureMiddleware(app: Application, ctx: any) {
         // byte range, not by content type, but set an explicit type + nosniff.
         res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('Accept-Ranges', 'bytes');
+        // no-transform stops Cloudflare re-compressing the (already compressed)
+        // archive. A re-encoded body drops Content-Length and changes the byte
+        // count, which the app's download check compares against.
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable, no-transform');
         res.setHeader('X-Content-Type-Options', 'nosniff');
         // The archive is map geometry only — no script/style/frame surface.
         res.setHeader(

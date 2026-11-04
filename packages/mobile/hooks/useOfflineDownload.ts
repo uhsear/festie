@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { useOfflineReadinessStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { SectionReadiness } from '@festie/shared/stores';
-import { buildOfflineSteps, summarizeOffline, festivalPhase, hasOfflineBasemap } from '@festie/shared/utils';
+import { buildOfflineSteps, summarizeOffline, festivalPhase, hasOfflineBasemap, extractSiteplan } from '@festie/shared/utils';
 import { basemapCacheInfo, ensureBasemapCached, subscribeBasemapCache } from '../lib/basemapCache';
 
 const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
@@ -23,7 +23,7 @@ function sectionFromDisk(pmtilesUrl: string | null | undefined): SectionReadines
   return info.cached ? { status: 'ready', syncedAt: info.syncedAt } : IDLE;
 }
 
-function useOfflineMapSection(pmtilesUrl: string | null) {
+function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | null) {
   // Seed from disk during the first render rather than setting state inside an
   // effect: the cache is readable synchronously, so an effect would render IDLE
   // once and immediately re-render, and it trips react-hooks/set-state-in-effect.
@@ -52,12 +52,13 @@ function useOfflineMapSection(pmtilesUrl: string | null) {
     // ensureBasemapCached never throws and never publishes a short archive when
     // the server reports a length, so a failure here is simply "still not
     // downloaded" — the map keeps working online, and Retry re-runs this.
-    await ensureBasemapCached(pmtilesUrl);
+    // The site-plan overlay image is saved alongside, best effort: it is not part of the step.
+    await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
     const info = basemapCacheInfo(pmtilesUrl);
     setSection(
       info.cached ? { status: 'ready', syncedAt: info.syncedAt } : { status: 'error', syncedAt: Date.now() },
     );
-  }, [pmtilesUrl]);
+  }, [pmtilesUrl, siteplanUrl]);
 
   return { section, download };
 }
@@ -82,7 +83,8 @@ export function useOfflineDownload(festivalId: string) {
     currentFestival?.id === festivalId && hasOfflineBasemap(currentFestival.mapConfig) && Platform.OS !== 'web'
       ? currentFestival.mapConfig.offlineBasemap.pmtilesUrl
       : null;
-  const { section: mapSection, download: downloadMap } = useOfflineMapSection(mapUrl);
+  const siteplanUrl = mapUrl ? (extractSiteplan(currentFestival?.mapConfig)?.imageUrl ?? null) : null;
+  const { section: mapSection, download: downloadMap } = useOfflineMapSection(mapUrl, siteplanUrl);
 
   const download = useCallback(() => {
     void downloadForOffline(festivalId, activeCrewId ?? undefined);
