@@ -85,12 +85,12 @@ describe('SW cache boundary — the SHIPPED matcher functions (not just the cons
 
 describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
   it('has exactly four rules', () => {
-    expect(FESTIE_RUNTIME_CACHING).toHaveLength(5);
+    expect(FESTIE_RUNTIME_CACHING).toHaveLength(6);
   });
 
   it('declares the expected cacheNames in order', () => {
     const names = FESTIE_RUNTIME_CACHING.map((r) => r.options?.cacheName);
-    expect(names).toEqual(['api-cache', 'weather-cache', 'art-cache', 'google-fonts', 'offline-map-cache']);
+    expect(names).toEqual(['api-cache', 'weather-cache', 'art-cache', 'google-fonts', 'offline-map-cache', 'siteplan-cache']);
   });
 
   it('declares the expected handlers in order', () => {
@@ -98,6 +98,7 @@ describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
     expect(handlers).toEqual([
       'StaleWhileRevalidate',
       'NetworkFirst',
+      'CacheFirst',
       'CacheFirst',
       'CacheFirst',
       'CacheFirst',
@@ -147,5 +148,38 @@ describe('SW offline map rule', () => {
     expect(rule.options?.rangeRequests).toBe(true);
     expect(rule.options?.cacheName).toBe(OFFLINE_MAP_CACHE);
     expect(rule.options?.cacheableResponse?.statuses).toEqual([200]);
+  });
+});
+
+describe('SW matchers survive serialization into sw.js', () => {
+  // workbox-build copies each urlPattern function into sw.js as source text.
+  // A matcher that references a module constant throws a ReferenceError there,
+  // which disables that rule AND every rule after it. Rebuild each matcher from
+  // its source alone and run it, as the shipped worker does.
+  const rebuild = (fn: unknown) =>
+    // eslint-disable-next-line no-new-func -- evaluating source text is the point: it mirrors sw.js
+    new Function(`return (${String(fn)})`)() as (o: { url: URL; request: Request }) => boolean;
+  const opts = (path: string) => ({
+    url: new URL(`https://festie.us${path}`),
+    request: { method: 'GET' } as Request,
+  });
+
+  it('every function matcher runs with no module scope', () => {
+    for (const rule of FESTIE_RUNTIME_CACHING) {
+      if (typeof rule.urlPattern !== 'function') continue;
+      expect(() => rebuild(rule.urlPattern)(opts('/x'))).not.toThrow();
+    }
+  });
+
+  it('rebuilt matchers agree with the exported boundary regexes', () => {
+    for (const path of ['/api/v1/festivals', '/api/v1/festivals/abc', '/api/v1/festivals/abc/picks', '/api/v1/crews']) {
+      expect(rebuild(FESTIE_RUNTIME_CACHING[0].urlPattern)(opts(path))).toBe(FESTIVAL_CATALOG_RE.test(path));
+    }
+    for (const path of ['/api/v1/weather/abc', '/api/v1/weather', '/api/v1/weather/']) {
+      expect(rebuild(FESTIE_RUNTIME_CACHING[1].urlPattern)(opts(path))).toBe(WEATHER_RE.test(path));
+    }
+    expect(rebuild(FESTIE_RUNTIME_CACHING[4].urlPattern)(opts('/uploads/basemaps/x.pmtiles'))).toBe(true);
+    expect(rebuild(FESTIE_RUNTIME_CACHING[5].urlPattern)(opts('/uploads/siteplans/x.webp'))).toBe(true);
+    expect(rebuild(FESTIE_RUNTIME_CACHING[5].urlPattern)(opts('/uploads/avatars/x.webp'))).toBe(false);
   });
 });

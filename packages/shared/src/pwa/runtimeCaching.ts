@@ -69,8 +69,11 @@ export const FESTIE_RUNTIME_CACHING: RuntimeCachingRule[] = [
     // StaleWhileRevalidate keys by URL only (ignores the session
     // cookie), so on a shared device an account switch would otherwise
     // repaint the previous user's data until the revalidate lands.
+    // The regex is inlined, not FESTIVAL_CATALOG_RE: workbox copies this function
+    // into sw.js as source text, where module constants do not exist. A free
+    // reference throws on every request and silently disables every rule below.
     urlPattern: ({ url, request }: { url: URL; request: Request }) =>
-      request.method === 'GET' && FESTIVAL_CATALOG_RE.test(url.pathname),
+      request.method === 'GET' && /^\/api\/v1\/festivals(\/[^/]+)?$/.test(url.pathname),
     handler: 'StaleWhileRevalidate',
     options: {
       cacheName: 'api-cache',
@@ -86,7 +89,7 @@ export const FESTIE_RUNTIME_CACHING: RuntimeCachingRule[] = [
     // zustand-persist. NetworkFirst with a short timeout: prefer fresh
     // data when online, fall back to the cached forecast when offline.
     urlPattern: ({ url, request }: { url: URL; request: Request }) =>
-      request.method === 'GET' && WEATHER_RE.test(url.pathname),
+      request.method === 'GET' && /^\/api\/v1\/weather\/[^/]+$/.test(url.pathname),
     handler: 'NetworkFirst',
     options: {
       cacheName: 'weather-cache',
@@ -128,5 +131,17 @@ export const FESTIE_RUNTIME_CACHING: RuntimeCachingRule[] = [
       request.method === 'GET' && url.pathname.endsWith('.pmtiles'),
     handler: 'CacheFirst',
     options: { cacheName: OFFLINE_MAP_CACHE, rangeRequests: true, cacheableResponse: { statuses: [200] } },
+  },
+  {
+    // A festival's site-plan overlay image (immutable, content-addressed), so the
+    // official festival map still draws over the basemap offline.
+    urlPattern: ({ url, request }: { url: URL; request: Request }) =>
+      request.method === 'GET' && url.pathname.startsWith('/uploads/siteplans/'),
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'siteplan-cache',
+      expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 30 },
+      cacheableResponse: { statuses: [200] },
+    },
   },
 ];
