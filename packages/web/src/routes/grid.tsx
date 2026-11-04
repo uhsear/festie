@@ -16,6 +16,7 @@ import {
 } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
+import TimelineSkeleton from '../components/ui/skeletons/TimelineSkeleton';
 import TimelineGrid from '../features/TimelineGrid';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
@@ -202,6 +203,7 @@ function GridViewInner() {
   const loadState = useFestivalStore((s) => festivalLoadState(s));
   if (!currentFestival) {
     if (loadState === 'error') return <FestivalLoadError />;
+    if (loadState === 'loading') return <TimelineSkeleton />;
     return (
       <EmptyState
         icon={<CalendarX className="w-12 h-12" aria-hidden="true" />}

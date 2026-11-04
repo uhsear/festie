@@ -140,6 +140,7 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
             type: 'set_reminder',
             festivalId: festival.id,
             setId,
+            fireAtMs: fireAt,
             deepLink: appLink(config, `/set/${setId}`),
           },
           threadId: `reminder-${festival.id}`,

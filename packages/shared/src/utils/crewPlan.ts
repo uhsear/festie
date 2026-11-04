@@ -42,6 +42,22 @@ export function pickActiveMeetingPoint(points: CrewMeetingPoint[], nowMs: number
   return untimed[0] ?? null;
 }
 
+/**
+ * "Sat 3:00 PM" for a meeting point's `meet_at`, in the festival `timeZone` when
+ * set (device-local for legacy festivals). Null when unparseable. Shared by the
+ * crew plan screens and the SMS handoff so both show the same time.
+ */
+export function formatMeetWhen(meetAt: string, timeZone?: string): string | null {
+  const when = new Date(meetAt);
+  if (Number.isNaN(when.getTime())) return null;
+  return when.toLocaleString([], {
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
 export interface SlotPick {
   memberId: string;
   memberName: string;

@@ -269,7 +269,7 @@ function PicksViewInner() {
 
   return (
     <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
-      <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
+      <div role="region" aria-label="My picks" className="flex flex-col max-w-[600px] mx-auto w-full">
         {guestBanner}
         {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
         {viewTabRow}

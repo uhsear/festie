@@ -47,14 +47,9 @@ function LoginPageInner() {
     setUsernameErr('');
     setPasswordErr('');
 
-    if (!username) {
-      setUsernameErr(AUTH_COPY.loginIdentifierRequired);
-      return;
-    }
-    if (!password) {
-      setPasswordErr('Password is required');
-      return;
-    }
+    if (!username) setUsernameErr(AUTH_COPY.loginIdentifierRequired);
+    if (!password) setPasswordErr('Password is required');
+    if (!username || !password) return;
 
     try {
       const result = await login({ username, password });

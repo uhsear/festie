@@ -628,6 +628,8 @@ export interface UpdateCrewMemberStatusRequest {
   targetMeetingPointId?: string | null;
   etaMinutes?: number | null;
   note?: string | null;
+  /** ISO time the status was set on the device; the server clamps it to the last 24 h. */
+  capturedAt?: string;
   /**
    * 055: optional last-known OFFLINE breadcrumb to persist with this status.
    * OMIT entirely to leave the prior breadcrumb untouched (server COALESCEs).

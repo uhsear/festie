@@ -117,6 +117,11 @@ export function platformLabel(platform: string): string {
   return (Object.hasOwn(PLATFORM_LABELS, platform) && PLATFORM_LABELS[platform]) || platform;
 }
 
+/** True only for http(s) URLs; blocks javascript:, data:, intent: and other schemes. */
+export function isSafeExternalUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
 export function getSetLinks(set: FestivalSet): Array<{ name: string; links: Record<string, string> }> {
   if (!set.artists?.length) {
     return set.linkUrl ? [{ name: set.artist || 'Unknown', links: { spotify: set.linkUrl } }] : [];

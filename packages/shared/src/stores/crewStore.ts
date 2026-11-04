@@ -1424,7 +1424,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
     try {
       const res = await api.put<{ status: CrewMemberStatus } | (UpdateCrewMemberStatusRequest & { _optimistic: true })>(
         `/crews/${crewId}/status`,
-        request,
+        { ...request, capturedAt: nowIso },
         {
           // Deterministic clientId collapses repeated offline toggles into one
           // pending write keyed on (crew, user).

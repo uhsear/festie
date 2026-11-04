@@ -97,10 +97,11 @@ export default function ProviderButtons({ mode, onCredential, only, next }: Prov
         <span className="h-px flex-1 bg-current opacity-30" />
       </div>
       {providers.includes('google') && cfg.google && (
-        <GoogleButton clientId={cfg.google.webClientId} dark={dark} submitRef={submitRef} onError={onError} />
+        <GoogleButton clientId={cfg.google.webClientId} label={mode === 'link' ? PROVIDER_COPY.linkGoogle : PROVIDER_COPY.continueGoogle} dark={dark} submitRef={submitRef} onError={onError} />
       )}
       {providers.includes('apple') && cfg.apple && (
         <AppleButton
+          label={mode === 'link' ? PROVIDER_COPY.linkApple : PROVIDER_COPY.continueApple}
           servicesId={cfg.apple.servicesId ?? ''}
           redirectUri={cfg.apple.redirectUri ?? ''}
           dark={dark}
@@ -124,11 +125,13 @@ const gsiOwners: Array<() => void> = [];
 
 function GoogleButton({
   clientId,
+  label,
   dark,
   submitRef,
   onError,
 }: {
   clientId: string;
+  label: string;
   dark: boolean;
   submitRef: SubmitRef;
   onError: (message: string) => void;
@@ -180,16 +183,18 @@ function GoogleButton({
     };
   }, [clientId, dark, round, submitRef, onError, reclaim]);
 
-  return <div ref={host} className="flex min-h-11 justify-center" aria-label={PROVIDER_COPY.continueGoogle} />;
+  return <div ref={host} className="flex min-h-11 justify-center" aria-label={label} />;
 }
 
 function AppleButton({
+  label,
   servicesId,
   redirectUri,
   dark,
   submitRef,
   onError,
 }: {
+  label: string;
   servicesId: string;
   redirectUri: string;
   dark: boolean;
@@ -240,7 +245,7 @@ function AppleButton({
       }
     >
       <AppleLogo />
-      {PROVIDER_COPY.continueApple}
+      {label}
     </button>
   );
 }

@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { api } from '@festie/shared/services';
 import { useToast } from '../lib/toastContext';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
+import Button from '../components/ui/Button';
 
 /**
  * Deep-link target for shareable artist links — festie.us/set/:setId.
@@ -19,12 +20,15 @@ export default function SetDeepLink() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const ran = useRef(false);
+  const [offline, setOffline] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
     (async () => {
       let found = false;
+      let unreachable = false;
       try {
         const store = useFestivalStore.getState();
         if (!store.festivals?.length) {
@@ -45,12 +49,36 @@ export default function SetDeepLink() {
       } catch (err) {
         // fall through — land on the schedule
         console.warn('set deep link failed', err);
+        unreachable = (err as { isNetworkError?: boolean } | null)?.isNetworkError === true;
       } finally {
-        if (!found) toast('That set link is no longer available.', 'info');
-        navigate({ to: '/', replace: true });
+        if (unreachable) {
+          // Stay on the link so a retry can resolve it; a 404 still means the set is gone.
+          setOffline(true);
+        } else {
+          if (!found) toast('That set link is no longer available.', 'info');
+          navigate({ to: '/', replace: true });
+        }
       }
     })();
-  }, [setId, navigate, toast]);
+  }, [setId, navigate, toast, attempt]);
+
+  if (offline) {
+    return (
+      <div role="alert" className="flex flex-col items-center gap-3 p-8 text-center">
+        <p className="text-text-primary">You're offline, so this set link can't open yet.</p>
+        <Button
+          variant="primary"
+          onClick={() => {
+            ran.current = false;
+            setOffline(false);
+            setAttempt((n) => n + 1);
+          }}
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  }
 
   return <CardsSkeleton />;
 }

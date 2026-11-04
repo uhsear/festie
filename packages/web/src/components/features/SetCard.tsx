@@ -3,7 +3,7 @@ import { Play, AlertTriangle, StickyNote, Clock, ArrowRightLeft } from 'lucide-r
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { useMyPick, useMyNote, usePickActions, usePickSync, usePickClear, useSetMove } from '@festie/shared/hooks';
-import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
+import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, isAfterMidnight, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { useSetStatus } from '@/hooks/useSetStatus';
 import { useUndoNotifier } from '@/lib/useUndoNotifier';
@@ -301,6 +301,11 @@ function SetCard({
         <span aria-hidden="true">
           {formatSetTimeRange(set) || 'TBA'}
         </span>
+        {isAfterMidnight(set, days) && (
+          <span className="text-[length:var(--font-size-12)] font-semibold uppercase tracking-wide text-text-muted">
+            Late
+          </span>
+        )}
         {myNote && (
           <span className="card-note-indicator inline-flex opacity-50" role="img" aria-label="Has note">
             <StickyNote className="w-3.5 h-3.5" aria-hidden="true" />

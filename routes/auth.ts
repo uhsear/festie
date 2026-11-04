@@ -489,18 +489,17 @@ export default function createAuthRoutes(deps: any): Router {
       setNoStore(res);
       const { hashSessionToken: hashToken } = deps;
       const currentTokenHash = req.userToken ? hashToken(req.userToken) : null;
-      await invalidateUserSessions(req.user.userId, req.userToken);
 
-      // Disconnect all sockets for this user except current session
+      // Notify other sockets before invalidateUserSessions disconnects them (it spares the current session)
       for (const [, socket] of io.sockets.sockets) {
         if (socket.data?.userId === req.user.userId) {
           const socketTokenHash = socket.data.userSessionToken ? hashToken(socket.data.userSessionToken) : null;
           if (socketTokenHash !== currentTokenHash) {
             socket.emit('session:revoked', { reason: 'All other sessions revoked' });
-            socket.disconnect(true);
           }
         }
       }
+      await invalidateUserSessions(req.user.userId, req.userToken);
 
       log.info('sessions:revoke-all', { userId: req.user.userId });
       return sendSuccess(res, { success: true });

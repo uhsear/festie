@@ -130,6 +130,7 @@ function CrewPlanInner() {
 function Gate({ children }: { children: React.ReactNode }) {
   return (
     <div className="space-y-4 pb-6 max-w-[600px] mx-auto w-full">
+      <h1 className="sr-only">Crew plan</h1>
       <BackLink />
       <Card padding="lg">{children}</Card>
     </div>

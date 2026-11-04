@@ -49,7 +49,7 @@ vi.mock('../features/UpdatePrompt', () => ({ default: () => null }));
 vi.mock('../features/IOSInstallSheet', () => ({ default: () => null }));
 vi.mock('../features/FestivalDayBanner', () => ({ default: () => null }));
 vi.mock('../features/SosBanner', () => ({ default: () => null }));
-vi.mock('../features/Onboarding', () => ({ default: () => null }));
+vi.mock('../features/Onboarding', () => ({ default: () => <div data-testid="onboarding" /> }));
 vi.mock('../crew/LiveLocationSharing', () => ({ default: () => null }));
 vi.mock('../../hooks/useRealtimeSync', () => ({ useRealtimeSync: vi.fn() }));
 vi.mock('../../hooks/usePushNotifications', () => ({ usePushNotifications: vi.fn() }));
@@ -90,6 +90,18 @@ describe('AppShell', () => {
     render(<AppShell />);
     expect(screen.queryByTestId('header')).not.toBeInTheDocument();
     expect(mockUseThemeSync).toHaveBeenCalled();
+  });
+
+  it('shows the first-visit walkthrough on the lineup only, never over deep links', () => {
+    const { unmount } = render(<AppShell />);
+    expect(screen.getByTestId('onboarding')).toBeInTheDocument();
+    unmount();
+    for (const path of ['/set/s1', '/join', '/u/ada']) {
+      mockPathname = path;
+      const r = render(<AppShell />);
+      expect(screen.queryByTestId('onboarding')).not.toBeInTheDocument();
+      r.unmount();
+    }
   });
 
   it('renders the app shell structure with header, main content, and bottom nav', () => {

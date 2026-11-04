@@ -9,25 +9,34 @@ import { api } from '@festie/shared/services';
 const TOKEN_KEY = 'festie-push-token';
 // Festival id last reported to the server as covered by on-device reminders.
 const LOCAL_FESTIVAL_KEY = 'festie-push-local-festival';
+// Fire time (epoch ms) of the last local reminder; the server still pushes later ones.
+const LOCAL_COVERS_KEY = 'festie-push-local-covers-until';
 const NO_FESTIVAL = '';
 
 /**
  * Tell the server which festival this phone schedules local set reminders for,
  * so the reminder scheduler skips the duplicate push. Pass null to turn the
- * skip off. No-op without a registered token or when the value is unchanged.
+ * skip off. `coversUntil` limits the skip to reminders firing at or before that
+ * time (the phone holds only its soonest 64); null covers the whole festival.
+ * No-op without a registered token or when the values are unchanged.
  */
-export async function reportLocalRemindersFestival(festivalId: string | null): Promise<void> {
+export async function reportLocalRemindersFestival(festivalId: string | null, coversUntil: number | null = null): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (!token) return;
     const reported = await AsyncStorage.getItem(LOCAL_FESTIVAL_KEY);
-    if (reported === (festivalId ?? NO_FESTIVAL)) return;
+    const reportedUntil = await AsyncStorage.getItem(LOCAL_COVERS_KEY);
+    const cutoff = festivalId ? coversUntil : null;
+    if (reported === (festivalId ?? NO_FESTIVAL) && (reportedUntil || null) === (cutoff === null ? null : String(cutoff))) return;
     await api.post('/notifications/token', {
       token,
       platform: Platform.OS,
       localRemindersFestivalId: festivalId,
+      localRemindersCoversUntil: cutoff,
     });
     await AsyncStorage.setItem(LOCAL_FESTIVAL_KEY, festivalId ?? NO_FESTIVAL);
+    if (cutoff === null) await AsyncStorage.removeItem(LOCAL_COVERS_KEY);
+    else await AsyncStorage.setItem(LOCAL_COVERS_KEY, String(cutoff));
   } catch (e) {
     Sentry.captureException(e);
   }
@@ -43,11 +52,13 @@ export async function reregisterRotatedToken(newToken: string): Promise<void> {
     if (!cached || cached === newToken) return;
     // Carry the covered festival over so the new server row keeps skipping duplicate pushes.
     const localFestivalId = (await AsyncStorage.getItem(LOCAL_FESTIVAL_KEY)) || undefined;
+    const coversUntil = Number(await AsyncStorage.getItem(LOCAL_COVERS_KEY));
     await api.post('/notifications/token', {
       token: newToken,
       platform: Platform.OS,
       deviceName: Device.deviceName ?? undefined,
       localRemindersFestivalId: localFestivalId,
+      localRemindersCoversUntil: localFestivalId && coversUntil > 0 ? coversUntil : undefined,
     });
     await AsyncStorage.setItem(TOKEN_KEY, newToken);
   } catch (e) {
@@ -64,7 +75,7 @@ export async function unregisterPushOnSignOut(): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (token) await api.delete('/notifications/token', { body: { token } }).catch(() => {});
-    await AsyncStorage.multiRemove([TOKEN_KEY, LOCAL_FESTIVAL_KEY]);
+    await AsyncStorage.multiRemove([TOKEN_KEY, LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (e) {
     Sentry.captureException(e);
@@ -238,7 +249,7 @@ export function useMobilePush(): MobilePush {
         deviceName: Device.deviceName ?? undefined,
       });
       await AsyncStorage.setItem(TOKEN_KEY, token);
-      await AsyncStorage.removeItem(LOCAL_FESTIVAL_KEY);
+      await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       setRegistered(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't enable notifications. Try again.");
@@ -257,7 +268,7 @@ export function useMobilePush(): MobilePush {
       if (token) {
         await api.delete('/notifications/token', { body: { token } });
         await AsyncStorage.removeItem(TOKEN_KEY);
-        await AsyncStorage.removeItem(LOCAL_FESTIVAL_KEY);
+        await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       }
       setRegistered(false);
     } catch (err) {

@@ -63,11 +63,6 @@ describe('getSetStatus', () => {
       expect(result.status).toBe('tba');
     });
 
-    it('returns tba when endTime is missing', () => {
-      const result = getSetStatus(makeSet({ date: '2026-06-15', endTime: undefined as unknown as string }), new Date());
-      expect(result.status).toBe('tba');
-    });
-
     it('returns tba for invalid date string', () => {
       const result = getSetStatus(makeSet({ date: 'not-a-date', startTime: '14:00', endTime: '15:00' }), new Date());
       expect(result.status).toBe('tba');

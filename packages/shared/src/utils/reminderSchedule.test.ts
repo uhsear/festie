@@ -6,6 +6,7 @@ import {
   MAX_LOCAL_REMINDERS,
   DEFAULT_REMINDER_LEAD_MINUTES,
   effectiveReminders,
+  reminderLeadForSet,
   soonestReminders,
 } from './reminderSchedule';
 import type { FestivalSet, FestivalDay, Priority } from '../types/domain';
@@ -171,6 +172,23 @@ describe('effectiveReminders', () => {
     const reminders = { c: 10 };
     expect(effectiveReminders(reminders, picks, null)).toBe(reminders);
     expect(effectiveReminders(undefined, picks, null)).toEqual({});
+  });
+});
+
+describe('reminderLeadForSet', () => {
+  const picks: Record<string, Priority> = { a: 'must', c: 'maybe' };
+
+  it('reports the must default as a default', () => {
+    expect(reminderLeadForSet('a', {}, picks, 15)).toEqual({ minutes: 15, isDefault: true });
+  });
+
+  it('prefers an explicit reminder', () => {
+    expect(reminderLeadForSet('a', { a: 5 }, picks, 15)).toEqual({ minutes: 5, isDefault: false });
+  });
+
+  it('has no reminder for non-must picks or a null default', () => {
+    expect(reminderLeadForSet('c', {}, picks, 15)).toEqual({ minutes: undefined, isDefault: false });
+    expect(reminderLeadForSet('a', undefined, picks, null)).toEqual({ minutes: undefined, isDefault: false });
   });
 });
 

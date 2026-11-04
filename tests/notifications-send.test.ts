@@ -577,11 +577,11 @@ describe('notifications/send: platform routing', () => {
 
   describe('local reminder skip', () => {
     const androidToken = 'a'.repeat(64);
-    function build(localRemindersFestivalId: string | null) {
+    function build(localRemindersFestivalId: string | null, localRemindersCoversUntil: number | null = null) {
       const stores = makeStores({
         notificationPrefs: { get: mock.fn(async () => ({ setReminders: true, crewUpdates: true })) },
         deviceTokens: {
-          listByUser: mock.fn(async () => [{ token: androidToken, platform: 'android', localRemindersFestivalId }]),
+          listByUser: mock.fn(async () => [{ token: androidToken, platform: 'android', localRemindersFestivalId, localRemindersCoversUntil }]),
           unregister: mock.fn(async () => {}),
         },
       });
@@ -617,6 +617,28 @@ describe('notifications/send: platform routing', () => {
       assert.equal(result.sent, 1);
       assert.equal(result.localCovered, 0);
       assert.equal(messaging.send.mock.calls.length, 1);
+    });
+
+    const timed = (fireAtMs: number) => ({ ...reminder('set_reminder'), data: { festivalId: 'f1', fireAtMs } });
+
+    it('with a cutoff, a reminder firing at or before it is skipped', async () => {
+      const { svc, messaging } = build('f1', 5000);
+      assert.equal((await svc.send(timed(5000))).localCovered, 1);
+      assert.equal((await svc.send(timed(4000))).localCovered, 1);
+      assert.equal(messaging.send.mock.calls.length, 0);
+    });
+
+    it('with a cutoff, a reminder firing after it still pushes', async () => {
+      const { svc, messaging } = build('f1', 5000);
+      const result = await svc.send(timed(5001));
+      assert.equal(result.sent, 1);
+      assert.equal(result.localCovered, 0);
+      assert.equal(messaging.send.mock.calls.length, 1);
+    });
+
+    it('with a cutoff but no fire time, the festival skip still applies', async () => {
+      const { svc } = build('f1', 5000);
+      assert.equal((await svc.send(reminder('set_reminder'))).localCovered, 1);
     });
 
     it('a non-reminder type is never skipped', async () => {

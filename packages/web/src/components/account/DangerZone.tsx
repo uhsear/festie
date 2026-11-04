@@ -85,7 +85,7 @@ export default function DangerZone() {
         ? await withReauth(() => deleteAccount(undefined as unknown as string, choices), ask)
         : await deleteAccount(deletePassword, choices);
       if (!outcome) return;
-      toast(accountDeletionNotice(outcome.deletionDate), 'info');
+      toast(accountDeletionNotice(outcome.deletionDate), 'info', 10000);
       navigate({ to: '/login' });
     } catch (err) {
       setDeleteError(mapErrorToUserMessage(err, ACCOUNT_COPY.deleteFailed));

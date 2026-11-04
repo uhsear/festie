@@ -168,6 +168,7 @@ describe('DangerZone', () => {
     expect(mockToast).toHaveBeenCalledWith(
       expect.stringContaining('Sign in before then to keep it.'),
       'info',
+      10000,
     );
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
   });
