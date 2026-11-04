@@ -244,11 +244,15 @@ export default function PicksImageScreen() {
     // and lays it out before captureRef looks up its native node.
     await nextTwoFrames();
     try {
+      // iOS view-shot takes width/height in points and renders at the device scale,
+      // so pixel sizes made a 3x canvas (8388 px tall) past the 8192 px limit.
+      // Android takes pixels.
+      const toUnits = Platform.OS === 'ios' ? 1 / PixelRatio.get() : 1;
       const uri = await captureRef(posterRef, {
         format: 'png',
         quality: 1,
-        width: layout.width,
-        height: layout.height,
+        width: layout.width * toUnits,
+        height: layout.height * toUnits,
         result: 'tmpfile',
       });
       if (!(await Sharing.isAvailableAsync())) {
