@@ -8,6 +8,7 @@ import {
   artistDisplayName,
   artistSubtitle,
   getSetLinks,
+  platformLabel,
   formatFestivalDateRange,
 } from './format';
 import type { FestivalSet } from '../types/domain';
@@ -195,6 +196,15 @@ describe('artistSubtitle', () => {
       artists: [{ name: 'A' }, { name: 'B' }],
     });
     expect(artistSubtitle(set, 'vs')).toBe('A vs B');
+  });
+});
+
+describe('platformLabel', () => {
+  it('maps known link keys to display names and passes unknown keys through', () => {
+    expect(platformLabel('soundcloud')).toBe('SoundCloud');
+    expect(platformLabel('website')).toBe('Website');
+    expect(platformLabel('twitter')).toBe('X');
+    expect(platformLabel('bandcamp')).toBe('bandcamp');
   });
 });
 

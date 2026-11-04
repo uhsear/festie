@@ -99,6 +99,11 @@ describe('contrast', () => {
 });
 
 describe('list modes', () => {
+  it('normalizes decomposed artist names to NFC so the width table counts one glyph', () => {
+    const nfd = sets.map((s) => (s.id === 'edco26-d0-me-n-u' ? { ...s, artist: 'Menü' } : s));
+    const m = build({ sets: nfd, picks: { 'edco26-d0-me-n-u': 'must' } });
+    expect(list(m).rows[0]!.artistLines).toEqual(['Menü']);
+  });
   it('3 picks: XL or L, one page, nothing lost', () => {
     const picks = pick(friday, 3);
     const m = build({ picks });

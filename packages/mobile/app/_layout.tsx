@@ -37,7 +37,7 @@ import HeaderTitle from '../components/HeaderTitle';
 import { TopBannerContext } from '../components/ScreenHeader';
 import { snoozeReminder, useLocalReminders } from '../hooks/useLocalReminders';
 import { useOngoingNotification } from '../hooks/useOngoingNotification';
-import { ensureAndroidChannels } from '../hooks/useMobilePush';
+import { ensureAndroidChannels, usePushTokenRotation } from '../hooks/useMobilePush';
 import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
 import { isGuestBlocked } from '../lib/authRoutes';
@@ -252,6 +252,7 @@ function AuthGate() {
   // at-home backstop. Mounted at the root so it tracks the active profile across
   // every screen.
   useLocalReminders();
+  usePushTokenRotation();
 
   // Keep Android's sticky festival status and iOS's Live Activity/widget alive
   // across route changes. The hook cancels them when the profile/festival model

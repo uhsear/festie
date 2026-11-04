@@ -306,7 +306,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
 
       if (nextAppState === 'active' && prev.match(/inactive|background/)) {
         // Returning to foreground — reconnect if disconnected.
-        if (!socket.connected) {
+        if (!socket.active) {
           socket.connect();
         }
         // FOREGROUND BACKFILL: the socket was disconnected while backgrounded, so
@@ -317,17 +317,20 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
         reloadProfiles();
         reloadCrews();
       } else if (nextAppState.match(/inactive|background/) && prev === 'active') {
-        // Going to background — disconnect to save battery / bandwidth.
+        // Going to background — disconnect to save battery / bandwidth. A socket
+        // mid-reconnect is not `connected` but is still `active`: stop it too, or
+        // socket.io keeps retrying in the background.
+        // Foreground-only live location: stop sharing the moment we background.
+        // The server also force-stops on the disconnect below; this explicit
+        // stop is immediate + clears local sharing state so there's no ghost
+        // marker and no silent re-share when we return (user must re-opt-in).
+        // Local state clears even while reconnecting (socket not connected).
+        const sharingCrewId = useLiveLocationStore.getState().sharingCrewId;
+        if (sharingCrewId) {
+          if (socket.connected) socket.emit('location:stop', { _v: 1, crewId: sharingCrewId });
+          useLiveLocationStore.getState().stopSharing();
+        }
         if (socket.connected) {
-          // Foreground-only live location: stop sharing the moment we background.
-          // The server also force-stops on the disconnect below; this explicit
-          // stop is immediate + clears local sharing state so there's no ghost
-          // marker and no silent re-share when we return (user must re-opt-in).
-          const sharingCrewId = useLiveLocationStore.getState().sharingCrewId;
-          if (sharingCrewId) {
-            socket.emit('location:stop', { _v: 1, crewId: sharingCrewId });
-            useLiveLocationStore.getState().stopSharing();
-          }
           const festivalId = useFestivalDataStore.getState().currentFestivalId;
           if (festivalId) {
             socket.emit('leave:festival');
@@ -336,8 +339,8 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
           if (crewId) {
             socket.emit('leave:crew', { _v: 1, crewId });
           }
-          socket.disconnect();
         }
+        socket.disconnect();
       }
     };
 

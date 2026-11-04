@@ -16,6 +16,12 @@ describe('set sheet (source-level guards)', () => {
     expect(sheet).toContain('canView(');
   });
 
+  it('labels artist links and groups them per artist for B2B sets', () => {
+    expect(sheet).toContain('platformLabel(key)');
+    expect(sheet).not.toContain('{key}</Text>');
+    expect(sheet).toContain('isB2B ?');
+  });
+
   it('keeps the View as button outside the accessible info group', () => {
     const start = sheet.indexOf('style={styles.crewInfo}');
     const end = sheet.indexOf('</View>', sheet.indexOf('meta.label}</Text>', start));

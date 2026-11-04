@@ -396,7 +396,7 @@ function baseRows(items: Item[], ctx: Ctx): BaseRow[] {
       time,
       period,
       until: `to ${formatTime(it.set.endTime).replace(/ [AP]M$/, '')}`,
-      artist: artistDisplayName(it.set, input.festival.b2bSeparator),
+      artist: artistDisplayName(it.set, input.festival.b2bSeparator).normalize('NFC'),
       stage: stage?.name ?? '',
       stageShort: shortStageName(stage?.name ?? ''),
       stageText: colors.text,
