@@ -56,6 +56,7 @@ function collectFestivalChildren(festivalId: string, festival: any) {
         sortOrder,
         set.linkUrl || null,
         JSON.stringify(set.artists || []),
+        set.displayName || null,
       ]);
       newSetIds.add(set.id);
       const key = `${set.artist}|${set.startTime}`;
@@ -104,7 +105,7 @@ export async function insertSetsBatch(client: any, rows: any[][]) {
   if (rows.length === 0) return;
   const { clause, params } = buildMultiInsert(rows);
   await client.query(
-    `INSERT INTO festival_sets (id, festival_id, day_index, artist, stage_id, start_time, end_time, sort_order, link_url, artists) VALUES ${clause}`,
+    `INSERT INTO festival_sets (id, festival_id, day_index, artist, stage_id, start_time, end_time, sort_order, link_url, artists, display_name) VALUES ${clause}`,
     params,
   );
 }
@@ -672,7 +673,9 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
                        'linkUrl', fs.link_url
                      )::jsonb
                        || CASE WHEN fs.moved_at IS NULL THEN '{}'::jsonb
-                               ELSE jsonb_build_object('movedAt', fs.moved_at, 'movedFrom', fs.moved_from) END)
+                               ELSE jsonb_build_object('movedAt', fs.moved_at, 'movedFrom', fs.moved_from) END
+                     || CASE WHEN fs.display_name IS NULL THEN '{}'::jsonb
+                             ELSE jsonb_build_object('displayName', fs.display_name) END)
                      ORDER BY fs.sort_order ASC
                    )
                    FROM festival_sets fs

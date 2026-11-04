@@ -170,6 +170,8 @@ export interface FestivalSet {
   endTime: string;
   artist?: string;
   artists?: Artist[];
+  /** Billed name for the whole set, shown instead of the joined artist names. */
+  displayName?: string;
   linkUrl?: string;
   /** T46: present only for 48 hours after an admin moved the set. */
   movedAt?: string;
