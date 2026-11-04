@@ -277,8 +277,10 @@ export const LOCKSCREEN_PRESETS: readonly LockscreenPreset[] = [
 export const LOCKSCREEN_ZONES = {
   top: 0.38,
   tallTop: 0.45,
-  contentEnd: 0.8,
-  footerEnd: 0.86,
+  // The schedule runs past the torch and camera buttons: they are see-through and
+  // sit in the bottom corners, and users asked for the whole day on one image.
+  contentEnd: 0.92,
+  footerEnd: 0.96,
   sidePadU: 6,
 } as const;
 
