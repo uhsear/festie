@@ -14,9 +14,11 @@ import {
   AccessibilityInfo,
   StyleSheet,
   useWindowDimensions,
+  Platform,
   type ScrollViewInstance,
   type TextInputInstance,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { setReturnTo } from '../../lib/returnTo';
@@ -81,6 +83,9 @@ import InviteQRSheet from '../../components/InviteQRSheet';
 import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
 
+/** Mirrors IOS_NATIVE_TAB_BAR_HEIGHT in (tabs)/index.tsx: the native iOS tab bar overlays content. */
+const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
+
 export default function CrewScreen() {
   const t = useTokens();
   const largeText = useLargeText();
@@ -97,6 +102,14 @@ export default function CrewScreen() {
   // home-indicator cushion). Crew is a TAB screen — the tab bar in (tabs)/_layout
   // already absorbs the safe-area inset, so we pass includeSafeArea:false to add
   // only the visible cushion and avoid double-padding the last row.
+  // NativeTabs floats above screen content on iOS, so shrink each scroll body by
+  // the tab bar + home indicator (as the Schedule tab does). Without it the last
+  // Manage control, Delete crew, sat under the tab bar and could not be reached.
+  const insets = useSafeAreaInsets();
+  const tabBodyStyle = useMemo(
+    () => [styles.flex1, { marginBottom: Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT + insets.bottom : 0 }],
+    [styles.flex1, insets.bottom],
+  );
   const listBottomPad = useListBottomInset({ includeSafeArea: false });
   const memberBottomPad = useListBottomInset({ base: t.spacing[4], includeSafeArea: false });
   const memberListStyle = useMemo(
@@ -725,7 +738,7 @@ export default function CrewScreen() {
       <View style={styles.screen} testID="crew-screen">
         <ScreenHeader title="Crew" subtitle="Coordinate with friends" icon="people" />
         <ScrollView
-          style={styles.flex1}
+          style={tabBodyStyle}
           contentContainerStyle={formScrollStyle}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
@@ -999,7 +1012,7 @@ export default function CrewScreen() {
 
       {crewTab === 'members' ? (
         <FlatList
-          style={styles.flex1}
+          style={tabBodyStyle}
           data={members}
           extraData={managingMemberId}
           keyExtractor={(m) => m.userId}
@@ -1365,7 +1378,7 @@ export default function CrewScreen() {
       ) : crewTab === 'plan' ? (
         <ScrollView
           ref={planScrollRef}
-          style={styles.flex1}
+          style={tabBodyStyle}
           contentContainerStyle={tabScrollStyle}
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={crewRefreshControl}
@@ -1555,7 +1568,7 @@ export default function CrewScreen() {
         </ScrollView>
       ) : crewTab === 'find' ? (
         <ScrollView
-          style={styles.flex1}
+          style={tabBodyStyle}
           contentContainerStyle={tabScrollStyle}
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={crewRefreshControl}
@@ -1620,7 +1633,7 @@ export default function CrewScreen() {
         </ScrollView>
       ) : (
         <ScrollView
-          style={styles.flex1}
+          style={tabBodyStyle}
           contentContainerStyle={tabScrollStyle}
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={crewRefreshControl}
