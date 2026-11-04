@@ -35,6 +35,8 @@ interface ScreenHeaderProps {
   onTitlePress?: () => void;
   /** Spoken name of the title button; used only with `onTitlePress`. */
   titleAccessibilityLabel?: string;
+  /** Max title lines before shrinking; 1 unless a screen opts in to wrapping. */
+  titleLines?: number;
 }
 
 /**
@@ -67,6 +69,7 @@ export default function ScreenHeader({
   icon,
   onTitlePress,
   titleAccessibilityLabel,
+  titleLines = 1,
 }: ScreenHeaderProps) {
   const t = useTokens();
   const styles = useStyles();
@@ -77,7 +80,7 @@ export default function ScreenHeader({
   const titleText = (
     <Text
       style={styles.title}
-      numberOfLines={1}
+      numberOfLines={titleLines}
       adjustsFontSizeToFit
       // Floor the shrink at 70% so very long names stay legible instead of
       // collapsing to an unreadable size (pairs with adjustsFontSizeToFit).
@@ -105,7 +108,8 @@ export default function ScreenHeader({
             24px Clash Display face, so medium/long festival & crew names
             (e.g. "North Coast Festival 2026") used to clip to "…". Single-line
             + adjustsFontSizeToFit is the reliable RN path (the title column is
-            width-bounded by titleBlock flex:1).
+            width-bounded by titleBlock flex:1). Multi-line is opt-in via
+            titleLines; Android wraps at full size instead of shrinking.
             maxFontSizeMultiplier caps Dynamic Type at 1.4× so the heading
             doesn't overflow the header row at AX sizes; body/notes text in
             the screen body is left uncapped to scale fully (F12). */}

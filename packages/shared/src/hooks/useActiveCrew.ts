@@ -36,7 +36,8 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
   }, [user, crews.length, crewLoading, track]);
 
   // Same deps as the old web crew page, so a failed select does not loop.
-  const firstCrewId = crews[0]?.id;
+  // Skip an offline-join placeholder: it has no server crew to select until the join replays.
+  const firstCrewId = crews.find((c) => !c._optimistic)?.id;
   useEffect(() => {
     // A pending select of another crew clears activeCrew; do not override it with the first crew.
     if (user && !crew && firstCrewId && !useCrewStore.getState().crewLoading) track(useCrewStore.getState().selectCrew(firstCrewId));
@@ -44,7 +45,7 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
 
   const retry = useCallback(() => {
     const store = useCrewStore.getState();
-    const first = store.crews[0];
+    const first = store.crews.find((c) => !c._optimistic);
     track(first ? store.selectCrew(first.id) : store.loadCrews());
   }, [track]);
 
@@ -52,6 +53,7 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
     status: crewScreenStatus({
       hasActiveCrew: !!crew,
       crewCount: crews.length,
+      joiningOnly: crews.length > 0 && !firstCrewId,
       loading: crewLoading,
       error: failed ? 'failed' : null,
     }),

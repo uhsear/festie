@@ -4,7 +4,7 @@ import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewFestival, useCrewHub, useFestival, usePicks } from '@festie/shared/hooks';
-import { artistDisplayName, formatTime, formatSetTimeRange, memberSummary, timeAgo } from '@festie/shared/utils';
+import { artistDisplayName, formatTime, formatSetTimeRange, memberSummary, meetingTimeDisplay, resolveFestivalTimeZone, timeAgo } from '@festie/shared/utils';
 import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -16,6 +16,8 @@ import FreshnessChip from '../components/FreshnessChip';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import Button from '../components/Button';
+
+const HHMM = /^\d{2}:\d{2}$/;
 
 // The plan renders from the persisted stores first (useCrewHub), then refreshes
 // statuses, meeting points and polls. Pure assembly lives in @festie/shared.
@@ -32,6 +34,7 @@ export default function CrewPlanScreen() {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const { getStageName } = useFestival();
   const { savePick } = usePicks();
+  const days = useFestivalStore((s) => s.days);
   const nowMs = useNow();
   const { status, crew, retry: retryCrew } = useActiveCrew();
   const festival = useCrewFestival(crew);
@@ -55,6 +58,15 @@ export default function CrewPlanScreen() {
         title="Couldn't load your crew"
         message="Check your connection, then try again."
         action={{ label: 'Try again', onPress: retryCrew }}
+      />,
+    );
+  }
+  if (status === 'joining') {
+    return gate(
+      <EmptyState
+        icon="cloud-offline-outline"
+        title="Joining when you're back online"
+        message="Your join is saved on this device. The crew opens once you reconnect."
       />,
     );
   }
@@ -122,11 +134,15 @@ export default function CrewPlanScreen() {
               <Text style={styles.secondaryLine}>{hub.meetingPoint.location}</Text>
               {hub.meetingPoint.meet_at ? (
                 <Text style={styles.accentLine}>
-                  {new Date(hub.meetingPoint.meet_at).toLocaleString([], {
-                    weekday: 'short',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
+                  {
+                    meetingTimeDisplay(
+                      hub.meetingPoint.meet_at,
+                      hub.meetingPoint.recurs_daily,
+                      days,
+                      new Date(nowMs),
+                      resolveFestivalTimeZone(currentFestival),
+                    ).label
+                  }
                 </Text>
               ) : null}
             </View>
@@ -147,7 +163,7 @@ export default function CrewPlanScreen() {
           {crew.homeBaseLocation || crew.homeBaseTime ? (
             <View style={styles.cardBody}>
               {crew.homeBaseLocation ? <Text style={styles.primaryLine}>{crew.homeBaseLocation}</Text> : null}
-              {crew.homeBaseTime ? <Text style={styles.secondaryLine}>{crew.homeBaseTime}</Text> : null}
+              {crew.homeBaseTime ? <Text style={styles.secondaryLine}>{HHMM.test(crew.homeBaseTime) ? formatTime(crew.homeBaseTime) : crew.homeBaseTime}</Text> : null}
             </View>
           ) : hub.isOwner ? (
             <>

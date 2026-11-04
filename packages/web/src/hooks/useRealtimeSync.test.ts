@@ -21,6 +21,7 @@ vi.mock('./useCrewQuerySink', () => ({ useCrewQuerySink: () => ({}) }));
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { useRealtimeSync } from './useRealtimeSync';
 
@@ -68,5 +69,15 @@ describe('useRealtimeSync (T58)', () => {
     act(() => handlers['connect']());
     expect(fakeSocket.emit).toHaveBeenCalledWith('join:festival', 'fest-1', { _v: 1 }, expect.any(Function));
     useAuthStore.setState({ user: null } as never);
+  });
+  it('refetches the open crew on crew:updated so a member drops a regenerated invite code', () => {
+    const loadCrews = vi.fn().mockResolvedValue(undefined);
+    const selectCrew = vi.fn().mockResolvedValue(undefined);
+    useCrewStore.setState({ activeCrew: { id: 'c1', inviteCode: 'OLD' }, loadCrews, selectCrew } as never);
+    renderHook(() => useRealtimeSync());
+    handlers['crew:updated']({ _v: 1, id: 'c1' });
+    act(() => void vi.advanceTimersByTime(400));
+    expect(selectCrew).toHaveBeenCalledWith('c1');
+    expect(loadCrews).toHaveBeenCalledTimes(1);
   });
 });

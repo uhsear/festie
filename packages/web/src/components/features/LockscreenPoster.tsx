@@ -41,6 +41,8 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
     ...(h !== undefined && { height: px(h) }),
   });
   const { header, footer } = page;
+  const art = model.poster;
+  const rule = page.poster?.rule;
 
   return (
     <div
@@ -73,6 +75,28 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
         />
       )}
 
+      {art?.beams.map((b) => (
+        <div
+          key={b.x}
+          style={{
+            ...abs(b.x, b.y, b.width, b.height),
+            backgroundImage: `linear-gradient(to bottom, ${b.color}00, ${b.color}${hexAlpha(0.55)})`,
+            filter: `blur(${px(1.2)})`,
+          }}
+        />
+      ))}
+      {art && (
+        <div
+          style={{
+            ...abs(art.panel.x, art.panel.y, art.panel.width, art.panel.height),
+            boxSizing: 'border-box',
+            backgroundColor: art.panel.fill,
+            border: `${px(0.15)} solid ${art.panel.border}`,
+            borderRadius: px(art.panel.radiusU),
+          }}
+        />
+      )}
+
       <div
         style={{
           ...abs(model.sideU, header.y, 100 - 2 * model.sideU, header.height),
@@ -81,7 +105,7 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
           justifyContent: 'space-between',
           paddingBottom: px(2),
           boxSizing: 'border-box',
-          borderBottom: `${px(0.15)} solid ${c.border}`,
+          borderBottom: rule ? undefined : `${px(0.15)} solid ${c.border}`,
         }}
       >
         <div
@@ -97,7 +121,7 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
             whiteSpace: 'nowrap',
           }}
         >
-          {header.day}
+          {page.poster ? <span>{[...header.day].map((ch, n) => <span key={n} style={{ color: page.poster!.dayColors[n] }}>{ch}</span>)}</span> : header.day}
           {header.pageChip && (
             <span
               style={{
@@ -119,6 +143,10 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
           <div style={{ color: c.text, fontWeight: 700 }}>{header.metaBottom}</div>
         </div>
       </div>
+
+      {rule?.map((r) => (
+        <div key={r.x} style={{ ...abs(r.x, r.y - r.height, r.width, r.height), backgroundColor: r.color }} />
+      ))}
 
       {page.body.kind === 'list' ? (
         <ListBody body={page.body} model={model} px={px} abs={abs} />

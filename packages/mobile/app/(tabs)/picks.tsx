@@ -610,7 +610,7 @@ export default function PicksScreen() {
         <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
       )}
       <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-        {exportBusy ? 'Exporting…' : 'Add to calendar'}
+        {exportBusy ? 'Exporting…' : 'Calendar'}
       </Text>
     </TouchableOpacity>
   );

@@ -286,6 +286,14 @@ function CrewViewInner() {
       {!activeCrew ? (
         status === 'loading' ? (
           <CrewSkeleton />
+        ) : status === 'joining' ? (
+          <Card padding="lg" className="space-y-4">
+            <EmptyState
+              illustration="noCrew"
+              title="Joining when you're back online"
+              description="Your join is saved on this device. The crew opens once you reconnect."
+            />
+          </Card>
         ) : status === 'error' ? (
           <Card padding="lg" className="space-y-4">
             <EmptyState

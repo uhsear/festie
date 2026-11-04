@@ -339,7 +339,7 @@ export default function CrewMeetingPoints({
             <Text style={styles.pointLabel} numberOfLines={1}>
               {point.label}
             </Text>
-            <Text style={styles.pointType}>{meetingPointKind(point.type).label}</Text>
+            <Text style={styles.pointType} numberOfLines={1}>{meetingPointKind(point.type).label}</Text>
             {point.recurs_daily ? (
               <View style={styles.recurBadge} accessibilityLabel="Repeats daily">
                 <Ionicons name="repeat" size={t.iconSize.xs} color={t.colors.accent.aqua} />
@@ -860,6 +860,7 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('micro'),
     color: t.colors.text.muted,
     textTransform: 'uppercase',
+    flexShrink: 0,
   },
   recurBadge: {
     flexDirection: 'row',

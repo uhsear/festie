@@ -338,6 +338,26 @@ describe('usePicks hook', () => {
       expect(renderHook(() => useMyReminder('a')).result.current).toBe(15);
     });
 
+    it('saveReminder shows through getMyReminder and useMyReminder at once, and clears', async () => {
+      const { api } = await import('../../services/api');
+      vi.mocked(api.put).mockResolvedValue({} as never);
+      useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: profile({}) });
+      useAuthStore.setState({ user: { id: 'u1' } as never });
+      const picks = renderHook(() => usePicks());
+      const one = renderHook(() => useMyReminder('b'));
+      expect(picks.result.current.getMyReminder('b')).toBeUndefined();
+      await act(async () => {
+        await picks.result.current.saveReminder('f1', 'b', 30);
+      });
+      expect(picks.result.current.getMyReminder('b')).toBe(30);
+      expect(one.result.current).toBe(30);
+      await act(async () => {
+        await picks.result.current.saveReminder('f1', 'b', null);
+      });
+      expect(picks.result.current.getMyReminder('b')).toBeUndefined();
+      expect(one.result.current).toBeUndefined();
+    });
+
     it('a write to another set does not re-render useMyPick', () => {
       useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: profile({ a: 'must' }) });
       let renders = 0;
