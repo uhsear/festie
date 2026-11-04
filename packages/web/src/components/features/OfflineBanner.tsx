@@ -86,7 +86,7 @@ export default function OfflineBanner() {
     <>
       <div
         className={cn(
-          'fixed top-0 left-0 right-0 z-40 px-4 py-3 flex items-center justify-between gap-3',
+          'relative shrink-0 z-40 px-4 py-2 flex items-center justify-between gap-3',
           tone,
           'backdrop-blur-xl',
         )}
@@ -95,7 +95,7 @@ export default function OfflineBanner() {
       >
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-2 h-2 rounded-full bg-bg-primary animate-pulse flex-shrink-0" />
-          <span className="text-sm font-medium truncate">{message}</span>
+          <span className="text-sm font-medium line-clamp-2">{message}</span>
           {!showFailed && pendingSync > 0 && (
             <span className="ml-1 px-2 py-0.5 rounded-full bg-bg-primary/20 text-xs font-medium flex-shrink-0">
               {pendingSync}

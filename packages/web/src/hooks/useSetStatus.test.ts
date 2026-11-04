@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { getSetStatus } from './useSetStatus';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { getSetStatus, useNow } from './useSetStatus';
 import type { FestivalSet, FestivalDay } from '@festie/shared/types';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
@@ -307,5 +308,23 @@ describe('getSetStatus', () => {
       expect(result.status).toBe('live');
       expect(result.progress).toBeCloseTo(0.5, 1);
     });
+  });
+});
+
+describe('useNow', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('ticks immediately when the tab becomes visible again', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-15T23:00:00Z'));
+    const { result, unmount } = renderHook(() => useNow());
+    const before = result.current;
+    // Background timers are frozen: the clock moves but no interval fires.
+    vi.setSystemTime(new Date('2026-06-15T23:20:00Z'));
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(result.current - before).toBe(20 * 60_000);
+    unmount();
   });
 });

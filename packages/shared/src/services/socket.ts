@@ -48,19 +48,46 @@ export function createSocket(
   // Guard so a burst of auth errors triggers at most one refresh attempt; reset
   // once a (re)connection succeeds so a later token expiry can re-trigger.
   let authErrorHandled = false;
+  let authFailed = false;
   socket.on('connect', () => {
     authErrorHandled = false;
+    authFailed = false;
   });
   socket.on('connect_error', (err: Error & { data?: { status?: number }; status?: number }) => {
     const status = err?.data?.status ?? err?.status;
     if (status === 401 || status === 403) {
       socket.disconnect();
+      authFailed = true;
       if (onAuthError && !authErrorHandled) {
         authErrorHandled = true;
         onAuthError();
       }
     }
   });
+
+  // Skip socket.io's backoff (up to reconnectionDelayMax) once the network is back or the
+  // tab is visible again. Browser-only: React Native has no window/document listeners.
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    const cleanup = () => {
+      window.removeEventListener('online', revive);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
+    };
+    const revive = () => {
+      if (authFailed || socket.connected) return;
+      // Disposed (disconnect/destroy) while not connected: 'disconnect' never fired, so detach here.
+      if (!socket.active) return cleanup();
+      // connect() alone is a no-op while socket.io waits to retry; disconnect() clears that wait.
+      socket.disconnect().connect();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') revive();
+    };
+    window.addEventListener('online', revive);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+    socket.on('disconnect', (reason: string) => {
+      if (reason === 'io client disconnect') cleanup();
+    });
+  }
 
   return socket;
 }
