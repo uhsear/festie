@@ -74,6 +74,15 @@ describe('OfflineBanner', () => {
     expect(screen.getByText(/offline/i)).toBeInTheDocument();
   });
 
+  it('sits in flow (not fixed over the header) and wraps its message', () => {
+    setStoreState({ offlineMode: true });
+    render(<OfflineBanner />);
+    const bar = screen.getByRole('status');
+    expect(bar.className).not.toMatch(/\bfixed\b/);
+    expect(bar.className).toContain('shrink-0');
+    expect(screen.getByText(/offline/i).className).toContain('line-clamp-2');
+  });
+
   it('shows pending count when offline with pending mutations', () => {
     setStoreState({ offlineMode: true, pendingSync: 3 });
     render(<OfflineBanner />);

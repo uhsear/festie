@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ── Mock socket.io-client ─────────────────────────────────────────────────
 // We capture every `io()` call and its options so tests can inspect them.
@@ -14,7 +14,16 @@ function createMockSocket() {
       listeners.get(event)!.push(fn);
       return socket;
     }),
-    disconnect: vi.fn(),
+    disconnect: vi.fn(() => {
+      socket.active = false;
+      return socket;
+    }),
+    connect: vi.fn(() => {
+      socket.active = true;
+      return socket;
+    }),
+    connected: false,
+    active: true,
     // Helper: emit an event from the "server" side so registered listeners fire
     __emit(event: string, ...args: unknown[]) {
       for (const fn of listeners.get(event) ?? []) {
@@ -27,10 +36,12 @@ function createMockSocket() {
 }
 
 let lastMockSocket: ReturnType<typeof createMockSocket>;
+const allMockSockets: ReturnType<typeof createMockSocket>[] = [];
 
 vi.mock('socket.io-client', () => ({
   io: vi.fn((_url: string | undefined, _opts: unknown) => {
     lastMockSocket = createMockSocket();
+    allMockSockets.push(lastMockSocket);
     return lastMockSocket;
   }),
 }));
@@ -102,6 +113,61 @@ describe('socket service', () => {
     it('returns the socket instance', () => {
       const socket = createSocket();
       expect(socket).toBe(lastMockSocket);
+    });
+  });
+
+  // ── immediate reconnect ───────────────────────────────────────────────
+
+  describe('immediate reconnect', () => {
+    it('connects on window online when disconnected', () => {
+      createSocket();
+      window.dispatchEvent(new Event('online'));
+      expect(lastMockSocket.connect).toHaveBeenCalledTimes(1);
+    });
+
+    it('resets socket.io retry wait: disconnect() then connect()', () => {
+      createSocket();
+      window.dispatchEvent(new Event('online'));
+      expect(lastMockSocket.disconnect).toHaveBeenCalledTimes(1);
+      expect(lastMockSocket.connect).toHaveBeenCalledTimes(1);
+      expect(lastMockSocket.disconnect.mock.invocationCallOrder[0]!).toBeLessThan(
+        lastMockSocket.connect.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('does not revive a socket disposed while not connected', () => {
+      createSocket();
+      lastMockSocket.active = false;
+      window.dispatchEvent(new Event('online'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(lastMockSocket.connect).not.toHaveBeenCalled();
+    });
+
+    it('connects on visibilitychange to visible when disconnected', () => {
+      createSocket();
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(lastMockSocket.connect).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not connect when already connected', () => {
+      createSocket();
+      lastMockSocket.connected = true;
+      window.dispatchEvent(new Event('online'));
+      expect(lastMockSocket.connect).not.toHaveBeenCalled();
+    });
+
+    it('does not connect after an auth failure', () => {
+      createSocket();
+      lastMockSocket.__emit('connect_error', Object.assign(new Error('x'), { status: 401 }));
+      window.dispatchEvent(new Event('online'));
+      expect(lastMockSocket.connect).not.toHaveBeenCalled();
+    });
+
+    it('stops listening after a manual disconnect', () => {
+      createSocket();
+      lastMockSocket.__emit('disconnect', 'io client disconnect');
+      window.dispatchEvent(new Event('online'));
+      expect(lastMockSocket.connect).not.toHaveBeenCalled();
     });
   });
 

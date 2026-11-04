@@ -4,9 +4,9 @@
 try {
   var t = JSON.parse(localStorage.getItem('festie-ui-theme-v1') || 'null');
   var s = t && t.state;
-  var daylight = s && (s.followSystemTheme === true
+  var daylight = !s || s.followSystemTheme === true
     ? window.matchMedia('(prefers-color-scheme: light)').matches
-    : s.theme === 'daylight');
+    : s.theme === 'daylight';
   if (daylight) {
     document.documentElement.dataset.theme = 'daylight';
     document.documentElement.style.colorScheme = 'light';

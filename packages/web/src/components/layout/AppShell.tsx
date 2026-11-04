@@ -158,13 +158,13 @@ export default function AppShell() {
           Skip to main content
         </a>
 
-        <OfflineBanner />
         <RouteAnnouncer />
         <UpdatePrompt />
         <IOSInstallSheet />
         <Onboarding suspended={!!pendingJoinCode} />
         {joinCrewSheet}
         <Header />
+        <OfflineBanner />
         <SosBanner />
         <AnnouncementBanner />
         <LiveLocationSharing />

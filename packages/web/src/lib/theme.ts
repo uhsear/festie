@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useUIStore } from '@festie/shared/stores/uiStore';
+import { useUIStore, THEME_STORAGE_KEY } from '@festie/shared/stores/uiStore';
 import type { ThemePreference } from '@festie/shared/stores/uiStore';
 import { colors, colorsDaylight } from '@festie/shared/tokens';
 
@@ -17,10 +17,23 @@ export function applyTheme(theme: ThemePreference): void {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ground);
 }
 
+// A visitor with no saved preference follows the OS. Read at import, before any store write; mobile has no OS sync, so the shared default stays 'stage'.
+let firstVisit = (() => {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) === null;
+  } catch {
+    return false;
+  }
+})();
+
 /** Keep the document in step with the persisted theme preference, and with the OS scheme in Match system mode. */
 export function useThemeSync(): void {
   const theme = useUIStore((state) => state.theme);
   useEffect(() => {
+    if (firstVisit) {
+      firstVisit = false;
+      useUIStore.getState().setThemeMode('system');
+    }
     applyTheme(theme);
   }, [theme]);
 
