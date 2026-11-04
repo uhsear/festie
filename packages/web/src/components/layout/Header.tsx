@@ -11,7 +11,6 @@ import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
 import Button from '../ui/Button';
 import DaylightToggle from '../features/DaylightToggle';
-import { useThemeSync } from '../../lib/theme';
 import { SECTION_HREF, activeSection } from './sections';
 import { useLineupHref } from '../../hooks/useLineupHref';
 import { useCrewAttention } from '../../hooks/useCrewAttention';
@@ -29,10 +28,6 @@ export default function Header() {
   const current = activeSection(location.pathname);
   const lineupHref = useLineupHref();
   const desktopTabs = APP_SECTIONS.filter((section) => user || section.key !== 'more');
-
-  // Apply the persisted theme (stage | daylight) to <html> and the PWA chrome
-  // color. index.html does the same before first paint; this tracks changes.
-  useThemeSync();
 
   // Connection status — reflects real network state (uiStore.offlineMode, driven by
   // useOffline and API failures), not the realtime socket: HTTP can work while the
