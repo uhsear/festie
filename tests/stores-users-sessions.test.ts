@@ -239,6 +239,28 @@ describe('createUsersStore', () => {
     });
   });
 
+  describe('findDeletedByEmail', () => {
+    it('returns a soft-deleted user inside the 30-day window, matching email case-insensitively', async () => {
+      const pool = mockPool([{ rows: [fakeUserRow({ deletedAt: '2026-10-20T00:00:00.000Z' })], rowCount: 1 }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      const result = await users.findDeletedByEmail('alice@example.com');
+      assert.equal(result.username, 'alice');
+      assert.equal(pool.calls[0].params[0], 'alice@example.com');
+      const sql = norm(pool.calls[0].sql);
+      assert.ok(sql.includes('LOWER(email) = $1'));
+      assert.ok(sql.includes('deleted_at IS NOT NULL'));
+      assert.ok(sql.includes("deleted_at > NOW() - INTERVAL '30 days'"));
+    });
+
+    it('returns null when not found', async () => {
+      const pool = mockPool([{ rows: [], rowCount: 0 }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      assert.equal(await users.findDeletedByEmail('ghost@example.com'), null);
+    });
+  });
+
   describe('reactivate', () => {
     it('clears the soft delete only on a deleted row', async () => {
       const pool = mockPool([{ rows: [], rowCount: 1 }]);

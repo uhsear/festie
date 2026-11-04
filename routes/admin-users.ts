@@ -424,6 +424,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         await stores.users.update(targetUserId, { passwordHash: await hashPassword(newPassword) });
         invalidateUserCache();
         const username = user.username;
+        if (stores.loginFailures) await stores.loginFailures.reset(targetUserId);
         await invalidateUserSessions(targetUserId);
         // Revoke long-lived refresh tokens so a held token chain cannot
         // mint new sessions after the admin password reset (H2).
