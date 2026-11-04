@@ -9,7 +9,9 @@ import type { CrewOverlap, FestivalDay, FestivalSet, Priority, Stage } from '../
 
 export type LockscreenMode = 'picks' | 'full' | 'stages' | 'crew';
 export type LockscreenTheme = 'dark' | 'light';
-export type LockscreenTier = 'XL' | 'L' | 'M';
+export type LockscreenTier = 'XL' | 'L' | 'M' | 'S';
+/** Where the lock-screen clock ends: 'big' is the tall iOS clock, 'widgets' a big clock plus a widget row. */
+export type LockscreenClock = 'normal' | 'big' | 'widgets';
 /** 'poster' adds stage-colour beams, a panel behind the schedule and a gradient headline; layout and safe zones are the same. */
 export type LockscreenStyle = 'standard' | 'poster';
 
@@ -35,6 +37,11 @@ export interface LockscreenInput {
   stageIds?: string[] | null;
   /** Mode crew: from crewStore.crewOverlap. */
   crewOverlap?: Record<string, CrewOverlap>;
+  /**
+   * Mode crew: true once crewOverlap has loaded for this crew. An empty overlap is also the
+   * store's initial value, so rows are marked "solo" only when this is true.
+   */
+  crewLoaded?: boolean;
   /** The signed-in user's id, so crew initials skip them. */
   selfUserId?: string;
   theme: LockscreenTheme;
@@ -42,8 +49,17 @@ export interface LockscreenInput {
   style?: LockscreenStyle;
   width: number;
   height: number;
-  /** "Big iOS clock": content starts at 0.45 instead of 0.38. */
+  /** "Big iOS clock": content starts at 0.45 instead of 0.38. Ignored when `clock` is set. */
   tallClock?: boolean;
+  /** Clock height: 'normal' starts content at 0.38, 'big' at 0.45, 'widgets' at 0.50. Omitted: `tallClock` decides. */
+  clock?: LockscreenClock;
+  /**
+   * "From now": drop sets that have ended by this instant (epoch ms), using getSetTimeBounds
+   * with `days` and `timeZone`. Omitted keeps every set.
+   */
+  fromMs?: number;
+  /** Festival IANA zone for `fromMs`; omitted uses the device-local frame. */
+  timeZone?: string;
   /** Grid modes: force a single image. */
   onePage?: boolean;
   savedAt: Date;
@@ -58,7 +74,7 @@ export interface LockscreenPalette {
   must: string;
   want: string;
   maybe: string;
-  /** Clash text colour. */
+  /** Clash label and bracket colour. Neutral: never the Maybe or a stage orange. */
   clash: string;
 }
 
@@ -77,11 +93,14 @@ export interface LockscreenHeader {
   daySizeU: number;
   /** "1/2" when more than one image, else null. */
   pageChip: string | null;
-  /** "EDC Orlando · Nov 6" */
+  /**
+   * "EDC Orlando · Nov 6", shortened to "Nov 6" or "" when the line is too long. Renderers draw
+   * metaTop, " · " and metaBottom on one line.
+   */
   metaTop: string;
   /** "My picks · 9", with " · to 7 PM" appended on a split series. */
   metaBottom: string;
-  /** Font size in u for metaTop and metaBottom, shrunk so each stays on one line. */
+  /** Font size in u for the one meta line. */
   metaSizeU: number;
   y: number;
   height: number;
@@ -103,11 +122,24 @@ export interface LockscreenListRow {
   period: string;
   /** "to 7:00 PM" */
   until: string;
+  /** Display name without a trailing set tag. */
   artist: string;
   /** Wrapped artist lines, as the renderer must draw them. */
   artistLines: string[];
+  /** Artist font size in u for this row: the page size, or smaller for a long name. */
+  artistSizeU: number;
+  /** Artist colour by priority (Maybe is softer). */
+  artistColor: string;
+  /** Priority glyph colour; colour only on the must star. Null when no priority. */
+  glyphColor: string | null;
+  /** "Sunset Set" from "Alesso (Sunset Set)"; null when none or (tiers M, S) when it does not fit after the name. */
+  tag: string | null;
+  /** True when the start time equals the row above on this image: renderers leave the time blank. */
+  timeRepeat: boolean;
+  /** Rows whose sets overlap share a group number; null when the set clashes with no other row. */
+  clashGroup: number | null;
   stage: string;
-  /** Short stage name for the tier M chip. */
+  /** Short stage name for the tier M and S chip. */
   stageShort: string;
   stageText: string;
   stageMark: string;
@@ -115,7 +147,7 @@ export interface LockscreenListRow {
   ink: string;
   /** Null only for crew-mode rows the user did not pick. */
   priority: Priority | null;
-  /** "Clashes with Matthias (1h)" for XL/L, "clash" for M; null when none. */
+  /** "↔ Matthias" (or "↔ Matthias +1"), drawn in XL/L; tiers M and S show the clash bracket only. Null when none. */
   clash: { label: string; short: 'clash' } | null;
   crew: LockscreenCrewMarks | null;
   y: number;
@@ -127,9 +159,15 @@ export interface LockscreenListPage {
   tier: LockscreenTier;
   artistSizeU: number;
   timeSizeU: number;
-  /** Column positions in u. Marks (priority glyph, clash, crew) anchor to the right edge, `100 - sideU`. */
+  /** "PM" size in u. */
+  periodSizeU: number;
+  /** Stage chip text size in u (tiers M and S). */
+  chipSizeU: number;
+  /** Column positions in u. Marks (priority glyph, crew) anchor to the right edge, `100 - sideU`. */
   layout: { barX: number; timeX: number; timeWidth: number; chipX: number | null; chipWidth: number; artistX: number; artistWidth: number };
   rows: LockscreenListRow[];
+  /** Clash brackets: a thin bar at `x` beside each run of overlapping rows. */
+  clashSpans: Array<{ x: number; y: number; width: number; height: number }>;
   /** Index of the row the "AFTER MIDNIGHT" divider sits above, or null. */
   divider: { beforeIndex: number; y: number; label: string } | null;
 }
@@ -162,7 +200,7 @@ export interface LockscreenGridBlock {
   textMode: 'full' | 'name' | 'none';
   /** Wrapped artist lines (never split inside a word; an overlong word ends in an ellipsis), clamped to `maxLines`. */
   artistLines: string[];
-  /** True when the name was clamped; the last line ends with an ellipsis. */
+  /** True when the name was clamped or a word was cut; the last line ends with an ellipsis. */
   ellipsis: boolean;
   /** Modes with 1-2 columns: time goes inline after the name, e.g. "1-2:25"; the lines already include it. */
   inlineTime: string | null;
@@ -200,6 +238,10 @@ export interface LockscreenGridPage {
   /** Right of the hour gutter, so the legend never covers the last hour label. */
   legendX: number;
   legendY: number;
+  /** The legend is centred in legendX..legendX + legendWidth, clear of the torch and camera buttons. */
+  legendWidth: number;
+  /** Grid label size in u: hour labels, stage headers, block times and the legend. */
+  labelSizeU: number;
 }
 
 export interface LockscreenRect {
@@ -228,8 +270,11 @@ export type LockscreenPage = LockscreenListPage | LockscreenGridPage;
 
 export interface LockscreenPageModel {
   header: LockscreenHeader;
-  /** Footer text and whether to draw the Festie mark (dark theme only). */
-  footer: { text: string; showMark: boolean; y: number };
+  /**
+   * Footer text (at most 33 characters) and whether to draw the Festie mark (dark theme only).
+   * Centred in x..x + width, between the torch and camera buttons; `y` is the top of the line.
+   */
+  footer: { text: string; showMark: boolean; y: number; x: number; width: number; sizeU: number };
   body: LockscreenPage;
   /** Festival day index this image shows. */
   dayIndex: number;
@@ -277,10 +322,14 @@ export const LOCKSCREEN_PRESETS: readonly LockscreenPreset[] = [
 export const LOCKSCREEN_ZONES = {
   top: 0.38,
   tallTop: 0.45,
+  /** Big iOS 26 clock plus a widget row. */
+  widgetsTop: 0.5,
   // The schedule runs past the torch and camera buttons: they are see-through and
   // sit in the bottom corners, and users asked for the whole day on one image.
   contentEnd: 0.92,
   footerEnd: 0.96,
+  /** List rows: the time line ends above this, clear of the torch and camera buttons (spec 3.1). */
+  cornerSafe: 0.875,
   sidePadU: 6,
 } as const;
 

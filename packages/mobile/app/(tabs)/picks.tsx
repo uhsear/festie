@@ -61,6 +61,7 @@ import { Skeleton } from '../../components/Skeleton';
 import SetCardMobile from '../../components/SetCardMobile';
 import CrewSuggestionStrip from '../../components/CrewSuggestionStrip';
 import RateNightBanner from '../../components/RateNightBanner';
+import LockscreenStaleBanner from '../../components/LockscreenStaleBanner';
 import OfflineReadinessCard from '../../components/OfflineReadinessCard';
 import ClashCards from '../../components/ClashCards';
 import { WalkRow, GapRow, MeetRow, PlanListRow } from '../../components/PlanRows';
@@ -1025,6 +1026,7 @@ export default function PicksScreen() {
       {orderRow}
       {searchField}
       <CrewSuggestionStrip />
+      <LockscreenStaleBanner />
       <RateNightBanner />
       <View onLayout={(e) => setClashY(e.nativeEvent.layout.y)}>
         <ClashCards groups={conflictGroups} days={days} />

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const festivalState: Record<string, unknown> = {};
 const crewState: Record<string, unknown> = {};
@@ -16,7 +16,13 @@ vi.mock('@festie/shared/utils', () => ({
     { id: 'pixel-9', label: 'Pixel 9', width: 1080, height: 2424 },
   ],
   buildLockscreenModel: (...a: unknown[]) => mockBuild(...a),
+  defaultScheduleImageDay: () => null,
+  formatTime: (t: string) => t,
+  setMinuteRange: () => null,
 }));
+
+const crewHook = { status: 'ready', retry: vi.fn() };
+vi.mock('@festie/shared/hooks', () => ({ useCrewOverlapStatus: () => crewHook }));
 
 const mockCaptureMany = vi.fn();
 vi.mock('../../lib/shareImage', () => ({ captureAndShareImages: (...a: unknown[]) => mockCaptureMany(...a) }));
@@ -31,8 +37,8 @@ import LockscreenPanel from './LockscreenPanel';
 
 const fakePage = (n: number, count: number) => ({
   header: { day: 'FRIDAY', daySizeU: 7.4, pageChip: count > 1 ? `${n}/${count}` : null, metaTop: 'Fest · Jun 10', metaBottom: 'x', metaSizeU: 2.9, y: 38, height: 11 },
-  footer: { text: 'festie.us', showMark: true, y: 80 },
-  body: { kind: 'list', tier: 'M', artistSizeU: 5.6, timeSizeU: 5.4, rows: [], divider: null },
+  footer: { text: 'festie.us', showMark: true, y: 80, x: 26, width: 48, sizeU: 2.4 },
+  body: { kind: 'list', tier: 'M', artistSizeU: 5.6, timeSizeU: 5.4, periodSizeU: 2.27, chipSizeU: 2.6, rows: [], clashSpans: [], divider: null },
   dayIndex: 0,
   setIds: [],
 });
@@ -84,6 +90,8 @@ function setup(opts: { initialMode?: 'picks' | 'full' | 'stages' | 'crew'; crew?
 describe('LockscreenPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    crewHook.status = 'ready';
     mockBuild.mockImplementation(() => fakeModel(1));
   });
 
@@ -105,7 +113,7 @@ describe('LockscreenPanel', () => {
   });
 
   it('keeps at least one priority on', () => {
-    setup();
+    setup({ picks: { s1: 'must', s2: 'maybe' } });
     for (const name of ['Must', 'Want', 'Maybe']) fireEvent.click(screen.getByRole('button', { name }));
     const on = ['Must', 'Want', 'Maybe'].filter(
       (name) => screen.getByRole('button', { name }).getAttribute('aria-pressed') === 'true',
@@ -130,12 +138,51 @@ describe('LockscreenPanel', () => {
     expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ onePage: true }));
   });
 
-  it('passes theme, big clock and the day choice to the model', () => {
+  it('passes theme, clock and the day choice to the model', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: 'Sunlight' }));
-    fireEvent.click(screen.getByLabelText('Big iOS clock'));
+    fireEvent.click(screen.getByRole('button', { name: 'Clock + widgets' }));
     fireEvent.change(screen.getByLabelText('Day'), { target: { value: 'all' } });
-    expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'light', tallClock: true, dayIndex: 'all' }));
+    expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'light', clock: 'widgets', dayIndex: 'all' }));
+  });
+
+  it('remembers look options but not the mode', () => {
+    setup({ initialMode: 'full' });
+    fireEvent.click(screen.getByRole('button', { name: 'Sunlight' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Big clock' }));
+    expect(JSON.parse(localStorage.getItem('festie.lockscreen.options.v1')!)).toMatchObject({ theme: 'light', clock: 'big' });
+    expect(localStorage.getItem('festie.lockscreen.options.v1')).not.toContain('full');
+  });
+
+  it('restores saved look options and ignores bad JSON', () => {
+    localStorage.setItem('festie.lockscreen.options.v1', JSON.stringify({ theme: 'light', clock: 'big', priorities: ['must'] }));
+    setup();
+    expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'light', clock: 'big', priorities: ['must'] }));
+    localStorage.setItem('festie.lockscreen.options.v1', '{bad');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockBuild.mockClear();
+    setup();
+    expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'dark', clock: 'normal' }));
+  });
+
+  it('waits for crew picks and offers a way out when they fail', () => {
+    crewHook.status = 'loading';
+    setup({ initialMode: 'crew', crew: true });
+    expect(screen.getByRole('button', { name: "Loading your crew's picks…" })).toBeDisabled();
+    cleanup();
+    crewHook.status = 'error';
+    setup({ initialMode: 'crew', crew: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(crewHook.retry).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save without crew' }));
+    expect(screen.getByRole('button', { name: 'My picks' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('offers to hide Maybe picks when that fits the day on one image', () => {
+    mockBuild.mockImplementation((input: { priorities: string[] }) => fakeModel(input.priorities.includes('maybe') ? 2 : 1));
+    setup({ picks: { s1: 'must', s2: 'maybe' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Fit on 1 image: hide 1 Maybe pick' }));
+    expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ priorities: ['must', 'want-to-see'] }));
   });
 
   it('uses the chosen phone size preset', () => {
@@ -146,7 +193,7 @@ describe('LockscreenPanel', () => {
 
   it('falls back to the generic size on a non-phone screen', () => {
     setup();
-    expect(screen.getByRole('option', { name: 'This phone (1290 × 2796)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'This phone (estimated) (1290 × 2796)' })).toBeInTheDocument();
   });
 
   it('disables a day with nothing in the chosen mode', () => {
@@ -199,8 +246,16 @@ describe('LockscreenPanel', () => {
 
   it('shows the empty message when the model has no pages', () => {
     mockBuild.mockImplementation(() => fakeModel(0));
-    setup();
+    setup({ initialMode: 'full' });
     expect(screen.getByText('Nothing matches these options, so there is nothing to draw.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Save/ })).toBeNull();
+  });
+
+  it('points an empty picks image at the full lineup', () => {
+    mockBuild.mockImplementation(() => fakeModel(0));
+    setup({ picks: {} });
+    expect(screen.getByText('You have no picks yet.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show full lineup' }));
+    expect(screen.getByRole('button', { name: 'Full lineup' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

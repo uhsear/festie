@@ -36,7 +36,7 @@ const set = (id: string, dayIndex: number, startTime: string) => ({
   endTime: '23:00',
 });
 
-function setup(sets: unknown[], picks: Record<string, string>, initialMode?: 'full') {
+function setup(sets: unknown[], picks: Record<string, string>, initialMode?: 'full', story = true) {
   Object.keys(festivalState).forEach((k) => delete festivalState[k]);
   Object.assign(festivalState, {
     currentFestival: { id: 'f1', name: 'Bonnaroo' },
@@ -51,13 +51,17 @@ function setup(sets: unknown[], picks: Record<string, string>, initialMode?: 'fu
   });
   render(<ScheduleImageDialog initialMode={initialMode} />);
   fireEvent.click(screen.getByRole('button', { name: initialMode ? 'Lock screen image' : 'Save my picks as an image' }));
+  // The dialog opens on Lock screen; most cases here exercise the Story shape.
+  if (!initialMode && story) fireEvent.click(screen.getByRole('button', { name: 'Story' }));
 }
 
 describe('ScheduleImageDialog', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders the spec copy and the shape and day controls', () => {
-    setup([set('s1', 0, '20:00')], { s1: 'must' });
+    setup([set('s1', 0, '20:00')], { s1: 'must' }, undefined, false);
+    expect(screen.getByRole('button', { name: 'Lock screen' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Story' }));
     expect(screen.getByText('Save your picks as an image')).toBeInTheDocument();
     expect(screen.getByText("One day per image. If your picks don't all fit, Must See picks come first.")).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Shape' })).toBeInTheDocument();
