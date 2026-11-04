@@ -8,6 +8,8 @@ import { NoteStatusLine } from './DetailNotesSection';
 
 interface Props {
   myReminder: number | undefined;
+  /** True when `myReminder` is the must-see default, not an explicit choice. */
+  reminderIsDefault?: boolean;
   reminderBusy: number | null | 'clear';
   onReminderClick: (minutes: number | null) => Promise<void>;
   canRemind: boolean;
@@ -21,6 +23,7 @@ interface Props {
 
 export default function DetailReminderNotePanel({
   myReminder,
+  reminderIsDefault,
   reminderBusy,
   onReminderClick,
   canRemind,
@@ -53,6 +56,7 @@ export default function DetailReminderNotePanel({
           {canRemind && (
             <DetailReminderPicker
               myReminder={myReminder}
+              reminderIsDefault={reminderIsDefault}
               reminderBusy={reminderBusy}
               onReminderClick={onReminderClick}
             />

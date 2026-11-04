@@ -18,6 +18,7 @@ import {
   PRIORITY_RANK,
   buildOverlapBreakdown,
   festivalPhase,
+  isAfterMidnight,
   primarySpotifyArtist,
   reminderLeadLabel,
   reminderLeadA11y,
@@ -223,6 +224,7 @@ function SetCardMobileImpl({
   const artistName = artistDisplayName(set, b2bSeparator);
   const subtitle = artistSubtitle(set, b2bSeparator);
   const timeLabel = formatSetTimeRange(set) || 'TBA';
+  const lateNight = isAfterMidnight(set, days);
 
   // R19: live state drives the aqua border AND the coral "now" progress bar.
   const isLive = setStatus.status === 'live';
@@ -280,6 +282,11 @@ function SetCardMobileImpl({
 
         <View style={styles.metaRow}>
           <Text style={[styles.time, dimmed && styles.dimmedText]}>{timeLabel}</Text>
+          {lateNight ? (
+            <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Late
+            </Text>
+          ) : null}
           <LiveBadge status={setStatus.status} label={setStatus.label} />
           {hasNote ? (
             <Ionicons

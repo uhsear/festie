@@ -121,6 +121,15 @@ describe('SetCard', () => {
     expect(screen.getByRole('button', { name: /, Moved from Saturday 10:00 PM, Sahara$/ })).toBeInTheDocument();
   });
 
+  it('shows a Late cue only for a set that starts after midnight', () => {
+    const { rerender } = render(
+      <SetCard {...defaultProps} set={makeSet({ startTime: '01:00', endTime: '02:00', date: '2026-09-04' })} />,
+    );
+    expect(screen.getByText('Late')).toBeInTheDocument();
+    rerender(<SetCard {...defaultProps} set={makeSet({ date: '2026-09-04' })} />);
+    expect(screen.queryByText('Late')).toBeNull();
+  });
+
   it('hides the moved chip when the set has no fresh move', () => {
     render(<SetCard {...defaultProps} />);
     expect(screen.queryByTestId('set-moved-chip')).toBeNull();

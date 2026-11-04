@@ -7,6 +7,8 @@ import { cn } from '../../lib/utils';
 
 interface Props {
   myReminder: number | undefined;
+  /** True when `myReminder` is the must-see default; tapping it pins it as an explicit reminder. */
+  reminderIsDefault?: boolean;
   reminderBusy: number | null | 'clear';
   onReminderClick: (minutes: number | null) => Promise<void>;
 }
@@ -26,7 +28,12 @@ const baseButtonClass =
 const problemLinkClass =
   'min-h-[44px] px-2 underline cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua';
 
-export default function DetailReminderPicker({ myReminder, reminderBusy, onReminderClick }: Props) {
+export default function DetailReminderPicker({
+  myReminder,
+  reminderIsDefault = false,
+  reminderBusy,
+  onReminderClick,
+}: Props) {
   const navigate = useNavigate();
   const { permissionState, unsupportedReason, requestPermission, registerToken } = usePushNotifications();
   const setRemindersPref = useNotificationPrefsStore((s) => s.prefs.setReminders);
@@ -55,7 +62,7 @@ export default function DetailReminderPicker({ myReminder, reminderBusy, onRemin
       <div className="text-[length:var(--font-size-12)] font-bold uppercase tracking-[0.5px] text-text-secondary mb-2">
         Remind me before it starts
       </div>
-      <div className={cn('flex gap-2', problem ? 'mb-2' : 'mb-6')}>
+      <div className={cn('flex gap-2', problem || reminderIsDefault ? 'mb-2' : 'mb-6')}>
         {options.map(([m, label]) => {
           const active = myReminder === m;
           const isThisBusy = reminderBusy === m;
@@ -66,14 +73,20 @@ export default function DetailReminderPicker({ myReminder, reminderBusy, onRemin
               className={cn(baseButtonClass, active && 'border-accent-aqua bg-[var(--color-aqua-a08)]')}
               type="button"
               aria-pressed={active ? 'true' : 'false'}
-              aria-label={active ? `Reminder ${label} before, click to clear` : `Remind me ${label} before`}
+              aria-label={
+                active
+                  ? reminderIsDefault
+                    ? `Default reminder ${label} before, click to keep it`
+                    : `Reminder ${label} before, click to clear`
+                  : `Remind me ${label} before`
+              }
               aria-busy={isThisBusy ? 'true' : 'false'}
               disabled={anyBusy}
               onClick={async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (reminderBusy !== null) return;
-                await onReminderClick(active ? null : m);
+                await onReminderClick(active && !reminderIsDefault ? null : m);
               }}
             >
               <div className="text-[length:var(--font-size-12)] font-bold uppercase tracking-[0.5px]">{label}</div>
@@ -81,6 +94,15 @@ export default function DetailReminderPicker({ myReminder, reminderBusy, onRemin
           );
         })}
       </div>
+      {reminderIsDefault && (
+        <div className={cn('text-xs text-text-secondary', problem ? 'mb-2' : 'mb-6')}>
+          Default for must-see picks. Pick another time to change it, or{' '}
+          <button type="button" className={problemLinkClass} onClick={() => void navigate({ to: '/account' })}>
+            turn it off in Account
+          </button>
+          .
+        </div>
+      )}
       {problem && (
         <div role="status" className="mb-6 text-xs text-accent-amber">
           {problem === 'not-enabled' && (

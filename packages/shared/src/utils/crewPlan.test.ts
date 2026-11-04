@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatMeetWhen,
   pickActiveMeetingPoint,
   buildSlots,
   CREW_PLAN_SLOTS,
@@ -257,5 +258,18 @@ describe('crewOwnerInfo and crewFestivalName', () => {
     expect(crewFestivalName(crew, [], f('f1', 'One'))).toBeNull();
     expect(crewFestivalName({ festivalId: undefined }, [], f('f1', 'One'))).toBe('One');
     expect(crewFestivalName(null, [], null)).toBeNull();
+  });
+});
+
+describe('formatMeetWhen', () => {
+  // 2026-05-16T01:00Z is Fri 6:00 PM in Los Angeles but Sat 3:00 AM in Berlin.
+  const iso = '2026-05-16T01:00:00Z';
+  it('renders in the festival zone, independent of the device zone', () => {
+    expect(formatMeetWhen(iso, 'America/Los_Angeles')).toMatch(/^Fri,? 6:00\sPM$/);
+    expect(formatMeetWhen(iso, 'Europe/Berlin')).toMatch(/^Sat,? 3:00\sAM$/);
+  });
+  it('falls back to device-local without a zone and null when unparseable', () => {
+    expect(formatMeetWhen(iso)).toBe(new Date(iso).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }));
+    expect(formatMeetWhen('nope', 'Europe/Berlin')).toBeNull();
   });
 });

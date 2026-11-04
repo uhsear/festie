@@ -9,6 +9,7 @@ import {
   artistSubtitle,
   getSetLinks,
   platformLabel,
+  isSafeExternalUrl,
   formatFestivalDateRange,
 } from './format';
 import type { FestivalSet } from '../types/domain';
@@ -269,5 +270,16 @@ describe('formatDateSpan', () => {
   });
   it('returns null when both ends are missing', () => {
     expect(formatDateSpan(null, null)).toBeNull();
+  });
+});
+
+describe('isSafeExternalUrl', () => {
+  it('allows only http and https', () => {
+    expect(isSafeExternalUrl('https://open.spotify.com/artist/1')).toBe(true);
+    expect(isSafeExternalUrl('HTTP://example.com')).toBe(true);
+    expect(isSafeExternalUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeExternalUrl('data:text/html,hi')).toBe(false);
+    expect(isSafeExternalUrl('intent://x#Intent;end')).toBe(false);
+    expect(isSafeExternalUrl('')).toBe(false);
   });
 });

@@ -96,6 +96,18 @@ describe('DetailReminderPicker', () => {
     expect(onReminderClick).toHaveBeenCalledWith(null);
   });
 
+  it('shows the must-see default, pins it on tap, and links to Account to turn it off', async () => {
+    const user = userEvent.setup();
+    render(
+      <DetailReminderPicker myReminder={15} reminderIsDefault reminderBusy={null} onReminderClick={onReminderClick} />,
+    );
+    expect(screen.getByText(/Default for must-see picks/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Default reminder 15m before, click to keep it' }));
+    expect(onReminderClick).toHaveBeenCalledWith(15);
+    await user.click(screen.getByRole('button', { name: 'turn it off in Account' }));
+    expect(navigate).toHaveBeenCalledWith({ to: '/account' });
+  });
+
   it('disables all buttons while a reminder action is busy', () => {
     render(<DetailReminderPicker myReminder={undefined} reminderBusy={10} onReminderClick={onReminderClick} />);
     for (const btn of screen.getAllByRole('button')) {

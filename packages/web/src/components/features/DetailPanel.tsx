@@ -55,6 +55,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     stageName,
     myPick,
     myReminder,
+    reminderIsDefault,
     artistName,
     sub,
     artistLinks,
@@ -314,6 +315,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             {user ? (
               <DetailReminderNotePanel
                 myReminder={myReminder}
+                reminderIsDefault={reminderIsDefault}
                 reminderBusy={reminderBusy}
                 onReminderClick={handleReminderClick}
                 canRemind={canRemind}
