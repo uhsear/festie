@@ -152,7 +152,13 @@ async function enqueueOfflineMutation<T>(path: string, method: string, options: 
   const clientId = options.clientId ?? (method === 'POST' ? `POST:${path}:${randomId()}` : `${method}:${path}`);
   const label = options.offlineLabel ?? `${method} ${path}`;
   const body = options.body;
-  const idempotencyKey = Object.entries(options.headers || {}).find(([k]) => k.toLowerCase() === 'idempotency-key')?.[1];
+  // PUT/PATCH/DELETE clientIds are per-resource, so two different offline edits share one
+  // clientId. Key each queued version separately: the server caches a key for 5 min and would
+  // replay the first edit's response for the second, silently dropping it. Retries of the
+  // same queued version keep this key, so duplicate replays still dedup.
+  const idempotencyKey =
+    Object.entries(options.headers || {}).find(([k]) => k.toLowerCase() === 'idempotency-key')?.[1] ??
+    (method === 'POST' ? undefined : `${clientId}:${randomId()}`);
 
   // Web PWA: hand off to the IndexedDB-backed bridge so the web + RN paths share
   // one durable queue surface per platform.
