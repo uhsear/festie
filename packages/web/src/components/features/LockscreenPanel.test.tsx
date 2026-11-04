@@ -18,6 +18,8 @@ vi.mock('@festie/shared/utils', () => ({
   buildLockscreenModel: (...a: unknown[]) => mockBuild(...a),
 }));
 
+vi.mock('@festie/shared/hooks', () => ({ useCrewOverlapStatus: () => ({ status: 'ready', retry: () => {} }) }));
+
 const mockCaptureMany = vi.fn();
 vi.mock('../../lib/shareImage', () => ({ captureAndShareImages: (...a: unknown[]) => mockCaptureMany(...a) }));
 

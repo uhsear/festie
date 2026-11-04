@@ -66,7 +66,7 @@ interface TierSpec {
 }
 const XL: TierSpec = { tier: 'XL', timeU: 7.4, periodU: 2.6, artistU: 7.6, maxLines: 3, twoLine: true };
 const L: TierSpec = { tier: 'L', timeU: 6.2, periodU: 2.4, artistU: 6.4, maxLines: 2, twoLine: true };
-const M56: TierSpec = { tier: 'M', timeU: 5.4, periodU: 2.27, artistU: 5.6, maxLines: 1, twoLine: false };
+const M56: TierSpec = { tier: 'M', timeU: 4.8, periodU: 2.27, artistU: 5.6, maxLines: 2, twoLine: false };
 const M46: TierSpec = { tier: 'M', timeU: 5.4, periodU: 2.27, artistU: 4.6, maxLines: 2, twoLine: false };
 
 // ---- colour -------------------------------------------------------------
@@ -328,6 +328,16 @@ function selectItems(input: LockscreenInput, dayIndex: number): Item[] {
   return items.sort((a, b) => a.start - b.start);
 }
 
+/** Picks on `dayIndex` that pass the priority filter but have no set time yet, so the list cannot draw them. */
+function untimedPickCount(input: LockscreenInput, dayIndex: number): number {
+  if (input.mode !== 'picks' && input.mode !== 'crew') return 0;
+  const wanted = input.priorities?.length ? new Set(input.priorities) : null;
+  return input.sets.filter((set) => {
+    const priority = input.picks?.[set.id];
+    return (set.dayIndex ?? 0) === dayIndex && priority && (!wanted || wanted.has(priority)) && !HHMM.test(set.startTime ?? '');
+  }).length;
+}
+
 function dayIndexesFor(input: LockscreenInput): number[] {
   if (input.dayIndex !== 'all') return [input.dayIndex];
   const seen = new Set<number>(input.days.map((d, i) => d.dayIndex ?? i));
@@ -407,7 +417,11 @@ function baseRows(items: Item[], ctx: Ctx): BaseRow[] {
       clash: badge ? { label: badge.label, short: 'clash' as const } : null,
       crew:
         input.mode === 'crew'
-          ? { initials: members.slice(0, 3).map(initialsOf), more: Math.max(0, members.length - 3), solo: members.length === 0 }
+          ? {
+              initials: members.slice(0, 3).map(initialsOf),
+              more: Math.max(0, members.length - 3),
+              solo: members.length === 0 && input.crewLoaded === true,
+            }
           : null,
     };
   });
@@ -432,7 +446,7 @@ function listColumns(
     const artistX = timeX + timeWidth + 2;
     return { barX: side, timeX, timeWidth, chipX: null, chipWidth: 0, artistX, artistWidth: 100 - side - marks - artistX };
   }
-  const timeWidth = Math.max(17.5, widest);
+  const timeWidth = Math.max(15.5, widest);
   const chipX = side + timeWidth + 1.5;
   const artistX = chipX + 13 + 2;
   return { barX: side, timeX: side, timeWidth, chipX, chipWidth: 13, artistX, artistWidth: 100 - side - marks - artistX };
@@ -446,7 +460,7 @@ function rowHeightU(spec: TierSpec, lines: number): number {
   return Math.max(spec.timeU * 1.1 + 3.6, lines * spec.artistU * 1.12 + 3.75) + 3.2;
 }
 
-/** Lays one page's rows out at `spec`, or null when they do not fit `availU` (or a tier-M row wraps at 5.6u). */
+/** Lays one page's rows out at `spec`, or null when they do not fit `availU`. */
 function layoutList(
   rows: BaseRow[],
   items: Item[],
@@ -457,11 +471,9 @@ function layoutList(
   force: boolean,
 ): LockscreenListPage | null {
   const layout = listColumns(spec, ctx.sideU, ctx.input.mode === 'crew', rows.some((r) => r.clash), rows);
-  const sized = rows.map((r) => {
-    const wrapped = wrapArtist(r.artist, spec.artistU, layout.artistWidth * LIST_FIT);
-    return { lines: clampLines(wrapped, spec.maxLines).lines, tooLong: wrapped.length > spec.maxLines };
-  });
-  if (!force && spec === M56 && sized.some((s) => s.tooLong)) return null;
+  const sized = rows.map((r) => ({
+    lines: clampLines(wrapArtist(r.artist, spec.artistU, layout.artistWidth * LIST_FIT), spec.maxLines).lines,
+  }));
   const dividerAt = items.findIndex((it, i) => i > 0 && startsAfterMidnight(it.set.startTime) && !startsAfterMidnight(items[i - 1]!.set.startTime));
   let y = y0;
   const out = rows.map((r, i): LockscreenListRow => {
@@ -662,6 +674,7 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
           });
         })();
     const n = bodies.length;
+    const untimed = untimedPickCount(input, dayIndex);
     series.push({
       dayIndex,
       pages: bodies.map((b, i) => {
@@ -670,7 +683,7 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
           input.mode === 'stages'
             ? `${(b.body as LockscreenGridPage).columns.length} ${(b.body as LockscreenGridPage).columns.length === 1 ? 'stage' : 'stages'}`
             : modeLabel(input, items.length);
-        const meta = [label, b.tail].filter(Boolean).join(' · ');
+        const meta = [label, b.tail, untimed ? `+${untimed} no set time` : ''].filter(Boolean).join(' · ');
         return {
           header: buildHeader(ctx, dayIndex, chip, meta),
           body: b.body,

@@ -35,6 +35,11 @@ export interface LockscreenInput {
   stageIds?: string[] | null;
   /** Mode crew: from crewStore.crewOverlap. */
   crewOverlap?: Record<string, CrewOverlap>;
+  /**
+   * Mode crew: true once crewOverlap has loaded for this crew. An empty overlap is also the
+   * store's initial value, so rows are marked "solo" only when this is true.
+   */
+  crewLoaded?: boolean;
   /** The signed-in user's id, so crew initials skip them. */
   selfUserId?: string;
   theme: LockscreenTheme;

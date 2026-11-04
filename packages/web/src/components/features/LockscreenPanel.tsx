@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
+import { useCrewOverlapStatus } from '@festie/shared/hooks';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import { LOCKSCREEN_PRESETS, buildLockscreenModel } from '@festie/shared/utils';
 import type { LockscreenMode, LockscreenStyle, LockscreenTheme } from '@festie/shared/utils';
@@ -71,6 +72,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   const preset = LOCKSCREEN_PRESETS.find((p) => p.id === presetId);
   const size = preset ? { width: preset.width, height: preset.height } : device;
   const isPickMode = mode === 'picks' || mode === 'crew';
+  const crewLoaded = useCrewOverlapStatus(mode === 'crew', festival?.id).status === 'ready';
 
   const dayHasSets = useMemo(() => {
     const out = new Set<number>();
@@ -107,6 +109,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             priorities,
             stageIds: mode === 'stages' ? stageIds : null,
             crewOverlap: mode === 'crew' ? crewOverlap : undefined,
+            crewLoaded,
             selfUserId,
             theme,
             style: lockStyle,
@@ -117,7 +120,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             savedAt: new Date(),
           })
         : null,
-    [festival, sets, stages, days, picks, dayIndex, mode, priorities, stageIds, crewOverlap, selfUserId, theme, lockStyle, size.width, size.height, tallClock, onePage],
+    [festival, sets, stages, days, picks, dayIndex, mode, priorities, stageIds, crewOverlap, crewLoaded, selfUserId, theme, lockStyle, size.width, size.height, tallClock, onePage],
   );
 
   if (!festival) return null;

@@ -2,6 +2,7 @@ import type { FestivalDay, FestivalSet, Priority, Stage } from '../types/domain'
 import { artistDisplayName, formatTime } from './format';
 import type { LockscreenMode } from './lockscreen';
 import { byStartTime, formatDayChip } from './scheduleFormat';
+import { getSetTimeBounds } from './setStatus';
 
 export type ScheduleImageFormat = 'story' | 'lockscreen' | 'print';
 
@@ -124,20 +125,34 @@ export function buildScheduleImageModel(args: {
 /**
  * The selected day when it has something to show, else the first day that does; null when none does.
  * Picks and crew need a timed pick. Full and stages need a timed set.
+ * With `nowMs`, a picks or crew day whose timed picks have all ended gives way to the next day with picks.
+ * `selectedDay` is a position in `days` (what logicalDayIndexAt returns), matched against set.dayIndex.
  */
 export function defaultScheduleImageDay(args: {
   sets: FestivalSet[];
   picks: Record<string, Priority> | undefined;
   selectedDay: number;
   mode?: LockscreenMode;
+  days?: FestivalDay[];
+  nowMs?: number;
+  timeZone?: string;
 }): number | null {
   const needsPick = !args.mode || args.mode === 'picks' || args.mode === 'crew';
-  const withTimedSets = new Set(
-    args.sets.filter((s) => (!needsPick || args.picks?.[s.id]) && hasStart(s)).map((s) => s.dayIndex ?? 0),
-  );
-  if (withTimedSets.has(args.selectedDay)) return args.selectedDay;
-  const days = [...withTimedSets].sort((a, b) => a - b);
-  return days.length ? days[0]! : null;
+  const shown = args.sets.filter((s) => (!needsPick || args.picks?.[s.id]) && hasStart(s));
+  const withTimedSets = new Set(shown.map((s) => s.dayIndex ?? 0));
+  const sorted = [...withTimedSets].sort((a, b) => a - b);
+  if (!withTimedSets.has(args.selectedDay)) return sorted.length ? sorted[0]! : null;
+  if (!needsPick || args.nowMs == null) return args.selectedDay;
+  const now = args.nowMs;
+  const ended = (day: number) =>
+    shown
+      .filter((s) => (s.dayIndex ?? 0) === day)
+      .every((s) => {
+        const bounds = getSetTimeBounds(s, args.days, args.timeZone);
+        return bounds != null && bounds.endMs <= now;
+      });
+  if (!ended(args.selectedDay)) return args.selectedDay;
+  return sorted.find((d) => d > args.selectedDay && !ended(d)) ?? args.selectedDay;
 }
 
 const slug = (text: string) =>

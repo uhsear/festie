@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   PixelRatio,
@@ -10,7 +10,9 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   type HostInstance,
+  type ScrollViewInstance,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
@@ -18,6 +20,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useAuthStore, useCrewStore, useFestivalDataStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
 import { COPY, PRIORITY_LABEL } from '@festie/shared/constants';
 import { fetchPrintableSchedule, mapErrorToUserMessage } from '@festie/shared/services';
+import { useCrewOverlapStatus } from '@festie/shared/hooks';
 import {
   LOCKSCREEN_PRESETS,
   SCHEDULE_IMAGE_LAYOUT,
@@ -25,10 +28,12 @@ import {
   buildScheduleImageModel,
   defaultScheduleImageDay,
   formatDayChip,
+  formatTime,
+  setMinuteRange,
   type LockscreenMode,
   type ScheduleImageFormat,
 } from '@festie/shared/utils';
-import type { Priority } from '@festie/shared/types';
+import type { FestivalSet, Priority } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import SegmentedControl from '../components/SegmentedControl';
@@ -64,8 +69,64 @@ const LOOK_OPTIONS = [
 
 const PRIORITIES: Priority[] = ['must', 'want-to-see', 'maybe'];
 const FALLBACK_SIZE = { width: 1290, height: 2796 };
+const HHMM = /^\d{1,2}:\d{2}$/;
+const IOS = Platform.OS === 'ios';
+const OPTIONS_KEY = 'festie.lockscreen.options.v1';
+const CAPTURE_ERROR = "Couldn't make the image. Try again. If it keeps failing, choose a smaller phone size.";
+
+const HELP_STEPS = IOS
+  ? [
+      'Open Photos. Your image is the newest photo.',
+      'Tap Share, then Use as Wallpaper.',
+      'Turn off Perspective Zoom if it is offered. Do not pinch. Tap Add, then Set as Lock Screen.',
+    ]
+  : [
+      'Open Photos or Gallery. Your image is the newest one.',
+      'Tap ⋮, then look for Set as wallpaper or Use as. Choose Lock screen.',
+    ];
+const HELP_MULTI = IOS
+  ? 'You can add a second lock screen. Long-press the lock screen and tap +.'
+  : 'Set image 1 now. Set image 2 later in the day.';
+const NOTIFICATION_TIP = IOS
+  ? 'If notifications cover it: Settings › Notifications › Display As › Count.'
+  : 'Set lock-screen notifications to icons only.';
 
 const isMode = (v: unknown): v is LockscreenMode => MODE_OPTIONS.some((o) => o.value === v);
+
+/** Look options restored from the last visit. Mode and phone size are never restored. */
+interface SavedOptions {
+  theme?: 'dark' | 'light';
+  lockStyle?: 'standard' | 'poster';
+  priorities?: Priority[];
+  tallClock?: boolean;
+}
+
+function parseSavedOptions(raw: string | null): SavedOptions {
+  if (!raw) return {};
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    const list = Array.isArray(o.priorities) ? (o.priorities as unknown[]) : [];
+    const priorities = PRIORITIES.filter((p) => list.includes(p));
+    return {
+      theme: o.theme === 'dark' || o.theme === 'light' ? o.theme : undefined,
+      lockStyle: o.lockStyle === 'standard' || o.lockStyle === 'poster' ? o.lockStyle : undefined,
+      priorities: priorities.length ? priorities : undefined,
+      tallClock: typeof o.tallClock === 'boolean' ? o.tallClock : undefined,
+    };
+  } catch (err) {
+    console.warn('picks image: ignoring bad saved options', err);
+    return {};
+  }
+}
+
+/** "1 PM – 9 PM": first start to the latest end of the sets on one image. */
+function spanLabel(pageSets: FestivalSet[]): string {
+  if (!pageSets.length) return '';
+  const short = (t: string) => formatTime(t).replace(':00', '');
+  const endOf = (s: FestivalSet) => setMinuteRange(s)?.end ?? 0;
+  const last = pageSets.reduce((a, b) => (endOf(b) > endOf(a) ? b : a));
+  return `${short(pageSets[0]!.startTime)} – ${short(last.endTime || last.startTime)}`;
+}
 
 /** The real screen in device pixels; a non-phone shape falls back to a 9:19.5 phone. */
 function detectScreenSize() {
@@ -91,8 +152,8 @@ const nextTwoFrames = () =>
  * Save your picks or the lineup as an image: a lock-screen wallpaper sized to this
  * phone (one or more images), a 9:16 story or an A4 print. Lock-screen layout comes
  * from the shared buildLockscreenModel; the poster is captured on the device (no
- * network) and handed to the share sheet one image at a time. Also offers the
- * server's printable HTML page.
+ * network) and handed to the share sheet one image at a time, starting from the
+ * image on screen. Also offers the server's printable HTML page.
  */
 export default function PicksImageScreen() {
   const t = useTokens();
@@ -123,19 +184,60 @@ export default function PicksImageScreen() {
   const [presetId, setPresetId] = useState<string | null>(null);
   const [choosingSize, setChoosingSize] = useState(false);
   const [previewPage, setPreviewPage] = useState(0);
-  const [saved, setSaved] = useState({ key: '', pages: 0 });
+  const [savedKey, setSavedKey] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
+  const [helpSeen, setHelpSeen] = useState(false);
   const [capturePage, setCapturePage] = useState(0);
   const [chosenDay, setChosenDay] = useState<DayChoice | null>(null);
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [nowMs] = useState(() => Date.now());
+  const [hydrated, setHydrated] = useState(false);
   const posterRef = useRef<HostInstance>(null);
+  const pagerRef = useRef<ScrollViewInstance>(null);
+  // Set once the user changes a look option, so a late restore never overwrites their tap.
+  const touched = useRef(false);
+
+  useEffect(() => {
+    let live = true;
+    AsyncStorage.getItem(OPTIONS_KEY)
+      .then((raw) => {
+        if (!live || touched.current) return;
+        const o = parseSavedOptions(raw);
+        if (o.theme) setTheme(o.theme);
+        if (o.lockStyle) setLockStyle(o.lockStyle);
+        if (o.priorities) setPriorities(o.priorities);
+        if (o.tallClock != null) setTallClock(o.tallClock);
+      })
+      .catch((err: unknown) => console.warn('picks image: could not read saved options', err))
+      .finally(() => {
+        if (live) setHydrated(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(OPTIONS_KEY, JSON.stringify({ theme, lockStyle, priorities, tallClock })).catch(
+      (err: unknown) => console.warn('picks image: could not save options', err),
+    );
+  }, [hydrated, theme, lockStyle, priorities, tallClock]);
+
+  const byUser =
+    <T,>(set: (v: T) => void) =>
+    (v: T) => {
+      touched.current = true;
+      set(v);
+    };
 
   const format: Exclude<ScheduleImageFormat, 'lockscreen'> = shape === 'lockscreen' ? 'story' : shape;
   const lockMode: LockscreenMode = mode === 'crew' && !activeCrew ? 'picks' : mode;
-  const picksDay = defaultScheduleImageDay({ sets, picks, selectedDay });
+  const crew = useCrewOverlapStatus(shape === 'lockscreen' && lockMode === 'crew', festival?.id);
+  const crewLoaded = crew.status === 'ready';
   const needsPicks = lockMode === 'picks' || lockMode === 'crew';
-  const lockDay: DayChoice = chosenDay ?? (needsPicks ? (picksDay ?? selectedDay) : selectedDay);
-  const storyDay = (chosenDay === 'all' ? null : chosenDay) ?? picksDay;
+  const picksDay = defaultScheduleImageDay({ sets, picks, selectedDay, days, nowMs, timeZone: festival?.timeZone });
 
   const screenSize = useMemo(() => detectScreenSize(), []);
   const size = LOCKSCREEN_PRESETS.find((p) => p.id === presetId) ?? screenSize;
@@ -155,7 +257,7 @@ export default function PicksImageScreen() {
   );
 
   const lockFor = useCallback(
-    (day: DayChoice) =>
+    (day: DayChoice, only?: Priority[]) =>
       buildLockscreenModel({
         festival: { name: festival?.name ?? 'Festie', b2bSeparator: festival?.b2bSeparator },
         sets,
@@ -164,9 +266,10 @@ export default function PicksImageScreen() {
         picks,
         dayIndex: day,
         mode: lockMode,
-        priorities,
+        priorities: only ?? priorities,
         stageIds: stageIds.length ? stageIds : null,
         crewOverlap,
+        crewLoaded,
         selfUserId,
         theme,
         style: lockStyle,
@@ -187,6 +290,7 @@ export default function PicksImageScreen() {
       priorities,
       stageIds,
       crewOverlap,
+      crewLoaded,
       selfUserId,
       theme,
       lockStyle,
@@ -196,8 +300,6 @@ export default function PicksImageScreen() {
       onePage,
     ],
   );
-
-  const lockModel = useMemo(() => (shape === 'lockscreen' ? lockFor(lockDay) : null), [shape, lockFor, lockDay]);
 
   const dayChips = useMemo(
     () =>
@@ -212,20 +314,33 @@ export default function PicksImageScreen() {
     [days, shape, lockFor, sets, picks],
   );
 
+  // A day chosen in another mode can be empty here; fall back the way web does.
+  const chosen = typeof chosenDay === 'number' && !dayChips[chosenDay]?.enabled ? null : chosenDay;
+  const lockDay: DayChoice = chosen ?? (needsPicks ? (picksDay ?? selectedDay) : selectedDay);
+  const storyDay = (chosen === 'all' ? null : chosen) ?? picksDay;
+
+  const lockModel = useMemo(() => (shape === 'lockscreen' ? lockFor(lockDay) : null), [shape, lockFor, lockDay]);
+
   const model = useMemo(
     () => (shape === 'lockscreen' || storyDay == null ? null : modelFor(storyDay, format)),
     [shape, storyDay, format, modelFor],
   );
 
   const pageCount = lockModel?.pages.length ?? 1;
-  // A changed picture restarts the one-at-a-time save from image 1.
-  const saveKey = JSON.stringify([lockMode, lockDay, priorities, stageIds, theme, lockStyle, size, tallClock, onePage]);
-  const savedPages = saved.key === saveKey ? saved.pages : 0;
+  const visiblePage = Math.min(previewPage, pageCount - 1);
+  // A changed picture goes back to image 1.
+  const saveKey = JSON.stringify([shape, lockMode, lockDay, priorities, stageIds, theme, lockStyle, size, tallClock, onePage]);
   const layout = shape === 'lockscreen' ? size : SCHEDULE_IMAGE_LAYOUT[format];
   const previewW = Math.min(260, width - 32);
   const scale = previewW / layout.width;
   const ready = shape === 'lockscreen' ? lockModel != null && !lockModel.empty : model != null;
   const dayValue: DayChoice | null = shape === 'lockscreen' ? lockDay : storyDay;
+  const crewWaiting = shape === 'lockscreen' && lockMode === 'crew' && crew.status === 'loading';
+
+  useEffect(() => {
+    setPreviewPage(0);
+    pagerRef.current?.scrollTo({ x: 0, animated: false });
+  }, [saveKey]);
 
   const showError = useCallback(
     (message: string) => {
@@ -236,9 +351,9 @@ export default function PicksImageScreen() {
   );
 
   const handleSave = useCallback(async () => {
-    if (!ready || saving) return;
+    if (!ready || saving || crewWaiting) return;
     setSaving(true);
-    const page = shape === 'lockscreen' ? Math.min(savedPages, pageCount - 1) : 0;
+    const page = shape === 'lockscreen' ? visiblePage : 0;
     setCapturePage(page);
     // The capture copy mounts only while saving. Wait two frames so React commits
     // and lays it out before captureRef looks up its native node.
@@ -247,7 +362,7 @@ export default function PicksImageScreen() {
       // iOS view-shot takes width/height in points and renders at the device scale,
       // so pixel sizes made a 3x canvas (8388 px tall) past the 8192 px limit.
       // Android takes pixels.
-      const toUnits = Platform.OS === 'ios' ? 1 / PixelRatio.get() : 1;
+      const toUnits = IOS ? 1 / PixelRatio.get() : 1;
       const uri = await captureRef(posterRef, {
         format: 'png',
         quality: 1,
@@ -256,22 +371,47 @@ export default function PicksImageScreen() {
         result: 'tmpfile',
       });
       if (!(await Sharing.isAvailableAsync())) {
-        showError("Couldn't make the image. Try again.");
+        showError(CAPTURE_ERROR);
         return;
       }
       await Sharing.shareAsync(uri, {
         mimeType: 'image/png',
         UTI: 'public.png',
-        dialogTitle: 'Save your picks image',
+        dialogTitle: shape === 'lockscreen' ? 'Save your lock-screen image' : 'Save your picks image',
       });
-      if (shape === 'lockscreen') setSaved({ key: saveKey, pages: page + 1 >= pageCount ? 0 : page + 1 });
+      // The sheet resolves the same way for save and cancel, so move on without claiming a save.
+      if (shape === 'lockscreen') {
+        if (!helpSeen) {
+          setShowHelp(true);
+          setHelpSeen(true);
+        }
+        if (page + 1 < pageCount) {
+          setPreviewPage(page + 1);
+          pagerRef.current?.scrollTo({ x: (page + 1) * previewW, animated: true });
+        } else {
+          setSavedKey(saveKey);
+        }
+      }
     } catch (err) {
       console.warn('picks image: capture failed', err);
-      showError("Couldn't make the image. Try again.");
+      showError(CAPTURE_ERROR);
     } finally {
       setSaving(false);
     }
-  }, [ready, saving, shape, savedPages, saveKey, pageCount, layout.width, layout.height, showError]);
+  }, [
+    ready,
+    saving,
+    crewWaiting,
+    shape,
+    visiblePage,
+    helpSeen,
+    pageCount,
+    previewW,
+    saveKey,
+    layout.width,
+    layout.height,
+    showError,
+  ]);
 
   const handlePrintable = useCallback(async () => {
     if (!festival || !profile || printing) return;
@@ -294,7 +434,9 @@ export default function PicksImageScreen() {
   }, [festival, profile, printing, showError]);
 
   const togglePriority = (p: Priority) =>
-    setPriorities((cur) => (cur.includes(p) ? (cur.length > 1 ? cur.filter((x) => x !== p) : cur) : [...cur, p]));
+    byUser(setPriorities)(
+      priorities.includes(p) ? (priorities.length > 1 ? priorities.filter((x) => x !== p) : priorities) : [...priorities, p],
+    );
   const toggleStage = (id: string) =>
     setStageIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
@@ -328,20 +470,78 @@ export default function PicksImageScreen() {
     </Text>
   );
 
-  const switchRow = (text: string, value: boolean, onChange: (v: boolean) => void) => (
-    <View style={styles.switchRow}>
-      <Text style={styles.switchLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        {text}
-      </Text>
-      <AppSwitch value={value} onValueChange={onChange} accessibilityLabel={text} accessibilityState={{ checked: value }} />
+  const switchRow = (text: string, value: boolean, onChange: (v: boolean) => void, helper?: string) => (
+    <View>
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {text}
+        </Text>
+        <AppSwitch value={value} onValueChange={onChange} accessibilityLabel={text} accessibilityState={{ checked: value }} />
+      </View>
+      {helper ? (
+        <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {helper}
+        </Text>
+      ) : null}
     </View>
+  );
+
+  const linkButton = (label: string, onPress: () => void) => (
+    <TouchableOpacity onPress={onPress} accessibilityRole="button" accessibilityLabel={label} hitSlop={8}>
+      <Text style={styles.link} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 
   const modeOptions = MODE_OPTIONS.filter((o) => o.value !== 'crew' || activeCrew);
   const lockscreen = shape === 'lockscreen';
   const grid = lockModel?.pages[0]?.body.kind === 'grid';
-  const saveLabel =
-    lockscreen && pageCount > 1 ? `Save image ${savedPages + 1} of ${pageCount}` : 'Save image';
+
+  const setById = useMemo(() => new Map(sets.map((s) => [s.id, s])), [sets]);
+  const pageSpan = (i: number) => {
+    const ids = lockModel?.pages[i]?.setIds ?? [];
+    return spanLabel(ids.map((id) => setById.get(id)).filter((s): s is FestivalSet => s != null));
+  };
+  // Timed picks on this day (any priority) next to the ones drawn, so a remembered filter stays visible.
+  const timedPicks = needsPicks
+    ? sets.filter((s) => picks?.[s.id] && HHMM.test(s.startTime ?? '') && (lockDay === 'all' || (s.dayIndex ?? 0) === lockDay))
+        .length
+    : 0;
+  const shownPicks = lockModel?.pages.reduce((n, p) => n + p.setIds.length, 0) ?? 0;
+  const statusLine = lockModel
+    ? [
+        pageCount > 1 ? `Image ${visiblePage + 1} of ${pageCount}` : '',
+        pageSpan(visiblePage),
+        needsPicks && shownPicks < timedPicks ? `Showing ${shownPicks} of ${timedPicks} picks` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+
+  const verb = IOS ? 'Save' : 'Share';
+  const savedAll = lockscreen && savedKey === saveKey && visiblePage === pageCount - 1;
+  const saveLabel = !lockscreen
+    ? IOS
+      ? 'Save to Photos…'
+      : 'Share image…'
+    : savedAll
+      ? `${verb} again…`
+      : pageCount > 1
+        ? `${verb} image ${visiblePage + 1} of ${pageCount}…`
+        : IOS
+          ? 'Save to Photos…'
+          : 'Share image…';
+
+  const noPicksAtAll = needsPicks && !Object.keys(picks ?? {}).length;
+  const dayName = typeof lockDay === 'number' && days[lockDay] ? formatDayChip(days[lockDay]!).label : 'this day';
+  const emptyText = !lockscreen
+    ? 'None of your picks have a set time yet, so there is nothing to draw.'
+    : noPicksAtAll
+      ? 'You have no picks yet.'
+      : needsPicks
+        ? `No picks on ${dayName} with these filters.`
+        : 'Nothing matches these choices for this day, so there is nothing to draw.';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -364,7 +564,7 @@ export default function PicksImageScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
             {modeOptions.map((o) => chip(o.value, o.label, lockMode === o.value, () => setMode(o.value)))}
           </ScrollView>
-          {lockMode === 'picks' || lockMode === 'crew' ? (
+          {needsPicks ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
               {PRIORITIES.map((p) => chip(p, PRIORITY_LABEL[p], priorities.includes(p), () => togglePriority(p)))}
             </ScrollView>
@@ -374,6 +574,17 @@ export default function PicksImageScreen() {
               {chip('all-stages', 'All stages', stageIds.length === 0, () => setStageIds([]))}
               {stages.map((st) => chip(st.id, st.name, stageIds.includes(st.id), () => toggleStage(st.id)))}
             </ScrollView>
+          ) : null}
+          {lockMode === 'crew' && crew.status === 'error' ? (
+            <View style={styles.notice}>
+              <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {"Couldn't load your crew's picks. Check your connection."}
+              </Text>
+              <View style={styles.sizeRow}>
+                {linkButton('Retry', crew.retry)}
+                {linkButton('Save without crew', () => setMode('picks'))}
+              </View>
+            </View>
           ) : null}
         </>
       ) : null}
@@ -391,9 +602,16 @@ export default function PicksImageScreen() {
       {lockscreen ? (
         <>
           {heading('Style')}
-          <SegmentedControl options={THEME_OPTIONS} value={theme} onChange={setTheme} accessibilityLabel="Style" />
-          <SegmentedControl options={LOOK_OPTIONS} value={lockStyle} onChange={setLockStyle} accessibilityLabel="Look" />
-          {Platform.OS === 'ios' ? switchRow('Big iOS clock', tallClock, setTallClock) : null}
+          <SegmentedControl options={THEME_OPTIONS} value={theme} onChange={byUser(setTheme)} accessibilityLabel="Style" />
+          <SegmentedControl options={LOOK_OPTIONS} value={lockStyle} onChange={byUser(setLockStyle)} accessibilityLabel="Look" />
+          {IOS
+            ? switchRow(
+                'Leave room for a big clock',
+                tallClock,
+                byUser(setTallClock),
+                'Turn on if your clock is large or you have widgets under it.',
+              )
+            : null}
           {grid ? switchRow('Fit on one image', onePage, setOnePage) : null}
 
           {heading('Phone size')}
@@ -403,16 +621,7 @@ export default function PicksImageScreen() {
                 ? `${LOCKSCREEN_PRESETS.find((p) => p.id === presetId)?.label} (${size.width} × ${size.height})`
                 : `This phone (${size.width} × ${size.height})`}
             </Text>
-            <TouchableOpacity
-              onPress={() => setChoosingSize((v) => !v)}
-              accessibilityRole="button"
-              accessibilityLabel="Change phone size"
-              hitSlop={8}
-            >
-              <Text style={styles.link} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                Change
-              </Text>
-            </TouchableOpacity>
+            {linkButton('Change', () => setChoosingSize((v) => !v))}
           </View>
           {choosingSize ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
@@ -428,13 +637,12 @@ export default function PicksImageScreen() {
           {lockscreen && lockModel ? (
             <>
               <ScrollView
+                ref={pagerRef}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                style={{ width: previewW + 2, alignSelf: 'center' }}
-                onMomentumScrollEnd={(e) =>
-                  setPreviewPage(Math.round(e.nativeEvent.contentOffset.x / (previewW + 2)))
-                }
+                style={{ width: previewW, alignSelf: 'center' }}
+                onMomentumScrollEnd={(e) => setPreviewPage(Math.round(e.nativeEvent.contentOffset.x / previewW))}
                 accessibilityElementsHidden
                 importantForAccessibility="no-hide-descendants"
               >
@@ -447,7 +655,7 @@ export default function PicksImageScreen() {
                 ))}
               </ScrollView>
               <Text style={styles.hintCenter} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {`Image ${Math.min(previewPage, pageCount - 1) + 1} of ${pageCount}`}
+                {statusLine}
               </Text>
             </>
           ) : model ? (
@@ -463,38 +671,62 @@ export default function PicksImageScreen() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.primaryButton, saving && styles.disabled]}
+            style={[styles.primaryButton, (saving || crewWaiting) && styles.disabled]}
             onPress={() => void handleSave()}
-            disabled={saving}
+            disabled={saving || crewWaiting}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityState={{ disabled: saving }}
+            accessibilityState={{ disabled: saving || crewWaiting }}
             accessibilityLabel={saveLabel}
           >
-            {saving ? <ActivityIndicator size="small" color={t.colors.text.onAccent} /> : null}
+            {saving || crewWaiting ? <ActivityIndicator size="small" color={t.colors.text.onAccent} /> : null}
             <Text style={styles.primaryButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-              {saving ? 'Making image…' : saveLabel}
+              {saving ? 'Making image…' : crewWaiting ? "Loading your crew's picks…" : saveLabel}
             </Text>
           </TouchableOpacity>
           <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {lockscreen && pageCount > 1
-              ? 'In the share menu, choose Save Image. Then save the next image.'
-              : 'In the share menu, choose Save Image to keep it in Photos.'}
+            {IOS ? 'Next: tap Save Image.' : 'Next: pick Photos or Files to keep it.'}
           </Text>
           {lockscreen ? (
-            <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {Platform.OS === 'ios'
-                ? 'Open Photos, tap Share, then Use as Wallpaper. If notifications cover your schedule: Settings › Notifications › Display As › Count.'
-                : 'Open Photos, tap ⋮ › Use as › Lock screen. Set lock-screen notifications to icons only so they do not cover the schedule.'}
-            </Text>
+            <>
+              <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {NOTIFICATION_TIP}
+              </Text>
+              {showHelp ? (
+                <View style={styles.card} accessibilityRole="summary">
+                  <View style={styles.sizeRow}>
+                    <Text style={styles.label} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      Set it as your wallpaper
+                    </Text>
+                    {linkButton('Close', () => setShowHelp(false))}
+                  </View>
+                  {HELP_STEPS.map((step, i) => (
+                    <Text key={step} style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {`${i + 1}. ${step}`}
+                    </Text>
+                  ))}
+                  {pageCount > 1 ? (
+                    <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {HELP_MULTI}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                    You only need to redo this if set times change.
+                  </Text>
+                </View>
+              ) : (
+                linkButton('How to set it as wallpaper', () => setShowHelp(true))
+              )}
+            </>
           ) : null}
         </>
       ) : (
-        <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {lockscreen
-            ? 'Nothing matches these choices for this day, so there is nothing to draw.'
-            : 'None of your picks have a set time yet, so there is nothing to draw.'}
-        </Text>
+        <View style={styles.notice}>
+          <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            {emptyText}
+          </Text>
+          {lockscreen && needsPicks ? linkButton('Show full lineup', () => setMode('full')) : null}
+        </View>
       )}
 
       <TouchableOpacity
@@ -538,10 +770,10 @@ const useStyles = makeStyles((t) => ({
   label: { ...typeStyle('label'), color: t.colors.text.primary },
   hint: { ...typeStyle('caption'), color: t.colors.text.secondary },
   hintCenter: { ...typeStyle('caption'), color: t.colors.text.secondary, textAlign: 'center' },
-  link: { ...typeStyle('label'), color: t.colors.accent.aqua },
+  link: { ...typeStyle('label'), color: t.colors.accent.aqua, minHeight: 44, textAlignVertical: 'center', paddingVertical: 10 },
   sizeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing[2] },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
-  switchLabel: { ...typeStyle('body'), color: t.colors.text.primary },
+  switchLabel: { ...typeStyle('body'), color: t.colors.text.primary, flex: 1 },
   chipRow: { gap: t.spacing[2] },
   chip: {
     minHeight: 44,
@@ -556,6 +788,15 @@ const useStyles = makeStyles((t) => ({
   chipDisabled: { opacity: 0.4 },
   chipText: { ...typeStyle('caption'), color: t.colors.text.secondary },
   chipTextActive: { ...typeStyle('caption', 700), color: t.colors.accent.aqua },
+  notice: { gap: t.spacing[1] },
+  card: {
+    gap: t.spacing[2],
+    padding: t.spacing[3],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.card,
+  },
   preview: {
     alignSelf: 'center',
     overflow: 'hidden',

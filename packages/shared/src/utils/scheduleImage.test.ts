@@ -96,6 +96,39 @@ describe('defaultScheduleImageDay', () => {
     expect(defaultScheduleImageDay({ sets, picks: { c: 'must' }, selectedDay: 0 })).toBeNull();
     expect(defaultScheduleImageDay({ sets, picks: undefined, selectedDay: 0 })).toBeNull();
   });
+
+  describe('with nowMs', () => {
+    const tz = 'America/New_York';
+    const at = (iso: string) => Date.parse(iso);
+    const night = (id: string, start: string, end: string, dayIndex: number): FestivalSet => ({
+      ...set(id, start, dayIndex),
+      endTime: end,
+    });
+    // Saturday night runs past midnight; 03:00 Sunday local is 07:00Z.
+    const threeAm = at('2026-09-06T07:00:00Z');
+
+    it('keeps a night with a pick still running at 03:00', () => {
+      const s = [night('a', '23:00', '02:00', 0), night('b', '01:00', '05:00', 0), night('c', '20:00', '23:00', 1)];
+      const args = { sets: s, picks: { a: 'must', b: 'must', c: 'must' } as Record<string, Priority>, days, timeZone: tz };
+      expect(defaultScheduleImageDay({ ...args, selectedDay: 0, nowMs: threeAm })).toBe(0);
+    });
+    it('moves to the next day with picks once every pick has ended', () => {
+      const s = [night('a', '23:00', '02:00', 0), night('c', '20:00', '23:00', 1)];
+      const args = { sets: s, picks: { a: 'must', c: 'must' } as Record<string, Priority>, days, timeZone: tz };
+      expect(defaultScheduleImageDay({ ...args, selectedDay: 0, nowMs: threeAm })).toBe(1);
+    });
+    it('stays on the selected day when no later day has picks left', () => {
+      const s = [night('a', '23:00', '02:00', 0)];
+      const args = { sets: s, picks: { a: 'must' } as Record<string, Priority>, days, timeZone: tz };
+      expect(defaultScheduleImageDay({ ...args, selectedDay: 0, nowMs: threeAm })).toBe(0);
+    });
+    it('ignores the rule in full-lineup mode', () => {
+      const s = [night('a', '23:00', '02:00', 0), night('c', '20:00', '23:00', 1)];
+      expect(
+        defaultScheduleImageDay({ sets: s, picks: {}, days, timeZone: tz, selectedDay: 0, nowMs: threeAm, mode: 'full' }),
+      ).toBe(0);
+    });
+  });
 });
 
 describe('scheduleImageFilename', () => {

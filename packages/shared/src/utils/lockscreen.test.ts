@@ -179,6 +179,7 @@ describe('list modes', () => {
       mode: 'crew',
       picks,
       selfUserId: 'me',
+      crewLoaded: true,
       crewOverlap: {
         [s0]: {
           setId: s0,
@@ -191,6 +192,17 @@ describe('list modes', () => {
     expect(rows.find((r) => r.setId === s0)!.crew).toEqual({ initials: ['JL', 'MI', 'PR'], more: 2, solo: false });
     expect(rows.find((r) => r.setId === s1)!.crew).toMatchObject({ solo: true });
     expect(m.pages[0]!.header.metaBottom).toBe('Picks + crew · 2');
+  });
+  it('crew mode never marks solo before the overlap has loaded', () => {
+    const m = build({ mode: 'crew', picks: pick(friday, 2), crewOverlap: {} });
+    expect(list(m).rows.every((r) => r.crew?.solo === false)).toBe(true);
+  });
+  it('counts picks with no set time in the header', () => {
+    const tba: FestivalSet = { ...friday[0]!, id: 'tba', startTime: '', endTime: '' };
+    const m = build({ sets: [...sets, tba], picks: { ...pick(friday, 2), tba: 'must' } });
+    expect(m.pages[0]!.header.metaBottom).toBe('My picks · 2 · +1 no set time');
+    const filtered = build({ sets: [...sets, tba], picks: { ...pick(friday, 2), tba: 'maybe' }, priorities: ['must'] });
+    expect(filtered.pages[0]!.header.metaBottom).not.toContain('no set time');
   });
   it('all days builds one series per day with a day-specific header', () => {
     const picks = { ...pick(friday, 2), ...pick(sets.filter((s) => s.dayIndex === 2), 1) };
@@ -216,7 +228,7 @@ describe('theme and zones', () => {
     expect(light.background.sheet!.topU).toBeCloseTo(light.contentTopU - 2);
     expect(light.pages[0]!.footer.showMark).toBe(false);
   });
-  it('content sits in 0.38 to 0.80 of the height, 0.45 with the big clock', () => {
+  it('content sits in 0.38 to 0.92 of the height, 0.45 with the big clock', () => {
     const m = build({ picks: pick(friday, 3) });
     expect(m.contentTopU / m.heightU).toBeCloseTo(0.38);
     expect(m.contentEndU / m.heightU).toBeCloseTo(0.92);
