@@ -64,7 +64,7 @@ export default function createNotificationRoutes(deps: any) {
   // effective cap by the worker count).
   router.post('/token', userAuth, rl(5, 'notif-token-reg'), validate(schemas.pushToken), async (req: any, res: any) => {
     try {
-      const { token, platform, deviceName, localRemindersFestivalId } = req.validatedBody;
+      const { token, platform, deviceName, localRemindersFestivalId, localRemindersCoversUntil } = req.validatedBody;
       if (!token || typeof token !== 'string' || token.length < TOKEN_MIN_LENGTH || token.length > TOKEN_MAX_LENGTH) {
         return sendError(res, 400, 'Invalid push token', ErrorCodes.INVALID_INPUT);
       }
@@ -112,6 +112,7 @@ export default function createNotificationRoutes(deps: any) {
         platform: cleanPlatform,
         deviceName: cleanDeviceName,
         localRemindersFestivalId: localRemindersFestivalId ?? null,
+        localRemindersCoversUntil: localRemindersCoversUntil ?? null,
         localRemindersPresent: localRemindersFestivalId !== undefined,
       });
       log.info('device token registered', { userId: req.user.userId, platform: cleanPlatform, ip: getRequestIp(req) });

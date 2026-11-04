@@ -553,7 +553,15 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
       }
 
       // The phone schedules this festival's set reminders on-device; a push would double them.
-      if (type === 'set_reminder' && device.localRemindersFestivalId && device.localRemindersFestivalId === safeData.festivalId) {
+      // A reported cutoff limits the skip to reminders firing at or before it (the phone's 64-slot window); no cutoff skips the whole festival.
+      const coversUntil = device.localRemindersCoversUntil == null ? null : Number(device.localRemindersCoversUntil);
+      const fireAtMs = Number(safeData.fireAtMs);
+      if (
+        type === 'set_reminder' &&
+        device.localRemindersFestivalId &&
+        device.localRemindersFestivalId === safeData.festivalId &&
+        (coversUntil === null || !Number.isFinite(fireAtMs) || fireAtMs <= coversUntil)
+      ) {
         localCovered += 1;
         continue;
       }

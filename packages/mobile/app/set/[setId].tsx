@@ -45,11 +45,13 @@ import {
   artistSubtitle,
   getSetLinks,
   platformLabel,
+  isSafeExternalUrl,
   detectConflicts,
   hasSetStarted,
   buildSetUrl,
   resolveFestivalTimeZone,
   reminderDeliveryProblem,
+  reminderLeadForSet,
   QUEUED_WRITE_MESSAGE,
   MAP_COPY,
   stageCoord,
@@ -167,7 +169,7 @@ export default function SetDetailScreen() {
   const days = useFestivalDataStore((s) => s.days);
   const stages = useFestivalDataStore((s) => s.stages);
 
-  const { getMyPick, savePick, getOtherPicks, getPickCount, saveReminder, getMyReminder } = usePicks();
+  const { getMyPick, savePick, getOtherPicks, getPickCount, saveReminder } = usePicks();
   const { getStageColor, getStageName } = useFestival();
   const { getCrewScopedOtherPicks } = useCrew();
   const viewAs = useViewAs();
@@ -243,7 +245,13 @@ export default function SetDetailScreen() {
   const status = set ? getSetStatus(set, new Date(nowMs), days, timeZone) : null;
   const whenLine = set ? formatSetWhen(set, days, status) : '';
   const myPick = set ? getMyPick(set.id) : undefined;
-  const myReminder = set ? getMyReminder(set.id) : undefined;
+  const mustSeeLead = useNotificationPrefsStore((s) => s.prefs.mustSeeReminderMinutes);
+  const { minutes: myReminder, isDefault: reminderIsDefault } = reminderLeadForSet(
+    set?.id ?? '',
+    currentProfile?.reminders,
+    currentProfile?.picks as Record<string, Priority> | undefined,
+    mustSeeLead,
+  );
 
   const allGenres = useMemo(() => [...new Set((set?.artists || []).flatMap((a) => a.genres || []))].slice(0, 6), [set]);
 
@@ -426,6 +434,7 @@ export default function SetDetailScreen() {
   );
 
   const openLink = useCallback((url: string) => {
+    if (!isSafeExternalUrl(url)) return;
     Linking.openURL(url).catch(() => {});
   }, []);
 
@@ -633,13 +642,15 @@ export default function SetDetailScreen() {
                                   borderColor: t.colors.accent.aqua,
                                 },
                               ]}
-                              onPress={() => handleReminder(active ? null : opt.value)}
+                              onPress={() => handleReminder(active && !reminderIsDefault ? null : opt.value)}
                               activeOpacity={0.7}
                               accessibilityRole="button"
                               accessibilityState={{ selected: active }}
                               accessibilityLabel={
                                 active
-                                  ? `Reminder set ${opt.label} before, tap to clear`
+                                  ? reminderIsDefault
+                                    ? `Default reminder ${opt.label} before, tap to keep it`
+                                    : `Reminder set ${opt.label} before, tap to clear`
                                   : `Remind me ${opt.label} before`
                               }
                             >
@@ -653,6 +664,20 @@ export default function SetDetailScreen() {
                           );
                         })}
                       </View>
+                      {reminderIsDefault ? (
+                        <View style={styles.statusRow}>
+                          <Text style={styles.statusWarn}>
+                            Default for must-see picks. Pick another time to change it.
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.statusAction}
+                            onPress={() => router.push('/(tabs)/account')}
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.statusActionText}>Turn off in Account</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
                       {reminderFailed ? (
                         <View style={styles.statusRow} accessibilityLiveRegion="polite">
                           <Text style={styles.statusWarn}>Reminder not saved.</Text>
@@ -838,13 +863,16 @@ export default function SetDetailScreen() {
         {/* Artist links */}
         {artistLinks.length > 0 ? (
           <View style={styles.section}>
-            {artistLinks.map((entry, i) => (
-              <View key={`${entry.name}-${i}`} style={styles.section}>
-                {isB2B ? <Text style={styles.sectionLabel}>{entry.name}</Text> : null}
-                <View style={styles.linkRow}>
-                  {Object.entries(entry.links)
-                    .filter(([key, url]) => !(key === 'spotify' && url === spotifyArtist?.url))
-                    .map(([key, url]) => (
+            {artistLinks.map((entry, i) => {
+              const visible = Object.entries(entry.links).filter(
+                ([key, url]) => !(key === 'spotify' && url === spotifyArtist?.url),
+              );
+              if (visible.length === 0) return null;
+              return (
+                <View key={`${entry.name}-${i}`}>
+                  {isB2B ? <Text style={styles.sectionLabel}>{entry.name}</Text> : null}
+                  <View style={styles.linkRow}>
+                    {visible.map(([key, url]) => (
                       <TouchableOpacity
                         key={key}
                         style={styles.linkButton}
@@ -857,9 +885,10 @@ export default function SetDetailScreen() {
                         <Text style={styles.linkText}>{platformLabel(key)}</Text>
                       </TouchableOpacity>
                     ))}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : null}
 

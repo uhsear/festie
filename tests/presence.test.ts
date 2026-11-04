@@ -424,6 +424,21 @@ describe('presence: disconnectUserSockets', () => {
   });
 });
 
+describe('presence: disconnectUserSockets exceptToken', () => {
+  it('spares the socket holding the excepted session token', () => {
+    const pm = createPresenceManager(defaultDeps());
+    const keep = makeSocket({ id: 'sock-1', userId: 'user-1', festivalId: 'fest-1' });
+    const drop = makeSocket({ id: 'sock-2', userId: 'user-1', festivalId: 'fest-1' });
+    keep.data.userSessionToken = 'keep-token';
+    drop.data.userSessionToken = 'other-token';
+
+    pm.disconnectUserSockets('user-1', makeIo([keep, drop]), 'keep-token');
+
+    assert.equal(keep.disconnect.mock.callCount(), 0);
+    assert.equal(drop.disconnect.mock.callCount(), 1);
+  });
+});
+
 describe('presence: disconnectSessionTokens', () => {
   it('disconnects sockets matching given tokens', async () => {
     const deps = defaultDeps();

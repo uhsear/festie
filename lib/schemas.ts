@@ -241,6 +241,7 @@ export const pushTokenSchema = z.object({
   platform: z.enum(['web', 'ios', 'android']).default('web'),
   deviceName: z.string().max(60).optional().nullable(),
   localRemindersFestivalId: z.string().min(1).max(128).nullable().optional(),
+  localRemindersCoversUntil: z.number().int().nonnegative().max(8.64e15).nullable().optional(),
 });
 export type PushTokenInput = z.infer<typeof pushTokenSchema>;
 
