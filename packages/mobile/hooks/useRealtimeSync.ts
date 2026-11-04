@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
 import { createSocket } from '@festie/shared/services';
+import { API_ORIGIN } from '../lib/apiOrigin';
 // Import the Socket type from the shared barrel (which re-exports it) rather
 // than from 'socket.io-client' directly: socket.io-client is a dependency of
 // @festie/shared, not of packages/mobile, so a direct import resolves locally
@@ -116,7 +117,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       return;
     }
 
-    const socket = createSocket(userToken, 'https://festie.us', () => {
+    const socket = createSocket(userToken, API_ORIGIN, () => {
       // Socket auth failed — attempt a single refresh, then reconnect with the
       // new token. On failure stay disconnected (HTTP/foreground path recovers).
       useAuthStore
