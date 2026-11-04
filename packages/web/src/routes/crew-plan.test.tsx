@@ -175,6 +175,20 @@ describe('CrewPlanView', () => {
     expect(screen.getByText('Forbidden Kingdom · 2 members')).toBeInTheDocument();
   });
 
+  it('shows a recurring meet-up time in the festival zone, not the device zone', () => {
+    festivalState.currentFestival = { id: 'f1', name: 'Forbidden Kingdom', timeZone: 'Asia/Tokyo' };
+    festivalState.days = [];
+    hubState.meetingPoint = {
+      id: 'mp1',
+      label: 'The big tree',
+      location: 'Near main gate',
+      meet_at: '2026-06-15T09:00:00Z',
+      recurs_daily: true,
+    };
+    render(<CrewPlanView />);
+    expect(screen.getByText(/^Daily 6:00 PM$/i)).toBeInTheDocument();
+  });
+
   it('shows an empty state with a way forward when nothing is coming up', () => {
     hubState.upNext = [];
     render(<CrewPlanView />);
@@ -262,6 +276,24 @@ describe('CrewPlanView', () => {
     Object.assign(hubState, baseHub({ crew: { ...baseCrew(), homeBaseLocation: null, homeBaseTime: null } }));
     render(<CrewPlanView />);
     expect(screen.getByText('Set home base')).toBeInTheDocument();
+  });
+
+  it('shows an HH:MM home base time as 12 h and keeps free text', () => {
+    Object.assign(hubState, baseHub({ crew: { ...baseCrew(), homeBaseTime: '18:30' } }));
+    const { unmount } = render(<CrewPlanView />);
+    expect(screen.getByText('6:30 PM')).toBeInTheDocument();
+    unmount();
+    Object.assign(hubState, baseHub());
+    render(<CrewPlanView />);
+    expect(screen.getByText('Back by 2am')).toBeInTheDocument();
+  });
+
+  it('lists carry list-none so no stray bullets render', () => {
+    hubState.mix = [{ set: setS1, count: 3, total: 5 }];
+    const { container } = render(<CrewPlanView />);
+    const lists = container.querySelectorAll('ul');
+    expect(lists.length).toBeGreaterThan(0);
+    lists.forEach((ul) => expect(ul).toHaveClass('list-none'));
   });
 
   it('renders Crew mix', () => {

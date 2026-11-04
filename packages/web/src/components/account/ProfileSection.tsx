@@ -52,6 +52,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="How your name appears to your crew"
+            aria-label="Display name"
             className="flex-1"
             autoComplete="name"
             maxLength={50}

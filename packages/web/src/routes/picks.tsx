@@ -110,7 +110,7 @@ function PicksViewInner() {
   // True when the profile has any pick at all, which gates the calendar export
   // independently of the active filters.
   const pickedSets = useMemo(() => sets.filter((s) => myPicks?.[s.id]), [sets, myPicks]);
-  const hasAnyPicks = !!currentProfile && pickedSets.length > 0;
+  const hasAnyPicks = pickedSets.length > 0;
 
   const timeZone = resolveFestivalTimeZone(currentFestival);
   const planInput = useMemo(
@@ -137,7 +137,8 @@ function PicksViewInner() {
     });
   }, [view, sets, myPicks, selectedDay, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator]);
 
-  const actionButtons = hasAnyPicks ? (
+  // Share, calendar and image export need a profile; the view tabs do not.
+  const actionButtons = currentProfile && hasAnyPicks ? (
     <Suspense fallback={null}>
       <SharePicksDialog />
       <CalendarDialog />
@@ -410,11 +411,11 @@ function PicksViewInner() {
           );
           if (row.kind === 'subgroup') {
             return (
-              <h3 key={row.key} className="flex items-center gap-2 mt-1 mb-3 pb-2.5 border-b border-border">
+              <h2 key={row.key} className="flex items-center gap-2 mt-1 mb-3 pb-2.5 border-b border-border">
                 {dot}
                 <span className="text-sm font-medium text-text-secondary">{row.label}</span>
                 {badge}
-              </h3>
+              </h2>
             );
           }
           return (

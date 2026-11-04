@@ -27,7 +27,7 @@ export default function FestivalReadyCard({ ready }: Props) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-text-primary">{FESTIVAL_READY_COPY.title}</h3>
+          <h2 className="text-sm font-bold text-text-primary">{FESTIVAL_READY_COPY.title}</h2>
           <p className="mt-0.5 text-xs text-text-secondary">{ready.progressLabel}</p>
         </div>
         <button

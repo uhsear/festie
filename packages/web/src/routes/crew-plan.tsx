@@ -3,7 +3,15 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useActiveCrew, useCrewFestival, useCrewHub, usePicks } from '@festie/shared/hooks';
-import { artistDisplayName, formatTime, formatSetTimeRange, memberSummary, timeAgo } from '@festie/shared/utils';
+import {
+  artistDisplayName,
+  formatTime,
+  formatSetTimeRange,
+  memberSummary,
+  meetingTimeDisplay,
+  resolveFestivalTimeZone,
+  timeAgo,
+} from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
 import { COPY, PRIORITY_LABEL } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
@@ -26,6 +34,8 @@ const PRIORITY_BADGE: Record<Priority, string> = {
   'want-to-see': 'bg-priority-want/15 text-priority-want',
   maybe: 'bg-priority-maybe/15 text-priority-maybe',
 };
+
+const HHMM = /^\d{2}:\d{2}$/;
 
 const EMPTY_LINK =
   'inline-flex items-center min-h-11 text-sm font-medium text-accent-aqua underline underline-offset-2';
@@ -120,6 +130,7 @@ function CrewPlanContent() {
   const { savePick } = usePicks();
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const stages = useFestivalStore((s) => s.stages);
+  const festivalDays = useFestivalStore((s) => s.days);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { crew, isOwner, ownerName, meetingPoint, isPast, upNext, howWeDid, mix, whereabouts, openPolls, myPicks } =
     hub;
@@ -157,11 +168,15 @@ function CrewPlanContent() {
               <p className="text-sm text-text-secondary">{meetingPoint.location}</p>
               {meetingPoint.meet_at && (
                 <p className="text-sm text-accent-aqua font-medium">
-                  {new Date(meetingPoint.meet_at).toLocaleString([], {
-                    weekday: 'short',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
+                  {
+                    meetingTimeDisplay(
+                      meetingPoint.meet_at,
+                      meetingPoint.recurs_daily,
+                      festivalDays,
+                      new Date(),
+                      resolveFestivalTimeZone(currentFestival),
+                    ).label
+                  }
                 </p>
               )}
             </div>
@@ -186,7 +201,11 @@ function CrewPlanContent() {
           {crew.homeBaseLocation || crew.homeBaseTime ? (
             <div className="space-y-1">
               {crew.homeBaseLocation && <p className="text-text-primary font-medium">{crew.homeBaseLocation}</p>}
-              {crew.homeBaseTime && <p className="text-sm text-text-secondary">{crew.homeBaseTime}</p>}
+              {crew.homeBaseTime && (
+                <p className="text-sm text-text-secondary">
+                  {HHMM.test(crew.homeBaseTime) ? formatTime(crew.homeBaseTime) : crew.homeBaseTime}
+                </p>
+              )}
             </div>
           ) : isOwner ? (
             <div className="space-y-2">
@@ -213,7 +232,7 @@ function CrewPlanContent() {
             {howWeDid.length === 0 ? (
               <p className="text-sm text-text-secondary">Your crew had no picks in common at this festival.</p>
             ) : (
-              <ul className="space-y-1">
+              <ul className="list-none m-0 p-0 space-y-1">
                 {howWeDid.map((e) => (
                   <li key={e.set.id}>
                     <Link
@@ -257,7 +276,7 @@ function CrewPlanContent() {
                   <p className="text-xs uppercase tracking-[var(--letter-spacing-caps)] text-text-secondary font-semibold">
                     {slot.startTime ? formatTime(slot.startTime) : 'Soon'}
                   </p>
-                  <ul className="space-y-1.5">
+                  <ul className="list-none m-0 p-0 space-y-1.5">
                     {slot.groups.map((g) => {
                       const stageName = stages?.find((st) => st.id === g.set.stageId)?.name;
                       return (
@@ -316,7 +335,7 @@ function CrewPlanContent() {
             <span className="font-semibold text-text-primary">Crew mix</span>
           </Card.Header>
           <Card.Body>
-            <ul className="space-y-1">
+            <ul className="list-none m-0 p-0 space-y-1">
               {mix.map((e) => (
                 <li key={e.set.id}>
                   <Link
@@ -343,7 +362,7 @@ function CrewPlanContent() {
             <span className="font-semibold text-text-primary">Where everyone is</span>
           </Card.Header>
           <Card.Body className="space-y-1">
-            <ul className="space-y-1">
+            <ul className="list-none m-0 p-0 space-y-1">
               {whereabouts.map((w) => {
                 const detail = w.sos ? 'Sent an SOS' : w.live === 'live' ? 'Sharing live location' : (w.statusLabel ?? 'Location shared');
                 const at = w.liveAt ?? w.statusAt;
@@ -368,7 +387,7 @@ function CrewPlanContent() {
             <span className="font-semibold text-text-primary">Open polls</span>
           </Card.Header>
           <Card.Body className="space-y-2">
-            <ul className="space-y-1">
+            <ul className="list-none m-0 p-0 space-y-1">
               {openPolls.slice(0, 2).map((p) => (
                 <li key={p.id} className="text-sm text-text-primary">
                   {p.question}
