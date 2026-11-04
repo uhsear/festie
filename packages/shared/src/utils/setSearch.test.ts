@@ -22,6 +22,20 @@ function mk(id: string, over: Partial<FestivalSet>): FestivalSet {
 }
 
 describe('setMatchesSearch', () => {
+  it('matches the billed display name', () => {
+    const named = mk('d', { displayName: 'Skull Machine (A x B)', artists: [{ name: 'A' } as never] });
+    expect(setMatchesSearch(named, 'skull', stages)).toBe(true);
+  });
+
+  it('ignores accents on both query and target', () => {
+    const acc = mk('x', { artist: 'Bacardí', artists: [{ name: 'Zoë' } as never] });
+    const st: Stage[] = [{ ...stages[0]!, name: 'Menü Hall' }];
+    expect(setMatchesSearch(acc, 'bacardi', st)).toBe(true);
+    expect(setMatchesSearch(acc, 'BACARDÍ', st)).toBe(true);
+    expect(setMatchesSearch(acc, 'zoe', st)).toBe(true);
+    expect(setMatchesSearch(acc, 'menu', st)).toBe(true);
+  });
+
   const set = mk('a', { artist: 'Daft Punk' });
 
   it('matches case-insensitively and ignores surrounding whitespace', () => {

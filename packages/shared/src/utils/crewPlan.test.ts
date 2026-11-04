@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatMeetWhen,
   pickActiveMeetingPoint,
   buildSlots,
   CREW_PLAN_SLOTS,
@@ -101,6 +102,18 @@ describe('buildSlots', () => {
     expect(slot!.picks[0]!.set.id).toBe('a2');
   });
 
+  it('counts only start times the crew picked and skips sets already started', () => {
+    const sets = [
+      set('x1', '12:30', '13:30'), // unpicked
+      set('x2', '12:45', '13:45'), // unpicked
+      set('x3', '13:00', '14:00'), // unpicked
+      set('live', '11:00', '13:00'), // started, picked
+      set('mine', '19:00', '20:00'),
+    ];
+    const slots = buildSlots(sets, days, [profile('m1', 'Ann', { live: 'must', mine: 'must' })], nowMs);
+    expect(slots.map((s) => s.startTime)).toEqual(['19:00']);
+  });
+
   it('honors a custom slot limit', () => {
     const sets = [set('a', '13:00', '14:00'), set('b', '15:00', '16:00')];
     const profiles = [profile('m1', 'Ann', { a: 'must', b: 'must' })];
@@ -125,6 +138,11 @@ describe('crewScreenStatus', () => {
     expect(crewScreenStatus(base)).toBe('none');
     expect(crewScreenStatus({ ...base, crewCount: 2, error: 'x' })).toBe('error');
     expect(crewScreenStatus({ ...base, crewCount: 2 })).toBe('loading');
+  });
+  it('reports joining when every crew is an offline-join placeholder, even after a failed select', () => {
+    expect(crewScreenStatus({ ...base, crewCount: 1, joiningOnly: true })).toBe('joining');
+    expect(crewScreenStatus({ ...base, crewCount: 1, joiningOnly: true, error: 'x' })).toBe('joining');
+    expect(crewScreenStatus({ ...base, hasActiveCrew: true, crewCount: 1, joiningOnly: true })).toBe('ready');
   });
 });
 
@@ -240,5 +258,18 @@ describe('crewOwnerInfo and crewFestivalName', () => {
     expect(crewFestivalName(crew, [], f('f1', 'One'))).toBeNull();
     expect(crewFestivalName({ festivalId: undefined }, [], f('f1', 'One'))).toBe('One');
     expect(crewFestivalName(null, [], null)).toBeNull();
+  });
+});
+
+describe('formatMeetWhen', () => {
+  // 2026-05-16T01:00Z is Fri 6:00 PM in Los Angeles but Sat 3:00 AM in Berlin.
+  const iso = '2026-05-16T01:00:00Z';
+  it('renders in the festival zone, independent of the device zone', () => {
+    expect(formatMeetWhen(iso, 'America/Los_Angeles')).toMatch(/^Fri,? 6:00\sPM$/);
+    expect(formatMeetWhen(iso, 'Europe/Berlin')).toMatch(/^Sat,? 3:00\sAM$/);
+  });
+  it('falls back to device-local without a zone and null when unparseable', () => {
+    expect(formatMeetWhen(iso)).toBe(new Date(iso).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }));
+    expect(formatMeetWhen('nope', 'Europe/Berlin')).toBeNull();
   });
 });

@@ -108,6 +108,7 @@ interface StageColumnProps {
    */
   registerScrollRef?: (node: ScrollViewInstance | null) => void;
   onUserScroll?: () => void;
+  onViewport?: (y: number, h: number) => void;
   /** Vertical offset this column had when FlatList windowing last unmounted it. */
   initialScrollY: number;
   onScrollSettled: (y: number) => void;
@@ -134,6 +135,7 @@ function StageColumn({
   columnWidth,
   registerScrollRef,
   onUserScroll,
+  onViewport,
   initialScrollY,
   onScrollSettled,
 }: StageColumnProps) {
@@ -180,6 +182,9 @@ function StageColumn({
         contentContainerStyle={{ height: totalHeight }}
         showsVerticalScrollIndicator={false}
         onScrollBeginDrag={onUserScroll}
+        scrollEventThrottle={100}
+        onScroll={(e) => onViewport?.(e.nativeEvent.contentOffset.y, e.nativeEvent.layoutMeasurement.height)}
+        onLayout={(e) => onViewport?.(startY, e.nativeEvent.layout.height)}
         contentOffset={startY ? { x: 0, y: startY } : undefined}
         onScrollEndDrag={(e) => onScrollSettled(e.nativeEvent.contentOffset.y)}
         onMomentumScrollEnd={(e) => onScrollSettled(e.nativeEvent.contentOffset.y)}
@@ -310,6 +315,8 @@ function StageColumn({
   );
 }
 
+// A reader who scrolled away is left alone this long before the clock pulls back to now.
+
 /**
  * Touch-adapted timeline: a horizontally-paged carousel of stage columns, each
  * a vertical 15-min slotted timeline (mirroring the web grid's information per
@@ -387,32 +394,30 @@ export default function TimelineView({
     return { eta, name: artistDisplayName(nextPick.set, b2bSeparator) };
   }, [nextPick, nowMs, b2bSeparator]);
 
-  // Don't fight active user scrolling: any drag arms the flag for 8s, during
-  // which the tick-driven auto-scroll holds off.
-  const recentlyScrolledRef = useRef(false);
-  const scrollArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Never pull a reading user back: once they drag, auto-scroll stays off for the
+  // life of this component, and it only fires when the NOW line is off-screen.
+  const userScrolledRef = useRef(false);
   const handleUserScroll = useCallback(() => {
-    recentlyScrolledRef.current = true;
-    if (scrollArmTimerRef.current) clearTimeout(scrollArmTimerRef.current);
-    scrollArmTimerRef.current = setTimeout(() => {
-      recentlyScrolledRef.current = false;
-    }, 8_000);
+    userScrolledRef.current = true;
   }, []);
-  useEffect(
-    () => () => {
-      if (scrollArmTimerRef.current) clearTimeout(scrollArmTimerRef.current);
-    },
-    [],
-  );
+  // Per column: mounted neighbours report too, so read the centered page's entry.
+  const viewportByPage = useRef(new Map<number, { y: number; h: number }>());
+  const handleViewport = useCallback((index: number, y: number, h: number) => {
+    viewportByPage.current.set(index, { y, h });
+  }, []);
 
-  // Auto-scroll to now on each tick, unless the user is actively scrolling.
+  // Auto-scroll to now on each tick, unless the user has scrolled or NOW is visible.
   useEffect(() => {
-    if (nowIndicator === null || recentlyScrolledRef.current) return;
+    if (nowIndicator === null || userScrolledRef.current) return;
     const id = requestAnimationFrame(() => {
-      if (!recentlyScrolledRef.current) scrollToNow();
+      if (userScrolledRef.current || !timeBounds) return;
+      const nowY = (nowIndicator / 100) * timeBounds.totalSlots * ROW_HEIGHT;
+      const { y, h } = viewportByPage.current.get(activePageRef.current) ?? { y: 0, h: 0 };
+      if (h > 0 && nowY >= y && nowY <= y + h) return;
+      scrollToNow();
     });
     return () => cancelAnimationFrame(id);
-  }, [nowMs, nowIndicator, scrollToNow]);
+  }, [nowMs, nowIndicator, scrollToNow, timeBounds]);
 
   // Single-column-per-page on phones; a touch of peek so swipe is discoverable.
   const columnWidth = useMemo(() => Math.min(width - 24, 360), [width]);
@@ -521,6 +526,7 @@ export default function TimelineView({
         // arms the "user is scrolling" guard so the tick won't fight it.
         registerScrollRef={(node) => registerColumnRef(index, node)}
         onUserScroll={handleUserScroll}
+        onViewport={(y, h) => handleViewport(index, y, h)}
         initialScrollY={scrollYByStage.current.get(item.id) ?? 0}
         onScrollSettled={(y) => rememberScrollY(item.id, y)}
       />
@@ -539,6 +545,7 @@ export default function TimelineView({
       columnWidth,
       registerColumnRef,
       handleUserScroll,
+      handleViewport,
       rememberScrollY,
       t.colors.text.muted,
     ],

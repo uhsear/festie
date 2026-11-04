@@ -3,6 +3,9 @@ import { renderHook } from '@testing-library/react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useThemeSync } from './theme';
 
+// Saved entry present: the first-visit default is covered in theme.firstVisit.test.ts.
+vi.hoisted(() => localStorage.setItem('festie-ui-theme-v1', '{}'));
+
 type Listener = () => void;
 
 function stubMatchMedia(initialLight: boolean) {

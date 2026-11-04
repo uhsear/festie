@@ -25,6 +25,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
   const joinByInvite = useJoinCrewByInvite();
   const currentFestivalId = useFestivalStore((s) => s.currentFestival?.id);
   const [busy, setBusy] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const lines = preview ? describeInvitePreview(preview) : null;
   const full = preview?.spotsLeft === 0;
@@ -38,6 +39,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
   const handleJoin = async () => {
     if (!code) return;
     setBusy(true);
+    setJoinError(null);
     try {
       const outcome = await joinByInvite(code);
       if (outcome.kind === 'joined') {
@@ -49,11 +51,14 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
       } else {
         toast("We'll join you when you're back online.", 'info');
       }
+      onClose();
     } catch {
-      toast(useCrewStore.getState().error || "Couldn't join this crew. Try again.", 'error', 5000);
+      // Stay open so the invite survives a transient failure and Join can be retried.
+      const message = useCrewStore.getState().error || "Couldn't join this crew. Try again.";
+      setJoinError(message);
+      toast(message, 'error', 5000);
     } finally {
       setBusy(false);
-      onClose();
     }
   };
 
@@ -72,6 +77,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
         <p>Crew members can see your picks and your status.</p>
         {switchNote && <p>{switchNote}</p>}
         {statusMessage && <p role="status">{statusMessage}</p>}
+        {joinError && <p role="alert">{joinError}</p>}
       </div>
       <div className="flex gap-2 pt-2">
         <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>

@@ -32,6 +32,7 @@ import { useFestivalMode } from '../../hooks/useFestivalMode';
 import { prefetchMainRoutes } from '../../router';
 import { cn } from '../../lib/utils';
 import { SocketContext } from '../../lib/socketContext';
+import { useThemeSync } from '../../lib/theme';
 
 const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password'];
 
@@ -52,6 +53,8 @@ function RouteFallback() {
 }
 
 // Routes where the global festival/day/stage sub-header has no purpose.
+// The first-visit walkthrough shows on the lineup only, never over a deep link (/set/:id, /join, /u/:username).
+const onboardingRoutes = ['/', '/cards'];
 const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan', '/festival-mode'];
 
 // Routes that keep ONLY the day toggle (Sat/Sun).
@@ -63,6 +66,8 @@ const festivalOnlySubHeaderRoutes = ['/wrap', '/picks'];
 
 export default function AppShell() {
   const location = useLocation();
+  // Runs on every route, including sign-in pages that render no Header, so a first visit follows the OS theme.
+  useThemeSync();
   const detailSet = useUIStore((s) => s.detailSet);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const detailAutoSpotify = useUIStore((s) => s.detailAutoSpotify);
@@ -158,13 +163,13 @@ export default function AppShell() {
           Skip to main content
         </a>
 
-        <OfflineBanner />
         <RouteAnnouncer />
         <UpdatePrompt />
         <IOSInstallSheet />
-        <Onboarding suspended={!!pendingJoinCode} />
+        {onboardingRoutes.includes(location.pathname) && <Onboarding suspended={!!pendingJoinCode} />}
         {joinCrewSheet}
         <Header />
+        <OfflineBanner />
         <SosBanner />
         <AnnouncementBanner />
         <LiveLocationSharing />

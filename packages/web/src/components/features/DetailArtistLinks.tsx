@@ -1,14 +1,5 @@
 import React from 'react';
-
-const PLATFORM_LABELS: Record<string, string> = {
-  spotify: 'Spotify',
-  soundcloud: 'SoundCloud',
-  instagram: 'Instagram',
-  twitter: 'X',
-  tiktok: 'TikTok',
-  facebook: 'Facebook',
-  website: 'Website',
-};
+import { platformLabel, isSafeExternalUrl } from '@festie/shared/utils';
 
 interface Props {
   artistLinks: Array<{ name: string; links: Record<string, string> }>;
@@ -49,12 +40,12 @@ export default function DetailArtistLinks({ artistLinks, isB2B, genres, hideLink
                       key={platform}
                       // Defense-in-depth: React passes javascript:/data: URLs
                       // through to the DOM, so only emit an href for http(s).
-                      href={/^https?:/i.test(url) ? url : undefined}
+                      href={isSafeExternalUrl(url) ? url : undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center min-h-11 text-[length:var(--font-size-14)] text-accent-aqua no-underline hover:underline"
                     >
-                      {(PLATFORM_LABELS[platform] || platform) + ' ↗'}
+                      {platformLabel(platform) + ' ↗'}
                     </a>
                   ))}
               </div>

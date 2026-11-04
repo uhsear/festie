@@ -144,9 +144,9 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
           >
             <div className="mb-2 flex items-center gap-2">
               <TriangleAlert className="h-4 w-4 shrink-0 text-priority-must" aria-hidden="true" />
-              <h3 className="text-sm font-bold text-text-primary">
+              <h2 className="text-sm font-bold text-text-primary">
                 {`${group.tight ? COPY.clash.tight : COPY.clash.one}${dayLabel ? ` · ${dayLabel}` : ''}`}
-              </h3>
+              </h2>
               {planned && (
                 <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-accent-aqua">
                   {COPY.clash.splitPlanned}

@@ -42,6 +42,11 @@ async function handleLoginFailure(user: any, deps: any) {
     state.metrics.authFailures = (state.metrics.authFailures || 0) + 1;
   }
   if (user && stores.loginFailures) {
+    // Failures older than the lockout window stop counting.
+    const prior = await stores.loginFailures.get(user.id);
+    if (prior?.lastFailureAt && Date.now() - new Date(prior.lastFailureAt).getTime() > config.LOGIN_LOCKOUT_MS) {
+      await stores.loginFailures.reset(user.id);
+    }
     await stores.loginFailures.record(user.id);
     const failures = await stores.loginFailures.get(user.id);
     if (failures && failures.consecutiveFailures >= config.MAX_LOGIN_FAILURES) {
@@ -151,7 +156,7 @@ export default function createAuthRoutes(deps: any): Router {
 
   router.post(
     '/register',
-    rateLimit(5, 'register'),
+    rateLimit(5, 'register', { keyFromBody: (req: any) => req.body?.username }),
     validate(schemas.register),
     async (req: Request, res: Response) => {
       try {
@@ -195,17 +200,26 @@ export default function createAuthRoutes(deps: any): Router {
           emailVerificationSent: !!cleanEmail,
         });
       } catch (error: any) {
+        // getByUsername skips accounts in their deletion window, but the unique
+        // index still holds the name (and a concurrent sign-up can race the check).
+        if (error?.code === '23505') {
+          const email = String(error.constraint ?? '').includes('email');
+          return sendError(res, 409, email ? 'Email address already in use' : 'That username is taken.', ErrorCodes.ALREADY_EXISTS);
+        }
         log.error('register failed', { error: error.message });
         return sendError(res, 500, 'Registration failed', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );
 
-  // Usernames cannot contain '@', so an '@' means sign-in by email. The email
-  // lookup skips soft-deleted accounts; only a username reactivates one.
+  // Usernames cannot contain '@', so an '@' means sign-in by email. An active
+  // account wins; otherwise a soft-deleted one inside its 30-day window.
   async function resolveLoginUser(username: string) {
     const ident = String(username).trim();
-    if (ident.includes('@')) return stores.users.getByEmail(ident.toLowerCase());
+    if (ident.includes('@')) {
+      const email = ident.toLowerCase();
+      return (await stores.users.getByEmail(email)) ?? stores.users.findDeletedByEmail(email);
+    }
     return (await stores.users.getByUsername(ident)) ?? stores.users.findDeletedByUsername(ident);
   }
 
@@ -221,7 +235,7 @@ export default function createAuthRoutes(deps: any): Router {
     return false;
   }
 
-  router.post('/login', rateLimit(10, 'login'), validate(schemas.login), async (req: Request, res: Response) => {
+  router.post('/login', rateLimit(10, 'login', { keyFromBody: (req: any) => req.body?.username }), validate(schemas.login), async (req: Request, res: Response) => {
     try {
       const { username, password } = req.validatedBody as any;
       if (!username || !password) {
@@ -475,18 +489,17 @@ export default function createAuthRoutes(deps: any): Router {
       setNoStore(res);
       const { hashSessionToken: hashToken } = deps;
       const currentTokenHash = req.userToken ? hashToken(req.userToken) : null;
-      await invalidateUserSessions(req.user.userId, req.userToken);
 
-      // Disconnect all sockets for this user except current session
+      // Notify other sockets before invalidateUserSessions disconnects them (it spares the current session)
       for (const [, socket] of io.sockets.sockets) {
         if (socket.data?.userId === req.user.userId) {
           const socketTokenHash = socket.data.userSessionToken ? hashToken(socket.data.userSessionToken) : null;
           if (socketTokenHash !== currentTokenHash) {
             socket.emit('session:revoked', { reason: 'All other sessions revoked' });
-            socket.disconnect(true);
           }
         }
       }
+      await invalidateUserSessions(req.user.userId, req.userToken);
 
       log.info('sessions:revoke-all', { userId: req.user.userId });
       return sendSuccess(res, { success: true });

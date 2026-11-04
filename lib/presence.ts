@@ -128,10 +128,11 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     socket.disconnect(true);
   }
 
-  function disconnectUserSockets(userId: any, io: any) {
+  function disconnectUserSockets(userId: any, io: any, exceptToken: any = null) {
     const presenceTargets = new Set();
     for (const socket of Array.from(io.of('/').sockets.values()) as any[]) {
       if (socket.data?.userId !== userId) continue;
+      if (exceptToken && socket.data?.userSessionToken === exceptToken) continue;
       disconnectSocket(socket, io, presenceTargets);
     }
     if (presenceTargets.size > 0)

@@ -89,7 +89,7 @@ function makeDeps(overrides: any = {}) {
 
   const deps = {
     express,
-    log: noopLog,
+    log: overrides.log || noopLog,
     userAuth:
       overrides.userAuth ||
       ((req: any, _res: any, next: any) => {
@@ -1264,6 +1264,37 @@ describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
     const row = (log.mock.calls as any[])[0].arguments[0];
     assert.equal(row.type, 'meeting-point-removed');
     assert.equal(row.detail, DEFAULT_MEETING_POINT.label);
+  });
+
+  test('responses do not wait for a slow push, and a failing push is logged', async () => {
+    const never = new Promise<void>(() => {});
+    const slow = { now: mock.fn(() => never) };
+    const stores = {
+      crews: {
+        ...member,
+        meetingPoints: {
+          getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, coming: ['user-2'] })),
+        },
+      },
+    };
+    const { app } = await buildApp({ crewNotify: slow, stores });
+    const created = await request(app)
+      .post('/crew-1/meeting-points')
+      .send({ label: 'A', location: 'B', meetAt: '2026-05-08T20:00:00.000Z' });
+    const updated = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T21:00:00.000Z' });
+    const removed = await request(app).delete('/crew-1/meeting-points/mp-1');
+    assert.deepEqual([created.status, updated.status, removed.status], [201, 200, 200]);
+    assert.equal(slow.now.mock.callCount(), 3);
+
+    const warn = mock.fn();
+    const failing = { now: mock.fn(async () => Promise.reject(new Error('push down'))) };
+    const failed = await buildApp({ crewNotify: failing, stores, log: { warn } });
+    const res = await request(failed.app)
+      .post('/crew-1/meeting-points')
+      .send({ label: 'A', location: 'B', meetAt: '2026-05-08T20:00:00.000Z' });
+    assert.equal(res.status, 201);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(warn.mock.callCount(), 1);
   });
 
   test('missing crewNotify still returns 201 and 200', async () => {

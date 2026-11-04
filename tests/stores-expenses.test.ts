@@ -678,7 +678,7 @@ describe('expenses store — getBalances()', () => {
     assert.strictEqual(bob!.balance, -30);
   });
 
-  it('ignores payer credit if payer is not a crew member', async () => {
+  it('skips the whole expense if payer is not a crew member', async () => {
     // Payer user-99 is not in the members list
     const expenses = [
       {
@@ -701,13 +701,12 @@ describe('expenses store — getBalances()', () => {
 
     const result = await store.getBalances('crew-1');
 
-    // user-99 not in balances, so payer credit is skipped (guarded by !== undefined check)
-    // user-1: 0 - 50 = -50
+    // user-99 has no balance row to credit, so the expense is skipped: nobody
+    // is left owing a payer who is gone (crediting no one left the ledger at -100).
     const alice = result.find((r: any) => r.userId === 'user-1');
-    assert.strictEqual(alice!.balance, -50);
-    // user-2: 0 - 50 = -50
+    assert.strictEqual(alice!.balance, 0);
     const bob = result.find((r: any) => r.userId === 'user-2');
-    assert.strictEqual(bob!.balance, -50);
+    assert.strictEqual(bob!.balance, 0);
   });
 
   it('redistributes shares for split members not in the crew (zero-sum)', async () => {
@@ -742,6 +741,45 @@ describe('expenses store — getBalances()', () => {
     assert.strictEqual(bob!.balance, -45);
     const total = result.reduce((s: number, r: any) => s + r.balance, 0);
     assert.ok(Math.abs(total) < 1e-9, `balances must be zero-sum, got ${total}`);
+  });
+
+  it('skips an expense whose payer left the crew so the ledger stays zero-sum', async () => {
+    const expenses = [
+      {
+        id: 'exp-gone',
+        crew_id: 'crew-1',
+        paid_by: 'user-99',
+        description: 'Paid by departed',
+        amount: '90.01',
+        split_with: '["user-1","user-2","user-99"]',
+        category: 'other',
+        created_at: '2026-05-01T00:00:00Z',
+      },
+      {
+        id: 'exp-kept',
+        crew_id: 'crew-1',
+        paid_by: 'user-1',
+        description: 'Paid by member',
+        amount: '10.00',
+        split_with: '["user-1","user-2"]',
+        category: 'other',
+        created_at: '2026-05-02T00:00:00Z',
+      },
+    ];
+    const members = [
+      { user_id: 'user-1', username: 'alice' },
+      { user_id: 'user-2', username: 'bob' },
+    ];
+    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: members }]) as any);
+
+    const result = await store.getBalancesCents('crew-1');
+
+    assert.strictEqual(result.find((r) => r.userId === 'user-1')!.balanceCents, 500);
+    assert.strictEqual(result.find((r) => r.userId === 'user-2')!.balanceCents, -500);
+    assert.strictEqual(
+      result.reduce((s, r) => s + r.balanceCents, 0),
+      0,
+    );
   });
 
   it('EXCLUDES planned (budget/forecast) expenses from the balance ledger', async () => {

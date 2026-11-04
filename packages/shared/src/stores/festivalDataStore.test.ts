@@ -436,6 +436,13 @@ describe('festivalDataStore', () => {
       expect(useFestivalDataStore.getState().pickCounts).toEqual({ 'set-1': 3 });
     });
 
+    it('treats a 403 (not joined) as no profiles without an error', async () => {
+      vi.mocked(api.getEnvelope).mockRejectedValueOnce(Object.assign(new Error('Join this festival'), { status: 403 }));
+      await useFestivalDataStore.getState().loadProfiles('fest-1');
+      expect(useFestivalDataStore.getState().allProfiles).toEqual([]);
+      expect(useFestivalDataStore.getState().error).toBeNull();
+    });
+
     it('falls back to empty pickCounts when the server sends none', async () => {
       useFestivalDataStore.setState({ pickCounts: { 'set-1': 9 } });
       vi.mocked(api.get).mockResolvedValueOnce([mockProfile]);
@@ -517,6 +524,22 @@ describe('festivalDataStore', () => {
       expect(cp?.reminders?.['set-offline']).toBe(15);
       // Existing picks must also survive
       expect(cp?.picks['set-1']).toBe('must');
+    });
+
+    it('keeps an optimistic reminder while its PUT is still in flight', async () => {
+      useAuthStore.setState({
+        user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' },
+      });
+      useFestivalDataStore.setState({
+        currentProfile: { ...mockProfile, reminders: { 'set-new': 30 } },
+        savesInFlight: 1,
+      });
+      vi.mocked(api.get).mockResolvedValueOnce([{ ...mockProfile, reminders: {} }]);
+
+      await useFestivalDataStore.getState().loadProfiles('fest-1');
+
+      expect(useFestivalDataStore.getState().currentProfile?.reminders?.['set-new']).toBe(30);
+      useFestivalDataStore.setState({ savesInFlight: 0 });
     });
   });
 
@@ -855,6 +878,17 @@ describe('festivalDataStore', () => {
       expect(profile.reminders?.['set-3']).toBe(15); // sibling's reminder survives
       expect(profile.picks['set-2']).toBeUndefined(); // failed call rolled back
       expect(profile.picks['set-1']).toBe('must'); // untouched
+    });
+  });
+
+  describe('applyProfilePatch', () => {
+    it('keeps the live profile reminders when a picks echo arrives', () => {
+      useFestivalDataStore.setState({
+        currentProfile: { ...mockProfile, reminders: { 'set-3': 15 } },
+        allProfiles: [{ ...mockProfile, reminders: {} }],
+      });
+      useFestivalDataStore.getState().applyProfilePatch({ profileId: mockProfile.id, picks: { 'set-1': 'must' } });
+      expect(useFestivalDataStore.getState().currentProfile!.reminders).toEqual({ 'set-3': 15 });
     });
   });
 

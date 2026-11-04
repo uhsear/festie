@@ -291,8 +291,13 @@ describe('useLiveLocationPublisher', () => {
     expect(sharesBefore).toBe(1);
 
     // Simulate a socket.io reconnect — the server's per-connection share grant
-    // is gone, so the publisher must re-declare intent.
+    // is gone, so the publisher must re-declare intent, but only after the
+    // join:crew ack (the share is refused until the socket is in the room).
     fire('connect');
+    expect(emit.mock.calls.filter((c) => c[0] === 'location:share').length).toBe(1);
+    const join = emit.mock.calls.find((c) => c[0] === 'join:crew')!;
+    expect(join[1]).toEqual({ _v: 1, crewId: 'crew-1' });
+    (join[2] as (r: { ok: boolean }) => void)({ ok: true });
     const sharesAfter = emit.mock.calls.filter((c) => c[0] === 'location:share').length;
     expect(sharesAfter).toBe(2);
 

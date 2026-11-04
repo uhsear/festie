@@ -1389,12 +1389,13 @@ describe('routes/profiles.js', () => {
       assert.equal(res.status, 404);
     });
 
-    test('returns 403 when user has no profile for the festival', async () => {
+    test('returns an empty list when user has no profile for the festival', async () => {
       const { app } = await buildProfileApp({
         getUserFestivalProfile: mock.fn(async () => null),
       });
       const res = await request(app).get('/profiles/f1');
-      assert.equal(res.status, 403);
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body.data, []);
     });
 
     test('returns profiles successfully', async () => {
@@ -1706,7 +1707,8 @@ describe('routes/profiles.js', () => {
       assert.equal(res.status, 400);
     });
 
-    test('returns 400 when reminders reference unknown set', async () => {
+    test('drops reminders that reference an unknown set', async () => {
+      const update = mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' }));
       const { app } = await buildProfileApp({
         normalizeReminderPayload: mock.fn((r) => ({ value: r })),
         stores: {
@@ -1714,13 +1716,15 @@ describe('routes/profiles.js', () => {
           profiles: {
             ...makeProfileDeps().stores.profiles,
             getById: mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' })),
+            update,
           },
         },
       });
       const res = await request(app)
         .put('/profiles/p1')
         .send({ reminders: { 'unknown-set': 5 } });
-      assert.equal(res.status, 400);
+      assert.equal(res.status, 200);
+      assert.deepEqual(((update.mock.calls[0] as any).arguments as any[])[1].reminders, {});
     });
 
     test('returns 409 on version mismatch (If-Match)', async () => {
@@ -1998,6 +2002,35 @@ describe('routes/share.js', () => {
       const res = await request(app).get('/s/u/INVALID!!!');
       assert.equal(res.status, 400);
       assert.ok(res.text.includes('Invalid Link'));
+    });
+
+    test('accepts a username with a space and shows a readable date, still noindex', async () => {
+      const getByUsername = mock.fn(async (_name: string) => ({ id: 'u1', username: 'Jane Doe', publicSchedule: true }));
+      const { app } = await buildShareApp({
+        getFestivalById: mock.fn(async (id: any) => ({
+          id, name: 'Test Fest', stages: [{ id: 'stg-1', name: 'Main' }],
+          days: [{ label: 'Friday', date: '2026-07-10', sets: [{ id: 'set-a', artist: 'Alpha' }] }],
+        })),
+        stores: {
+          ...makeShareDeps().stores,
+          users: { getByUsername },
+          profiles: {
+            ...makeShareDeps().stores.profiles,
+            getById: mock.fn(async (id: string) => ({ id, userId: 'u1', festivalId: 'f1', picks: { 'set-a': 'must' } })),
+          },
+          shareLinks: {
+            ...makeShareDeps().stores.shareLinks,
+            newestProfile: mock.fn(async () => ({ profileId: 'p-new', festivalId: 'f1', festivalName: 'Test Fest' })),
+          },
+        },
+      });
+      const res = await request(app).get('/s/u/Jane%20Doe');
+      assert.equal(res.status, 200);
+      assert.equal(getByUsername.mock.calls[0]!.arguments[0], 'jane doe');
+      assert.ok(res.text.includes('Fri, Jul 10'));
+      assert.ok(!res.text.includes('share-date">2026-07-10'));
+      assert.ok(res.text.includes('/s/u/jane%20doe'));
+      assert.equal(res.headers['x-robots-tag'], 'noindex');
     });
 
     test('returns error for too-long username', async () => {

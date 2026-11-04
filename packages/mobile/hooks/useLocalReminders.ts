@@ -10,6 +10,7 @@ import {
   effectiveReminders,
   MAX_LOCAL_REMINDERS,
   resolveFestivalTimeZone,
+  soonestReminders,
 } from '@festie/shared/utils';
 import type { ReminderPlanEntry } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
@@ -32,8 +33,8 @@ import { reportLocalRemindersFestival } from './useMobilePush';
  * Behavior:
  * - Reconciles on every change to picks/reminders/sets/days (and on app
  *   foreground, since the wall-clock advances and past reminders should drop).
- * - Caps to the next ≤64 upcoming reminders (iOS local-notification limit),
- *   prioritizing must > want-to-see > maybe (logic lives in `@festie/shared`).
+ * - Caps to the soonest ≤64 upcoming reminders (iOS local-notification limit;
+ *   logic lives in `@festie/shared`).
  * - Cancels reminders for sets that were un-reminded, by deterministic id.
  * - Gated on the user's set-reminders preference (`notificationPrefs.setReminders`,
  *   the existing pref that controls schedule alerts). When off, all local
@@ -100,7 +101,9 @@ export function useLocalReminders(): void {
       }
 
       const merged = effectiveReminders(reminders, picks, mustSeeReminderMinutes);
-      const plan = buildReminderPlan({ reminders: merged, picks, sets, days, timeZone: festivalTimeZone });
+      // Past reminders are already dropped here; the cap applies only to upcoming ones.
+      const upcoming = buildReminderPlan({ reminders: merged, picks, sets, days, timeZone: festivalTimeZone, max: Infinity });
+      const plan = soonestReminders(upcoming, MAX_LOCAL_REMINDERS);
 
       // Nothing to schedule and (likely) nothing scheduled — still reconcile so
       // un-reminded sets get cancelled. But avoid prompting for permission when
@@ -139,10 +142,15 @@ export function useLocalReminders(): void {
       );
       if (cancelled) return;
 
-      // Above the iOS slot cap, or after a failed schedule, some reminders are not on
-      // the phone, so the server push must stay on.
-      const fullyLocal = Object.keys(merged).length <= MAX_LOCAL_REMINDERS && results.every(Boolean);
-      await reportLocalRemindersFestival(permissionRef.current.granted && fullyLocal && festivalId ? festivalId : null);
+      // After a failed schedule some reminders are not on the phone, so the server push
+      // must stay on. Above the iOS slot cap the phone covers only up to one ms before
+      // its first left-out reminder (ties with the 64th then get a duplicate, not a miss); the server still pushes the later ones.
+      const covered = permissionRef.current.granted && results.every(Boolean) && festivalId;
+      const truncated = upcoming.length > MAX_LOCAL_REMINDERS;
+      const coversUntil = truncated
+        ? soonestReminders(upcoming, MAX_LOCAL_REMINDERS + 1)[MAX_LOCAL_REMINDERS]!.fireAtMs - 1
+        : null;
+      await reportLocalRemindersFestival(covered ? festivalId : null, coversUntil);
     }
 
     reconcile();

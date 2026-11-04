@@ -13,6 +13,27 @@ describe('T3 local reminders report their festival (source-level guards)', () =>
     const src = read('hooks/useLocalReminders.ts');
     expect(src).toContain('Promise<boolean>');
     expect(src).toContain('results.every(Boolean)');
+    expect(src).toContain('soonestReminders(upcoming, MAX_LOCAL_REMINDERS)');
+  });
+
+  it('the 64 cap counts only upcoming reminders, not the merged map', () => {
+    const src = read('hooks/useLocalReminders.ts');
+    expect(src).toContain('upcoming.length > MAX_LOCAL_REMINDERS');
+    // Above the cap the phone reports a cutoff instead of dropping the festival skip.
+    expect(src).toContain('[MAX_LOCAL_REMINDERS]!.fireAtMs - 1');
+    expect(src).not.toContain('Object.keys(merged).length');
+  });
+
+  it('useMobilePush re-registers a rotated token and derives the switch from permission + token', () => {
+    const src = read('hooks/useMobilePush.ts');
+    const fn = src.slice(src.indexOf('export async function reregisterRotatedToken'), src.indexOf('export async function unregisterPushOnSignOut'));
+    expect(fn).toContain("api.post('/notifications/token'");
+    expect(fn).toContain('if (!cached || cached === newToken) return');
+    expect(src).toContain('Notifications.addPushTokenListener(');
+    expect(fn).toContain('localRemindersFestivalId');
+    expect(fn).toContain('localRemindersCoversUntil');
+    expect(read('app/_layout.tsx')).toContain('usePushTokenRotation();');
+    expect(src).toContain("setRegistered(p.status === 'granted' && !!token)");
   });
 
   it('useMobilePush clears the reported-festival key on register and unregister', () => {
@@ -20,7 +41,7 @@ describe('T3 local reminders report their festival (source-level guards)', () =>
     expect(src).toContain("'festie-push-local-festival'");
     const register = src.slice(src.indexOf('const register = '), src.indexOf('const unregister = '));
     const unregister = src.slice(src.indexOf('const unregister = '));
-    expect(register).toContain('removeItem(LOCAL_FESTIVAL_KEY)');
-    expect(unregister).toContain('removeItem(LOCAL_FESTIVAL_KEY)');
+    expect(register).toContain('multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
+    expect(unregister).toContain('multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
   });
 });

@@ -323,12 +323,25 @@ button[aria-label='Back to app'] {
   border-top-color: var(--color-bg-elevated, #18182c);
   border-bottom-color: var(--color-bg-elevated, #18182c);
 }
+/* Opaque: a translucent fill let the bright tiles through and dropped the text under 4.5:1. */
 .festie-map-canvas .maplibregl-ctrl-attrib {
-  background: color-mix(in srgb, var(--color-bg-primary) 75%, transparent);
+  background: var(--color-bg-primary);
   color: var(--color-text-muted, #8787a8);
 }
+.festie-map-canvas .maplibregl-ctrl-attrib.maplibregl-compact,
+.festie-map-canvas .maplibregl-ctrl-attrib.maplibregl-compact-show {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary, #eaeaf2);
+}
+/* maplibre's toggle is a black SVG; invert it on the dark themes. */
+:root:not([data-theme='daylight']) .festie-map-canvas .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}
 .festie-map-canvas .maplibregl-ctrl-attrib a {
-  color: var(--color-text-secondary, #9999bb);
+  color: var(--color-text-primary, #eaeaf2);
+  display: inline-block;
+  min-block-size: 24px;
+  line-height: 24px;
 }
 
 /* Live peer marker — visually distinct from the coral meeting-point dot: an aqua

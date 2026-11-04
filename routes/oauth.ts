@@ -24,6 +24,7 @@ import {
   createUserWithProfile,
   finishSignIn,
   USERNAME_RULE_MESSAGE,
+  usernameTaken,
 } from '../lib/auth/sign-in';
 import { acceptProviderToken, isProviderEnabled, OAUTH_MESSAGES, ProviderRejection } from '../lib/oauth/accept';
 import { sha256hex } from '../lib/oauth/verify';
@@ -114,7 +115,7 @@ export default function createOAuthRoutes(deps: any): Router {
     const base = usernameBase(name, email);
     let candidate = base;
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      if (!(await stores.users.getByUsername(candidate))) return candidate;
+      if (!(await usernameTaken(candidate, stores))) return candidate;
       const digits = String(crypto.randomInt(10, 10_000));
       candidate = `${base.slice(0, 30 - digits.length)}${digits}`;
     }

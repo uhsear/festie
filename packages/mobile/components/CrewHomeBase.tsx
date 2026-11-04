@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
-import { formatTime } from '@festie/shared/utils';
+import { formatTime, QUEUED_WRITE_MESSAGE } from '@festie/shared/utils';
 import { COPY, planBLine } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
@@ -62,11 +62,12 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
     setTimeError(null);
     setSaving(true);
     try {
-      await updateHomeBase(crewId, {
+      const outcome = await updateHomeBase(crewId, {
         location: trimmed,
         time: parsedTime,
         planB: planB.trim() || null,
       });
+      if (outcome === 'queued') AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
       setEditing(false);
     } catch {
       // Error is surfaced via the crew store.
@@ -80,7 +81,8 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
     setTimeError(null);
     setSaving(true);
     try {
-      await updateHomeBase(crewId, { location: null, time: null, planB: null });
+      const outcome = await updateHomeBase(crewId, { location: null, time: null, planB: null });
+      if (outcome === 'queued') AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
       setEditing(false);
     } catch {
       // Error is surfaced via the crew store.

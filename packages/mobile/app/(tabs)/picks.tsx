@@ -41,6 +41,7 @@ import {
   buildPlanList,
   clashBadgeBySetId,
   fmtZonedClock,
+  foldSearch,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
 import { COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
@@ -192,12 +193,12 @@ export default function PicksScreen() {
 
   const listRows = useMemo<Row[]>(() => {
     if (activePlanList) {
-      const q = search.trim().toLowerCase();
+      const q = foldSearch(search.trim());
       const items = (activePlanList === 'reminders' ? reminderItems : noteItems).filter(
         (item) =>
           !q ||
-          artistDisplayName(item.set, separator).toLowerCase().includes(q) ||
-          (getStageName(item.set.stageId) || '').toLowerCase().includes(q),
+          foldSearch(artistDisplayName(item.set, separator)).includes(q) ||
+          foldSearch(getStageName(item.set.stageId) || '').includes(q),
       );
       const out: Row[] = [];
       const known = new Set(days.map((d) => d.index));
@@ -610,7 +611,7 @@ export default function PicksScreen() {
         <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
       )}
       <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-        {exportBusy ? 'Exporting…' : 'Add to calendar'}
+        {exportBusy ? 'Exporting…' : 'Calendar'}
       </Text>
     </TouchableOpacity>
   );

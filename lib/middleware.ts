@@ -243,7 +243,7 @@ function configureMiddleware(app: Application, ctx: any) {
     );
     res.setHeader(
       'Permissions-Policy',
-      'accelerometer=(), autoplay=(self), browsing-topics=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(self), screen-wake-lock=(), sync-xhr=(), usb=(), xr-spatial-tracking=()',
+      'accelerometer=(), autoplay=(self), browsing-topics=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(self), screen-wake-lock=(self), sync-xhr=(), usb=(), xr-spatial-tracking=()',
     );
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');

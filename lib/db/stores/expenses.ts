@@ -354,10 +354,12 @@ export function createExpensesStore(pool: Pool) {
           isMember,
         );
         if (owed.length === 0) continue;
+        // A payer who left has no balance row to credit. Skip the expense, as for a
+        // departed split member's forgiven share, or the ledger stops summing to zero.
+        if (!isMember(exp.paid_by)) continue;
 
         // Payer fronted the whole amount.
-        const payerBal = cents[exp.paid_by];
-        if (payerBal !== undefined) cents[exp.paid_by] = payerBal + amountCents;
+        cents[exp.paid_by] = (cents[exp.paid_by] ?? 0) + amountCents;
 
         for (const [uid, share] of owed) cents[uid] = (cents[uid] ?? 0) - share;
       }

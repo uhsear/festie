@@ -72,10 +72,10 @@ describe('useFestivalLoader session probe', () => {
     h.state.currentProfile = null;
   });
 
-  it('does not call checkSession when no user is persisted', () => {
+  it('probes once when no user is persisted, since the session cookie may exist', () => {
     h.state.user = null;
     renderHook(() => useFestivalLoader());
-    expect(h.checkSession).not.toHaveBeenCalled();
+    expect(h.checkSession).toHaveBeenCalledTimes(1);
   });
 
   it('calls checkSession when a user is persisted', () => {
@@ -91,6 +91,16 @@ describe('useFestivalLoader session probe', () => {
     expect(h.checkSession).not.toHaveBeenCalled();
     h.state.cb?.(); // simulate onFinishHydration firing
     expect(h.checkSession).toHaveBeenCalledTimes(1);
+  });
+  it('refetches festivals when the auth user changes (sign-out)', async () => {
+    h.state.user = { id: 'u1' };
+    const { rerender } = renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    h.loadFestivals.mockClear();
+    h.state.user = null;
+    rerender();
+    await act(async () => {});
+    expect(h.loadFestivals).toHaveBeenCalledTimes(1);
   });
 });
 

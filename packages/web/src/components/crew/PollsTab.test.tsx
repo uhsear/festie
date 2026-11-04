@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PollsTab from './PollsTab';
 
@@ -61,5 +61,23 @@ describe('PollsTab cap', () => {
     const create = await screen.findByRole('button', { name: /Create Poll/ });
     expect(create).toBeEnabled();
     expect(screen.queryByText(/Close a poll to start another/)).not.toBeInTheDocument();
+  });
+});
+
+describe('PollsTab failed refetch', () => {
+  it('keeps cached polls and shows a retry note instead of the error card', async () => {
+    apiGet.mockResolvedValueOnce({ polls: [poll('1')] });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <PollsTab crewId="c1" currentUserId="u1" isOwner />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('button', { name: /Create Poll/ });
+    apiGet.mockRejectedValueOnce(new Error('offline'));
+    await act(() => qc.refetchQueries({ queryKey: ['polls', 'c1'] }));
+    expect(await screen.findByText(/Showing saved data/)).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load polls")).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create Poll/ })).toBeInTheDocument();
   });
 });

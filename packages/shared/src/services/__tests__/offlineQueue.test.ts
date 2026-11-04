@@ -28,6 +28,7 @@ import {
   dismissFailed,
   hydrateFailedSync,
   surfaceFailedSync,
+  MAX_RETRIES,
   type QueuedMutation,
 } from '../offlineQueue';
 import { useUIStore } from '../../stores/uiStore';
@@ -197,6 +198,33 @@ describe('offlineQueue', () => {
 
       expect(readPersisted()).toHaveLength(1); // still queued
       expect(useUIStore.getState().failedSync).toHaveLength(0); // not a permanent fail
+    });
+
+    it('keeps a 429 queued, skips it until Retry-After passes, and never consumes a retry', async () => {
+      seed([makeMutation({ clientId: 'a' })]);
+      vi.mocked(api.put).mockRejectedValue(Object.assign(new ApiClientError('Slow down', 429), { retryAfter: '60' }));
+
+      await drainQueue();
+
+      const [entry] = readPersisted();
+      expect(entry!.retries ?? 0).toBe(0);
+      expect(entry!.notBefore).toBeGreaterThan(Date.now() + 50_000);
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
+
+      vi.mocked(api.put).mockClear();
+      await drainQueue();
+      expect(api.put).not.toHaveBeenCalled(); // still backing off
+    });
+
+    it('network timeouts never consume MAX_RETRIES and never surface as failed', async () => {
+      seed([makeMutation({ clientId: 'a' })]);
+      vi.mocked(api.put).mockRejectedValue(new ApiClientError('Request timed out', 0, true));
+
+      for (let i = 0; i < MAX_RETRIES + 2; i++) await drainQueue();
+
+      expect(readPersisted()).toHaveLength(1);
+      expect(readPersisted()[0]!.retries ?? 0).toBe(0);
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
     });
 
     it('does nothing while offline', async () => {

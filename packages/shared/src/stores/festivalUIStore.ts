@@ -37,7 +37,12 @@ export interface FestivalUIState {
   byFestival: Record<string, ScheduleFilterPrefs>;
   /** "View as": the crew mate whose picks filter the schedule. Memory only; cleared on festival switch. */
   viewAsProfileId: string | null;
+  /** When the user last picked a day. Memory only; stops "follow today" from overriding a recent choice. */
+  daySetAt: number;
 }
+
+/** A refresh or resume moves to today unless the user picked a day this recently. */
+export const FOLLOW_TODAY_IDLE_MS = 30 * 60 * 1000;
 
 export interface FestivalUIActions {
   setSelectedDay: (dayIndex: number) => void;
@@ -50,7 +55,7 @@ export interface FestivalUIActions {
   dismissPhaseBand: (phase: FestivalPhase | null) => void;
   setScheduleGroupBy: (groupBy: ScheduleGroupBy | null) => void;
   setViewAs: (profileId: string | null) => void;
-  restoreForFestival: (festivalId: string, scope: FestivalUIScope & { todayIdx: number }) => void;
+  restoreForFestival: (festivalId: string, scope: FestivalUIScope & { todayIdx: number; isLive?: boolean }) => void;
 }
 
 export type FestivalUIStore = FestivalUIState & FestivalUIActions;
@@ -160,9 +165,10 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
         prefsScope: { stageIds: [], dayCount: 0 },
         byFestival: {},
         viewAsProfileId: null,
+        daySetAt: 0,
 
         setSelectedDay: (dayIndex: number) => {
-          set({ selectedDay: dayIndex });
+          set({ selectedDay: dayIndex, daySetAt: Date.now() });
         },
 
         setOnlyMine: (onlyMine: boolean) => update({ onlyMine }),
@@ -188,17 +194,24 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
         // Plain set, not update: View as is never remembered.
         setViewAs: (profileId) => set({ viewAsProfileId: profileId }),
 
-        restoreForFestival: (festivalId, { todayIdx, ...scope }) => {
+        restoreForFestival: (festivalId, { todayIdx, isLive, ...scope }) => {
           const s = get();
           const inRange = (i: number) => i >= 0 && i < scope.dayCount;
           if (s.prefsFestivalId === festivalId) {
             // A refresh of the same festival: keep the live fields, drop what no longer exists.
             const prefs = sanitizeSchedulePrefs(toPrefs(s), scope);
-            const selectedDay = inRange(s.selectedDay)
-              ? s.selectedDay
-              : inRange(todayIdx)
-                ? todayIdx
-                : firstVisibleDay(scope.dayCount, prefs.hiddenDays);
+            const followToday =
+              !!isLive &&
+              inRange(todayIdx) &&
+              !prefs.hiddenDays.includes(todayIdx) &&
+              Date.now() - s.daySetAt > FOLLOW_TODAY_IDLE_MS;
+            const selectedDay = followToday
+              ? todayIdx
+              : inRange(s.selectedDay)
+                ? s.selectedDay
+                : inRange(todayIdx)
+                  ? todayIdx
+                  : firstVisibleDay(scope.dayCount, prefs.hiddenDays);
             set({ ...fromPrefs(prefs), prefsScope: scope, selectedDay });
             return;
           }
@@ -214,6 +227,7 @@ export const useFestivalUIStore = create<FestivalUIStore>()(
             prefsFestivalId: festivalId,
             prefsScope: scope,
             selectedDay,
+            daySetAt: 0,
           });
         },
       };

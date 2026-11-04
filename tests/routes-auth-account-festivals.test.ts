@@ -147,6 +147,8 @@ function makeMockDeps(overrides: any = {}) {
         countActive: mock.fn(async () => 0),
         update: mock.fn(async (id, data) => ({ id, username: data.username || 'testuser', ...data })),
         findDeletedByUsername: mock.fn(async () => null),
+        getByEmail: mock.fn(async () => null),
+        findDeletedByEmail: mock.fn(async () => null),
         reactivate: mock.fn(async () => {}),
       },
       profiles: {
@@ -341,7 +343,7 @@ describe('routes/auth.js — createAuthRoutes', () => {
 
     test('returns 400 when username already taken', async () => {
       const deps = makeMockDeps();
-      deps.stores.users.getByUsername = mock.fn(async () => ({ id: 'u-exist', username: 'newuser' }));
+      deps.stores.pool.query = mock.fn(async () => ({ rows: [{ '?column?': 1 }] }));
       const router = createAuthRoutes(deps);
       const app = createApp(router);
 
@@ -351,6 +353,25 @@ describe('routes/auth.js — createAuthRoutes', () => {
 
       assert.equal(res.status, 400);
       assert.equal(res.body.error.code, 'ALREADY_EXISTS');
+    });
+
+    test('returns 409 when the username unique index rejects the insert', async () => {
+      const deps = makeMockDeps();
+      deps.stores.users.getByUsername = mock.fn(async () => null);
+      deps.stores.users.countActive = mock.fn(async () => 0);
+      deps.stores.users.create = mock.fn(async () => {
+        throw Object.assign(new Error('duplicate key'), { code: '23505', constraint: 'users_username_key' });
+      });
+      const router = createAuthRoutes(deps);
+      const app = createApp(router);
+
+      const res = await request(app)
+        .post('/register')
+        .send({ username: 'newuser', password: 'Str0ngTest!Pw', confirmPassword: 'Str0ngTest!Pw' });
+
+      assert.equal(res.status, 409);
+      assert.equal(res.body.error.code, 'ALREADY_EXISTS');
+      assert.equal(res.body.error.message, 'That username is taken.');
     });
 
     test('returns 400 when max users reached', async () => {
@@ -406,7 +427,7 @@ describe('routes/auth.js — createAuthRoutes', () => {
 
     test('returns 500 on internal error', async () => {
       const deps = makeMockDeps();
-      deps.stores.users.getByUsername = mock.fn(async () => {
+      deps.stores.pool.query = mock.fn(async () => {
         throw new Error('db down');
       });
       const router = createAuthRoutes(deps);
@@ -511,6 +532,29 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.equal(res.body.data.reactivated, true);
       assert.deepEqual(reactivate.mock.calls[0]!.arguments, ['u-deleted']);
       assert.deepEqual(restore.mock.calls[0]!.arguments, ['u-deleted']);
+    });
+
+    test('reactivates a soft-deleted account when signing in by email, case-insensitive', async () => {
+      const reactivate = mock.fn(async () => {});
+      const findDeletedByEmail = mock.fn(async () => ({
+        id: 'u-deleted',
+        username: 'testuser',
+        passwordHash: 'hashed-pw',
+        deletedAt: '2026-01-01T00:00:00.000Z',
+      }));
+      const deps = makeMockDeps();
+      deps.stores.users.findDeletedByEmail = findDeletedByEmail;
+      deps.stores.users.reactivate = reactivate;
+      deps.stores.profiles.restoreByUserId = mock.fn(async () => 0);
+      deps.stores.roles = { getUserRoles: mock.fn(async () => []) };
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app).post('/login').send({ username: 'Test@Example.COM', password: 'Str0ngTest!Pw' });
+
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.reactivated, true);
+      assert.deepEqual(findDeletedByEmail.mock.calls[0]!.arguments, ['test@example.com']);
+      assert.deepEqual(reactivate.mock.calls[0]!.arguments, ['u-deleted']);
     });
 
     test('a soft-deleted account with a wrong password is not reactivated', async () => {

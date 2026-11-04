@@ -86,6 +86,7 @@ export function minutesToTime(minutes: number): string {
 }
 
 export function artistDisplayName(set: FestivalSet, separator?: string): string {
+  if (set.displayName) return set.displayName;
   const sep = separator || 'b2b';
   const joined = set.artists?.length ? set.artists.map((a) => a.name).join(` ${sep} `) : '';
 
@@ -98,8 +99,29 @@ export function artistSubtitle(set: FestivalSet, separator?: string): string {
   if (!set.artists || set.artists.length < 2) return '';
   const sep = separator || 'b2b';
   const joined = set.artists.map((a) => a.name).join(` ${sep} `);
+  if (set.displayName) return set.displayName === joined ? '' : joined;
   if (!set.artist || set.artist === joined) return '';
   return joined;
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  spotify: 'Spotify',
+  soundcloud: 'SoundCloud',
+  instagram: 'Instagram',
+  twitter: 'X',
+  tiktok: 'TikTok',
+  facebook: 'Facebook',
+  website: 'Website',
+};
+
+/** Human label for an artist link key; unknown keys pass through unchanged. */
+export function platformLabel(platform: string): string {
+  return (Object.hasOwn(PLATFORM_LABELS, platform) && PLATFORM_LABELS[platform]) || platform;
+}
+
+/** True only for http(s) URLs; blocks javascript:, data:, intent: and other schemes. */
+export function isSafeExternalUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
 }
 
 export function getSetLinks(set: FestivalSet): Array<{ name: string; links: Record<string, string> }> {

@@ -17,6 +17,7 @@
 
 import sharp from 'sharp';
 
+import { dayHeadingDate } from '../lib/festival-page.js';
 import { festivalTint } from '../lib/festival-tint.js';
 import { escapeHtml } from '../lib/helpers/sanitize.js';
 import {
@@ -26,6 +27,7 @@ import {
   sanitizeColor,
   shareTimeText,
 } from '../lib/helpers/public-page.js';
+import { validateUsername } from '../lib/helpers/validation.js';
 import { buildShareOgSvg, pickOgArtists } from '../lib/helpers/share-og-image.js';
 import { festivalStartMinutes } from '../lib/time-zone.js';
 
@@ -46,10 +48,11 @@ export default function createShareRoutes(deps: any) {
     return res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0f;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}.error-box{text-align:center;padding:40px 24px;max-width:400px}.error-icon{font-size:48px;margin-bottom:16px;opacity:.5}.error-title{font-size:20px;font-weight:700;margin-bottom:8px}.error-msg{font-size:14px;color:#888;margin-bottom:24px}.error-btn{display:inline-block;background:#ff3366;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px}.error-btn:hover{background:#e62e5c}</style></head><body><div class="error-box"><div class="error-icon">🎵</div><div class="error-title">${escapeHtml(title)}</div><div class="error-msg">${escapeHtml(message)}</div><a class="error-btn" href="${escapeHtml(config.PUBLIC_ORIGIN || '/')}">Go to Festie</a></div></body></html>`);
   }
 
-  // Sanitize username: lowercase, alphanumeric + underscore + hyphen, max 30 chars. Null when invalid.
+  // Express already URL-decodes the param. Accepts what validateUsername accepts
+  // (single spaces between words), lowercased. Null when invalid.
   function vanityUsername(raw: unknown) {
     const username = String(raw || '').trim().toLowerCase();
-    return username && username.length <= 30 && /^[a-z0-9_-]+$/.test(username) ? username : null;
+    return validateUsername(username) ? username : null;
   }
 
   // The newest profile of a public user. Private users answer exactly like a
@@ -149,7 +152,7 @@ export default function createShareRoutes(deps: any) {
             (a.startTime ? festivalStartMinutes(a.startTime) : Number.MAX_SAFE_INTEGER) -
             (b.startTime ? festivalStartMinutes(b.startTime) : Number.MAX_SAFE_INTEGER),
         );
-      return { label: escapeHtml(day.label || `Day ${dayIndex + 1}`), date: day.date || '', sets: daySets };
+      return { label: escapeHtml(day.label || `Day ${dayIndex + 1}`), date: escapeHtml(dayHeadingDate(day.date)), sets: daySets };
     }).filter((day: any) => day.sets.length > 0);
   }
 
@@ -193,7 +196,7 @@ export default function createShareRoutes(deps: any) {
     const user = await getUserById(profile.userId);
     const picks = profile.picks || {};
     const origin = shareOrigin(req);
-    const shareUrl = `${origin}/s/${shareRef}`;
+    const shareUrl = `${origin}/s/${shareRef.split('/').map(encodeURIComponent).join('/')}`;
     const ogUrl = `${shareUrl}/og.png`;
     const username = user?.username || profile.name || 'Anonymous';
     const stats = buildPickStats(picks);

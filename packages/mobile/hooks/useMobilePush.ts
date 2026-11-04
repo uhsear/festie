@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -9,25 +9,74 @@ import { api } from '@festie/shared/services';
 const TOKEN_KEY = 'festie-push-token';
 // Festival id last reported to the server as covered by on-device reminders.
 const LOCAL_FESTIVAL_KEY = 'festie-push-local-festival';
+// Fire time (epoch ms) of the last local reminder; the server still pushes later ones.
+const LOCAL_COVERS_KEY = 'festie-push-local-covers-until';
 const NO_FESTIVAL = '';
 
 /**
  * Tell the server which festival this phone schedules local set reminders for,
  * so the reminder scheduler skips the duplicate push. Pass null to turn the
- * skip off. No-op without a registered token or when the value is unchanged.
+ * skip off. `coversUntil` limits the skip to reminders firing at or before that
+ * time (the phone holds only its soonest 64); null covers the whole festival.
+ * No-op without a registered token or when the values are unchanged.
  */
-export async function reportLocalRemindersFestival(festivalId: string | null): Promise<void> {
+export async function reportLocalRemindersFestival(festivalId: string | null, coversUntil: number | null = null): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (!token) return;
     const reported = await AsyncStorage.getItem(LOCAL_FESTIVAL_KEY);
-    if (reported === (festivalId ?? NO_FESTIVAL)) return;
+    const reportedUntil = await AsyncStorage.getItem(LOCAL_COVERS_KEY);
+    const cutoff = festivalId ? coversUntil : null;
+    if (reported === (festivalId ?? NO_FESTIVAL) && (reportedUntil || null) === (cutoff === null ? null : String(cutoff))) return;
     await api.post('/notifications/token', {
       token,
       platform: Platform.OS,
       localRemindersFestivalId: festivalId,
+      localRemindersCoversUntil: cutoff,
     });
     await AsyncStorage.setItem(LOCAL_FESTIVAL_KEY, festivalId ?? NO_FESTIVAL);
+    if (cutoff === null) await AsyncStorage.removeItem(LOCAL_COVERS_KEY);
+    else await AsyncStorage.setItem(LOCAL_COVERS_KEY, String(cutoff));
+  } catch (e) {
+    Sentry.captureException(e);
+  }
+}
+
+/**
+ * Register a rotated device token with the server. No-op when this phone has no
+ * cached token (not registered, or signed out) or the token is unchanged.
+ */
+export async function reregisterRotatedToken(newToken: string): Promise<void> {
+  try {
+    const cached = await AsyncStorage.getItem(TOKEN_KEY);
+    if (!cached || cached === newToken) return;
+    // Carry the covered festival over so the new server row keeps skipping duplicate pushes.
+    const localFestivalId = (await AsyncStorage.getItem(LOCAL_FESTIVAL_KEY)) || undefined;
+    const coversUntil = Number(await AsyncStorage.getItem(LOCAL_COVERS_KEY));
+    await api.post('/notifications/token', {
+      token: newToken,
+      platform: Platform.OS,
+      deviceName: Device.deviceName ?? undefined,
+      localRemindersFestivalId: localFestivalId,
+      localRemindersCoversUntil: localFestivalId && coversUntil > 0 ? coversUntil : undefined,
+    });
+    await AsyncStorage.setItem(TOKEN_KEY, newToken);
+  } catch (e) {
+    Sentry.captureException(e);
+  }
+}
+
+/**
+ * Sign-out cleanup, run BEFORE the session is revoked so DELETE /notifications/token
+ * is still authenticated: drop this device's token server-side, forget it locally,
+ * and cancel on-device reminders so the next account does not get them. Never throws.
+ */
+export async function unregisterPushOnSignOut(): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    if (token) await api.delete('/notifications/token', { body: { token } }).catch(() => {});
+    await AsyncStorage.multiRemove([TOKEN_KEY, LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
+    await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (e) {
     Sentry.captureException(e);
   }
@@ -98,6 +147,26 @@ export async function ensureAndroidChannels(): Promise<void> {
   });
 }
 
+/**
+ * Keep the server's push token current. Mount once at the app root: the
+ * listener catches rotations while the app runs, and the startup check catches
+ * rotations that happened while it was closed.
+ */
+export function usePushTokenRotation(): void {
+  useEffect(() => {
+    const sub = Notifications.addPushTokenListener((t) => {
+      void reregisterRotatedToken(String(t.data));
+    });
+    (async () => {
+      const [perm, cached] = await Promise.all([Notifications.getPermissionsAsync(), AsyncStorage.getItem(TOKEN_KEY)]);
+      if (perm.status !== 'granted' || !cached) return;
+      const { data } = await Notifications.getDevicePushTokenAsync();
+      await reregisterRotatedToken(String(data));
+    })().catch((e) => Sentry.captureException(e));
+    return () => sub.remove();
+  }, []);
+}
+
 export type PushPermission = 'granted' | 'denied' | 'undetermined';
 
 export interface MobilePush {
@@ -126,30 +195,29 @@ export function useMobilePush(): MobilePush {
   const [error, setError] = useState<string | null>(null);
   const [permission, setPermission] = useState<PushPermission | null>(null);
   const [canAskAgain, setCanAskAgain] = useState(true);
+  // register() owns the state while it runs; a foreground read mid-register would see the old empty token.
+  const busyRef = useRef(false);
 
   useEffect(() => {
-    const readPermission = () =>
-      Notifications.getPermissionsAsync()
-        .then((p) => {
+    // The switch is on only when the OS permission is granted AND a token is
+    // cached; revoking permission in system settings turns it off on next focus.
+    const readState = () =>
+      Promise.all([Notifications.getPermissionsAsync(), AsyncStorage.getItem(TOKEN_KEY)])
+        .then(([p, token]) => {
           setPermission(p.status);
           setCanAskAgain(p.canAskAgain);
+          setRegistered(p.status === 'granted' && !!token);
         })
         // Best-effort: without a reading the UI keeps the plain switch.
         .catch(() => {});
-    void readPermission();
+    void readState();
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void readPermission();
+      if (state === 'active' && !busyRef.current) void readState();
     });
     return () => sub.remove();
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(TOKEN_KEY)
-      .then((t) => setRegistered(!!t))
-      // Intentional best-effort: this only seeds the toggle's initial state from
-      // the cached token. A storage-read miss just defaults to not-registered —
-      // not worth a Sentry event.
-      .catch(() => {});
     // Create/upgrade channels on mount so already-registered users (who won't
     // re-run register) get the correct 'updates' HIGH channel after this update.
     // A failure here means reminders/crew updates arrive silently or at the wrong
@@ -158,6 +226,7 @@ export function useMobilePush(): MobilePush {
   }, []);
 
   const register = useCallback(async () => {
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -180,12 +249,13 @@ export function useMobilePush(): MobilePush {
         deviceName: Device.deviceName ?? undefined,
       });
       await AsyncStorage.setItem(TOKEN_KEY, token);
-      await AsyncStorage.removeItem(LOCAL_FESTIVAL_KEY);
+      await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       setRegistered(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't enable notifications. Try again.");
       throw err;
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }, []);
@@ -198,7 +268,7 @@ export function useMobilePush(): MobilePush {
       if (token) {
         await api.delete('/notifications/token', { body: { token } });
         await AsyncStorage.removeItem(TOKEN_KEY);
-        await AsyncStorage.removeItem(LOCAL_FESTIVAL_KEY);
+        await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       }
       setRegistered(false);
     } catch (err) {

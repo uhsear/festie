@@ -42,6 +42,22 @@ export function pickActiveMeetingPoint(points: CrewMeetingPoint[], nowMs: number
   return untimed[0] ?? null;
 }
 
+/**
+ * "Sat 3:00 PM" for a meeting point's `meet_at`, in the festival `timeZone` when
+ * set (device-local for legacy festivals). Null when unparseable. Shared by the
+ * crew plan screens and the SMS handoff so both show the same time.
+ */
+export function formatMeetWhen(meetAt: string, timeZone?: string): string | null {
+  const when = new Date(meetAt);
+  if (Number.isNaN(when.getTime())) return null;
+  return when.toLocaleString([], {
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
 export interface SlotPick {
   memberId: string;
   memberName: string;
@@ -68,11 +84,13 @@ export function buildSlots(
   limit: number = CREW_PLAN_SLOTS,
   timeZone?: string,
 ): Slot[] {
-  // Resolve each set's bounds once; keep only sets that haven't ended yet.
+  // Resolve each set's bounds once; keep only upcoming sets some crew member picked, so
+  // the slot limit counts the crew's start times, not the whole lineup's.
+  const pickedIds = new Set(profiles.flatMap((p) => Object.keys(p.picks || {})));
   const timed = sets
     .map((set) => ({ set, bounds: getSetTimeBounds(set, days, timeZone) }))
     .filter((x): x is { set: FestivalSet; bounds: { startMs: number; endMs: number } } => x.bounds != null)
-    .filter((x) => x.bounds.endMs > nowMs);
+    .filter((x) => x.bounds.endMs > nowMs && x.bounds.startMs >= nowMs && pickedIds.has(x.set.id));
 
   // Distinct start times become "slots", soonest first, capped to `limit`.
   const startTimes = Array.from(new Set(timed.map((x) => x.bounds.startMs)))
@@ -110,19 +128,22 @@ export function buildSlots(
   });
 }
 
-export type CrewScreenStatus = 'ready' | 'loading' | 'error' | 'none';
+export type CrewScreenStatus = 'ready' | 'loading' | 'error' | 'none' | 'joining';
 
 /**
  * What a crew screen should render. With crews but none active, the auto-select
  * is about to run, so that case reads as `loading` unless it already failed.
+ * `joiningOnly` means every crew is an offline-join placeholder: `joining`.
  */
 export function crewScreenStatus(i: {
   hasActiveCrew: boolean;
   crewCount: number;
+  joiningOnly?: boolean;
   loading: boolean;
   error: string | null;
 }): CrewScreenStatus {
   if (i.hasActiveCrew) return 'ready';
+  if (i.joiningOnly) return 'joining';
   if (i.loading) return 'loading';
   if (i.error) return 'error';
   return i.crewCount === 0 ? 'none' : 'loading';

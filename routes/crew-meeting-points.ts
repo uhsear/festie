@@ -36,6 +36,13 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
 
   const router = Router({ mergeParams: true });
 
+  // Pushes fan out after the response; a slow or failing push must not hold up or fail the request.
+  const pushInBackground = (push: Parameters<NonNullable<typeof crewNotify>['now']>[0]) => {
+    void (async () => crewNotify?.now(push))().catch((err: Error) =>
+      log.warn('meeting point push failed', { crewId: push.crewId, key: push.key, error: err.message }),
+    );
+  };
+
   // ── PUT /:crewId/home-base — set crew meeting point ─────────────
   router.put(
     '/:crewId/home-base',
@@ -208,7 +215,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
 
         io.to('crew:' + crewId).emit('crew:meeting-point-created', point);
         await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'meeting-point-added', detail: label });
-        await crewNotify?.now({
+        pushInBackground({
           crewId,
           actorId: req.user.userId,
           kind: 'meeting-point',
@@ -299,7 +306,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           const effLat = body.latitude !== undefined ? body.latitude : existing.latitude;
           const effLng = body.longitude !== undefined ? body.longitude : existing.longitude;
           const coming = (existing.coming as string[] | undefined) ?? [];
-          await crewNotify?.now({
+          pushInBackground({
             crewId,
             actorId: req.user.userId,
             kind: 'meeting-point',
@@ -361,7 +368,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         // `existing` was read before deactivate, so it still holds the taps.
         const coming = (existing.coming as string[] | undefined) ?? [];
         if (coming.length) {
-          await crewNotify?.now({
+          pushInBackground({
             crewId,
             actorId: req.user.userId,
             kind: 'meeting-point',

@@ -78,7 +78,7 @@ export function createSessionHelpers({
   async function invalidateUserSessions(userId: any, exceptToken: any = null) {
     await stores.sessions.deleteUserSessions(userId, exceptToken ? hashSessionToken(exceptToken) : null);
     const io = getIO();
-    if (io) disconnectUserSockets(userId, io);
+    if (io) disconnectUserSockets(userId, io, exceptToken);
   }
 
   async function resolveUserRequestSession(req: any) {

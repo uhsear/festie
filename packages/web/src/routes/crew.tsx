@@ -144,7 +144,13 @@ function CrewViewInner() {
     navigate({ from: '/crew', to: '/crew', search: (prev) => ({ ...prev, start: undefined }), replace: true });
   }, [user?.id, start]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!user) return <GuestTeaser mode="crew" />;
+  if (!user)
+    return (
+      <>
+        <h1 className="sr-only">Crew</h1>
+        <GuestTeaser mode="crew" />
+      </>
+    );
 
   const handleSelectCrew = (crewId: string) => {
     selectCrew(crewId).catch((e: unknown) => {
@@ -260,8 +266,10 @@ function CrewViewInner() {
 
   return (
     <div className="crew-page space-y-4 pb-6 max-w-[600px] mx-auto min-w-0 w-full">
-      {activeCrew && (
+      {activeCrew ? (
         <CrewHeader crew={activeCrew} members={members} onOpenMembers={() => handleTabChange('members')} />
+      ) : (
+        <h1 className="sr-only">Crew</h1>
       )}
 
       {crews.length > 0 && (
@@ -286,6 +294,14 @@ function CrewViewInner() {
       {!activeCrew ? (
         status === 'loading' ? (
           <CrewSkeleton />
+        ) : status === 'joining' ? (
+          <Card padding="lg" className="space-y-4">
+            <EmptyState
+              illustration="noCrew"
+              title="Joining when you're back online"
+              description="Your join is saved on this device. The crew opens once you reconnect."
+            />
+          </Card>
         ) : status === 'error' ? (
           <Card padding="lg" className="space-y-4">
             <EmptyState

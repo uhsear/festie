@@ -48,9 +48,9 @@ export default function PlanNotesList({ kind, items, days, onOpenSet }: PlanNote
     <div>
       {groups.map((group) => (
         <section key={group.id} aria-label={group.heading} className="mb-4">
-          <h3 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
+          <h2 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
             {group.heading}
-          </h3>
+          </h2>
           {group.items.map((item) => {
             const { set } = item;
             const name = artistDisplayName(set, b2bSeparator);

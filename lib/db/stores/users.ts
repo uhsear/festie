@@ -178,6 +178,14 @@ export default function createUsersStore(pool: Pool, utils: any) {
       return normalizeRow(result.rows[0]);
     },
 
+    async findDeletedByEmail(email: string) {
+      const result = await pool.query(
+        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' ORDER BY deleted_at DESC LIMIT 1`,
+        [email],
+      );
+      return normalizeRow(result.rows[0]);
+    },
+
     // `update` filters `deleted_at IS NULL`, so it cannot clear a soft delete.
     async reactivate(userId: string) {
       await pool.query(

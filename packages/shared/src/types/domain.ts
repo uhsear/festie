@@ -170,6 +170,8 @@ export interface FestivalSet {
   endTime: string;
   artist?: string;
   artists?: Artist[];
+  /** Billed name for the whole set, shown instead of the joined artist names. */
+  displayName?: string;
   linkUrl?: string;
   /** T46: present only for 48 hours after an admin moved the set. */
   movedAt?: string;
@@ -628,6 +630,8 @@ export interface UpdateCrewMemberStatusRequest {
   targetMeetingPointId?: string | null;
   etaMinutes?: number | null;
   note?: string | null;
+  /** ISO time the status was set on the device; the server clamps it to the last 24 h. */
+  capturedAt?: string;
   /**
    * 055: optional last-known OFFLINE breadcrumb to persist with this status.
    * OMIT entirely to leave the prior breadcrumb untouched (server COALESCEs).

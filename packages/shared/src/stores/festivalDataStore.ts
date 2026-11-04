@@ -39,7 +39,15 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
 
 /** GET /profiles/:festivalId with its anonymous meta.pickCounts ({} from a server without it). */
 async function fetchProfiles(festivalId: string): Promise<{ profiles: Profile[]; pickCounts: Record<string, number> }> {
-  const { data, meta } = await api.getEnvelope<Profile[]>(`/profiles/${festivalId}`);
+  let envelope;
+  try {
+    envelope = await api.getEnvelope<Profile[]>(`/profiles/${festivalId}`);
+  } catch (err) {
+    // 403 = signed in but not joined to this festival: no profiles, not an error.
+    if ((err as { status?: number }).status === 403) return { profiles: [], pickCounts: {} };
+    throw err;
+  }
+  const { data, meta } = envelope;
   const raw = meta.pickCounts;
   return { profiles: data, pickCounts: raw && typeof raw === 'object' ? (raw as Record<string, number>) : {} };
 }
@@ -338,10 +346,19 @@ function restoreUIForFestival(
   stages: Stage[],
   days: FestivalDay[],
 ): void {
-  const todayIdx = logicalDayIndexAt(days, Date.now(), resolveFestivalTimeZone(festival)) ?? 0;
-  useFestivalUIStore
-    .getState()
-    .restoreForFestival(festivalId, { stageIds: stages.map((s) => s.id), dayCount: days.length, todayIdx });
+  const liveIdx = logicalDayIndexAt(days, Date.now(), resolveFestivalTimeZone(festival));
+  useFestivalUIStore.getState().restoreForFestival(festivalId, {
+    stageIds: stages.map((s) => s.id),
+    dayCount: days.length,
+    todayIdx: liveIdx ?? 0,
+    isLive: liveIdx != null,
+  });
+}
+
+/** App resume / tab focus: move the day tab to today if the user has not picked a day lately. No fetch. */
+export function followTodayOnResume(): void {
+  const { currentFestival: f, stages, days } = useFestivalDataStore.getState();
+  if (f && days.length > 0) restoreUIForFestival(f.id, f, stages, days);
 }
 
 const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
@@ -496,7 +513,8 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       // so a mid-drain reloadProfiles call — e.g. from AppState foreground return —
       // doesn't clobber optimistic state that hasn't been synced yet. The drain's
       // socket event (profile:updated) re-syncs when it lands.
-      const hasPendingWrites = useUIStore.getState().pendingSync > 0;
+      // A PUT still awaiting its ack (savesInFlight) is the same case: this fetch may predate it.
+      const hasPendingWrites = useUIStore.getState().pendingSync > 0 || prevState.savesInFlight > 0;
       const currentProfile =
         hasPendingWrites && serverProfile && prevState.currentProfile?.id === serverProfile.id
           ? {
@@ -548,7 +566,9 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
     next[idx] = updated;
     set({
       allProfiles: next,
-      currentProfile: currentProfile && currentProfile.id === profileId ? updated : currentProfile,
+      // Patch the live profile in place: the allProfiles copy lacks (or has stale) notes and
+      // reminders, so swapping it in reverted an optimistic reminder when the echo arrived.
+      currentProfile: currentProfile && currentProfile.id === profileId ? { ...currentProfile, picks } : currentProfile,
     });
     return true;
   },

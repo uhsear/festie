@@ -8,6 +8,8 @@ import {
   artistDisplayName,
   artistSubtitle,
   getSetLinks,
+  platformLabel,
+  isSafeExternalUrl,
   formatFestivalDateRange,
 } from './format';
 import type { FestivalSet } from '../types/domain';
@@ -120,6 +122,12 @@ describe('minutesToTime', () => {
 });
 
 describe('artistDisplayName', () => {
+  it('prefers the billed display name over the joined artists', () => {
+    const set = makeSet({ displayName: 'Skull Machine', artists: [{ name: 'A' }, { name: 'B' }] as never });
+    expect(artistDisplayName(set, 'B2B')).toBe('Skull Machine');
+    expect(artistSubtitle(set, 'B2B')).toBe('A B2B B');
+  });
+
   it('returns artist field when no artists array', () => {
     const set = makeSet({ artist: 'Daft Punk' });
     expect(artistDisplayName(set)).toBe('Daft Punk');
@@ -198,6 +206,15 @@ describe('artistSubtitle', () => {
   });
 });
 
+describe('platformLabel', () => {
+  it('maps known link keys to display names and passes unknown keys through', () => {
+    expect(platformLabel('soundcloud')).toBe('SoundCloud');
+    expect(platformLabel('website')).toBe('Website');
+    expect(platformLabel('twitter')).toBe('X');
+    expect(platformLabel('bandcamp')).toBe('bandcamp');
+  });
+});
+
 describe('getSetLinks', () => {
   it('returns empty array when no artists and no linkUrl', () => {
     const set = makeSet({});
@@ -259,5 +276,16 @@ describe('formatDateSpan', () => {
   });
   it('returns null when both ends are missing', () => {
     expect(formatDateSpan(null, null)).toBeNull();
+  });
+});
+
+describe('isSafeExternalUrl', () => {
+  it('allows only http and https', () => {
+    expect(isSafeExternalUrl('https://open.spotify.com/artist/1')).toBe(true);
+    expect(isSafeExternalUrl('HTTP://example.com')).toBe(true);
+    expect(isSafeExternalUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeExternalUrl('data:text/html,hi')).toBe(false);
+    expect(isSafeExternalUrl('intent://x#Intent;end')).toBe(false);
+    expect(isSafeExternalUrl('')).toBe(false);
   });
 });

@@ -335,27 +335,34 @@ export default function TimelineGrid({
       {/* Now-indicator line — thicker, brighter, and ringed so the NOW moment
           stands out clearly against the dense grid. */}
       {nowIndicator !== null && (
+        // Spans exactly the time rows (below the auto-height sticky header), so
+        // the percentage is of the rows' height and no header offset is needed.
         <div
-          className={cn(
-            'timeline-now-label',
-            'absolute right-0 h-[3px]',
-            'bg-[var(--color-accent-coral)]',
-            'z-[8] pointer-events-none',
-            'shadow-[0_0_12px_rgba(var(--accent-coral-rgb),0.75)]',
-          )}
-          style={{ top: `calc(${nowIndicator}% + 38px)`, left: gutterW }}
+          data-testid="now-track"
+          className="relative z-[8] pointer-events-none"
+          style={{ gridColumn: '2 / -1', gridRow: `2 / span ${timeBounds.totalSlots}` }}
         >
           <div
             className={cn(
-              'absolute -left-[5px] -top-[3.5px]',
-              'w-2.5 h-2.5 rounded-full',
+              'timeline-now-label',
+              'absolute left-0 right-0 h-[3px]',
               'bg-[var(--color-accent-coral)]',
-              'ring-2 ring-[var(--color-bg-primary)]',
-              'shadow-[0_0_10px_var(--color-accent-coral)]',
-              'animate-[timeline-now-pulse_1800ms_ease-out_infinite]',
-              'motion-reduce:!animate-none',
+              'shadow-[0_0_12px_rgba(var(--accent-coral-rgb),0.75)]',
             )}
-          />
+            style={{ top: `${nowIndicator}%` }}
+          >
+            <div
+              className={cn(
+                'absolute -left-[5px] -top-[3.5px]',
+                'w-2.5 h-2.5 rounded-full',
+                'bg-[var(--color-accent-coral)]',
+                'ring-2 ring-[var(--color-bg-primary)]',
+                'shadow-[0_0_10px_var(--color-accent-coral)]',
+                'animate-[timeline-now-pulse_1800ms_ease-out_infinite]',
+                'motion-reduce:!animate-none',
+              )}
+            />
+          </div>
         </div>
       )}
     </div>

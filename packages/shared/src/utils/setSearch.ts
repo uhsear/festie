@@ -1,17 +1,22 @@
 import type { FestivalSet, Stage } from '../types/domain';
 import { byStartTime } from './scheduleFormat';
 
+/** Lowercase and strip diacritics so "Bacardi" finds "Bacardí". */
+export const foldSearch = (s: string): string => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
 /**
- * Lineup search match, shared by web and mobile. Case-insensitive substring
+ * Lineup search match, shared by web and mobile. Case- and accent-insensitive substring
  * match on the headline artist, any B2B artist name, or the stage name. An
  * empty (or whitespace-only) query matches every set.
  */
 export function setMatchesSearch(set: FestivalSet, query: string, stages: Stage[]): boolean {
-  const q = query.trim().toLowerCase();
+  const q = foldSearch(query.trim());
   if (!q) return true;
-  if (set.artist?.toLowerCase().includes(q)) return true;
-  if (set.artists?.some((a) => a.name.toLowerCase().includes(q))) return true;
-  return stages.find((s) => s.id === set.stageId)?.name.toLowerCase().includes(q) ?? false;
+  if (set.artist && foldSearch(set.artist).includes(q)) return true;
+  if (set.displayName && foldSearch(set.displayName).includes(q)) return true;
+  if (set.artists?.some((a) => foldSearch(a.name).includes(q))) return true;
+  const stageName = stages.find((s) => s.id === set.stageId)?.name;
+  return stageName ? foldSearch(stageName).includes(q) : false;
 }
 
 /**

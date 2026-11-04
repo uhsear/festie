@@ -111,13 +111,40 @@
       body {
         font-family: 'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
       }
+      /* Static pre-React shell (inside #root, replaced when React mounts). Colors
+         track the stage/daylight themes set by /theme-init.js. */
+      .boot-shell {
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: #0a0a0a;
+        color: #a1a1aa;
+        font-size: 14px;
+      }
+      :root[data-theme='daylight'] .boot-shell {
+        background: #f4f4f7;
+        color: #52525b;
+      }
+      .boot-shell img {
+        width: 64px;
+        height: 64px;
+      }
     </style>
     <!-- Persisted theme, applied before first paint (see /theme-init.js). -->
     <script src="/theme-init.js"></script>
     <title>Festie — Festival Planner</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-shell" role="status">
+        <img src="/favicon.svg" alt="" width="64" height="64" />
+        <span>Loading Festie…</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -24,6 +24,7 @@ import { useHaptics } from '../../hooks/useHaptics';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import EmptyState from '../ui/EmptyState';
+import StaleNote from './StaleNote';
 import Skeleton from '../ui/Skeleton';
 import IconButton from '../ui/IconButton';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -231,7 +232,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
         <Skeleton variant="card" />
       </div>
     );
-  if (isError)
+  if (isError && polls.length === 0)
     return (
       <div className="px-4">
         <EmptyState
@@ -245,6 +246,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
 
   return (
     <div className="space-y-3 px-4">
+      <StaleNote show={isError} onRetry={() => void refetch()} />
       {showSchedule ? (
         <SchedulePollComposer
           crewId={crewId}

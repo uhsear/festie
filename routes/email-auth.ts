@@ -76,7 +76,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
   // ── POST /forgot-password — request password reset email ─────────────
   router.post(
     '/forgot-password',
-    rateLimit(3, 'forgot-password'),
+    rateLimit(3, 'forgot-password', { keyFromBody: (req: any) => req.body?.email }),
     passwordResetRateLimit,
     validate(schemas.forgotPassword),
     async (req: any, res: any) => {
@@ -369,6 +369,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
 
         await stores.users.update(targetUserId, { passwordHash: await hashPassword(newPassword) });
         invalidateUserCache();
+        if (stores.loginFailures) await stores.loginFailures.reset(targetUserId);
         await invalidateUserSessions(targetUserId);
         // Revoke long-lived refresh tokens so a held token chain cannot
         // mint new sessions after the password reset (H2).

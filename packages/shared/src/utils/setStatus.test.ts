@@ -6,6 +6,7 @@ import {
   isSetScheduled,
   festivalStartMinutes,
   startsAfterMidnight,
+  isAfterMidnight,
   setMinuteRange,
 } from './setStatus';
 import type { FestivalSet, FestivalDay } from '../types/domain';
@@ -158,6 +159,12 @@ describe('festival-day minute helpers', () => {
     expect(festivalStartMinutes('23:30')).toBe(1410);
   });
 
+  it('isAfterMidnight needs a post-midnight start and resolvable bounds', () => {
+    expect(isAfterMidnight(makeSet({ startTime: '01:00', endTime: '02:00' }))).toBe(true);
+    expect(isAfterMidnight(makeSet({ startTime: '21:00', endTime: '22:00' }))).toBe(false);
+    expect(isAfterMidnight(makeSet({ startTime: '01:00', date: undefined, dayIndex: undefined }))).toBe(false);
+  });
+
   it('startsAfterMidnight is true only for a start before 06:00', () => {
     expect(startsAfterMidnight('00:30')).toBe(true);
     expect(startsAfterMidnight('05:59')).toBe(true);
@@ -223,6 +230,11 @@ describe('getSetStatus with festival timeZone', () => {
     expect(result.minutesUntil).toBe(90);
   });
 
+  it('labels 31-59 minutes as minutes only, without a 0h part', () => {
+    const now = new Date(Date.UTC(2026, 8, 4, 19, 2, 0)); // 58m before 20:00 UTC
+    expect(getSetStatus(set, now, [], 'UTC').label).toBe('In 58m');
+  });
+
   it('LIVE/past badge is correct for a festival in America/New_York (EDT = UTC-4)', () => {
     // 2026-09-04 is in EDT (UTC-4): wall-clock 20:00 EDT = 00:00 UTC 2026-09-05.
     // A set 20:00-21:00 EDT; at 20:30 EDT (= 00:30 UTC next day) it should be LIVE.
@@ -250,9 +262,46 @@ describe('getSetStatus consumes getSetTimeBounds (parity)', () => {
     expect(getSetStatus(set, now).status).toBe('live');
   });
 
-  it('still returns TBA when endTime is absent (status path unchanged)', () => {
-    const set = makeSet({ endTime: '' });
+  it('returns TBA when startTime is absent', () => {
+    const set = makeSet({ startTime: '' });
     expect(getSetStatus(set, new Date(localMs('2026-09-04', 20, 30))).status).toBe('tba');
+  });
+
+  it('treats a start-only set as one hour long (live, then past)', () => {
+    const set = makeSet({ endTime: '' });
+    expect(getSetStatus(set, new Date(localMs('2026-09-04', 20, 30))).status).toBe('live');
+    expect(getSetStatus(set, new Date(localMs('2026-09-04', 21, 1))).status).toBe('past');
+  });
+});
+
+describe('getSetStatus last minute before start', () => {
+  const set = makeSet({ startTime: '20:00', endTime: '21:00' });
+
+  it('shows Starting, never an empty label, in the last 30 seconds', () => {
+    for (const secBefore of [29, 10, 1]) {
+      const now = new Date(Date.UTC(2026, 8, 4, 20, 0, 0) - secBefore * 1000);
+      const r = getSetStatus(set, now, [], 'UTC');
+      expect(r.status).toBe('soon');
+      expect(r.label).toBe('Starting');
+    }
+  });
+
+  it('still shows In 1m at 45 seconds out', () => {
+    const now = new Date(Date.UTC(2026, 8, 4, 20, 0, 0) - 45_000);
+    expect(getSetStatus(set, now, [], 'UTC').label).toBe('In 1m');
+  });
+
+  it('applies in a non-UTC festival zone (America/New_York, EDT)', () => {
+    const now = new Date(Date.UTC(2026, 8, 5, 0, 0, 0) - 20_000); // 19:59:40 EDT
+    const r = getSetStatus(set, now, [], 'America/New_York');
+    expect(r.status).toBe('soon');
+    expect(r.label).toBe('Starting');
+  });
+
+  it('start-only set resolves in a festival zone too', () => {
+    const open = makeSet({ startTime: '20:00', endTime: '' });
+    const now = new Date(Date.UTC(2026, 8, 5, 0, 30, 0)); // 20:30 EDT
+    expect(getSetStatus(open, now, [], 'America/New_York').status).toBe('live');
   });
 });
 

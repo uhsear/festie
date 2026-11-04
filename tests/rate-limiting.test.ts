@@ -201,6 +201,42 @@ describe('rate-limiting: scoped rateLimit middleware', () => {
   });
 });
 
+describe('rate-limiting: keyFromBody (per-account bucket behind a shared IP)', () => {
+  const keyFromBody = (req: any) => req.body?.username;
+  const run = async (mw: any, body: any) => {
+    const res = mockRes();
+    let passed = false;
+    await mw(mockReq({ body }), res, () => { passed = true; });
+    return { passed, res };
+  };
+
+  it('lets one IP try max+1 different accounts', async () => {
+    const mw = createRateLimiters(makeDeps()).rateLimit(10, 'login', { keyFromBody });
+    for (let i = 0; i < 11; i++) assert.ok((await run(mw, { username: `user${i}` })).passed);
+  });
+
+  it('blocks the max+1th attempt on the same account, case-insensitively', async () => {
+    const mw = createRateLimiters(makeDeps()).rateLimit(10, 'login', { keyFromBody });
+    for (let i = 0; i < 10; i++) assert.ok((await run(mw, { username: i % 2 ? 'Alice' : 'alice' })).passed);
+    const { passed, res } = await run(mw, { username: 'ALICE' });
+    assert.ok(!passed);
+    assert.equal(res._body.code, 'RATE_LIMITED');
+  });
+
+  it('caps the whole IP at max * 10 across accounts', async () => {
+    const mw = createRateLimiters(makeDeps()).rateLimit(10, 'login', { keyFromBody });
+    for (let i = 0; i < 100; i++) assert.ok((await run(mw, { username: `user${i}` })).passed);
+    assert.ok(!(await run(mw, { username: 'user-extra' })).passed);
+  });
+
+  it('falls back to the per-IP bucket when the body has no identifier', async () => {
+    const mw = createRateLimiters(makeDeps()).rateLimit(10, 'login', { keyFromBody });
+    for (let i = 0; i < 10; i++) assert.ok((await run(mw, {})).passed);
+    assert.ok(!(await run(mw, {})).passed);
+    assert.ok(!(await run(mw, { username: '   ' })).passed);
+  });
+});
+
 describe('rate-limiting: enforceRateLimitMapCap', () => {
   it('evicts oldest entries when map exceeds cap', () => {
     const deps = makeDeps({ config: { MAX_RATE_LIMIT_ENTRIES: 3 } });

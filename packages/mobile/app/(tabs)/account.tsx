@@ -7,7 +7,7 @@ import * as Updates from 'expo-updates';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useMobilePush } from '../../hooks/useMobilePush';
+import { useMobilePush, unregisterPushOnSignOut } from '../../hooks/useMobilePush';
 import { useAuth } from '@festie/shared/hooks';
 import { buildSupportMailto } from '@festie/shared/utils';
 import {
@@ -179,6 +179,7 @@ export default function AccountScreen() {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
+      await unregisterPushOnSignOut();
       await logout();
       router.replace('/(auth)/login');
     } catch {

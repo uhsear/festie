@@ -133,16 +133,21 @@ export function useLiveLocationPublisher({
 
     // 1. Declare intent to share. Send the first fix inline once we have it.
     store.getState().startSharing(crewId, sessionExpiresAt);
-    socket.emit('location:share', { _v: 1, crewId, expiresAt: sessionExpiresAt }, handleShareAck);
+    // Not connected yet: the server rejects the share until the socket is in the crew room, so
+    // skip the first emit and let the connect handler send it from the join ack.
+    if (socket.connected) socket.emit('location:share', { _v: 1, crewId, expiresAt: sessionExpiresAt }, handleShareAck);
 
     // Re-announce on reconnect: the server keeps the share grant on
     // per-connection state (socket.data.sharingCrewId), so a disconnect/
     // reconnect silently kills sharing — every location:update is rejected
-    // NOT_SHARING until we re-emit the intent.
+    // NOT_SHARING until we re-emit the intent. The server only accepts the share
+    // once the socket is in the crew room, and useCrewRealtime's own join:crew
+    // races this listener, so join (idempotent) and share from its ack.
     const onReconnect = () => {
-      if (!stopped) {
-        socket.emit('location:share', { _v: 1, crewId, expiresAt: sessionExpiresAt }, handleShareAck);
-      }
+      if (stopped) return;
+      socket.emit('join:crew', { _v: 1, crewId }, () => {
+        if (!stopped) socket.emit('location:share', { _v: 1, crewId, expiresAt: sessionExpiresAt }, handleShareAck);
+      });
     };
     socket.on('connect', onReconnect);
 

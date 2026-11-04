@@ -312,6 +312,7 @@ export function resolveLiveShareMs(d: LiveShareDuration): number {
 /** Live-sharing copy single-sourced for web + mobile. The stop rule differs because the behaviour does. */
 export const LIVE_SHARE_COPY = {
   title: 'Share my live location',
+  weakGps: 'Weak GPS signal. Still sharing, and your location updates when it returns.',
   switchA11y: 'Share my live location with this crew',
   ruleNative: 'Only this crew sees it. It stops at the time you pick.',
   keepLocked: 'Keep sharing when my phone is locked',

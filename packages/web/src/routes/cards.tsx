@@ -272,9 +272,9 @@ function CardsViewInner() {
           )}
           {groups.map((group) => (
             <Fragment key={group.key || 'other'}>
-              <h3 className="col-span-full mt-[var(--space-2)] text-[length:var(--font-size-14)] font-semibold text-text-secondary">
+              <h2 className="col-span-full mt-[var(--space-2)] text-[length:var(--font-size-14)] font-semibold text-text-secondary">
                 {group.label}
-              </h3>
+              </h2>
               {group.sets.map((set) => {
                 const idx = renderIndex.get(set.id) ?? 0;
                 const sc = getStageColor(set.stageId);

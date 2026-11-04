@@ -214,6 +214,15 @@ export function getSetTimeBounds(
   return { startMs, endMs };
 }
 
+/** True when a scheduled set starts after midnight (the next calendar date of its logical day). */
+export function isAfterMidnight(
+  set: Pick<FestivalSet, 'startTime' | 'endTime' | 'date' | 'dayIndex'>,
+  days: ReadonlyArray<Pick<FestivalDay, 'date'>> = [],
+  timeZone?: string,
+): boolean {
+  return startsAfterMidnight(set.startTime) && getSetTimeBounds(set, days, timeZone) !== null;
+}
+
 /**
  * Whether `set.dayIndex` resolves to a real position in `days` — days are
  * stored positionally (`days[i]` IS day `i`, see `getSetTimeBounds` above). A
@@ -249,7 +258,7 @@ export function getSetStatus(
   days: FestivalDay[] = [],
   timeZone?: string,
 ): SetStatusResult {
-  if (!set.startTime || !set.endTime) {
+  if (!set.startTime) {
     return { status: 'tba', label: 'TBA', minutesUntil: Infinity, progress: 0 };
   }
 
@@ -279,14 +288,16 @@ export function getSetStatus(
     return { status: 'past', label: 'Ended', minutesUntil, progress: 0 };
   }
 
-  if (minutesUntil > 0 && minutesUntil <= 30) {
-    return { status: 'soon', label: `In ${minutesUntil}m`, minutesUntil, progress: 0 };
+  if (msUntilStart > 0 && minutesUntil <= 30) {
+    // Under 30 s rounds to 0 minutes: say "Starting" rather than an empty/"In 0m" badge.
+    const label = minutesUntil < 1 ? 'Starting' : `In ${minutesUntil}m`;
+    return { status: 'soon', label, minutesUntil, progress: 0 };
   }
 
   if (minutesUntil > 30 && minutesUntil <= 120) {
     const hours = Math.floor(minutesUntil / 60);
     const mins = minutesUntil % 60;
-    const label = mins > 0 ? `In ${hours}h ${mins}m` : `In ${hours}h`;
+    const label = hours === 0 ? `In ${mins}m` : mins > 0 ? `In ${hours}h ${mins}m` : `In ${hours}h`;
     return { status: 'upcoming', label, minutesUntil, progress: 0 };
   }
 

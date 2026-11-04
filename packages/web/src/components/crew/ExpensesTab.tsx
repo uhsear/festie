@@ -34,6 +34,7 @@ import { useToast } from '../../lib/toastContext';
 import { cn } from '@/lib/utils';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
+import StaleNote from './StaleNote';
 import Skeleton from '../ui/Skeleton';
 import ExpenseItem from './ExpenseItem';
 import ExpenseForm from './ExpenseForm';
@@ -305,7 +306,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         <Skeleton variant="card" />
       </div>
     );
-  if (isError)
+  if (isError && expenses.length === 0)
     return (
       <div className="px-4">
         <EmptyState
@@ -319,6 +320,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
 
   return (
     <div className="space-y-3 px-4">
+      <StaleNote show={isError} onRetry={() => void refetch()} />
       {/* Currency label. A label only: changing it never converts amounts. */}
       <div className="p-3 rounded-lg bg-bg-card border border-border space-y-1">
         {isOwner ? (

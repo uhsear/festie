@@ -137,6 +137,15 @@ export function buildReminderPlan(args: BuildReminderPlanArgs): ReminderPlanEntr
   return entries.slice(0, max);
 }
 
+/**
+ * Keep the `max` reminders that fire soonest. With no signal at a festival, a
+ * far-future "must" must not crowd out tonight's reminders; the foreground
+ * reconcile moves the window forward as time passes.
+ */
+export function soonestReminders(entries: ReminderPlanEntry[], max: number = MAX_LOCAL_REMINDERS): ReminderPlanEntry[] {
+  return [...entries].sort((a, b) => a.fireAtMs - b.fireAtMs).slice(0, max);
+}
+
 export interface ReminderDiff {
   /** Entries whose schedule is new or changed — (re)schedule these. */
   toSchedule: ReminderPlanEntry[];
@@ -175,4 +184,21 @@ export function effectiveReminders(
     if (priority === 'must' && merged[setId] === undefined) merged[setId] = mustSeeLead;
   }
   return merged;
+}
+
+/**
+ * The reminder a set sheet should show: the explicit lead, else the must-see
+ * default. `isDefault` is true when the lead comes from the default, so the UI
+ * can say where it came from.
+ */
+export function reminderLeadForSet(
+  setId: string,
+  reminders: Record<string, number> | undefined | null,
+  picks: Record<string, Priority> | undefined | null,
+  mustSeeLead: number | null | undefined,
+): { minutes: number | undefined; isDefault: boolean } {
+  const explicit = reminders?.[setId];
+  if (explicit !== undefined) return { minutes: explicit, isDefault: false };
+  const minutes = effectiveReminders(reminders, picks, mustSeeLead)[setId];
+  return { minutes, isDefault: minutes !== undefined };
 }

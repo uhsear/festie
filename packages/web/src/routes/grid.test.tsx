@@ -11,6 +11,8 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
+vi.mock('../components/features/ScheduleImageDialog', () => ({ default: () => null }));
+
 vi.mock('../lib/useUndoNotifier', () => ({
   useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
 }));
@@ -221,11 +223,20 @@ describe('GridView', () => {
   });
 
   it('shows "No festival selected" when no festival is selected', () => {
+    storeState.festivals = [{ id: 'f1' }];
     setFilters({ currentFestival: null });
     render(<GridView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
     expect(screen.getByText('Choose a festival on the Lineup tab to see the schedule grid.')).toBeInTheDocument();
+  });
+
+  it('shows the skeleton, not "No festival selected", while the festival is loading', () => {
+    storeState.isLoading = true;
+    setFilters({ currentFestival: null });
+    render(<GridView />);
+    expect(screen.queryByText('No festival selected')).toBeNull();
+    expect(screen.getByRole('status', { name: 'Loading timeline' })).toBeInTheDocument();
   });
 
   it('shows the load error and a retry when the festival list failed', () => {
@@ -266,6 +277,25 @@ describe('GridView', () => {
     render(<GridView />);
     expect(screen.getByText('No picks for this day yet')).toBeInTheDocument();
     expect(screen.getByText('Show all sets')).toBeInTheDocument();
+  });
+
+  it('says where the artist plays when a search finds nothing on this day', () => {
+    const setSelectedDay = vi.fn();
+    Object.assign(storeState, {
+      searchQuery: 'daft',
+      selectedDay: 0,
+      setSelectedDay,
+      days: [
+        { index: 0, dayIndex: 0, label: 'Friday', date: '2026-06-12' },
+        { index: 1, dayIndex: 1, label: 'Saturday', date: '2026-06-13' },
+      ],
+      sets: [{ id: 's9', artist: 'Daft Punk', stageId: 'st1', startTime: '14:00', endTime: '15:00', dayIndex: 1 }],
+    });
+    setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+    render(<GridView />);
+    expect(screen.getByText('Also on Saturday')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Daft Punk/ }));
+    expect(setSelectedDay).toHaveBeenCalledWith(1);
   });
 
   it('shows "No sets scheduled" when timeBounds is null', () => {
@@ -322,6 +352,12 @@ describe('GridView', () => {
     expect(screen.getByTestId('timeline-legend')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Share grid as image' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Zoom in' })).toBeInTheDocument();
+  });
+
+  it('lets the legend and toolbar scroll away so the sticky stage header row keeps the top edge', () => {
+    setFilters(timedDay);
+    render(<GridView />);
+    expect(screen.getByTestId('timeline-legend').closest('.sticky')).toBeNull();
   });
 
   it('renders the grid region with the "Schedule grid" label', () => {

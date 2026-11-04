@@ -3,7 +3,15 @@ import { FestivalSet, Priority } from '@festie/shared/types';
 import { usePicks, useFestival, useCrew } from '@festie/shared/hooks';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { artistDisplayName, artistSubtitle, getSetLinks, detectConflicts, resolveStageColor } from '@festie/shared/utils';
+import { useNotificationPrefsStore } from '@festie/shared/stores';
+import {
+  artistDisplayName,
+  artistSubtitle,
+  getSetLinks,
+  detectConflicts,
+  resolveStageColor,
+  reminderLeadForSet,
+} from '@festie/shared/utils';
 
 export interface CrewMemberPick {
   profileId: string;
@@ -25,7 +33,7 @@ export function useDetailPanelData(set: FestivalSet) {
   const sets = useFestivalStore((s) => s.sets);
   const activeCrew = useCrewStore((s) => s.activeCrew);
 
-  const { getMyPick, savePick, saveNote, getOtherPicks, getPickCount, saveReminder, getMyReminder } = usePicks();
+  const { getMyPick, savePick, saveNote, getOtherPicks, getPickCount, saveReminder } = usePicks();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)');
@@ -35,7 +43,13 @@ export function useDetailPanelData(set: FestivalSet) {
   const stageColor = getStageColor(set.stageId);
   const stageName = getStageName(set.stageId) || 'Unknown';
   const myPick = getMyPick(set.id);
-  const myReminder = getMyReminder(set.id);
+  const mustSeeLead = useNotificationPrefsStore((s) => s.prefs.mustSeeReminderMinutes);
+  const { minutes: myReminder, isDefault: reminderIsDefault } = reminderLeadForSet(
+    set.id,
+    currentProfile?.reminders,
+    currentProfile?.picks as Record<string, Priority> | undefined,
+    mustSeeLead,
+  );
   const artistName = artistDisplayName(set, b2bSeparator);
   const sub = artistSubtitle(set, b2bSeparator);
   const artistLinks = getSetLinks(set);
@@ -98,6 +112,7 @@ export function useDetailPanelData(set: FestivalSet) {
     stageName,
     myPick,
     myReminder,
+    reminderIsDefault,
     saveReminder,
     artistName,
     sub,

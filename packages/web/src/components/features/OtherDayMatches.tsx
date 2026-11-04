@@ -19,7 +19,7 @@ export default function OtherDayMatches({ groups, dayLabels, stages, b2bSeparato
         const dayLabel = dayLabels[dayIndex] ?? `Day ${dayIndex + 1}`;
         return (
           <section key={dayIndex} aria-label={`Also on ${dayLabel}`}>
-            <h3 className="text-sm font-semibold text-text-secondary mb-2">{`Also on ${dayLabel}`}</h3>
+            <h2 className="text-sm font-semibold text-text-secondary mb-2">{`Also on ${dayLabel}`}</h2>
             <ul className="flex flex-col gap-2">
               {sets.map((set) => {
                 const artist = artistDisplayName(set, b2bSeparator);

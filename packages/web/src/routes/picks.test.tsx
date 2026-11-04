@@ -322,6 +322,15 @@ describe('PicksView', () => {
     expect(screen.getByRole('tab', { name: 'My day' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('gives a guest with picks the My day tab but no export buttons', () => {
+    setStoreState({ user: null, profile: null, sets: [makeSet('s1', 'Daft Punk')] });
+    useFestivalStore.setState({ guestPicks: { f1: { s1: 'must' } } } as never);
+    render(<PicksView />);
+    fireEvent.click(screen.getByRole('tab', { name: 'My day' }));
+    expect(screen.getByTestId('my-day-list')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Share my picks')).toBeNull();
+  });
+
   it('shows the tab row and the Notes list for a user with only a note', () => {
     setStoreState({
       sets: [makeSet('s1', 'Daft Punk')],

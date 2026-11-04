@@ -136,6 +136,7 @@ describe('GridView perf (EDC Orlando-sized lineup)', () => {
       stages: STAGES,
       days: DAYS,
       selectedDay: 0,
+      searchQuery: '',
       activeStages: [],
       onlyMine: false,
       setDetailSet: vi.fn(),

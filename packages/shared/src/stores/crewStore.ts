@@ -234,7 +234,7 @@ export interface CrewActions {
   loadActivity: (crewId: string) => Promise<void>;
   loadOlderActivity: (crewId: string) => Promise<void>;
   // Home base (owner-only PUT /crews/:id/home-base).
-  updateHomeBase: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => Promise<void>;
+  updateHomeBase: (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => Promise<WriteOutcome>;
   // M6 Crew Photo Wall (Phase 1, link-out): set/clear the crew shared-album URL
   // (member-gated PUT /crews/:id/photo-album). Pass null to clear.
   updatePhotoAlbum: (crewId: string, payload: { photoAlbumUrl: string | null }) => Promise<void>;
@@ -1424,7 +1424,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
     try {
       const res = await api.put<{ status: CrewMemberStatus } | (UpdateCrewMemberStatusRequest & { _optimistic: true })>(
         `/crews/${crewId}/status`,
-        request,
+        { ...request, capturedAt: nowIso },
         {
           // Deterministic clientId collapses repeated offline toggles into one
           // pending write keyed on (crew, user).
@@ -1721,11 +1721,12 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   },
 
   // POST /crews/:crewId/expenses/remind. No local change. A second reminder the
-  // same day is a 409 whose message the caller shows, so rethrow.
+  // same day is a 409 whose message the caller shows, so rethrow. Online-only: a
+  // reminder queued offline would fire hours later, so it fails fast instead.
   remindPayment: async (crewId: string, userId: string) => {
     set({ error: null });
     try {
-      const res = await api.post(`/crews/${crewId}/expenses/remind`, { userId });
+      const res = await api.post(`/crews/${crewId}/expenses/remind`, { userId }, { _bypassOfflineQueue: true });
       return writeOutcomeOf(res);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to send reminder');
@@ -1737,6 +1738,8 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   settleExpense: async (crewId: string, request: SettleCrewExpenseRequest) => {
     set({ error: null });
     try {
+      // Random per-call key (api.ts): a repeat settle of the same amount is a real second payment.
+      // The timeout re-queue reuses the call's key; the UI must block double taps while in flight.
       const res = await api.post(`/crews/${crewId}/expenses/settle`, request);
       // Queued offline: nothing was recorded server-side yet, and a refetch
       // would fail offline anyway.
@@ -1800,11 +1803,15 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   updateHomeBase: async (crewId: string, payload: { location: string | null; time: string | null; planB?: string | null }) => {
     set({ error: null });
     try {
-      const { crew } = await api.put<{ crew: Crew }>(`/crews/${crewId}/home-base`, payload);
+      const res = await api.put<{ crew: Crew }>(`/crews/${crewId}/home-base`, payload);
+      // Queued offline: there is no returned crew to merge yet.
+      if (writeOutcomeOf(res) === 'queued') return 'queued';
+      const { crew } = res;
       set((state) => ({
         activeCrew: state.activeCrew?.id === crewId ? { ...state.activeCrew, ...crew } : state.activeCrew,
         crews: state.crews.map((c) => (c.id === crewId ? { ...c, ...crew } : c)),
       }));
+      return 'sent';
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to update home base');
       set({ error: message });

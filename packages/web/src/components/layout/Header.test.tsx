@@ -21,7 +21,7 @@ const mockFestival = { scheduleView: null as string | null, sets: [], days: [], 
 vi.mock('@festie/shared', () => ({
   useFestivalStore: (selector: (s: typeof mockFestival) => unknown) => selector(mockFestival),
   useAuthStore: (selector: (s: { user: unknown }) => unknown) => selector({ user: mockAuthStore() }),
-  useUIStore: (selector: (s: { connected: boolean }) => unknown) => selector({ connected: mockConnected }),
+  useUIStore: (selector: (s: { offlineMode: boolean }) => unknown) => selector({ offlineMode: !mockConnected }),
 }));
 
 vi.mock('@festie/shared/utils', async (importOriginal) => ({
@@ -42,6 +42,13 @@ const mockBadge = vi.hoisted(() => ({ value: { count: 0, dot: false, label: null
 vi.mock('../../hooks/useCrewAttention', () => ({ useCrewAttention: () => mockBadge.value }));
 
 import Header from './Header';
+import { useThemeSync } from '../../lib/theme';
+
+// AppShell owns theme sync; mount both so the toggle's effect on <html> is observable.
+function HeaderWithThemeSync() {
+  useThemeSync();
+  return <Header />;
+}
 import { useInboxStore } from '@festie/shared/stores/inboxStore';
 import { useUIStore as useRealUIStore } from '@festie/shared/stores/uiStore';
 import { useLocation } from '@tanstack/react-router';
@@ -107,7 +114,7 @@ describe('Header', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('shows an Offline label next to the dot when a signed-in user is disconnected', () => {
+  it('shows an Offline label next to the dot when a signed-in user is offline', () => {
     mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
     mockConnected = false;
     render(<Header />);
@@ -206,7 +213,7 @@ describe('Header', () => {
 
     it('stage theme leaves data-theme unset and keeps the dark chrome colour', () => {
       document.documentElement.setAttribute('data-theme', 'daylight');
-      render(<Header />);
+      render(<HeaderWithThemeSync />);
       expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
       expect(document.documentElement.style.colorScheme).toBe('dark');
       expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#0a0a0a');
@@ -214,7 +221,7 @@ describe('Header', () => {
 
     it('tapping the toggle switches to daylight and back', async () => {
       const user = userEvent.setup();
-      render(<Header />);
+      render(<HeaderWithThemeSync />);
       await user.click(screen.getByLabelText('Daylight mode'));
       expect(document.documentElement.dataset.theme).toBe('daylight');
       expect(document.documentElement.style.colorScheme).toBe('light');

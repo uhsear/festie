@@ -67,6 +67,19 @@ describe('api offline interception', () => {
       useUIStore.setState({ offlineMode: true });
     });
 
+    it('gives each queued version of a coalesced PUT its own Idempotency-Key', async () => {
+      // Same deterministic clientId (one queue entry), two different edits: the server caches a key
+      // for 5 min, so reusing it would replay the first edit's response and drop the second.
+      await api.put('/profiles/p1', { picks: { s1: 'must' } }, { clientId: 'pick-p1-s1' });
+      await api.put('/profiles/p1', { picks: {} }, { clientId: 'pick-p1-s1' });
+      const [first, second] = enqueueMutation.mock.calls.map((c) => c[0] as { clientId: string; idempotencyKey?: string });
+      expect(first!.clientId).toBe('pick-p1-s1');
+      expect(second!.clientId).toBe('pick-p1-s1');
+      expect(first!.idempotencyKey).toMatch(/^pick-p1-s1:/);
+      expect(second!.idempotencyKey).toMatch(/^pick-p1-s1:/);
+      expect(second!.idempotencyKey).not.toBe(first!.idempotencyKey);
+    });
+
     it('POST queues with a unique clientId and returns optimistic create', async () => {
       const result = await api.post<{ id: string; _optimistic: boolean; title: string }>('/crews/c1/polls', {
         title: 'Where to meet?',
@@ -161,6 +174,15 @@ describe('api offline interception', () => {
       expect(enqueueMutation).toHaveBeenCalledTimes(1);
       expect(result._optimistic).toBe(true);
       expect(useUIStore.getState().offlineMode).toBe(true);
+    });
+
+    it('sends the first POST with an Idempotency-Key and re-queues under that same key', async () => {
+      useUIStore.setState({ offlineMode: false });
+      fetchSpy.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      await api.post('/crews/c1/meeting-points', { label: 'Main gate' });
+      const sentKey = (fetchSpy.mock.calls[0]![1] as { headers: Record<string, string> }).headers['Idempotency-Key'];
+      expect(sentKey).toBeTruthy();
+      expect(vi.mocked(enqueueMutation).mock.calls[0]![0].idempotencyKey).toBe(sentKey);
     });
 
     it('still throws the network error for an INELIGIBLE mutation (not lost-silently elsewhere)', async () => {

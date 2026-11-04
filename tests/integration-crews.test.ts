@@ -32,7 +32,8 @@ describe('Integration — Crews (membership + realtime)', { concurrency: 1 }, ()
     await server.request
       .get('/api/v1/profiles/fest-1')
       .set('x-user-token', charlie.token)
-      .expect(403);
+      .expect(200)
+      .expect((res: any) => assert.deepEqual(res.body.data, []));
 
     await server.request
       .get('/api/v1/presence/fest-1')
@@ -47,9 +48,14 @@ describe('Integration — Crews (membership + realtime)', { concurrency: 1 }, ()
     aliceSocket.emit('join:festival', 'fest-1', { userToken: alice.token });
     await alicePresence;
 
-    const realtimeError = waitForEvent(charlieSocket, 'error', (payload) => /Join this festival/.test(payload.message));
-    charlieSocket.emit('join:festival', 'fest-1', { userToken: charlie.token });
-    await realtimeError;
+    let sawError = false;
+    charlieSocket.on('error', () => { sawError = true; });
+    const ack: any = await new Promise((resolve) => {
+      charlieSocket.emit('join:festival', 'fest-1', { userToken: charlie.token }, resolve);
+    });
+    assert.equal(ack.ok, false);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sawError, false);
 
     aliceSocket.close();
     charlieSocket.close();

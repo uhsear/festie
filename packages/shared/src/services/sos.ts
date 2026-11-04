@@ -28,7 +28,7 @@ export function sosErrorMessage(err: unknown, action: 'send' | 'clear'): string 
         ? 'No signal — your SOS was NOT sent. Use your phone or radio to reach your crew directly.'
         : 'No signal — the SOS is still showing. Try again when you have signal.';
     }
-    if (send && err.status === 429) return 'Your SOS is already active. Your crew can see it.';
+    if (send && err.status === 429) return 'You just sent an SOS. Wait a moment before sending another.';
     if (err.status === 503) {
       return send ? 'SOS is turned off right now. Call or message your crew directly.' : 'SOS is turned off right now.';
     }

@@ -48,7 +48,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone }: MyDayListProps
             {formatTime(set.startTime)}
             {set.endTime ? ` – ${formatTime(set.endTime)}` : ''}
           </span>
-          <span className="flex-1 text-sm font-bold min-w-0 truncate">{name}</span>
+          <span className="flex-1 basis-40 text-sm font-bold min-w-[10rem] break-words">{name}</span>
           <PriorityIcon priority={item.priority} className="w-4 h-4" />
           <StageBadge variant="pick" stageName={stageName} stageColor={stageColor(set.stageId)} />
           {clashLabel && (
@@ -94,17 +94,17 @@ export default function MyDayList({ myDay, onOpenSet, timeZone }: MyDayListProps
     <div>
       {myDay.sections.map((section) => (
         <section key={section.part} aria-label={section.title} className="mb-4">
-          <h3 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
+          <h2 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
             {section.title}
-          </h3>
+          </h2>
           {section.items.map(renderItem)}
         </section>
       ))}
       {myDay.unscheduled.length > 0 && (
         <section aria-label={COPY.myDay.unscheduled} className="mb-4">
-          <h3 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
+          <h2 className="mb-3 pb-2.5 border-b border-border text-sm font-medium text-text-secondary">
             {COPY.myDay.unscheduled}
-          </h3>
+          </h2>
           {myDay.unscheduled.map((set) => (
             <button
               key={set.id}

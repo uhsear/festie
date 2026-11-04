@@ -88,11 +88,12 @@ describe('LoginPage', () => {
     expect(screen.getByText('Forgot password?')).toBeInTheDocument();
   });
 
-  it('shows the identifier-required error when submitting with empty fields', async () => {
+  it('shows both required errors together when submitting with empty fields', async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter your username or email.');
+    expect(screen.getByText('Enter your username or email.')).toBeInTheDocument();
+    expect(screen.getByText('Password is required')).toBeInTheDocument();
   });
 
   it('shows "Password is required" when username is filled but password is empty', async () => {
