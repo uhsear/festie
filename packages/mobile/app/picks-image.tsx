@@ -261,7 +261,8 @@ export default function PicksImageScreen() {
         dialogTitle: 'Save your picks image',
       });
       if (shape === 'lockscreen') setSaved({ key: saveKey, pages: page + 1 >= pageCount ? 0 : page + 1 });
-    } catch {
+    } catch (err) {
+      console.warn('picks image: capture failed', err);
       showError("Couldn't make the image. Try again.");
     } finally {
       setSaving(false);
@@ -514,7 +515,7 @@ export default function PicksImageScreen() {
         <View style={styles.offscreen} pointerEvents="none">
           <View ref={posterRef} collapsable={false}>
             {lockscreen && lockModel ? (
-              <LockscreenPoster model={lockModel} page={capturePage} />
+              <LockscreenPoster model={lockModel} page={capturePage} pointScale={1 / PixelRatio.get()} />
             ) : model ? (
               <ScheduleImagePoster model={model} format={format} />
             ) : null}

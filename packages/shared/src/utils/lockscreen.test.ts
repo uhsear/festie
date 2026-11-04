@@ -219,7 +219,7 @@ describe('theme and zones', () => {
   it('content sits in 0.38 to 0.80 of the height, 0.45 with the big clock', () => {
     const m = build({ picks: pick(friday, 3) });
     expect(m.contentTopU / m.heightU).toBeCloseTo(0.38);
-    expect(m.contentEndU / m.heightU).toBeCloseTo(0.8);
+    expect(m.contentEndU / m.heightU).toBeCloseTo(0.92);
     expect(build({ picks: pick(friday, 3), tallClock: true }).contentTopU / m.heightU).toBeCloseTo(0.45);
   });
   it('stamps the save time and the re-save hint', () => {

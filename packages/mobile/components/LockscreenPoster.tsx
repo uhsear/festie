@@ -45,18 +45,24 @@ interface Props {
   model: LockscreenModel;
   /** Index into model.pages. */
   page: number;
+  /**
+   * Points per model pixel. 1 lays the image out at its pixel size in points.
+   * The capture copy passes 1 / PixelRatio so iOS snapshots it at the device
+   * scale without exceeding its 8192 px limit.
+   */
+  pointScale?: number;
 }
 
 /**
  * One lock-screen wallpaper image, drawn from the shared LockscreenModel. Every
  * coordinate in the model is in u (1% of image width), so each box is positioned
- * absolutely at u * unit. Rendered off-screen at device pixels and captured with
- * react-native-view-shot. Fixed-pixel image: text ignores the OS font size.
+ * absolutely at u * unit. Captured off-screen with react-native-view-shot at
+ * device points (see pointScale). Fixed-pixel image: text ignores the OS font size.
  * shortcut: flat background, no radial glow or Festie mark (needs gradient or
  * an asset); add if the dark theme looks plain in QA.
  */
-export default function LockscreenPoster({ model, page }: Props) {
-  const u = model.width / 100;
+export default function LockscreenPoster({ model, page, pointScale = 1 }: Props) {
+  const u = (model.width * pointScale) / 100;
   const pm = model.pages[page];
   if (!pm) return null;
   const { palette: p, background: bg } = model;
@@ -66,7 +72,7 @@ export default function LockscreenPoster({ model, page }: Props) {
   const rule = pm.poster?.rule;
 
   return (
-    <View style={{ width: model.width, height: model.height, backgroundColor: bg.color, overflow: 'hidden' }}>
+    <View style={{ width: model.width * pointScale, height: model.height * pointScale, backgroundColor: bg.color, overflow: 'hidden' }}>
       {bg.sheet ? (
         <View
           style={{
