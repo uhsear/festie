@@ -223,11 +223,20 @@ describe('GridView', () => {
   });
 
   it('shows "No festival selected" when no festival is selected', () => {
+    storeState.festivals = [{ id: 'f1' }];
     setFilters({ currentFestival: null });
     render(<GridView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     expect(screen.getByText('No festival selected')).toBeInTheDocument();
     expect(screen.getByText('Choose a festival on the Lineup tab to see the schedule grid.')).toBeInTheDocument();
+  });
+
+  it('shows the skeleton, not "No festival selected", while the festival is loading', () => {
+    storeState.isLoading = true;
+    setFilters({ currentFestival: null });
+    render(<GridView />);
+    expect(screen.queryByText('No festival selected')).toBeNull();
+    expect(screen.getByRole('status', { name: 'Loading timeline' })).toBeInTheDocument();
   });
 
   it('shows the load error and a retry when the festival list failed', () => {

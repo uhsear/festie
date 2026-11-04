@@ -75,9 +75,12 @@ function Row({ row, username }: { row: ComparedSet; username: string }) {
 
 function Message({ text }: { text: string }) {
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4 text-center" role="alert">
-      {text}
-    </div>
+    <>
+      <h1 className="sr-only">Friend picks</h1>
+      <div className="max-w-2xl mx-auto py-8 px-4 text-center" role="alert">
+        {text}
+      </div>
+    </>
   );
 }
 

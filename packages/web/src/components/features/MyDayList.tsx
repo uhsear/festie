@@ -48,7 +48,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone }: MyDayListProps
             {formatTime(set.startTime)}
             {set.endTime ? ` – ${formatTime(set.endTime)}` : ''}
           </span>
-          <span className="flex-1 text-sm font-bold min-w-0 truncate">{name}</span>
+          <span className="flex-1 basis-40 text-sm font-bold min-w-[10rem] break-words">{name}</span>
           <PriorityIcon priority={item.priority} className="w-4 h-4" />
           <StageBadge variant="pick" stageName={stageName} stageColor={stageColor(set.stageId)} />
           {clashLabel && (

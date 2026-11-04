@@ -31,7 +31,8 @@ export default function createProfilesRoutes(deps: any) {
       const { getUserFestivalProfile } = deps;
       const ownProfile = await getUserFestivalProfile(req.user.userId, festivalId);
       if (!ownProfile) {
-        return sendError(res, 403, 'Join this festival to view crew plans', ErrorCodes.FORBIDDEN);
+        // Not joined is not an error: an empty list keeps the client console quiet.
+        return sendSuccess(res, [], { pickCounts: {} });
       }
       // listPicksByFestival leaves out notes and reminders, so the viewer's own row
       // comes from ownProfile. A row missing from the list (a delete race) stays missing.

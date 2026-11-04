@@ -1389,12 +1389,13 @@ describe('routes/profiles.js', () => {
       assert.equal(res.status, 404);
     });
 
-    test('returns 403 when user has no profile for the festival', async () => {
+    test('returns an empty list when user has no profile for the festival', async () => {
       const { app } = await buildProfileApp({
         getUserFestivalProfile: mock.fn(async () => null),
       });
       const res = await request(app).get('/profiles/f1');
-      assert.equal(res.status, 403);
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.body.data, []);
     });
 
     test('returns profiles successfully', async () => {

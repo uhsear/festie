@@ -72,10 +72,10 @@ describe('useFestivalLoader session probe', () => {
     h.state.currentProfile = null;
   });
 
-  it('does not call checkSession when no user is persisted', () => {
+  it('probes once when no user is persisted, since the session cookie may exist', () => {
     h.state.user = null;
     renderHook(() => useFestivalLoader());
-    expect(h.checkSession).not.toHaveBeenCalled();
+    expect(h.checkSession).toHaveBeenCalledTimes(1);
   });
 
   it('calls checkSession when a user is persisted', () => {

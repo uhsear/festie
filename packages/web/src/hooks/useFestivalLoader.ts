@@ -67,10 +67,9 @@ export function useFestivalLoader() {
 
   useEffect(captureRef, []);
 
-  // Check session on mount — but only if a user was persisted. A cold guest
-  // boot has no stored user, so an unconditional checkSession() guarantees a
-  // 401 on every load. Wait for zustand persist rehydration first (the store
-  // reads as logged-out until then), then probe only when a user is present.
+  // Check session once on mount. On web the httpOnly cookie is the session, so a
+  // cookie-only session (no persisted user) must still be probed; a guest pays one 401.
+  // Wait for zustand persist rehydration first so the probe cannot race it.
   useEffect(() => {
     let cancelled = false;
     const persist = (
@@ -79,7 +78,7 @@ export function useFestivalLoader() {
       }
     ).persist;
     const probe = () => {
-      if (!cancelled && useAuthStore.getState().user) checkSession().catch(() => {});
+      if (!cancelled) checkSession().catch(() => {});
     };
     if (!persist || persist.hasHydrated()) {
       probe();
