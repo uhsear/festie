@@ -55,7 +55,7 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
 import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '../lib/webviewBridge';
 import type { AuthoringMode } from '../lib/webviewBridge';
-import { ensureBasemapCached, readCachedBase64 } from '../lib/basemapCache';
+import { basemapCacheInfo, ensureBasemapCached, readCachedBase64 } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
 import { peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
@@ -633,12 +633,23 @@ export default function OfflineMap({
   // rejects file://, so on iOS every tile failed and the map drew pins on a blank
   // ground. Keyed by the local URI, which the style's pmtiles:// source names.
   const [cachedBasemap, setCachedBasemap] = useState<{ url: string; uri: string; base64: string } | null>(null);
+  // When the archive is already on disk, hold the WebView until its bytes are read.
+  // Starting on the remote archive and swapping documents a moment later left the
+  // first open half-drawn.
+  const archiveOnDisk = useMemo(
+    () => (remotePmtilesUrl ? basemapCacheInfo(remotePmtilesUrl).cached : false),
+    [remotePmtilesUrl],
+  );
+  const [checkedArchiveUrl, setCheckedArchiveUrl] = useState<string | null>(null);
+  const waitingForArchive = archiveOnDisk && checkedArchiveUrl !== remotePmtilesUrl;
   useEffect(() => {
     let cancelled = false;
     if (!remotePmtilesUrl) return;
     void ensureBasemapCached(remotePmtilesUrl).then(async (uri) => {
       const base64 = uri ? await readCachedBase64(remotePmtilesUrl) : null;
-      if (!cancelled && uri && base64) setCachedBasemap({ url: remotePmtilesUrl, uri, base64 });
+      if (cancelled) return;
+      if (uri && base64) setCachedBasemap({ url: remotePmtilesUrl, uri, base64 });
+      setCheckedArchiveUrl(remotePmtilesUrl);
     });
     return () => {
       cancelled = true;
@@ -1243,25 +1254,29 @@ export default function OfflineMap({
   };
   return (
     <View style={styles.screen}>
-      <WebView<object>
-        ref={webRef}
-        // Default-deny navigation: the document is an inline (about:blank) page;
-        // only its own load + OSM raster tiles are
-        // expected. Anything else (e.g. an injected redirect) is blocked so a
-        // payload can't navigate the WebView off to an attacker host. Pairs with
-        // the in-document CSP for defense in depth behind the H3 transport fix.
-        originWhitelist={originWhitelist}
-        onShouldStartLoadWithRequest={shouldStartLoad}
-        source={source}
-        style={styles.web}
-        onMessage={onMessage}
-        onLoadStart={armTimeout}
-        onError={fallBack}
-        onHttpError={fallBack}
-        javaScriptEnabled
-        domStorageEnabled
-        startInLoadingState={false}
-      />
+      {waitingForArchive ? (
+        <View style={styles.web} />
+      ) : (
+        <WebView<object>
+          ref={webRef}
+          // Default-deny navigation: the document is an inline (about:blank) page;
+          // only its own load + OSM raster tiles are
+          // expected. Anything else (e.g. an injected redirect) is blocked so a
+          // payload can't navigate the WebView off to an attacker host. Pairs with
+          // the in-document CSP for defense in depth behind the H3 transport fix.
+          originWhitelist={originWhitelist}
+          onShouldStartLoadWithRequest={shouldStartLoad}
+          source={source}
+          style={styles.web}
+          onMessage={onMessage}
+          onLoadStart={armTimeout}
+          onError={fallBack}
+          onHttpError={fallBack}
+          javaScriptEnabled
+          domStorageEnabled
+          startInLoadingState={false}
+        />
+      )}
       {phase === 'loading' ? (
         <View style={styles.loadingOverlay} pointerEvents="none">
           <ActivityIndicator color={t.colors.accent.aqua} />
