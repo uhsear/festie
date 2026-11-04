@@ -142,10 +142,15 @@ export function useLocalReminders(): void {
       );
       if (cancelled) return;
 
-      // Above the iOS slot cap, or after a failed schedule, some reminders are not on
-      // the phone, so the server push must stay on.
-      const fullyLocal = upcoming.length <= MAX_LOCAL_REMINDERS && results.every(Boolean);
-      await reportLocalRemindersFestival(permissionRef.current.granted && fullyLocal && festivalId ? festivalId : null);
+      // After a failed schedule some reminders are not on the phone, so the server push
+      // must stay on. Above the iOS slot cap the phone covers only up to one ms before
+      // its first left-out reminder (ties with the 64th then get a duplicate, not a miss); the server still pushes the later ones.
+      const covered = permissionRef.current.granted && results.every(Boolean) && festivalId;
+      const truncated = upcoming.length > MAX_LOCAL_REMINDERS;
+      const coversUntil = truncated
+        ? soonestReminders(upcoming, MAX_LOCAL_REMINDERS + 1)[MAX_LOCAL_REMINDERS]!.fireAtMs - 1
+        : null;
+      await reportLocalRemindersFestival(covered ? festivalId : null, coversUntil);
     }
 
     reconcile();

@@ -185,3 +185,20 @@ export function effectiveReminders(
   }
   return merged;
 }
+
+/**
+ * The reminder a set sheet should show: the explicit lead, else the must-see
+ * default. `isDefault` is true when the lead comes from the default, so the UI
+ * can say where it came from.
+ */
+export function reminderLeadForSet(
+  setId: string,
+  reminders: Record<string, number> | undefined | null,
+  picks: Record<string, Priority> | undefined | null,
+  mustSeeLead: number | null | undefined,
+): { minutes: number | undefined; isDefault: boolean } {
+  const explicit = reminders?.[setId];
+  if (explicit !== undefined) return { minutes: explicit, isDefault: false };
+  const minutes = effectiveReminders(reminders, picks, mustSeeLead)[setId];
+  return { minutes, isDefault: minutes !== undefined };
+}

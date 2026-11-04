@@ -28,6 +28,7 @@ import { z } from 'zod';
 import type { CrewMeetingPoint, Priority } from '../types';
 import { planBLine } from '../constants/copy';
 import { PRIORITY_WEIGHT } from './crewNudges';
+import { formatMeetWhen } from './crewPlan';
 
 /** Current envelope version. Bump when the payload shape changes incompatibly. */
 export const PLAN_SNAPSHOT_VERSION = 1 as const;
@@ -383,12 +384,8 @@ export function buildHandoffSms(args: {
       lines.push(`https://maps.google.com/?q=${mp.latitude},${mp.longitude}`);
     }
     if (mp.meet_at) {
-      const when = new Date(mp.meet_at);
-      if (!Number.isNaN(when.getTime())) {
-        const opts: Intl.DateTimeFormatOptions = { weekday: 'short', hour: 'numeric', minute: '2-digit' };
-        if (args.timeZone) opts.timeZone = args.timeZone;
-        lines.push(`When: ${when.toLocaleString([], opts)}`);
-      }
+      const when = formatMeetWhen(mp.meet_at, args.timeZone);
+      if (when) lines.push(`When: ${when}`);
     }
   }
   if (planB) lines.push(planBLine(planB));

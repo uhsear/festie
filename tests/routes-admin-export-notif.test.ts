@@ -1706,6 +1706,24 @@ describe('routes/notifications.js', () => {
     assert.equal(arg.localRemindersPresent, false);
   });
 
+  test('POST /token passes localRemindersCoversUntil to the store', async () => {
+    const { app, deps } = await buildNotifApp();
+    await request(app)
+      .post('/token')
+      .send({ token: 'a'.repeat(30), platform: 'android', localRemindersFestivalId: 'fest-1', localRemindersCoversUntil: 1790000000000 })
+      .expect(200);
+    const arg = (deps.stores.deviceTokens.register.mock.calls as any[])[0]!.arguments[0];
+    assert.equal(arg.localRemindersCoversUntil, 1790000000000);
+  });
+
+  test('pushToken schema rejects a non-integer or negative localRemindersCoversUntil', async () => {
+    const { pushTokenSchema } = await import('../lib/schemas.js');
+    const base = { token: 'a'.repeat(30), platform: 'android' as const };
+    assert.equal(pushTokenSchema.safeParse({ ...base, localRemindersCoversUntil: 1.5 }).success, false);
+    assert.equal(pushTokenSchema.safeParse({ ...base, localRemindersCoversUntil: -1 }).success, false);
+    assert.equal(pushTokenSchema.safeParse({ ...base, localRemindersCoversUntil: null }).success, true);
+  });
+
   test('pushToken schema rejects a 129-character localRemindersFestivalId', async () => {
     const { pushTokenSchema } = await import('../lib/schemas.js');
     const base = { token: 'a'.repeat(30), platform: 'android' as const };
