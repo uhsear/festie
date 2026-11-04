@@ -149,3 +149,34 @@ describe('SW offline map rule', () => {
     expect(rule.options?.cacheableResponse?.statuses).toEqual([200]);
   });
 });
+
+describe('SW matchers survive serialization into sw.js', () => {
+  // workbox-build copies each urlPattern function into sw.js as source text.
+  // A matcher that references a module constant throws a ReferenceError there,
+  // which disables that rule AND every rule after it. Rebuild each matcher from
+  // its source alone and run it, as the shipped worker does.
+  const rebuild = (fn: unknown) =>
+    // eslint-disable-next-line no-new-func -- evaluating source text is the point: it mirrors sw.js
+    new Function(`return (${String(fn)})`)() as (o: { url: URL; request: Request }) => boolean;
+  const opts = (path: string) => ({
+    url: new URL(`https://festie.us${path}`),
+    request: { method: 'GET' } as Request,
+  });
+
+  it('every function matcher runs with no module scope', () => {
+    for (const rule of FESTIE_RUNTIME_CACHING) {
+      if (typeof rule.urlPattern !== 'function') continue;
+      expect(() => rebuild(rule.urlPattern)(opts('/x'))).not.toThrow();
+    }
+  });
+
+  it('rebuilt matchers agree with the exported boundary regexes', () => {
+    for (const path of ['/api/v1/festivals', '/api/v1/festivals/abc', '/api/v1/festivals/abc/picks', '/api/v1/crews']) {
+      expect(rebuild(FESTIE_RUNTIME_CACHING[0].urlPattern)(opts(path))).toBe(FESTIVAL_CATALOG_RE.test(path));
+    }
+    for (const path of ['/api/v1/weather/abc', '/api/v1/weather', '/api/v1/weather/']) {
+      expect(rebuild(FESTIE_RUNTIME_CACHING[1].urlPattern)(opts(path))).toBe(WEATHER_RE.test(path));
+    }
+    expect(rebuild(FESTIE_RUNTIME_CACHING[4].urlPattern)(opts('/uploads/basemaps/x.pmtiles'))).toBe(true);
+  });
+});
