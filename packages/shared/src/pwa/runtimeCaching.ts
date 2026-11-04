@@ -69,8 +69,11 @@ export const FESTIE_RUNTIME_CACHING: RuntimeCachingRule[] = [
     // StaleWhileRevalidate keys by URL only (ignores the session
     // cookie), so on a shared device an account switch would otherwise
     // repaint the previous user's data until the revalidate lands.
+    // The regex is inlined, not FESTIVAL_CATALOG_RE: workbox copies this function
+    // into sw.js as source text, where module constants do not exist. A free
+    // reference throws on every request and silently disables every rule below.
     urlPattern: ({ url, request }: { url: URL; request: Request }) =>
-      request.method === 'GET' && FESTIVAL_CATALOG_RE.test(url.pathname),
+      request.method === 'GET' && /^\/api\/v1\/festivals(\/[^/]+)?$/.test(url.pathname),
     handler: 'StaleWhileRevalidate',
     options: {
       cacheName: 'api-cache',
@@ -86,7 +89,7 @@ export const FESTIE_RUNTIME_CACHING: RuntimeCachingRule[] = [
     // zustand-persist. NetworkFirst with a short timeout: prefer fresh
     // data when online, fall back to the cached forecast when offline.
     urlPattern: ({ url, request }: { url: URL; request: Request }) =>
-      request.method === 'GET' && WEATHER_RE.test(url.pathname),
+      request.method === 'GET' && /^\/api\/v1\/weather\/[^/]+$/.test(url.pathname),
     handler: 'NetworkFirst',
     options: {
       cacheName: 'weather-cache',
