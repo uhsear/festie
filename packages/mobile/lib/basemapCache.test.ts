@@ -51,13 +51,16 @@ vi.mock('expo-file-system', () => {
       this.uri = this.uri.replace(/[^/]+$/, newName);
       fs.files.set(this.uri, size);
     }
+    async base64() {
+      return `b64:${fs.files.get(this.uri) ?? 0}`;
+    }
     static downloadFileAsync = fs.download;
   }
 
   return { File, Directory, Paths: { cache: 'file:///cache' } };
 });
 
-const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, subscribeBasemapCache } = await import(
+const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, subscribeBasemapCache, readCachedBase64, MAX_INLINE_BYTES } = await import(
   './basemapCache'
 );
 
@@ -167,5 +170,24 @@ describe('basemapCacheInfo', () => {
     // OS cache eviction: the bytes go, and readiness must go with them.
     basemapCacheFile(URL_A).delete();
     expect(basemapCacheInfo(URL_A).cached).toBe(false);
+  });
+});
+
+describe('readCachedBase64', () => {
+  beforeEach(() => fs.files.clear());
+
+  it('returns the bytes of a saved file and null for a missing, empty or oversized one', async () => {
+    expect(await readCachedBase64(URL_A)).toBeNull();
+    fs.files.set(basemapCacheFile(URL_A).uri, 0);
+    expect(await readCachedBase64(URL_A)).toBeNull();
+    fs.files.set(basemapCacheFile(URL_A).uri, 1234);
+    expect(await readCachedBase64(URL_A)).toBe('b64:1234');
+    fs.files.set(basemapCacheFile(URL_A).uri, MAX_INLINE_BYTES + 1);
+    expect(await readCachedBase64(URL_A)).toBeNull();
+  });
+
+  it('keeps an image URL extension so the site plan shares the cache', () => {
+    expect(basemapCacheKey('https://festie.us/uploads/siteplans/x.webp')).toMatch(/^[0-9a-f]{8}\.webp$/);
+    expect(basemapCacheKey(URL_A)).toMatch(/^[0-9a-f]{8}\.pmtiles$/);
   });
 });

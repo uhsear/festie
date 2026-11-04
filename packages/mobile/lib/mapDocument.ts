@@ -120,6 +120,13 @@ export function buildMapHtml(
   siteplanOrigin: string | null = null,
   /** The app theme: Daylight swaps the document ground and the chip/popup chrome to the light palette. */
   theme: ThemePreference = 'stage',
+  /**
+   * The saved PMTiles archive, base64-encoded, plus the URL the style's
+   * `pmtiles://` source names. The document serves tiles from these bytes in
+   * memory, because WebKit's fetch cannot read a `file://` archive. No CSP or
+   * file access is widened for it.
+   */
+  inlineArchive: { url: string; base64: string } | null = null,
 ): string {
   const ui = documentChrome(theme);
   // center is numeric, non-user-controlled coords — safe to template. Still run
@@ -134,7 +141,7 @@ export function buildMapHtml(
   // Phase 3A/3B: load the pmtiles UMD when a vector basemap is configured — either
   // a remote https archive (pmtilesOrigin set) OR a local cached file:// archive
   // (localBasemap set). With neither, the map is the online OpenFreeMap style.
-  const usePmtiles = pmtilesOrigin != null || localBasemap;
+  const usePmtiles = pmtilesOrigin != null || localBasemap || inlineArchive != null;
   // Phase 3A CSP widening (the one security-sensitive change). When — and only
   // when — a festival has a REMOTE offline basemap, we add its EXACT https origin
   // to connect-src (the archive is byte-range fetched via fetch()) and img-src (a
@@ -183,6 +190,7 @@ export function buildMapHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>${MAPLIBRE_CSS_SRC}</style>
   ${pmtilesScriptTag}
+  ${inlineArchive ? `<script id="festie-basemap" type="text/plain">${inlineArchive.base64.replace(/[^A-Za-z0-9+/=]/g, '')}</script>` : ''}
   <script id="mlgl-shared" type="text/plain">${MAPLIBRE_SHARED_SRC}</script>
   <script id="mlgl-worker" type="text/plain">${MAPLIBRE_WORKER_SRC}</script>
   <script id="mlgl-main" type="text/plain">${MAPLIBRE_JS_SRC}</script>
@@ -300,6 +308,7 @@ export function buildMapHtml(
     // festival configured one) + whether the pmtiles protocol must be registered.
     var STYLE = ${styleJson};
     var USE_PMTILES = ${usePmtiles ? 'true' : 'false'};
+    var INLINE_ARCHIVE_URL = ${safeJsonForScript(inlineArchive ? inlineArchive.url : null)};
     // Tracks whether meeting-point pins exist, so live peer/SOS auto-framing only
     // kicks in when there are no pins to anchor the view. Updated by __festieSetPins.
     var HAD_PINS = false;
@@ -314,6 +323,19 @@ export function buildMapHtml(
     // authoring is armed. PLACEMENT and AUTHORING live inside init(), so their
     // setters keep this top-level copy in step for renderPins/renderMapData.
     var PLACE_TAPS = true;
+
+    // The saved archive, decoded once into memory and read by byte range.
+    function inlineArchiveSource(url) {
+      var bin = atob(document.getElementById('festie-basemap').textContent);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return {
+        getKey: function () { return url; },
+        getBytes: function (offset, length) {
+          return Promise.resolve({ data: bytes.buffer.slice(offset, offset + length) });
+        }
+      };
+    }
 
     function post(msg) {
       if (window.ReactNativeWebView) {
@@ -580,6 +602,7 @@ export function buildMapHtml(
         if (USE_PMTILES && typeof pmtiles !== 'undefined' && pmtiles.Protocol) {
           try {
             var protocol = new pmtiles.Protocol();
+            if (INLINE_ARCHIVE_URL) protocol.add(new pmtiles.PMTiles(inlineArchiveSource(INLINE_ARCHIVE_URL)));
             maplibregl.addProtocol('pmtiles', protocol.tile);
           } catch (e) {}
         }

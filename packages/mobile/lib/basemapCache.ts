@@ -35,8 +35,31 @@ export function basemapCacheKey(pmtilesUrl: string): string {
     // FNV prime multiply, kept in 32-bit range via Math.imul.
     h = Math.imul(h, 0x01000193);
   }
-  // >>> 0 → unsigned; pad so the name is stable-length.
-  return `${(h >>> 0).toString(16).padStart(8, '0')}.pmtiles`;
+  // >>> 0 → unsigned; pad so the name is stable-length. The site-plan image shares
+  // this cache, so a .webp/.png URL keeps its own extension.
+  const ext = /\.(webp|png|jpe?g)$/i.exec(pmtilesUrl)?.[1]?.toLowerCase() ?? 'pmtiles';
+  return `${(h >>> 0).toString(16).padStart(8, '0')}.${ext}`;
+}
+
+// shortcut: the map document receives the whole archive as one base64 string, so
+// archives above this size keep the remote URL. Raise it, or stream ranges over the
+// WebView bridge, if a festival ever ships a bigger extract.
+export const MAX_INLINE_BYTES = 24 * 1024 * 1024;
+
+/**
+ * The cached file's bytes as base64, or null when it is missing, empty or larger
+ * than MAX_INLINE_BYTES. The map document cannot read `file://` itself: WebKit's
+ * fetch rejects the scheme, so the bytes are handed over instead.
+ */
+export async function readCachedBase64(url: string | null | undefined): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const file = basemapCacheFile(url);
+    if (!file.exists || file.size <= 0 || file.size > MAX_INLINE_BYTES) return null;
+    return await file.base64();
+  } catch {
+    return null;
+  }
 }
 
 /** The Directory under which all cached basemaps are stored. */

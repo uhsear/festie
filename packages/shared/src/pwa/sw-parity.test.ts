@@ -85,12 +85,12 @@ describe('SW cache boundary — the SHIPPED matcher functions (not just the cons
 
 describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
   it('has exactly four rules', () => {
-    expect(FESTIE_RUNTIME_CACHING).toHaveLength(5);
+    expect(FESTIE_RUNTIME_CACHING).toHaveLength(6);
   });
 
   it('declares the expected cacheNames in order', () => {
     const names = FESTIE_RUNTIME_CACHING.map((r) => r.options?.cacheName);
-    expect(names).toEqual(['api-cache', 'weather-cache', 'art-cache', 'google-fonts', 'offline-map-cache']);
+    expect(names).toEqual(['api-cache', 'weather-cache', 'art-cache', 'google-fonts', 'offline-map-cache', 'siteplan-cache']);
   });
 
   it('declares the expected handlers in order', () => {
@@ -98,6 +98,7 @@ describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
     expect(handlers).toEqual([
       'StaleWhileRevalidate',
       'NetworkFirst',
+      'CacheFirst',
       'CacheFirst',
       'CacheFirst',
       'CacheFirst',
@@ -178,5 +179,7 @@ describe('SW matchers survive serialization into sw.js', () => {
       expect(rebuild(FESTIE_RUNTIME_CACHING[1].urlPattern)(opts(path))).toBe(WEATHER_RE.test(path));
     }
     expect(rebuild(FESTIE_RUNTIME_CACHING[4].urlPattern)(opts('/uploads/basemaps/x.pmtiles'))).toBe(true);
+    expect(rebuild(FESTIE_RUNTIME_CACHING[5].urlPattern)(opts('/uploads/siteplans/x.webp'))).toBe(true);
+    expect(rebuild(FESTIE_RUNTIME_CACHING[5].urlPattern)(opts('/uploads/avatars/x.webp'))).toBe(false);
   });
 });

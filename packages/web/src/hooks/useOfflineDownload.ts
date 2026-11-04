@@ -3,7 +3,7 @@ import { useOfflineReadinessStore } from '@festie/shared/stores/offlineReadiness
 import type { SectionReadiness } from '@festie/shared/stores/offlineReadinessStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
-import { buildOfflineSteps, summarizeOffline, festivalPhase, hasOfflineBasemap } from '@festie/shared/utils';
+import { buildOfflineSteps, summarizeOffline, festivalPhase, hasOfflineBasemap, extractSiteplan } from '@festie/shared/utils';
 import {
   basemapCacheInfo,
   basemapSize,
@@ -62,6 +62,9 @@ export function useOfflineDownload(festivalId: string) {
     }
     setQuotaFailed(false);
     setMapSection({ status: 'syncing', syncedAt: null });
+    // The service worker stores the site-plan overlay as it passes; best effort.
+    const siteplanUrl = extractSiteplan(mapConfig)?.imageUrl;
+    if (siteplanUrl) void fetch(siteplanUrl).catch(() => undefined);
     const map = ensureBasemapCached(mapUrl).then(async (result) => {
       if (!result.ok && result.reason === 'quota') {
         setQuotaFailed(true);
@@ -73,7 +76,7 @@ export function useOfflineDownload(festivalId: string) {
       );
     });
     await Promise.all([store, map]);
-  }, [downloadForOffline, festivalId, activeCrewId, mapUrl]);
+  }, [downloadForOffline, festivalId, activeCrewId, mapUrl, mapConfig]);
 
   const mapDetail =
     quotaFailed && mapSection.status === 'error'
