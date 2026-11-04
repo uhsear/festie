@@ -69,7 +69,7 @@ export default function createCrewStatusRoutes(deps: any) {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const userId = req.user.userId;
-        const { status, targetMeetingPointId, etaMinutes, note, position } = req.validatedBody;
+        const { status, targetMeetingPointId, etaMinutes, note, position, capturedAt } = req.validatedBody;
 
         const membership = await stores.crews.getMember(crewId, userId);
         if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
@@ -87,6 +87,7 @@ export default function createCrewStatusRoutes(deps: any) {
           targetMeetingPointId: targetMeetingPointId ?? null,
           etaMinutes: etaMinutes ?? null,
           note: note ?? null,
+          capturedAt: capturedAt ?? null,
           latitude: position ? position.lat : null,
           longitude: position ? position.lng : null,
           locationCapturedAt: position ? (position.capturedAt ?? new Date().toISOString()) : null,

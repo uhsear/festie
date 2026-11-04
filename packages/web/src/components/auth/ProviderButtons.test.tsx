@@ -143,8 +143,8 @@ describe('ProviderButtons', () => {
   it('shows only the providers passed in `only`', async () => {
     mockGetProviders.mockResolvedValue({ google, apple });
     renderButtons({ mode: 'link', onCredential: vi.fn(), only: ['apple'] });
-    expect(await screen.findByRole('button', { name: 'Continue with Apple' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Continue with Google')).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Link Apple' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Link Google')).toBeNull();
   });
 
   it('returns to `next` after sign-in and carries it to finish-signup', async () => {
@@ -177,6 +177,14 @@ describe('ProviderButtons', () => {
     googleCallback!({ credential: 'google-id-token-xxxxxxxxxx' });
     await waitFor(() => expect(pageLink).toHaveBeenCalledWith('google', expect.objectContaining({ idToken: 'google-id-token-xxxxxxxxxx' })));
     expect(dialogLink).not.toHaveBeenCalled();
+  });
+
+  it('labels the link buttons Link Google and Link Apple, not Continue with', async () => {
+    mockGetProviders.mockResolvedValue({ google, apple });
+    renderButtons({ mode: 'link', onCredential: vi.fn() });
+    expect(await screen.findByRole('button', { name: 'Link Apple' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Link Google')).toBeInTheDocument();
+    expect(screen.queryByText(/Continue with/)).toBeNull();
   });
 
   it('shows nothing when the Apple popup is closed', async () => {

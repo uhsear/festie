@@ -33,10 +33,11 @@ describe('Integration — Auth', { concurrency: 1 }, () => {
 
     const registration = await registerUser(server, 'alice');
     assert.equal(registration.user.username, 'alice');
-    await server.request
+    const beforeJoin = await server.request
       .get('/api/v1/profiles/fest-1')
       .set('x-user-token', registration.token)
-      .expect(403);
+      .expect(200);
+    assert.deepEqual(beforeJoin.body.data, []);
     const profile = await joinFestivalProfile(server, registration.token);
 
     await server.request

@@ -83,6 +83,22 @@ describe('lib/db/stores/crews.ts — crewStatus sub-store', () => {
       assert.strictEqual(params[5], null); // note
     });
 
+    it('stamps updated_at from the client capture time, clamped to [now-24h, now]', async () => {
+      const { store, pool } = makeStore([{ rows: [] }, { rows: [{ crew_id: 'crew-1', user_id: 'user-1' }] }]);
+      await store.upsert({ crewId: 'crew-1', userId: 'user-1', status: 'here', capturedAt: '2026-06-14T12:00:00.000Z' });
+      const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+      assert.ok(sql.includes("GREATEST(LEAST($10::timestamptz, NOW()), NOW() - INTERVAL '24 hours')"));
+      assert.ok(sql.includes('updated_at = EXCLUDED.updated_at'));
+      assert.strictEqual(params[9], '2026-06-14T12:00:00.000Z');
+    });
+
+    it('does not let an older capture replace a newer stored row', async () => {
+      const { store, pool } = makeStore([{ rows: [] }, { rows: [{ crew_id: 'crew-1', user_id: 'user-1' }] }]);
+      await store.upsert({ crewId: 'crew-1', userId: 'user-1', status: 'here', capturedAt: '2026-06-14T11:00:00.000Z' });
+      const [sql] = pool.query.mock.calls[0]!.arguments as any[];
+      assert.ok(sql.includes('WHERE crew_member_status.updated_at <= EXCLUDED.updated_at'));
+    });
+
     it('returns null when the row is not found after upsert', async () => {
       const { store } = makeStore([{ rows: [] }, { rows: [] }]);
       const result = await store.upsert({ crewId: 'crew-1', userId: 'user-1', status: 'here' });

@@ -1416,7 +1416,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
             updated_at
           )
         VALUES
-          ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE(GREATEST(LEAST($10::timestamptz, NOW()), NOW() - INTERVAL '24 hours'), NOW()))
         ON CONFLICT (crew_id, user_id) DO UPDATE SET
           status = EXCLUDED.status,
           target_meeting_point_id = EXCLUDED.target_meeting_point_id,
@@ -1428,7 +1428,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
             EXCLUDED.location_captured_at,
             crew_member_status.location_captured_at
           ),
-          updated_at = NOW()
+          updated_at = EXCLUDED.updated_at
+        WHERE crew_member_status.updated_at <= EXCLUDED.updated_at
       `,
         [
           data.crewId,
@@ -1440,6 +1441,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           hasPosition ? data.latitude : null,
           hasPosition ? (data.longitude ?? null) : null,
           hasPosition ? (data.locationCapturedAt ?? null) : null,
+          data.capturedAt ?? null,
         ],
       );
       const result = await pool.query(

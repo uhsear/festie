@@ -1163,6 +1163,8 @@ export const crewStatusSchema = z
     etaMinutes: z.number().int().min(0).max(1440).optional().nullable(),
     note: z.string().trim().max(280).optional().nullable(),
     position: crewStatusPosition.optional().nullable(),
+    // Device time the status was set (often offline). The store clamps it to [now-24h, now].
+    capturedAt: z.string().datetime().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'At least one field required' });
 export type CrewStatusInput = z.infer<typeof crewStatusSchema>;

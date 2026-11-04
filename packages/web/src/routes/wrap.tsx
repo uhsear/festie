@@ -34,9 +34,12 @@ import { Sparkles, Trophy, Share2, Users } from 'lucide-react';
 
 export default function WrapPage() {
   return (
-    <RenderErrorBoundary name="wrap">
-      <WrapPageInner />
-    </RenderErrorBoundary>
+    <>
+      <h1 className="sr-only">{COPY.wrap.name}</h1>
+      <RenderErrorBoundary name="wrap">
+        <WrapPageInner />
+      </RenderErrorBoundary>
+    </>
   );
 }
 
@@ -421,7 +424,7 @@ function CrewWrapTab({
           <Users className="w-4 h-4" aria-hidden="true" />
           {COPY.wrap.crewName}
         </div>
-        <h1 className="text-xl font-display font-bold text-text-primary leading-tight">{crewName}</h1>
+        <h2 className="text-xl font-display font-bold text-text-primary leading-tight">{crewName}</h2>
         <p className="text-sm text-text-secondary">{festivalName}</p>
       </header>
 

@@ -284,9 +284,6 @@ export default function setupSocketHandlers(deps: any) {
           rateLimitScope: 'join',
         });
         if (!result.ok) {
-          if (result.error === 'Not a member of this festival') {
-            socket.emit('error', { message: 'Join this festival before using crew realtime' });
-          }
           return respond({ ok: false, error: result.error, code: result.code });
         }
         respond({ ok: true, profileId: result.profile.id });

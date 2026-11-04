@@ -53,6 +53,8 @@ function RouteFallback() {
 }
 
 // Routes where the global festival/day/stage sub-header has no purpose.
+// The first-visit walkthrough shows on the lineup only, never over a deep link (/set/:id, /join, /u/:username).
+const onboardingRoutes = ['/', '/cards'];
 const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan', '/festival-mode'];
 
 // Routes that keep ONLY the day toggle (Sat/Sun).
@@ -164,7 +166,7 @@ export default function AppShell() {
         <RouteAnnouncer />
         <UpdatePrompt />
         <IOSInstallSheet />
-        <Onboarding suspended={!!pendingJoinCode} />
+        {onboardingRoutes.includes(location.pathname) && <Onboarding suspended={!!pendingJoinCode} />}
         {joinCrewSheet}
         <Header />
         <OfflineBanner />

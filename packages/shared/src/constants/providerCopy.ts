@@ -1,6 +1,8 @@
 export const PROVIDER_COPY = {
   continueGoogle: 'Continue with Google',
   continueApple: 'Continue with Apple',
+  linkGoogle: 'Link Google',
+  linkApple: 'Link Apple',
   divider: 'or',
   finishTitle: 'Finish creating your account',
   finishBody: 'Pick a username your crew will see. You can change your display name later.',
