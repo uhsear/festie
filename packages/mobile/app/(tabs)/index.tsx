@@ -311,7 +311,7 @@ export default function TimelineScreen() {
   // festival's date range vs now (shared `festivalPhase` → `festivalStatus`).
   // Feeds the next-step band (`getHomeActions`); null when the festival has no
   // usable dates, in which case the band is empty.
-  const phase = useMemo(() => festivalPhase(currentFestival, days), [currentFestival, days]);
+  const phase = useMemo(() => festivalPhase(currentFestival, days, new Date(nowMs)), [currentFestival, days, nowMs]);
   const pickCount = Object.keys(myPicks ?? {}).length;
   const hasCrew = crews.some((c) => !c.festivalId || c.festivalId === currentFestival?.id);
   const homeActions = getHomeActions({ phase, signedIn: !!user, pickCount, hasCrew });
@@ -675,6 +675,7 @@ export default function TimelineScreen() {
                 onPress: () => {
                   setOnlyMine(false);
                   setActiveStages([]);
+                  setActiveGenres([]);
                   viewAs.clear();
                 },
               }

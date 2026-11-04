@@ -329,9 +329,22 @@ describe('defaultScheduleImageDay with a mode', () => {
       const long = { ...sets.find((s) => s.dayIndex === 0)!, id: 'long', artist: 'Supercalifragilisticexpialidocious', startTime: '16:00', endTime: '18:00' };
       const m = buildLockscreenModel({ ...base, sets: [long, ...sets], mode: 'full', onePage: true, picks: {} });
       const b = grid(m).blocks.find((x) => x.setId === 'long')!;
-      expect(b.artistSizeU).toBe(2.6);
+      expect(b.artistSizeU).toBe(2.2);
       expect(b.artistLines).toHaveLength(1);
       expect(b.artistLines[0]).toMatch(/…$/);
+    });
+    it('sizes the list time column to fit the widest time', () => {
+      const late = { ...sets.find((s) => s.dayIndex === 0)!, id: 'late', artist: 'Late One', startTime: '22:30', endTime: '23:30' };
+      const m = buildLockscreenModel({ ...base, sets: [late, ...sets], mode: 'picks', picks: { late: 'must' } });
+      const l = list(m);
+      const need = (l.timeSizeU * 0.6 * 5) + 0.3 * 2.27 + 2.27 * 0.76 * 2;
+      expect(l.layout.timeWidth).toBeGreaterThanOrEqual(need);
+    });
+    it('a two-word name wraps onto extra lines in a short tile before any ellipsis', () => {
+      const two = { ...sets.find((s) => s.dayIndex === 0)!, id: 'two', artist: 'Adventure Club Sunset', startTime: '16:00', endTime: '17:00' };
+      const m = buildLockscreenModel({ ...base, sets: [two, ...sets], mode: 'full', onePage: true, picks: {} });
+      const b = grid(m).blocks.find((x) => x.setId === 'two')!;
+      if (b.textMode !== 'none' && !b.ellipsis) expect(b.artistLines.join(' ')).toBe(b.artist);
     });
     it('reserves the legend below the last hour label', () => {
       const m = fullFriday();

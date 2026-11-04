@@ -109,6 +109,17 @@ export default function CrewCompareScreen() {
       </Wrapper>
     );
   }
+  if (status === 'joining') {
+    return (
+      <Wrapper>
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Joining when you're back online"
+          message="Your join is saved on this device. The crew opens once you reconnect."
+        />
+      </Wrapper>
+    );
+  }
   if (status === 'none' || !activeCrew) {
     return (
       <Wrapper>

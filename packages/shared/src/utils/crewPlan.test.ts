@@ -138,6 +138,11 @@ describe('crewScreenStatus', () => {
     expect(crewScreenStatus({ ...base, crewCount: 2, error: 'x' })).toBe('error');
     expect(crewScreenStatus({ ...base, crewCount: 2 })).toBe('loading');
   });
+  it('reports joining when every crew is an offline-join placeholder, even after a failed select', () => {
+    expect(crewScreenStatus({ ...base, crewCount: 1, joiningOnly: true })).toBe('joining');
+    expect(crewScreenStatus({ ...base, crewCount: 1, joiningOnly: true, error: 'x' })).toBe('joining');
+    expect(crewScreenStatus({ ...base, hasActiveCrew: true, crewCount: 1, joiningOnly: true })).toBe('ready');
+  });
 });
 
 describe('crewProfilesFor', () => {

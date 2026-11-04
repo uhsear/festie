@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, Alert, Linking, AccessibilityInfo } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -104,6 +104,8 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   const dayCount = useFestivalStore((s) => s.days.length);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const settlingRef = useRef(false);
   // Planned-vs-actual filter. 'actual' = the real ledger (feeds settle-up);
   // 'planned' = the budget/forecast view; 'all' = both.
   const [view, setView] = useState<'all' | 'actual' | 'planned'>('actual');
@@ -268,19 +270,27 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   // button, and the settlement (the exact netted plan amount) is recorded only
   // after the user confirms they paid.
   const handleConfirmPaid = (s: CrewSettlement) => {
-    if (s.amount <= 0) return;
+    // The ref (not state) blocks a second Alert: state is stale inside the Alert callback.
+    if (s.amount <= 0 || settlingRef.current) return;
+    settlingRef.current = true;
     Alert.alert('Record payment', confirmPaidMessage(s, formatAmount(s.amount, currency)), [
-      { text: 'Cancel', style: 'cancel' },
+      { text: 'Cancel', style: 'cancel', onPress: () => { settlingRef.current = false; } },
       {
         text: 'Yes, I paid',
         onPress: () => {
+          // A repeat settle is a real second payment (random idempotency key), so block taps while in flight.
+          setSettling(true);
           createSettleUpFlow(s, (req) => settleExpense(crewId, req), currency)
             .confirmPaid()
             .then((outcome) => {
               if (outcome === 'queued') Alert.alert('Not sent yet', QUEUED_WRITE_MESSAGE);
               else haptics.success();
             })
-            .catch(() => {});
+            .catch(() => {})
+            .finally(() => {
+              settlingRef.current = false;
+              setSettling(false);
+            });
         },
       },
     ]);
@@ -552,10 +562,12 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                         </Text>
                       )}
                       <TouchableOpacity
-                        style={styles.settleButton}
+                        style={[styles.settleButton, settling && { opacity: 0.5 }]}
                         onPress={() => handleConfirmPaid(s)}
+                        disabled={settling}
                         activeOpacity={0.8}
                         accessibilityRole="button"
+                        accessibilityState={{ disabled: settling, busy: settling }}
                         accessibilityLabel={`I've paid ${s.toName}. Record the payment`}
                       >
                         <Ionicons name="cash-outline" size={14} color={t.colors.accent.aqua} />

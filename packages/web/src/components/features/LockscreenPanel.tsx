@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import { LOCKSCREEN_PRESETS, buildLockscreenModel } from '@festie/shared/utils';
-import type { LockscreenMode, LockscreenTheme } from '@festie/shared/utils';
+import type { LockscreenMode, LockscreenStyle, LockscreenTheme } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
 import Button from '../ui/Button';
 import LockscreenPoster from './LockscreenPoster';
@@ -59,6 +59,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   const [stageIds, setStageIds] = useState<string[]>(() => stages.map((s) => s.id));
   const [dayChoice, setDayChoice] = useState<number | 'all' | null>(null);
   const [theme, setTheme] = useState<LockscreenTheme>('dark');
+  const [lockStyle, setLockStyle] = useState<LockscreenStyle>('standard');
   const [tallClock, setTallClock] = useState(false);
   const [onePage, setOnePage] = useState(false);
   const [presetId, setPresetId] = useState('auto');
@@ -108,6 +109,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             crewOverlap: mode === 'crew' ? crewOverlap : undefined,
             selfUserId,
             theme,
+            style: lockStyle,
             width: size.width,
             height: size.height,
             tallClock,
@@ -115,7 +117,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             savedAt: new Date(),
           })
         : null,
-    [festival, sets, stages, days, picks, dayIndex, mode, priorities, stageIds, crewOverlap, selfUserId, theme, size.width, size.height, tallClock, onePage],
+    [festival, sets, stages, days, picks, dayIndex, mode, priorities, stageIds, crewOverlap, selfUserId, theme, lockStyle, size.width, size.height, tallClock, onePage],
   );
 
   if (!festival) return null;
@@ -231,6 +233,13 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         {(['dark', 'light'] as const).map((t) => (
           <button key={t} type="button" aria-pressed={theme === t} className={optionClass(theme === t)} onClick={() => setTheme(t)}>
             {t === 'dark' ? 'Dark' : 'Sunlight'}
+          </button>
+        ))}
+      </div>
+      <div role="group" aria-label="Look" className="flex flex-wrap gap-2">
+        {(['standard', 'poster'] as const).map((l) => (
+          <button key={l} type="button" aria-pressed={lockStyle === l} className={optionClass(lockStyle === l)} onClick={() => setLockStyle(l)}>
+            {l === 'standard' ? 'Standard' : 'Poster'}
           </button>
         ))}
       </div>

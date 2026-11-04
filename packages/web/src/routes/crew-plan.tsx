@@ -75,6 +75,18 @@ function CrewPlanInner() {
     );
   }
 
+  if (status === 'joining') {
+    return (
+      <Gate>
+        <EmptyState
+          icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          title="Joining when you're back online"
+          description="Your join is saved on this device. The crew opens once you reconnect."
+        />
+      </Gate>
+    );
+  }
+
   if (status === 'none' || !crew) {
     return (
       <Gate>

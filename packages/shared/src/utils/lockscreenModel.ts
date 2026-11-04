@@ -16,6 +16,7 @@ import {
   type LockscreenPalette,
   type LockscreenTheme,
 } from './lockscreen';
+import { buildPosterArt, buildPosterPage } from './lockscreenPoster';
 import { formatDayChip } from './scheduleFormat';
 import { festivalStartMinutes, setMinuteRange, startsAfterMidnight } from './setStatus';
 
@@ -412,19 +413,33 @@ function baseRows(items: Item[], ctx: Ctx): BaseRow[] {
   });
 }
 
-function listColumns(spec: TierSpec, side: number, crew: boolean, clashWord: boolean): LockscreenListPage['layout'] {
+function listColumns(
+  spec: TierSpec,
+  side: number,
+  crew: boolean,
+  clashWord: boolean,
+  rows: BaseRow[],
+): LockscreenListPage['layout'] {
+  // Widest "time period" on the page, from the width table, so '10:30 PM' never clips.
+  const widest = Math.max(
+    0,
+    ...rows.map((r) => wordWidthU(r.time, spec.timeU) + wordWidthU(` ${r.period}`, spec.periodU) * 1.1),
+  );
   const marks = 6 + (crew ? 14 : 0) + (clashWord && !spec.twoLine ? 8 : 0);
   if (spec.twoLine) {
     const timeX = side + 2.4;
-    const timeWidth = spec.timeU * 3.3;
+    const timeWidth = Math.max(spec.timeU * 3.3, widest);
     const artistX = timeX + timeWidth + 2;
     return { barX: side, timeX, timeWidth, chipX: null, chipWidth: 0, artistX, artistWidth: 100 - side - marks - artistX };
   }
-  const timeWidth = 17.5;
+  const timeWidth = Math.max(17.5, widest);
   const chipX = side + timeWidth + 1.5;
   const artistX = chipX + 13 + 2;
   return { barX: side, timeX: side, timeWidth, chipX, chipWidth: 13, artistX, artistWidth: 100 - side - marks - artistX };
 }
+
+/** Real fonts run wider than the width table; wrap list names a little early so the native one-line clamp never cuts them. */
+const LIST_FIT = 0.92;
 
 function rowHeightU(spec: TierSpec, lines: number): number {
   if (!spec.twoLine) return lines * spec.artistU * 1.1 + 2.2;
@@ -441,9 +456,9 @@ function layoutList(
   availU: number,
   force: boolean,
 ): LockscreenListPage | null {
-  const layout = listColumns(spec, ctx.sideU, ctx.input.mode === 'crew', rows.some((r) => r.clash));
+  const layout = listColumns(spec, ctx.sideU, ctx.input.mode === 'crew', rows.some((r) => r.clash), rows);
   const sized = rows.map((r) => {
-    const wrapped = wrapArtist(r.artist, spec.artistU, layout.artistWidth);
+    const wrapped = wrapArtist(r.artist, spec.artistU, layout.artistWidth * LIST_FIT);
     return { lines: clampLines(wrapped, spec.maxLines).lines, tooLong: wrapped.length > spec.maxLines };
   });
   if (!force && spec === M56 && sized.some((s) => s.tooLong)) return null;
@@ -489,6 +504,8 @@ function listPages(items: Item[], ctx: Ctx): LockscreenListPage[] {
 
 // ---- grid pages ---------------------------------------------------------
 
+const GRID_FLOOR_U = 2.2;
+
 function buildBlock(
   it: Item,
   col: { x: number; width: number; mark: string },
@@ -512,9 +529,9 @@ function buildBlock(
   const timeLine = textMode === 'full' && !inlineTime ? 3 : 0;
   const maxLinesFor = (size: number) => Math.max(0, Math.floor((height - 1.6 - timeLine) / (size * 1.12)));
   const start = cols <= 2 ? 4.8 : 4;
-  let size = fitArtistU(text, start, 2.6, textW);
+  let size = fitArtistU(text, start, GRID_FLOOR_U, textW);
   let lines = wrapArtist(text, size, textW);
-  while (size > 2.6 && lines.length > maxLinesFor(size)) {
+  while (size > GRID_FLOOR_U && lines.length > maxLinesFor(size)) {
     size = Math.round((size - 0.2) * 10) / 10;
     lines = wrapArtist(text, size, textW);
   }
@@ -602,6 +619,14 @@ function gridPageModels(items: Item[], ctx: Ctx): { page: LockscreenGridPage; it
   });
 }
 
+/** Theme-adjusted marks of the stages a page draws, in festival stage order. */
+function pageStageMarks(setIds: string[], ctx: Ctx): string[] {
+  const shown = new Set(ctx.input.sets.filter((s) => setIds.includes(s.id)).map((s) => s.stageId));
+  return [...shown]
+    .sort((a, b) => (ctx.stageOrder.get(a) ?? 1e6) - (ctx.stageOrder.get(b) ?? 1e6))
+    .map((id) => stageColors(ctx.stageById.get(id), ctx.input.theme).mark);
+}
+
 // ---- entry point --------------------------------------------------------
 
 export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
@@ -656,10 +681,23 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
     });
   }
 
+  const poster =
+    input.style === 'poster'
+      ? buildPosterArt({
+          stageMarks: input.stages.map((st) => stageColors(st, theme).mark),
+          palette: ctx.palette,
+          theme,
+          sideU: ctx.sideU,
+          artEndU: contentTopU - 2,
+          contentTopU,
+          contentEndU: ctx.contentEndU,
+        })
+      : null;
   const flat = series.flatMap((s) => s.pages);
   const stamp = savedStamp(input.savedAt);
   const pages: LockscreenPageModel[] = flat.map((p, i) => ({
     ...p,
+    ...(poster && { poster: buildPosterPage(poster, p.header.day, pageStageMarks(p.setIds, ctx), ctx.sideU, p.header.y + p.header.height) }),
     footer: {
       text: ['festie.us', `Saved ${stamp}`, flat.length > 1 ? `image ${i + 1} of ${flat.length}` : '', 'set times can change, re-save in Festie']
         .filter(Boolean)
@@ -683,6 +721,8 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
     contentEndU: ctx.contentEndU,
     sideU: ctx.sideU,
     mode: input.mode,
+    style: input.style ?? 'standard',
+    poster,
     pages,
     empty: pages.length === 0,
   };

@@ -10,6 +10,8 @@ import type { CrewOverlap, FestivalDay, FestivalSet, Priority, Stage } from '../
 export type LockscreenMode = 'picks' | 'full' | 'stages' | 'crew';
 export type LockscreenTheme = 'dark' | 'light';
 export type LockscreenTier = 'XL' | 'L' | 'M';
+/** 'poster' adds stage-colour beams, a panel behind the schedule and a gradient headline; layout and safe zones are the same. */
+export type LockscreenStyle = 'standard' | 'poster';
 
 export interface LockscreenPreset {
   id: string;
@@ -36,6 +38,8 @@ export interface LockscreenInput {
   /** The signed-in user's id, so crew initials skip them. */
   selfUserId?: string;
   theme: LockscreenTheme;
+  /** Default 'standard'. */
+  style?: LockscreenStyle;
   width: number;
   height: number;
   /** "Big iOS clock": content starts at 0.45 instead of 0.38. */
@@ -198,6 +202,28 @@ export interface LockscreenGridPage {
   legendY: number;
 }
 
+export interface LockscreenRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Poster style art. Beams sit above the content band; the panel is the content band. */
+export interface LockscreenPosterArt {
+  beams: Array<LockscreenRect & { color: string }>;
+  panel: LockscreenRect & { radiusU: number; fill: string; border: string };
+  /** Headline gradient end colours. */
+  headline: { from: string; to: string };
+}
+
+export interface LockscreenPosterPage {
+  /** One colour per character of header.day. */
+  dayColors: string[];
+  /** Stage-colour segments under the header; replaces the hairline. */
+  rule: Array<LockscreenRect & { color: string }>;
+}
+
 export type LockscreenPage = LockscreenListPage | LockscreenGridPage;
 
 export interface LockscreenPageModel {
@@ -209,6 +235,8 @@ export interface LockscreenPageModel {
   dayIndex: number;
   /** Set ids drawn (not carry-over repeats) on this image. */
   setIds: string[];
+  /** Poster style only. */
+  poster?: LockscreenPosterPage;
 }
 
 export interface LockscreenModel {
@@ -224,6 +252,9 @@ export interface LockscreenModel {
   contentEndU: number;
   sideU: number;
   mode: LockscreenMode;
+  style: LockscreenStyle;
+  /** Null for the standard style. */
+  poster: LockscreenPosterArt | null;
   pages: LockscreenPageModel[];
   /** True when nothing matched the filters. */
   empty: boolean;

@@ -525,6 +525,22 @@ describe('festivalDataStore', () => {
       // Existing picks must also survive
       expect(cp?.picks['set-1']).toBe('must');
     });
+
+    it('keeps an optimistic reminder while its PUT is still in flight', async () => {
+      useAuthStore.setState({
+        user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' },
+      });
+      useFestivalDataStore.setState({
+        currentProfile: { ...mockProfile, reminders: { 'set-new': 30 } },
+        savesInFlight: 1,
+      });
+      vi.mocked(api.get).mockResolvedValueOnce([{ ...mockProfile, reminders: {} }]);
+
+      await useFestivalDataStore.getState().loadProfiles('fest-1');
+
+      expect(useFestivalDataStore.getState().currentProfile?.reminders?.['set-new']).toBe(30);
+      useFestivalDataStore.setState({ savesInFlight: 0 });
+    });
   });
 
   describe('setCurrentProfile', () => {

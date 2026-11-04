@@ -57,6 +57,11 @@ const THEME_OPTIONS = [
   { value: 'light', label: 'Sunlight' },
 ] as const;
 
+const LOOK_OPTIONS = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'poster', label: 'Poster' },
+] as const;
+
 const PRIORITIES: Priority[] = ['must', 'want-to-see', 'maybe'];
 const FALLBACK_SIZE = { width: 1290, height: 2796 };
 
@@ -112,6 +117,7 @@ export default function PicksImageScreen() {
   const [priorities, setPriorities] = useState<Priority[]>(PRIORITIES);
   const [stageIds, setStageIds] = useState<string[]>([]);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [lockStyle, setLockStyle] = useState<'standard' | 'poster'>('standard');
   const [tallClock, setTallClock] = useState(false);
   const [onePage, setOnePage] = useState(false);
   const [presetId, setPresetId] = useState<string | null>(null);
@@ -163,6 +169,7 @@ export default function PicksImageScreen() {
         crewOverlap,
         selfUserId,
         theme,
+        style: lockStyle,
         width: size.width,
         height: size.height,
         tallClock,
@@ -182,6 +189,7 @@ export default function PicksImageScreen() {
       crewOverlap,
       selfUserId,
       theme,
+      lockStyle,
       size.width,
       size.height,
       tallClock,
@@ -211,7 +219,7 @@ export default function PicksImageScreen() {
 
   const pageCount = lockModel?.pages.length ?? 1;
   // A changed picture restarts the one-at-a-time save from image 1.
-  const saveKey = JSON.stringify([lockMode, lockDay, priorities, stageIds, theme, size, tallClock, onePage]);
+  const saveKey = JSON.stringify([lockMode, lockDay, priorities, stageIds, theme, lockStyle, size, tallClock, onePage]);
   const savedPages = saved.key === saveKey ? saved.pages : 0;
   const layout = shape === 'lockscreen' ? size : SCHEDULE_IMAGE_LAYOUT[format];
   const previewW = Math.min(260, width - 32);
@@ -379,6 +387,7 @@ export default function PicksImageScreen() {
         <>
           {heading('Style')}
           <SegmentedControl options={THEME_OPTIONS} value={theme} onChange={setTheme} accessibilityLabel="Style" />
+          <SegmentedControl options={LOOK_OPTIONS} value={lockStyle} onChange={setLockStyle} accessibilityLabel="Look" />
           {Platform.OS === 'ios' ? switchRow('Big iOS clock', tallClock, setTallClock) : null}
           {grid ? switchRow('Fit on one image', onePage, setOnePage) : null}
 

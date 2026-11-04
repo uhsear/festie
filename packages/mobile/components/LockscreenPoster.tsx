@@ -38,6 +38,9 @@ function T(props: { style: TextStyle; children: React.ReactNode; lines?: number 
   );
 }
 
+/** Stepped slices stand in for a vertical gradient (no gradient module in the JS bundle). */
+const BEAM_STEPS = 8;
+
 interface Props {
   model: LockscreenModel;
   /** Index into model.pages. */
@@ -59,6 +62,8 @@ export default function LockscreenPoster({ model, page }: Props) {
   const { palette: p, background: bg } = model;
   const side = model.sideU * u;
   const body = pm.body;
+  const art = model.poster;
+  const rule = pm.poster?.rule;
 
   return (
     <View style={{ width: model.width, height: model.height, backgroundColor: bg.color, overflow: 'hidden' }}>
@@ -77,6 +82,38 @@ export default function LockscreenPoster({ model, page }: Props) {
         />
       ) : null}
 
+      {art?.beams.map((b) =>
+        Array.from({ length: BEAM_STEPS }, (_, n) => (
+          <View
+            key={`${b.x}-${n}`}
+            style={{
+              position: 'absolute',
+              left: b.x * u,
+              width: b.width * u,
+              top: (b.y + (b.height * n) / BEAM_STEPS) * u,
+              height: (b.height / BEAM_STEPS) * u + 1,
+              backgroundColor: b.color,
+              opacity: (0.55 * (n + 1)) / BEAM_STEPS,
+            }}
+          />
+        )),
+      )}
+      {art ? (
+        <View
+          style={{
+            position: 'absolute',
+            left: art.panel.x * u,
+            top: art.panel.y * u,
+            width: art.panel.width * u,
+            height: art.panel.height * u,
+            backgroundColor: art.panel.fill,
+            borderColor: art.panel.border,
+            borderWidth: 0.15 * u,
+            borderRadius: art.panel.radiusU * u,
+          }}
+        />
+      ) : null}
+
       <View
         style={{
           position: 'absolute',
@@ -91,7 +128,13 @@ export default function LockscreenPoster({ model, page }: Props) {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 * u }}>
           <T style={txt(u, pm.header.daySizeU, CLASH_700, p.text)} lines={1}>
-            {pm.header.day}
+            {pm.poster
+              ? [...pm.header.day].map((ch, n) => (
+                  <Text key={n} style={{ color: pm.poster!.dayColors[n] }}>
+                    {ch}
+                  </Text>
+                ))
+              : pm.header.day}
           </T>
           {pm.header.pageChip ? (
             <View
@@ -111,16 +154,25 @@ export default function LockscreenPoster({ model, page }: Props) {
           <T style={txt(u, pm.header.metaSizeU, GROTESK_700, p.text, { textAlign: 'right' })} lines={1}>{pm.header.metaBottom}</T>
         </View>
       </View>
-      <View
-        style={{
-          position: 'absolute',
-          left: side,
-          right: side,
-          top: (pm.header.y + pm.header.height) * u,
-          height: 0.15 * u,
-          backgroundColor: p.border,
-        }}
-      />
+      {rule ? (
+        rule.map((r) => (
+          <View
+            key={r.x}
+            style={{ position: 'absolute', left: r.x * u, width: r.width * u, top: (r.y - r.height) * u, height: r.height * u, backgroundColor: r.color }}
+          />
+        ))
+      ) : (
+        <View
+          style={{
+            position: 'absolute',
+            left: side,
+            right: side,
+            top: (pm.header.y + pm.header.height) * u,
+            height: 0.15 * u,
+            backgroundColor: p.border,
+          }}
+        />
+      )}
 
       {body.kind === 'list' ? (
         <>

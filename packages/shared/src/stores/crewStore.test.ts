@@ -104,6 +104,23 @@ describe('crewStore', () => {
     });
   });
 
+  describe('updateHomeBase outcome', () => {
+    const payload = { location: 'Gate', time: null };
+    it('returns sent and merges the returned crew', async () => {
+      useCrewStore.setState({ crews: [mockCrew], activeCrew: mockCrew });
+      vi.mocked(api.put).mockResolvedValueOnce({ crew: { ...mockCrew, homeBaseLocation: 'Gate' } });
+      await expect(useCrewStore.getState().updateHomeBase('crew-1', payload)).resolves.toBe('sent');
+      expect(useCrewStore.getState().activeCrew).toMatchObject({ homeBaseLocation: 'Gate' });
+    });
+
+    it('returns queued and leaves the crew untouched when saved offline', async () => {
+      useCrewStore.setState({ crews: [mockCrew], activeCrew: mockCrew });
+      vi.mocked(api.put).mockResolvedValueOnce({ ...payload, _optimistic: true });
+      await expect(useCrewStore.getState().updateHomeBase('crew-1', payload)).resolves.toBe('queued');
+      expect(useCrewStore.getState().activeCrew).toEqual(mockCrew);
+    });
+  });
+
   describe('loadCrews', () => {
     it('sets crewLoading true then false on success', async () => {
       vi.mocked(api.get).mockResolvedValueOnce([mockCrew]);
@@ -658,7 +675,8 @@ describe('crewStore', () => {
       const conflict = Object.assign(new Error('You already reminded Sam today. Try again tomorrow.'), { status: 409 });
       vi.mocked(api.post).mockRejectedValueOnce(conflict);
       await expect(useCrewStore.getState().remindPayment('crew-1', 'user-2')).rejects.toBe(conflict);
-      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/expenses/remind', { userId: 'user-2' });
+      // Online-only: a reminder queued offline would fire hours later.
+      expect(api.post).toHaveBeenCalledWith('/crews/crew-1/expenses/remind', { userId: 'user-2' }, { _bypassOfflineQueue: true });
     });
   });
 

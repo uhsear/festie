@@ -513,7 +513,8 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       // so a mid-drain reloadProfiles call — e.g. from AppState foreground return —
       // doesn't clobber optimistic state that hasn't been synced yet. The drain's
       // socket event (profile:updated) re-syncs when it lands.
-      const hasPendingWrites = useUIStore.getState().pendingSync > 0;
+      // A PUT still awaiting its ack (savesInFlight) is the same case: this fetch may predate it.
+      const hasPendingWrites = useUIStore.getState().pendingSync > 0 || prevState.savesInFlight > 0;
       const currentProfile =
         hasPendingWrites && serverProfile && prevState.currentProfile?.id === serverProfile.id
           ? {

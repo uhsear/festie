@@ -294,7 +294,7 @@ export default function CrewScreen() {
     router.setParams({ start: undefined });
   }, [user, startParam, router]);
   useEffect(() => {
-    if (!pendingStart || status === 'loading' || status === 'error') return;
+    if (!pendingStart || status === 'loading' || status === 'error' || status === 'joining') return;
     // Create focuses via CreateCrewForm's autoFocus prop, which reads pendingStart.
     if (pendingStart === 'join' && status === 'none') inviteInputRef.current?.focus();
     setPendingStart(null);
@@ -687,6 +687,19 @@ export default function CrewScreen() {
     );
   }
 
+  if (status === 'joining') {
+    return (
+      <View style={styles.screen} testID="crew-screen">
+        <ScreenHeader title="Crew" icon="people" />
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Joining when you're back online"
+          message="Your join is saved on this device. The crew opens once you reconnect."
+        />
+      </View>
+    );
+  }
+
   if (status === 'error') {
     return (
       <View style={styles.screen} testID="crew-screen">
@@ -832,6 +845,7 @@ export default function CrewScreen() {
     <View style={styles.screen} testID="crew-screen">
       <ScreenHeader
         title={crew.name}
+        titleLines={2}
         subtitle={headerSubtitle}
         icon="people"
         right={

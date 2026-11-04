@@ -78,6 +78,18 @@ function CompareViewInner() {
     );
   }
 
+  if (status === 'joining') {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <EmptyState
+          icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          title="Joining when you're back online"
+          description="Your join is saved on this device. The crew opens once you reconnect."
+        />
+      </div>
+    );
+  }
+
   if (status === 'none' || !crew) {
     return (
       <div className="max-w-2xl mx-auto">

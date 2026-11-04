@@ -112,19 +112,22 @@ export function buildSlots(
   });
 }
 
-export type CrewScreenStatus = 'ready' | 'loading' | 'error' | 'none';
+export type CrewScreenStatus = 'ready' | 'loading' | 'error' | 'none' | 'joining';
 
 /**
  * What a crew screen should render. With crews but none active, the auto-select
  * is about to run, so that case reads as `loading` unless it already failed.
+ * `joiningOnly` means every crew is an offline-join placeholder: `joining`.
  */
 export function crewScreenStatus(i: {
   hasActiveCrew: boolean;
   crewCount: number;
+  joiningOnly?: boolean;
   loading: boolean;
   error: string | null;
 }): CrewScreenStatus {
   if (i.hasActiveCrew) return 'ready';
+  if (i.joiningOnly) return 'joining';
   if (i.loading) return 'loading';
   if (i.error) return 'error';
   return i.crewCount === 0 ? 'none' : 'loading';
