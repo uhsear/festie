@@ -190,6 +190,25 @@ describe('crewStore', () => {
       expect(useCrewStore.getState().crewMembers).toEqual(mockMembers);
     });
 
+    it.each([404, 403])('forgets a saved crew the server answers %i for', async (status) => {
+      useCrewStore.setState({
+        crews: [mockCrew],
+        activeCrew: mockCrew,
+        crewMembers: mockMembers,
+        _cachedAt: 1,
+        _cachedCrewId: mockCrew.id,
+      });
+      vi.mocked(api.get).mockRejectedValueOnce(Object.assign(new Error('gone'), { status }));
+
+      await useCrewStore.getState().selectCrew(mockCrew.id);
+      const state = useCrewStore.getState();
+      expect(state.crews).toEqual([]);
+      expect(state.activeCrew).toBeNull();
+      expect(state.crewMembers).toEqual([]);
+      expect(state._cachedCrewId).toBeNull();
+      expect(state.error).toBeNull();
+    });
+
     it('handles missing members gracefully', async () => {
       vi.mocked(api.get).mockResolvedValueOnce({ ...mockCrew });
       await useCrewStore.getState().selectCrew('crew-1');
