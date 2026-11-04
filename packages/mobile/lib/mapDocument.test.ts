@@ -167,10 +167,13 @@ describe('map document CSP', () => {
     expect(local['img-src']).toContain('file:');
     expect(local['connect-src']).not.toContain('https://festie.us');
 
-    // The site-plan raster is image-only — never connect-src.
+    // MapLibre fetch()es the site-plan image, so its origin and the offline
+    // data: copy must be on connect-src as well as img-src.
     const siteplan = cspOf(VARIANTS[3]![1]);
     expect(siteplan['img-src']).toContain('https://cdn.example.org');
-    expect(siteplan['connect-src']).not.toContain('cdn.example.org');
+    expect(siteplan['connect-src']).toContain('https://cdn.example.org');
+    expect(siteplan['connect-src']).toContain('data:');
+    expect(remote['connect-src']).not.toContain('data:');
   });
 });
 

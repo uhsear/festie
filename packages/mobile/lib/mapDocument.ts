@@ -157,9 +157,12 @@ export function buildMapHtml(
   // is added in this branch. With no offline basemap `fileExtra` is empty.
   const fileExtra = localBasemap ? ' file:' : '';
   // Phase 4B: permit EXACTLY the site-plan image's https origin on img-src (the
-  // raster is loaded as an image). Image-only — no connect-src/script-src change.
+  // raster is loaded as an image). No script-src change.
   // With no site plan this is empty and the CSP is byte-for-byte as before.
   const siteplanExtra = siteplanOrigin ? ` https://${siteplanOrigin}` : '';
+  // MapLibre loads an image source with fetch(), so connect-src governs it too.
+  // `data:` covers the offline copy, which RN hands over as a data URL.
+  const siteplanConnect = siteplanOrigin ? ` https://${siteplanOrigin} data:` : '';
   // The map runtime is inlined (see the file header), so NO remote origin is
   // needed to start the map: script-src and style-src carry no host at all, and
   // the only https origins left anywhere in the policy are the ones TILES still
@@ -173,7 +176,7 @@ export function buildMapHtml(
     "script-src 'unsafe-inline' blob:",
     "style-src 'unsafe-inline'",
     `img-src data: blob: https://${OPENFREEMAP_HOST}${extra}${fileExtra}${siteplanExtra}`,
-    `connect-src https://${OPENFREEMAP_HOST}${extra}${fileExtra}`,
+    `connect-src https://${OPENFREEMAP_HOST}${extra}${fileExtra}${siteplanConnect}`,
     'worker-src blob:',
     'font-src data:',
   ].join('; ');
