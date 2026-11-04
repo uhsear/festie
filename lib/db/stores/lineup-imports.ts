@@ -71,7 +71,7 @@ async function insertNewSets(client: any, festivalId: string, inserts: LineupImp
   const setRows = inserts.map((s) => {
     const sortOrder = next.get(s.dayIndex) ?? 0;
     next.set(s.dayIndex, sortOrder + 1);
-    return [s.id, festivalId, s.dayIndex, s.artist, s.stageId, s.startTime, s.endTime, sortOrder, s.linkUrl, JSON.stringify(s.artists)];
+    return [s.id, festivalId, s.dayIndex, s.artist, s.stageId, s.startTime, s.endTime, sortOrder, s.linkUrl, JSON.stringify(s.artists), null];
   });
   await insertSetsBatch(client, setRows);
 }

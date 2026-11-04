@@ -248,4 +248,23 @@ describe('festival days save keeps per-set user data', { skip, concurrency: 1 },
       { user_id: USER_ID, set_id: SET_RATED, rating: 4, note: 'great' },
     ]);
   });
+  test('keeps a set display name across a save that leaves it out, and clears it on null', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const token = await loginAdmin(server);
+    const shown = async () => {
+      const res = await server.request.get(`/api/v1/festivals/${FEST_ID}`).expect(200);
+      const set = res.body.data.days[0].sets.find((s: any) => s.id === SET_KEPT);
+      return set.displayName;
+    };
+
+    await saveDays(server, token, { [SET_KEPT]: { displayName: 'Kept Project (A x B)' } }).expect(200);
+    assert.equal(await shown(), 'Kept Project (A x B)');
+
+    await saveDays(server, token).expect(200);
+    assert.equal(await shown(), 'Kept Project (A x B)', 'a save without displayName keeps it');
+
+    await saveDays(server, token, { [SET_KEPT]: { displayName: null } }).expect(200);
+    assert.equal(await shown(), undefined, 'null clears it');
+  });
 });

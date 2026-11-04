@@ -360,6 +360,8 @@ export const setSchema = z
     artists: z.array(artistLinkSchema).min(1).max(MAX_ARTISTS_PER_SET).optional(),
     // Backward compat — old clients may still send artist/linkUrl
     artist: z.string().max(300).optional(),
+    // Billed name for the whole set. Absent keeps the stored name; null or '' clears it.
+    displayName: z.string().max(300).optional().nullable(),
     stageId: z.string().max(100).optional().nullable(),
     startTime: z
       .string()
@@ -874,6 +876,12 @@ function _applyLinkEdit(links: Record<string, string>, rawLinkUrl: any, storedLi
  *    name, copying links by name from artists[], then from the stored set.
  * normalizeSetArtists stays for the create path.
  */
+/** A set's billed name: the sent value, or the stored one when the payload leaves it out. */
+export function resolveSetDisplayName(set: any, storedSet: any): string | null {
+  if (set.displayName === undefined) return storedSet?.displayName || null;
+  return sanitizeString(set.displayName || '', 300) || null;
+}
+
 export function resolveSetArtists(set: any, storedSet: any, sep = 'b2b'): any[] {
   const stored: any[] = Array.isArray(storedSet?.artists) ? storedSet.artists : [];
   const payload = Array.isArray(set.artists) ? _cleanArtistList(set.artists) : [];
@@ -1030,6 +1038,7 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
           artists,
           // Phase 1 backward compat: keep flat artist + linkUrl for rollback safety
           artist: artistDisplayName(artists, b2bSep),
+          displayName: resolveSetDisplayName(set, setId ? storedSets.get(setId) : undefined),
           stageId: sanitizeIdentifier(set.stageId, 100) || '',
           startTime: validateTime(set.startTime) ? set.startTime : null,
           endTime: validateTime(set.endTime) ? set.endTime : null,
