@@ -15,7 +15,7 @@ function set(id: string, stageId: string, startTime: string, endTime: string): F
 }
 const sets = [set('alpha', 's1', '10:00', '11:00'), set('beta', 's2', '10:30', '11:30'), set('gamma', 's1', '12:00', '13:00')];
 
-function renderGrid(vpW: number) {
+function renderGrid(vpW: number, nowIndicator: number | null = null) {
   const gridRef = createRef<HTMLDivElement>();
   const utils = render(
     <TimelineGrid
@@ -25,7 +25,7 @@ function renderGrid(vpW: number) {
       selectedDay={0}
       rowHeight={36}
       vpW={vpW}
-      nowIndicator={null}
+      nowIndicator={nowIndicator}
       clashMarks={new Map()}
       currentProfile={null}
       currentFestival={null}
@@ -57,5 +57,13 @@ describe('TimelineGrid', () => {
     fireEvent.keyDown(open('beta'), { key: 'ArrowLeft' });
     fireEvent.keyDown(open('alpha'), { key: 'ArrowDown' });
     expect(document.activeElement).toBe(open('gamma'));
+  });
+
+  it('places the now line inside a track spanning only the time rows', () => {
+    const { getByTestId } = renderGrid(1024, 75);
+    const track = getByTestId('now-track');
+    expect(track.style.gridRow).toBe('2 / span 16');
+    expect(track.style.gridColumn).toBe('2 / -1');
+    expect((track.firstElementChild as HTMLElement).style.top).toBe('75%');
   });
 });

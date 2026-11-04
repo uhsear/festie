@@ -25,17 +25,24 @@ function tick(): void {
   for (const listener of _listeners) listener();
 }
 
+// Timers are throttled in background tabs; catch up as soon as the tab returns.
+function onVisibilityChange(): void {
+  if (document.visibilityState === 'visible') tick();
+}
+
 function subscribe(listener: () => void): () => void {
   _listeners.add(listener);
   if (_timer === null) {
     _now = Date.now();
     _timer = setInterval(tick, TICK_MS);
+    document.addEventListener('visibilitychange', onVisibilityChange);
   }
   return () => {
     _listeners.delete(listener);
     if (_listeners.size === 0 && _timer !== null) {
       clearInterval(_timer);
       _timer = null;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     }
   };
 }
