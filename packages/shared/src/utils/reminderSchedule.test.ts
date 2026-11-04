@@ -6,6 +6,7 @@ import {
   MAX_LOCAL_REMINDERS,
   DEFAULT_REMINDER_LEAD_MINUTES,
   effectiveReminders,
+  soonestReminders,
 } from './reminderSchedule';
 import type { FestivalSet, FestivalDay, Priority } from '../types/domain';
 
@@ -95,6 +96,14 @@ describe('buildReminderPlan', () => {
     const picks: Record<string, Priority> = { late: 'must', early: 'must' };
     const plan = buildReminderPlan({ reminders, picks, sets, days, nowMs: localMs(8, 0), max: 1 });
     expect(plan.map((e) => e.setId)).toEqual(['early']);
+  });
+
+  it('soonestReminders keeps the earliest fire times regardless of priority', () => {
+    const sets = [makeSet('m', '22:00'), makeSet('y', '20:00'), makeSet('w', '21:00')];
+    const reminders = { m: 10, y: 10, w: 10 };
+    const picks: Record<string, Priority> = { m: 'must', w: 'want-to-see', y: 'maybe' };
+    const upcoming = buildReminderPlan({ reminders, picks, sets, days, nowMs: localMs(8, 0), max: Infinity });
+    expect(soonestReminders(upcoming, 2).map((e) => e.setId)).toEqual(['y', 'w']);
   });
 
   it('caps to the iOS limit by default', () => {

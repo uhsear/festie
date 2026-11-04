@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -28,6 +28,28 @@ export async function reportLocalRemindersFestival(festivalId: string | null): P
       localRemindersFestivalId: festivalId,
     });
     await AsyncStorage.setItem(LOCAL_FESTIVAL_KEY, festivalId ?? NO_FESTIVAL);
+  } catch (e) {
+    Sentry.captureException(e);
+  }
+}
+
+/**
+ * Register a rotated device token with the server. No-op when this phone has no
+ * cached token (not registered, or signed out) or the token is unchanged.
+ */
+export async function reregisterRotatedToken(newToken: string): Promise<void> {
+  try {
+    const cached = await AsyncStorage.getItem(TOKEN_KEY);
+    if (!cached || cached === newToken) return;
+    // Carry the covered festival over so the new server row keeps skipping duplicate pushes.
+    const localFestivalId = (await AsyncStorage.getItem(LOCAL_FESTIVAL_KEY)) || undefined;
+    await api.post('/notifications/token', {
+      token: newToken,
+      platform: Platform.OS,
+      deviceName: Device.deviceName ?? undefined,
+      localRemindersFestivalId: localFestivalId,
+    });
+    await AsyncStorage.setItem(TOKEN_KEY, newToken);
   } catch (e) {
     Sentry.captureException(e);
   }
@@ -114,6 +136,26 @@ export async function ensureAndroidChannels(): Promise<void> {
   });
 }
 
+/**
+ * Keep the server's push token current. Mount once at the app root: the
+ * listener catches rotations while the app runs, and the startup check catches
+ * rotations that happened while it was closed.
+ */
+export function usePushTokenRotation(): void {
+  useEffect(() => {
+    const sub = Notifications.addPushTokenListener((t) => {
+      void reregisterRotatedToken(String(t.data));
+    });
+    (async () => {
+      const [perm, cached] = await Promise.all([Notifications.getPermissionsAsync(), AsyncStorage.getItem(TOKEN_KEY)]);
+      if (perm.status !== 'granted' || !cached) return;
+      const { data } = await Notifications.getDevicePushTokenAsync();
+      await reregisterRotatedToken(String(data));
+    })().catch((e) => Sentry.captureException(e));
+    return () => sub.remove();
+  }, []);
+}
+
 export type PushPermission = 'granted' | 'denied' | 'undetermined';
 
 export interface MobilePush {
@@ -142,30 +184,29 @@ export function useMobilePush(): MobilePush {
   const [error, setError] = useState<string | null>(null);
   const [permission, setPermission] = useState<PushPermission | null>(null);
   const [canAskAgain, setCanAskAgain] = useState(true);
+  // register() owns the state while it runs; a foreground read mid-register would see the old empty token.
+  const busyRef = useRef(false);
 
   useEffect(() => {
-    const readPermission = () =>
-      Notifications.getPermissionsAsync()
-        .then((p) => {
+    // The switch is on only when the OS permission is granted AND a token is
+    // cached; revoking permission in system settings turns it off on next focus.
+    const readState = () =>
+      Promise.all([Notifications.getPermissionsAsync(), AsyncStorage.getItem(TOKEN_KEY)])
+        .then(([p, token]) => {
           setPermission(p.status);
           setCanAskAgain(p.canAskAgain);
+          setRegistered(p.status === 'granted' && !!token);
         })
         // Best-effort: without a reading the UI keeps the plain switch.
         .catch(() => {});
-    void readPermission();
+    void readState();
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void readPermission();
+      if (state === 'active' && !busyRef.current) void readState();
     });
     return () => sub.remove();
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(TOKEN_KEY)
-      .then((t) => setRegistered(!!t))
-      // Intentional best-effort: this only seeds the toggle's initial state from
-      // the cached token. A storage-read miss just defaults to not-registered —
-      // not worth a Sentry event.
-      .catch(() => {});
     // Create/upgrade channels on mount so already-registered users (who won't
     // re-run register) get the correct 'updates' HIGH channel after this update.
     // A failure here means reminders/crew updates arrive silently or at the wrong
@@ -174,6 +215,7 @@ export function useMobilePush(): MobilePush {
   }, []);
 
   const register = useCallback(async () => {
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -202,6 +244,7 @@ export function useMobilePush(): MobilePush {
       setError(err instanceof Error ? err.message : "Couldn't enable notifications. Try again.");
       throw err;
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }, []);

@@ -44,6 +44,7 @@ import {
   artistDisplayName,
   artistSubtitle,
   getSetLinks,
+  platformLabel,
   detectConflicts,
   hasSetStarted,
   buildSetUrl,
@@ -247,6 +248,7 @@ export default function SetDetailScreen() {
   const allGenres = useMemo(() => [...new Set((set?.artists || []).flatMap((a) => a.genres || []))].slice(0, 6), [set]);
 
   const artistLinks = useMemo(() => (set ? getSetLinks(set) : []), [set]);
+  const isB2B = (set?.artists?.length ?? 0) > 1;
 
   // Conflicts: other picked sets whose times overlap this one (web parity).
   const conflicts = useMemo(() => {
@@ -835,24 +837,29 @@ export default function SetDetailScreen() {
 
         {/* Artist links */}
         {artistLinks.length > 0 ? (
-          <View style={styles.linkRow}>
-            {artistLinks.flatMap((entry) =>
-              Object.entries(entry.links)
-                .filter(([key, url]) => !(key === 'spotify' && url === spotifyArtist?.url))
-                .map(([key, url]) => (
-                  <TouchableOpacity
-                    key={`${entry.name}-${key}`}
-                    style={styles.linkButton}
-                    onPress={() => openLink(url)}
-                    activeOpacity={0.7}
-                    accessibilityRole="link"
-                    accessibilityLabel={`Open ${entry.name} on ${key}`}
-                  >
-                    <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
-                    <Text style={styles.linkText}>{key}</Text>
-                  </TouchableOpacity>
-                )),
-            )}
+          <View style={styles.section}>
+            {artistLinks.map((entry, i) => (
+              <View key={`${entry.name}-${i}`} style={styles.section}>
+                {isB2B ? <Text style={styles.sectionLabel}>{entry.name}</Text> : null}
+                <View style={styles.linkRow}>
+                  {Object.entries(entry.links)
+                    .filter(([key, url]) => !(key === 'spotify' && url === spotifyArtist?.url))
+                    .map(([key, url]) => (
+                      <TouchableOpacity
+                        key={key}
+                        style={styles.linkButton}
+                        onPress={() => openLink(url)}
+                        activeOpacity={0.7}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Open ${entry.name} on ${platformLabel(key)}`}
+                      >
+                        <Ionicons name="open-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
+                        <Text style={styles.linkText}>{platformLabel(key)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              </View>
+            ))}
           </View>
         ) : null}
 
@@ -1099,7 +1106,6 @@ const useStyles = makeStyles((t) => ({
   linkText: {
     ...typeStyle('label'),
     color: t.colors.accent.aqua,
-    textTransform: 'capitalize',
   },
   spotifySection: {
     gap: t.spacing[2],

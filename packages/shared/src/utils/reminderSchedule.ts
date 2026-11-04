@@ -137,6 +137,15 @@ export function buildReminderPlan(args: BuildReminderPlanArgs): ReminderPlanEntr
   return entries.slice(0, max);
 }
 
+/**
+ * Keep the `max` reminders that fire soonest. With no signal at a festival, a
+ * far-future "must" must not crowd out tonight's reminders; the foreground
+ * reconcile moves the window forward as time passes.
+ */
+export function soonestReminders(entries: ReminderPlanEntry[], max: number = MAX_LOCAL_REMINDERS): ReminderPlanEntry[] {
+  return [...entries].sort((a, b) => a.fireAtMs - b.fireAtMs).slice(0, max);
+}
+
 export interface ReminderDiff {
   /** Entries whose schedule is new or changed — (re)schedule these. */
   toSchedule: ReminderPlanEntry[];

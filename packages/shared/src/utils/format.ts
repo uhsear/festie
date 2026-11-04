@@ -102,6 +102,21 @@ export function artistSubtitle(set: FestivalSet, separator?: string): string {
   return joined;
 }
 
+const PLATFORM_LABELS: Record<string, string> = {
+  spotify: 'Spotify',
+  soundcloud: 'SoundCloud',
+  instagram: 'Instagram',
+  twitter: 'X',
+  tiktok: 'TikTok',
+  facebook: 'Facebook',
+  website: 'Website',
+};
+
+/** Human label for an artist link key; unknown keys pass through unchanged. */
+export function platformLabel(platform: string): string {
+  return (Object.hasOwn(PLATFORM_LABELS, platform) && PLATFORM_LABELS[platform]) || platform;
+}
+
 export function getSetLinks(set: FestivalSet): Array<{ name: string; links: Record<string, string> }> {
   if (!set.artists?.length) {
     return set.linkUrl ? [{ name: set.artist || 'Unknown', links: { spotify: set.linkUrl } }] : [];

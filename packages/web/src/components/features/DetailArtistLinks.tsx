@@ -1,14 +1,5 @@
 import React from 'react';
-
-const PLATFORM_LABELS: Record<string, string> = {
-  spotify: 'Spotify',
-  soundcloud: 'SoundCloud',
-  instagram: 'Instagram',
-  twitter: 'X',
-  tiktok: 'TikTok',
-  facebook: 'Facebook',
-  website: 'Website',
-};
+import { platformLabel } from '@festie/shared/utils';
 
 interface Props {
   artistLinks: Array<{ name: string; links: Record<string, string> }>;
@@ -54,7 +45,7 @@ export default function DetailArtistLinks({ artistLinks, isB2B, genres, hideLink
                       rel="noopener noreferrer"
                       className="inline-flex items-center min-h-11 text-[length:var(--font-size-14)] text-accent-aqua no-underline hover:underline"
                     >
-                      {(PLATFORM_LABELS[platform] || platform) + ' ↗'}
+                      {platformLabel(platform) + ' ↗'}
                     </a>
                   ))}
               </div>
