@@ -444,10 +444,25 @@ describe('lib/shutdown.js', () => {
       for (const t of ctx.state.timers) clearInterval(t);
     });
 
-    it('registers 7 timers in state.timers', () => {
+    it('registers 8 timers in state.timers', () => {
       createBackgroundTasks(ctx, { io: ioStub });
-      // session, avatar, token, audit, retention, memory, meeting-point = 7
-      assert.equal(ctx.state.timers.length, 7);
+      // session, avatar, token, audit, retention, retention first run, memory, meeting-point = 8
+      assert.equal(ctx.state.timers.length, 8);
+    });
+
+    it('runs retention cleanup once ten minutes after boot', () => {
+      mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+      try {
+        const queries: string[] = [];
+        ctx.stores.pool = { ...(ctx.stores.pool || {}), query: async (sql: string) => { queries.push(sql); return { rows: [] }; } };
+        createBackgroundTasks(ctx, { io: ioStub });
+        mock.timers.tick(9 * 60 * 1000);
+        assert.equal(queries.filter((q) => q.includes('retention_cleanup')).length, 0);
+        mock.timers.tick(60 * 1000);
+        assert.equal(queries.filter((q) => q.includes('retention_cleanup')).length, 1);
+      } finally {
+        mock.timers.reset();
+      }
     });
 
     it('all timers are unref-ed (no timer should keep process alive)', () => {
