@@ -59,6 +59,15 @@ describe('invite-pages: renderInviteJoinPage', () => {
     assert.ok(html.includes('body { background: #08160c; }'));
   });
 
+  it('has a light-scheme block that follows the tint rules, on the join and error pages', () => {
+    const html = renderInviteJoinPage(defaultArgs);
+    const light = html.indexOf('@media (prefers-color-scheme: light)');
+    assert.ok(light > html.indexOf('body { background: #'), 'light block must come after the tint');
+    assert.ok(html.includes('background: #f4f4f7'));
+    assert.ok(html.includes('border-top-color'));
+    assert.ok(renderInviteErrorPage('https://festie.us', 'x').includes('@media (prefers-color-scheme: light)'));
+  });
+
   it('returns valid HTML document', () => {
     const html = renderInviteJoinPage(defaultArgs);
     assert.ok(html.startsWith('<!DOCTYPE html>'));

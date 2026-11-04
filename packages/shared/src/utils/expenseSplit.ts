@@ -68,17 +68,17 @@ export function sharesError(totalCents: number, shares: ExpenseShare[], currency
 
 /**
  * The user's share of an expense in cents. Null when the user is not in the
- * split or the row is a plan. Mirrors owedShares in lib/db/stores/expenses.ts:
+ * split, the row is a plan, or the payer left the crew (the ledger skips it). Mirrors owedShares in lib/db/stores/expenses.ts:
  * a stored map that does not add up falls back to an equal split over its keys,
  * and the cents of members who left are pooled and spread over the staying keys
  * in `Object.keys(split_amounts)` order (the JSONB order both sides receive).
  */
 export function expenseShareCents(
-  expense: Pick<CrewExpense, 'amount' | 'split_with' | 'split_amounts' | 'planned'>,
+  expense: Pick<CrewExpense, 'amount' | 'split_with' | 'split_amounts' | 'planned' | 'paid_by'>,
   userId: string,
   memberIds: string[],
 ): number | null {
-  if (expense.planned) return null;
+  if (expense.planned || !memberIds.includes(expense.paid_by)) return null;
   const present = new Set(memberIds);
   const total = toCents(expense.amount);
   const stored = expense.split_amounts;

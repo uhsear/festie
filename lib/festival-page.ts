@@ -38,7 +38,7 @@ export function festivalDateRange(festival: any): string | null {
 }
 
 /** "Fri, Jul 18" for a stored calendar date, or '' when it is not `YYYY-MM-DD`. */
-function dayHeadingDate(date: unknown): string {
+export function dayHeadingDate(date: unknown): string {
   const value = String(date || '');
   if (!ISO_DATE_RE.test(value)) return '';
   const parsed = new Date(`${value.slice(0, 10)}T00:00:00Z`);

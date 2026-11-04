@@ -2003,6 +2003,35 @@ describe('routes/share.js', () => {
       assert.ok(res.text.includes('Invalid Link'));
     });
 
+    test('accepts a username with a space and shows a readable date, still noindex', async () => {
+      const getByUsername = mock.fn(async (_name: string) => ({ id: 'u1', username: 'Jane Doe', publicSchedule: true }));
+      const { app } = await buildShareApp({
+        getFestivalById: mock.fn(async (id: any) => ({
+          id, name: 'Test Fest', stages: [{ id: 'stg-1', name: 'Main' }],
+          days: [{ label: 'Friday', date: '2026-07-10', sets: [{ id: 'set-a', artist: 'Alpha' }] }],
+        })),
+        stores: {
+          ...makeShareDeps().stores,
+          users: { getByUsername },
+          profiles: {
+            ...makeShareDeps().stores.profiles,
+            getById: mock.fn(async (id: string) => ({ id, userId: 'u1', festivalId: 'f1', picks: { 'set-a': 'must' } })),
+          },
+          shareLinks: {
+            ...makeShareDeps().stores.shareLinks,
+            newestProfile: mock.fn(async () => ({ profileId: 'p-new', festivalId: 'f1', festivalName: 'Test Fest' })),
+          },
+        },
+      });
+      const res = await request(app).get('/s/u/Jane%20Doe');
+      assert.equal(res.status, 200);
+      assert.equal(getByUsername.mock.calls[0]!.arguments[0], 'jane doe');
+      assert.ok(res.text.includes('Fri, Jul 10'));
+      assert.ok(!res.text.includes('share-date">2026-07-10'));
+      assert.ok(res.text.includes('/s/u/jane%20doe'));
+      assert.equal(res.headers['x-robots-tag'], 'noindex');
+    });
+
     test('returns error for too-long username', async () => {
       const { app } = await buildShareApp();
       const res = await request(app).get('/s/u/' + 'a'.repeat(31));

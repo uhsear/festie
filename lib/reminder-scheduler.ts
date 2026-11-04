@@ -17,6 +17,8 @@ import { isInDndWindow } from './notifications/index.js';
 import { appLink } from './notifications/links.js';
 import { FESTIVAL_DAY_START_HOUR, formatClock12, zonedWallTimeToMs } from './time-zone.js';
 
+const REMINDER_SEND_CONCURRENCY = 10;
+
 function createReminderScheduler({ pool, stores, notificationService, log, config }: any) {
   // ── Leader election (PM2 cluster) ──────────────────────────────────────────
   // PM2 sets NODE_APP_INSTANCE to '0'..'3' in cluster mode. Only instance 0
@@ -247,9 +249,14 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
         );
 
         const deps = { notify: notificationService.send.bind(notificationService), logger: log };
-        for (const profile of profiles) {
-          await processProfileReminders(profile, setLookup, festival, now, deps);
-        }
+        // Bounded parallel: one slow FCM send must not push later reminders past their window.
+        let next = 0;
+        const worker = async () => {
+          while (next < profiles.length) {
+            await processProfileReminders(profiles[next++], setLookup, festival, now, deps);
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(REMINDER_SEND_CONCURRENCY, profiles.length) }, worker));
       }
     } catch (err: any) {
       log.error('reminder scheduler tick failed', { error: err.message });

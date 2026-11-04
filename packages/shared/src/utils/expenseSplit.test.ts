@@ -110,6 +110,12 @@ describe('expenseShareCents', () => {
     expect(expenseShareCents(expense({ split_with: ['a'] }), 'b', ['a', 'b'])).toBeNull();
   });
 
+  it('returns null when the payer left the crew, as the ledger skips the expense', () => {
+    const e = expense({ amount: '9.00', paid_by: 'x', split_with: ['a', 'b'] });
+    expect(expenseShareCents(e, 'a', ['a', 'b'])).toBeNull();
+    expect(expenseShareCents(e, 'a', ['a', 'b', 'x'])).toBe(450);
+  });
+
   it('uses stored uneven shares', () => {
     const e = expense({ split_with: ['a', 'b'], split_amounts: { a: 700, b: 300 } });
     expect(expenseShareCents(e, 'a', ['a', 'b'])).toBe(700);

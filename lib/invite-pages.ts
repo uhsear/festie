@@ -67,6 +67,19 @@ const PAGE_STYLE = `
     .invite-link:hover { text-decoration: underline; }
     .invite-save { display: inline-block; margin-top: 16px; padding: 12px 8px; }`;
 
+// Values copied from the Daylight palette (packages/shared/src/tokens/colorsDaylight.ts); the backend cannot import @festie/shared.
+// Must follow the festival tint rules so it wins at equal specificity.
+const LIGHT_STYLE = `
+    @media (prefers-color-scheme: light) {
+      body { background: #f4f4f7; color: #0b0b12; }
+      .invite-card { background: #ffffff; border-color: rgba(0, 0, 0, 0.12); }
+      .invite-eyebrow, .invite-link { color: #a8002a; }
+      .invite-line, .invite-error-message { color: #2e2e44; }
+      .invite-footer { color: #45455c; }
+      .invite-button { background: #a8002a; color: #ffffff; }
+      .invite-button:hover { background: #a3001f; }
+    }`;
+
 /** "Crew of 6 · 2 spots left", or "Crew of 30 · full". */
 export function inviteStateLine(memberCount: number, spotsLeft: number): string {
   if (spotsLeft <= 0) return `Crew of ${memberCount} · full`;
@@ -108,6 +121,9 @@ export function renderInviteJoinPage({
   const tintStyle = `
     body { background: ${tint.bg}; }
     .invite-card { background: ${tint.pale}; border-color: ${tint.faint}; border-top: 4px solid ${tint.active}; }`;
+  // LIGHT_STYLE resets every border side, so restore the tinted top edge after it.
+  const tintLightStyle = `
+    @media (prefers-color-scheme: light) { .invite-card { border-top-color: ${tint.active}; } }`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -125,7 +141,7 @@ export function renderInviteJoinPage({
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <style>${PAGE_STYLE}${tintStyle}
+  <style>${PAGE_STYLE}${tintStyle}${LIGHT_STYLE}${tintLightStyle}
   </style>
 </head>
 <body>
@@ -176,7 +192,7 @@ export function renderInviteErrorPage(origin: string, message: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>This invite doesn't work</title>
   <meta name="theme-color" content="#0a0a0a">
-  <style>${PAGE_STYLE}
+  <style>${PAGE_STYLE}${LIGHT_STYLE}
   </style>
 </head>
 <body>

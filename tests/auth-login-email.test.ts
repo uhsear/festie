@@ -1,5 +1,7 @@
 import { afterEach, describe, test } from 'node:test';
-import { assert, DEFAULT_PASSWORD, startServer } from './_integration-helpers';
+import crypto from 'crypto';
+import { Pool } from 'pg';
+import { assert, DEFAULT_PASSWORD, startServer, TEST_DATABASE_URL } from './_integration-helpers';
 
 const servers: any[] = [];
 
@@ -65,5 +67,55 @@ describe('Integration — sign in by email', { concurrency: 1 }, () => {
       .post('/api/v1/auth/login')
       .send({ username: 'bob', password: DEFAULT_PASSWORD })
       .expect(423);
+  });
+
+  test('failures older than the lockout window stop counting', async () => {
+    const server = await startServer({ MAX_LOGIN_FAILURES: 3, LOGIN_LOCKOUT_MS: 1000 });
+    servers.push(server);
+    await registerWithEmail(server, 'dana', 'dana@example.com');
+    const fail = () =>
+      server.request.post('/api/v1/auth/login').send({ username: 'dana', password: 'wrong-password-1' }).expect(401);
+
+    await fail();
+    await fail();
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await fail();
+    await fail();
+
+    await server.request.post('/api/v1/auth/login').send({ username: 'dana', password: DEFAULT_PASSWORD }).expect(200);
+  });
+
+  test('a successful password reset clears the login failure counter', async () => {
+    const server = await startServer({ MAX_LOGIN_FAILURES: 3 });
+    servers.push(server);
+    await registerWithEmail(server, 'erin', 'erin@example.com');
+    for (let i = 0; i < 3; i += 1) {
+      await server.request
+        .post('/api/v1/auth/login')
+        .send({ username: 'erin', password: 'wrong-password-1' })
+        .expect(401);
+    }
+    await server.request.post('/api/v1/auth/login').send({ username: 'erin', password: DEFAULT_PASSWORD }).expect(423);
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', ['erin']);
+      await pool.query(
+        `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+        [rows[0].id, crypto.createHash('sha256').update(token).digest('hex')],
+      );
+    } finally {
+      await pool.end();
+    }
+    const newPassword = 'Br4ndNew!Passw0rd';
+    await server.request
+      .post('/api/v1/auth/reset-password')
+      .set('x-festie-request', '1')
+      .send({ token, newPassword, confirmPassword: newPassword })
+      .expect(200);
+
+    await server.request.post('/api/v1/auth/login').send({ username: 'erin', password: newPassword }).expect(200);
   });
 });

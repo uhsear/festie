@@ -603,6 +603,53 @@ describe('crews routes', { concurrency: 1, skip }, () => {
       await pool.end();
     }
   });
+
+  test('POST /:crewId/reform stops at the member cap and reports the skipped members', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const owner = await createMember(server, 'cap-owner');
+    const m1 = await createMember(server, 'cap-m1');
+    const m2 = await createMember(server, 'cap-m2');
+    const sourceCrew = await createCrew(server, owner.token, 'Cap Source');
+
+    const targetFestivalId = `fest-${RUN_TAG}-cap`;
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      await pool.query(
+        'INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
+        [targetFestivalId, 'Cap Target', 'Test Grounds'],
+      );
+      for (const u of [owner, m1, m2]) {
+        await pool.query(
+          'INSERT INTO festival_profiles (id, festival_id, user_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW())',
+          [`profile-${RUN_TAG}-cap-${u.id}`, targetFestivalId, u.id, 'cap'],
+        );
+      }
+      for (const u of [m1, m2]) {
+        await pool.query(
+          "INSERT INTO crew_members (crew_id, user_id, role, joined_at) VALUES ($1, $2, 'member', NOW())",
+          [sourceCrew.id, u.id],
+        );
+      }
+      // The reformed crew inherits this cap: the owner plus ONE of the two prior members fits.
+      await pool.query('UPDATE crews SET max_members = 2 WHERE id = $1', [sourceCrew.id]);
+
+      const res = await server.request
+        .post(`/api/v1/crews/${sourceCrew.id}/reform`)
+        .set('x-user-token', owner.token)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .send({ targetFestivalId });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.data.reform.autoAdded.length, 1);
+      assert.equal(res.body.data.reform.skippedFull.length, 1);
+      const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM crew_members WHERE crew_id = $1', [
+        res.body.data.id,
+      ]);
+      assert.equal(rows[0].n, 2, 'member count must not exceed the cap');
+    } finally {
+      await pool.end();
+    }
+  });
 });
 
 // Mock-based: no database needed, so this block runs even when the DB suite above is skipped.

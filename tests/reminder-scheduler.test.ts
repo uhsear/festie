@@ -620,3 +620,36 @@ describe('reminder-scheduler: overlapping ticks', () => {
     assert.ok(queryFn.mock.calls.length > 5);
   });
 });
+
+describe('reminder-scheduler: bounded parallel sends', () => {
+  it('sends to several profiles concurrently, capped at 10 in flight', async () => {
+    const now = Date.now();
+    const setStartMs = now + 16 * 60000;
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
+    const date = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
+    const startTime = `${String(startClock.getHours()).padStart(2, '0')}:${String(startClock.getMinutes()).padStart(2, '0')}`;
+    const profiles = Array.from({ length: 25 }, (_, i) => ({ id: `fp-${i}`, userId: `user-${i}`, remindersJson: { 'set-1': 15 }, picksJson: '{}' }));
+    const queryFn = async (sql: string) => {
+      if (sql.includes('festival_days')) return { rows: [{ day_index: 0, label: 'Day 1', date }] };
+      if (sql.includes('festival_stages')) return { rows: [] };
+      if (sql.includes('festival_sets')) return { rows: [{ id: 'set-1', day_index: 0, artist: 'DJ Alpha', artists: null, stage_id: null, startTime }] };
+      if (sql.includes('festival_profiles')) return { rows: profiles };
+      if (sql.includes('festivals')) return { rows: [{ id: 'fest-1', name: 'Test Fest' }] };
+      return { rows: [] };
+    };
+    let inFlight = 0;
+    let peak = 0;
+    const notifyFn = mock.fn(async () => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return { sent: 1 };
+    });
+    const scheduler = createReminderScheduler(makeDeps({ pool: { query: queryFn }, notificationService: { send: notifyFn } }));
+    await scheduler.tick();
+    assert.equal(notifyFn.mock.calls.length, 25);
+    assert.ok(peak > 1 && peak <= 10, `peak in flight was ${peak}`);
+  });
+});

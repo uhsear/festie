@@ -455,14 +455,19 @@ export default function createCrewRoutes(deps: any) {
         // Auto-add eligible prior members up to the member cap. Each add is
         // best-effort + idempotent at the DB layer guard above; a duplicate-key
         // race is swallowed so one stragler can't fail the whole reform.
+        // The capped addMember re-checks the cap under a crews row lock, so
+        // concurrent reforms/joins cannot overshoot it; 'full' means skip.
         const added: string[] = [];
-        let slots = memberCap - existingMemberUserIds.length;
+        const skippedFull: string[] = [];
         for (const uid of toAutoAdd) {
-          if (slots <= 0) break;
+          if (skippedFull.length > 0) {
+            skippedFull.push(uid);
+            continue;
+          }
           try {
-            await stores.crews.addMember({ crewId: newCrew.id, userId: uid, role: 'member' });
-            added.push(uid);
-            slots--;
+            const result = await stores.crews.addMember({ crewId: newCrew.id, userId: uid, role: 'member' }, memberCap);
+            if (result === 'full') skippedFull.push(uid);
+            else added.push(uid);
           } catch (addErr: any) {
             log.warn('crew reform auto-add skipped', { crewId: newCrew.id, userId: uid, error: addErr?.message });
           }
@@ -525,6 +530,7 @@ export default function createCrewRoutes(deps: any) {
           reform: {
             autoAdded: added,
             invited: toInvite,
+            skippedFull,
           },
         });
       } catch (error: any) {

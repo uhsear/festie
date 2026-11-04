@@ -88,6 +88,12 @@ export function deviceOf(req: Request) {
   return describeDevice(req.get('user-agent'), req.get('x-festie-client') === 'native' || !req.get('origin'));
 }
 
+/** True when any user row, soft-deleted or not, holds the username (CITEXT, so case-insensitive). */
+export async function usernameTaken(username: string, stores: any): Promise<boolean> {
+  const { rows } = await stores.pool.query('SELECT 1 FROM users WHERE username = $1', [username]);
+  return rows.length > 0;
+}
+
 /**
  * Username and capacity checks shared by /register and provider sign-up.
  * Returns the error message, or null. The email check runs only when an
@@ -95,11 +101,9 @@ export function deviceOf(req: Request) {
  */
 export async function checkRegistrationConflicts(cleanUsername: string, cleanEmail: string | null, deps: any) {
   const { stores, config } = deps;
-  const [existingUser, userCount] = await Promise.all([
-    stores.users.getByUsername(cleanUsername),
-    stores.users.countActive(),
-  ]);
-  if (existingUser) return 'Username already taken';
+  // users.username is unique across soft-deleted rows too, so check them as well.
+  const [taken, userCount] = await Promise.all([usernameTaken(cleanUsername, stores), stores.users.countActive()]);
+  if (taken) return 'Username already taken';
   if (userCount >= config.MAX_USERS) return 'Maximum users reached';
 
   if (cleanEmail) {
