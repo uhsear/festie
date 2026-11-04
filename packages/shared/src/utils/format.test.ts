@@ -122,6 +122,12 @@ describe('minutesToTime', () => {
 });
 
 describe('artistDisplayName', () => {
+  it('prefers the billed display name over the joined artists', () => {
+    const set = makeSet({ displayName: 'Skull Machine', artists: [{ name: 'A' }, { name: 'B' }] as never });
+    expect(artistDisplayName(set, 'B2B')).toBe('Skull Machine');
+    expect(artistSubtitle(set, 'B2B')).toBe('A B2B B');
+  });
+
   it('returns artist field when no artists array', () => {
     const set = makeSet({ artist: 'Daft Punk' });
     expect(artistDisplayName(set)).toBe('Daft Punk');

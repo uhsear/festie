@@ -13,6 +13,7 @@ export function setMatchesSearch(set: FestivalSet, query: string, stages: Stage[
   const q = foldSearch(query.trim());
   if (!q) return true;
   if (set.artist && foldSearch(set.artist).includes(q)) return true;
+  if (set.displayName && foldSearch(set.displayName).includes(q)) return true;
   if (set.artists?.some((a) => foldSearch(a.name).includes(q))) return true;
   const stageName = stages.find((s) => s.id === set.stageId)?.name;
   return stageName ? foldSearch(stageName).includes(q) : false;
