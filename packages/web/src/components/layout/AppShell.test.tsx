@@ -69,6 +69,8 @@ vi.mock('../../hooks/useFestivalLoader', () => ({
 }));
 vi.mock('../../hooks/useFestivalMode', () => ({ useFestivalMode: vi.fn(() => ({ showDayBanner: false })) }));
 vi.mock('../../router', () => ({ prefetchMainRoutes: vi.fn() }));
+const mockUseThemeSync = vi.fn();
+vi.mock('../../lib/theme', () => ({ useThemeSync: () => mockUseThemeSync() }));
 
 import AppShell from './AppShell';
 
@@ -81,6 +83,13 @@ describe('AppShell', () => {
       pendingJoinCode: null,
       clearPendingJoin: vi.fn(),
     };
+  });
+
+  it('syncs the theme on sign-in pages, which render no Header', () => {
+    mockPathname = '/login';
+    render(<AppShell />);
+    expect(screen.queryByTestId('header')).not.toBeInTheDocument();
+    expect(mockUseThemeSync).toHaveBeenCalled();
   });
 
   it('renders the app shell structure with header, main content, and bottom nav', () => {

@@ -32,6 +32,7 @@ import { useFestivalMode } from '../../hooks/useFestivalMode';
 import { prefetchMainRoutes } from '../../router';
 import { cn } from '../../lib/utils';
 import { SocketContext } from '../../lib/socketContext';
+import { useThemeSync } from '../../lib/theme';
 
 const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password'];
 
@@ -63,6 +64,8 @@ const festivalOnlySubHeaderRoutes = ['/wrap', '/picks'];
 
 export default function AppShell() {
   const location = useLocation();
+  // Runs on every route, including sign-in pages that render no Header, so a first visit follows the OS theme.
+  useThemeSync();
   const detailSet = useUIStore((s) => s.detailSet);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const detailAutoSpotify = useUIStore((s) => s.detailAutoSpotify);

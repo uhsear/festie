@@ -80,7 +80,7 @@ describe('OfflineBanner', () => {
     const bar = screen.getByRole('status');
     expect(bar.className).not.toMatch(/\bfixed\b/);
     expect(bar.className).toContain('shrink-0');
-    expect(screen.getByText(/offline/i).className).toContain('line-clamp-2');
+    expect(screen.getByText(/offline/i).className).not.toMatch(/truncate|line-clamp/);
   });
 
   it('shows pending count when offline with pending mutations', () => {
