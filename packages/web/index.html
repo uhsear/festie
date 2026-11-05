@@ -47,7 +47,7 @@
          from /font-loader.js (async) so it never blocks first paint. The
          media="print"+onload swap would violate CSP script-src-attr 'none'.
          `display=swap` + the size-adjust fallback below cover the swap. -->
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+    <link rel="preload" as="style" crossorigin href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" />
     <script src="/font-loader.js" async></script>
     <!-- Display face (Clash Display) is self-hosted (font-src 'self' — no CDN/CSP
          change). Preload the Bold weight: it carries the FESTIE wordmark + every
