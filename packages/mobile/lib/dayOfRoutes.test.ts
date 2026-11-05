@@ -1,6 +1,7 @@
 import {
   CREW_MEET_HREF,
   SCHEDULE_HREF,
+  SOS_MAP_HREF,
   compassHref,
   peerCompassHref,
   meetHref,
@@ -12,6 +13,11 @@ import {
 describe('map entry routes', () => {
   it('builds the stage map href', () => {
     expect(stageMapHref('s1')).toEqual({ pathname: '/(tabs)/map', params: { focusStage: 's1' } });
+  });
+
+  it('sends an SOS row to the Map tab, not the crew Find tab', () => {
+    expect(SOS_MAP_HREF).toBe('/(tabs)/map');
+    expect(SOS_MAP_HREF).not.toEqual(CREW_MEET_HREF);
   });
 
   it('stringifies compass coordinates, negatives included', () => {
