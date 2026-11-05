@@ -746,3 +746,23 @@ describe('middleware: request timeout (real configureMiddleware)', () => {
     await new Promise((r) => setTimeout(r, 120));
   });
 });
+
+describe('middleware: crews rate limit', () => {
+  it('limits crew writes but never spends the budget on reads (FND-002)', async () => {
+    const calls: string[] = [];
+    const { app } = makeMiddlewareApp({
+      ctx: {
+        rateLimit: (_max: number, scope: string) => (req: any, res: any, next: any) => {
+          if (scope !== 'crews') return next();
+          calls.push(req.method);
+          return sendError(res, 429, 'Too many requests', ErrorCodes.RATE_LIMITED);
+        },
+      },
+    });
+    app.all('/api/v1/crews/:id/days', (_req: any, res: any) => res.json({ ok: true }));
+
+    await request(app).get('/api/v1/crews/abc/days').expect(200);
+    await request(app).post('/api/v1/crews/abc/days').expect(429);
+    assert.deepEqual(calls, ['POST']);
+  });
+});

@@ -567,7 +567,12 @@ function configureMiddleware(app: Application, ctx: any) {
   app.use('/api/v1/auth/forgot-password', authRateLimit);
   app.use('/api/v1/auth/reset-password', authRateLimit);
   app.use('/api/v1/profiles', rateLimit(config.PROFILE_RATE_LIMIT_MAX, 'profiles', { anonIpCap: false }));
-  app.use('/api/v1/crews', rateLimit(config.OVERLAP_RATE_LIMIT_MAX, 'crews', { anonIpCap: false }));
+  // Writes only: opening a crew screen fires ~10 parallel GETs, which would burn the
+  // whole budget and 429 the SOS / crew writes. Reads stay under the global limit above.
+  const crewWriteLimit = rateLimit(config.OVERLAP_RATE_LIMIT_MAX, 'crews', { anonIpCap: false });
+  app.use('/api/v1/crews', (req: any, res: any, next: any) =>
+    req.method === 'GET' || req.method === 'HEAD' ? next() : crewWriteLimit(req, res, next),
+  );
 
   // ── Idempotency key middleware ────────────────────────────────────────
   // Keyed by the session's user id when the request carries one, so two people
