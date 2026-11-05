@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist, stageCoord, MAP_COPY } from '@festie/shared/utils';
+import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist, stageCoord, resolveFestivalTimeZone, MAP_COPY } from '@festie/shared/utils';
 import { useDebouncedNote, useSpotifyPreview, usePickClear, useCanPick, useSetMove, useViewAs } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
@@ -361,6 +361,9 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 currentSet={set}
                 conflicts={conflicts}
                 b2bSeparator={b2bSeparator}
+                days={festivalDays}
+                timeZone={resolveFestivalTimeZone(currentFestival)}
+                stages={stages}
                 getPriority={getMyPick}
                 onClear={handleClashClear}
               />

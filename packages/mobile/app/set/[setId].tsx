@@ -836,6 +836,9 @@ export default function SetDetailScreen() {
             currentSet={set}
             conflicts={conflicts}
             b2bSeparator={b2bSeparator}
+            days={days}
+            timeZone={timeZone}
+            stages={stages}
             getPriority={getMyPick}
             onClear={handleClashClear}
           />

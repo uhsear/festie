@@ -84,4 +84,15 @@ describe('ClashPrompt', () => {
     expect(screen.getByLabelText('Keep Headliner, clear Artist A')).toBeInTheDocument();
     expect(screen.getByLabelText('Keep Headliner, clear Artist B')).toBeInTheDocument();
   });
+
+  it('shows a leave-at plan when festival days are given, and none without', () => {
+    const days = [{ id: 'd0', festivalId: 'fest-1', date: '2026-05-01', createdAt: '', updatedAt: '' }];
+    const a = makeSet({ id: 'a', artist: 'Headliner', dayIndex: 0, startTime: '21:00', endTime: '22:30' });
+    const b = makeSet({ id: 'b', artist: 'DJ Snake', dayIndex: 0, startTime: '21:30', endTime: '23:00' });
+    const { rerender } = render(<ClashPrompt currentSet={a} conflicts={[b]} onClear={vi.fn()} />);
+    expect(screen.queryByText(/Stay at/)).toBeNull();
+    rerender(<ClashPrompt currentSet={a} conflicts={[b]} days={days} timeZone="America/Chicago" onClear={vi.fn()} />);
+    expect(screen.getByText(/Stay at Headliner until 10:00 PM, head over, catch the last 1h of DJ Snake\./))
+      .toBeInTheDocument();
+  });
 });

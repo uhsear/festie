@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import type { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, festivalStartMinutes } from '@festie/shared/utils';
+import type { FestivalDay, FestivalSet, Priority, Stage } from '@festie/shared/types';
+import { formatTime, artistDisplayName, festivalStartMinutes, buildLeaveAtPlan, leaveAtLine } from '@festie/shared/utils';
 import { clashPromptCopy, clashesWith } from '@festie/shared/constants';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -19,6 +19,10 @@ interface Props {
    */
   conflicts: FestivalSet[];
   b2bSeparator?: string;
+  /** Festival days, zone and stage pins: with `days` each clash shows a leave-at plan. */
+  days?: FestivalDay[];
+  timeZone?: string;
+  stages?: ReadonlyArray<Pick<Stage, 'id' | 'latitude' | 'longitude'>>;
   /**
    * Resolve the user's pick priority for a set. When both sides of a clash are
    * `must`, the prompt escalates to an explicit "you have a conflict" — the
@@ -54,7 +58,7 @@ function overlapStartLabel(a: FestivalSet, b: FestivalSet): string {
  * pair (in-memory for the screen's lifetime); after "Keep both" one quiet
  * "Clashes with" line stays as the lasting signal so we don't double-nag.
  */
-export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPriority, onClear }: Props) {
+export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days, timeZone, stages, getPriority, onClear }: Props) {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
@@ -128,6 +132,12 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
         // Both sides a must-see → escalate to an explicit clash.
         const hard = getPriority?.(currentSet.id) === 'must' && getPriority?.(c.id) === 'must';
         const { title, body } = clashPromptCopy({ hard, at, currentName, otherName });
+        const plan = days
+          ? buildLeaveAtPlan({
+              a: currentSet, b: c, days, timeZone, stages,
+              priorityA: getPriority?.(currentSet.id), priorityB: getPriority?.(c.id),
+            })
+          : null;
         const card = (
           <View style={styles.card} accessibilityRole="alert">
             <View style={styles.header}>
@@ -137,6 +147,9 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
               </Text>
             </View>
             <Text style={styles.body}>{body}</Text>
+            {plan ? (
+              <Text style={styles.plan}>{leaveAtLine(plan, (s) => artistDisplayName(s, b2bSeparator))}</Text>
+            ) : null}
             <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.keepButton}
@@ -239,6 +252,10 @@ const useStyles = makeStyles((t) => ({
   body: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  plan: {
+    ...typeStyle('caption'),
+    color: t.colors.text.primary,
   },
   actions: {
     flexDirection: 'row',
