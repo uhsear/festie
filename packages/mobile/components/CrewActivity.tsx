@@ -184,7 +184,7 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
         </TouchableOpacity>
       ) : null}
 
-      {!hasMore && activityNextCursor ? (
+      {(expanded || !hasMore) && activityNextCursor ? (
         <TouchableOpacity
           style={styles.moreButton}
           onPress={() => loadOlderActivity(crewId).catch(() => {})}
