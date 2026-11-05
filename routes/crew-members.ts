@@ -156,7 +156,7 @@ export default function createCrewMemberRoutes(deps: any) {
         if (!crew) return sendError(res, 404, 'Crew not found', ErrorCodes.NOT_FOUND);
 
         const membership = await stores.crews.getMember(crewId, req.user.userId);
-        if (!membership) return sendError(res, 400, 'Not a member of this crew', ErrorCodes.INVALID_INPUT);
+        if (!membership) return sendError(res, 403, 'Not a member of this crew', ErrorCodes.FORBIDDEN);
 
         if (membership.role === 'owner') {
           return sendError(res, 400, 'Transfer ownership before leaving', ErrorCodes.FORBIDDEN);

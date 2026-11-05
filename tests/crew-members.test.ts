@@ -359,7 +359,7 @@ describe('routes/crew-members.js — DELETE /:crewId/leave', () => {
   });
 
   // ── Not a member ──────────────────────────────────────────────────
-  test('returns 400 when user is not a member', async () => {
+  test('returns 403 when user is not a member', async () => {
     const { app } = await buildApp({
       stores: {
         crews: {
@@ -372,8 +372,8 @@ describe('routes/crew-members.js — DELETE /:crewId/leave', () => {
     const res = await request(app)
       .delete('/crew-1/leave');
 
-    assert.equal(res.status, 400);
-    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'FORBIDDEN');
     assert.match(res.body.error.message, /Not a member/i);
   });
 
