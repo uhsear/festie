@@ -49,8 +49,9 @@ describe('dayShortLabel', () => {
     expect(dayShortLabel({ date: '2026-11-05', label: 'Sunday' }, 2)).toBe('Sun');
     expect(dayShortLabel({ date: '2026-09-05', label: 'Day 2' }, 1)).toBe('Sat');
   });
-  it('falls back to the label, then to Day n', () => {
-    expect(dayShortLabel({ date: '', label: '  Friday  ' }, 0)).toBe('Friday');
+  it('falls back to a non-weekday label, then to Day n', () => {
+    expect(dayShortLabel({ date: '', label: '  Friday  ' }, 0)).toBe('Fri');
+    expect(dayShortLabel({ date: '', label: '  Opening  ' }, 0)).toBe('Opening');
     expect(dayShortLabel({ date: '' }, 2)).toBe('Day 3');
   });
 });
