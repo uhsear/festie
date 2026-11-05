@@ -100,6 +100,8 @@ function FriendPicksInner() {
   const user = useAuthStore((s) => s.user);
   const currentFestivalId = useFestivalStore((s) => s.currentFestivalId);
   const currentProfile = useFestivalStore((s) => s.currentProfile);
+  // On a hard load the festival list is still empty, so a null current festival is not yet a real choice.
+  const festivalsPending = useFestivalStore((s) => s.isLoading || (s.festivals.length === 0 && !s.error));
   const ref = parseSharedPicksRef(search.from);
 
   const query = useQuery({
@@ -148,7 +150,7 @@ function FriendPicksInner() {
 
   const { username, festivalName } = payload;
   // No festival selected counts as another festival, as on mobile, so Switch is offered.
-  const otherFestival = currentFestivalId !== payload.festivalId;
+  const otherFestival = currentFestivalId !== payload.festivalId && !(currentFestivalId === null && festivalsPending);
   const notJoined = !otherFestival && !!user && !currentProfile;
   const addableRows = comparison.days.flatMap((d) => d.rows).filter((r) => r.addable);
   const plan = planSharedPicksAdd(comparison, ticked);
