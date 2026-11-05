@@ -115,7 +115,7 @@ describe('LineupImport', () => {
     await pasteSampleAndCheck();
     expect(await screen.findByText('Unknown day "Fryday".')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
-    expect(screen.getByText('Fix or remove the 1 rows with errors to continue.')).toBeInTheDocument();
+    expect(screen.getByText('Fix or remove the 1 row with errors to continue.')).toBeInTheDocument();
   });
 
   it('sends the edited value when Check again is chosen', async () => {
