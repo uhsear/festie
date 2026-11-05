@@ -10,6 +10,7 @@
 // The strict nonce CSP helper lives here because the HTML status route in
 // this file needs it. If another file ever needs the same policy, promote it
 // to lib/csp-helpers.js.
+import { randomBytes } from 'node:crypto';
 import { adminAnalyticsQuery, festivalIdParams, validateParams, validateQuery } from '../lib/schemas.js';
 import { renderStatusPage } from '../lib/helpers/status-template.js';
 import { overlappingClashes } from '../lib/helpers/pick-clashes.js';
@@ -286,7 +287,7 @@ export default function createAdminStatusRoutes(deps: any): { router: Router } {
       setNoStore(res);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
 
-      const cspNonce = res.locals.cspNonce || '';
+      const cspNonce = res.locals.cspNonce || randomBytes(16).toString('base64');
       res.setHeader('Content-Security-Policy', buildStrictNonceCSP(cspNonce));
 
       const uptime = Math.round(process.uptime());
