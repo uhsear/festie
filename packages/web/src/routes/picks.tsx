@@ -364,7 +364,7 @@ function PicksViewInner() {
           </div>
         </div>
 
-        <PickConflicts groups={conflictGroups} />
+        {!(trimmedSearch && rows.length === 0) && <PickConflicts groups={conflictGroups} />}
         <RateNightBanner />
         <PickBulkActions />
         <ListenList

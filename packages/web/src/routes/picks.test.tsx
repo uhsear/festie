@@ -288,6 +288,18 @@ describe('PicksView', () => {
     expect(screen.queryByRole('button', { name: /Clashes/ })).toBeNull();
   });
 
+  it('hides the clash card when a search matches no pick', () => {
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Odesza', { startTime: '14:30', endTime: '15:30' })],
+      profile: picksOf({ s1: 'must', s2: 'maybe' }),
+    });
+    render(<PicksView />);
+    expect(screen.getByTestId('pick-conflicts')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filter my picks'), { target: { value: 'zzzqq' } });
+    expect(screen.getByText('No matching picks')).toBeInTheDocument();
+    expect(screen.queryByTestId('pick-conflicts')).toBeNull();
+  });
+
   it('the search input filters by stage name', () => {
     setStoreState({
       sets: [
