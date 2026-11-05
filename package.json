@@ -91,7 +91,7 @@
     "lint-staged": "^17.5.0",
     "openapi-typescript": "^7.13.0",
     "simple-git-hooks": "^2.14.0",
-    "socket.io-client": "^4.8.3",
+    "socket.io-client": "^4.8.4",
     "supertest": "^7.2.2",
     "syncpack": "^15.3.3",
     "typescript": "~6.0.3",
