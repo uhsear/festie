@@ -170,7 +170,7 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
     // browser blocks the cached images from rendering (CSP violation), defeating the
     // offline art cache entirely.  Kept tight — no other hosts added.
     "img-src 'self' data: blob: https://art.festie.us https://*.scdn.co https://*.spotifycdn.com https://tiles.openfreemap.org",
-    "font-src 'self' data: https://fonts.gstatic.com",
+    "font-src 'self' https://fonts.gstatic.com",
     `style-src ${styleSrc}`,
     `script-src ${scriptSrc}`,
     "script-src-attr 'none'",

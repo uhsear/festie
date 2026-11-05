@@ -80,7 +80,7 @@ function PicksViewInner() {
   const crewLoading = useCrewStore((s) => s.crewLoading);
   // A direct load never opens a crew screen, so nothing selects a crew and the crew suggestion strip stays empty.
   useEffect(() => {
-    if (user && !hasActiveCrew && firstCrewId && !crewLoading) useCrewStore.getState().selectCrew(firstCrewId).catch(() => {});
+    if (user && !hasActiveCrew && firstCrewId && !crewLoading) useCrewStore.getState().selectCrew(firstCrewId).catch((err) => console.warn("picks: selecting first crew failed", err));
   }, [user, hasActiveCrew, firstCrewId, crewLoading]);
   const [view, setView] = useState<PicksViewMode>('plan');
   const {
