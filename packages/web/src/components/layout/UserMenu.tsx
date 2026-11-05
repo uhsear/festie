@@ -1,8 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { useAuthStore } from '@festie/shared';
 import { useNavigate } from '@tanstack/react-router';
+import { COPY } from '@festie/shared/constants';
 import { identityLabel } from '@festie/shared/utils';
 import Avatar from '../ui/Avatar';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import UserMenuPanel from './UserMenuPanel';
 import UserMenuProfileCard from './UserMenuProfileCard';
 import UserMenuAccountSection from './UserMenuAccountSection';
@@ -21,6 +23,7 @@ interface UserMenuProps {
 
 export default function UserMenu({ user }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const navigate = useNavigate();
 
   const logout = useAuthStore((state) => state.logout);
@@ -28,7 +31,6 @@ export default function UserMenu({ user }: UserMenuProps) {
   const close = useCallback(() => setIsOpen(false), []);
 
   const handleLogout = async () => {
-    close();
     try {
       await logout();
     } catch (e) {
@@ -58,9 +60,26 @@ export default function UserMenu({ user }: UserMenuProps) {
       {isOpen && (
         <UserMenuPanel ariaLabel="User menu" onClose={close}>
           <UserMenuProfileCard user={user} />
-          <UserMenuAccountSection user={user} onClose={close} onLogout={handleLogout} />
+          <UserMenuAccountSection
+            user={user}
+            onClose={close}
+            onLogout={() => {
+              close();
+              setConfirmSignOut(true);
+            }}
+          />
         </UserMenuPanel>
       )}
+
+      <ConfirmDialog
+        open={confirmSignOut}
+        onOpenChange={setConfirmSignOut}
+        title={COPY.auth.signOut}
+        description={COPY.auth.signOutConfirm}
+        confirmLabel={COPY.auth.signOut}
+        destructive
+        onConfirm={handleLogout}
+      />
     </>
   );
 }
