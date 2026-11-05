@@ -486,17 +486,18 @@ describe('routes/email-auth', () => {
     assert.equal(res.body.error.code, 'NOT_FOUND');
   });
 
-  test('POST /resend-verification — succeeds for unverified user', async () => {
+  // No RESEND_API_KEY in tests, so the send fails; FND-018 reports that instead of a false 200.
+  test('POST /resend-verification — 503 for unverified user when the mail cannot be sent', async () => {
     const deps = buildEmailAuthDeps();
     // emailTokens methods default to no-op async, which is sufficient
     createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
     const router = createEmailAuthRoutes(deps);
     const app = mountApp(router);
 
-    const res = await request(app).post('/resend-verification').expect(200);
+    const res = await request(app).post('/resend-verification').expect(503);
 
-    assert.equal(res.body.error, null);
-    assert.match(res.body.data.message, /verification email sent/i);
+    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
+    assert.match(res.body.error.message, /could not send the verification email/i);
   });
 
   test('POST /reset-password — passwords must match', async () => {

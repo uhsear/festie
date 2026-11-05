@@ -772,7 +772,7 @@ describe('routes/crews.js', () => {
       assert.equal(res.status, 404);
     });
 
-    test('returns 400 when not a member', async () => {
+    test('returns 403 when not a member', async () => {
       const crewStore = {
         ...makeCrewDeps().stores.crews,
         getById: mock.fn(async () => ({ id: 'c1' })),
@@ -783,7 +783,7 @@ describe('routes/crews.js', () => {
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1/leave');
-      assert.equal(res.status, 400);
+      assert.equal(res.status, 403);
     });
 
     test('returns 400 when owner tries to leave', async () => {

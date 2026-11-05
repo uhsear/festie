@@ -482,14 +482,15 @@ describe('POST /api/v1/auth/resend-verification', () => {
     assert.equal(res.status, 401);
   });
 
-  test('authenticated user without email on file — 200 or 400', async () => {
+  // No mail key in tests: an address on file gets 503 (FND-018), not a false 200.
+  test('authenticated user — 400 without an email on file, 503 when the mail cannot be sent', async () => {
     const server = await startServer(); servers.push(server);
     const user = await registerUser(server, 'resendnoemail');
     const res = await server.request
       .post('/api/v1/auth/resend-verification')
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1');
-    assert.ok(res.status === 200 || res.status === 400);
+    assert.ok(res.status === 400 || res.status === 503, JSON.stringify(res.body));
   });
 
   test('rate limiting — multiple rapid resends eventually hit 429 or send-error', async () => {
