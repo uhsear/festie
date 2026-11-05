@@ -856,7 +856,6 @@ export default function CrewScreen() {
     <View style={styles.screen} testID="crew-screen">
       <ScreenHeader
         title={crew.name}
-        titleLines={2}
         subtitle={headerSubtitle}
         icon="people"
         right={
