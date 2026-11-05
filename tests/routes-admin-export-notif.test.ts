@@ -682,6 +682,20 @@ describe('routes/admin-metrics.js', () => {
     assert.equal(res.body.data, null);
   });
 
+  test('GET /internal/metrics-json returns 403 for loopback requests that came through a proxy (FND-015)', async () => {
+    const { default: createAdminMetricsRoutes } = await import('../routes/admin-metrics.js');
+    const { router } = createAdminMetricsRoutes(makeDeps());
+    const app = express();
+    app.use((req: any, _res: any, next: any) => {
+      Object.defineProperty(req.socket, 'remoteAddress', { value: '127.0.0.1', configurable: true });
+      next();
+    });
+    app.use(router);
+    await request(app).get('/internal/metrics-json').set('CF-Connecting-IP', '203.0.113.9').expect(403);
+    await request(app).get('/internal/metrics-json').set('X-Forwarded-For', '203.0.113.9').expect(403);
+    await request(app).get('/internal/metrics-json').expect(200);
+  });
+
   test('GET /internal/metrics-json returns metrics for localhost', async () => {
     const { default: createAdminMetricsRoutes } = await import('../routes/admin-metrics.js');
     const deps = makeDeps();
