@@ -211,8 +211,9 @@ function configureMiddleware(app: Application, ctx: any) {
       crossOriginResourcePolicy: { policy: 'same-origin' },
       originAgentCluster: true,
       // Google's sign-in button reads the page origin from the Referer and returns 400 ("origin is not
-      // allowed") without one. Cross-origin requests then carry only the origin, never the path.
-      referrerPolicy: { policy: config.OAUTH_GOOGLE_ENABLED ? 'strict-origin-when-cross-origin' : 'no-referrer' },
+      // allowed") without one. strict-origin sends only the origin, never the path, so a
+      // /reset-password?token=... URL never leaks in Referer. no-referrer breaks the button.
+      referrerPolicy: { policy: config.OAUTH_GOOGLE_ENABLED ? 'strict-origin' : 'no-referrer' },
       frameguard: { action: 'deny' },
       dnsPrefetchControl: { allow: false },
       hsts: config.PUBLIC_ORIGIN.startsWith('https://')

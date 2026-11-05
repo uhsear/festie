@@ -62,7 +62,7 @@ function initSentry(options: any = {}) {
         userInfo: false,
         cookies: false,
         httpHeaders: {
-          request: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
+          request: { deny: ['forwarded', 'referer', '-ip', 'remote-', 'via', '-user'] },
           response: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
         },
         httpBodies: [],

@@ -256,6 +256,6 @@ describe('csp: Cross-Origin-Opener-Policy', () => {
 
   it('sends no referrer unless Google sign-in needs the origin', async () => {
     assert.equal((await headersFor({}))['referrer-policy'], 'no-referrer');
-    assert.equal((await headersFor({ OAUTH_GOOGLE_ENABLED: true }))['referrer-policy'], 'strict-origin-when-cross-origin');
+    assert.equal((await headersFor({ OAUTH_GOOGLE_ENABLED: true }))['referrer-policy'], 'strict-origin');
   });
 });
