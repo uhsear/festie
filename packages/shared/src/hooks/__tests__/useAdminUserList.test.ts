@@ -72,6 +72,23 @@ describe('useAdminUserList', () => {
     expect(result.current.total).toBe(1);
   });
 
+  it('a failed search drops the previous rows and sets the error', async () => {
+    getEnvelope.mockResolvedValueOnce(page(['a', 'b'], null, 2));
+    const { result } = renderHook(() => useAdminUserList());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.users).toHaveLength(2);
+    getEnvelope.mockRejectedValueOnce(new Error('boom'));
+    act(() => result.current.setSearch('zed'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(result.current.error).toBe('boom');
+    expect(result.current.users).toEqual([]);
+    expect(result.current.total).toBe(0);
+  });
+
   it('ignores a stale response', async () => {
     let resolveOld: (v: unknown) => void = () => {};
     getEnvelope
