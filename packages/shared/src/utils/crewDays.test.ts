@@ -45,6 +45,10 @@ describe('dayShortLabel', () => {
   it('uses the weekday when the date is valid', () => {
     expect(dayShortLabel({ date: '2026-09-05' }, 1)).toBe('Sat');
   });
+  it('takes the weekday from a weekday label, not the calendar date', () => {
+    expect(dayShortLabel({ date: '2026-11-05', label: 'Sunday' }, 2)).toBe('Sun');
+    expect(dayShortLabel({ date: '2026-09-05', label: 'Day 2' }, 1)).toBe('Sat');
+  });
   it('falls back to the label, then to Day n', () => {
     expect(dayShortLabel({ date: '', label: '  Friday  ' }, 0)).toBe('Friday');
     expect(dayShortLabel({ date: '' }, 2)).toBe('Day 3');
