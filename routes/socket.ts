@@ -335,8 +335,10 @@ export default function setupSocketHandlers(deps: any) {
           socket.data?.userSessionToken || resolveSocketToken(socket, null, config.USER_SESSION_COOKIE);
         const session = await validateUserSession(sessionToken);
         if (!session) {
+          // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
+          respond({ ok: false, error: 'Authentication required' });
           disconnectSocket(socket, io);
-          return respond({ ok: false, error: 'Authentication required' });
+          return;
         }
         // eslint-disable-next-line require-atomic-updates -- socket.data is not a shared race target
         socket.data.userSessionToken = sessionToken;
@@ -441,8 +443,10 @@ export default function setupSocketHandlers(deps: any) {
           socket.data?.userSessionToken || resolveSocketToken(socket, null, config.USER_SESSION_COOKIE);
         const session = await validateUserSession(sessionToken);
         if (!session) {
+          // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
+          respond({ ok: false, code: 'AUTH_REQUIRED' });
           disconnectSocket(socket, io);
-          return respond({ ok: false, code: 'AUTH_REQUIRED' });
+          return;
         }
         const membership = await stores.crews.getMember(crewId, session.userId);
         if (!membership) return respond({ ok: false, code: 'NOT_A_MEMBER' });
@@ -676,8 +680,10 @@ export default function setupSocketHandlers(deps: any) {
           socket.data?.userSessionToken || resolveSocketToken(socket, null, config.USER_SESSION_COOKIE);
         const session = await validateUserSession(sessionToken);
         if (!session) {
+          // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
+          respond({ ok: false, peers: [] });
           disconnectSocket(socket, io);
-          return respond({ ok: false, peers: [] });
+          return;
         }
         const membership = await stores.crews.getMember(crewId, session.userId);
         if (!membership) return respond({ ok: false, peers: [] });

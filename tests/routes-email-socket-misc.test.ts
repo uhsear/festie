@@ -885,6 +885,24 @@ describe('routes/socket', () => {
     assert.equal(response.crewId, 'crew-1');
   });
 
+  test('join:crew — acks before disconnecting on an invalid session (FND-032)', async () => {
+    const deps = buildSocketDeps();
+    deps.validateUserSession = mock.fn(async () => null);
+    const order: string[] = [];
+    deps.disconnectSocket = mock.fn(() => { order.push('disconnect'); });
+    const handlers = await setupAndGetHandlers(deps);
+    const socket = makeSocket();
+    const socketHandlers: Record<string, any> = {};
+    socket.on = mock.fn((event: any, handler: any) => {
+      socketHandlers[event] = handler;
+    });
+
+    handlers.connection(socket);
+    await socketHandlers['join:crew']({ crewId: 'crew-1' }, () => { order.push('ack'); });
+
+    assert.deepEqual(order, ['ack', 'disconnect']);
+  });
+
   test('join:crew — rejects when crew not found', async () => {
     const deps = buildSocketDeps();
     deps.stores.crews.getById = mock.fn(async () => null);
