@@ -91,7 +91,7 @@ vi.mock('../lib/toastContext', () => ({
 }));
 
 import PicksView from './picks';
-import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import { useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
 import { buildPicksIcsExport, describeIcsExport } from '@festie/shared/utils';
 
 const DAYS = [
@@ -298,6 +298,15 @@ describe('PicksView', () => {
     fireEvent.change(screen.getByLabelText('Filter my picks'), { target: { value: 'zzzqq' } });
     expect(screen.getByText('No matching picks')).toBeInTheDocument();
     expect(screen.queryByTestId('pick-conflicts')).toBeNull();
+  });
+
+  it('selects the first crew on a direct load so crew suggestions can show', () => {
+    const selectCrew = vi.fn().mockResolvedValue(undefined);
+    useCrewStore.setState({ activeCrew: null, crews: [{ id: 'c1' } as never], crewLoading: false, selectCrew });
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    expect(selectCrew).toHaveBeenCalledWith('c1');
+    useCrewStore.setState(useCrewStore.getInitialState(), true);
   });
 
   it('the search input filters by stage name', () => {

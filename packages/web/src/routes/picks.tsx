@@ -75,6 +75,13 @@ function PicksViewInner() {
   const selectedDay = useFestivalStore((state) => state.selectedDay);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  const hasActiveCrew = useCrewStore((s) => !!s.activeCrew);
+  const firstCrewId = useCrewStore((s) => s.crews.find((c) => !c._optimistic)?.id);
+  const crewLoading = useCrewStore((s) => s.crewLoading);
+  // A direct load never opens a crew screen, so nothing selects a crew and the crew suggestion strip stays empty.
+  useEffect(() => {
+    if (user && !hasActiveCrew && firstCrewId && !crewLoading) useCrewStore.getState().selectCrew(firstCrewId).catch(() => {});
+  }, [user, hasActiveCrew, firstCrewId, crewLoading]);
   const [view, setView] = useState<PicksViewMode>('plan');
   const {
     groupMode,
