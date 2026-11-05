@@ -20,6 +20,15 @@ const fillForm = async (user: ReturnType<typeof userEvent.setup>, email = 'new@e
 };
 
 describe('ChangeEmailModal', () => {
+  it('lets the user reveal the current password', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const field = screen.getByLabelText('Current password');
+    expect(field).toHaveAttribute('type', 'password');
+    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(field).toHaveAttribute('type', 'text');
+  });
+
   it('renders as a labelled dialog with both fields', () => {
     renderModal();
     expect(screen.getByRole('dialog', { name: 'Change email' })).toBeInTheDocument();
