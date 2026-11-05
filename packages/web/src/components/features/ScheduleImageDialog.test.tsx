@@ -84,6 +84,7 @@ describe('ScheduleImageDialog', () => {
     const options = screen.getAllByRole('option') as HTMLOptionElement[];
     expect(options[0]!.disabled).toBe(false);
     expect(options[1]!.disabled).toBe(true);
+    expect(options[1]!.textContent).toContain('no timed picks');
   });
 
   it('shows the failure toast when capture rejects', async () => {

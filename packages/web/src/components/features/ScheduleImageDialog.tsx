@@ -181,11 +181,12 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
                 <select
                   value={dayIndex}
                   onChange={(e) => setDayChoice(Number(e.target.value))}
-                  className="min-h-9 rounded-lg border border-border bg-bg-card px-2 text-sm text-text-primary"
+                  className="min-h-9 rounded-lg border border-border bg-bg-card pl-2 pr-8 text-sm text-text-primary"
                 >
                   {Array.from({ length: dayCount }, (_, i) => (
                     <option key={i} value={i} disabled={!timedDays.has(i)}>
                       {dayLabels[i] ?? `Day ${i + 1}`}
+                      {timedDays.has(i) ? '' : ' (no timed picks)'}
                     </option>
                   ))}
                 </select>
