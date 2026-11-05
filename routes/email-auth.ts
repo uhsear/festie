@@ -279,7 +279,10 @@ export default function createEmailAuthRoutes(deps: any): Router {
         config.EMAIL_VERIFY_TOKEN_TTL_HOURS,
       );
       const verifyUrl = `${config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
-      await sendVerificationEmail({ to: user.email, username: user.username, verifyUrl, config, log });
+      const sent = await sendVerificationEmail({ to: user.email, username: user.username, verifyUrl, config, log });
+      if (!sent) {
+        return sendError(res, 503, 'We could not send the verification email. Try again in a few minutes.', ErrorCodes.SERVICE_UNAVAILABLE);
+      }
 
       return sendSuccess(res, { message: 'Verification email sent' });
     } catch (error: any) {

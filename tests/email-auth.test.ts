@@ -484,7 +484,7 @@ describe('email-auth: resend-verification', { concurrency: 1 }, () => {
     assert.equal(res.status, 400);
   });
 
-  test('200 happy path when email is set but unverified', async () => {
+  test('503 (not a false 200) when the mail cannot be sent, token still stored', async () => {
     const server = await startServer();
     servers.push(server);
     const ts = Date.now();
@@ -498,7 +498,7 @@ describe('email-auth: resend-verification', { concurrency: 1 }, () => {
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({});
-    assert.equal(res.status, 200);
+    assert.equal(res.status, 503, JSON.stringify(res.body));
 
     // A fresh verification token should now exist for this user.
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });
