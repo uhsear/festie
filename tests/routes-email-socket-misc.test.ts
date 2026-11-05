@@ -831,6 +831,23 @@ describe('routes/socket', () => {
     assert.ok(deps.emitPresence.mock.calls.length >= 1);
   });
 
+  test('leave:festival — clears crewId so location gates refuse (FND-017)', async () => {
+    const deps = buildSocketDeps();
+    deps.leaveFestivalRealtime = mock.fn(() => 'fest-1');
+    const handlers = await setupAndGetHandlers(deps);
+    const socket = makeSocket();
+    const socketHandlers: Record<string, any> = {};
+    socket.on = mock.fn((event: any, handler: any) => {
+      socketHandlers[event] = handler;
+    });
+
+    handlers.connection(socket);
+    socket.data.crewId = 'crew-1';
+    socketHandlers['leave:festival']();
+
+    assert.equal(socket.data.crewId, undefined);
+  });
+
   test('leave:festival — rate limit rejection', async () => {
     const deps = buildSocketDeps();
     deps.consumeSocketRateLimit = mock.fn(() => false);

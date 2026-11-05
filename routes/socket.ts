@@ -301,9 +301,21 @@ export default function setupSocketHandlers(deps: any) {
           return;
         }
         const festivalId = leaveFestivalRealtime(socket, io);
+        // Tell peers a sharing marker is gone before the room is left.
+        const { crewId, sharingCrewId, userId } = socket.data ?? {};
+        if (sharingCrewId) {
+          socket.to(`crew:${sharingCrewId}`).emit('location:peer-stopped', { _v: 1, crewId: sharingCrewId, userId, reason: 'left' });
+          unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
+        }
         for (const room of socket.rooms) {
           if (room !== socket.id) socket.leave(room);
         }
+        // Every crew room is gone, so the location:share/sync gates (which read
+        // socket.data.crewId) must refuse until join:crew runs again.
+        if (crewId) delete socket.data.crewId;
+        delete socket.data.sharingCrewId;
+        delete socket.data.crewMembershipCheckedAt;
+        delete socket.data.crewMembershipUpdateCount;
         if (festivalId) emitPresence(festivalId, io);
       } catch (error: any) {
         log.error('leave:festival error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
