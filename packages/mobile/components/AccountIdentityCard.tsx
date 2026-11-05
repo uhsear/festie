@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, Alert } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { File } from 'expo-file-system';
 import { useAuth } from '@festie/shared/hooks';
 import { AVATAR_COPY, ACCOUNT_COPY } from '@festie/shared/constants';
 import { mapErrorToUserMessage } from '@festie/shared/services';
@@ -130,8 +131,10 @@ export default function AccountIdentityCard() {
       const asset = result.assets[0];
       if (!asset) return;
       setBusy('upload');
+      // Expo's fetch rejects RN's { uri } form part; read the bytes via expo-file-system instead.
+      const file = new File(asset.uri);
       await uploadAvatar({
-        uri: asset.uri,
+        bytes: () => file.bytes(),
         name: asset.fileName ?? 'avatar.jpg',
         type: asset.mimeType ?? 'image/jpeg',
         size: asset.fileSize ?? null,
