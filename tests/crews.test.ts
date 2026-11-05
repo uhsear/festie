@@ -651,6 +651,36 @@ describe('crews routes', { concurrency: 1, skip }, () => {
     assert.ok(rooms.includes(`crew:${res.body.data.id}`));
   });
 
+  // FND-089: reform used to 403 "Join the festival first" with no way forward.
+  test('POST /:crewId/reform creates the owner profile in the target festival instead of refusing', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const owner = await createMember(server, 'noprof-owner');
+    const sourceCrew = await createCrew(server, owner.token, 'NoProfile Source');
+    const targetFestivalId = `fest-${RUN_TAG}-noprof`;
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      await pool.query(
+        'INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
+        [targetFestivalId, 'NoProfile Target', 'Test Grounds'],
+      );
+      const res = await server.request
+        .post(`/api/v1/crews/${sourceCrew.id}/reform`)
+        .set('x-user-token', owner.token)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .send({ targetFestivalId })
+        .expect(200);
+      assert.equal(res.body.data.festivalId, targetFestivalId);
+      const { rows } = await pool.query(
+        'SELECT 1 FROM festival_profiles WHERE festival_id = $1 AND user_id = $2',
+        [targetFestivalId, owner.id],
+      );
+      assert.equal(rows.length, 1, 'owner profile created in the target festival');
+    } finally {
+      await pool.end();
+    }
+  });
+
   test('POST /:crewId/reform stops at the member cap and reports the skipped members', async () => {
     const server = await startServer();
     servers.push(server);
