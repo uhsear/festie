@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   user: null as unknown,
   crew: null as unknown,
   useQuery: vi.fn(),
+  useActiveCrew: vi.fn(),
   crewMapProps: vi.fn(),
   setActiveCrew: vi.fn(),
   search: {} as { focusStage?: string },
@@ -32,9 +33,15 @@ vi.mock('@festie/shared/stores', () => {
       selectFestival: h.selectFestival,
     }),
     useAuthStore: pick(() => ({ user: h.user })),
-    useCrewStore: pick(() => ({ activeCrew: h.crew })),
-  };
+    };
 });
+
+vi.mock('@festie/shared/hooks', () => ({
+  useActiveCrew: () => {
+    h.useActiveCrew();
+    return { crew: h.crew };
+  },
+}));
 
 vi.mock('@festie/shared/stores/liveLocationStore', () => {
   const state = { peers: {}, activeSosList: [] };
@@ -112,6 +119,13 @@ describe('MapView', () => {
     expect(h.crewMapProps.mock.calls[0]![0].meetingPoints).toHaveLength(0);
     expect(screen.getByText('Sign in and join a crew to see friends and meeting points here.')).toBeInTheDocument();
     expect(h.setActiveCrew).not.toHaveBeenCalled();
+  });
+
+  it('selects a crew itself so a hard load of /map still gets live peers', async () => {
+    h.user = { id: 'u1' };
+    render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(h.useActiveCrew).toHaveBeenCalled();
   });
 
   it('links to /crew for a signed-in user without a crew', async () => {

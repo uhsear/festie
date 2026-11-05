@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
 import type { CrewMeetingPoint } from '@festie/shared/types';
-import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
+import { useActiveCrew } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { Map as MapIcon } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
@@ -38,7 +39,8 @@ function MapViewInner() {
     [currentFestival, festivalStages],
   );
   const user = useAuthStore((s) => s.user);
-  const activeCrew = useCrewStore((s) => s.activeCrew);
+  // Also selects the first crew, so a hard load of /map joins the crew room without a visit to /crew.
+  const { crew: activeCrew } = useActiveCrew();
   const crewId = user && activeCrew ? activeCrew.id : '';
   const hasCrew = crewId !== '';
 
