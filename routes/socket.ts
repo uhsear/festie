@@ -46,6 +46,7 @@ import {
   clampCapturedAt,
 } from '../lib/live-location-cache.js';
 import { noteBatteryLevel } from '../lib/battery-low.js';
+import type { LocationPeerStoppedReason } from '../packages/shared/src/types/socket-events.js';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket Event Validation Schemas
@@ -559,7 +560,7 @@ export default function setupSocketHandlers(deps: any) {
               _v: 1,
               crewId,
               userId,
-              reason: 'revoked',
+              reason: 'kicked' satisfies LocationPeerStoppedReason,
             });
             delete socket.data.sharingCrewId;
             socket.leave('crew:' + crewId);

@@ -849,6 +849,29 @@ describe('routes/socket', () => {
     assert.equal(socket.data.crewId, undefined);
   });
 
+  test('location:update — a sharer who is no longer a member stops with peer reason kicked', async () => {
+    const deps = buildSocketDeps();
+    deps.stores.crews.getMember = mock.fn(async () => null);
+    const handlers = await setupAndGetHandlers(deps);
+    const socket: any = makeSocket();
+    const toEmit = mock.fn();
+    socket.to = mock.fn(() => ({ emit: toEmit }));
+    const socketHandlers: Record<string, any> = {};
+    socket.on = mock.fn((event: any, handler: any) => {
+      socketHandlers[event] = handler;
+    });
+
+    handlers.connection(socket);
+    socket.data.userId = 'user-1';
+    socket.data.crewId = 'crew-1';
+    socket.data.sharingCrewId = 'crew-1';
+    await socketHandlers['location:update']({ crewId: 'crew-1', lat: 41.9, lng: -87.6, capturedAt: new Date().toISOString() });
+
+    assert.equal(toEmit.mock.calls.length, 1);
+    assert.equal(toEmit.mock.calls[0]!.arguments[0], 'location:peer-stopped');
+    assert.equal(toEmit.mock.calls[0]!.arguments[1].reason, 'kicked');
+  });
+
   test('leave:festival — rate limit rejection', async () => {
     const deps = buildSocketDeps();
     deps.consumeSocketRateLimit = mock.fn(() => false);
