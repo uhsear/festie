@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ElementType } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Pressable, AccessibilityInfo } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Pressable, AccessibilityInfo, Alert } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore } from '@festie/shared/stores';
@@ -129,6 +129,15 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
     remove(item.id, item.label);
   };
 
+  // A stray long-press must not drop an item from a shared list: confirm first.
+  const confirmDelete = (item: CrewPackingItem) => {
+    haptics.warning();
+    Alert.alert('Remove item', `Remove "${item.label}" from the packing list?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => handleDelete(item) },
+    ]);
+  };
+
   const canCreate = !!label.trim();
   const visibleItems = items.filter((i) => !hiddenIds.has(i.id));
 
@@ -238,7 +247,7 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
               : Animated.View;
           const pressProps = canRemove
             ? {
-                onLongPress: () => handleDelete(item),
+                onLongPress: () => confirmDelete(item),
                 delayLongPress: 350,
                 accessibilityHint: 'Long press to remove this item',
                 style: ({ pressed }: { pressed: boolean }) => [styles.itemRow, pressed && styles.itemRowPressed],
