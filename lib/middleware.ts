@@ -565,7 +565,10 @@ function configureMiddleware(app: Application, ctx: any) {
   });
 
   // ── Rate limiting ─────────────────────────────────────────────────────
-  app.use('/api', rateLimit());
+  // The web-vitals beacon has its own scoped limiter (routes/client-metrics.ts); keep it out of the shared bucket so it cannot starve crew calls.
+  const globalLimiter = rateLimit();
+  app.use('/api', (req: any, res: any, next: any) =>
+    req.path === '/v1/metrics/web-vitals' ? next() : globalLimiter(req, res, next));
   app.use('/api/v1/auth/login', authRateLimit);
   app.use('/api/v1/auth/register', authRateLimit);
   // L7: extend the strict Redis-backed (cluster-accurate) auth limiter across
