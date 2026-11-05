@@ -99,3 +99,4 @@ export * from './findFriends';
 export * from './alsoPlays';
 export * from './scrubUrl';
 export * from './deepLinks';
+export * from './gridCrewAvatars';

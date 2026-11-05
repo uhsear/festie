@@ -6,17 +6,17 @@ import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
 /** Avatar diameters (px) -- mirror the web Avatar's xs/sm/md sizes. */
-const SIZE_PX = { xs: 24, sm: 32, md: 40 } as const;
+const SIZE_PX = { xxs: 18, xs: 24, sm: 32, md: 40 } as const;
 
 /** Status dot diameter per avatar size. */
-const DOT_PX = { xs: 6, sm: 8, md: 10 } as const;
+const DOT_PX = { xxs: 4, xs: 6, sm: 8, md: 10 } as const;
 
 interface AvatarProps {
   /** Display name; drives the deterministic fallback color + initials. */
   name?: string;
   /** Avatar image URL. When absent, renders the initials fallback. */
   image?: string | null;
-  /** Diameter preset: xs=24, sm=32, md=40. */
+  /** Diameter preset: xxs=18 (grid tiles), xs=24, sm=32, md=40. */
   size?: keyof typeof SIZE_PX;
   /**
    * Border ring color. Defaults to the card background so overlapping

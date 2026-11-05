@@ -7,6 +7,7 @@ import {
   type ClashMark,
   type GridNavCell,
   type GridNavKey,
+  type GridCrewAvatars,
 } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -17,11 +18,6 @@ import TimelineGridCell from './TimelineGridCell';
 const SLOT_MINUTES = 15;
 
 const NAV_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']);
-
-// Shared frozen empty array so cells with no crew overlap always receive the
-// same reference — keeps the React.memo on TimelineGridCell from re-rendering
-// on a fresh `[]` each pass.
-const EMPTY_OTHERS: Array<{ profileId: string; priority: Priority; name?: string }> = [];
 
 function fmtHour(hh: number, mm: number): string {
   const h = hh % 12 || 12;
@@ -131,7 +127,8 @@ export interface TimelineGridProps {
   currentFestival: Festival | null;
   gridRef: React.RefObject<HTMLDivElement | null>;
   getMyPick: (setId: string) => Priority | null | undefined;
-  getOtherPicks: (setId: string) => Array<{ profileId: string; priority: Priority; name?: string }>;
+  /** Crew-scoped avatars per set, built once by the route (sets nobody in the crew picked are absent). */
+  crewBySet: ReadonlyMap<string, GridCrewAvatars>;
   getStageColor: (stageId: string) => string;
   onSetClick: (set: FestivalSet) => void;
   onSavePick: (setId: string, priority: string | null) => void;
@@ -150,7 +147,7 @@ export default function TimelineGrid({
   currentFestival,
   gridRef,
   getMyPick,
-  getOtherPicks,
+  crewBySet,
   getStageColor,
   onSetClick,
   onSavePick,
@@ -167,18 +164,6 @@ export default function TimelineGrid({
     }
     return m;
   }, [timedSets]);
-
-  // Pre-compute setId -> crew-overlap picks once per render. Calling
-  // getOtherPicks(s.id) inline returns a fresh array on every render, which
-  // would defeat the React.memo on TimelineGridCell (new `others` reference
-  // each time). Memoizing here gives each cell a referentially stable array
-  // unless the underlying pick data changes (which flips getOtherPicks'
-  // identity via usePicks).
-  const othersBySet = useMemo(() => {
-    const m = new Map<string, ReturnType<typeof getOtherPicks>>();
-    for (const s of timedSets) m.set(s.id, getOtherPicks(s.id));
-    return m;
-  }, [timedSets, getOtherPicks]);
 
   // Single source of truth for the gutter width — the now-line offset below
   // must match this exactly, or it starts inside the first column instead of
@@ -319,7 +304,7 @@ export default function TimelineGrid({
               spanSlots={spanSlots}
               rowHeight={rowHeight}
               myPick={getMyPick(s.id)}
-              others={othersBySet.get(s.id) ?? EMPTY_OTHERS}
+              crew={crewBySet.get(s.id)}
               clash={clashMarks.get(s.id)}
               compact={compact}
               tabbable={s.id === tabStopId}

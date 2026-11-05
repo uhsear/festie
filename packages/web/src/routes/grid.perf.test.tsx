@@ -48,6 +48,7 @@ vi.mock('@festie/shared/hooks', () => {
   const picks = () => (storeState.picks ?? {}) as Record<string, Priority>;
   return {
     usePickClear: () => vi.fn(),
+    useCrew: () => ({ getCrewScopedOtherPicks: () => [] }),
     usePicks: () => ({
       getMyPick: (id: string) => picks()[id] ?? null,
       getOtherPicks: () => [],
@@ -127,6 +128,7 @@ const DOM_BUDGET = 934;
 describe('GridView perf (EDC Orlando-sized lineup)', () => {
   beforeEach(() => {
     Object.keys(storeState).forEach((k) => delete storeState[k]);
+    storeState.allProfiles = [];
     Object.assign(storeState, {
       currentFestival: { id: 'edc', name: 'EDC Orlando' },
       currentProfile: { id: 'p1', picks: PICKS },

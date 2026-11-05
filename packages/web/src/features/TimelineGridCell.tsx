@@ -1,18 +1,11 @@
 import React from 'react';
 import { FestivalSet, Priority, Festival } from '@festie/shared/types';
-import { fmtShort, artistDisplayName, type ClashMark } from '@festie/shared/utils';
+import { fmtShort, artistDisplayName, type ClashMark, type GridCrewAvatars } from '@festie/shared/utils';
 import { TriangleAlert, Users } from 'lucide-react';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { cn } from '../lib/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
-
-// Crew-overlap marker fill per priority; same AA-safe pairings as the pick buttons below.
-const OVERLAP_STYLE: Record<string, string> = {
-  must: 'bg-[var(--color-accent-coral-strong)] text-[var(--color-text-on-accent)]',
-  'want-to-see': 'bg-[var(--color-priority-want)] text-[var(--text-on-light-accent)]',
-  maybe: 'bg-[var(--color-priority-maybe)] text-[var(--text-on-light-accent)]',
-};
-const MAX_OVERLAP_MARKERS = 3;
+import Avatar from '../components/ui/Avatar';
 
 // Pick-icon ink per priority for the compact cell (no pick buttons there).
 const PICK_ICON_COLOR: Record<string, string> = {
@@ -36,7 +29,8 @@ export interface TimelineGridCellProps {
   spanSlots: number;
   rowHeight: number;
   myPick: Priority | null | undefined;
-  others: Array<{ profileId: string; priority: Priority; name?: string }>;
+  /** Crew-scoped members who picked this set (undefined when none). */
+  crew: GridCrewAvatars | undefined;
   clash?: ClashMark;
   compact: boolean;
   tabbable: boolean;
@@ -55,7 +49,7 @@ function TimelineGridCell({
   spanSlots,
   rowHeight,
   myPick,
-  others,
+  crew,
   clash,
   compact,
   tabbable,
@@ -186,7 +180,7 @@ function TimelineGridCell({
         </span>
         <span className="sr-only">
           {`, ${stageName}${myPick ? `, priority: ${myPick}` : ''}${
-            others.length ? `, crew: ${others.map((o) => `${o.name || 'Crew member'} (${o.priority})`).join(', ')}` : ''
+            crew ? `, ${crew.label}: ${crew.shown.map((o) => `${o.name} (${o.priority})`).join(', ')}${crew.overflow ? `, and ${crew.overflow} more` : ''}` : ''
           }${clash ? `, ${clash.text}` : ''}`}
         </span>
       </button>
@@ -249,37 +243,31 @@ function TimelineGridCell({
       )}
 
       {/* Compact crew marker: people glyph plus count (names are in the button's sr-only text) */}
-      {compact && others.length > 0 && (
+      {compact && crew && (
         <span
           className="absolute bottom-[3px] right-[5px] flex items-center gap-[2px] rounded-full bg-[color-mix(in_srgb,var(--color-accent-aqua)_18%,transparent)] px-1 py-px text-[length:var(--font-size-10)] font-bold leading-none text-accent-aqua pointer-events-none tabular-nums"
           aria-hidden="true"
         >
           <Users className="w-3 h-3" aria-hidden="true" />
-          {others.length}
+          {crew.total}
         </span>
       )}
 
-      {/* Crew overlap markers: initial on a priority-coloured disc (names are in the button's sr-only text) */}
-      {!compact && others.length > 0 && (
-        <div className="absolute top-[3px] right-[3px] flex gap-px pointer-events-none" aria-hidden="true">
-          {others.slice(0, MAX_OVERLAP_MARKERS).map((o) => (
-            <span
-              key={o.profileId}
-              className={cn(
-                'inline-flex items-center justify-center shrink-0',
-                'rounded-full font-bold leading-none',
-                'w-4 h-4 text-[length:var(--font-size-10)]',
-                'border-[1.5px] border-[var(--color-bg-primary)]',
-                OVERLAP_STYLE[o.priority] ?? OVERLAP_STYLE.maybe,
-              )}
-              title={`${o.name || 'Crew member'} (${o.priority})`}
-            >
-              {(o.name || '?').trim().charAt(0).toUpperCase()}
-            </span>
+      {/* Crew avatars (the shared Avatar, up to 3, then +N). Pointer-transparent, so a tap opens the set like the rest of the tile; names are in the button's sr-only text */}
+      {!compact && crew && (
+        <div className="absolute top-[3px] right-[3px] flex items-center pointer-events-none" aria-hidden="true">
+          {crew.shown.map((o, i) => (
+            <Avatar
+              key={o.key}
+              name={o.name}
+              image={o.avatarUrl ?? undefined}
+              size="xxs"
+              className={cn('ring-[1.5px] ring-[var(--color-bg-primary)] rounded-full', i > 0 && '-ml-1')}
+            />
           ))}
-          {others.length > MAX_OVERLAP_MARKERS && (
-            <span className="inline-flex items-center text-[length:var(--font-size-10)] font-bold text-[var(--color-text-secondary)] tabular-nums">
-              +{others.length - MAX_OVERLAP_MARKERS}
+          {crew.overflow > 0 && (
+            <span className="ml-0.5 text-[length:var(--font-size-10)] font-bold text-[var(--color-text-secondary)] tabular-nums">
+              +{crew.overflow}
             </span>
           )}
         </div>

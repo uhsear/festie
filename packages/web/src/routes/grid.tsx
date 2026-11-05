@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { usePicks, useFestival, useDayClashes, usePickClear, useViewAs } from '@festie/shared/hooks';
+import { usePicks, useFestival, useDayClashes, usePickClear, useViewAs, useCrew } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
@@ -13,6 +13,8 @@ import {
   searchOtherDays,
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
+  buildGridCrewAvatarsBySet,
+  type GridCrewProfile,
 } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -68,6 +70,8 @@ function GridViewInner() {
   // battery-costing reflow loop). The manual "Now" button stays available.
   const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
   const { getMyPick, getOtherPicks, savePick } = usePicks();
+  const { getCrewScopedOtherPicks } = useCrew();
+  const allProfiles = useFestivalStore((state) => state.allProfiles);
   const clearPick = usePickClear(useUndoNotifier());
   const { toast } = useToast();
   const { getStageColor: getStageColorRaw } = useFestival();
@@ -88,6 +92,17 @@ function GridViewInner() {
     conflictIds,
     timeBounds,
   } = useTimelineFilters();
+
+  // Crew-scoped only (same accessor as the set sheet), never every festival user.
+  const crewBySet = useMemo(
+    () =>
+      buildGridCrewAvatarsBySet(
+        timedSets.map((s) => s.id),
+        getCrewScopedOtherPicks,
+        allProfiles as GridCrewProfile[],
+      ),
+    [timedSets, getCrewScopedOtherPicks, allProfiles],
+  );
 
   // Matches on the other days, so a search that finds nothing here says where the artist plays.
   const otherDayGroups = useMemo(
@@ -340,7 +355,7 @@ function GridViewInner() {
             currentFestival={currentFestival}
             gridRef={gridRef}
             getMyPick={getMyPick}
-            getOtherPicks={getOtherPicks}
+            crewBySet={crewBySet}
             getStageColor={getStageColor}
             onSetClick={setDetailSet}
             onSavePick={handleSavePick}
