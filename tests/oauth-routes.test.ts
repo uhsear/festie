@@ -431,6 +431,19 @@ describe('provider sign-in routes (database)', { skip, concurrency: 1 }, () => {
     assert.equal(res.body.data.reactivated, true);
   });
 
+  test('rejects markup in the client-supplied given and family names', async () => {
+    const s = await server();
+    for (const name of [{ givenName: '<b>Ada' }, { familyName: 'Love>lace' }]) {
+      const nonce = await getNonce(s);
+      const res = await signIn(s, 'apple', {
+        idToken: await appleToken({ sub: uniqueSubject(), nonce: sha256hex(nonce) }),
+        nonce,
+        name,
+      });
+      assert.equal(res.status, 400, JSON.stringify(res.body));
+    }
+  });
+
   test('Apple with an authorization code stores the sealed refresh token', async () => {
     const s = await server();
     const nonce = await getNonce(s);

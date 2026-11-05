@@ -104,13 +104,20 @@ const authorizationCode = z.string().max(512).optional(); // Apple only
 
 export const oauthProviderParams = z.object({ provider: providerName });
 
+// Names reach push and email templates as well as escaped pages, so refuse markup at the door.
+const noMarkup = (s: string) => !/[<>]/.test(s);
+const noMarkupMsg = 'Names cannot contain < or >';
+
 export const oauthSignInSchema = z.object({
   idToken,
   nonce: oauthNonce,
   authorizationCode,
   redirectUri: z.string().url().max(300).optional(), // Apple web code exchange
   name: z
-    .object({ givenName: z.string().max(50).optional(), familyName: z.string().max(50).optional() })
+    .object({
+      givenName: z.string().max(50).refine(noMarkup, noMarkupMsg).optional(),
+      familyName: z.string().max(50).refine(noMarkup, noMarkupMsg).optional(),
+    })
     .optional(),
 });
 export type OAuthSignInInput = z.infer<typeof oauthSignInSchema>;
@@ -270,10 +277,6 @@ export const usernameChangeSchema = z.object({
   username: z.string().trim().min(1, 'Username required').max(40),
 });
 export type UsernameChangeInput = z.infer<typeof usernameChangeSchema>;
-
-// Names reach push and email templates as well as escaped pages, so refuse markup at the door.
-const noMarkup = (s: string) => !/[<>]/.test(s);
-const noMarkupMsg = 'Names cannot contain < or >';
 
 // Editable display name (friendly name). Username stays the immutable @handle.
 export const displayNameChangeSchema = z.object({
