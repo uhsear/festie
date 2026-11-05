@@ -343,11 +343,11 @@ export default function CrewScreen() {
   // left "Couldn't load" / "Failed to load" on screen until a force-stop. Retry
   // every 30 s while the error shows, and restart the wait when the network returns.
   const offlineMode = useUIStore((s) => s.offlineMode);
-  const hasLoadError = status === 'error' || sectionLoadError !== null;
+  const hasLoadError = status === 'error' || sectionsFailed;
   const reloadAfterError = useCallback(() => {
     if (status === 'error') retry();
-    else if (activeCrew?.id) loadCrewSections(activeCrew.id).catch(() => {});
-  }, [status, retry, activeCrew?.id, loadCrewSections]);
+    else reloadCrewSections();
+  }, [status, retry, reloadCrewSections]);
   useEffect(() => {
     if (!hasLoadError || offlineMode) return;
     const timer = setInterval(reloadAfterError, CREW_ERROR_RETRY_MS);
