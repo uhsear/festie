@@ -258,7 +258,7 @@ export default function createOAuthRoutes(deps: any): Router {
         const email = claims.email ? claims.email.toLowerCase() : null;
         // Apple sends the name only on the first authorization, never in the token.
         const name =
-          sanitizeString([body.name?.givenName, body.name?.familyName].filter(Boolean).join(' ').trim(), 50) || null;
+          sanitizeString([body.name?.givenName, body.name?.familyName].filter(Boolean).join(' ').replace(/[<>]/g, '').trim(), 50) || null;
         const signupToken = crypto.randomBytes(32).toString('base64url');
         const pending: PendingSignup = {
           provider,
