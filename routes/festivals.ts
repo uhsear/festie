@@ -422,10 +422,11 @@ export default function createFestivalsRoutes(deps: any) {
     async (req: any, res: any) => {
       try {
         const body = req.validatedBody;
-        const issues = validateFestivalIssues(config, body);
-        if (issues.length > 0) return sendIssues(res, issues);
         const existingFestival = await getFestivalById(req.validatedParams.id);
         if (!existingFestival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        // The body is partial, so check the festival that results from the save.
+        const issues = validateFestivalIssues(config, { ...existingFestival, ...body });
+        if (issues.length > 0) return sendIssues(res, issues);
 
         if (
           body.expectedUpdatedAt !== undefined &&
