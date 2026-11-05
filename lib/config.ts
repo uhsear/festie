@@ -7,6 +7,18 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 
+/**
+ * SHA-256 certificates allowed to open festie.us links in the Android app (us.festie.app).
+ * Public values: every signed APK carries them. The first is the Play App Signing key
+ * (installs from Google Play), read from the Play Developer API generatedApks for
+ * versionCodes 7 and 10. The second is the EAS upload key (sideloaded and internal
+ * builds), read with `keytool -printcert -jarfile` from EAS build 43bb1aa4 (2026-11-05).
+ */
+export const ANDROID_APP_SIGNING_CERTS = [
+  '74:83:26:AB:CA:AB:28:60:4D:87:9C:13:CE:18:CC:8B:08:0B:5F:D0:5C:B4:7A:0B:96:48:1C:13:7E:8D:60:47',
+  '0C:49:FB:87:94:C5:D4:39:F8:BE:BD:D1:D3:78:B9:CD:B8:40:7E:4E:4C:A3:73:96:73:57:13:79:B8:92:6D:01',
+] as const;
+
 export const DEFAULTS = {
   PORT: 4000,
   RATE_LIMIT_WINDOW: 60_000,
@@ -680,7 +692,12 @@ export function loadConfig(overrides: Record<string, any> = {}): {
 
     // Deep linking — populate when you have your Apple/Android signing credentials
     // APPLE_TEAM_ID comes from `...oauth` below; the AASA file and Apple sign-in share it.
-    ANDROID_CERT_FINGERPRINTS: overrides.ANDROID_CERT_FINGERPRINTS || process.env.ANDROID_CERT_FINGERPRINTS || '',
+    // The env list adds to the built-in certs; it never removes them.
+    ANDROID_CERT_FINGERPRINTS:
+      overrides.ANDROID_CERT_FINGERPRINTS ??
+      [...new Set([...ANDROID_APP_SIGNING_CERTS, ...(process.env.ANDROID_CERT_FINGERPRINTS || '').split(',')]
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean))].join(','),
 
     // Sign in with Google and Apple (T45; see oauthProviderStatus).
     ...oauth,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, afterEach } from 'node:test';
 
-import { DEFAULTS, loadConfig } from '../lib/config.js';
+import { ANDROID_APP_SIGNING_CERTS, DEFAULTS, loadConfig } from '../lib/config.js';
 
 // Helpers to isolate env vars between tests
 const envSnapshot: Record<string, string | undefined> = {};
@@ -324,5 +324,25 @@ describe('config: an explicit empty RESEND_API_KEY override disables email', () 
       if (saved === undefined) delete process.env.RESEND_API_KEY;
       else process.env.RESEND_API_KEY = saved;
     }
+  });
+});
+
+describe('ANDROID_CERT_FINGERPRINTS', () => {
+  const saved = process.env.ANDROID_CERT_FINGERPRINTS;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.ANDROID_CERT_FINGERPRINTS;
+    else process.env.ANDROID_CERT_FINGERPRINTS = saved;
+  });
+
+  it('includes the Play App Signing and upload certs by default', () => {
+    delete process.env.ANDROID_CERT_FINGERPRINTS;
+    const certs = loadConfig({ PUBLIC_ORIGIN: '' }).ANDROID_CERT_FINGERPRINTS.split(',');
+    assert.deepEqual(certs, [...ANDROID_APP_SIGNING_CERTS]);
+  });
+
+  it('adds env certs without dropping or duplicating the built-in ones', () => {
+    process.env.ANDROID_CERT_FINGERPRINTS = ` aa:bb , ${ANDROID_APP_SIGNING_CERTS[1].toLowerCase()}`;
+    const certs = loadConfig({ PUBLIC_ORIGIN: '' }).ANDROID_CERT_FINGERPRINTS.split(',');
+    assert.deepEqual(certs, [...ANDROID_APP_SIGNING_CERTS, 'AA:BB']);
   });
 });
