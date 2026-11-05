@@ -1,4 +1,5 @@
-// Admin festival saves: a partial PUT body is checked against the stored festival.
+// Admin festival saves: a partial PUT body is checked against the stored festival,
+// and an id that another festival already holds answers 409 instead of 500.
 import assert from 'node:assert/strict';
 import { describe, test, mock } from 'node:test';
 import express from 'express';
@@ -76,5 +77,35 @@ describe('festival save validation', () => {
     const app = appFor({ festivals: { update } });
     await request(app).put('/f1').send({ location: 'QA Land 3' }).expect(200);
     assert.equal((update.mock.calls[0]!.arguments as any)[1].location, 'QA Land 3');
+  });
+
+  test('POST with an id that already exists answers 409 naming the id', async () => {
+    const create = mock.fn(async () => {
+      throw Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'festivals_pkey',
+        detail: 'Key (id)=(qa-gf-fest-1) already exists.',
+      });
+    });
+    const app = appFor({ festivals: { create } });
+    const res = await request(app)
+      .post('/')
+      .send({ id: 'qa-gf-fest-1', name: 'QA', stages: [], days: [] })
+      .expect(409);
+    assert.match(res.body.error.message, /qa-gf-fest-1/);
+  });
+
+  test('PUT with a set id used by another festival answers 409', async () => {
+    const update = mock.fn(async () => {
+      throw Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'festival_sets_pkey',
+        detail: 'Key (id)=(qa-set-1) already exists.',
+      });
+    });
+    const app = appFor({ festivals: { update } });
+    const body = { days: [{ label: 'Fri', date: '2026-11-06', sets: [existing.days[0]!.sets[0], { id: 'qa-set-1', artist: 'B', stageId: 'st1' }] }] };
+    const res = await request(app).put('/f1').send(body).expect(409);
+    assert.match(res.body.error.message, /set with id "qa-set-1"/);
   });
 });

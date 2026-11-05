@@ -73,6 +73,15 @@ export default function createFestivalsRoutes(deps: any) {
     return sendError(res, 400, `${issues[0].message}${more}`, ErrorCodes.INVALID_INPUT, { issues });
   }
 
+  // A primary-key clash on save (an id another festival, or another festival's set, already holds) is the caller's mistake, not a server fault.
+  function sendIdClash(res: any, error: any) {
+    if (error?.code !== '23505') return null;
+    const clashing = /Key \(id\)=\(([^)]*)\)/.exec(error.detail ?? '')?.[1];
+    const what = String(error.constraint ?? '').startsWith('festival_sets') ? 'set' : 'festival';
+    const message = clashing ? `A ${what} with id "${clashing}" already exists.` : `A ${what} with that id already exists.`;
+    return sendError(res, 409, message, ErrorCodes.ALREADY_EXISTS);
+  }
+
   // Two lists from one build: admins see every festival (drafts too), with
   // `published` and `updatedAt`; the public list keeps its old shape.
   let _festivalListCache: { admin: { items: any[]; etag: string }; public: { items: any[]; etag: string } } | null = null;
@@ -407,6 +416,7 @@ export default function createFestivalsRoutes(deps: any) {
         res.status(201);
         return sendSuccess(res, { ...festival, publishedAt: null });
       } catch (error: any) {
+        if (sendIdClash(res, error)) return;
         log.error('festival create failed', { error: error.message });
         return sendError(res, 500, 'Failed to create festival', ErrorCodes.INTERNAL_ERROR);
       }
@@ -550,6 +560,7 @@ export default function createFestivalsRoutes(deps: any) {
         }
         return sendSuccess(res, { ...festival, scheduleNotice });
       } catch (error: any) {
+        if (sendIdClash(res, error)) return;
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
       }
