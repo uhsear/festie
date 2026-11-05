@@ -466,7 +466,7 @@ export default function SetDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessibilityViewIsModal>
       {/* Faux drag handle removed — the native formSheet (SDK 56) renders a real
           grabber (sheetGrabberVisible). Share and close sit in their own header
           row, not floating over the content: absolutely positioned, they covered
