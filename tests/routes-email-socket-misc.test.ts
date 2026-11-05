@@ -872,6 +872,29 @@ describe('routes/socket', () => {
     assert.equal(toEmit.mock.calls[0]!.arguments[1].reason, 'kicked');
   });
 
+  test('leave:festival — drops the cached position of a sharer (FND-017)', async () => {
+    const hdel = mock.fn(async (..._args: any[]) => 1);
+    const deps = buildSocketDeps({ redis: { hdel } });
+    deps.leaveFestivalRealtime = mock.fn(() => 'fest-1');
+    const handlers = await setupAndGetHandlers(deps);
+    const socket: any = makeSocket();
+    socket.to = mock.fn(() => ({ emit: mock.fn() }));
+    const socketHandlers: Record<string, any> = {};
+    socket.on = mock.fn((event: any, handler: any) => {
+      socketHandlers[event] = handler;
+    });
+
+    handlers.connection(socket);
+    socket.data.userId = 'user-1';
+    socket.data.crewId = 'crew-1';
+    socket.data.sharingCrewId = 'crew-1';
+    socketHandlers['leave:festival']();
+    await new Promise((r) => setImmediate(r));
+
+    assert.equal(hdel.mock.calls.length, 1);
+    assert.equal(hdel.mock.calls[0]!.arguments[1], 'user-1');
+  });
+
   test('leave:festival — rate limit rejection', async () => {
     const deps = buildSocketDeps();
     deps.consumeSocketRateLimit = mock.fn(() => false);

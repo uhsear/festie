@@ -307,6 +307,7 @@ export default function setupSocketHandlers(deps: any) {
         if (sharingCrewId) {
           socket.to(`crew:${sharingCrewId}`).emit('location:peer-stopped', { _v: 1, crewId: sharingCrewId, userId, reason: 'left' });
           unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
+          void dropLivePosition(redis, sharingCrewId, userId);
         }
         for (const room of socket.rooms) {
           if (room !== socket.id) socket.leave(room);
