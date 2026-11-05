@@ -17,6 +17,27 @@
 
 import { Router, json } from 'express';
 
+// A CSP report's URLs can carry query strings (invite or friend-link tokens).
+// Log only the directive fields, with each URL cut back to origin and path.
+const CSP_REPORT_FIELDS = [
+  'violated-directive', 'effective-directive', 'blocked-uri', 'document-uri', 'source-file',
+  'disposition', 'status-code', 'line-number', 'column-number',
+];
+
+function stripUrlQuery(value: any) {
+  if (typeof value !== 'string') return value;
+  return value.replace(/[?#].*$/, '');
+}
+
+export function redactCspReport(body: any) {
+  const report = body && typeof body === 'object' ? body['csp-report'] ?? body : {};
+  const out: Record<string, any> = {};
+  for (const field of CSP_REPORT_FIELDS) {
+    if (report[field] !== undefined) out[field] = stripUrlQuery(report[field]);
+  }
+  return out;
+}
+
 export default function createHealthRoutes(deps: any) {
   const {
     log,
@@ -59,7 +80,7 @@ export default function createHealthRoutes(deps: any) {
   });
 
   router.post('/csp-report', rateLimit(30, 'csp-report'), json({ type: ['application/csp-report', 'application/json'], limit: '2kb' }), (req: any, res: any) => {
-    log.warn('csp-violation', { report: req.body });
+    log.warn('csp-violation', { report: redactCspReport(req.body) });
     res.status(204).end();
   });
 
