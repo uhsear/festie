@@ -1297,6 +1297,40 @@ describe('routes/admin-bulk.js', () => {
     assert.equal(res.body.data.results[1].status, 'error');
   });
 
+  test('POST /bulk/deactivate reports an unknown user as an error and revokes nothing for it', async () => {
+    const { app, deps } = await buildBulkRouter();
+    const res = await request(app)
+      .post('/bulk/deactivate')
+      .send({ userIds: ['user-1', 'user-nonexistent'] })
+      .expect(200);
+    assert.deepEqual(
+      res.body.data.results.map((r: any) => [r.userId, r.status]),
+      [['user-1', 'logged_out'], ['user-nonexistent', 'error']],
+    );
+    assert.equal(deps.invalidateUserSessions.mock.callCount(), 1);
+    const rows = deps.stores.auditLog.insert.mock.calls.map((c: any) => c.arguments[0]);
+    assert.equal(rows.find((r: any) => r.targetId === 'user-nonexistent').status, 'failure');
+  });
+
+  test('POST /bulk/archive-festivals reports an unknown festival as an error', async () => {
+    const deps = makeDeps();
+    deps.stores.festivals.getById = mock.fn(async (id: any) => (id === 'f1' ? { id: 'f1', name: 'Test' } : null));
+    const { default: mountAdminBulkRoutes } = await import('../routes/admin-bulk.js');
+    const router = express.Router();
+    mountAdminBulkRoutes({ router, deps, ctx: { adminWriteLimit: (req: any, res: any, next: any) => next() } });
+    const res = await request(buildApp(router))
+      .post('/bulk/archive-festivals')
+      .send({ festivalIds: ['f1', 'f-none'] })
+      .expect(200);
+    assert.deepEqual(
+      res.body.data.results.map((r: any) => [r.festivalId, r.status]),
+      [['f1', 'archived'], ['f-none', 'error']],
+    );
+    assert.equal(deps.stores.festivals.softDelete.mock.callCount(), 1);
+    const rows = deps.stores.auditLog.insert.mock.calls.map((c: any) => c.arguments[0]);
+    assert.equal(rows.find((r: any) => r.targetId === 'f-none').status, 'failure');
+  });
+
   test('POST /bulk/archive-festivals archives festivals', async () => {
     const { app, deps } = await buildBulkRouter();
     const res = await request(app)

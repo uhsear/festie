@@ -140,6 +140,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
         }
         const settled = await Promise.allSettled(
           userIds.map(async (userId: string) => {
+            if (!(await getUserById(userId))) throw new Error('User not found');
             // Sessions and sockets first, then refresh tokens so the user cannot mint a new session.
             await invalidateUserSessions(userId);
             if (stores.refreshTokens) await stores.refreshTokens.revokeAll(userId);
@@ -199,7 +200,9 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
         for (const festivalId of festivalIds) {
           try {
             // Read the name first: the audit row needs it after the soft delete.
-            names.set(festivalId, (await stores.festivals.getById(festivalId))?.name ?? null);
+            const festival = await stores.festivals.getById(festivalId);
+            if (!festival) throw new Error('Festival not found');
+            names.set(festivalId, festival.name ?? null);
             // H1: evict crew-room sockets before the festival is archived, while
             // listByFestival can still resolve its crews.
             await evictFestivalCrewRooms(festivalId);
