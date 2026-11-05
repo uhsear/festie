@@ -50,7 +50,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             _v: 1,
             crewId,
             userId: removedUserId,
-            reason: 'revoked',
+            reason: 'kicked',
           });
         }
         s.emit('crew:access-revoked', { crewId });
