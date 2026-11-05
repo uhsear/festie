@@ -44,7 +44,9 @@ export async function loadInvitePreview(
     stores.crews.getMembers(crew.id),
     crew.festivalId ? getFestivalById(crew.festivalId) : null,
   ]);
-  const owner = members.find((m: any) => m.role === 'owner');
+  // "Started by" names the creator; after an ownership transfer the owner is someone else.
+  const owner =
+    members.find((m: any) => m.userId === crew.createdBy) ?? members.find((m: any) => m.role === 'owner');
   // Same derivation as the festival list (routes/festivals.ts): the festivals
   // table has no start/end columns, so the range comes from the day dates.
   const dates = (festival?.days || [])
