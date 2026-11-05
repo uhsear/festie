@@ -123,3 +123,13 @@ describe('schemas: ride direction and departTime', () => {
     });
   }
 });
+
+describe('schemas: expense amount bounds and cursor (FND-006, FND-014)', () => {
+  it('rejects amounts that round to zero or overflow NUMERIC(10,2)', () => {
+    for (const amount of [0.001, 1e15, 100_000_000]) {
+      assert.equal(schemas.expenseCreate.safeParse({ ...base, amount }).success, false, String(amount));
+      assert.equal(schemas.expenseSettleFull.safeParse({ toUserId: 'a', amount }).success, false, String(amount));
+    }
+    assert.equal(schemas.expenseCreate.safeParse({ ...base, amount: 0.01 }).success, true);
+  });
+});

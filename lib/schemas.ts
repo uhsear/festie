@@ -1388,10 +1388,13 @@ export const expenseShareSchema = z.object({
 });
 export type ExpenseShareInput = z.infer<typeof expenseShareSchema>;
 
+// Column is NUMERIC(10,2) with CHECK (amount > 0): below 0.01 rounds to 0, above 99,999,999.99 overflows.
+const expenseAmount = z.number().min(0.01).max(99_999_999.99);
+
 export const expenseCreateSchema = z
   .object({
     description: z.string().min(1).max(200),
-    amount: z.number().positive(),
+    amount: expenseAmount,
     // User IDs are TEXT (e.g. "user-<uuid>"), not integers — clients send strings.
     // Typing these as numbers 400'd every real expense create/settle.
     splitWith: z.array(z.string().min(1)).min(1),
@@ -1536,7 +1539,7 @@ export type CrewListQueryInput = z.infer<typeof crewListQuery>;
 // ── Expense settle schema (extended with amount) ──────────────
 export const expenseSettleFullSchema = z.object({
   toUserId: z.string().min(1),
-  amount: z.number().positive(),
+  amount: expenseAmount,
 });
 export type ExpenseSettleFullInput = z.infer<typeof expenseSettleFullSchema>;
 
