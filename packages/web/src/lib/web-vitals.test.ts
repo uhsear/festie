@@ -27,4 +27,20 @@ describe('initWebVitals', () => {
     expect(beacon).toHaveBeenCalledTimes(1);
     expect(JSON.parse((beacon.mock.calls[0] as unknown as [string, string])[1]).value).toBe(0.05);
   });
+
+  it('keeps the queue when the page is hidden offline', () => {
+    const beacon = vi.fn(() => true);
+    Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true });
+    const queued = [{ name: 'LCP', value: 1, rating: 'good', delta: 1, id: 'q', url: '/' }];
+    localStorage.setItem('fp:webvitals:queue', JSON.stringify(queued));
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    initWebVitals();
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(beacon).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem('fp:webvitals:queue')!)).toEqual(queued);
+    online.mockRestore();
+  });
 });

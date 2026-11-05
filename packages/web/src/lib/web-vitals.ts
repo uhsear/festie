@@ -108,7 +108,8 @@ export function initWebVitals(): void {
 
   // Page-hide is the last chance before unload; pagehide covers browsers that skip visibilitychange.
   const onHide = () => {
-    flushQueue();
+    // Offline, sendBeacon reports success for a request that never leaves, which would drop the queue.
+    if (navigator.onLine !== false) flushQueue();
     sendPending();
   };
   document.addEventListener('visibilitychange', () => {
