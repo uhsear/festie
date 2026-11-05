@@ -181,7 +181,7 @@ export default function AdminScreen() {
     };
   }, [isAdmin, load]);
 
-  // Returning from a festival screen (publish, create) must show the change; the first focus is the load above.
+  // Returning from a festival screen (publish, create) or Users / Crews must show the change; the first focus is the load above.
   const focusedOnce = useRef(false);
   useFocusEffect(
     useCallback(() => {
