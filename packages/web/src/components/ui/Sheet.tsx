@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Drawer } from 'vaul';
 import { X } from 'lucide-react';
 import IconButton from './IconButton';
@@ -36,12 +36,24 @@ export default function Sheet({
   onCloseClick,
   className,
 }: SheetProps) {
+  const opener = useRef<HTMLElement | null>(null);
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} dismissible modal={modal}>
       <Drawer.Portal>
         {modal && <Drawer.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/50 backdrop-blur-sm" />}
         <Drawer.Content
           {...(description ? {} : { 'aria-describedby': undefined })}
+          // Radix leaves focus outside when the sheet opens from a URL, and with no
+          // Dialog.Trigger it has nowhere to return focus. Do both here.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            opener.current = document.activeElement as HTMLElement | null;
+            (e.currentTarget as HTMLElement).focus();
+          }}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            if (opener.current?.isConnected) opener.current.focus();
+          }}
           className={cn(
             'fixed bottom-0 inset-x-0 z-[var(--z-modal)] rounded-t-2xl bg-bg-primary border-t border-border-light',
             'shadow-2xl p-5 pb-8 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col outline-none',

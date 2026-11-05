@@ -60,6 +60,11 @@ describe('JoinCrewSheet', () => {
     expect(screen.getByText('Crew members can see your picks and your status.')).toBeInTheDocument();
   });
 
+  it('moves focus into the dialog when it opens', async () => {
+    renderSheet();
+    await waitFor(() => expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true));
+  });
+
   it('notes a festival switch when the crew is in another festival', () => {
     h.preview = { status: 'ready', preview: preview({ festivalId: 'f2', festivalName: 'Ultra' }) };
     renderSheet();
