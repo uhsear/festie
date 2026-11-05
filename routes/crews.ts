@@ -476,9 +476,10 @@ export default function createCrewRoutes(deps: any) {
         const finalCrew = await stores.crews.getById(newCrew.id);
         const finalMembers = await stores.crews.getMembers(newCrew.id);
 
-        // Broadcast to the new crew room so any already-open client refreshes.
+        // Members are still in the SOURCE crew room (nobody can have joined the
+        // brand-new room yet), so target both; the new room covers a re-run.
         if (io) {
-          io.to(`crew:${newCrew.id}`).emit('crew:reformed', {
+          io.to(`crew:${sourceCrewId}`).to(`crew:${newCrew.id}`).emit('crew:reformed', {
             crewId: newCrew.id,
             reformedFrom: sourceCrewId,
             festivalId: targetFestivalId,

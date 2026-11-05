@@ -604,6 +604,53 @@ describe('crews routes', { concurrency: 1, skip }, () => {
     }
   });
 
+  // Regression (FND-007): crew:reformed went only to the brand-new crew room,
+  // which no socket can have joined yet, so nobody ever received it.
+  test('POST /:crewId/reform emits crew:reformed to the source crew room', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const owner = await createMember(server, 'emit-owner');
+    const sourceCrew = await createCrew(server, owner.token, 'Emit Source');
+    const targetFestivalId = `fest-${RUN_TAG}-emit`;
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      await pool.query(
+        'INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
+        [targetFestivalId, 'Emit Target', 'Test Grounds'],
+      );
+      await pool.query(
+        'INSERT INTO festival_profiles (id, festival_id, user_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW())',
+        [`profile-${RUN_TAG}-emit`, targetFestivalId, owner.id, 'emit'],
+      );
+    } finally {
+      await pool.end();
+    }
+
+    const rooms: string[] = [];
+    const events: string[] = [];
+    const io = server.planner.io;
+    const realTo = io.to.bind(io);
+    mock.method(io, 'to', (room: string) => {
+      rooms.push(room);
+      const chain: any = realTo(room);
+      chain.to = (r: string) => { rooms.push(r); return chain; };
+      const origEmit = chain.emit.bind(chain);
+      chain.emit = (ev: string, ...a: any[]) => { events.push(ev); return origEmit(ev, ...a); };
+      return chain;
+    });
+
+    const res = await server.request
+      .post(`/api/v1/crews/${sourceCrew.id}/reform`)
+      .set('x-user-token', owner.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ targetFestivalId })
+      .expect(200);
+
+    assert.ok(events.includes('crew:reformed'));
+    assert.ok(rooms.includes(`crew:${sourceCrew.id}`), 'source crew room must receive crew:reformed');
+    assert.ok(rooms.includes(`crew:${res.body.data.id}`));
+  });
+
   test('POST /:crewId/reform stops at the member cap and reports the skipped members', async () => {
     const server = await startServer();
     servers.push(server);
