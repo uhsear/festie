@@ -52,6 +52,13 @@ describe('dayShortLabel', () => {
   it('falls back to a non-weekday label, then to Day n', () => {
     expect(dayShortLabel({ date: '', label: '  Friday  ' }, 0)).toBe('Fri');
     expect(dayShortLabel({ date: '', label: '  Opening  ' }, 0)).toBe('Opening');
+    for (const [label, want] of [['Fri', 'Fri'], ['Friday', 'Fri'], ['Sat.', 'Sat'], ['Thurs', 'Thu']] as const) {
+      expect(dayShortLabel({ date: '', label }, 0)).toBe(want);
+    }
+    // Words that only start like a weekday fall back to the date, not to "Thu"/"Sun"/"Mon".
+    expect(dayShortLabel({ date: '2026-09-05', label: 'Thunderdome' }, 0)).toBe('Sat');
+    expect(dayShortLabel({ date: '2026-09-05', label: 'Sunset Sessions' }, 0)).toBe('Sat');
+    expect(dayShortLabel({ date: '2026-09-05', label: 'Monster Night' }, 0)).toBe('Sat');
     expect(dayShortLabel({ date: '' }, 2)).toBe('Day 3');
   });
 });

@@ -36,12 +36,12 @@ export function hasDayAnswers(index: CrewDaysIndex, userIds: string[]): boolean 
   return userIds.some((id) => (index.get(id)?.size ?? 0) > 0);
 }
 
-const WEEKDAY_LABEL = /^(mon|tue|wed|thu|fri|sat|sun)[a-z]*/i;
+const WEEKDAY_LABEL = /^(mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\.?(?![a-z])/i;
 
 /** `Sat` from a weekday label (the festival's own name for the day, as `formatDayChip` shows); else from the date at noon; else the trimmed label; else `Day 3`. */
 export function dayShortLabel(day: Pick<FestivalDay, 'date' | 'label'>, dayIndex: number): string {
   const named = WEEKDAY_LABEL.exec(day.label?.trim() ?? '');
-  if (named) return named[1]!.charAt(0).toUpperCase() + named[1]!.slice(1).toLowerCase();
+  if (named) return named[1]!.charAt(0).toUpperCase() + named[1]!.slice(1, 3).toLowerCase();
   const key = day.date?.slice(0, 10) ?? '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
     const d = createDateInLocalFrame(key, 12, 0);
