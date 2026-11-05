@@ -104,6 +104,13 @@ describe('Input', () => {
       expect(input).toHaveAttribute('type', 'password');
     });
 
+    it('reveals the text when the caller also passes type="password"', async () => {
+      const user = userEvent.setup();
+      render(<Input label="Password" type="password" isPassword />);
+      await user.click(screen.getByRole('button', { name: 'Show password' }));
+      expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text');
+    });
+
     it('sets aria-pressed on the toggle button', async () => {
       const user = userEvent.setup();
       render(<Input label="Password" isPassword />);
