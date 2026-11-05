@@ -1985,6 +1985,7 @@ describe('routes/deep-links', () => {
     const res = await request(app).get('/assetlinks.json').expect(200);
     assert.ok(Array.isArray(res.body));
     assert.equal(res.body[0].target.sha256_cert_fingerprints.length, 2);
+    assert.equal(res.body[0].target.package_name, 'us.festie.app');
   });
 
   test('GET /assetlinks.json — 503 when not configured', async () => {

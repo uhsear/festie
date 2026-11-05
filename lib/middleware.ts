@@ -456,8 +456,9 @@ function configureMiddleware(app: Application, ctx: any) {
   // Must be mounted explicitly and BEFORE the public/ static below: that
   // handler uses `dotfiles: 'deny'`, which would otherwise 404 the entire
   // `.well-known` dot-directory into the SPA catch-all — breaking both
-  // security.txt (RFC 9116) and assetlinks.json (Android App Links
-  // verification). Scoped to this dir only, so no other dotfiles are exposed.
+  // security.txt (RFC 9116). assetlinks.json and apple-app-site-association
+  // come from routes/deep-links.ts, so no static copy may shadow them.
+  // Scoped to this dir only, so no other dotfiles are exposed.
   app.use(
     '/.well-known',
     express.static(path.join(config.PUBLIC_DIR, '.well-known'), {
