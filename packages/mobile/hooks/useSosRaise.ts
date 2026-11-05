@@ -20,22 +20,27 @@ export function useSosRaise(crewId: string | null) {
     haptics.heavy();
     let position: SosPosition | undefined;
     try {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (perm.granted) {
-        const seed = await Location.getLastKnownPositionAsync();
-        const fresh = await Promise.race([
-          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
-        ]);
-        const pos = fresh ?? seed;
-        if (pos) {
-          position = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy ?? undefined,
-            capturedAt: new Date(pos.timestamp).toISOString(),
-          };
-        }
+      // One 4s budget covers the permission prompt and both reads: a hung
+      // native call must never hold the alert back.
+      const pos = await Promise.race([
+        (async () => {
+          const perm = await Location.requestForegroundPermissionsAsync();
+          if (!perm.granted) return null;
+          const seed = await Location.getLastKnownPositionAsync().catch(() => null);
+          const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(
+            () => null,
+          );
+          return fresh ?? seed;
+        })(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+      ]);
+      if (pos) {
+        position = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy ?? undefined,
+          capturedAt: new Date(pos.timestamp).toISOString(),
+        };
       }
     } catch {
       // No location — still raise the SOS (the alert + push are the priority).
