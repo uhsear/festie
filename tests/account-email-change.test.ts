@@ -413,6 +413,21 @@ describe('account: POST /email (change-email request)', { concurrency: 1 }, () =
     assert.equal(fourth.body.error.code, 'RATE_LIMITED');
   });
 
+  test('wrong-password attempts do not use up the recipient address budget', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const attacker = await registerUser(server, unique('ec-bad'), `${unique('old')}@example.com`);
+    const victim = await registerUser(server, unique('ec-ok'), `${unique('old')}@example.com`);
+
+    const target = `${unique('shared')}@example.com`;
+    for (let i = 0; i < 3; i++) {
+      const bad = await changeEmail(server, attacker.token, target, 'Wr0ngPassword!x');
+      assert.equal(bad.status, 400);
+    }
+    const ok = await changeEmail(server, victim.token, target);
+    assert.equal(ok.status, 200);
+  });
+
   // The old-address security notice is asserted in
   // tests/routes-auth-account-festivals.test.ts ("POST /email notifies the
   // address on file"): pino writes through a worker transport, so the send is
