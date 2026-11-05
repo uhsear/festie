@@ -295,6 +295,8 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
       const crewId = deps.sanitizeIdentifier(req.validatedParams.id, 100);
       if (!crewId) return sendError(res, 400, 'Invalid crew ID', ErrorCodes.INVALID_INPUT);
 
+      if (!(await stores.crews.getById(crewId))) return sendError(res, 404, 'Crew not found', ErrorCodes.NOT_FOUND);
+
       const members = await stores.crews.getMembers(crewId);
       return sendSuccess(res, members);
     } catch (error: any) {

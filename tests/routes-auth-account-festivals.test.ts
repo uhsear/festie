@@ -2162,6 +2162,21 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       assert.equal(res.body.error, null);
     });
 
+    test('returns 404 for an unknown festival', async () => {
+      const deps = makeMockDeps({
+        stores: {
+          festivals: { create: mock.fn(async (d) => d) },
+          users: { create: mock.fn(async (d) => d) },
+          profiles: { update: mock.fn(async () => {}) },
+          pool: { query: mock.fn(async () => ({ rows: [] })) },
+          roles: { getUserRoles: mock.fn(async () => []) },
+          sessions: { deleteUserSession: mock.fn(async () => {}), listUserSessions: mock.fn(async () => []) },
+        },
+      });
+      const res = await request(createApp(createFestivalsRoutes(deps))).get('/qa-nonexistent/sets/links');
+      assert.equal(res.status, 404);
+    });
+
     test('returns 500 on internal error', async () => {
       const deps = makeMockDeps({
         stores: {

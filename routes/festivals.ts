@@ -762,6 +762,8 @@ export default function createFestivalsRoutes(deps: any) {
   router.get('/:festivalId/sets/links', adminAuth, async (req: any, res: any) => {
     try {
       const festivalId = req.params.festivalId;
+      const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
+      if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       const result = await stores.pool.query(
         'SELECT id, artist, link_url AS "linkUrl", artists FROM festival_sets WHERE festival_id = $1 AND (link_url IS NOT NULL OR artists != \'[]\'::jsonb) ORDER BY artist',
         [festivalId],

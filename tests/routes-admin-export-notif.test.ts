@@ -1413,6 +1413,11 @@ describe('routes/admin-bulk.js', () => {
     assert.ok(Array.isArray(res.body.data));
   });
 
+  test('GET /crews/:id/members returns 404 for an unknown crew', async () => {
+    const { app } = await buildBulkRouter();
+    await request(app).get('/crews/crew-nonexistent/members').expect(404);
+  });
+
   test('GET /crews/:id/members returns 400 for invalid crew ID', async () => {
     const { app } = await buildBulkRouter({
       sanitizeIdentifier: () => null,
