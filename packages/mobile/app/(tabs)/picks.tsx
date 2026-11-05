@@ -1063,16 +1063,6 @@ export default function PicksScreen() {
         message="Browse the lineup and tap the sets you want to see."
         action={{ label: 'Browse the lineup', onPress: () => router.navigate('/(tabs)') }}
       />
-    ) : effectiveFilter === 'clashes' && !search.trim() ? (
-      // Only the genuine "no overlaps" case. If a search is active, the clash
-      // cards may simply be hidden by the query — fall through to the
-      // search/filter empty state below rather than falsely claiming all-clear.
-      <EmptyState
-        icon="checkmark-circle-outline"
-        title={COPY.clash.none}
-        message={COPY.clash.noneBody}
-        action={{ label: 'Show all picks', onPress: clearFilters }}
-      />
     ) : (
       <EmptyState
         icon="search-outline"
