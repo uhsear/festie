@@ -5,7 +5,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useFestivalStore, useAuthStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { usePicksPlan } from '@festie/shared/hooks';
+import { useActiveCrew, usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
 import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
@@ -75,13 +75,9 @@ function PicksViewInner() {
   const selectedDay = useFestivalStore((state) => state.selectedDay);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
-  const hasActiveCrew = useCrewStore((s) => !!s.activeCrew);
-  const firstCrewId = useCrewStore((s) => s.crews.find((c) => !c._optimistic)?.id);
-  const crewLoading = useCrewStore((s) => s.crewLoading);
   // A direct load never opens a crew screen, so nothing selects a crew and the crew suggestion strip stays empty.
-  useEffect(() => {
-    if (user && !hasActiveCrew && firstCrewId && !crewLoading) useCrewStore.getState().selectCrew(firstCrewId).catch((err) => console.warn("picks: selecting first crew failed", err));
-  }, [user, hasActiveCrew, firstCrewId, crewLoading]);
+  // The shared hook selects the first crew once and does not retry a failed select.
+  useActiveCrew();
   const [view, setView] = useState<PicksViewMode>('plan');
   const {
     groupMode,

@@ -11,7 +11,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@festie/shared/services/api', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
-  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  api: { get: vi.fn().mockResolvedValue([]), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('@festie/shared/utils', async (orig) => ({
@@ -306,6 +306,22 @@ describe('PicksView', () => {
     setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
     render(<PicksView />);
     expect(selectCrew).toHaveBeenCalledWith('c1');
+    useCrewStore.setState(useCrewStore.getInitialState(), true);
+  });
+
+  it('does not retry selecting the first crew when the select fails', async () => {
+    // The real store flips crewLoading around a select; a failed select must not re-trigger the effect.
+    const selectCrew = vi.fn().mockImplementation(async () => {
+      useCrewStore.setState({ crewLoading: true });
+      await new Promise((r) => setTimeout(r, 5));
+      useCrewStore.setState({ crewLoading: false });
+      throw new Error('boom');
+    });
+    useCrewStore.setState({ activeCrew: null, crews: [{ id: 'c1' } as never], crewLoading: false, selectCrew });
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(selectCrew).toHaveBeenCalledTimes(1);
     useCrewStore.setState(useCrewStore.getInitialState(), true);
   });
 
