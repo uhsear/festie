@@ -16,6 +16,7 @@ import { loadInvitePreview } from '../lib/invite-preview.js';
 // Public festival page slug (migration 094). Checked before any query; upper case fails too.
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const isFestivalSlug = (slug: string) => slug.length <= 80 && SLUG_RE.test(slug);
+const STATIC_ASSET_PATH = /\.(?:txt|xml|json|map|js|css|png|jpe?g|gif|webp|svg|ico|woff2?|webmanifest)$/i;
 
 export default function createPageRoutes(deps: any) {
   const {
@@ -183,6 +184,11 @@ export default function createPageRoutes(deps: any) {
   router.get('/{*splat}', (req: any, res: any, next: any) => {
     if (req.path.startsWith('/uploads/')) {
       return res.status(404).end();
+    }
+    // A missing asset (robots.txt, a stale hashed chunk) must not come back as a 200 HTML shell.
+    if (STATIC_ASSET_PATH.test(req.path)) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.status(404).send('Not found');
     }
     res.setHeader('Cache-Control', 'no-store');
     res.sendFile(_spaIndex, (err: any) => {

@@ -456,6 +456,16 @@ describe('pages: SPA catch-all', () => {
     assert.equal(res._status, 404);
   });
 
+  it('returns 404, not the SPA shell, for a missing static asset (FND-061)', () => {
+    const router = createPageRoutes(buildDeps());
+    const handler = getHandler(router, '/{*splat}');
+
+    const res = mockRes();
+    handler(mockReq({ path: '/robots.txt' }), res, () => {});
+    assert.equal(res._status, 404);
+    assert.equal(res._sentFile, null);
+  });
+
   it('sets no-store cache header for non-upload paths', () => {
     const router = createPageRoutes(buildDeps());
     const handler = getHandler(router, '/{*splat}');
