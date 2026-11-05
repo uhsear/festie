@@ -87,6 +87,7 @@ export const COPY = {
     retry: 'Try again', noneTitle: 'No festival selected',
   },
   status: { playing: 'Playing', playingA11y: 'Playing now', liveLocation: 'Live' },
+  session: { signedOut: 'You were signed out on this device. Sign in again to continue.' },
 } as const;
 
 export const FESTIVAL_STATUS_LABEL: Record<FestivalStatus, string> = {
