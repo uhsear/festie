@@ -438,6 +438,20 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     assert.deepEqual(afterUndo.body.data.imports.map((i: any) => i.canUndo), [false, true]);
   });
 
+  test('a repeat commit that changes nothing does not block undoing the real import', async () => {
+    if (!createFestivalPlanner) return;
+    const { server, admin } = await adminServer();
+    const rows = [{ row: 2, artist: 'DJ Repeat', stage: 'Main Stage', day: 'Friday', startTime: '20:00', endTime: '21:00' }];
+    const first = await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }).expect(200);
+    await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }).expect(200);
+    const history = await server.request
+      .get(`/api/v1/admin/festivals/${FEST_ID}/imports`).set('x-user-token', admin).expect(200);
+    assert.equal(history.body.data.imports.find((i: any) => i.id === first.body.data.result.importId).canUndo, true);
+    await server.request
+      .post(`/api/v1/admin/festivals/${FEST_ID}/imports/${first.body.data.result.importId}/undo`)
+      .set('x-user-token', admin).set(TRUSTED_MUTATION_HEADER, '1').expect(200);
+  });
+
   test('a commit writes exactly one festival.lineup.imported audit row', async () => {
     if (!createFestivalPlanner) return;
     const { server, admin } = await adminServer();

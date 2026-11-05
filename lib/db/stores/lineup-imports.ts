@@ -306,6 +306,9 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           newStages: writes.newStages.length,
           newDays: writes.newDays.length,
         };
+        // An import that changed nothing has nothing to undo. Store it as already undone
+        // so it never becomes the "newest open" import that blocks undoing the real ones.
+        const changedNothing = Object.values(counts).every((n) => n === 0);
         await client.query(
           `
   INSERT INTO
@@ -317,10 +320,11 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
       created_set_ids,
       created_stage_ids,
       created_day_indexes,
-      updated_sets
+      updated_sets,
+      undone_at
     )
   VALUES
-    ($1, $2, $3, $4, $5, $6, $7, $8)
+    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `,
           [
             importId,
@@ -331,6 +335,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
             writes.newStages.map((s) => s.id),
             writes.newDays.map((d) => d.dayIndex),
             JSON.stringify(writes.updates.map((u) => ({ id: u.setId, before: u.before, after: u.after }))),
+            changedNothing ? new Date().toISOString() : null,
           ],
         );
         return { committed: true as const, plan, writes, importId };
