@@ -35,7 +35,7 @@ export default function FestivalLinks({ festivalId, festivalName, onClose }: Fes
   const [result, setResult] = useState<SpotifyBackfillResult | null>(null);
 
   const load = useCallback(async () => {
-    const full = await api.get<LooseFestivalDetail>(`/festivals/${festivalId}`);
+    const full = await api.get<LooseFestivalDetail>(`/admin/festivals/${festivalId}`);
     const next = setLinkRows(full);
     const nextDrafts: Record<string, string> = {};
     for (const row of next) for (const a of row.artists) nextDrafts[draftKey(row.setId, a.index)] = a.spotifyUrl ?? '';

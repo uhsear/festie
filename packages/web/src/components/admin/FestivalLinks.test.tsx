@@ -48,6 +48,11 @@ describe('FestivalLinks', () => {
     get.mockResolvedValue(festival);
   });
 
+  it('loads from the admin route so a draft festival opens', async () => {
+    await renderPanel();
+    expect(get).toHaveBeenCalledWith('/admin/festivals/f1');
+  });
+
   it('renders one input per artist', async () => {
     await renderPanel();
     expect(screen.getByLabelText('Spotify link for A')).toBeTruthy();

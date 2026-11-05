@@ -359,7 +359,7 @@ export function addCrewMember(crewId: string, userId: string): Promise<unknown> 
 }
 
 export async function fetchFestivalPreview(festivalId: string) {
-  const detail = await api.get<FestivalPreviewInput>(`/festivals/${enc(festivalId)}`);
+  const detail = await api.get<FestivalPreviewInput>(`/admin/festivals/${enc(festivalId)}`);
   return buildFestivalPreview(detail);
 }
 
