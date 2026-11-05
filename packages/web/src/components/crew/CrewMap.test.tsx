@@ -433,6 +433,13 @@ describe('CrewMap place card and Nearest', () => {
     expect(mapInstances[0].flyTo).toHaveBeenCalled();
   });
 
+  it('tells the user when Show my location is blocked', async () => {
+    await renderReadyMap();
+    fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+    act(() => watchPosition.mock.calls[0][1]({ code: 1 }));
+    expect(screen.getByText(/Location is blocked/)).toBeInTheDocument();
+  });
+
   it('opens the card for a mapped focusPinId once and reports it handled', async () => {
     extractStagePins.mockReturnValue([STAGE_PIN]);
     const onFocusHandled = vi.fn();
