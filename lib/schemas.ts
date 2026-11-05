@@ -270,9 +270,13 @@ export const usernameChangeSchema = z.object({
 });
 export type UsernameChangeInput = z.infer<typeof usernameChangeSchema>;
 
+// Names reach push and email templates as well as escaped pages, so refuse markup at the door.
+const noMarkup = (s: string) => !/[<>]/.test(s);
+const noMarkupMsg = 'Names cannot contain < or >';
+
 // Editable display name (friendly name). Username stays the immutable @handle.
 export const displayNameChangeSchema = z.object({
-  displayName: z.string().trim().min(1, 'Display name required').max(50),
+  displayName: z.string().trim().min(1, 'Display name required').max(50).refine(noMarkup, noMarkupMsg),
 });
 export type DisplayNameChangeInput = z.infer<typeof displayNameChangeSchema>;
 
@@ -574,7 +578,7 @@ export const festivalAnnouncementSchema = z
 
 // ── Crew schemas ─────────────────────────────────────────────────────
 export const crewCreateSchema = z.object({
-  name: z.string().trim().min(1, 'Crew name required').max(60),
+  name: z.string().trim().min(1, 'Crew name required').max(60).refine(noMarkup, noMarkupMsg),
   festivalId: identifier,
   totemName: z.string().trim().max(40).optional(),
   totemEmoji: z.string().trim().max(16).optional(),
@@ -583,7 +587,7 @@ export type CrewCreateInput = z.infer<typeof crewCreateSchema>;
 
 export const crewUpdateSchema = z
   .object({
-    name: z.string().trim().min(1).max(60).optional(),
+    name: z.string().trim().min(1).max(60).refine(noMarkup, noMarkupMsg).optional(),
     maxMembers: z.number().int().min(2).max(30).optional(),
     totemName: z.string().trim().max(40).optional(),
     totemEmoji: z.string().trim().max(16).optional(),
