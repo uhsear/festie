@@ -253,4 +253,9 @@ describe('csp: Cross-Origin-Opener-Policy', () => {
   it('allows popups when Apple web sign-in is enabled', async () => {
     assert.equal(await coopFor({ OAUTH_APPLE_WEB_ENABLED: true }), 'same-origin-allow-popups');
   });
+
+  it('sends no referrer unless Google sign-in needs the origin', async () => {
+    assert.equal((await headersFor({}))['referrer-policy'], 'no-referrer');
+    assert.equal((await headersFor({ OAUTH_GOOGLE_ENABLED: true }))['referrer-policy'], 'strict-origin-when-cross-origin');
+  });
 });
