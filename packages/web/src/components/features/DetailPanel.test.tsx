@@ -254,6 +254,20 @@ describe('DetailPanel', () => {
     expect(screen.getByLabelText('Set detail panel')).toBeInTheDocument();
   });
 
+  it('opens at full height on a short landscape viewport so the pick buttons are reachable', () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      ...original(query),
+      matches: query === '(max-height: 500px)',
+    })) as typeof window.matchMedia;
+    try {
+      render(<DetailPanel {...defaultProps} />);
+      expect(screen.getByTestId('drawer-content').querySelector('.overflow-y-auto')).not.toBeNull();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it('renders the stage name badge', () => {
     render(<DetailPanel {...defaultProps} />);
     expect(screen.getByText('Main Stage')).toBeInTheDocument();

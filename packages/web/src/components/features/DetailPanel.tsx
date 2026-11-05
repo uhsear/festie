@@ -39,6 +39,8 @@ interface DetailPanelProps {
 export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: DetailPanelProps) {
   const theme = useUIStore((s) => s.theme);
   const isLg = useMediaQuery('(min-width: 1024px)');
+  // A landscape phone's half-height sheet hides the pick buttons, so open it full height.
+  const isShort = useMediaQuery('(max-height: 500px)');
   const user = useAuthStore((s) => s.user);
   const canPick = useCanPick();
   const navigate = useNavigate();
@@ -96,7 +98,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   const [priorityBusy, setPriorityBusy] = useState<Priority | null | 'clear'>(null);
   const [reminderBusy, setReminderBusy] = useState<number | null | 'clear'>(null);
 
-  const [snap, setSnap] = useState<number | string | null>(autoOpenSpotify ? 1 : 0.5);
+  const [snap, setSnap] = useState<number | string | null>(autoOpenSpotify || isShort ? 1 : 0.5);
   const status = useSetStatus(set);
   const { status: spotifyStatus, preview: spotifyPreview } = useSpotifyPreview(set.id);
   const spotifyArtist = primarySpotifyArtist(set);
