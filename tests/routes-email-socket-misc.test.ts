@@ -1962,6 +1962,8 @@ describe('routes/deep-links', () => {
     // Crew invite links open the app when it is installed.
     assert.ok(res.body.applinks.details[0].paths.includes('/join/*'));
     assert.ok(res.body.applinks.details[0].components.some((c: any) => c['/'] === '/join/*'));
+    // Paths the app rewrites to mobile screens (packages/mobile/app/+native-intent.tsx).
+    for (const p of ['/s/*', '/compare', '/crew', '/friend-picks']) assert.ok(res.body.applinks.details[0].paths.includes(p), p);
   });
 
   test('GET /apple-app-site-association — 503 when not configured', async () => {

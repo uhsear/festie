@@ -10,6 +10,9 @@
 
 import { Router } from 'express';
 
+// Paths the app opens. Keep in step with the Android intent filter in packages/mobile/app.json.
+const APP_PATHS = ['/set/*', '/reset-password', '/join/*', '/s/*', '/compare', '/crew', '/crew-plan', '/friend-picks'];
+
 export default function createDeepLinkRoutes(deps: any) {
   const { config, sendError, ErrorCodes } = deps;
   const router = Router();
@@ -32,8 +35,8 @@ export default function createDeepLinkRoutes(deps: any) {
         details: [
           {
             appIDs: [`${config.APPLE_TEAM_ID}.us.festie.app`],
-            paths: ['/set/*', '/reset-password', '/join/*'],
-            components: [{ '/': '/set/*' }, { '/': '/reset-password' }, { '/': '/join/*' }],
+            paths: APP_PATHS,
+            components: APP_PATHS.map((p) => ({ '/': p })),
           },
         ],
       },
