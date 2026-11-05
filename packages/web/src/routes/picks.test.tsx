@@ -11,7 +11,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@festie/shared/services/api', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
-  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  api: { get: vi.fn().mockResolvedValue([]), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('@festie/shared/utils', async (orig) => ({
@@ -91,7 +91,7 @@ vi.mock('../lib/toastContext', () => ({
 }));
 
 import PicksView from './picks';
-import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import { useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
 import { buildPicksIcsExport, describeIcsExport } from '@festie/shared/utils';
 
 const DAYS = [
@@ -286,6 +286,43 @@ describe('PicksView', () => {
     });
     render(<PicksView />);
     expect(screen.queryByRole('button', { name: /Clashes/ })).toBeNull();
+  });
+
+  it('hides the clash card when a search matches no pick', () => {
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Odesza', { startTime: '14:30', endTime: '15:30' })],
+      profile: picksOf({ s1: 'must', s2: 'maybe' }),
+    });
+    render(<PicksView />);
+    expect(screen.getByTestId('pick-conflicts')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filter my picks'), { target: { value: 'zzzqq' } });
+    expect(screen.getByText('No matching picks')).toBeInTheDocument();
+    expect(screen.queryByTestId('pick-conflicts')).toBeNull();
+  });
+
+  it('selects the first crew on a direct load so crew suggestions can show', () => {
+    const selectCrew = vi.fn().mockResolvedValue(undefined);
+    useCrewStore.setState({ activeCrew: null, crews: [{ id: 'c1' } as never], crewLoading: false, selectCrew });
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    expect(selectCrew).toHaveBeenCalledWith('c1');
+    useCrewStore.setState(useCrewStore.getInitialState(), true);
+  });
+
+  it('does not retry selecting the first crew when the select fails', async () => {
+    // The real store flips crewLoading around a select; a failed select must not re-trigger the effect.
+    const selectCrew = vi.fn().mockImplementation(async () => {
+      useCrewStore.setState({ crewLoading: true });
+      await new Promise((r) => setTimeout(r, 5));
+      useCrewStore.setState({ crewLoading: false });
+      throw new Error('boom');
+    });
+    useCrewStore.setState({ activeCrew: null, crews: [{ id: 'c1' } as never], crewLoading: false, selectCrew });
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(selectCrew).toHaveBeenCalledTimes(1);
+    useCrewStore.setState(useCrewStore.getInitialState(), true);
   });
 
   it('the search input filters by stage name', () => {

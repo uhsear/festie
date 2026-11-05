@@ -104,7 +104,7 @@ async function registerUser(server: any, username: string, email?: string) {
     password: DEFAULT_PASSWORD,
     confirmPassword: DEFAULT_PASSWORD,
     dateOfBirth: '1995-01-01',
-    tosAccepted: true,
+    tosAccepted: true, email: `${username}@example.com`,
   };
   if (email) body.email = email;
   const res = await server.request.post('/api/v1/auth/register').set(TRUSTED_MUTATION_HEADER, '1').send(body);
@@ -411,6 +411,21 @@ describe('account: POST /email (change-email request)', { concurrency: 1 }, () =
     const fourth = await changeEmail(server, user.token, `${unique('rl')}@example.com`);
     assert.equal(fourth.status, 429);
     assert.equal(fourth.body.error.code, 'RATE_LIMITED');
+  });
+
+  test('wrong-password attempts do not use up the recipient address budget', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const attacker = await registerUser(server, unique('ec-bad'), `${unique('old')}@example.com`);
+    const victim = await registerUser(server, unique('ec-ok'), `${unique('old')}@example.com`);
+
+    const target = `${unique('shared')}@example.com`;
+    for (let i = 0; i < 3; i++) {
+      const bad = await changeEmail(server, attacker.token, target, 'Wr0ngPassword!x');
+      assert.equal(bad.status, 400);
+    }
+    const ok = await changeEmail(server, victim.token, target);
+    assert.equal(ok.status, 200);
   });
 
   // The old-address security notice is asserted in

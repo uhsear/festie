@@ -35,6 +35,10 @@ export function useAdminUserList({ enabled = true, pageSize = 50 }: { enabled?: 
         })
         .catch((err: unknown) => {
           if (id !== requestId.current) return;
+          // Drop the previous term's rows so a failed search never shows them as its results.
+          setUsers([]);
+          setTotal(0);
+          setNextCursor(null);
           setError(err instanceof Error ? err.message : 'Failed to load users');
         })
         .finally(() => {

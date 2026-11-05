@@ -40,6 +40,8 @@ export interface FestivalEditFormProps {
   changes: { total: number; changedSetIds: Set<string>; newSetIds: Set<string> };
   issues: FestivalIssue[];
   saving: boolean;
+  /** The last save stored a weak geocode match for the venue. */
+  venueGuessed?: boolean;
   /** Picks and reminders per set id; undefined until loaded. */
   engagement?: SetEngagementMap;
   engagementError?: boolean;
@@ -70,6 +72,7 @@ export default function FestivalEditForm({
   changes,
   issues,
   saving,
+  venueGuessed,
   engagement,
   engagementError,
   onSave,
@@ -339,6 +342,11 @@ export default function FestivalEditForm({
             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             className="w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           />
+          {venueGuessed && (
+            <p role="status" className="mt-1 text-xs text-accent-amber">
+              Venue location was guessed from the address. Check the map pin.
+            </p>
+          )}
         </div>
         <label className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
           Time zone

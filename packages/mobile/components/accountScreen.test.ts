@@ -19,10 +19,11 @@ describe('Account screen', () => {
     expect(source).toContain('checkSession');
   });
 
-  it('identity card uploads the RN file part with the shared copy', async () => {
+  it('identity card uploads a bytes() part Expo fetch accepts with the shared copy', async () => {
     const source = await read('components', 'AccountIdentityCard.tsx');
     expect(source).toContain('AVATAR_COPY');
-    expect(source).toContain('uri: asset.uri');
+    expect(source).toContain('bytes: () => file.bytes()');
+    expect(source).not.toContain('uri: asset.uri');
   });
 
   it('email card re-checks the session when the app returns to the foreground', async () => {

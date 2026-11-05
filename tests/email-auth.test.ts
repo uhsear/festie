@@ -78,7 +78,7 @@ async function startServer(overrides: any = {}) {
 }
 
 async function registerUser(server: any, username: any, password = DEFAULT_PASSWORD, email?: any) {
-  const body: any = { username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true };
+  const body: any = { username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` };
   if (email) body.email = email;
   const res = await server.request.post('/api/v1/auth/register').set(TRUSTED_MUTATION_HEADER, '1').send(body);
   assert.ok(res.status === 201 || res.status === 200, `register failed: ${res.status} ${JSON.stringify(res.body)}`);
@@ -475,6 +475,13 @@ describe('email-auth: resend-verification', { concurrency: 1 }, () => {
     servers.push(server);
     const ts = Date.now();
     const user = await registerUser(server, `rv-noemail-${ts}`);
+    // Registration now requires an email; an older account can still lack one.
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      await pool.query('UPDATE users SET email = NULL WHERE id = $1', [user.user.id]);
+    } finally {
+      await pool.end();
+    }
 
     const res = await server.request
       .post('/api/v1/auth/resend-verification')
@@ -484,7 +491,7 @@ describe('email-auth: resend-verification', { concurrency: 1 }, () => {
     assert.equal(res.status, 400);
   });
 
-  test('200 happy path when email is set but unverified', async () => {
+  test('503 (not a false 200) when the mail cannot be sent, token still stored', async () => {
     const server = await startServer();
     servers.push(server);
     const ts = Date.now();
@@ -498,7 +505,7 @@ describe('email-auth: resend-verification', { concurrency: 1 }, () => {
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({});
-    assert.equal(res.status, 200);
+    assert.equal(res.status, 503, JSON.stringify(res.body));
 
     // A fresh verification token should now exist for this user.
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });

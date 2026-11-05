@@ -65,6 +65,7 @@ export default function createAdminRoutes(deps: any): Router {
     sendError,
     ErrorCodes,
     redis: deps.redis,
+    paramKey: 'id',
   });
 
   // One place adds the display fields to audit rows, so the audit list and the

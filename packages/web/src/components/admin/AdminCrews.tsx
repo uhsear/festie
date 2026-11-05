@@ -4,10 +4,12 @@ import {
   addCrewMember,
   fetchAdminCrews,
   removeCrewMember,
+  withReauth,
   type AdminCrewRow,
 } from '@festie/shared/services/admin';
 import { filterAdminCrews, removeMemberCopy } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
+import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import UserPickerDialog from './UserPickerDialog';
@@ -50,6 +52,7 @@ export default function AdminCrews() {
   const [removeTarget, setRemoveTarget] = useState<{ crewId: string; member: CrewMember } | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   const { toast, toastError } = useToast();
+  const { askPassword, reauthDialog } = useReauthPrompt();
 
   useEffect(() => {
     loadCrews();
@@ -124,7 +127,11 @@ export default function AdminCrews() {
     const name = crews.find((c) => c.id === id)?.name || 'this crew';
     setDeleteBusy(true);
     try {
-      await api.delete<void>(`/admin/crews/${id}`);
+      const done = await withReauth(async () => {
+        await api.delete<void>(`/admin/crews/${id}`);
+        return true;
+      }, askPassword);
+      if (done === null) return;
       setCrews(crews.filter((c) => c.id !== id));
       toast(`Deleted ${name}`, 'success');
       setConfirmDelete(null);
@@ -361,6 +368,7 @@ export default function AdminCrews() {
         busy={deleteBusy}
         onConfirm={doDelete}
       />
+      {reauthDialog}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
-import { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, festivalStartMinutes } from '@festie/shared/utils';
+import { FestivalDay, FestivalSet, Priority, Stage } from '@festie/shared/types';
+import { formatTime, artistDisplayName, festivalStartMinutes, buildLeaveAtPlan, leaveAtLine } from '@festie/shared/utils';
 import { AlertTriangle, TriangleAlert } from 'lucide-react';
 import { clashPromptCopy, clashesWith } from '@festie/shared/constants';
 import Button from '../ui/Button';
@@ -14,6 +14,10 @@ interface Props {
    */
   conflicts: FestivalSet[];
   b2bSeparator?: string;
+  /** Festival days, zone and stage pins: with `days` each clash shows a leave-at plan. */
+  days?: FestivalDay[];
+  timeZone?: string;
+  stages?: ReadonlyArray<Pick<Stage, 'id' | 'latitude' | 'longitude'>>;
   /**
    * Resolve the user's pick priority for a set. When both sides of a clash are
    * `must`, the prompt escalates to an explicit "you have a conflict" — the
@@ -55,7 +59,7 @@ function overlapStartLabel(a: FestivalSet, b: FestivalSet): string {
  * savePick(...,null). Shows once per pair per session; once resolved or
  * dismissed, one quiet "Clashes with" line carries the signal.
  */
-export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPriority, onClear }: Props) {
+export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days, timeZone, stages, getPriority, onClear }: Props) {
   // Session-dismissed pairs (resolve or "keep both"). Seeded from sessionStorage
   // so a closed/reopened panel doesn't re-nag the same clash.
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
@@ -102,6 +106,12 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
         // Both sides a must-see → escalate to an explicit conflict.
         const hard = getPriority?.(currentSet.id) === 'must' && getPriority?.(c.id) === 'must';
         const { title, body } = clashPromptCopy({ hard, at, currentName, otherName });
+        const plan = days
+          ? buildLeaveAtPlan({
+              a: currentSet, b: c, days, timeZone, stages,
+              priorityA: getPriority?.(currentSet.id), priorityB: getPriority?.(c.id),
+            })
+          : null;
         return (
           <div
             key={c.id}
@@ -113,6 +123,11 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, getPr
               <span>{title}</span>
             </div>
             <div className="mt-1 text-[length:var(--font-size-14)] text-text-secondary">{body}</div>
+            {plan && (
+              <div className="mt-1 text-[length:var(--font-size-14)] text-text-primary">
+                {leaveAtLine(plan, (s) => artistDisplayName(s, b2bSeparator))}
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 variant="secondary"

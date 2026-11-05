@@ -56,8 +56,13 @@ describe('JoinCrewSheet', () => {
     const join = screen.getByRole('button', { name: 'Join crew' });
     expect(state.compareDocumentPosition(join) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText(/EDC Orlando/)).toBeInTheDocument();
-    expect(screen.getByText('Started by DJ Dana')).toBeInTheDocument();
+    expect(screen.getByText('Led by DJ Dana')).toBeInTheDocument();
     expect(screen.getByText('Crew members can see your picks and your status.')).toBeInTheDocument();
+  });
+
+  it('moves focus into the dialog when it opens', async () => {
+    renderSheet();
+    await waitFor(() => expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true));
   });
 
   it('notes a festival switch when the crew is in another festival', () => {

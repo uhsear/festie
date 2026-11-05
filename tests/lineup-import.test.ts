@@ -103,6 +103,7 @@ async function cleanupById(pool: any) {
   await pool.query(`DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
   await pool.query(`DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
   await pool.query(`DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
+  await pool.query(`DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
   await pool.query(`DELETE FROM users WHERE username LIKE $1`, [`li-${RUN_ID}%`]);
 }
 
@@ -132,7 +133,7 @@ async function registerUser(server: any, suffix: any) {
   const res = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true })
+    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` })
     .expect(201);
   return { ...res.body.data, username };
 }
@@ -142,7 +143,7 @@ async function loginAdmin(server: any) {
   const regRes = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: ADMIN_PASSWORD, confirmPassword: ADMIN_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true });
+    .send({ username, password: ADMIN_PASSWORD, confirmPassword: ADMIN_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` });
   if (regRes.status === 201) {
     const pool = new Pool({ connectionString: TEST_DATABASE_URL, statement_timeout: 5000 });
     try {
@@ -436,6 +437,20 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
       .get(`/api/v1/admin/festivals/${FEST_ID}/imports`).set('x-user-token', admin).expect(200);
     assert.ok(afterUndo.body.data.imports[0].undoneAt);
     assert.deepEqual(afterUndo.body.data.imports.map((i: any) => i.canUndo), [false, true]);
+  });
+
+  test('a repeat commit that changes nothing does not block undoing the real import', async () => {
+    if (!createFestivalPlanner) return;
+    const { server, admin } = await adminServer();
+    const rows = [{ row: 2, artist: 'DJ Repeat', stage: 'Main Stage', day: 'Friday', startTime: '20:00', endTime: '21:00' }];
+    const first = await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }).expect(200);
+    await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }).expect(200);
+    const history = await server.request
+      .get(`/api/v1/admin/festivals/${FEST_ID}/imports`).set('x-user-token', admin).expect(200);
+    assert.equal(history.body.data.imports.find((i: any) => i.id === first.body.data.result.importId).canUndo, true);
+    await server.request
+      .post(`/api/v1/admin/festivals/${FEST_ID}/imports/${first.body.data.result.importId}/undo`)
+      .set('x-user-token', admin).set(TRUSTED_MUTATION_HEADER, '1').expect(200);
   });
 
   test('a commit writes exactly one festival.lineup.imported audit row', async () => {

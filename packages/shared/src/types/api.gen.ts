@@ -1059,7 +1059,8 @@ export type paths = {
                     "application/json": {
                         confirmPassword: string;
                         dateOfBirth: string;
-                        email?: string | "";
+                        /** Format: email */
+                        email: string;
                         password: string;
                         ref?: string;
                         /** @enum {boolean} */

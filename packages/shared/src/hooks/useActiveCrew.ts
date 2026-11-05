@@ -43,6 +43,18 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
     if (user && !crew && firstCrewId && !useCrewStore.getState().crewLoading) track(useCrewStore.getState().selectCrew(firstCrewId));
   }, [user, crew, firstCrewId, track]);
 
+  // A persisted activeCrew is a cold-start read cache; refetch it once per crew so members
+  // who joined while this device was closed appear. selectCrew keeps same-crew data on screen.
+  const revalidatedId = useRef<string | null>(null);
+  const activeId = crew?.id;
+  useEffect(() => {
+    if (!user || !activeId || revalidatedId.current === activeId) return;
+    // An in-flight select is already fetching this crew.
+    revalidatedId.current = activeId;
+    if (useCrewStore.getState().crewLoading) return;
+    track(useCrewStore.getState().selectCrew(activeId));
+  }, [user, activeId, track]);
+
   const retry = useCallback(() => {
     const store = useCrewStore.getState();
     const first = store.crews.find((c) => !c._optimistic);

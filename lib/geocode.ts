@@ -18,6 +18,24 @@ const TIMEOUT_MS = 5000;
 export interface VenueCoords {
   latitude: number;
   longitude: number;
+  /** True when the match is a weak guess (see isWeakVenueMatch). The coordinates are kept either way. */
+  guessed: boolean;
+}
+
+// Nominatim `addresstype` values for an area rather than a venue: the point is
+// the area's centre, not the venue's gate.
+const AREA_ADDRESS_TYPES = new Set([
+  'country', 'state', 'region', 'province', 'state_district', 'county', 'municipality', 'city', 'town',
+  'village', 'hamlet', 'city_district', 'district', 'borough', 'suburb', 'quarter', 'neighbourhood', 'postcode',
+]);
+// Below this `importance` Nominatim has little evidence for the place. Missing fields are not weak.
+const WEAK_IMPORTANCE = 0.2;
+
+/** A match is weak when it resolves to a whole area or to a place Nominatim ranks as obscure. */
+export function isWeakVenueMatch(row: { addresstype?: string; importance?: number } | undefined): boolean {
+  if (!row) return false;
+  if (typeof row.addresstype === 'string' && AREA_ADDRESS_TYPES.has(row.addresstype)) return true;
+  return typeof row.importance === 'number' && row.importance < WEAK_IMPORTANCE;
 }
 
 /**
@@ -53,12 +71,12 @@ export function createVenueGeocoder({ fetchImpl = fetch as unknown as FetchLike,
     const url = `${NOMINATIM_URL}?${new URLSearchParams({ q, format: 'jsonv2', limit: '1' })}`;
     const resp = await fetchImpl(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (!resp.ok) return null;
-    const rows = (await resp.json()) as Array<{ lat?: string; lon?: string }>;
+    const rows = (await resp.json()) as Array<{ lat?: string; lon?: string; addresstype?: string; importance?: number }>;
     const latitude = Number(rows?.[0]?.lat);
     const longitude = Number(rows?.[0]?.lon);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
     if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
-    return { latitude, longitude };
+    return { latitude, longitude, guessed: isWeakVenueMatch(rows[0]) };
   }
 
   /** Resolve a festival location to coordinates, or null when nothing matches or the lookup fails. */

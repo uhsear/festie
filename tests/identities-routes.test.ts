@@ -73,6 +73,7 @@ after(async () => {
     await pool.query(`DELETE FROM refresh_tokens WHERE user_id IN ${ids}`, like);
     await pool.query(`DELETE FROM user_sessions WHERE user_id IN ${ids}`, like);
     await pool.query(`DELETE FROM user_roles WHERE user_id IN ${ids}`, like);
+    await pool.query('DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
     await pool.query('DELETE FROM users WHERE username LIKE $1', like);
   });
 });
@@ -174,7 +175,7 @@ async function passwordUser(s: Server) {
     password: PASSWORD,
     confirmPassword: PASSWORD,
     dateOfBirth: '1995-01-01',
-    tosAccepted: true,
+    tosAccepted: true, email: `${username}@example.com`,
   });
   assert.equal(res.status, 201, JSON.stringify(res.body));
   return { username, token: res.body.data.token as string, userId: res.body.data.user.id as string };
@@ -193,7 +194,7 @@ async function providerUser(s: Server, provider: 'google' | 'apple' = 'google') 
     signupToken: start.body.data.signupToken,
     username,
     dateOfBirth: '1995-01-01',
-    tosAccepted: true,
+    tosAccepted: true, email: `${username}@example.com`,
   });
   assert.equal(done.status, 201, JSON.stringify(done.body));
   return { username, subject, token: done.body.data.token as string, userId: done.body.data.user.id as string };

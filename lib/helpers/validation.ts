@@ -150,6 +150,9 @@ export function validateFestivalIssues(config: any, body: any): FestivalIssue[] 
     });
     if (!cleanName) add('stage_name_required', 'Every stage requires a name', target('name'));
     if (!cleanId) add('stage_id_invalid', `Stage "${cleanName || 'Unnamed'}" requires a valid id`, target('id'));
+    if (stage?.color !== undefined && !validateColor(stage.color)) {
+      add('stage_color_invalid', `Stage "${cleanName || 'Unnamed'}" needs a colour like #1a2b3c`, target('color'));
+    }
     if (cleanId && stageIds.has(cleanId)) add('stage_id_duplicate', `Duplicate stage id: ${cleanId}`, target('id'));
     if (cleanId) stageIds.add(cleanId);
     const normalizedName = cleanName.toLowerCase();

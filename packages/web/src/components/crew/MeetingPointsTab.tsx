@@ -380,7 +380,10 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   }
   if (isError && points.length === 0) {
     return (
-      <div className="px-4">
+      <div className="space-y-3 px-4">
+        {/* The safety controls do not depend on the list, so a failed list never hides SOS. */}
+        <LiveLocationControls crewId={crewId} currentUserId={currentUserId} />
+        <div className="h-px bg-border" />
         <EmptyState
           icon={<MapPin className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load meeting points"

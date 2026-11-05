@@ -13,7 +13,7 @@ import {
 } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-import { CREW_MEET_HREF } from '../lib/dayOfRoutes';
+import { SOS_MAP_HREF } from '../lib/dayOfRoutes';
 import { festivalForCrew } from '../lib/crewFestival';
 
 interface CrewActivityProps {
@@ -155,7 +155,7 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
               <Text style={styles.time}>{timeAgoFromIso(it.created_at)}</Text>
               {action === 'show-sos' ? (
                 <TouchableOpacity
-                  onPress={() => router.push(CREW_MEET_HREF)}
+                  onPress={() => router.push(SOS_MAP_HREF)}
                   accessibilityRole="button"
                   accessibilityLabel="Show SOS on map"
                 >
@@ -184,7 +184,7 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
         </TouchableOpacity>
       ) : null}
 
-      {!hasMore && activityNextCursor ? (
+      {(expanded || !hasMore) && activityNextCursor ? (
         <TouchableOpacity
           style={styles.moreButton}
           onPress={() => loadOlderActivity(crewId).catch(() => {})}

@@ -5,7 +5,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useFestivalStore, useAuthStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { usePicksPlan } from '@festie/shared/hooks';
+import { useActiveCrew, usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
 import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
@@ -75,6 +75,9 @@ function PicksViewInner() {
   const selectedDay = useFestivalStore((state) => state.selectedDay);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
+  // A direct load never opens a crew screen, so nothing selects a crew and the crew suggestion strip stays empty.
+  // The shared hook selects the first crew once and does not retry a failed select.
+  useActiveCrew();
   const [view, setView] = useState<PicksViewMode>('plan');
   const {
     groupMode,
@@ -208,7 +211,7 @@ function PicksViewInner() {
     return (
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
-          {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
           {viewTabRow}
           <PlanNotesList
             kind={view}
@@ -228,7 +231,7 @@ function PicksViewInner() {
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
           {guestBanner}
-          {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
           {viewTabRow}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
@@ -271,7 +274,7 @@ function PicksViewInner() {
     <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
       <div role="region" aria-label="My picks" className="flex flex-col max-w-[600px] mx-auto w-full">
         {guestBanner}
-        {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+        {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
         {viewTabRow}
         <CrewSuggestionStrip />
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
@@ -364,7 +367,7 @@ function PicksViewInner() {
           </div>
         </div>
 
-        <PickConflicts groups={conflictGroups} />
+        {!(trimmedSearch && rows.length === 0) && <PickConflicts groups={conflictGroups} />}
         <RateNightBanner />
         <PickBulkActions />
         <ListenList

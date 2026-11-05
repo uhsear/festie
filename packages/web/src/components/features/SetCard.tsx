@@ -437,7 +437,7 @@ function SetCard({
         )}
 
         {/* Crew overlap / who's going */}
-        {groupedFriends.length > 0 && <CrewOverlapAvatars friends={groupedFriends} artistName={artistName} />}
+        {groupedFriends.length > 0 && <CrewOverlapAvatars friends={groupedFriends} artistName={artistName} onClick={onTap} />}
       </div>
 
       {showPicks && pickSync?.state === 'failed' && (

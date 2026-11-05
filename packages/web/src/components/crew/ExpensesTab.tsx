@@ -323,7 +323,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       <StaleNote show={isError} onRetry={() => void refetch()} />
       {/* Currency label. A label only: changing it never converts amounts. */}
       <div className="p-3 rounded-lg bg-bg-card border border-border space-y-1">
-        {isOwner ? (
+        {isOwner && currency !== 'USD' ? (
           <>
             <label htmlFor="expense-currency" className="block text-xs text-text-muted uppercase tracking-wide">
               Currency
@@ -335,7 +335,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
               onChange={(e) => changeCurrency.mutate(e.target.value)}
               className={cn(inputBase, 'min-h-11')}
             >
-              {CREW_CURRENCIES.map((code) => (
+              {[currency, ...CREW_CURRENCIES.filter((c) => c !== currency)].map((code) => (
                 <option key={code} value={code}>
                   {code}
                 </option>
@@ -504,7 +504,9 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
                         </div>
                       ) : (
                         <div className="text-xs text-text-secondary">
-                          {s.toName} hasn't added a payment handle. Pay them directly, then confirm here.
+                          {Object.values(s.payeeHandles).some(Boolean)
+                            ? `${s.toName}'s payment apps don't support ${currency}. Pay them directly, then confirm here.`
+                            : `${s.toName} hasn't added a payment handle. Pay them directly, then confirm here.`}
                         </div>
                       )}
                       <Button

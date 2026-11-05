@@ -431,17 +431,21 @@ export default function CrewMap({
 
   // "Show my location": fly to the fix now, or ask for one and fly when it lands.
   const flyToSelfRef = useRef(false);
+  // True from the tap until a fix lands, so a blocked or failed location shows a message.
+  const [awaitingSelf, setAwaitingSelf] = useState(false);
   const showMyLocation = useCallback(() => {
     if (selfCoord) {
       mapRef.current?.flyTo({ center: [selfCoord.longitude, selfCoord.latitude], zoom: 16, duration: 600 });
       return;
     }
     flyToSelfRef.current = true;
+    setAwaitingSelf(true);
     locate();
   }, [selfCoord, locate]);
   useEffect(() => {
     if (!flyToSelfRef.current || !selfCoord) return;
     flyToSelfRef.current = false;
+    setAwaitingSelf(false);
     mapRef.current?.flyTo({ center: [selfCoord.longitude, selfCoord.latitude], zoom: 16, duration: 600 });
   }, [selfCoord]);
 
@@ -824,7 +828,7 @@ export default function CrewMap({
           )}
         </p>
       )}
-      {interactive && !nearestNotice && pendingNearest && (
+      {interactive && !nearestNotice && (pendingNearest || awaitingSelf) && (
         <p role="status" className="text-xs text-text-secondary">
           {geoState === 'denied' || geoState === 'unavailable' ? (
             <>

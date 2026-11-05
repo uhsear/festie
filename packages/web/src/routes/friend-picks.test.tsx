@@ -71,6 +71,9 @@ beforeEach(() => {
   authUser.value = { id: 'u1' };
   Object.assign(storeState, {
     currentFestivalId: 'f1',
+    festivals: [{ id: 'f1' }],
+    isLoading: false,
+    error: null,
     currentProfile: { picks: { s2: 'must' } },
     bulkSavePicks,
     restorePicks,
@@ -123,6 +126,13 @@ describe('FriendPicksView', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Switch to EDC' }));
     expect(storeState.selectFestival).toHaveBeenCalledWith('f1');
     expect(screen.queryByText(/haven't joined/)).toBeNull();
+  });
+
+  it('offers no Switch while the festival list is still loading', async () => {
+    Object.assign(storeState, { currentFestivalId: null, currentProfile: null, festivals: [] });
+    renderView();
+    await screen.findByText('Two');
+    expect(screen.queryByRole('button', { name: 'Switch to EDC' })).toBeNull();
   });
 
   it('shows the not-joined banner when the festival matches but there is no profile', async () => {

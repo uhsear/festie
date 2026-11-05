@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  AppState,
   Share,
   AccessibilityInfo,
   StyleSheet,
@@ -20,10 +21,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore, useUIStore } from '@festie/shared/stores';
-import { useCrew, useActiveCrew } from '@festie/shared/hooks';
+import { useCrew, useActiveCrew, useCrewSections } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { COPY, GUEST_PROMPT_COPY, LOW_POWER_COPY } from '@festie/shared/constants';
 import {
@@ -85,6 +86,9 @@ import { LowPowerIndicator } from '../../components/LowPowerControls';
 
 /** Mirrors IOS_NATIVE_TAB_BAR_HEIGHT in (tabs)/index.tsx: the native iOS tab bar overlays content. */
 const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
+
+// How often to retry a failed crew load while the error is showing.
+const CREW_ERROR_RETRY_MS = 30_000;
 
 export default function CrewScreen() {
   const t = useTokens();
@@ -148,11 +152,6 @@ export default function CrewScreen() {
   const handOverAndLeave = useCrewStore((s) => s.handOverAndLeave);
   const regenerateInvite = useCrewStore((s) => s.regenerateInvite);
   const loadOverlap = useCrewStore((s) => s.loadOverlap);
-  const loadPolls = useCrewStore((s) => s.loadPolls);
-  const loadMeetingPoints = useCrewStore((s) => s.loadMeetingPoints);
-  const loadPacking = useCrewStore((s) => s.loadPacking);
-  const loadRides = useCrewStore((s) => s.loadRides);
-  const loadExpenses = useCrewStore((s) => s.loadExpenses);
   const setError = useCrewStore((s) => s.setError);
 
   const reformCrew = useCrewStore((s) => s.reformCrew);
@@ -185,7 +184,6 @@ export default function CrewScreen() {
   const [regenBusy, setRegenBusy] = useState(false);
   const [overlapBusy, setOverlapBusy] = useState(false);
   const [overlapError, setOverlapError] = useState<string | null>(null);
-  const [sectionLoadError, setSectionLoadError] = useState<string | null>(null);
   const [showOverlap, setShowOverlap] = useState(false);
   const [forceAddOpen, setForceAddOpen] = useState(false);
   const [forceAddName, setForceAddName] = useState('');
@@ -313,38 +311,23 @@ export default function CrewScreen() {
     setPendingStart(null);
   }, [pendingStart, status]);
 
-  // Load polls + meeting points for the active crew (best-effort). These five
-  // loaders all write the SAME shared store `error` field, so firing them
-  // concurrently let a later failure silently clobber an earlier one (e.g. a
-  // packing failure went invisible if polls failed after it). Promise.allSettled
-  // + a local aggregate message reports every failed section instead of just
-  // whichever loader lost the race last.
-  const loadCrewSections = useCallback(
-    async (id: string) => {
-      const [polls, meetingPoints, packing, rides, expenses] = await Promise.allSettled([
-        loadPolls(id),
-        loadMeetingPoints(id),
-        loadPacking(id),
-        loadRides(id),
-        loadExpenses(id),
-      ]);
-      const failed = [
-        polls.status === 'rejected' && 'polls',
-        meetingPoints.status === 'rejected' && 'meeting points',
-        packing.status === 'rejected' && 'packing',
-        rides.status === 'rejected' && 'rides',
-        expenses.status === 'rejected' && 'expenses',
-      ].filter((name): name is string => name !== false);
-      setSectionLoadError(failed.length ? `Failed to load: ${failed.join(', ')}` : null);
-    },
-    [loadPolls, loadMeetingPoints, loadPacking, loadRides, loadExpenses],
+  // The five crew sections load with bounded retry (429/5xx/network). A failure
+  // that outlasts the retries is re-tried on screen focus, app foreground, or Try again.
+  const { error: sectionLoadError, reload: reloadCrewSections } = useCrewSections(activeCrew?.id);
+  const sectionsFailed = !!sectionLoadError;
+  useFocusEffect(
+    useCallback(() => {
+      if (sectionsFailed) reloadCrewSections();
+      // Only re-run on focus, not when the error flips, or a failed retry would loop.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reloadCrewSections]),
   );
-
   useEffect(() => {
-    const id = activeCrew?.id;
-    if (!id) return;
-    loadCrewSections(id).catch(() => {});
-  }, [activeCrew?.id, loadCrewSections]);
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && sectionsFailed) reloadCrewSections();
+    });
+    return () => sub.remove();
+  }, [sectionsFailed, reloadCrewSections]);
 
   // Pull-to-refresh: re-fetch the crew list and the active crew (members,
   // polls, meeting points, expenses all reload off selectCrew + the effect).
@@ -352,9 +335,24 @@ export default function CrewScreen() {
     loadCrews().catch(() => {});
     if (activeCrew) {
       selectCrew(activeCrew.id).catch(() => {});
-      loadCrewSections(activeCrew.id).catch(() => {});
+      reloadCrewSections();
     }
-  }, [loadCrews, activeCrew, selectCrew, loadCrewSections]);
+  }, [loadCrews, activeCrew, selectCrew, reloadCrewSections]);
+
+  // Error states clear only on a new load, so a rate limit or a dropped connection
+  // left "Couldn't load" / "Failed to load" on screen until a force-stop. Retry
+  // every 30 s while the error shows, and restart the wait when the network returns.
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const hasLoadError = status === 'error' || sectionsFailed;
+  const reloadAfterError = useCallback(() => {
+    if (status === 'error') retry();
+    else reloadCrewSections();
+  }, [status, retry, reloadCrewSections]);
+  useEffect(() => {
+    if (!hasLoadError || offlineMode) return;
+    const timer = setInterval(reloadAfterError, CREW_ERROR_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [hasLoadError, offlineMode, reloadAfterError]);
 
   // Fast set lookup by id for overlap labels.
   const setsById = useMemo(() => {
@@ -858,7 +856,6 @@ export default function CrewScreen() {
     <View style={styles.screen} testID="crew-screen">
       <ScreenHeader
         title={crew.name}
-        titleLines={2}
         subtitle={headerSubtitle}
         icon="people"
         right={
@@ -924,7 +921,12 @@ export default function CrewScreen() {
           Members tab to keep this pinned header short. */}
       <View style={[styles.crewChrome, tabletInset]}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {sectionLoadError ? <Text style={styles.error}>{sectionLoadError}</Text> : null}
+        {sectionLoadError ? (
+          <>
+            <Text style={styles.error}>{sectionLoadError}</Text>
+            <Button label="Try again" variant="secondary" size="sm" onPress={reloadCrewSections} />
+          </>
+        ) : null}
 
         <View style={styles.crewMetaRow}>
           {/* Crew totem (rally marker) rides in the meta row so the pinned

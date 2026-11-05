@@ -202,6 +202,8 @@ describe('lib/sentry.js', () => {
       assert.deepEqual(dc.httpBodies, []);
       assert.equal(dc.databaseQueryData, false);
       assert.equal(dc.queues, false);
+      assert.ok(dc.httpHeaders.request.deny.includes('referer'), 'Referer can carry a reset token URL');
+      assert.ok(dc.urlQueryParams.deny.includes('token'), 'reset and verify links carry ?token=');
     });
   });
 

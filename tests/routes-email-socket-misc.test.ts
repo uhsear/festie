@@ -486,17 +486,18 @@ describe('routes/email-auth', () => {
     assert.equal(res.body.error.code, 'NOT_FOUND');
   });
 
-  test('POST /resend-verification — succeeds for unverified user', async () => {
+  // No RESEND_API_KEY in tests, so the send fails; FND-018 reports that instead of a false 200.
+  test('POST /resend-verification — 503 for unverified user when the mail cannot be sent', async () => {
     const deps = buildEmailAuthDeps();
     // emailTokens methods default to no-op async, which is sufficient
     createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
     const router = createEmailAuthRoutes(deps);
     const app = mountApp(router);
 
-    const res = await request(app).post('/resend-verification').expect(200);
+    const res = await request(app).post('/resend-verification').expect(503);
 
-    assert.equal(res.body.error, null);
-    assert.match(res.body.data.message, /verification email sent/i);
+    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
+    assert.match(res.body.error.message, /could not send the verification email/i);
   });
 
   test('POST /reset-password — passwords must match', async () => {
@@ -831,6 +832,69 @@ describe('routes/socket', () => {
     assert.ok(deps.emitPresence.mock.calls.length >= 1);
   });
 
+  test('leave:festival — clears crewId so location gates refuse (FND-017)', async () => {
+    const deps = buildSocketDeps();
+    deps.leaveFestivalRealtime = mock.fn(() => 'fest-1');
+    const handlers = await setupAndGetHandlers(deps);
+    const socket = makeSocket();
+    const socketHandlers: Record<string, any> = {};
+    socket.on = mock.fn((event: any, handler: any) => {
+      socketHandlers[event] = handler;
+    });
+
+    handlers.connection(socket);
+    socket.data.crewId = 'crew-1';
+    socketHandlers['leave:festival']();
+
+    assert.equal(socket.data.crewId, undefined);
+  });
+
+  test('location:update — a sharer who is no longer a member stops with peer reason kicked', async () => {
+    const deps = buildSocketDeps();
+    deps.stores.crews.getMember = mock.fn(async () => null);
+    const handlers = await setupAndGetHandlers(deps);
+    const socket: any = makeSocket();
+    const toEmit = mock.fn();
+    socket.to = mock.fn(() => ({ emit: toEmit }));
+    const socketHandlers: Record<string, any> = {};
+    socket.on = mock.fn((event: any, handler: any) => {
+      socketHandlers[event] = handler;
+    });
+
+    handlers.connection(socket);
+    socket.data.userId = 'user-1';
+    socket.data.crewId = 'crew-1';
+    socket.data.sharingCrewId = 'crew-1';
+    await socketHandlers['location:update']({ crewId: 'crew-1', lat: 41.9, lng: -87.6, capturedAt: new Date().toISOString() });
+
+    assert.equal(toEmit.mock.calls.length, 1);
+    assert.equal(toEmit.mock.calls[0]!.arguments[0], 'location:peer-stopped');
+    assert.equal(toEmit.mock.calls[0]!.arguments[1].reason, 'kicked');
+  });
+
+  test('leave:festival — drops the cached position of a sharer (FND-017)', async () => {
+    const hdel = mock.fn(async (..._args: any[]) => 1);
+    const deps = buildSocketDeps({ redis: { hdel } });
+    deps.leaveFestivalRealtime = mock.fn(() => 'fest-1');
+    const handlers = await setupAndGetHandlers(deps);
+    const socket: any = makeSocket();
+    socket.to = mock.fn(() => ({ emit: mock.fn() }));
+    const socketHandlers: Record<string, any> = {};
+    socket.on = mock.fn((event: any, handler: any) => {
+      socketHandlers[event] = handler;
+    });
+
+    handlers.connection(socket);
+    socket.data.userId = 'user-1';
+    socket.data.crewId = 'crew-1';
+    socket.data.sharingCrewId = 'crew-1';
+    socketHandlers['leave:festival']();
+    await new Promise((r) => setImmediate(r));
+
+    assert.equal(hdel.mock.calls.length, 1);
+    assert.equal(hdel.mock.calls[0]!.arguments[1], 'user-1');
+  });
+
   test('leave:festival — rate limit rejection', async () => {
     const deps = buildSocketDeps();
     deps.consumeSocketRateLimit = mock.fn(() => false);
@@ -866,6 +930,24 @@ describe('routes/socket', () => {
     const response = ack.mock.calls[0]!.arguments[0];
     assert.equal(response.ok, true);
     assert.equal(response.crewId, 'crew-1');
+  });
+
+  test('join:crew — acks before disconnecting on an invalid session (FND-032)', async () => {
+    const deps = buildSocketDeps();
+    deps.validateUserSession = mock.fn(async () => null);
+    const order: string[] = [];
+    deps.disconnectSocket = mock.fn(() => { order.push('disconnect'); });
+    const handlers = await setupAndGetHandlers(deps);
+    const socket = makeSocket();
+    const socketHandlers: Record<string, any> = {};
+    socket.on = mock.fn((event: any, handler: any) => {
+      socketHandlers[event] = handler;
+    });
+
+    handlers.connection(socket);
+    await socketHandlers['join:crew']({ crewId: 'crew-1' }, () => { order.push('ack'); });
+
+    assert.deepEqual(order, ['ack', 'disconnect']);
   });
 
   test('join:crew — rejects when crew not found', async () => {
@@ -1927,6 +2009,8 @@ describe('routes/deep-links', () => {
     // Crew invite links open the app when it is installed.
     assert.ok(res.body.applinks.details[0].paths.includes('/join/*'));
     assert.ok(res.body.applinks.details[0].components.some((c: any) => c['/'] === '/join/*'));
+    // Paths the app rewrites to mobile screens (packages/mobile/app/+native-intent.tsx).
+    for (const p of ['/s/*', '/compare', '/crew', '/friend-picks']) assert.ok(res.body.applinks.details[0].paths.includes(p), p);
   });
 
   test('GET /apple-app-site-association — 503 when not configured', async () => {
@@ -1948,6 +2032,7 @@ describe('routes/deep-links', () => {
     const res = await request(app).get('/assetlinks.json').expect(200);
     assert.ok(Array.isArray(res.body));
     assert.equal(res.body[0].target.sha256_cert_fingerprints.length, 2);
+    assert.equal(res.body[0].target.package_name, 'us.festie.app');
   });
 
   test('GET /assetlinks.json — 503 when not configured', async () => {

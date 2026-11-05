@@ -10,10 +10,11 @@ import Sheet from '../ui/Sheet';
  * kick a drain, then drop it from the failed list. Feature-detects
  * window.__festieQueue so it's a no-op if the bridge isn't mounted yet.
  */
-function retryItem(item: FailedSyncItem): void {
+function retryItem(item: FailedSyncItem): Promise<unknown> {
   const q = typeof window !== 'undefined' ? window.__festieQueue : undefined;
+  let settled: Promise<unknown> = Promise.resolve();
   if (q?.queueMutation) {
-    Promise.resolve(
+    settled = Promise.resolve(
       q.queueMutation({
         type: 'api',
         url: item.url,
@@ -29,6 +30,7 @@ function retryItem(item: FailedSyncItem): void {
   }
   // Optimistically clear it (store and storage); if the retry fails again the queue re-reports it.
   dismissItem(item.clientId);
+  return settled;
 }
 
 /** Drop a failed item from the list AND from storage, so a reload does not bring it back. */
@@ -50,17 +52,24 @@ export default function PendingSyncSheet({ onClose }: PendingSyncSheetProps) {
   const failedSync = useUIStore((state) => state.failedSync);
   const clearFailedSync = useUIStore((state) => state.clearFailedSync);
 
+  // Rows are dismissed before a retry resolves, so hold the sheet open until
+  // every retry settles; a re-failure then re-adds the rows instead of closing it.
+  const [retrying, setRetrying] = React.useState(0);
+
   // If the list empties (e.g. user dismissed the last item), close the sheet.
   React.useEffect(() => {
-    if (failedSync.length === 0) onClose();
-  }, [failedSync.length, onClose]);
+    if (failedSync.length === 0 && retrying === 0) onClose();
+  }, [failedSync.length, retrying, onClose]);
 
-  const handleRetryAll = () => {
-    // Snapshot before mutating the store as we iterate.
-    [...failedSync].forEach(retryItem);
+  const handleRetry = (items: FailedSyncItem[]) => {
+    setRetrying((n) => n + 1);
+    void Promise.all(items.map(retryItem)).finally(() => setRetrying((n) => n - 1));
   };
 
-  if (failedSync.length === 0) return null;
+  // Snapshot before mutating the store as we iterate.
+  const handleRetryAll = () => handleRetry([...failedSync]);
+
+  if (failedSync.length === 0 && retrying === 0) return null;
 
   return (
     <Sheet
@@ -83,7 +92,7 @@ export default function PendingSyncSheet({ onClose }: PendingSyncSheetProps) {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
-                onClick={() => retryItem(item)}
+                onClick={() => handleRetry([item])}
                 className="text-xs font-bold px-3 rounded bg-accent-aqua/15 text-accent-aqua hover:bg-accent-aqua/25 min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
               >
                 Retry

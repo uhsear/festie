@@ -57,7 +57,7 @@ export interface RegisterRequest {
   /** YYYY-MM-DD. Required by the backend 18+ age gate at registration. */
   dateOfBirth?: string;
   tosAccepted: boolean;
-  email?: string;
+  email: string;
   /** Anonymous sign-up source from a ?ref= link; the server drops an invalid value. */
   ref?: string;
 }

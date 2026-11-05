@@ -173,7 +173,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
             <Download className="w-4 h-4 text-text-secondary" aria-hidden="true" />
           )}
         </span>
-        <span className="flex-1 min-w-0 truncate text-sm font-medium text-text-primary">
+        <span className="flex-1 min-w-0 text-sm leading-tight font-medium text-text-primary">
           {offlineStatusLabel(summary)}
         </span>
         <button

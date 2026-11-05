@@ -35,6 +35,19 @@ describe('Integration — Client Metrics (Web Vitals)', { concurrency: 1 }, () =
     assert.equal(res.text, '');
   });
 
+  test('rejects an oversized beacon with 413 and an error code (FND-031)', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const res = await server.request
+      .post('/api/v1/metrics/web-vitals')
+      .set('Content-Type', 'text/plain')
+      .send('x'.repeat(5000))
+      .expect(413);
+
+    assert.equal(res.body?.error?.code, 'INVALID_INPUT');
+  });
+
   test('accepts all valid metric types (CLS, LCP, FCP, INP, TTFB)', async () => {
     const server = await startServer();
     servers.push(server);

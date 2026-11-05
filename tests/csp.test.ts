@@ -237,6 +237,11 @@ describe('csp: Cross-Origin-Opener-Policy', () => {
     assert.match(policy, /camera=\(\)/);
   });
 
+  it('lets only the Spotify embed use encrypted media (FND-062)', async () => {
+    const policy = String((await headersFor({}))['permissions-policy']);
+    assert.match(policy, /encrypted-media=\(self "https:\/\/open\.spotify\.com"\)/);
+  });
+
   it('stays same-origin when no provider is enabled', async () => {
     assert.equal(await coopFor({}), 'same-origin');
   });
@@ -247,5 +252,10 @@ describe('csp: Cross-Origin-Opener-Policy', () => {
 
   it('allows popups when Apple web sign-in is enabled', async () => {
     assert.equal(await coopFor({ OAUTH_APPLE_WEB_ENABLED: true }), 'same-origin-allow-popups');
+  });
+
+  it('sends no referrer unless Google sign-in needs the origin', async () => {
+    assert.equal((await headersFor({}))['referrer-policy'], 'no-referrer');
+    assert.equal((await headersFor({ OAUTH_GOOGLE_ENABLED: true }))['referrer-policy'], 'strict-origin');
   });
 });

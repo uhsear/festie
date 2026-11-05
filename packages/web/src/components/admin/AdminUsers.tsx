@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { api } from '@festie/shared/services/api';
 import { useAuthStore } from '@festie/shared/stores/authStore';
@@ -63,6 +63,8 @@ function AdminUsersList() {
   const [text, setText] = useState(q ?? '');
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  // State lags a fast double-click; the ref blocks the second run synchronously.
+  const confirmRunning = useRef(false);
   const [linkToCopy, setLinkToCopy] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectionNote, setSelectionNote] = useState<string | undefined>();
@@ -72,11 +74,13 @@ function AdminUsersList() {
   const { askPassword, reauthDialog } = useReauthPrompt();
 
   const runConfirmed = async () => {
-    if (!confirm) return;
+    if (!confirm || confirmRunning.current) return;
+    confirmRunning.current = true;
     setConfirmBusy(true);
     try {
       await confirm.run();
     } finally {
+      confirmRunning.current = false;
       setConfirmBusy(false);
       setConfirm(null);
     }
@@ -92,7 +96,7 @@ function AdminUsersList() {
       destructive: !grant,
       run: async () => {
         try {
-          const roles = await withReauth(async () => (await setAdminRole(user.id, grant)).roles, askPassword);
+          const roles = await withReauth(async () => (await setAdminRole(user.id, grant)).roles, askPassword, { retryWrongPassword: true });
           if (!roles) return;
           patchUser(user.id, { roles });
           toast(`User ${grant ? 'granted' : 'revoked'} admin access`, 'success');
@@ -114,7 +118,7 @@ function AdminUsersList() {
           const done = await withReauth(async () => {
             await api.delete<void>(`/admin/users/${user.id}`);
             return true;
-          }, askPassword);
+          }, askPassword, { retryWrongPassword: true });
           if (!done) return;
           removeUser(user.id);
           setSelected((prev) => {
@@ -138,7 +142,7 @@ function AdminUsersList() {
       confirmLabel: copy.confirmLabel,
       run: async () => {
         try {
-          const result = await withReauth(() => createResetLink(user.id), askPassword);
+          const result = await withReauth(() => createResetLink(user.id), askPassword, { retryWrongPassword: true });
           if (!result) return;
           const { resetUrl, username, expiresAt } = result;
           try {
@@ -164,7 +168,7 @@ function AdminUsersList() {
       destructive: true,
       run: async () => {
         try {
-          const done = await withReauth(() => bulkForceLogout(ids), askPassword);
+          const done = await withReauth(() => bulkForceLogout(ids), askPassword, { retryWrongPassword: true });
           if (!done) return;
           toast(summarizeBulkResults('force-logout', done.results), 'success');
           setSelected(new Set());

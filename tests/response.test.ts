@@ -135,6 +135,13 @@ describe('response: sendError', () => {
     assert.equal(body.error.code, ErrorCodes.INVALID_INPUT);
   });
 
+  it('records the error code on res.locals for the request log', () => {
+    const res = createMockRes();
+    res.locals = {};
+    sendError(res, 400, 'Bad input', ErrorCodes.INVALID_INPUT);
+    assert.equal(res.locals.errorInfo.code, ErrorCodes.INVALID_INPUT);
+  });
+
   it('sets HTTP status code', () => {
     const res = createMockRes();
     sendError(res, 404, 'Not found');

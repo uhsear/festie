@@ -463,7 +463,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
           </button>
           {blocked && p.counts.error > 0 && (
             <span className="text-sm text-accent-coral">
-              Fix or remove the {p.counts.error} rows with errors to continue.
+              Fix or remove the {p.counts.error} {p.counts.error === 1 ? 'row' : 'rows'} with errors to continue.
             </span>
           )}
         </div>

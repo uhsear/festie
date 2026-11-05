@@ -222,7 +222,9 @@ export default function createAdminMetricsRoutes(deps: any): { router: Router } 
     // check cannot be bypassed via X-Forwarded-For when TRUST_PROXY is enabled.
     const ip = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-    if (!isLocal) return sendError(res, 403, 'Localhost only', ErrorCodes.FORBIDDEN);
+    // cloudflared connects from loopback too, but always adds forwarding headers; the cron job sends none.
+    const proxied = Boolean(req.headers?.['cf-connecting-ip'] || req.headers?.['cf-ray'] || req.headers?.['x-forwarded-for']);
+    if (!isLocal || proxied) return sendError(res, 403, 'Localhost only', ErrorCodes.FORBIDDEN);
     setNoStore(res);
     const metrics = deps.metrics || {};
     return sendSuccess(res, {

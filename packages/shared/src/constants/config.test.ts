@@ -208,11 +208,8 @@ describe('LIVE_SHARE_DURATIONS', () => {
 });
 
 describe('crew money and packing constants', () => {
-  it('lists 14 unique three-letter currencies starting with USD', () => {
-    expect(CREW_CURRENCIES).toHaveLength(14);
-    expect(new Set(CREW_CURRENCIES).size).toBe(14);
-    expect(CREW_CURRENCIES[0]).toBe('USD');
-    for (const c of CREW_CURRENCIES) expect(c).toMatch(/^[A-Z]{3}$/);
+  it('offers USD as the only crew currency (FND-082)', () => {
+    expect([...CREW_CURRENCIES]).toEqual(['USD']);
   });
 
   it('has the camping and day-trip templates with unique items', () => {

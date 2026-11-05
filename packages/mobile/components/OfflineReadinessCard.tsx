@@ -179,7 +179,11 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
           style={[styles.button, isDownloading && styles.buttonBusy]}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>{offlineActionLabel(summary)}</Text>
+          <View style={styles.buttonBg} pointerEvents="none" />
+          {/* Trailing NBSP absorbs Fabric's single-line under-measure (see OfflineStatusChip). */}
+          <Text style={styles.buttonText} textBreakStrategy="simple">
+            {offlineActionLabel(summary) + ' '}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setExpanded((v) => !v)}
@@ -250,12 +254,20 @@ const useCardStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: t.colors.accent.aqua,
-    borderRadius: t.radii.sm,
     paddingVertical: t.spacing[2],
     paddingHorizontal: t.spacing[3],
     flexShrink: 0,
     minHeight: 44,
+  },
+  // Bg lives on an absolutely-positioned sibling so the Text is never clipped to the rounded bounds.
+  buttonBg: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: t.radii.sm,
+    backgroundColor: t.colors.accent.aqua,
   },
   buttonBusy: {
     opacity: 0.7,

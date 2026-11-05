@@ -3,6 +3,7 @@ import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import Dialog from '../ui/Dialog';
 import { inputBase } from '../../lib/styles';
 import Button from '../ui/Button';
+import Input from '../ui/Input';
 
 interface ChangeEmailModalProps {
   /** Address currently on file. Absent means the account has no email yet, which switches the copy from "change" to "add". */
@@ -60,15 +61,12 @@ export default function ChangeEmailModal({ currentEmail, needsPassword = true, o
             />
           </div>
           {needsPassword && (
-            <div className="flex flex-col items-stretch gap-1.5 py-2.5">
-              <label className="text-xs font-semibold text-text-secondary uppercase tracking-[.8px]" htmlFor="ce-password">
-                Current password
-              </label>
-              <input
+            <div className="py-2.5">
+              <Input
                 id="ce-password"
-                type="password"
+                label="Current password"
+                isPassword
                 autoComplete="current-password"
-                className={inputBase}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

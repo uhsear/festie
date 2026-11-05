@@ -277,9 +277,8 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // number of accounts can point the mailer at one victim inbox. Reuses the
   // password-reset limiter factory (Redis-first, in-memory fallback) with a
   // distinct scope so the two buckets never collide.
-  // ponytail: counts requests, not sends, so three wrong-password attempts also
-  // consume the address budget — same trade /forgot-password already makes.
-  // Move the check inside the handler if that lockout is ever reported.
+  // The handler runs it after the password check, so a wrong password does not
+  // consume the address budget: a signed-in user cannot lock out a chosen inbox.
   const emailChangeRecipientLimit = createPasswordResetRateLimit(deps.config, {
     log,
     sendError,
@@ -676,7 +675,6 @@ export default function createAccountRoutes(deps: RouteDeps) {
     '/email',
     userAuth,
     rateLimit(3, 'email-change'),
-    emailChangeRecipientLimit,
     validate(schemas.updateEmail),
     async (req: Request, res: Response) => {
       // Success body never echoes the submitted address back.
@@ -693,6 +691,13 @@ export default function createAccountRoutes(deps: RouteDeps) {
         if (!currentUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
 
         if (await refuseUnconfirmed(req, res, currentUser.passwordHash, password, 400)) return undefined;
+
+        // The limiter answers 429 itself and never calls next, so a finished response means refused.
+        const underLimit = await new Promise<boolean>((resolve) => {
+          res.once('finish', () => resolve(false));
+          void emailChangeRecipientLimit(req, res, () => resolve(true));
+        });
+        if (!underLimit) return undefined;
 
         if (await stores.emailTokens.checkEmailExists(cleanEmail, req.user.userId)) {
           log.warn('account:email-change-rejected', { userId: req.user.userId, reason: 'address-unavailable' });
@@ -807,7 +812,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           }
         }
 
-        log.warn('account:soft-delete', {
+        log.info('account:soft-delete', {
           userId: req.user.userId,
           username: currentUser.username,
           ip: getRequestIp(req),

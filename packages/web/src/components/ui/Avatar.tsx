@@ -6,13 +6,14 @@ import { avatarInk } from '../../lib/avatarInk';
 interface AvatarProps {
   name?: string;
   image?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg';
+  size?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
   showOnline?: boolean;
   isOnline?: boolean;
   className?: string;
 }
 
 const sizeMap = {
+  xxs: 'w-4 h-4 text-[8px]',
   xs: 'w-6 h-6 text-xs',
   sm: 'w-8 h-8 text-sm',
   md: 'w-10 h-10 text-base',
@@ -24,6 +25,7 @@ const sizeMap = {
 // before the avatar URL resolves -- eliminates avatar-pop CLS in crew lists
 // and member rows where 20+ avatars load in parallel.
 const sizePx = {
+  xxs: 16,
   xs: 24,
   sm: 32,
   md: 40,
@@ -31,6 +33,7 @@ const sizePx = {
 };
 
 const dotSizeMap = {
+  xxs: 'w-1 h-1',
   xs: 'w-1.5 h-1.5',
   sm: 'w-2 h-2',
   md: 'w-2.5 h-2.5',

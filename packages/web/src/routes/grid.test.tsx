@@ -46,6 +46,7 @@ vi.mock('@festie/shared/hooks', async () => {
   const { filterScheduleSets } = await import('@festie/shared/utils');
   return {
     usePickClear: () => vi.fn(),
+    useCrew: () => ({ getCrewScopedOtherPicks: () => [] }),
     usePicks: vi.fn(() => ({
       getMyPick: vi.fn(() => null),
       getOtherPicks: vi.fn(() => []),
@@ -192,6 +193,7 @@ describe('GridView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.keys(storeState).forEach((k) => delete storeState[k]);
+    storeState.allProfiles = [];
     Object.assign(storeState, {
       stages: [{ id: 'st1', name: 'Main Stage' }],
       days: [{ index: 0, label: 'Friday', date: '2026-06-12' }],

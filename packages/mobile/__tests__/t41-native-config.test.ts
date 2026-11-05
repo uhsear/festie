@@ -12,7 +12,7 @@ describe('t41 native config source guards', () => {
     // OTAs from main must keep reaching 1.4.0 users; the bump is a separate release commit.
     expect(expo.version).toBe('1.5.0');
     const prefixes = expo.android.intentFilters[0].data.map((d: { pathPrefix: string }) => d.pathPrefix);
-    expect(prefixes).toEqual(expect.arrayContaining(['/set', '/reset-password', '/join']));
+    expect(prefixes).toEqual(expect.arrayContaining(['/set', '/reset-password', '/join', '/crew']));
   });
   it('expo-location plugin enables background location', () => {
     const entry = expo.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-location');

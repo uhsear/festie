@@ -7,6 +7,7 @@ import {
   groupCrewsByFestival,
   handOverCandidates,
   memberAvatarUrl,
+  absoluteAvatarUrl,
   memberCountLabel,
   openPollState,
   ownedCrewsForDeletion,
@@ -205,5 +206,17 @@ describe('crewCopy.deleteSolo', () => {
     expect(crewCopy.deleteSolo(2)).toBe(
       "You're the only member of 2 crews. They are deleted with your account after 30 days.",
     );
+  });
+});
+
+describe('absoluteAvatarUrl', () => {
+  it('prefixes a relative path with the origin', () => {
+    expect(absoluteAvatarUrl('/uploads/avatars/u1.webp?v=3', 'https://staging.festie.us/')).toBe(
+      'https://staging.festie.us/uploads/avatars/u1.webp?v=3',
+    );
+  });
+  it('keeps an absolute URL and handles empty input', () => {
+    expect(absoluteAvatarUrl('https://cdn.example/a.webp', 'https://festie.us')).toBe('https://cdn.example/a.webp');
+    expect(absoluteAvatarUrl(null, 'https://festie.us')).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PendingSyncSheet from './PendingSyncSheet';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -112,5 +112,21 @@ describe('PendingSyncSheet', () => {
     await user.click(screen.getByText('Dismiss all'));
     expect(clearFailedSync).toHaveBeenCalled();
     expect(clearPersistedFailed).toHaveBeenCalled();
+  });
+
+  it('keeps the sheet open while Retry all is in flight, even once the list empties', async () => {
+    const user = userEvent.setup();
+    const finishers: Array<() => void> = [];
+    const processQueue = vi.fn(() => new Promise<void>((resolve) => finishers.push(resolve)));
+    (window as Record<string, unknown>).__festieQueue = { queueMutation: vi.fn().mockResolvedValue('a'), processQueue };
+    const onClose = vi.fn();
+    setStoreState([item({ clientId: 'a' }), item({ clientId: 'b' })]);
+    const { rerender } = render(<PendingSyncSheet onClose={onClose} />);
+    await user.click(screen.getByText('Retry all'));
+    setStoreState([]);
+    rerender(<PendingSyncSheet onClose={onClose} />);
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => finishers.forEach((f) => f()));
+    expect(onClose).toHaveBeenCalled();
   });
 });

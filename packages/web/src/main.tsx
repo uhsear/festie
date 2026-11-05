@@ -108,15 +108,18 @@ const queryClient = new QueryClient({
 });
 
 import { useAuthStore } from '@festie/shared';
-import { setOnUnauthorized } from '@festie/shared/services';
+import { setOnUnauthorized, noticeSignedOut } from '@festie/shared/services';
 import { clearOfflineQueue } from './hooks/useOfflineQueue';
 
 setOnUnauthorized(async () => {
+  // Read before refreshToken(), which clears the user on failure.
+  const wasSignedIn = !!useAuthStore.getState().user;
   try {
     await useAuthStore.getState().refreshToken();
     return true;
   } catch {
     useAuthStore.getState().setUser(null);
+    noticeSignedOut(wasSignedIn);
     return false;
   }
 });

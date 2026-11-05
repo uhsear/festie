@@ -467,7 +467,7 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const formData = new FormData();
-      // The RN { uri, name, type } part is not a Blob; RN FormData accepts it.
+      // Expo's fetch accepts a Blob or a part with bytes(); the RN { uri } part is rejected.
       formData.append('avatar', file as Blob);
       const headers: Record<string, string> = {
         [TRUSTED_MUTATION_HEADER]: '1',
@@ -484,7 +484,10 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
           headers,
           body: formData,
         });
-      } catch {
+      } catch (fetchErr) {
+        // Keep the real cause in the log; only a transport failure maps to the offline copy.
+        console.warn('uploadAvatar fetch failed', fetchErr);
+        if (!isTransportError(fetchErr)) throw new Error(AVATAR_COPY.uploadFailed);
         throw new ApiClientError(
           'You appear to be offline — check your connection and try again.',
           0,
@@ -582,6 +585,11 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     set({ error });
   },
 });
+
+/** fetch rejects with a TypeError (or a network-worded Error) when no response arrived. */
+function isTransportError(err: unknown): boolean {
+  return err instanceof TypeError || (err instanceof Error && /network|failed to fetch|offline|timed out/i.test(err.message));
+}
 
 export const useAuthStore = create<AuthStore>()(
   persist(authStore, {

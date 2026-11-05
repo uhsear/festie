@@ -418,6 +418,7 @@ function createPasswordResetRateLimit(
     ErrorCodes,
     redis,
     scope = 'pw-reset',
+    paramKey = null,
     maxAttempts = 3,
     windowMs = 60 * 60 * 1000,
     message = 'Too many password reset attempts for this email. Try again later.',
@@ -453,7 +454,8 @@ function createPasswordResetRateLimit(
     // keyBy email (body or query). Falls through if email missing so the
     // validator can emit the proper 400 — we don't want the limiter to hide
     // an input-shape bug.
-    const email = normalize(req.body?.email || req.query?.email);
+    // paramKey: routes keyed by a URL param (admin resets carry no email) use it instead.
+    const email = normalize(paramKey ? req.params?.[paramKey] : req.body?.email || req.query?.email);
     if (!email) return next();
 
     // Hash email for Redis key (privacy)

@@ -78,7 +78,7 @@ function ForgotPasswordPageInner() {
 
         {!submitted ? (
           // Form
-          <form onSubmit={handleSubmit} className="bg-bg-card border border-border rounded-lg p-6 space-y-4 text-left">
+          <form noValidate onSubmit={handleSubmit} className="bg-bg-card border border-border rounded-lg p-6 space-y-4 text-left">
             <Input
               label={AUTH_COPY.emailLabel}
               name="email"

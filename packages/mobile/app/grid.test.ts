@@ -24,6 +24,12 @@ describe('mobile Grid screen', () => {
     expect(src).toMatch(/const clearAllFilters = \(\) => \{[^}]*setActiveGenres\(\[\]\)/);
     expect(src).toContain('activeGenreCount: activeGenres.length');
   });
+  it('shows crew-scoped avatars, falls back to the count on narrow tiles, and labels the tile', () => {
+    for (const needle of ['getCrewScopedOtherPicks', 'buildGridCrewAvatarsBySet(', 'AVATAR_MIN_COL_W', 'size="xxs"', 'crew.label', 'hasActiveCrew', 'getOtherPicks }']) {
+      expect(src).toContain(needle);
+    }
+    expect(src).not.toContain('getOverlapCount');
+  });
   it('drops the fixed column width and scale', () => {
     expect(src).not.toContain('const COL_W = 132');
     expect(src).not.toContain('const PX_PER_MIN = 1.6');

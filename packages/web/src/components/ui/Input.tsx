@@ -23,7 +23,7 @@ export default function Input({
   ...props
 }: InputProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const inputType = isPassword && !showPassword ? 'password' : type || 'text';
+  const inputType = isPassword ? (showPassword ? 'text' : 'password') : type || 'text';
   const generatedId = useId();
   const inputId = id || generatedId;
   const labelOnly = label && !props['aria-label'];

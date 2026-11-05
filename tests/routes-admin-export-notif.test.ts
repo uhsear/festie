@@ -682,6 +682,20 @@ describe('routes/admin-metrics.js', () => {
     assert.equal(res.body.data, null);
   });
 
+  test('GET /internal/metrics-json returns 403 for loopback requests that came through a proxy (FND-015)', async () => {
+    const { default: createAdminMetricsRoutes } = await import('../routes/admin-metrics.js');
+    const { router } = createAdminMetricsRoutes(makeDeps());
+    const app = express();
+    app.use((req: any, _res: any, next: any) => {
+      Object.defineProperty(req.socket, 'remoteAddress', { value: '127.0.0.1', configurable: true });
+      next();
+    });
+    app.use(router);
+    await request(app).get('/internal/metrics-json').set('CF-Connecting-IP', '203.0.113.9').expect(403);
+    await request(app).get('/internal/metrics-json').set('X-Forwarded-For', '203.0.113.9').expect(403);
+    await request(app).get('/internal/metrics-json').expect(200);
+  });
+
   test('GET /internal/metrics-json returns metrics for localhost', async () => {
     const { default: createAdminMetricsRoutes } = await import('../routes/admin-metrics.js');
     const deps = makeDeps();
@@ -1297,6 +1311,40 @@ describe('routes/admin-bulk.js', () => {
     assert.equal(res.body.data.results[1].status, 'error');
   });
 
+  test('POST /bulk/deactivate reports an unknown user as an error and revokes nothing for it', async () => {
+    const { app, deps } = await buildBulkRouter();
+    const res = await request(app)
+      .post('/bulk/deactivate')
+      .send({ userIds: ['user-1', 'user-nonexistent'] })
+      .expect(200);
+    assert.deepEqual(
+      res.body.data.results.map((r: any) => [r.userId, r.status]),
+      [['user-1', 'logged_out'], ['user-nonexistent', 'error']],
+    );
+    assert.equal(deps.invalidateUserSessions.mock.callCount(), 1);
+    const rows = deps.stores.auditLog.insert.mock.calls.map((c: any) => c.arguments[0]);
+    assert.equal(rows.find((r: any) => r.targetId === 'user-nonexistent').status, 'failure');
+  });
+
+  test('POST /bulk/archive-festivals reports an unknown festival as an error', async () => {
+    const deps = makeDeps();
+    deps.stores.festivals.getById = mock.fn(async (id: any) => (id === 'f1' ? { id: 'f1', name: 'Test' } : null));
+    const { default: mountAdminBulkRoutes } = await import('../routes/admin-bulk.js');
+    const router = express.Router();
+    mountAdminBulkRoutes({ router, deps, ctx: { adminWriteLimit: (req: any, res: any, next: any) => next() } });
+    const res = await request(buildApp(router))
+      .post('/bulk/archive-festivals')
+      .send({ festivalIds: ['f1', 'f-none'] })
+      .expect(200);
+    assert.deepEqual(
+      res.body.data.results.map((r: any) => [r.festivalId, r.status]),
+      [['f1', 'archived'], ['f-none', 'error']],
+    );
+    assert.equal(deps.stores.festivals.softDelete.mock.callCount(), 1);
+    const rows = deps.stores.auditLog.insert.mock.calls.map((c: any) => c.arguments[0]);
+    assert.equal(rows.find((r: any) => r.targetId === 'f-none').status, 'failure');
+  });
+
   test('POST /bulk/archive-festivals archives festivals', async () => {
     const { app, deps } = await buildBulkRouter();
     const res = await request(app)
@@ -1377,6 +1425,11 @@ describe('routes/admin-bulk.js', () => {
     const res = await request(app).get('/crews/crew-1/members').expect(200);
     assert.equal(res.body.error, null);
     assert.ok(Array.isArray(res.body.data));
+  });
+
+  test('GET /crews/:id/members returns 404 for an unknown crew', async () => {
+    const { app } = await buildBulkRouter();
+    await request(app).get('/crews/crew-nonexistent/members').expect(404);
   });
 
   test('GET /crews/:id/members returns 400 for invalid crew ID', async () => {

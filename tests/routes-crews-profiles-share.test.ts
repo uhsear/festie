@@ -772,7 +772,7 @@ describe('routes/crews.js', () => {
       assert.equal(res.status, 404);
     });
 
-    test('returns 400 when not a member', async () => {
+    test('returns 403 when not a member', async () => {
       const crewStore = {
         ...makeCrewDeps().stores.crews,
         getById: mock.fn(async () => ({ id: 'c1' })),
@@ -783,7 +783,7 @@ describe('routes/crews.js', () => {
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1/leave');
-      assert.equal(res.status, 400);
+      assert.equal(res.status, 403);
     });
 
     test('returns 400 when owner tries to leave', async () => {
@@ -1705,6 +1705,27 @@ describe('routes/profiles.js', () => {
         .put('/profiles/p1')
         .send({ notes: { 'unknown-set': 'note text' } });
       assert.equal(res.status, 400);
+    });
+
+    test('accepts a crew: note key for a known set (FND-003)', async () => {
+      const update = mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' }));
+      const { app } = await buildProfileApp({
+        normalizeNotePayload: mock.fn((n) => ({ value: n })),
+        stores: {
+          ...makeProfileDeps().stores,
+          profiles: {
+            ...makeProfileDeps().stores.profiles,
+            getById: mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' })),
+            update,
+          },
+        },
+      });
+      const res = await request(app)
+        .put('/profiles/p1')
+        .send({ notes: { 'crew:set-a': 'meet at front', 'set-b': 'private' } });
+      assert.equal(res.status, 200);
+      const bad = await request(app).put('/profiles/p1').send({ notes: { 'crew:nope': 'x' } });
+      assert.equal(bad.status, 400);
     });
 
     test('drops reminders that reference an unknown set', async () => {

@@ -330,19 +330,23 @@ describe('provider sign-in routes (database)', { skip, concurrency: 1 }, () => {
     assert.equal(await userCount(), before);
   });
 
-  test('an unverified provider email signs up with no email on the account', async () => {
+  test('an unverified provider email is still saved as the recovery email, left unverified (FND-023)', async () => {
     const s = await server();
-    const { data } = await startGoogleSignup(s, { email: uniqueEmail('u'), email_verified: false });
-    assert.equal(data.email, null);
+    const email = uniqueEmail('u');
+    const { data } = await startGoogleSignup(s, { email, email_verified: false });
+    assert.equal(data.email, email);
     const username = uniqueName('u');
     const done = await complete(s, { signupToken: data.signupToken, username });
     assert.equal(done.status, 201, JSON.stringify(done.body));
+    assert.equal(done.body.data.emailVerificationSent, true);
     assert.ok(done.body.data.token, 'a native client gets a body token');
     assert.ok(done.body.data.refreshToken);
-    const email = await withPool(
-      async (pool) => (await pool.query('SELECT email FROM users WHERE username = $1', [username])).rows[0].email,
+    const row = await withPool(
+      async (pool) =>
+        (await pool.query('SELECT email, email_verified_at FROM users WHERE username = $1', [username])).rows[0],
     );
-    assert.equal(email, null);
+    assert.equal(row.email, email);
+    assert.equal(row.email_verified_at, null);
   });
 
   test('complete refuses an expired or reused sign-up, a taken name, a minor and missing Terms', async () => {
@@ -405,7 +409,7 @@ describe('provider sign-in routes (database)', { skip, concurrency: 1 }, () => {
     const reg = await s.api
       .post('/api/v1/auth/register')
       .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ username, password: PASSWORD, confirmPassword: PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true });
+      .send({ username, password: PASSWORD, confirmPassword: PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` });
     assert.equal(reg.status, 201, JSON.stringify(reg.body));
     const subject = uniqueSubject();
     await withPool((pool) =>
@@ -425,6 +429,18 @@ describe('provider sign-in routes (database)', { skip, concurrency: 1 }, () => {
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.equal(res.body.data.status, 'signed-in');
     assert.equal(res.body.data.reactivated, true);
+  });
+
+  test('strips angle brackets from the Apple name instead of rejecting the sign-in', async () => {
+    const s = await server();
+    const nonce = await getNonce(s);
+    const res = await signIn(s, 'apple', {
+      idToken: await appleToken({ sub: uniqueSubject(), nonce: sha256hex(nonce) }),
+      nonce,
+      name: { givenName: '<b>Ada', familyName: 'Love>lace' },
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.data.name, 'bAda Lovelace');
   });
 
   test('Apple with an authorization code stores the sealed refresh token', async () => {
@@ -454,7 +470,7 @@ describe('provider sign-in routes (database)', { skip, concurrency: 1 }, () => {
       async (pool) =>
         (
           await pool.query(
-            `SELECT u.display_name, i.apple_refresh_token_enc, i.is_private_email
+            `SELECT u.display_name, u.email, u.email_verified_at, i.apple_refresh_token_enc, i.is_private_email
              FROM users u JOIN user_identities i ON i.user_id = u.id WHERE u.username = $1`,
             [username],
           )
@@ -462,6 +478,8 @@ describe('provider sign-in routes (database)', { skip, concurrency: 1 }, () => {
     );
     assert.equal(row.display_name, 'Ada Lovelace');
     assert.equal(row.is_private_email, true);
+    assert.match(row.email, /@privaterelay\.appleid\.com$/, 'the Apple relay address is the account email');
+    assert.notEqual(row.email_verified_at, null);
     assert.equal(open(row.apple_refresh_token_enc, TOKEN_KEY), 'rt-1');
   });
 });

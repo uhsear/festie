@@ -15,19 +15,20 @@ import {
   type LockscreenPageModel,
   type LockscreenPalette,
   type LockscreenTheme,
+  type LockscreenTier,
 } from './lockscreen';
 import { buildPosterArt, buildPosterPage } from './lockscreenPoster';
 import { formatDayChip } from './scheduleFormat';
-import { festivalStartMinutes, setMinuteRange, startsAfterMidnight } from './setStatus';
+import { festivalStartMinutes, getSetTimeBounds, setMinuteRange, startsAfterMidnight } from './setStatus';
 
 const HHMM = /^\d{1,2}:\d{2}$/;
-const HEADER_H = 11;
+const HEADER_H = 8.5;
 const HEADER_GAP = 1.5;
 const STAGE_ROW_H = 4;
 /** The last hour label and the legend share this line: the legend sits right of the label, in the columns area. */
 const LEGEND_H = 3.3;
 const DIVIDER_H = 4;
-const GUTTER_W = 5;
+const GUTTER_W = 6;
 const COL_GAP = 0.8;
 const MAX_HOUR_U = 16;
 const DARK_BG = '#0a0a0a';
@@ -35,17 +36,26 @@ const LIGHT_SHEET = '#ffffff';
 const NEAR_BLACK = '#0a0a0a';
 const WHITE = '#ffffff';
 const FALLBACK_STAGE = '#9999bb';
-const LEGEND = '■ your pick  ★ must  ● want  ○ maybe';
+const LEGEND = '■ pick  ★ must  ● want  ○ maybe';
+/** Grid text floor: hour labels, stage headers, block times, names and the legend. */
+const GRID_LABEL_U = 2.8;
+/** Footer and grid legend sit between the torch and camera buttons. */
+const SAFE_X = 26;
+const SAFE_W = 48;
+const FOOTER_U = 2.4;
+/** Footer baseline as a fraction of the image height. */
+const FOOTER_BASELINE = 0.945;
+export const LOCKSCREEN_FOOTER_MAX = 33;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export const LOCKSCREEN_PALETTES: Record<LockscreenTheme, LockscreenPalette> = {
   dark: {
     text: '#eaeaf2', text2: '#9999bb', muted: '#8787a8', surface: '#17171f', border: '#26263a',
-    must: '#ff3366', want: '#00e8d0', maybe: '#ffb020', clash: '#ffb020',
+    must: '#ff3366', want: '#00e8d0', maybe: '#c8c8cf', clash: '#b4b4d4',
   },
   light: {
     text: '#0b0b12', text2: '#2e2e44', muted: '#45455c', surface: '#eeeef4', border: '#c9c9d6',
-    must: '#a8002a', want: '#00594f', maybe: '#6b4100', clash: '#6b4100',
+    must: '#a8002a', want: '#00594f', maybe: '#2f2f35', clash: '#55557a',
   },
 };
 
@@ -57,17 +67,27 @@ export const LOCKSCREEN_PALETTES: Record<LockscreenTheme, LockscreenPalette> = {
 const minHourU = (cols: number) => (cols <= 2 ? 11 : 11.5);
 
 interface TierSpec {
-  tier: 'XL' | 'L' | 'M';
+  tier: LockscreenTier;
   timeU: number;
   periodU: number;
   artistU: number;
   maxLines: number;
   twoLine: boolean;
+  /** Most rows a page may hold at this tier. */
+  maxRows: number;
 }
-const XL: TierSpec = { tier: 'XL', timeU: 7.4, periodU: 2.6, artistU: 7.6, maxLines: 3, twoLine: true };
-const L: TierSpec = { tier: 'L', timeU: 6.2, periodU: 2.4, artistU: 6.4, maxLines: 2, twoLine: true };
-const M56: TierSpec = { tier: 'M', timeU: 5.4, periodU: 2.27, artistU: 5.6, maxLines: 1, twoLine: false };
-const M46: TierSpec = { tier: 'M', timeU: 5.4, periodU: 2.27, artistU: 4.6, maxLines: 2, twoLine: false };
+const XL: TierSpec = { tier: 'XL', timeU: 7.4, periodU: 2.6, artistU: 7.6, maxLines: 3, twoLine: true, maxRows: 4 };
+const L: TierSpec = { tier: 'L', timeU: 6.2, periodU: 2.4, artistU: 6.4, maxLines: 2, twoLine: true, maxRows: 7 };
+const M56: TierSpec = { tier: 'M', timeU: 4.8, periodU: 2.27, artistU: 5.6, maxLines: 3, twoLine: false, maxRows: Infinity };
+const M46: TierSpec = { tier: 'M', timeU: 4.8, periodU: 2.27, artistU: 4.6, maxLines: 3, twoLine: false, maxRows: Infinity };
+/** Dense tier: 14 picks fit one image. The artist never goes below 4.2u, the stage chip text never below 2.6u. */
+const S: TierSpec = { tier: 'S', timeU: 4, periodU: 2, artistU: 4.2, maxLines: 3, twoLine: false, maxRows: Infinity };
+/** Largest first. */
+const TIERS = [XL, L, M56, M46, S];
+const CHIP_U = 2.6;
+/** A long name shrinks to this share of the tier size (never below 4.2u) before it wraps past the limit or ellipsizes. */
+const NAME_SHRINK = 0.8;
+const NAME_FLOOR_U = 4.2;
 
 // ---- colour -------------------------------------------------------------
 
@@ -125,7 +145,10 @@ function ellipsizeWord(word: string, sizeU: number, widthU: number): string {
   return `${chars.slice(0, n).join('')}…`;
 }
 
-/** Greedy word wrap using the width table. Lines break only between words; a word wider than a line is ellipsized. */
+/**
+ * Greedy word wrap using the width table. Lines break only between words. A word wider than a line
+ * is ellipsized and ends the name, so a cut word is never followed by more text.
+ */
 export function wrapArtist(text: string, sizeU: number, widthU: number): string[] {
   const lines: string[] = [];
   let line = '';
@@ -137,6 +160,7 @@ export function wrapArtist(text: string, sizeU: number, widthU: number): string[
       lines.push(line);
       line = word;
     }
+    if (word !== raw) break;
   }
   if (line) lines.push(line);
   return lines.length ? lines : [''];
@@ -301,6 +325,7 @@ interface Ctx {
   stageOrder: Map<string, number>;
   contentTopU: number;
   contentEndU: number;
+  cornerSafeU: number;
   sideU: number;
 }
 
@@ -316,16 +341,31 @@ function selectItems(input: LockscreenInput, dayIndex: number): Item[] {
   const { sets, picks, mode } = input;
   const wanted = input.priorities?.length ? new Set(input.priorities) : null;
   const stageIds = input.stageIds ? new Set(input.stageIds) : null;
+  const { fromMs } = input;
   const items: Item[] = [];
   for (const set of sets) {
     if ((set.dayIndex ?? 0) !== dayIndex || !HHMM.test(set.startTime ?? '')) continue;
     const priority = picks?.[set.id] ?? null;
     if ((mode === 'picks' || mode === 'crew') && (!priority || (wanted && !wanted.has(priority)))) continue;
     if (mode === 'stages' && stageIds && !stageIds.has(set.stageId)) continue;
+    if (fromMs != null) {
+      const bounds = getSetTimeBounds(set, input.days, input.timeZone);
+      if (bounds && bounds.endMs <= fromMs) continue;
+    }
     const start = festivalStartMinutes(set.startTime);
     items.push({ set, priority, start, end: setMinuteRange(set)?.end ?? start + 60 });
   }
   return items.sort((a, b) => a.start - b.start);
+}
+
+/** Picks on `dayIndex` that pass the priority filter but have no set time yet, so the list cannot draw them. */
+function untimedPickCount(input: LockscreenInput, dayIndex: number): number {
+  if (input.mode !== 'picks' && input.mode !== 'crew') return 0;
+  const wanted = input.priorities?.length ? new Set(input.priorities) : null;
+  return input.sets.filter((set) => {
+    const priority = input.picks?.[set.id];
+    return (set.dayIndex ?? 0) === dayIndex && priority && (!wanted || wanted.has(priority)) && !HHMM.test(set.startTime ?? '');
+  }).length;
 }
 
 function dayIndexesFor(input: LockscreenInput): number[] {
@@ -348,24 +388,40 @@ function modeLabel(input: LockscreenInput, count: number): string {
   }
 }
 
-function buildHeader(ctx: Ctx, dayIndex: number, chip: string | null, metaBottom: string): LockscreenHeader {
+/** Header width table, measured on renders: Clash Display 700 capitals about 0.66em, Space Grotesk meta about 0.5em. */
+const dayWordEm = (word: string) => [...word].reduce((sum, ch) => sum + (ch === ' ' ? 0.25 : /\p{Lu}/u.test(ch) ? 0.66 : 0.55), 0);
+const META_EM = 0.5;
+
+/** `metas` runs from the fullest meta to the shortest; the first that fits beside the day word wins. */
+function buildHeader(ctx: Ctx, dayIndex: number, chip: string | null, metas: string[]): LockscreenHeader {
   const { input } = ctx;
   const day = input.days.find((d, i) => (d.dayIndex ?? i) === dayIndex);
   const dayChip = day ? formatDayChip(day) : null;
   const word = (dayChip?.label ?? `Day ${dayIndex + 1}`).toUpperCase();
-  const availW = 100 - 2 * ctx.sideU - 38 - (chip ? 10 : 0);
-  const daySizeU = Math.max(6, Math.min(7.4, availW / (word.length * 0.66)));
+  const inner = 100 - 2 * ctx.sideU;
+  const chipW = chip ? 11 : 0;
+  const metaW = (text: string, sizeU: number) => text.length * META_EM * sizeU;
+  const shortest = metas.at(-1)!;
+  // The day word runs 4.8-5.6u. It shrinks further (to 4.2u) only when a very long label would push the meta off.
+  const reserve = metaW(shortest, 2.2) + 2;
+  const daySizeU = Math.floor(Math.max(4.2, Math.min(5.6, (inner - chipW - reserve) / dayWordEm(word))) * 10) / 10;
   const festName = input.festival.name.replace(/\s+\d{4}$/, '');
-  const metaTop = dayChip?.date ? `${festName} · ${dayChip.date}` : festName;
-  // Room left of the day word and chip; the meta lines shrink to fit it on one line each.
-  const metaAvail = 100 - 2 * ctx.sideU - word.length * 0.66 * daySizeU - (chip ? 9 : 0) - 2;
+  const date = dayChip?.date ?? '';
+  // One meta line beside the day word: drop the festival name, then the date, then the split tail, until it fits.
+  const avail = inner - dayWordEm(word) * daySizeU - chipW - 2;
+  const tops = [[festName, date].filter(Boolean).join(' · '), date, ''];
+  const options = metas.flatMap((bottom) => tops.map((top) => ({ top, bottom })));
+  const line = (o: { top: string; bottom: string }) => [o.top, o.bottom].filter(Boolean).join(' · ');
+  // Prefer a shorter line at a readable 2.6u over the full line at the 2.2u floor.
+  const fitsAt = (size: number) => options.find((o) => metaW(line(o), size) <= avail);
+  const meta = fitsAt(2.6) ?? fitsAt(2.2) ?? { top: '', bottom: shortest };
   return {
     day: word,
-    daySizeU: Math.round(daySizeU * 10) / 10,
+    daySizeU,
     pageChip: chip,
-    metaTop,
-    metaBottom,
-    metaSizeU: Math.round(Math.max(2.2, Math.min(2.9, metaAvail / (Math.max(metaTop.length, metaBottom.length) * 0.58))) * 10) / 10,
+    metaTop: meta.top,
+    metaBottom: meta.bottom,
+    metaSizeU: Math.floor(Math.max(2.2, Math.min(2.8, avail / (line(meta).length * META_EM))) * 10) / 10,
     y: ctx.contentTopU,
     height: HEADER_H,
   };
@@ -373,10 +429,33 @@ function buildHeader(ctx: Ctx, dayIndex: number, chip: string | null, metaBottom
 
 // ---- list pages ---------------------------------------------------------
 
-type BaseRow = Omit<LockscreenListRow, 'y' | 'height' | 'artistLines'>;
+type BaseRow = Omit<LockscreenListRow, 'y' | 'height' | 'artistLines' | 'artistSizeU' | 'timeRepeat'>;
+
+/** Rows joined by overlaps share a group, numbered by its first row. Null for a row that overlaps no other row. */
+function clashGroups(items: Item[], pairs: ReturnType<typeof detectConflicts>): Array<number | null> {
+  const index = new Map(items.map((it, i) => [it.set.id, i]));
+  const parent = items.map((_, i) => i);
+  const root = (i: number): number => (parent[i] === i ? i : (parent[i] = root(parent[i]!)));
+  const linked = new Set<number>();
+  for (const p of pairs) {
+    const a = index.get(p.setA.id);
+    const b = index.get(p.setB.id);
+    if (a == null || b == null) continue;
+    const [ra, rb] = [root(a), root(b)];
+    parent[Math.max(ra, rb)] = Math.min(ra, rb);
+    linked.add(a).add(b);
+  }
+  return items.map((_, i) => (linked.has(i) ? root(i) : null));
+}
+
+/** "Alesso (Sunset Set)" gives artist "Alesso" and tag "Sunset Set". */
+function splitTag(name: string): { artist: string; tag: string | null } {
+  const m = /\s*\(([^()]+)\)$/.exec(name);
+  return m && m.index > 0 ? { artist: name.slice(0, m.index), tag: m[1]!.trim() } : { artist: name, tag: null };
+}
 
 function baseRows(items: Item[], ctx: Ctx): BaseRow[] {
-  const { input } = ctx;
+  const { input, palette } = ctx;
   const picked = input.sets.filter((s) => input.picks?.[s.id] && HHMM.test(s.startTime ?? '') && s.endTime);
   const day = items[0]?.set.dayIndex ?? 0;
   const pairs = detectConflicts(
@@ -384,7 +463,9 @@ function baseRows(items: Item[], ctx: Ctx): BaseRow[] {
     (id) => input.picks?.[id],
   );
   const clashes = clashBadgeBySetId(pairs, input.festival.b2bSeparator);
-  return items.map((it) => {
+  const groups = clashGroups(items, pairs);
+  const glyphColor: Record<Priority, string> = { must: palette.must, 'want-to-see': palette.text, maybe: palette.text2 };
+  return items.map((it, i) => {
     const stage = ctx.stageById.get(it.set.stageId);
     const colors = stageColors(stage, input.theme);
     const [time = '', period = ''] = formatTime(it.set.startTime).split(' ');
@@ -397,56 +478,93 @@ function baseRows(items: Item[], ctx: Ctx): BaseRow[] {
       time,
       period,
       until: `to ${formatTime(it.set.endTime).replace(/ [AP]M$/, '')}`,
-      artist: artistDisplayName(it.set, input.festival.b2bSeparator).normalize('NFC'),
+      ...splitTag(artistDisplayName(it.set, input.festival.b2bSeparator).normalize('NFC')),
+      artistColor: it.priority === 'maybe' ? palette.maybe : palette.text,
+      glyphColor: it.priority ? glyphColor[it.priority] : null,
+      clashGroup: groups[i] ?? null,
       stage: stage?.name ?? '',
       stageShort: shortStageName(stage?.name ?? ''),
       stageText: colors.text,
       stageMark: colors.mark,
       ink: colors.ink,
       priority: it.priority,
-      clash: badge ? { label: badge.label, short: 'clash' as const } : null,
+      // Short so it fits the stage line: "↔ Matthias", "↔ Matthias +1", or the shared tight-change label.
+      clash: badge ? { label: badge.tight ? badge.label : `↔ ${badge.otherName}${badge.more ? ` +${badge.more}` : ''}`, short: 'clash' as const } : null,
       crew:
         input.mode === 'crew'
-          ? { initials: members.slice(0, 3).map(initialsOf), more: Math.max(0, members.length - 3), solo: members.length === 0 }
+          ? {
+              initials: members.slice(0, 3).map(initialsOf),
+              more: Math.max(0, members.length - 3),
+              solo: members.length === 0 && input.crewLoaded === true,
+            }
           : null,
     };
   });
 }
 
-function listColumns(
-  spec: TierSpec,
-  side: number,
-  crew: boolean,
-  clashWord: boolean,
-  rows: BaseRow[],
-): LockscreenListPage['layout'] {
+function listColumns(spec: TierSpec, side: number, crew: boolean, rows: BaseRow[]): LockscreenListPage['layout'] {
   // Widest "time period" on the page, from the width table, so '10:30 PM' never clips.
   const widest = Math.max(
     0,
     ...rows.map((r) => wordWidthU(r.time, spec.timeU) + wordWidthU(` ${r.period}`, spec.periodU) * 1.1),
   );
-  const marks = 6 + (crew ? 14 : 0) + (clashWord && !spec.twoLine ? 8 : 0);
+  const marks = 6 + (crew ? 14 : 0);
   if (spec.twoLine) {
     const timeX = side + 2.4;
     const timeWidth = Math.max(spec.timeU * 3.3, widest);
     const artistX = timeX + timeWidth + 2;
     return { barX: side, timeX, timeWidth, chipX: null, chipWidth: 0, artistX, artistWidth: 100 - side - marks - artistX };
   }
-  const timeWidth = Math.max(17.5, widest);
+  const timeWidth = Math.max(spec.timeU * 3.23, widest);
+  // Bold capitals with letter spacing run about 0.7em in Space Grotesk.
+  const chipWidth = Math.max(13, ...rows.map((r) => r.stageShort.length * 0.7 * CHIP_U + 1.2));
   const chipX = side + timeWidth + 1.5;
-  const artistX = chipX + 13 + 2;
-  return { barX: side, timeX: side, timeWidth, chipX, chipWidth: 13, artistX, artistWidth: 100 - side - marks - artistX };
+  const artistX = chipX + chipWidth + 2;
+  return { barX: side, timeX: side, timeWidth, chipX, chipWidth, artistX, artistWidth: 100 - side - marks - artistX };
 }
 
 /** Real fonts run wider than the width table; wrap list names a little early so the native one-line clamp never cuts them. */
 const LIST_FIT = 0.92;
+/** A set tag ("Sunset Set") draws at this share of the row's artist size. */
+export const LOCKSCREEN_TAG_SCALE = 0.62;
+const BRACKET_W = 0.6;
 
-function rowHeightU(spec: TierSpec, lines: number): number {
-  if (!spec.twoLine) return lines * spec.artistU * 1.1 + 2.2;
-  return Math.max(spec.timeU * 1.1 + 3.6, lines * spec.artistU * 1.12 + 3.75) + 3.2;
+function rowHeightU(spec: TierSpec, lines: number, sizeU: number): number {
+  if (!spec.twoLine) return Math.max(lines * sizeU * 1.1, CHIP_U * 1.2 + 1, spec.timeU * 1.1) + (spec === S ? 1.2 : 2.2);
+  return Math.max(spec.timeU * 1.1 + 3.6, lines * sizeU * 1.12 + 3.75) + 3.2;
 }
 
-/** Lays one page's rows out at `spec`, or null when they do not fit `availU` (or a tier-M row wraps at 5.6u). */
+/** Wraps a B2B name before the separator when that costs no extra line ("Bullet Tooth / B2B Sidney Charles"). */
+function wrapName(text: string, sizeU: number, widthU: number, sep: string): string[] {
+  const plain = wrapArtist(text, sizeU, widthU);
+  const lower = text.toLowerCase();
+  const at = [sep, 'b2b'].map((s) => lower.indexOf(` ${s.toLowerCase()} `)).find((i) => i > 0) ?? -1;
+  if (plain.length < 2 || at < 0) return plain;
+  const split = [...wrapArtist(text.slice(0, at), sizeU, widthU), ...wrapArtist(text.slice(at + 1), sizeU, widthU)];
+  return split.length <= plain.length && !split.some((l) => l.endsWith('…')) ? split : plain;
+}
+
+/**
+ * A long name first shrinks (to NAME_SHRINK of the tier, never below 4.2u) to stay within `preferLines`,
+ * then wraps up to maxLines, then shrinks to 4.2u. It ellipsizes only when it still does not fit.
+ */
+function fitName(text: string, spec: TierSpec, widthU: number, sep: string): { sizeU: number; lines: string[] } {
+  const floor = Math.max(NAME_FLOOR_U, Math.round(spec.artistU * NAME_SHRINK * 10) / 10);
+  const preferLines = spec.twoLine ? spec.maxLines : 2;
+  let lines: string[] = [];
+  let size = spec.artistU;
+  // Last resort before a cut word: shrink to the 4.2u floor.
+  for (const [limit, min] of [[preferLines, floor], [spec.maxLines, floor], [spec.maxLines, NAME_FLOOR_U]] as const) {
+    for (size = spec.artistU; ; size = Math.round((size - 0.2) * 10) / 10) {
+      lines = wrapName(text, size, widthU, sep);
+      if (lines.length <= limit && !lines.some((l) => l.endsWith('…'))) return { sizeU: size, lines };
+      if (size - 0.2 < min - 1e-9) break;
+    }
+  }
+  return { sizeU: size, lines: clampLines(lines, spec.maxLines).lines };
+}
+
+/** Lays one page's rows out at `spec`, or null when they do not fit `availU`. */
 function layoutList(
   rows: BaseRow[],
   items: Item[],
@@ -456,22 +574,47 @@ function layoutList(
   availU: number,
   force: boolean,
 ): LockscreenListPage | null {
-  const layout = listColumns(spec, ctx.sideU, ctx.input.mode === 'crew', rows.some((r) => r.clash), rows);
-  const sized = rows.map((r) => {
-    const wrapped = wrapArtist(r.artist, spec.artistU, layout.artistWidth * LIST_FIT);
-    return { lines: clampLines(wrapped, spec.maxLines).lines, tooLong: wrapped.length > spec.maxLines };
-  });
-  if (!force && spec === M56 && sized.some((s) => s.tooLong)) return null;
+  const layout = listColumns(spec, ctx.sideU, ctx.input.mode === 'crew', rows);
+  const widthU = layout.artistWidth * LIST_FIT;
+  const sep = ctx.input.festival.b2bSeparator || 'b2b';
   const dividerAt = items.findIndex((it, i) => i > 0 && startsAfterMidnight(it.set.startTime) && !startsAfterMidnight(items[i - 1]!.set.startTime));
   let y = y0;
   const out = rows.map((r, i): LockscreenListRow => {
     if (i === dividerAt) y += DIVIDER_H;
-    const height = rowHeightU(spec, sized[i]!.lines.length);
-    const row = { ...r, artistLines: sized[i]!.lines, y, height };
+    const { sizeU, lines } = fitName(r.artist, spec, widthU, sep);
+    const height = rowHeightU(spec, lines.length, sizeU);
+    const last = lines.at(-1)!;
+    // Compact tiers draw the tag after the last name line, at LOCKSCREEN_TAG_SCALE of the name size.
+    const tagFits = (tag: string) =>
+      spec.twoLine || (!last.endsWith('…') && wordWidthU(last, sizeU) + wordWidthU(` ${tag}`, sizeU * LOCKSCREEN_TAG_SCALE) <= widthU);
+    const prev = rows[i - 1];
+    const row = {
+      ...r,
+      tag: r.tag && tagFits(r.tag) ? r.tag : null,
+      artistLines: lines,
+      artistSizeU: sizeU,
+      timeRepeat: !!prev && prev.time === r.time && prev.period === r.period,
+      y,
+      height,
+    };
     y += height;
     return row;
   });
   if (!force && y - y0 > availU + 1e-9) return null;
+  // The time (and the XL/L "to 7:00" line) of every row ends above the torch and camera buttons.
+  const timeBottom = (r: LockscreenListRow) =>
+    spec.twoLine ? r.y + 1 + spec.timeU + 0.9 + 3.6 : r.y + (r.height + spec.timeU * 1.1) / 2;
+  if (!force && out.some((r) => timeBottom(r) > ctx.cornerSafeU + 1e-9)) return null;
+  // One bracket per run of overlapping rows on this image, in the side margin left of the times.
+  const clashSpans: LockscreenListPage['clashSpans'] = [];
+  for (let i = 0; i < out.length; i++) {
+    const g = out[i]!.clashGroup;
+    if (g == null || out[i - 1]?.clashGroup === g) continue;
+    let j = i;
+    while (out[j + 1]?.clashGroup === g) j++;
+    const top = out[i]!.y + 0.8;
+    clashSpans.push({ x: ctx.sideU - 2, width: BRACKET_W, y: top, height: out[j]!.y + out[j]!.height - 0.8 - top });
+  }
   const dayWord = ctx.input.days.find((d, i) => (d.dayIndex ?? i) === (items[0]?.set.dayIndex ?? 0));
   const label = `AFTER MIDNIGHT · STILL ${(dayWord ? formatDayChip(dayWord).label : 'TONIGHT').toUpperCase()}`;
   return {
@@ -479,32 +622,33 @@ function layoutList(
     tier: spec.tier,
     artistSizeU: spec.artistU,
     timeSizeU: spec.timeU,
+    periodSizeU: spec.periodU,
+    chipSizeU: CHIP_U,
     layout,
     rows: out,
+    clashSpans,
     divider: dividerAt > 0 ? { beforeIndex: dividerAt, y: out[dividerAt]!.y - DIVIDER_H / 2, label } : null,
   };
 }
 
+/** Fewest images first, then the largest tier that fits every image, so a series shares one tier. */
 function listPages(items: Item[], ctx: Ctx): LockscreenListPage[] {
   const rows = baseRows(items, ctx);
   const y0 = ctx.contentTopU + HEADER_H + HEADER_GAP;
   const availU = ctx.contentEndU - y0;
-  const tryPage = (a: number, b: number, force: boolean): LockscreenListPage | null => {
-    const n = b - a;
-    const specs = [...(n <= 4 ? [XL] : []), ...(n <= 7 ? [L] : []), M56, M46];
-    for (const spec of specs) {
-      const page = layoutList(rows.slice(a, b), items.slice(a, b), spec, ctx, y0, availU, force && spec === M46);
-      if (page) return page;
+  const lay = (spec: TierSpec, [a, b]: [number, number], force: boolean) =>
+    force || b - a <= spec.maxRows ? layoutList(rows.slice(a, b), items.slice(a, b), spec, ctx, y0, availU, force) : null;
+  for (let k = 1; k <= items.length; k++) {
+    const ranges = balancedRanges(items.length, k);
+    for (const spec of TIERS) {
+      const pages = ranges.map((r) => lay(spec, r, false));
+      if (pages.every((p) => p !== null)) return pages as LockscreenListPage[];
     }
-    return null;
-  };
-  const ranges = paginateBy(items.length, (a, b) => tryPage(a, b, false) !== null);
-  return ranges.map(([a, b]) => tryPage(a, b, true)!);
+  }
+  return balancedRanges(items.length, items.length).map((r) => lay(S, r, true)!);
 }
 
 // ---- grid pages ---------------------------------------------------------
-
-const GRID_FLOOR_U = 2.2;
 
 function buildBlock(
   it: Item,
@@ -523,15 +667,17 @@ function buildBlock(
   const artist = artistDisplayName(it.set, input.festival.b2bSeparator);
   const carryOver = it.start < page.startMinute;
   const inlineTime = cols <= 2 && !carryOver ? compactRange(it.start, it.end) : null;
-  const text = carryOver ? `↑ ${shortTime(it.start)} ${artist}` : inlineTime ? `${artist} ${inlineTime}` : artist;
   const textMode = height < 4.5 ? 'none' : height < 7.6 ? 'name' : 'full';
+  // A short carry-over block keeps the name and drops the start time.
+  const carryLabel = carryOver ? (textMode === 'full' ? `↑ ${shortTime(it.start)} ${artist}` : `↑ ${artist}`) : null;
+  const text = carryLabel ?? (inlineTime ? `${artist} ${inlineTime}` : artist);
   const textW = col.width - 0.8 - 1 - 1.2;
-  const timeLine = textMode === 'full' && !inlineTime ? 3 : 0;
+  const timeLine = textMode === 'full' && !inlineTime && !carryOver ? GRID_LABEL_U * 1.15 : 0;
   const maxLinesFor = (size: number) => Math.max(0, Math.floor((height - 1.6 - timeLine) / (size * 1.12)));
   const start = cols <= 2 ? 4.8 : 4;
-  let size = fitArtistU(text, start, GRID_FLOOR_U, textW);
+  let size = fitArtistU(text, start, GRID_LABEL_U, textW);
   let lines = wrapArtist(text, size, textW);
-  while (size > GRID_FLOOR_U && lines.length > maxLinesFor(size)) {
+  while (size > GRID_LABEL_U && lines.length > maxLinesFor(size)) {
     size = Math.round((size - 0.2) * 10) / 10;
     lines = wrapArtist(text, size, textW);
   }
@@ -550,17 +696,17 @@ function buildBlock(
     maxLines,
     textMode,
     artistLines: textMode === 'none' ? [] : clamped.lines,
-    ellipsis: textMode !== 'none' && clamped.clamped,
+    ellipsis: textMode !== 'none' && (clamped.clamped || !!clamped.lines.at(-1)?.endsWith('…')),
     inlineTime,
     priority: it.priority,
     picked,
     fill: picked ? colors.mark : palette.surface,
     edge: colors.mark,
-    ink: picked ? colors.ink : palette.text,
+    ink: picked ? colors.ink : palette.text2,
     outline: picked && input.theme === 'light' ? '#0b0b12' : null,
     ring: it.priority === 'must',
     carryOver,
-    carryLabel: carryOver ? `↑ ${shortTime(it.start)} ${artist}` : null,
+    carryLabel,
   };
 }
 
@@ -612,8 +758,10 @@ function gridPageModels(items: Item[], ctx: Ctx): { page: LockscreenGridPage; it
       hours,
       blocks,
       legend: LEGEND,
-      legendX: ctx.sideU + GUTTER_W,
+      legendX: SAFE_X,
       legendY: gridY + hoursInPage * hourU + 0.3,
+      legendWidth: SAFE_W,
+      labelSizeU: GRID_LABEL_U,
     };
     return { page, items: inPage.filter((i) => i.start >= p.startMinute), span: spanLabel(p.startMinute, p.endMinute) };
   });
@@ -632,7 +780,9 @@ function pageStageMarks(setIds: string[], ctx: Ctx): string[] {
 export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
   const { width, height, theme } = input;
   const heightU = (height / width) * 100;
-  const contentTopU = (input.tallClock ? LOCKSCREEN_ZONES.tallTop : LOCKSCREEN_ZONES.top) * heightU;
+  const clock = input.clock ?? (input.tallClock ? 'big' : 'normal');
+  const top = { normal: LOCKSCREEN_ZONES.top, big: LOCKSCREEN_ZONES.tallTop, widgets: LOCKSCREEN_ZONES.widgetsTop }[clock];
+  const contentTopU = top * heightU;
   const ctx: Ctx = {
     input,
     palette: LOCKSCREEN_PALETTES[theme],
@@ -640,6 +790,7 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
     stageOrder: new Map(input.stages.map((s, i) => [s.id, i])),
     contentTopU,
     contentEndU: LOCKSCREEN_ZONES.contentEnd * heightU,
+    cornerSafeU: LOCKSCREEN_ZONES.cornerSafe * heightU,
     sideU: LOCKSCREEN_ZONES.sidePadU,
   };
 
@@ -662,6 +813,7 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
           });
         })();
     const n = bodies.length;
+    const untimed = untimedPickCount(input, dayIndex);
     series.push({
       dayIndex,
       pages: bodies.map((b, i) => {
@@ -670,9 +822,9 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
           input.mode === 'stages'
             ? `${(b.body as LockscreenGridPage).columns.length} ${(b.body as LockscreenGridPage).columns.length === 1 ? 'stage' : 'stages'}`
             : modeLabel(input, items.length);
-        const meta = [label, b.tail].filter(Boolean).join(' · ');
+        const meta = (tail: string) => [label, tail, untimed ? `+${untimed} no set time` : ''].filter(Boolean).join(' · ');
         return {
-          header: buildHeader(ctx, dayIndex, chip, meta),
+          header: buildHeader(ctx, dayIndex, chip, b.tail ? [meta(b.tail), meta('')] : [meta('')]),
           body: b.body,
           dayIndex,
           setIds: b.ids.map((it) => it.set.id),
@@ -694,16 +846,18 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
         })
       : null;
   const flat = series.flatMap((s) => s.pages);
-  const stamp = savedStamp(input.savedAt);
+  const saved = `Saved ${savedStamp(input.savedAt).replace(',', '')}`;
   const pages: LockscreenPageModel[] = flat.map((p, i) => ({
     ...p,
     ...(poster && { poster: buildPosterPage(poster, p.header.day, pageStageMarks(p.setIds, ctx), ctx.sideU, p.header.y + p.header.height) }),
     footer: {
-      text: ['festie.us', `Saved ${stamp}`, flat.length > 1 ? `image ${i + 1} of ${flat.length}` : '', 'set times can change, re-save in Festie']
-        .filter(Boolean)
-        .join(' · '),
+      // At most LOCKSCREEN_FOOTER_MAX characters, so it fits between the torch and camera buttons.
+      text: flat.length > 1 ? `${saved} · ${i + 1} of ${flat.length}` : `festie.us · ${saved}`,
       showMark: theme === 'dark',
-      y: ctx.contentEndU + 1.5,
+      x: SAFE_X,
+      width: SAFE_W,
+      sizeU: FOOTER_U,
+      y: FOOTER_BASELINE * heightU - 0.8 * FOOTER_U,
     },
   }));
 

@@ -46,6 +46,7 @@ export default function createCrewMemberRoutes(deps: any) {
    * already gone). io may be absent in some test/CLI contexts.
    * @param crewId - the crew the user was removed from
    * @param removedUserId - the user whose sockets must leave the room
+   * @param reason - 'left' for a voluntary leave, 'kicked' for removal by an owner/admin
    */
   /**
    * Bound on the adapter round-trip below. Generous enough that a healthy Redis
@@ -54,7 +55,7 @@ export default function createCrewMemberRoutes(deps: any) {
    */
   const EVICTION_TIMEOUT_MS = 3_000;
 
-  async function evictUserFromCrewRoom(crewId: string, removedUserId: string) {
+  async function evictUserFromCrewRoom(crewId: string, removedUserId: string, reason: 'left' | 'kicked') {
     // A background (HTTP) sharer has no sharing socket, so evict the cached fix
     // and tell peers to drop the marker once, whatever sockets the user holds.
     void dropLivePosition(redis, crewId, removedUserId);
@@ -65,7 +66,7 @@ export default function createCrewMemberRoutes(deps: any) {
         _v: 1,
         crewId,
         userId: removedUserId,
-        reason: 'revoked',
+        reason,
       });
       // fetchSockets() goes through the Redis adapter, which issues PUBSUB NUMSUB
       // on the pub connection. That connection now buffers while Redis is
@@ -156,7 +157,7 @@ export default function createCrewMemberRoutes(deps: any) {
         if (!crew) return sendError(res, 404, 'Crew not found', ErrorCodes.NOT_FOUND);
 
         const membership = await stores.crews.getMember(crewId, req.user.userId);
-        if (!membership) return sendError(res, 400, 'Not a member of this crew', ErrorCodes.INVALID_INPUT);
+        if (!membership) return sendError(res, 403, 'Not a member of this crew', ErrorCodes.FORBIDDEN);
 
         if (membership.role === 'owner') {
           return sendError(res, 400, 'Transfer ownership before leaving', ErrorCodes.FORBIDDEN);
@@ -174,7 +175,7 @@ export default function createCrewMemberRoutes(deps: any) {
         await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'member-left' });
         // H1: force the leaver's still-connected socket(s) out of the crew room
         // so they stop receiving live location/SOS and can't keep injecting.
-        await evictUserFromCrewRoom(crewId, req.user.userId);
+        await evictUserFromCrewRoom(crewId, req.user.userId, 'left');
 
         log.info('crew:left', { crewId, userId: req.user.userId });
         return sendSuccess(res, { success: true });
@@ -226,7 +227,7 @@ export default function createCrewMemberRoutes(deps: any) {
         });
         // H1: force the kicked member's still-connected socket(s) out of the
         // crew room so they stop receiving live location/SOS and can't inject.
-        await evictUserFromCrewRoom(crewId, targetUserId);
+        await evictUserFromCrewRoom(crewId, targetUserId, 'kicked');
 
         log.info('crew:member-kicked', { crewId, targetUserId, byUserId: req.user.userId });
         return sendSuccess(res, { success: true });

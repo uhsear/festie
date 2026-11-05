@@ -161,20 +161,32 @@ export interface ReauthBody {
  * Runs `run`. If the server asks for a recent check, prompts once,
  * posts it to /auth/reauth and runs `run` again. `null` means the user cancelled.
  * `ask` returns a password string, or a ReauthBody for an account with no password.
+ * With `retryWrongPassword`, a wrong password asks again with the server's message
+ * instead of throwing, so a typo does not end the whole action.
  */
 export async function withReauth<T>(
   run: () => Promise<T>,
-  ask: () => Promise<string | ReauthBody | null>,
+  ask: (error?: string) => Promise<string | ReauthBody | null>,
+  opts: { retryWrongPassword?: boolean } = {},
 ): Promise<T | null> {
   try {
     return await run();
   } catch (err) {
     if (!(err instanceof ApiClientError) || err.code !== 'REAUTH_REQUIRED') throw err;
   }
-  const answer = await ask();
-  if (answer === null) return null;
-  await api.post('/auth/reauth', typeof answer === 'string' ? { password: answer } : answer);
-  return run();
+  let error: string | undefined;
+  for (;;) {
+    const answer = await ask(error);
+    if (answer === null) return null;
+    try {
+      await api.post('/auth/reauth', typeof answer === 'string' ? { password: answer } : answer);
+    } catch (err) {
+      if (!opts.retryWrongPassword || !(err instanceof ApiClientError) || err.code !== 'PASSWORD_INCORRECT') throw err;
+      error = err.message;
+      continue;
+    }
+    return run();
+  }
 }
 
 export interface RemovalSummary {
@@ -359,7 +371,7 @@ export function addCrewMember(crewId: string, userId: string): Promise<unknown> 
 }
 
 export async function fetchFestivalPreview(festivalId: string) {
-  const detail = await api.get<FestivalPreviewInput>(`/festivals/${enc(festivalId)}`);
+  const detail = await api.get<FestivalPreviewInput>(`/admin/festivals/${enc(festivalId)}`);
   return buildFestivalPreview(detail);
 }
 

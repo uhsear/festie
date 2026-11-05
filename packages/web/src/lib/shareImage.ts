@@ -77,11 +77,13 @@ export async function captureAndShareImages(
       await navigator.share({ files, title: opts.title });
       return 'shared';
     }
-    for (const file of files) {
+    // Browsers drop several download clicks fired in one tick, and an early revoke can cancel one.
+    for (const [i, file] of files.entries()) {
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 400));
       const url = URL.createObjectURL(file);
       const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     }
     return 'downloaded';
   } catch (e: unknown) {

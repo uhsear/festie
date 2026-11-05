@@ -182,6 +182,26 @@ describe('middleware: audit-middleware', () => {
     assert.ok(deps.stores.auditLog.insert.mock.calls.length >= 1);
   });
 
+  it('names the resource from the mount path when the route is only /:id (FND-019)', async () => {
+    const deps = makeDeps();
+    const middleware = createAuditMiddleware(deps);
+    const req = mockReq({
+      method: 'DELETE',
+      baseUrl: '/api/v1/profiles',
+      route: { path: '/:id' },
+      params: { id: 'prof-1' },
+      user: { userId: 'admin-1' },
+    });
+    const res = mockRes();
+    middleware(req, res, () => {});
+    res._emit('finish');
+    await new Promise((r) => setTimeout(r, 50));
+    const entry = (deps.stores.auditLog.insert.mock.calls[0] as any).arguments[0];
+    assert.equal(entry.action, 'profiles.deleted');
+    assert.equal(entry.target_type, 'profiles');
+    assert.equal(entry.target_id, 'prof-1');
+  });
+
   it('handles audit log insert errors gracefully', async () => {
     const deps = makeDeps();
     deps.stores.auditLog.insert = mock.fn(async () => { throw new Error('db down'); });
@@ -744,5 +764,59 @@ describe('middleware: request timeout (real configureMiddleware)', () => {
     // clearTimeout) were broken, the stale timer would try to write a second,
     // now-invalid response here.
     await new Promise((r) => setTimeout(r, 120));
+  });
+});
+
+describe('middleware: crews rate limit', () => {
+  it('limits crew writes but never spends the budget on reads (FND-002)', async () => {
+    const calls: string[] = [];
+    const { app } = makeMiddlewareApp({
+      ctx: {
+        rateLimit: (_max: number, scope: string) => (req: any, res: any, next: any) => {
+          if (scope !== 'crews') return next();
+          calls.push(req.method);
+          return sendError(res, 429, 'Too many requests', ErrorCodes.RATE_LIMITED);
+        },
+      },
+    });
+    app.all('/api/v1/crews/:id/days', (_req: any, res: any) => res.json({ ok: true }));
+
+    await request(app).get('/api/v1/crews/abc/days').expect(200);
+    await request(app).post('/api/v1/crews/abc/days').expect(429);
+    assert.deepEqual(calls, ['POST']);
+  });
+});
+
+describe('middleware: global rate limit skip', () => {
+  it('skips only the POST web-vitals beacon, not other methods on that path', async () => {
+    const counted: string[] = [];
+    const { app } = makeMiddlewareApp({
+      ctx: {
+        rateLimit: (...args: any[]) => (req: any, _res: any, next: any) => {
+          if (args.length === 0) counted.push(req.method);
+          next();
+        },
+      },
+    });
+    app.all('/api/v1/metrics/web-vitals', (_req: any, res: any) => res.json({ ok: true }));
+
+    await request(app).post('/api/v1/metrics/web-vitals').expect(200);
+    await request(app).get('/api/v1/metrics/web-vitals').expect(200);
+    assert.deepEqual(counted, ['GET']);
+  });
+});
+
+describe('middleware: request log error detail', () => {
+  it('adds the error code and message to a 5xx request log line (FND-096)', async () => {
+    const lines: any[] = [];
+    const { app } = makeMiddlewareApp({
+      ctx: { log: { info() {}, warn() {}, error: (_m: string, meta: any) => lines.push(meta) } },
+    });
+    app.get('/api/v1/boom', (_req: any, res: any) => sendError(res, 500, 'Could not load', ErrorCodes.INTERNAL_ERROR));
+
+    await request(app).get('/api/v1/boom').expect(500);
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].errorCode, ErrorCodes.INTERNAL_ERROR);
+    assert.equal(lines[0].errorMessage, 'Could not load');
   });
 });

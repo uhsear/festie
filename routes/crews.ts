@@ -380,11 +380,6 @@ export default function createCrewRoutes(deps: any) {
         );
         if (festivalRows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
-        // The requester must have a profile in the target festival to own a crew
-        // there. Unlike POST /crews, reform does not create it.
-        const requesterProfile = await stores.profiles.readByUserAndFestival?.(req.user.userId, targetFestivalId);
-        if (!requesterProfile) return sendError(res, 403, 'Join the festival first', ErrorCodes.FORBIDDEN);
-
         const sourceMembers = await stores.crews.getMembers(sourceCrewId);
         const targetProfileUserIds = await stores.profiles.userIdsByFestival(targetFestivalId);
 
@@ -402,6 +397,20 @@ export default function createCrewRoutes(deps: any) {
           // Honor the per-festival crew cap for the requester.
           if ((requesterTargetCrews || []).length >= MAX_CREWS_PER_FESTIVAL) {
             return sendError(res, 400, CREW_CAP_MESSAGE, ErrorCodes.MAX_LIMIT_REACHED);
+          }
+          // Owning a crew there needs a profile: create it as POST / and join do, instead
+          // of refusing. After the cap check, so a refused reform leaves no stray profile.
+          const profileResult = await ensureFestivalProfile(deps, req.user, targetFestivalId);
+          if (profileResult.error === 'limit') {
+            return sendError(
+              res,
+              400,
+              'This festival has reached its member limit on Festie.',
+              ErrorCodes.MAX_LIMIT_REACHED,
+            );
+          }
+          if (profileResult.error === 'user-missing') {
+            return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
           }
           const newCrewId = createOpaqueId('crew');
           const inviteCode = await generateUniqueInviteCode(stores);
@@ -476,9 +485,10 @@ export default function createCrewRoutes(deps: any) {
         const finalCrew = await stores.crews.getById(newCrew.id);
         const finalMembers = await stores.crews.getMembers(newCrew.id);
 
-        // Broadcast to the new crew room so any already-open client refreshes.
+        // Members are still in the SOURCE crew room (nobody can have joined the
+        // brand-new room yet), so target both; the new room covers a re-run.
         if (io) {
-          io.to(`crew:${newCrew.id}`).emit('crew:reformed', {
+          io.to(`crew:${sourceCrewId}`).to(`crew:${newCrew.id}`).emit('crew:reformed', {
             crewId: newCrew.id,
             reformedFrom: sourceCrewId,
             festivalId: targetFestivalId,

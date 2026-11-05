@@ -23,3 +23,9 @@ describe('mobile TimelineView', () => {
     expect(call).not.toContain('conflictIds=');
   });
 });
+
+describe('mobile TimelineView carousel height', () => {
+  it('floors the carousel height so a tall header stack cannot squeeze it', () => {
+    expect(read('TimelineView.tsx')).toMatch(/minHeight: Math\.round\(windowHeight \* 0\.4\)/);
+  });
+});

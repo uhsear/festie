@@ -5,6 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { schemas } from '../lib/schemas';
 import { validateFestival, validateFestivalIssues, publishChecklist } from '../lib/helpers/validation';
 
 const config = { MAX_STAGES: 50, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 };
@@ -103,6 +104,22 @@ describe('validateFestivalIssues targets', () => {
     });
     assert.equal(issueOf(day([set('s1', 'X', 'a', '25:00', '23:00')]), 'set_time_invalid').target.field, 'startTime');
     assert.equal(issueOf(day([set('s1', 'X', 'a', '22:00', 'late')]), 'set_time_invalid').target.field, 'endTime');
+  });
+
+  test('an empty colour or a set with no artist passes the schema and is named as an issue', () => {
+    const body = {
+      name: 'F',
+      stages: [stage('st1', 'Main', { color: '' })],
+      days: [{ label: 'Fri', sets: [{ id: 's1', artists: [], stageId: 'st1' }] }],
+    };
+    assert.equal(schemas.festivalCreate.safeParse(body).success, true);
+    assert.deepEqual(issueOf(body, 'stage_color_invalid').target, {
+      kind: 'stage',
+      field: 'color',
+      stageIndex: 0,
+      stageId: 'st1',
+    });
+    assert.equal(issueOf(body, 'set_artist_required').message, 'Every set requires an artist name');
   });
 
   test('stage_overlap names the later set and the earlier one', () => {

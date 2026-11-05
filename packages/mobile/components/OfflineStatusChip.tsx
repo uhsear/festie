@@ -42,7 +42,7 @@ function Chip({ festivalId, remind }: { festivalId: string; remind: boolean }) {
       <View style={styles.chipBg} pointerEvents="none" />
       <Ionicons name={icon} size={14} color={iconColor} />
       {/* Trailing NBSP absorbs Fabric's single-line under-measure (see FreshnessChip). */}
-      <Text style={styles.chipText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+      <Text style={styles.chipText} maxFontSizeMultiplier={MAX_FONT_SCALE} textBreakStrategy="simple">
         {label + '\u00A0'}
       </Text>
     </>

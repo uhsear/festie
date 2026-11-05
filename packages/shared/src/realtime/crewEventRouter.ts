@@ -54,6 +54,7 @@ import type {
   CrewActivityPayload,
   LocationPeerUpdatePayload,
   LocationPeerStoppedPayload,
+  LocationPeerStoppedReason,
   SosRaisedPayload,
   SosClearedPayload,
 } from '../types/socket-events';
@@ -148,7 +149,7 @@ export interface LocationPeerStoppedIntent {
   kind: 'location-peer-stopped';
   crewId: string;
   userId: string;
-  reason: 'stop' | 'disconnect' | 'expired';
+  reason: LocationPeerStoppedReason;
 }
 
 export interface SosRaisedIntent {

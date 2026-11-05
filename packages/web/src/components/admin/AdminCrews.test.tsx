@@ -7,20 +7,26 @@ vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
 }));
 
+vi.mock('../../lib/useReauthPrompt', () => ({
+  useReauthPrompt: () => ({ askPassword: vi.fn(), reauthDialog: null }),
+}));
 vi.mock('./useAdminSearch', () => ({ useAdminSearch: () => [{}, vi.fn()] }));
 vi.mock('./UserPickerDialog', () => ({ default: () => null }));
 
 const mockFetchCrews = vi.fn();
 const mockRemove = vi.fn();
+const mockWithReauth = vi.fn();
+const mockDelete = vi.fn();
 vi.mock('@festie/shared/services/admin', () => ({
   fetchAdminCrews: () => mockFetchCrews(),
   addCrewMember: vi.fn(),
   removeCrewMember: (...a: unknown[]) => mockRemove(...a),
+  withReauth: (fn: () => unknown) => mockWithReauth(fn),
 }));
 
 const mockGet = vi.fn();
 vi.mock('@festie/shared/services/api', () => ({
-  api: { get: (...a: unknown[]) => mockGet(...a), delete: vi.fn() },
+  api: { get: (...a: unknown[]) => mockGet(...a), delete: (...a: unknown[]) => mockDelete(...a) },
   mapErrorToUserMessage: (_e: unknown, fallback: string) => fallback,
 }));
 
@@ -43,6 +49,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFetchCrews.mockResolvedValue([crew]);
   mockRemove.mockResolvedValue({});
+  mockWithReauth.mockImplementation((fn: () => unknown) => fn());
+  mockDelete.mockResolvedValue(undefined);
   mockGet.mockResolvedValue([
     { userId: 'u1', username: 'alice', role: 'owner' },
     { userId: 'u2', username: 'bob', role: 'member' },
@@ -87,5 +95,13 @@ describe('AdminCrews', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('Sunset Squad')).toBeInTheDocument();
     expect(mockFetchCrews).toHaveBeenCalledTimes(2);
+  });
+
+  it('deletes a crew through the password prompt', async () => {
+    render(<AdminCrews />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Delete' }).at(-1)!);
+    expect(mockWithReauth).toHaveBeenCalledTimes(1);
+    expect(mockDelete).toHaveBeenCalledWith('/admin/crews/c1');
   });
 });

@@ -72,8 +72,12 @@ function flushQueue(): void {
   writeQueue(remaining);
 }
 
-function send(metric: Metric) {
-  const payload: Payload = {
+// Latest value per metric. CLS and INP keep changing during a visit, so each one
+// goes out once, when the page is hidden, instead of on every update.
+const pending = new Map<string, Payload>();
+
+function collect(metric: Metric) {
+  pending.set(metric.name, {
     name: metric.name,
     value: metric.value,
     rating: metric.rating,
@@ -81,32 +85,37 @@ function send(metric: Metric) {
     id: metric.id,
     url: window.location.pathname,
     navigationType: metric.navigationType,
-  };
+  });
+}
 
-  // Offline — queue and bail.
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    enqueue(payload);
-    return;
+function sendPending(): void {
+  for (const payload of pending.values()) {
+    // Offline: queue for the next reconnect.
+    if (navigator.onLine === false || !postOne(payload)) enqueue(payload);
   }
-
-  const ok = postOne(payload);
-  if (!ok) enqueue(payload);
+  pending.clear();
 }
 
 export function initWebVitals(): void {
-  onCLS(send);
-  onLCP(send);
-  onINP(send);
-  onFCP(send);
-  onTTFB(send);
+  onCLS(collect);
+  onLCP(collect);
+  onINP(collect);
+  onFCP(collect);
+  onTTFB(collect);
 
   // Flush on reconnect.
   window.addEventListener('online', flushQueue);
 
-  // Flush on page-hide (last chance before unload).
+  // Page-hide is the last chance before unload; pagehide covers browsers that skip visibilitychange.
+  const onHide = () => {
+    // Offline, sendBeacon reports success for a request that never leaves, which would drop the queue.
+    if (navigator.onLine !== false) flushQueue();
+    sendPending();
+  };
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushQueue();
+    if (document.visibilityState === 'hidden') onHide();
   });
+  window.addEventListener('pagehide', onHide);
 
   // Attempt an initial drain if we booted with pending queued items.
   if (navigator.onLine !== false) flushQueue();

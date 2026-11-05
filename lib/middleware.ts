@@ -210,7 +210,10 @@ function configureMiddleware(app: Application, ctx: any) {
       },
       crossOriginResourcePolicy: { policy: 'same-origin' },
       originAgentCluster: true,
-      referrerPolicy: { policy: 'no-referrer' },
+      // Google's sign-in button reads the page origin from the Referer and returns 400 ("origin is not
+      // allowed") without one. strict-origin sends only the origin, never the path, so a
+      // /reset-password?token=... URL never leaks in Referer. no-referrer breaks the button.
+      referrerPolicy: { policy: config.OAUTH_GOOGLE_ENABLED ? 'strict-origin' : 'no-referrer' },
       frameguard: { action: 'deny' },
       dnsPrefetchControl: { allow: false },
       hsts: config.PUBLIC_ORIGIN.startsWith('https://')
@@ -243,7 +246,7 @@ function configureMiddleware(app: Application, ctx: any) {
     );
     res.setHeader(
       'Permissions-Policy',
-      'accelerometer=(), autoplay=(self), browsing-topics=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(self), screen-wake-lock=(self), sync-xhr=(), usb=(), xr-spatial-tracking=()',
+      'accelerometer=(), autoplay=(self), browsing-topics=(), camera=(), display-capture=(), encrypted-media=(self "https://open.spotify.com"), fullscreen=(self), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(self), screen-wake-lock=(self), sync-xhr=(), usb=(), xr-spatial-tracking=()',
     );
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
@@ -456,8 +459,9 @@ function configureMiddleware(app: Application, ctx: any) {
   // Must be mounted explicitly and BEFORE the public/ static below: that
   // handler uses `dotfiles: 'deny'`, which would otherwise 404 the entire
   // `.well-known` dot-directory into the SPA catch-all — breaking both
-  // security.txt (RFC 9116) and assetlinks.json (Android App Links
-  // verification). Scoped to this dir only, so no other dotfiles are exposed.
+  // security.txt (RFC 9116). assetlinks.json and apple-app-site-association
+  // come from routes/deep-links.ts, so no static copy may shadow them.
+  // Scoped to this dir only, so no other dotfiles are exposed.
   app.use(
     '/.well-known',
     express.static(path.join(config.PUBLIC_DIR, '.well-known'), {
@@ -525,6 +529,10 @@ function configureMiddleware(app: Application, ctx: any) {
         traceId: req.traceId,
       };
       if (req.user?.userId) meta.userId = req.user.userId;
+      if (res.statusCode >= 400 && res.locals?.errorInfo) {
+        meta.errorCode = res.locals.errorInfo.code;
+        meta.errorMessage = res.locals.errorInfo.message;
+      }
       if (res.statusCode >= 500) log.error('request', meta);
       else if (res.statusCode >= 400) log.warn('request', meta);
       else log.info('request', meta);
@@ -558,7 +566,10 @@ function configureMiddleware(app: Application, ctx: any) {
   });
 
   // ── Rate limiting ─────────────────────────────────────────────────────
-  app.use('/api', rateLimit());
+  // The web-vitals beacon has its own scoped limiter (routes/client-metrics.ts); keep it out of the shared bucket so it cannot starve crew calls.
+  const globalLimiter = rateLimit();
+  app.use('/api', (req: any, res: any, next: any) =>
+    req.method === 'POST' && req.path === '/v1/metrics/web-vitals' ? next() : globalLimiter(req, res, next));
   app.use('/api/v1/auth/login', authRateLimit);
   app.use('/api/v1/auth/register', authRateLimit);
   // L7: extend the strict Redis-backed (cluster-accurate) auth limiter across
@@ -567,7 +578,12 @@ function configureMiddleware(app: Application, ctx: any) {
   app.use('/api/v1/auth/forgot-password', authRateLimit);
   app.use('/api/v1/auth/reset-password', authRateLimit);
   app.use('/api/v1/profiles', rateLimit(config.PROFILE_RATE_LIMIT_MAX, 'profiles', { anonIpCap: false }));
-  app.use('/api/v1/crews', rateLimit(config.OVERLAP_RATE_LIMIT_MAX, 'crews', { anonIpCap: false }));
+  // Writes only: opening a crew screen fires ~10 parallel GETs, which would burn the
+  // whole budget and 429 the SOS / crew writes. Reads stay under the global limit above.
+  const crewWriteLimit = rateLimit(config.OVERLAP_RATE_LIMIT_MAX, 'crews', { anonIpCap: false });
+  app.use('/api/v1/crews', (req: any, res: any, next: any) =>
+    req.method === 'GET' || req.method === 'HEAD' ? next() : crewWriteLimit(req, res, next),
+  );
 
   // ── Idempotency key middleware ────────────────────────────────────────
   // Keyed by the session's user id when the request carries one, so two people

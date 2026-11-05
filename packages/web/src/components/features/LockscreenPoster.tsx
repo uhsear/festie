@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { LOCKSCREEN_TAG_SCALE } from '@festie/shared/utils';
 import type {
   LockscreenGridPage,
   LockscreenListPage,
@@ -103,7 +104,7 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
           display: 'flex',
           alignItems: 'flex-end',
           justifyContent: 'space-between',
-          paddingBottom: px(2),
+          paddingBottom: px(1.6),
           boxSizing: 'border-box',
           borderBottom: rule ? undefined : `${px(0.15)} solid ${c.border}`,
         }}
@@ -138,9 +139,9 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
             </span>
           )}
         </div>
-        <div style={{ textAlign: 'right', fontSize: px(header.metaSizeU), lineHeight: 1.25, minWidth: 0, whiteSpace: 'nowrap' }}>
-          <div style={{ color: c.text2, fontWeight: 500 }}>{header.metaTop}</div>
-          <div style={{ color: c.text, fontWeight: 700 }}>{header.metaBottom}</div>
+        <div style={{ textAlign: 'right', fontSize: px(header.metaSizeU), lineHeight: 1.1, minWidth: 0, whiteSpace: 'nowrap' }}>
+          {header.metaTop && <span style={{ color: c.text2, fontWeight: 500 }}>{header.metaTop} · </span>}
+          <span style={{ color: c.text, fontWeight: 700 }}>{header.metaBottom}</span>
         </div>
       </div>
 
@@ -156,11 +157,14 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
 
       <div
         style={{
-          ...abs(model.sideU, footer.y, 100 - 2 * model.sideU),
+          ...abs(footer.x, footer.y, footer.width),
           display: 'flex',
           alignItems: 'center',
-          gap: px(1.6),
-          fontSize: px(2.27),
+          justifyContent: 'center',
+          gap: px(1.2),
+          fontSize: px(footer.sizeU),
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
           color: c.muted,
           fontWeight: 500,
         }}
@@ -168,7 +172,7 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
         {footer.showMark && (
           <span
             aria-hidden="true"
-            style={{ width: px(3), height: px(3), borderRadius: '50%', backgroundColor: c.want, flex: 'none' }}
+            style={{ width: px(1.8), height: px(1.8), borderRadius: '50%', backgroundColor: c.want, flex: 'none' }}
           />
         )}
         {footer.text}
@@ -179,9 +183,8 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
 
 function ListBody({ body, model, px, abs }: BodyProps<LockscreenListPage>) {
   const { palette: c, sideU } = model;
-  const priorityColor: Record<Priority, string> = { must: c.must, 'want-to-see': c.want, maybe: c.maybe };
   const inner = 100 - 2 * sideU;
-  const compact = body.tier === 'M';
+  const compact = body.tier === 'M' || body.tier === 'S';
   const { layout } = body;
   return (
     <>
@@ -206,11 +209,13 @@ function ListBody({ body, model, px, abs }: BodyProps<LockscreenListPage>) {
               whiteSpace: 'nowrap',
             }}
           >
-            <span style={{ fontWeight: 700, fontSize: px(body.timeSizeU), lineHeight: 1, letterSpacing: '-0.02em' }}>
-              {r.time}
-            </span>
-            <span style={{ fontWeight: 600, fontSize: px(body.timeSizeU * 0.4), color: c.text2, marginLeft: '0.2em' }}>
-              {r.period}
+            <span style={{ visibility: r.timeRepeat ? 'hidden' : undefined }}>
+              <span style={{ fontWeight: 700, fontSize: px(body.timeSizeU), lineHeight: 1, letterSpacing: '-0.02em' }}>
+                {r.time}
+              </span>
+              <span style={{ fontWeight: 600, fontSize: px(body.periodSizeU), color: c.text2, marginLeft: '0.2em' }}>
+                {r.period}
+              </span>
             </span>
             {!compact && (
               <div style={{ fontSize: px(3), color: c.text2, fontWeight: 500, marginTop: px(0.9) }}>{r.until}</div>
@@ -223,9 +228,10 @@ function ListBody({ body, model, px, abs }: BodyProps<LockscreenListPage>) {
                 width: px(layout.chipWidth),
                 marginRight: px(2),
                 textAlign: 'center',
-                fontSize: px(2.4),
+                fontSize: px(body.chipSizeU),
                 fontWeight: 700,
                 letterSpacing: '0.04em',
+                whiteSpace: 'nowrap',
                 textTransform: 'uppercase',
                 padding: `${px(0.5)} 0`,
                 borderRadius: px(1),
@@ -252,26 +258,43 @@ function ListBody({ body, model, px, abs }: BodyProps<LockscreenListPage>) {
               style={{
                 fontFamily: CLASH,
                 fontWeight: r.priority === 'must' ? 700 : r.priority === 'maybe' ? 500 : 600,
-                fontSize: px(body.artistSizeU),
-                lineHeight: 1.04,
-                color: r.priority === 'maybe' ? c.text2 : c.text,
+                fontSize: px(r.artistSizeU),
+                lineHeight: 1.1,
+                color: r.artistColor,
+                whiteSpace: 'nowrap',
               }}
             >
               {r.artistLines.map((line, n) => (
-                <div key={n}>{line}</div>
+                <div key={n}>
+                  {line}
+                  {compact && r.tag && n === r.artistLines.length - 1 && (
+                    <span style={{ fontFamily: GROTESK, fontWeight: 500, fontSize: px(r.artistSizeU * LOCKSCREEN_TAG_SCALE), color: c.text2 }}>
+                      {' '}
+                      {r.tag}
+                    </span>
+                  )}
+                </div>
               ))}
             </div>
             {!compact && (
-              <div style={{ fontSize: px(3), fontWeight: 600, color: r.stageText, marginTop: px(0.7) }}>
+              <div
+                style={{
+                  fontSize: px(3),
+                  fontWeight: 600,
+                  color: r.stageText,
+                  marginTop: px(0.7),
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {r.stage}
+                {r.tag && ` · ${r.tag}`}
                 {r.clash && <span style={{ color: c.clash }}> · {r.clash.label}</span>}
               </div>
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: px(1.6), flex: 'none', marginLeft: 'auto' }}>
-            {compact && r.clash && (
-              <span style={{ fontSize: px(2.6), fontWeight: 600, color: c.clash }}>{r.clash.short}</span>
-            )}
             {r.crew && (
               <span style={{ display: 'flex', alignItems: 'center', gap: px(0.4), fontSize: px(2.4), color: c.text2 }}>
                 {r.crew.initials.map((ini) => (
@@ -297,12 +320,15 @@ function ListBody({ body, model, px, abs }: BodyProps<LockscreenListPage>) {
               </span>
             )}
             {r.priority && (
-              <span style={{ fontSize: px(3.6), lineHeight: 1, color: priorityColor[r.priority] }}>
+              <span style={{ fontSize: px(3.6), lineHeight: 1, color: r.glyphColor ?? c.text }}>
                 {GLYPH[r.priority]}
               </span>
             )}
           </div>
         </div>
+      ))}
+      {body.clashSpans.map((s) => (
+        <div key={s.y} style={{ ...abs(s.x, s.y, s.width, s.height), borderRadius: 999, backgroundColor: c.clash }} />
       ))}
       {body.divider && (
         <div
@@ -335,7 +361,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
             display: 'flex',
             alignItems: 'center',
             gap: px(0.9),
-            fontSize: px(2.6),
+            fontSize: px(body.labelSizeU),
             fontWeight: 700,
             color: col.text,
             whiteSpace: 'nowrap',
@@ -354,7 +380,9 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
               borderTop: `${px(0.1)} ${h.dashed ? 'dashed' : 'solid'} ${c.border}`,
             }}
           />
-          <div style={{ ...abs(sideU, h.y + 0.3), fontSize: px(2.4), fontWeight: 600, color: c.muted }}>{h.label}</div>
+          <div style={{ ...abs(sideU, h.y + 0.3), fontSize: px(body.labelSizeU), lineHeight: 1.1, fontWeight: 600, color: c.muted }}>
+            {h.label}
+          </div>
         </div>
       ))}
       {body.blocks.map((b) => {
@@ -373,14 +401,14 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
               ...(b.carryOver && { borderTopLeftRadius: 0, borderTopRightRadius: 0 }),
               backgroundColor: b.fill,
               borderLeft: b.picked ? undefined : `${px(0.8)} solid ${b.edge}`,
-              color: b.picked ? b.ink : c.text2,
+              color: b.ink,
               boxShadow: shadow || undefined,
             }}
           >
             {b.textMode !== 'none' && (
               <>
                 {b.textMode === 'full' && !b.inlineTime && !b.carryLabel && (
-                  <div style={{ fontSize: px(2.4), fontWeight: 600, whiteSpace: 'nowrap', lineHeight: 1.1 }}>
+                  <div style={{ fontSize: px(body.labelSizeU), fontWeight: 600, whiteSpace: 'nowrap', lineHeight: 1.1 }}>
                     {b.priority === 'must' && '★ '}
                     {b.time}
                   </div>
@@ -390,7 +418,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
                     fontFamily: CLASH,
                     fontWeight: b.picked ? 700 : 600,
                     fontSize: px(b.artistSizeU),
-                    lineHeight: 1.04,
+                    lineHeight: 1.1,
                     overflow: 'hidden',
                     whiteSpace: 'nowrap',
                     ...(b.textMode === 'full' &&
@@ -409,7 +437,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
             )}
             {b.picked && b.priority && b.priority !== 'must' && (
               <span
-                style={{ position: 'absolute', top: px(0.4), right: px(0.6), fontSize: px(2.6), lineHeight: 1, color: b.ink }}
+                style={{ position: 'absolute', top: px(0.4), right: px(0.6), fontSize: px(body.labelSizeU), lineHeight: 1, color: b.ink }}
               >
                 {GLYPH[b.priority]}
               </span>
@@ -417,7 +445,17 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
           </div>
         );
       })}
-      <div style={{ ...abs(body.legendX, body.legendY), fontSize: px(2.4), color: c.text2, fontWeight: 500, whiteSpace: 'nowrap' }}>
+      <div
+        style={{
+          ...abs(body.legendX, body.legendY, body.legendWidth),
+          textAlign: 'center',
+          fontSize: px(body.labelSizeU),
+          lineHeight: 1.1,
+          color: c.text2,
+          fontWeight: 500,
+          whiteSpace: 'nowrap',
+        }}
+      >
         {body.legend}
       </div>
     </>

@@ -618,6 +618,17 @@ describe('authStore', () => {
       vi.mocked(globalThis.fetch).mockRestore();
     });
 
+    it('does not report a non-network fetch failure as offline', async () => {
+      const mockBlob = new Blob(['img'], { type: 'image/png' });
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Unsupported FormDataPart implementation'));
+
+      await expect(useAuthStore.getState().uploadAvatar(mockBlob)).rejects.toThrow(AVATAR_COPY.uploadFailed);
+      expect(useAuthStore.getState().error).toBe(AVATAR_COPY.uploadFailed);
+
+      vi.mocked(globalThis.fetch).mockRestore();
+    });
+
     it('rolls back to undefined avatar when previous avatar was undefined', async () => {
       useAuthStore.setState({ user: { ...mockUser, avatarUrl: undefined } });
       const mockBlob = new Blob(['img'], { type: 'image/png' });
@@ -668,7 +679,7 @@ describe('authStore', () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
       await expect(
-        useAuthStore.getState().uploadAvatar({ uri: 'file:///a.png', name: 'a.png', type: 'image/png', size: 6_000_000 }),
+        useAuthStore.getState().uploadAvatar({ bytes: async () => new Uint8Array(), name: 'a.png', type: 'image/png', size: 6_000_000 }),
       ).rejects.toThrow(AVATAR_COPY.tooBig);
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(useAuthStore.getState().isLoading).toBe(false);

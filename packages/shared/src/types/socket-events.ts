@@ -245,11 +245,14 @@ export interface LocationPeerUpdatePayload extends VersionedPayload {
   serverAt: string;
 }
 
-/** server→client: a peer stopped / disconnected / TTL-expired. */
+/** 'left' = member left the crew; 'kicked' = removed by an owner/admin. */
+export type LocationPeerStoppedReason = 'stop' | 'disconnect' | 'expired' | 'left' | 'kicked';
+
+/** server→client: a peer stopped / disconnected / TTL-expired / left / was removed. */
 export interface LocationPeerStoppedPayload extends VersionedPayload {
   crewId: string;
   userId: string;
-  reason: 'stop' | 'disconnect' | 'expired';
+  reason: LocationPeerStoppedReason;
 }
 
 /** server→client: emitted by POST /crews/:crewId/sos (never a client emit). */

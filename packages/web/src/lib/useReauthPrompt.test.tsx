@@ -14,7 +14,7 @@ vi.mock('../components/auth/ProviderButtons', () => ({
   ),
 }));
 
-let ask: () => Promise<string | ReauthBody | null>;
+let ask: (error?: string) => Promise<string | ReauthBody | null>;
 
 function Harness({ hasPassword = true }: { hasPassword?: boolean }) {
   const { askPassword, reauthDialog } = useReauthPrompt({ hasPassword, linked: ['google'] });
@@ -32,6 +32,14 @@ describe('useReauthPrompt', () => {
     await userEvent.type(await screen.findByPlaceholderText('Password'), ' hunter2 ');
     await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     await expect(result!).resolves.toBe(' hunter2 ');
+  });
+
+  it('shows the message passed on a repeat ask', async () => {
+    render(<Harness />);
+    act(() => {
+      void ask('That password is not right. Try again.');
+    });
+    expect(await screen.findByText('That password is not right. Try again.')).toBeInTheDocument();
   });
 
   it('resolves null on cancel', async () => {

@@ -75,6 +75,22 @@ export default function CrewSelector({
         e.stopPropagation();
         return;
       }
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key) && panelRef.current) {
+        const options = Array.from(panelRef.current.querySelectorAll<HTMLElement>('[role="option"]'));
+        if (options.length === 0) return;
+        e.preventDefault();
+        const at = options.indexOf(document.activeElement as HTMLElement);
+        const next =
+          e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? options.length - 1
+              : e.key === 'ArrowDown'
+                ? (at + 1) % options.length
+                : (at <= 0 ? options.length : at) - 1;
+        options[next]!.focus();
+        return;
+      }
       if (e.key !== 'Tab' || !panelRef.current) return;
       const focusable = panelRef.current.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',

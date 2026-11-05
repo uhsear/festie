@@ -2629,20 +2629,11 @@
                     "type": "string"
                   },
                   "email": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 254,
-                        "format": "email",
-                        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-                      },
-                      {
-                        "type": "string",
-                        "enum": [
-                          ""
-                        ]
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
                   },
                   "dateOfBirth": {
                     "type": "string",
@@ -2663,6 +2654,7 @@
                   "username",
                   "password",
                   "confirmPassword",
+                  "email",
                   "dateOfBirth",
                   "tosAccepted"
                 ]

@@ -1,8 +1,16 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
+import { useCrewOverlapStatus } from '@festie/shared/hooks';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
-import { LOCKSCREEN_PRESETS, buildLockscreenModel } from '@festie/shared/utils';
+import {
+  LOCKSCREEN_PRESETS,
+  buildLockscreenModel,
+  defaultScheduleImageDay,
+  formatTime,
+  setMinuteRange,
+} from '@festie/shared/utils';
 import type { LockscreenMode, LockscreenStyle, LockscreenTheme } from '@festie/shared/utils';
+import type { FestivalSet } from '@festie/shared/types';
 import type { Priority } from '@festie/shared/types';
 import Button from '../ui/Button';
 import LockscreenPoster from './LockscreenPoster';
@@ -19,10 +27,51 @@ const MODES: Array<{ value: LockscreenMode; label: string }> = [
   { value: 'stages', label: 'Stages' },
   { value: 'crew', label: 'Crew' },
 ];
+type Clock = 'normal' | 'big' | 'widgets';
+const CLOCKS: Array<{ value: Clock; label: string }> = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'big', label: 'Big clock' },
+  { value: 'widgets', label: 'Clock + widgets' },
+];
 const HINT_IOS =
-  'Open Photos, tap Share, then Use as Wallpaper. If notifications cover your schedule: Settings › Notifications › Display As › Count.';
+  'Open Photos, tap Share, then Use as Wallpaper. Turn off Perspective Zoom and do not pinch. If notifications cover your schedule: Settings › Notifications › Display As › Count.';
 const HINT_ANDROID =
   "Open Photos, tap ⋮ › Use as › Lock screen. Set lock-screen notifications to icons only so they don't cover the schedule.";
+const OPTIONS_KEY = 'festie.lockscreen.options.v1';
+
+interface SavedOptions {
+  theme?: LockscreenTheme;
+  lockStyle?: LockscreenStyle;
+  priorities?: Priority[];
+  clock?: Clock;
+}
+
+/** Look options from the last visit; mode and phone size are never restored. */
+export function readSavedOptions(): SavedOptions {
+  try {
+    const o = JSON.parse(localStorage.getItem(OPTIONS_KEY) ?? '{}') as Record<string, unknown>;
+    const list = Array.isArray(o.priorities) ? (o.priorities as unknown[]) : [];
+    const priorities = PRIORITIES.filter((p) => list.includes(p));
+    return {
+      theme: o.theme === 'dark' || o.theme === 'light' ? o.theme : undefined,
+      lockStyle: o.lockStyle === 'standard' || o.lockStyle === 'poster' ? o.lockStyle : undefined,
+      priorities: priorities.length ? priorities : undefined,
+      clock: CLOCKS.some((c) => c.value === o.clock) ? (o.clock as Clock) : undefined,
+    };
+  } catch (err) {
+    console.warn('lock-screen: ignoring saved options', err);
+    return {};
+  }
+}
+
+/** "1 PM – 9 PM": first start to the latest end of the sets on one image. */
+function spanLabel(pageSets: FestivalSet[]): string {
+  if (!pageSets.length) return '';
+  const short = (t: string) => formatTime(t).replace(':00', '');
+  const endOf = (s: FestivalSet) => setMinuteRange(s)?.end ?? 0;
+  const last = pageSets.reduce((a, b) => (endOf(b) > endOf(a) ? b : a));
+  return `${short(pageSets[0]!.startTime)} – ${short(last.endTime || last.startTime)}`;
+}
 
 const optionClass = (active: boolean) =>
   `rounded-full border px-3 min-h-9 text-xs font-semibold cursor-pointer transition-colors ${
@@ -55,12 +104,16 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   const picks = profile?.picks;
 
   const [mode, setMode] = useState<LockscreenMode>(initialMode === 'crew' && !hasCrew ? 'picks' : initialMode);
-  const [priorities, setPriorities] = useState<Priority[]>(PRIORITIES);
+  const [saved] = useState(readSavedOptions);
+  const [priorities, setPriorities] = useState<Priority[]>(saved.priorities ?? PRIORITIES);
   const [stageIds, setStageIds] = useState<string[]>(() => stages.map((s) => s.id));
   const [dayChoice, setDayChoice] = useState<number | 'all' | null>(null);
-  const [theme, setTheme] = useState<LockscreenTheme>('dark');
-  const [lockStyle, setLockStyle] = useState<LockscreenStyle>('standard');
-  const [tallClock, setTallClock] = useState(false);
+  const [theme, setTheme] = useState<LockscreenTheme>(saved.theme ?? 'dark');
+  const [lockStyle, setLockStyle] = useState<LockscreenStyle>(saved.lockStyle ?? 'standard');
+  const [clock, setClock] = useState<Clock>(saved.clock ?? 'normal');
+  const [fromNow, setFromNow] = useState(false);
+  const [savedAtMs, setSavedAtMs] = useState(() => Date.now());
+  const [nowMs] = useState(() => Date.now());
   const [onePage, setOnePage] = useState(false);
   const [presetId, setPresetId] = useState('auto');
   const [pageIndex, setPageIndex] = useState(0);
@@ -68,30 +121,48 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   const captureRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   const device = useMemo(deviceSize, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(OPTIONS_KEY, JSON.stringify({ theme, lockStyle, priorities, clock }));
+    } catch (err) {
+      console.warn('lock-screen: could not save options', err);
+    }
+  }, [theme, lockStyle, priorities, clock]);
   const preset = LOCKSCREEN_PRESETS.find((p) => p.id === presetId);
   const size = preset ? { width: preset.width, height: preset.height } : device;
   const isPickMode = mode === 'picks' || mode === 'crew';
+  const crew = useCrewOverlapStatus(mode === 'crew', festival?.id);
+  const crewLoaded = crew.status === 'ready';
+  const crewWaiting = mode === 'crew' && crew.status === 'loading';
 
   const dayHasSets = useMemo(() => {
     const out = new Set<number>();
     for (const s of sets) {
       if (!HAS_TIME.test(s.startTime ?? '')) continue;
-      if (isPickMode && !picks?.[s.id]) continue;
+      const priority = picks?.[s.id];
+      if (isPickMode && (!priority || !priorities.includes(priority))) continue;
       if (mode === 'stages' && !stageIds.includes(s.stageId)) continue;
       out.add(s.dayIndex ?? 0);
     }
     return out;
-  }, [sets, picks, mode, isPickMode, stageIds]);
+  }, [sets, picks, priorities, mode, isPickMode, stageIds]);
   const dayCount = Math.max(days.length, ...[...dayHasSets].map((d) => d + 1));
   const firstDay = [...dayHasSets].sort((a, b) => a - b)[0];
+  // In pick modes, a day whose picks have all ended gives way to the next day with picks.
+  const pickDay = isPickMode
+    ? defaultScheduleImageDay({ sets, picks, selectedDay, days, nowMs, timeZone: festival?.timeZone })
+    : null;
   const dayIndex: number | 'all' | null =
     dayChoice === 'all' && dayHasSets.size > 0
       ? 'all'
       : typeof dayChoice === 'number' && dayHasSets.has(dayChoice)
         ? dayChoice
-        : dayHasSets.has(selectedDay)
-          ? selectedDay
-          : (firstDay ?? null);
+        : pickDay != null && dayHasSets.has(pickDay)
+          ? pickDay
+          : dayHasSets.has(selectedDay)
+            ? selectedDay
+            : (firstDay ?? null);
 
   const model = useMemo(
     () =>
@@ -107,17 +178,55 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             priorities,
             stageIds: mode === 'stages' ? stageIds : null,
             crewOverlap: mode === 'crew' ? crewOverlap : undefined,
+            crewLoaded,
             selfUserId,
             theme,
             style: lockStyle,
             width: size.width,
             height: size.height,
-            tallClock,
+            clock,
+            fromMs: fromNow ? nowMs : undefined,
+            timeZone: festival.timeZone,
             onePage,
-            savedAt: new Date(),
+            savedAt: new Date(savedAtMs),
           })
         : null,
-    [festival, sets, stages, days, picks, dayIndex, mode, priorities, stageIds, crewOverlap, selfUserId, theme, lockStyle, size.width, size.height, tallClock, onePage],
+    [festival, sets, stages, days, picks, dayIndex, mode, priorities, stageIds, crewOverlap, crewLoaded, selfUserId, theme, lockStyle, size.width, size.height, clock, fromNow, nowMs, onePage, savedAtMs],
+  );
+
+  // One click to fit a multi-image picks day on one image by leaving out Maybe picks.
+  const withoutMaybe = priorities.filter((p) => p !== 'maybe');
+  const maybeCount =
+    festival && mode === 'picks' && dayIndex !== null && priorities.includes('maybe') && withoutMaybe.length
+      ? sets.filter(
+          (s) => picks?.[s.id] === 'maybe' && HAS_TIME.test(s.startTime ?? '') && (dayIndex === 'all' || (s.dayIndex ?? 0) === dayIndex),
+        ).length
+      : 0;
+  const fitsWithoutMaybe = useMemo(
+    () =>
+      festival != null &&
+      dayIndex !== null &&
+      maybeCount > 0 &&
+      (model?.pages.length ?? 0) >= 2 &&
+      buildLockscreenModel({
+        festival,
+        sets,
+        stages,
+        days,
+        picks,
+        dayIndex,
+        mode,
+        priorities: priorities.filter((p) => p !== 'maybe'),
+        theme,
+        style: lockStyle,
+        width: size.width,
+        height: size.height,
+        clock,
+        fromMs: fromNow ? nowMs : undefined,
+        timeZone: festival.timeZone,
+        savedAt: new Date(savedAtMs),
+      }).pages.length === 1,
+    [festival, dayIndex, maybeCount, model, sets, stages, days, picks, mode, priorities, theme, lockStyle, size.width, size.height, clock, fromNow, nowMs, savedAtMs],
   );
 
   if (!festival) return null;
@@ -133,9 +242,12 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   const dayLabel = (i: number) => days[i]?.label ?? `Day ${i + 1}`;
 
   const save = async () => {
-    if (!model || pages.length === 0) return;
-    const nodes = captureRefs.current.slice(0, pages.length).filter((n): n is HTMLDivElement => n !== null);
+    if (!model || pages.length === 0 || crewWaiting) return;
     setBusy(true);
+    // Stamp the footer with the time of this save, then let React redraw the capture copies.
+    setSavedAtMs(Date.now());
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    const nodes = captureRefs.current.slice(0, pages.length).filter((n): n is HTMLDivElement => n !== null);
     try {
       const result = await captureAndShareImages(nodes, {
         width: model.width,
@@ -155,6 +267,21 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   };
 
   const scale = model ? PREVIEW_WIDTH / model.width : 1;
+  const setById = new Map(sets.map((s) => [s.id, s]));
+  const pageSets = (pages[current]?.setIds ?? []).map((id) => setById.get(id)).filter((s): s is FestivalSet => s != null);
+  const timedPicks = isPickMode
+    ? sets.filter((s) => picks?.[s.id] && HAS_TIME.test(s.startTime ?? '') && (dayIndex === 'all' || (s.dayIndex ?? 0) === dayIndex)).length
+    : 0;
+  const shownPicks = pages.reduce((n, p) => n + p.setIds.length, 0);
+  const statusLine = [
+    pages.length > 1 ? `Image ${current + 1} of ${pages.length}` : '',
+    spanLabel(pageSets),
+    isPickMode && shownPicks < timedPicks ? `Showing ${shownPicks} of ${timedPicks} picks` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const deviceEstimated = !LOCKSCREEN_PRESETS.some((p) => p.width === device.width && p.height === device.height);
+  const noPicksAtAll = isPickMode && !Object.keys(picks ?? {}).length;
   return (
     <div className="space-y-4">
       <span id="lockscreen-show" className="block text-sm text-text-secondary">
@@ -190,6 +317,19 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
               {PRIORITY_LABEL[p]}
             </button>
           ))}
+        </div>
+      )}
+      {mode === 'crew' && crew.status === 'error' && (
+        <div className="space-y-2 text-sm text-text-secondary">
+          <p>{"Couldn't load your crew's picks. Check your connection."}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" type="button" onClick={crew.retry}>
+              Retry
+            </Button>
+            <Button variant="secondary" size="sm" type="button" onClick={() => setMode('picks')}>
+              Save without crew
+            </Button>
+          </div>
         </div>
       )}
       {mode === 'stages' && (
@@ -229,6 +369,28 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         </select>
       </label>
 
+      {isPickMode && (
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input type="checkbox" checked={fromNow} onChange={(e) => setFromNow(e.target.checked)} />
+          Only sets still to come
+        </label>
+      )}
+
+      <span id="lockscreen-clock" className="block text-sm text-text-secondary">
+        Your lock screen
+      </span>
+      <div role="group" aria-labelledby="lockscreen-clock" className="flex flex-wrap gap-2">
+        {CLOCKS.map((c) => (
+          <button key={c.value} type="button" aria-pressed={clock === c.value} className={optionClass(clock === c.value)} onClick={() => setClock(c.value)}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-text-muted">Pick Big clock or Clock + widgets if your clock is large or has widgets under it.</p>
+
+      <span id="lockscreen-look" className="block text-sm text-text-secondary">
+        Look
+      </span>
       <div role="group" aria-label="Style" className="flex flex-wrap gap-2">
         {(['dark', 'light'] as const).map((t) => (
           <button key={t} type="button" aria-pressed={theme === t} className={optionClass(theme === t)} onClick={() => setTheme(t)}>
@@ -243,10 +405,6 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
           </button>
         ))}
       </div>
-      <label className="flex items-center gap-2 text-sm text-text-secondary">
-        <input type="checkbox" checked={tallClock} onChange={(e) => setTallClock(e.target.checked)} />
-        Big iOS clock
-      </label>
       {(mode === 'full' || mode === 'stages') && (
         <label className="flex items-center gap-2 text-sm text-text-secondary">
           <input type="checkbox" checked={onePage} onChange={(e) => setOnePage(e.target.checked)} />
@@ -261,7 +419,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
           onChange={(e) => setPresetId(e.target.value)}
           className="min-h-9 min-w-0 rounded-lg border border-border bg-bg-card px-2 text-sm text-text-primary"
         >
-          <option value="auto">{`This phone (${device.width} × ${device.height})`}</option>
+          <option value="auto">{`This phone${deviceEstimated ? ' (estimated)' : ''} (${device.width} × ${device.height})`}</option>
           {LOCKSCREEN_PRESETS.map((p) => (
             <option key={p.id} value={p.id}>{`${p.label} (${p.width} × ${p.height})`}</option>
           ))}
@@ -283,11 +441,19 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             <Button variant="secondary" size="sm" type="button" disabled={current === 0} onClick={() => setPageIndex(current - 1)}>
               Previous
             </Button>
-            <span>{`Image ${current + 1} of ${pages.length}`}</span>
+            <span>{pages.length > 1 ? `Image ${current + 1} of ${pages.length}` : ''}</span>
             <Button variant="secondary" size="sm" type="button" disabled={current >= pages.length - 1} onClick={() => setPageIndex(current + 1)}>
               Next
             </Button>
           </div>
+          <p className="text-center text-xs text-text-secondary">{statusLine}</p>
+          {fitsWithoutMaybe && (
+            <div className="flex justify-center">
+              <button type="button" className={optionClass(false)} onClick={() => setPriorities(withoutMaybe)}>
+                {`Fit on 1 image: hide ${maybeCount} Maybe ${maybeCount === 1 ? 'pick' : 'picks'}`}
+              </button>
+            </div>
+          )}
           {/* Off-screen full-size copies: the capture nodes, one per page. */}
           <div aria-hidden="true" style={{ position: 'fixed', left: -100000, top: 0, pointerEvents: 'none' }}>
             {pages.map((p, i) => (
@@ -296,12 +462,31 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
               </div>
             ))}
           </div>
-          <Button variant="primary" size="sm" type="button" fullWidth onClick={save} disabled={busy}>
-            {busy ? 'Making image…' : pages.length === 1 ? 'Save image' : `Save ${pages.length} images`}
+          <Button variant="primary" size="sm" type="button" fullWidth onClick={save} disabled={busy || crewWaiting}>
+            {busy
+              ? 'Making image…'
+              : crewWaiting
+                ? "Loading your crew's picks…"
+                : pages.length === 1
+                  ? 'Save image'
+                  : `Save ${pages.length} images`}
           </Button>
         </>
       ) : (
-        <p className="text-sm text-text-secondary">Nothing matches these options, so there is nothing to draw.</p>
+        <div className="space-y-2 text-sm text-text-secondary">
+          <p>
+            {noPicksAtAll
+              ? 'You have no picks yet.'
+              : isPickMode
+                ? 'No picks on this day with these filters.'
+                : 'Nothing matches these options, so there is nothing to draw.'}
+          </p>
+          {isPickMode && (
+            <Button variant="secondary" size="sm" type="button" onClick={() => setMode('full')}>
+              Show full lineup
+            </Button>
+          )}
+        </div>
       )}
       {isIos && <p className="text-xs text-text-muted">{HINT_IOS}</p>}
       {isAndroid && <p className="text-xs text-text-muted">{HINT_ANDROID}</p>}

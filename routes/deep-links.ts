@@ -10,6 +10,9 @@
 
 import { Router } from 'express';
 
+// Paths the app opens. Keep in step with the Android intent filter in packages/mobile/app.json.
+const APP_PATHS = ['/set/*', '/reset-password', '/join/*', '/s/*', '/compare', '/crew', '/crew-plan', '/friend-picks'];
+
 export default function createDeepLinkRoutes(deps: any) {
   const { config, sendError, ErrorCodes } = deps;
   const router = Router();
@@ -32,8 +35,8 @@ export default function createDeepLinkRoutes(deps: any) {
         details: [
           {
             appIDs: [`${config.APPLE_TEAM_ID}.us.festie.app`],
-            paths: ['/set/*', '/reset-password', '/join/*'],
-            components: [{ '/': '/set/*' }, { '/': '/reset-password' }, { '/': '/join/*' }],
+            paths: APP_PATHS,
+            components: APP_PATHS.map((p) => ({ '/': p })),
           },
         ],
       },
@@ -44,10 +47,10 @@ export default function createDeepLinkRoutes(deps: any) {
   });
 
   // Android App Links for the Festie app (us.festie.app). Fingerprints come from
-  // ANDROID_CERT_FINGERPRINTS (comma-separated SHA-256 in colon-hex). The
-  // fingerprint is public (it's in every signed APK), not a secret. Prod's .env
-  // lists the EAS signing cert; add the Play App Signing fingerprint here once on
-  // the Play Store. 503 when unconfigured so we never serve an empty allowlist.
+  // ANDROID_CERT_FINGERPRINTS (comma-separated SHA-256 in colon-hex): the built-in
+  // Play App Signing and EAS upload certs (ANDROID_APP_SIGNING_CERTS in lib/config.ts)
+  // plus any the env adds. They are public, not secrets. 503 when empty so we never
+  // serve an empty allowlist.
   router.get('/assetlinks.json', (req: any, res: any) => {
     if (!config.ANDROID_CERT_FINGERPRINTS || config.ANDROID_CERT_FINGERPRINTS.trim() === '') {
       return sendError(res, 503, 'Android certificate fingerprints not configured', ErrorCodes.SERVICE_UNAVAILABLE);

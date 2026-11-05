@@ -97,26 +97,11 @@ export const CREW_ACTIVITY_LABELS: Record<string, string> = {
 // ── Crew money and packing ─────────────────────────────────────────────────
 
 /**
- * Currencies a crew can use. All have 2 decimal places, so integer-cent math
- * stays valid. Keep in sync with CREW_CURRENCIES in lib/schemas.ts (the backend
+ * Currencies a crew can be set to. USD only for now (FND-082); a crew that
+ * already stores another code keeps it and still displays correctly. Keep in sync with CREW_CURRENCIES in lib/schemas.ts (the backend
  * cannot import shared).
  */
-export const CREW_CURRENCIES = [
-  'USD',
-  'EUR',
-  'GBP',
-  'CAD',
-  'AUD',
-  'NZD',
-  'MXN',
-  'CHF',
-  'SEK',
-  'NOK',
-  'DKK',
-  'PLN',
-  'CZK',
-  'BRL',
-] as const;
+export const CREW_CURRENCIES = ['USD'] as const;
 
 /** Starter packing lists offered on an empty crew packing tab. */
 export const PACKING_TEMPLATES: readonly { id: 'camping' | 'day-trip'; label: string; items: readonly string[] }[] = [

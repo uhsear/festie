@@ -259,7 +259,7 @@ describe('Integration — Picks', { concurrency: 1 }, () => {
 
     const registerResponse = await firstRequest
       .post('/api/v1/auth/register')
-      .send({ username: 'persisted', password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true })
+      .send({ username: 'persisted', password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${'persisted'}@example.com` })
       .expect(201);
     const token = registerResponse.body.data.token;
 

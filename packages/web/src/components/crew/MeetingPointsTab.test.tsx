@@ -219,6 +219,13 @@ describe('MeetingPointsTab', () => {
     expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the live-location and SOS controls when the list fails to load', () => {
+    setQuery({ isError: true });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText("Couldn't load meeting points")).toBeInTheDocument();
+    expect(screen.getByTestId('live-share-toggle')).toBeInTheDocument();
+  });
+
   it('renders an empty state when there are no points', () => {
     setQuery({ data: [] });
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);

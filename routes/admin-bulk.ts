@@ -50,7 +50,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             _v: 1,
             crewId,
             userId: removedUserId,
-            reason: 'revoked',
+            reason: 'kicked',
           });
         }
         s.emit('crew:access-revoked', { crewId });
@@ -140,6 +140,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
         }
         const settled = await Promise.allSettled(
           userIds.map(async (userId: string) => {
+            if (!(await getUserById(userId))) throw new Error('User not found');
             // Sessions and sockets first, then refresh tokens so the user cannot mint a new session.
             await invalidateUserSessions(userId);
             if (stores.refreshTokens) await stores.refreshTokens.revokeAll(userId);
@@ -199,7 +200,9 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
         for (const festivalId of festivalIds) {
           try {
             // Read the name first: the audit row needs it after the soft delete.
-            names.set(festivalId, (await stores.festivals.getById(festivalId))?.name ?? null);
+            const festival = await stores.festivals.getById(festivalId);
+            if (!festival) throw new Error('Festival not found');
+            names.set(festivalId, festival.name ?? null);
             // H1: evict crew-room sockets before the festival is archived, while
             // listByFestival can still resolve its crews.
             await evictFestivalCrewRooms(festivalId);
@@ -291,6 +294,8 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
       setNoStore(res);
       const crewId = deps.sanitizeIdentifier(req.validatedParams.id, 100);
       if (!crewId) return sendError(res, 400, 'Invalid crew ID', ErrorCodes.INVALID_INPUT);
+
+      if (!(await stores.crews.getById(crewId))) return sendError(res, 404, 'Crew not found', ErrorCodes.NOT_FOUND);
 
       const members = await stores.crews.getMembers(crewId);
       return sendSuccess(res, members);

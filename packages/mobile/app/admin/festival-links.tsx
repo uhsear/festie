@@ -77,7 +77,7 @@ export default function FestivalLinksScreen() {
     if (!festivalId) return;
     setLoadError(false);
     try {
-      const full = await api.get<LooseFestivalDetail>(`/festivals/${encodeURIComponent(festivalId)}`);
+      const full = await api.get<LooseFestivalDetail>(`/admin/festivals/${encodeURIComponent(festivalId)}`);
       setDetail(full);
       setDrafts({});
     } catch {

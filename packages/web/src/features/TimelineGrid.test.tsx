@@ -31,7 +31,7 @@ function renderGrid(vpW: number, nowIndicator: number | null = null) {
       currentFestival={null}
       gridRef={gridRef}
       getMyPick={() => null}
-      getOtherPicks={() => []}
+      crewBySet={new Map()}
       getStageColor={() => '#ff3366'}
       onSetClick={vi.fn()}
       onSavePick={vi.fn()}

@@ -16,3 +16,4 @@ export * from './oauth';
 export * from './liveLocation';
 export * from './account';
 export * from './nudge';
+export * from './sessionLost';

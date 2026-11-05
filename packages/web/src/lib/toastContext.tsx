@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { onSignedOutNotice } from '@festie/shared/services';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -108,6 +109,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (err: unknown, fallback: string) => toast(mapErrorToUserMessage(err, fallback), 'error', 5000),
     [toast],
   );
+
+  useEffect(() => onSignedOutNotice((message) => toast(message, 'info', 6000)), [toast]);
 
   const value = useMemo(
     () => ({ toasts, toast, toastUndo, toastError, removeToast, pauseToast, resumeToast }),

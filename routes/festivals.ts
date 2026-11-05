@@ -41,24 +41,29 @@ export default function createFestivalsRoutes(deps: any) {
   const router = express.Router();
 
   // Fill a festival's venue coordinates from its free-text location (lib/geocode.ts),
-  // after the save has answered the admin. The map centres on them when nothing is
+  // during the admin save, so the response can flag a weak match. The map centres on them when nothing is
   // pinned, and the weather route needs them. Tests do not inject geocodeVenue.
-  async function fillVenueCoords(festivalId: string, location: string) {
-    if (!geocodeVenue || !location?.trim()) return;
+  // Resolves true when the stored venue was a weak match. The flag is not stored (no column),
+  // so the save response is the only place the admin sees it.
+  async function fillVenueCoords(festivalId: string, location: string): Promise<boolean> {
+    if (!geocodeVenue || !location?.trim()) return false;
     try {
-      const coords = await geocodeVenue(location);
-      if (!coords) {
+      const found = await geocodeVenue(location);
+      if (!found) {
         log.info('festival venue not found', { festivalId, location });
-        return;
+        return false;
       }
+      const { guessed, ...coords } = found;
       const festival = await stores.festivals.update(festivalId, coords);
-      if (!festival) return;
+      if (!festival) return false;
       invalidateFestivalCache();
       invalidateFestivalListCache();
       // A draft has no attendees, and the event goes to every socket.
       if (festival.publishedAt) emitter.festivalUpdated({ festival });
+      return guessed;
     } catch (error: any) {
       log.warn('festival venue geocode failed', { festivalId, error: error.message });
+      return false;
     }
   }
 
@@ -71,6 +76,15 @@ export default function createFestivalsRoutes(deps: any) {
   function sendIssues(res: any, issues: any[]) {
     const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
     return sendError(res, 400, `${issues[0].message}${more}`, ErrorCodes.INVALID_INPUT, { issues });
+  }
+
+  // A primary-key clash on save (an id another festival, or another festival's set, already holds) is the caller's mistake, not a server fault.
+  function sendIdClash(res: any, error: any) {
+    if (error?.code !== '23505') return null;
+    const clashing = /Key \(id\)=\(([^)]*)\)/.exec(error.detail ?? '')?.[1];
+    const what = String(error.constraint ?? '').startsWith('festival_sets') ? 'set' : 'festival';
+    const message = clashing ? `A ${what} with id "${clashing}" already exists.` : `A ${what} with that id already exists.`;
+    return sendError(res, 409, message, ErrorCodes.ALREADY_EXISTS);
   }
 
   // Two lists from one build: admins see every festival (drafts too), with
@@ -403,10 +417,12 @@ export default function createFestivalsRoutes(deps: any) {
         invalidateFestivalListCache();
         log.info('festival:created', { festivalId: festival.id, name: festival.name });
         audit(AUDIT_ACTIONS.FESTIVAL_CREATED, 'festival', festival.id, req, { name: festival.name });
-        if (typeof festival.latitude !== 'number') void fillVenueCoords(festival.id, festival.location);
+        const venueGuessed =
+          typeof festival.latitude !== 'number' && (await fillVenueCoords(festival.id, festival.location));
         res.status(201);
-        return sendSuccess(res, { ...festival, publishedAt: null });
+        return sendSuccess(res, { ...festival, publishedAt: null, ...(venueGuessed ? { venueGuessed } : {}) });
       } catch (error: any) {
+        if (sendIdClash(res, error)) return;
         log.error('festival create failed', { error: error.message });
         return sendError(res, 500, 'Failed to create festival', ErrorCodes.INTERNAL_ERROR);
       }
@@ -422,10 +438,11 @@ export default function createFestivalsRoutes(deps: any) {
     async (req: any, res: any) => {
       try {
         const body = req.validatedBody;
-        const issues = validateFestivalIssues(config, body);
-        if (issues.length > 0) return sendIssues(res, issues);
         const existingFestival = await getFestivalById(req.validatedParams.id);
         if (!existingFestival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        // The body is partial, so check the festival that results from the save.
+        const issues = validateFestivalIssues(config, { ...existingFestival, ...body });
+        if (issues.length > 0) return sendIssues(res, issues);
 
         if (
           body.expectedUpdatedAt !== undefined &&
@@ -544,11 +561,13 @@ export default function createFestivalsRoutes(deps: any) {
           venueSent &&
           (nextFestival.latitude !== existingFestival.latitude ||
             nextFestival.longitude !== existingFestival.longitude);
-        if (!venueSetByAdmin && (venueMissing || nextFestival.location !== existingFestival.location)) {
-          void fillVenueCoords(festival.id, nextFestival.location);
-        }
-        return sendSuccess(res, { ...festival, scheduleNotice });
+        const venueGuessed =
+          !venueSetByAdmin &&
+          (venueMissing || nextFestival.location !== existingFestival.location) &&
+          (await fillVenueCoords(festival.id, nextFestival.location));
+        return sendSuccess(res, { ...festival, scheduleNotice, ...(venueGuessed ? { venueGuessed } : {}) });
       } catch (error: any) {
+        if (sendIdClash(res, error)) return;
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
       }
@@ -669,7 +688,7 @@ export default function createFestivalsRoutes(deps: any) {
         audit(hardDelete ? AUDIT_ACTIONS.FESTIVAL_PURGED : AUDIT_ACTIONS.FESTIVAL_DELETED, 'festival', festivalId, req, {
           name: festival.name,
         });
-        log.warn('admin:delete-festival', {
+        log.info('admin:delete-festival', {
           festivalId,
           festivalName: festival.name,
           hard: hardDelete,
@@ -750,6 +769,8 @@ export default function createFestivalsRoutes(deps: any) {
   router.get('/:festivalId/sets/links', adminAuth, async (req: any, res: any) => {
     try {
       const festivalId = req.params.festivalId;
+      const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
+      if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       const result = await stores.pool.query(
         'SELECT id, artist, link_url AS "linkUrl", artists FROM festival_sets WHERE festival_id = $1 AND (link_url IS NOT NULL OR artists != \'[]\'::jsonb) ORDER BY artist',
         [festivalId],

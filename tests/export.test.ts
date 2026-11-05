@@ -103,6 +103,7 @@ async function cleanupById(pool: any) {
   // Child tables referencing users (FK changed to RESTRICT in migration 031)
   await pool.query(`DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`export-${RUN_ID}%`]);
   await pool.query(`DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`export-${RUN_ID}%`]);
+  await pool.query(`DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`export-${RUN_ID}%`]);
   await pool.query(`DELETE FROM users WHERE username LIKE $1`, [`export-${RUN_ID}%`]);
 }
 
@@ -135,7 +136,7 @@ async function registerUser(server: any, suffix: any) {
   const res = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true })
+    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` })
     .expect(201);
   return res.body.data;
 }

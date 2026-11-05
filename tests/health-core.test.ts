@@ -203,3 +203,22 @@ describe('health-core: setReady', () => {
     assert.equal(typeof result.clientMetrics.samples, 'number');
   });
 });
+
+describe('redactCspReport (FND-063)', () => {
+  it('drops query strings and unknown fields', async () => {
+    const { redactCspReport } = await import('../routes/health-core.js');
+    const out = redactCspReport({
+      'csp-report': {
+        'document-uri': 'https://festie.us/invite/abc?token=secret#frag',
+        'blocked-uri': 'https://evil.example/x.js?k=1',
+        'violated-directive': 'script-src',
+        referrer: 'https://festie.us/?t=secret',
+      },
+    });
+    assert.deepEqual(out, {
+      'violated-directive': 'script-src',
+      'blocked-uri': 'https://evil.example/x.js',
+      'document-uri': 'https://festie.us/invite/abc',
+    });
+  });
+});

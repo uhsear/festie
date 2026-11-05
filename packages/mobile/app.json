@@ -149,6 +149,26 @@
               "scheme": "https",
               "host": "festie.us",
               "pathPrefix": "/reset-password"
+            },
+            {
+              "scheme": "https",
+              "host": "festie.us",
+              "pathPrefix": "/s/"
+            },
+            {
+              "scheme": "https",
+              "host": "festie.us",
+              "pathPrefix": "/compare"
+            },
+            {
+              "scheme": "https",
+              "host": "festie.us",
+              "pathPrefix": "/crew"
+            },
+            {
+              "scheme": "https",
+              "host": "festie.us",
+              "pathPrefix": "/friend-picks"
             }
           ],
           "category": [

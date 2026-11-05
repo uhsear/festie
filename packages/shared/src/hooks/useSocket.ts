@@ -37,6 +37,13 @@ export function useSocket(festivalId?: string): UseSocketReturn {
   const canJoin = useAuthStore((state) => !state.user) || isMember;
 
   useEffect(() => {
+    const joinedFestivalId = canJoin ? festivalId || currentFestivalId : undefined;
+    // A socket that never emits join:festival is dropped by the server after 5 s
+    // (socket:auth-timeout), so do not connect until there is a room to join.
+    if (!joinedFestivalId) {
+      joinedFestivalIdRef.current = null;
+      return;
+    }
     const socket = createSocket(userToken || undefined, undefined, () => {
       // Socket auth failed — attempt a single token refresh, then reconnect
       // with the new token. On failure stay disconnected (an HTTP request will
@@ -53,10 +60,9 @@ export function useSocket(festivalId?: string): UseSocketReturn {
         })
         .catch((e) => console.warn('socket token refresh failed; realtime paused until the next request', e));
     });
-    const joinedFestivalId = canJoin ? festivalId || currentFestivalId : undefined;
     // Sync the ref BEFORE wiring handlers so handleConnect reads the
     // right id and cleanup can leave the right room.
-    joinedFestivalIdRef.current = joinedFestivalId ?? null;
+    joinedFestivalIdRef.current = joinedFestivalId;
 
     const handleConnect = () => {
       setConnected(true);

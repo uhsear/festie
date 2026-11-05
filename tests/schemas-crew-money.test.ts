@@ -73,11 +73,11 @@ describe('schemas: expenseCreate shares', () => {
 });
 
 describe('schemas: expenseCurrency', () => {
-  it('accepts EUR', () => {
-    assert.equal(schemas.expenseCurrency.safeParse({ currency: 'EUR' }).success, true);
+  it('accepts USD', () => {
+    assert.equal(schemas.expenseCurrency.safeParse({ currency: 'USD' }).success, true);
   });
 
-  for (const currency of ['eur', 'JPY', 'XXX']) {
+  for (const currency of ['EUR', 'eur', 'JPY', 'XXX']) {
     it(`rejects ${currency}`, () => {
       assert.equal(schemas.expenseCurrency.safeParse({ currency }).success, false);
     });
@@ -122,4 +122,19 @@ describe('schemas: ride direction and departTime', () => {
       assert.equal(schemas[name].safeParse({ departTime: 'Fri 2pm' }).success, false);
     });
   }
+});
+
+describe('schemas: expense amount bounds and cursor (FND-006, FND-014)', () => {
+  it('rejects amounts that round to zero or overflow NUMERIC(10,2)', () => {
+    for (const amount of [0.001, 1e15, 100_000_000]) {
+      assert.equal(schemas.expenseCreate.safeParse({ ...base, amount }).success, false, String(amount));
+      assert.equal(schemas.expenseSettleFull.safeParse({ toUserId: 'a', amount }).success, false, String(amount));
+    }
+    assert.equal(schemas.expenseCreate.safeParse({ ...base, amount: 0.01 }).success, true);
+  });
+
+  it('rejects a pagination cursor containing a NUL byte', () => {
+    assert.equal(schemas.paginationQuery.safeParse({ cursor: '\u0000bad' }).success, false);
+    assert.equal(schemas.paginationQuery.safeParse({ cursor: 'garbage' }).success, true);
+  });
 });

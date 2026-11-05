@@ -33,7 +33,7 @@ const HEALTH_ICONS = {
  */
 export default function AdminDashboard() {
   const [, setAdminSearch] = useAdminSearch();
-  const { data, error, isError, isPending, refetch } = useQuery({
+  const { data, error, isError, isPending, isFetching, refetch } = useQuery({
     queryKey: adminKeys.dashboard,
     queryFn: fetchAdminDashboard,
     ...ADMIN_QUERY_OPTIONS,
@@ -154,7 +154,8 @@ export default function AdminDashboard() {
       <div className="flex justify-center pt-4">
         <button
           onClick={() => void refetch()}
-          className="px-6 py-2 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium border border-accent-aqua/30"
+          disabled={isFetching}
+          className="px-6 py-2 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium border border-accent-aqua/30 disabled:opacity-60"
         >
           Refresh Dashboard
         </button>

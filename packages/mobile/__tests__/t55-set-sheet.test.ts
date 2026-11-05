@@ -11,6 +11,7 @@ const clash = read('components/ClashCards.tsx');
 describe('set sheet (source-level guards)', () => {
   it('renders Also plays, member colour and the View as button', () => {
     expect(sheet).toContain('<AlsoPlaysSection');
+    expect(sheet).toContain('<SetContextSection');
     expect(sheet).toContain('viewAsButtonLabel');
     expect(sheet).toContain('getAvatarColor');
     expect(sheet).toContain('canView(');

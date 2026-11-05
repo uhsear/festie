@@ -53,7 +53,8 @@ const shortText = z.string().max(1000);
 // ════════════════════════════════════════════════════════════════════════════════
 // Authentication Schemas
 // ════════════════════════════════════════════════════════════════════════════════
-const email = z.string().email('Invalid email address').max(254).optional().or(z.literal(''));
+// Password resets need an address, so sign-up requires one (FND-023).
+const requiredEmail = z.string().trim().min(1, 'Email is required').email('Invalid email address').max(254);
 
 /** True if `iso` (YYYY-MM-DD) is a date at least `years` years before today. */
 export function isAtLeastYearsOld(iso: string, years: number): boolean {
@@ -83,7 +84,7 @@ export const registerSchema = z
     username,
     password,
     confirmPassword: z.string(),
-    email: email.optional(),
+    email: requiredEmail,
     dateOfBirth,
     tosAccepted,
     ref: signupRef,
@@ -108,8 +109,12 @@ export const oauthSignInSchema = z.object({
   nonce: oauthNonce,
   authorizationCode,
   redirectUri: z.string().url().max(300).optional(), // Apple web code exchange
+  // Apple sends the name once, so markup is stripped in the route instead of rejected here.
   name: z
-    .object({ givenName: z.string().max(50).optional(), familyName: z.string().max(50).optional() })
+    .object({
+      givenName: z.string().max(50).optional(),
+      familyName: z.string().max(50).optional(),
+    })
     .optional(),
 });
 export type OAuthSignInInput = z.infer<typeof oauthSignInSchema>;
@@ -270,9 +275,13 @@ export const usernameChangeSchema = z.object({
 });
 export type UsernameChangeInput = z.infer<typeof usernameChangeSchema>;
 
+// Names reach push and email templates as well as escaped pages, so refuse markup at the door.
+const noMarkup = (s: string) => !/[<>]/.test(s);
+const noMarkupMsg = 'Names cannot contain < or >';
+
 // Editable display name (friendly name). Username stays the immutable @handle.
 export const displayNameChangeSchema = z.object({
-  displayName: z.string().trim().min(1, 'Display name required').max(50),
+  displayName: z.string().trim().min(1, 'Display name required').max(50).refine(noMarkup, noMarkupMsg),
 });
 export type DisplayNameChangeInput = z.infer<typeof displayNameChangeSchema>;
 
@@ -330,10 +339,8 @@ export type UpdateEmailInput = z.infer<typeof updateEmailSchema>;
 export const stageSchema = z.object({
   id: z.string().max(100).optional(),
   name: z.string().min(1).max(100),
-  color: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{3,8}$/)
-    .optional(),
+  // The shape is checked by validateFestivalIssues, which names the stage at fault.
+  color: z.string().max(20).optional(),
   // Festival-map: optional GPS pin for this stage (mirrors meetingPointCreateSchema
   // coords). Nullable — stages without coords simply don't render a map pin and the
   // "not mapped yet" fallback stays for festivals that were never mapped.
@@ -357,7 +364,8 @@ export type ArtistLinkInput = z.infer<typeof artistLinkSchema>;
 export const setSchema = z
   .object({
     id: z.string().max(100).optional(),
-    artists: z.array(artistLinkSchema).min(1).max(MAX_ARTISTS_PER_SET).optional(),
+    // An empty list or no artist at all is reported by validateFestivalIssues, which names the set.
+    artists: z.array(artistLinkSchema).max(MAX_ARTISTS_PER_SET).optional(),
     // Backward compat — old clients may still send artist/linkUrl
     artist: z.string().max(300).optional(),
     // Billed name for the whole set. Absent keeps the stored name; null or '' clears it.
@@ -376,9 +384,6 @@ export const setSchema = z
       .nullable()
       .or(z.literal('')),
     linkUrl: z.string().max(500).optional().nullable().or(z.literal('')),
-  })
-  .refine((d) => (d.artists?.length ?? 0) > 0 || (d.artist && d.artist.length > 0), {
-    message: 'At least one artist is required (via artists[] or artist)',
   });
 export type SetInput = z.infer<typeof setSchema>;
 
@@ -574,7 +579,7 @@ export const festivalAnnouncementSchema = z
 
 // ── Crew schemas ─────────────────────────────────────────────────────
 export const crewCreateSchema = z.object({
-  name: z.string().trim().min(1, 'Crew name required').max(60),
+  name: z.string().trim().min(1, 'Crew name required').max(60).refine(noMarkup, noMarkupMsg),
   festivalId: identifier,
   totemName: z.string().trim().max(40).optional(),
   totemEmoji: z.string().trim().max(16).optional(),
@@ -583,7 +588,7 @@ export type CrewCreateInput = z.infer<typeof crewCreateSchema>;
 
 export const crewUpdateSchema = z
   .object({
-    name: z.string().trim().min(1).max(60).optional(),
+    name: z.string().trim().min(1).max(60).refine(noMarkup, noMarkupMsg).optional(),
     maxMembers: z.number().int().min(2).max(30).optional(),
     totemName: z.string().trim().max(40).optional(),
     totemEmoji: z.string().trim().max(16).optional(),
@@ -1363,24 +1368,10 @@ export type WrapQueryInput = z.infer<typeof wrapQuery>;
 
 // ── Expense schemas ─────────────────────────────────────────────
 // Keep in sync with CREW_CURRENCIES in packages/shared/src/constants/config.ts
-// (the backend cannot import @festie/shared, see lib/time-zone.ts). Every code
-// has 2 decimal places, so integer-cent ledger math stays valid.
-export const CREW_CURRENCIES = [
-  'USD',
-  'EUR',
-  'GBP',
-  'CAD',
-  'AUD',
-  'NZD',
-  'MXN',
-  'CHF',
-  'SEK',
-  'NOK',
-  'DKK',
-  'PLN',
-  'CZK',
-  'BRL',
-] as const;
+// (the backend cannot import @festie/shared, see lib/time-zone.ts). USD is the
+// only currency for new writes (FND-082); crews that already store another
+// code keep it, and every read path still accepts any string.
+export const CREW_CURRENCIES = ['USD'] as const;
 
 export const expenseShareSchema = z.object({
   userId: z.string().min(1).max(100),
@@ -1388,10 +1379,13 @@ export const expenseShareSchema = z.object({
 });
 export type ExpenseShareInput = z.infer<typeof expenseShareSchema>;
 
+// Column is NUMERIC(10,2) with CHECK (amount > 0): below 0.01 rounds to 0, above 99,999,999.99 overflows.
+const expenseAmount = z.number().min(0.01).max(99_999_999.99);
+
 export const expenseCreateSchema = z
   .object({
     description: z.string().min(1).max(200),
-    amount: z.number().positive(),
+    amount: expenseAmount,
     // User IDs are TEXT (e.g. "user-<uuid>"), not integers — clients send strings.
     // Typing these as numbers 400'd every real expense create/settle.
     splitWith: z.array(z.string().min(1)).min(1),
@@ -1464,7 +1458,8 @@ export type AdminAddRoleInput = z.infer<typeof adminAddRoleSchema>;
 
 // ── Pagination query schema ────────────────────────────────────
 export const paginationQuery = z.object({
-  cursor: z.string().optional(),
+  // Postgres rejects NUL in text parameters, which would surface as a 500.
+  cursor: z.string().refine((v) => !v.includes('\u0000'), 'Invalid cursor').optional(),
   limit: z.coerce.number().int().min(1).max(MAX_PUBLIC_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });
 export type PaginationQueryInput = z.infer<typeof paginationQuery>;
@@ -1536,7 +1531,7 @@ export type CrewListQueryInput = z.infer<typeof crewListQuery>;
 // ── Expense settle schema (extended with amount) ──────────────
 export const expenseSettleFullSchema = z.object({
   toUserId: z.string().min(1),
-  amount: z.number().positive(),
+  amount: expenseAmount,
 });
 export type ExpenseSettleFullInput = z.infer<typeof expenseSettleFullSchema>;
 

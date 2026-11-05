@@ -63,8 +63,6 @@ export default function AccountDisplayNameSection() {
   };
 
   const trimmed = value.trim();
-  const dirty = trimmed !== currentName;
-  const valid = trimmed.length > 0 && trimmed.length <= MAX_LEN && dirty;
 
   const validate = (): string | null => {
     if (!trimmed) return 'Enter a display name.';
@@ -128,7 +126,10 @@ export default function AccountDisplayNameSection() {
             <TextInput
               style={styles.input}
               value={value}
-              onChangeText={setValue}
+              onChangeText={(v) => {
+                setValue(v);
+                setError(null);
+              }}
               placeholder="How your name appears to your crew"
               placeholderTextColor={t.colors.text.placeholder}
               autoCapitalize="words"
@@ -138,7 +139,7 @@ export default function AccountDisplayNameSection() {
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               returnKeyType="done"
-              onSubmitEditing={() => valid && !offlineMode && void submit()}
+              onSubmitEditing={() => !offlineMode && void submit()}
               accessibilityLabel="New display name"
             />
             {value.length > 0 && !submitting ? (
@@ -187,7 +188,7 @@ export default function AccountDisplayNameSection() {
             label="Save Display Name"
             onPress={() => void submit()}
             loading={submitting}
-            disabled={!valid || offlineMode}
+            disabled={offlineMode}
             accessibilityLabel="Save display name"
           />
         </View>

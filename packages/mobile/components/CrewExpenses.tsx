@@ -338,7 +338,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
 
   return (
     <View style={styles.container}>
-      {isOwner ? (
+      {isOwner && currency !== 'USD' ? (
         <View style={styles.ledger}>
           <TouchableOpacity
             style={styles.currencyRow}

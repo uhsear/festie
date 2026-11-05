@@ -110,7 +110,7 @@ async function register(server: Server, username: string, email?: string) {
   const res = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: PASSWORD, confirmPassword: PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email });
+    .send({ username, password: PASSWORD, confirmPassword: PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: email ?? `${username}@example.com` });
   assert.equal(res.status, 201, `register failed: ${JSON.stringify(res.body)}`);
   return { id: res.body.data.user.id as string, token: res.body.data.token as string };
 }
@@ -254,7 +254,8 @@ describe('account lifecycle', { concurrency: 1, skip }, () => {
       .post('/api/v1/auth/resend-verification')
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1');
-    assert.equal(resent.status, 200, JSON.stringify(resent.body));
+    // No mail key in tests, so the send fails; the token is stored before the send.
+    assert.equal(resent.status, 503, JSON.stringify(resent.body));
 
     const { rows } = await withPool((pool) =>
       pool.query('SELECT 1 FROM email_verification_tokens WHERE user_id = $1 AND email = $2 AND used_at IS NULL', [

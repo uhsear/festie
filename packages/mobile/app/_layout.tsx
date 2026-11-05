@@ -8,7 +8,9 @@ import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigatio
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureApi, setAuthToken } from '@festie/shared/services';
+import { API_ORIGIN } from '../lib/apiOrigin';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { COPY } from '@festie/shared/constants';
 import { scrubSensitiveUrl } from '@festie/shared/utils';
 import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
@@ -100,7 +102,7 @@ if (SENTRY_DSN && !isExpoGo) {
 
 // Wire up 401 handling: attempt a token refresh, then logout on failure.
 configureApi({
-  baseUrl: 'https://festie.us/api/v1',
+  baseUrl: `${API_ORIGIN}/api/v1`,
   authMode: 'bearer',
   onUnauthorized: async () => {
     // GUEST GUARD: with no session there is nothing to refresh and nothing to
@@ -116,6 +118,7 @@ configureApi({
       return true;
     } catch {
       await useAuthStore.getState().logout();
+      useUIStore.getState().showToast(COPY.session.signedOut);
       return false;
     }
   },

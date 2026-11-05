@@ -84,9 +84,12 @@ textarea {
   appearance: none;
 }
 
-/* Restore native checkbox rendering after the form reset above. Native
+/* Restore native checkbox and radio rendering after the form reset above.
+   Without it every bare checkbox and radio in the app renders 0x0. Native
    controls provide reliable unchecked, checked, focus, and forced-colors
    states; accent-color keeps the selected state on-brand. */
+input[type='checkbox'],
+input[type='radio'],
 .auth-tos-checkbox {
   -webkit-appearance: checkbox;
   appearance: auto;

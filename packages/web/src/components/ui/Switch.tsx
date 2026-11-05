@@ -33,7 +33,7 @@ export default function Switch({
         data-testid={testId}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative w-11 h-6 shrink-0 rounded-full transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua disabled:opacity-60',
+          'relative w-11 h-6 shrink-0 rounded-full after:absolute after:-inset-y-2.5 after:inset-x-0 after:content-[""] transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua disabled:opacity-60',
           checked ? 'bg-accent-aqua' : 'bg-control-track-off',
         )}
       >

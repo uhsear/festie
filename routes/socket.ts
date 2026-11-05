@@ -46,6 +46,7 @@ import {
   clampCapturedAt,
 } from '../lib/live-location-cache.js';
 import { noteBatteryLevel } from '../lib/battery-low.js';
+import type { LocationPeerStoppedReason } from '../packages/shared/src/types/socket-events.js';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket Event Validation Schemas
@@ -301,9 +302,22 @@ export default function setupSocketHandlers(deps: any) {
           return;
         }
         const festivalId = leaveFestivalRealtime(socket, io);
+        // Tell peers a sharing marker is gone before the room is left.
+        const { crewId, sharingCrewId, userId } = socket.data ?? {};
+        if (sharingCrewId) {
+          socket.to(`crew:${sharingCrewId}`).emit('location:peer-stopped', { _v: 1, crewId: sharingCrewId, userId, reason: 'left' });
+          unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
+          void dropLivePosition(redis, sharingCrewId, userId);
+        }
         for (const room of socket.rooms) {
           if (room !== socket.id) socket.leave(room);
         }
+        // Every crew room is gone, so the location:share/sync gates (which read
+        // socket.data.crewId) must refuse until join:crew runs again.
+        if (crewId) delete socket.data.crewId;
+        delete socket.data.sharingCrewId;
+        delete socket.data.crewMembershipCheckedAt;
+        delete socket.data.crewMembershipUpdateCount;
         if (festivalId) emitPresence(festivalId, io);
       } catch (error: any) {
         log.error('leave:festival error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
@@ -323,8 +337,10 @@ export default function setupSocketHandlers(deps: any) {
           socket.data?.userSessionToken || resolveSocketToken(socket, null, config.USER_SESSION_COOKIE);
         const session = await validateUserSession(sessionToken);
         if (!session) {
+          // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
+          respond({ ok: false, error: 'Authentication required' });
           disconnectSocket(socket, io);
-          return respond({ ok: false, error: 'Authentication required' });
+          return;
         }
         // eslint-disable-next-line require-atomic-updates -- socket.data is not a shared race target
         socket.data.userSessionToken = sessionToken;
@@ -429,8 +445,10 @@ export default function setupSocketHandlers(deps: any) {
           socket.data?.userSessionToken || resolveSocketToken(socket, null, config.USER_SESSION_COOKIE);
         const session = await validateUserSession(sessionToken);
         if (!session) {
+          // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
+          respond({ ok: false, code: 'AUTH_REQUIRED' });
           disconnectSocket(socket, io);
-          return respond({ ok: false, code: 'AUTH_REQUIRED' });
+          return;
         }
         const membership = await stores.crews.getMember(crewId, session.userId);
         if (!membership) return respond({ ok: false, code: 'NOT_A_MEMBER' });
@@ -543,7 +561,7 @@ export default function setupSocketHandlers(deps: any) {
               _v: 1,
               crewId,
               userId,
-              reason: 'revoked',
+              reason: 'kicked' satisfies LocationPeerStoppedReason,
             });
             delete socket.data.sharingCrewId;
             socket.leave('crew:' + crewId);
@@ -664,8 +682,10 @@ export default function setupSocketHandlers(deps: any) {
           socket.data?.userSessionToken || resolveSocketToken(socket, null, config.USER_SESSION_COOKIE);
         const session = await validateUserSession(sessionToken);
         if (!session) {
+          // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
+          respond({ ok: false, peers: [] });
           disconnectSocket(socket, io);
-          return respond({ ok: false, peers: [] });
+          return;
         }
         const membership = await stores.crews.getMember(crewId, session.userId);
         if (!membership) return respond({ ok: false, peers: [] });

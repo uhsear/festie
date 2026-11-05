@@ -60,6 +60,8 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const failedCount = failedSync.length;
+  // Close the review sheet once the last failure is dismissed or retried away (render-time reset, no effect).
+  if (sheetOpen && failedCount === 0) setSheetOpen(false);
 
   // Bounded retry timer for a drain that leaves items queued while we're
   // still online (e.g. a transient 5xx) — the only other drain triggers are

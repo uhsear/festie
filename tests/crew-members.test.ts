@@ -339,6 +339,31 @@ describe('routes/crew-members.js — DELETE /:crewId/leave', () => {
     });
   });
 
+  test('leave emits location:peer-stopped with reason left', async () => {
+    const emitFn = mock.fn(() => {});
+    const ioObj = {
+      to: mock.fn(() => ({ emit: emitFn })),
+      in: mock.fn(() => ({ fetchSockets: async () => [] })),
+    };
+    const { app } = await buildApp({
+      io: ioObj,
+      stores: {
+        crews: {
+          getById: mock.fn(async () => ({ ...DEFAULT_CREW })),
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          removeMember: mock.fn(async () => {}),
+        },
+      },
+    });
+
+    const res = await request(app).delete('/crew-1/leave');
+
+    assert.equal(res.status, 200);
+    const stops = (emitFn.mock.calls as any[]).filter((c) => c.arguments[0] === 'location:peer-stopped');
+    assert.equal(stops.length, 1);
+    assert.deepEqual(stops[0].arguments[1], { _v: 1, crewId: 'crew-1', userId: 'user-1', reason: 'left' });
+  });
+
   // ── Owner cannot leave ────────────────────────────────────────────
   test('returns 400 when owner tries to leave without transferring', async () => {
     const { app } = await buildApp({
@@ -359,7 +384,7 @@ describe('routes/crew-members.js — DELETE /:crewId/leave', () => {
   });
 
   // ── Not a member ──────────────────────────────────────────────────
-  test('returns 400 when user is not a member', async () => {
+  test('returns 403 when user is not a member', async () => {
     const { app } = await buildApp({
       stores: {
         crews: {
@@ -372,8 +397,8 @@ describe('routes/crew-members.js — DELETE /:crewId/leave', () => {
     const res = await request(app)
       .delete('/crew-1/leave');
 
-    assert.equal(res.status, 400);
-    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'FORBIDDEN');
     assert.match(res.body.error.message, /Not a member/i);
   });
 
@@ -1333,7 +1358,7 @@ describe('routes/crew-members.js -- feed rows and pushes', () => {
 //  T41: removing a member drops their live marker once, socket or HTTP
 // =====================================================================
 describe('routes/crew-members.js -- live location on removal', () => {
-  test('kick emits one location:peer-stopped with reason revoked and drops the cached fix', async () => {
+  test('kick emits one location:peer-stopped with reason kicked and drops the cached fix', async () => {
     const emitFn = mock.fn(() => {});
     const ioObj = {
       to: mock.fn(() => ({ emit: emitFn })),
@@ -1363,7 +1388,7 @@ describe('routes/crew-members.js -- live location on removal', () => {
     assert.equal(res.status, 200);
     const stops = (emitFn.mock.calls as any[]).filter((c) => c.arguments[0] === 'location:peer-stopped');
     assert.equal(stops.length, 1);
-    assert.deepEqual(stops[0].arguments[1], { _v: 1, crewId: 'crew-1', userId: 'user-2', reason: 'revoked' });
+    assert.deepEqual(stops[0].arguments[1], { _v: 1, crewId: 'crew-1', userId: 'user-2', reason: 'kicked' });
     const toRooms = (ioObj.to.mock.calls as any[]).map((c) => c.arguments[0]);
     assert.ok(toRooms.every((r) => r === 'crew:crew-1'));
     assert.equal(hdel.mock.calls.length, 1);

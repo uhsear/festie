@@ -15,8 +15,10 @@ import {
   stageMark,
   stageText,
   wrapArtist,
+  LOCKSCREEN_FOOTER_MAX,
 } from './lockscreenModel';
 import { defaultScheduleImageDay } from './scheduleImage';
+import { getSetTimeBounds } from './setStatus';
 
 const stages: Stage[] = EDC_STAGES.map(([id, name, color]) => ({
   id, name, color, festivalId: 'f', createdAt: '', updatedAt: '',
@@ -120,20 +122,42 @@ describe('list modes', () => {
     expect(ids(m)).toHaveLength(9);
     const last = list(m).rows.at(-1)!;
     expect(last.y + last.height).toBeLessThanOrEqual(m.contentEndU + 1e-6);
-    expect(list(m).rows[0]!.y).toBeGreaterThanOrEqual(m.contentTopU + 11);
+    expect(list(m).rows[0]!.y).toBeGreaterThanOrEqual(m.contentTopU + 8.5);
   });
-  it('14 picks split 7+7 and keep every set', () => {
+  it('14 picks fit one image at tier S, keeping the stage chip and a 4.2u artist floor', () => {
     const picks = pick(friday, 14);
     const m = build({ picks });
-    expect(m.pages.map((p) => p.setIds.length)).toEqual([7, 7]);
+    expect(m.pages).toHaveLength(1);
     expect(ids(m).sort()).toEqual(Object.keys(picks).sort());
+    const l = list(m);
+    expect(l.tier).toBe('S');
+    expect(l.chipSizeU).toBeGreaterThanOrEqual(2.6);
+    expect(l.rows.every((r) => r.stageShort.length > 0 && r.artistSizeU >= 4.2)).toBe(true);
+    const last = l.rows.at(-1)!;
+    expect(last.y + last.height).toBeLessThanOrEqual(m.contentEndU + 1e-6);
+  });
+  it('30 picks fit two images that share one tier', () => {
+    const picks = spread(30);
+    const m = build({ picks });
+    expect(m.pages).toHaveLength(2);
+    expect(ids(m).sort()).toEqual(Object.keys(picks).sort());
+    expect(new Set(m.pages.map((p) => (p.body as LockscreenListPage).tier)).size).toBe(1);
     expect(m.pages.map((p) => p.header.pageChip)).toEqual(['1/2', '2/2']);
     expect(m.pages[0]!.header.metaBottom).toMatch(/ · to \d/);
-    expect(m.pages[1]!.footer.text).toContain('image 2 of 2');
+    expect(m.pages[1]!.footer.text).toContain('2 of 2');
     for (const p of m.pages) {
-      const last = (p.body as LockscreenListPage).rows.at(-1)!;
-      expect(last.y + last.height).toBeLessThanOrEqual(m.contentEndU + 1e-6);
+      const rows = (p.body as LockscreenListPage).rows;
+      expect(rows.at(-1)!.y + rows.at(-1)!.height).toBeLessThanOrEqual(m.contentEndU + 1e-6);
+      // Every time line ends above the torch and camera buttons.
+      for (const r of rows) expect(r.y + (r.height + 4 * 1.1) / 2).toBeLessThanOrEqual(0.875 * m.heightU + 1e-6);
     }
+  });
+  it('fewer images beat bigger text: the largest tier is chosen only after the page count', () => {
+    for (const n of [3, 9, 14]) {
+      const m = build({ picks: pick(friday, n) });
+      expect(m.pages).toHaveLength(1);
+    }
+    expect(list(build({ picks: pick(friday, 3) })).tier).toBe('XL');
   });
   it('priority filter keeps only the chosen priorities', () => {
     const m = build({ picks: pick(friday, 9), priorities: ['must'] });
@@ -179,6 +203,7 @@ describe('list modes', () => {
       mode: 'crew',
       picks,
       selfUserId: 'me',
+      crewLoaded: true,
       crewOverlap: {
         [s0]: {
           setId: s0,
@@ -192,12 +217,23 @@ describe('list modes', () => {
     expect(rows.find((r) => r.setId === s1)!.crew).toMatchObject({ solo: true });
     expect(m.pages[0]!.header.metaBottom).toBe('Picks + crew · 2');
   });
+  it('crew mode never marks solo before the overlap has loaded', () => {
+    const m = build({ mode: 'crew', picks: pick(friday, 2), crewOverlap: {} });
+    expect(list(m).rows.every((r) => r.crew?.solo === false)).toBe(true);
+  });
+  it('counts picks with no set time in the header', () => {
+    const tba: FestivalSet = { ...friday[0]!, id: 'tba', startTime: '', endTime: '' };
+    const m = build({ sets: [...sets, tba], picks: { ...pick(friday, 2), tba: 'must' } });
+    expect(m.pages[0]!.header.metaBottom).toBe('My picks · 2 · +1 no set time');
+    const filtered = build({ sets: [...sets, tba], picks: { ...pick(friday, 2), tba: 'maybe' }, priorities: ['must'] });
+    expect(filtered.pages[0]!.header.metaBottom).not.toContain('no set time');
+  });
   it('all days builds one series per day with a day-specific header', () => {
     const picks = { ...pick(friday, 2), ...pick(sets.filter((s) => s.dayIndex === 2), 1) };
     const m = build({ picks, dayIndex: 'all' });
     expect(m.pages.map((p) => p.dayIndex)).toEqual([0, 2]);
     expect(m.pages.map((p) => p.header.day)).toEqual(['FRIDAY', 'SUNDAY']);
-    expect(m.pages[1]!.footer.text).toContain('image 2 of 2');
+    expect(m.pages[1]!.footer.text).toContain('2 of 2');
   });
   it('an empty result has no pages', () => {
     const m = build({ picks: {} });
@@ -216,16 +252,56 @@ describe('theme and zones', () => {
     expect(light.background.sheet!.topU).toBeCloseTo(light.contentTopU - 2);
     expect(light.pages[0]!.footer.showMark).toBe(false);
   });
-  it('content sits in 0.38 to 0.80 of the height, 0.45 with the big clock', () => {
+  it('content sits in 0.38 to 0.92 of the height, 0.45 with the big clock', () => {
     const m = build({ picks: pick(friday, 3) });
     expect(m.contentTopU / m.heightU).toBeCloseTo(0.38);
     expect(m.contentEndU / m.heightU).toBeCloseTo(0.92);
     expect(build({ picks: pick(friday, 3), tallClock: true }).contentTopU / m.heightU).toBeCloseTo(0.45);
   });
-  it('stamps the save time and the re-save hint', () => {
-    expect(build({ picks: pick(friday, 3) }).pages[0]!.footer.text).toBe(
-      'festie.us · Saved Nov 3, 2:41 PM · set times can change, re-save in Festie',
-    );
+  it('stamps the save time in a centred footer of at most 33 characters, clear of the corner buttons', () => {
+    const one = build({ picks: pick(friday, 3) });
+    expect(one.pages[0]!.footer.text).toBe('festie.us · Saved Nov 3 2:41 PM');
+    const widest = new Date(2026, 10, 16, 12, 41);
+    const single = build({ picks: pick(friday, 3), savedAt: widest }).pages[0]!.footer;
+    const paged = build({ picks: spread(30), savedAt: widest }).pages[1]!.footer;
+    expect(single.text).toBe('festie.us · Saved Nov 16 12:41 PM');
+    expect(paged.text).toBe('Saved Nov 16 12:41 PM · 2 of 2');
+    for (const f of [single, paged]) {
+      expect(f.text.length).toBeLessThanOrEqual(LOCKSCREEN_FOOTER_MAX);
+      expect(f.x).toBe(26);
+      expect(f.x + f.width).toBe(74);
+      expect((f.y + 0.8 * f.sizeU) / one.heightU).toBeCloseTo(0.945);
+    }
+  });
+  it('clock: widgets starts content at 0.50; tallClock stays an alias for big', () => {
+    const at = (over: Partial<LockscreenInput>) => build({ picks: pick(friday, 3), ...over });
+    const m = at({});
+    expect(at({ clock: 'widgets' }).contentTopU / m.heightU).toBeCloseTo(0.5);
+    expect(at({ clock: 'big' }).contentTopU).toBeCloseTo(at({ tallClock: true }).contentTopU);
+    expect(at({ clock: 'normal', tallClock: true }).contentTopU / m.heightU).toBeCloseTo(0.38);
+    expect(ids(at({ clock: 'widgets' }))).toHaveLength(3);
+  });
+  it('the compact header keeps a long day label and one meta line', () => {
+    // The model's header width table: capitals 0.66em, spaces 0.25em, other glyphs 0.55em; meta 0.5em.
+    const dayEm = (w: string) => [...w].reduce((n, ch) => n + (ch === ' ' ? 0.25 : /[A-Z]/.test(ch) ? 0.66 : 0.55), 0);
+    const fits = (h: ReturnType<typeof build>['pages'][number]['header']) => {
+      const meta = [h.metaTop, h.metaBottom].filter(Boolean).join(' · ');
+      return dayEm(h.day) * h.daySizeU + (h.pageChip ? 11 : 0) + 2 + meta.length * 0.5 * h.metaSizeU;
+    };
+    const opening = days.map((d, i) => (i === 0 ? { ...d, label: 'Day 1 - Opening Night' } : d));
+    const one = build({ days: opening, picks: pick(friday, 3) }).pages[0]!.header;
+    expect(one.height).toBe(8.5);
+    expect(one.day).toBe('DAY 1 - OPENING NIGHT');
+    expect(one.daySizeU).toBeGreaterThanOrEqual(4.8);
+    expect(one.daySizeU).toBeLessThanOrEqual(5.6);
+    expect(fits(one)).toBeLessThanOrEqual(88 + 1e-6);
+    for (const p of build({ days: opening, picks: spread(30) }).pages) {
+      expect(fits(p.header)).toBeLessThanOrEqual(88 + 1e-6);
+      expect(p.header.metaBottom).toContain('My picks · 30');
+    }
+    const friday1 = build({ picks: pick(friday, 3) }).pages[0]!.header;
+    expect(friday1.daySizeU).toBe(5.6);
+    expect(friday1.metaTop).toBe('EDC Orlando · Nov 6');
   });
 });
 
@@ -329,7 +405,7 @@ describe('defaultScheduleImageDay with a mode', () => {
       const long = { ...sets.find((s) => s.dayIndex === 0)!, id: 'long', artist: 'Supercalifragilisticexpialidocious', startTime: '16:00', endTime: '18:00' };
       const m = buildLockscreenModel({ ...base, sets: [long, ...sets], mode: 'full', onePage: true, picks: {} });
       const b = grid(m).blocks.find((x) => x.setId === 'long')!;
-      expect(b.artistSizeU).toBe(2.2);
+      expect(b.artistSizeU).toBe(2.8);
       expect(b.artistLines).toHaveLength(1);
       expect(b.artistLines[0]).toMatch(/…$/);
     });
@@ -380,5 +456,133 @@ describe('defaultScheduleImageDay with a mode', () => {
       if (two.length && one.length) expect(two[0]!.height).toBeGreaterThan(one[0]!.height);
       for (const r of rows) for (const l of r.artistLines) expect(l.endsWith('-')).toBe(false);
     });
+  });
+});
+
+describe('clashes, names and emphasis', () => {
+  const at = (id: string, artist: string, stageId: string, startTime: string, endTime: string): FestivalSet => ({
+    ...friday[0]!, id, artist, stageId, startTime, endTime,
+  });
+  const late = [
+    at('a', 'Chris Lorenzo', 'stereo-bloom', '22:30', '23:45'),
+    at('b', 'Kaskade', 'kinetic-field', '23:30', '00:45'),
+    at('c', 'Josh Baker', 'neon-garden', '23:30', '01:00'),
+    at('d', 'Sub Focus', 'circuit-grounds', '00:15', '01:15'),
+    at('e', 'Eric Prydz', 'kinetic-field', '01:00', '02:30'),
+    at('f', 'Early Act', 'bacardi', '20:00', '21:00'),
+  ];
+  const all = (chosen: FestivalSet[]) => Object.fromEntries(chosen.map((s, i) => [s.id, cycle[i % 3]!]));
+
+  it('past midnight: 11:30 PM, 12:15 AM and 1:00 AM read in order, one clash group, the repeated time shown once', () => {
+    const m = build({ sets: late, picks: all(late) });
+    const rows = list(m).rows;
+    expect(rows.map((r) => `${r.time} ${r.period}`)).toEqual(['8:00 PM', '10:30 PM', '11:30 PM', '11:30 PM', '12:15 AM', '1:00 AM']);
+    expect(rows.map((r) => r.timeRepeat)).toEqual([false, false, false, true, false, false]);
+    expect(list(m).divider).toMatchObject({ beforeIndex: 4 });
+    const group = rows[1]!.clashGroup;
+    expect(group).not.toBeNull();
+    expect(rows.slice(1).every((r) => r.clashGroup === group)).toBe(true);
+    expect(rows[0]!.clashGroup).toBeNull();
+    // One bracket per run; the after-midnight divider does not split a run of rows.
+    expect(list(m).clashSpans).toHaveLength(1);
+    const span = list(m).clashSpans[0]!;
+    expect(span.y).toBeGreaterThan(rows[1]!.y);
+    expect(span.y + span.height).toBeLessThan(rows[5]!.y + rows[5]!.height);
+    expect(span.x).toBeGreaterThanOrEqual(4);
+  });
+  it('the clash colour is neutral: never the old Maybe orange, never the Maybe colour', () => {
+    for (const theme of ['dark', 'light'] as const) {
+      const c = build({ picks: pick(friday, 3), theme }).palette;
+      expect(c.clash.toLowerCase()).not.toBe('#ffb020');
+      expect(c.maybe.toLowerCase()).not.toBe('#ffb020');
+      expect(c.clash).not.toBe(c.maybe);
+      expect(contrastRatio(c.clash, theme === 'dark' ? '#0a0a0a' : '#ffffff')).toBeGreaterThanOrEqual(3);
+    }
+  });
+  it('Must, Want and Maybe: colour only on the must star, a softer Maybe name', () => {
+    const m = build({ picks: pick(friday, 3) });
+    const c = m.palette;
+    const by = (p: Priority) => list(m).rows.find((r) => r.priority === p)!;
+    expect(by('must').glyphColor).toBe(c.must);
+    expect(by('want-to-see').glyphColor).toBe(c.text);
+    expect(by('maybe').glyphColor).toBe(c.text2);
+    expect(by('must').artistColor).toBe(c.text);
+    expect(by('maybe').artistColor).toBe(c.maybe);
+    expect(contrastRatio(c.maybe, '#0a0a0a')).toBeGreaterThanOrEqual(4.5);
+  });
+  it('long and B2B names shrink before they ellipsize, and a cut word ends the name', () => {
+    const names = [
+      at('n1', 'Interplanetary Criminal', 'stereo-bloom', '18:00', '19:00'),
+      at('n2', 'Bullet Tooth B2B Sidney Charles', 'stereo-bloom', '19:00', '20:00'),
+      at('n3', 'Dom Dolla B2B John Summit B2B Mau P', 'kinetic-field', '20:00', '21:30'),
+      at('n4', 'Luke Dean B2B George Smeddles', 'bacardi', '22:30', '23:30'),
+      at('n5', 'Supercalifragilisticexpialidocious', 'neon-garden', '23:30', '23:59'),
+    ];
+    for (const n of [4, 5]) {
+      const rows = list(build({ sets: names.slice(0, n), picks: all(names.slice(0, n)) })).rows;
+      for (const r of rows) {
+        const cut = r.artistLines.findIndex((l) => l.endsWith('…'));
+        // A cut word is always the last thing drawn.
+        if (cut >= 0) expect(cut).toBe(r.artistLines.length - 1);
+        if (r.setId !== 'n5') expect(r.artistLines.join(' ')).toBe(r.artist);
+        expect(r.artistSizeU).toBeGreaterThanOrEqual(4.2);
+      }
+    }
+    const cutLines = wrapArtist('Interplanetary Criminal', 6, 30);
+    expect(cutLines).toHaveLength(1);
+    expect(cutLines[0]).toMatch(/^Interpl.*…$/);
+  });
+  it('splits a set tag off the name', () => {
+    const m = build({ sets: [at('t', 'Alesso (Sunset Set)', 'kinetic-field', '17:28', '18:44')], picks: { t: 'must' } });
+    expect(list(m).rows[0]).toMatchObject({ artist: 'Alesso', tag: 'Sunset Set' });
+  });
+});
+
+describe('from now', () => {
+  const picks = pick(friday, 14);
+  it('drops sets that ended by fromMs, using the shared set bounds', () => {
+    const fromMs = new Date(2026, 10, 6, 19, 0).getTime();
+    const m = build({ picks, fromMs });
+    const kept = new Set(ids(m));
+    for (const id of Object.keys(picks)) {
+      const ended = getSetTimeBounds(sets.find((s) => s.id === id)!, days)!.endMs <= fromMs;
+      expect(kept.has(id)).toBe(!ended);
+    }
+    expect(kept.size).toBeGreaterThan(0);
+    expect(kept.size).toBeLessThan(14);
+  });
+  it('leaves the model unchanged when omitted or before every set', () => {
+    const plain = build({ picks });
+    expect(build({ picks, fromMs: undefined })).toEqual(plain);
+    expect(ids(build({ picks, fromMs: new Date(2026, 10, 6, 6, 0).getTime() }))).toEqual(ids(plain));
+  });
+  it('drops a whole day in all-days mode once it has ended', () => {
+    const both = { ...pick(friday, 2), ...pick(sets.filter((s) => s.dayIndex === 2), 1) };
+    const m = build({ picks: both, dayIndex: 'all', fromMs: new Date(2026, 10, 7, 12, 0).getTime() });
+    expect(m.pages.map((p) => p.dayIndex)).toEqual([2]);
+  });
+});
+
+describe('grid legibility', () => {
+  it('no grid text below 2.8u; the legend sits between the corner buttons; unpicked names are text2', () => {
+    for (const onePage of [false, true]) {
+      const m = build({ mode: 'full', picks: pick(friday, 6), onePage });
+      for (const p of m.pages) {
+        const g = p.body as LockscreenGridPage;
+        expect(g.labelSizeU).toBeGreaterThanOrEqual(2.8);
+        expect(g.legendX).toBeGreaterThanOrEqual(26);
+        expect(g.legendX + g.legendWidth).toBeLessThanOrEqual(74);
+        for (const b of g.blocks) {
+          expect(b.artistSizeU).toBeGreaterThanOrEqual(2.8);
+          if (!b.picked) expect(b.ink).toBe(m.palette.text2);
+        }
+      }
+    }
+  });
+  it('a short carry-over block keeps the name and drops the start time', () => {
+    const m = build({ mode: 'full', picks: pick(friday, 6) });
+    for (const b of grid(m, 1).blocks.filter((x) => x.carryOver)) {
+      expect(b.carryLabel).toBe(b.textMode === 'full' ? `↑ ${b.time} ${b.artist}` : `↑ ${b.artist}`);
+    }
   });
 });

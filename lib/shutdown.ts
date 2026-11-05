@@ -249,6 +249,7 @@ function createBackgroundTasks(ctx: any, { io }: any) {
   state.timers.push(_meetingPointExpiryTimer);
 
   // Poll expiry sweep: end polls whose closes_at has passed (announce + push, like a manual end).
+  // 5 s keeps the crew:poll-closed announcement close to closes_at; the UPDATE only scans open polls.
   if (ctx.pollCloser) {
     const _pollExpiryTimer = setInterval(async () => {
       try {
@@ -259,7 +260,7 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         recordJobRun('poll_expiry', false);
         log.warn('poll expiry sweep failed', { error: err.message });
       }
-    }, 60 * 1000);
+    }, 5 * 1000);
     _pollExpiryTimer.unref();
     state.timers.push(_pollExpiryTimer);
   }

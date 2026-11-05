@@ -78,7 +78,9 @@ export default function createAuditMiddleware(deps: any) {
     // the resource name is never parts[0] -- walk past every leading :param
     // segment instead of only checking the first one.
     const resourceSegment = parts.find((part: string) => !part.startsWith(':'));
-    const type = resourceSegment || 'unknown';
+    // Routers such as /profiles only register '/:id'; the mount path names the resource.
+    const mountSegment = String(req.baseUrl || '').split('/').filter(Boolean).pop();
+    const type = resourceSegment || mountSegment || 'unknown';
 
     let id = null;
     const routeParamKeys = Object.keys(req.params || {});

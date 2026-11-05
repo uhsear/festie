@@ -255,7 +255,7 @@ export async function registerViaApi(context: BrowserContext, app: AppRef, usern
       password: DEFAULT_PASSWORD,
       confirmPassword: DEFAULT_PASSWORD,
       dateOfBirth: '1995-01-01',
-      tosAccepted: true,
+      tosAccepted: true, email: `${username}@example.com`,
     },
   });
   expect(res.ok(), `registration failed (${res.status()})`).toBe(true);

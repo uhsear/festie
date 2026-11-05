@@ -20,6 +20,13 @@ function isApiError(err: unknown): err is Error & ApiErrorLike {
 
 type ErrorKind = 'network' | 'not-found' | 'server' | 'generic';
 
+/** A failed lazy route chunk: the browser caches the rejected import, so only a reload can recover. */
+function isChunkLoadError(error: Error): boolean {
+  return /dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError/i.test(
+    `${error.name} ${error.message}`,
+  );
+}
+
 function classifyError(error: Error): ErrorKind {
   // ApiClientError from shared/services/api
   if (isApiError(error)) {
@@ -134,7 +141,7 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
             size="sm"
             type="button"
             icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
-            onClick={() => reset()}
+            onClick={() => (isChunkLoadError(error) ? window.location.reload() : reset())}
           >
             Retry
           </Button>

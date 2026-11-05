@@ -873,15 +873,18 @@ describe('schemas: festivalUpdate partial refinement', () => {
   });
 });
 
-describe('schemas: setSchema refinement (artist requirement)', () => {
-  it('rejects set with neither artists[] nor artist string', () => {
-    const result = schemas.festivalCreate.safeParse({
+describe('schemas: set artist requirement', () => {
+  it('leaves a set with neither artists[] nor artist to validateFestivalIssues, which names the set', async () => {
+    const body = {
       name: 'Fest',
       days: [{
         sets: [{ stageId: 'stage-1', startTime: '14:00', endTime: '16:00' }],
       }],
-    });
-    assert.ok(!result.success);
+    };
+    assert.ok(schemas.festivalCreate.safeParse(body).success);
+    const { validateFestivalIssues } = await import('../lib/helpers/validation.js');
+    const issues = validateFestivalIssues({ MAX_STAGES: 20, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 }, body);
+    assert.ok(issues.some((issue) => issue.code === 'set_artist_required'));
   });
 });
 

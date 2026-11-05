@@ -610,7 +610,7 @@ export default function LineupImportScreen() {
           {blocked ? (
             <Text style={styles.errorLine}>
               {plan.counts.error > 0
-                ? `Fix or remove the ${plan.counts.error} rows with errors to continue.`
+                ? `Fix or remove the ${plan.counts.error} ${plan.counts.error === 1 ? 'row' : 'rows'} with errors to continue.`
                 : 'Fix the problems above to continue.'}
             </Text>
           ) : null}

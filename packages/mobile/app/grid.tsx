@@ -15,8 +15,8 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useFestivalDataStore, useFestivalStore, useAuthStore } from '@festie/shared/stores';
-import { usePicks, useFestival, useDayClashes, useViewAs } from '@festie/shared/hooks';
+import { useFestivalDataStore, useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
+import { usePicks, useFestival, useDayClashes, useViewAs, useCrew } from '@festie/shared/hooks';
 import { COPY } from '@festie/shared/constants';
 import {
   festivalLoadState,
@@ -36,6 +36,8 @@ import {
   scheduleEmptyCopy,
   scheduleEmptyReason,
   scheduleResultsSummary,
+  buildGridCrewAvatarsBySet,
+  type GridCrewProfile,
   searchEmptyCopy,
   searchHiddenByFilters,
   type GridBounds,
@@ -50,6 +52,7 @@ import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import { SCHEDULE_HREF } from '../lib/dayOfRoutes';
+import Avatar from '../components/Avatar';
 import ClashHatch from '../components/ClashHatch';
 import ClashChip from '../components/ClashChip';
 import TBASection from '../components/TBASection';
@@ -71,6 +74,8 @@ const HEADER_H = 40;
 // WCAG 2.5.5 — a 15-min set at the smallest zoom is only 21px; bump cells to a 44px
 // minimum tap target (mirrors the web grid's Math.max(..., 44)).
 const MIN_CELL_H = 44;
+// Below this column width the avatar cluster would collide with the time line.
+const AVATAR_MIN_COL_W = 140;
 
 /**
  * Grid — the dense 2D stage×time schedule, a mobile port of the web `/grid`
@@ -136,10 +141,11 @@ export default function GridScreen() {
   const dayLabel = getDays()[selectedDay]?.label ?? 'Grid';
   const screenTitle = `${dayLabel} · Grid`;
 
-  // Compact crew-overlap count for a cell — how many OTHER crew members picked
-  // a set. Same shared accessor the web grid uses (getOtherPicks reads the
-  // persisted profiles, so the count renders offline).
-  const getOverlapCount = useCallback((setId: string) => getOtherPicks(setId).length, [getOtherPicks]);
+  // With an active crew: crew-scoped avatars (same accessor as the set sheet). Without
+  // one: the plain count, as before. Built from the persisted profiles, so they render offline.
+  const { getCrewScopedOtherPicks } = useCrew();
+  const hasActiveCrew = useCrewStore((s) => !!s.activeCrew);
+  const allProfiles = useFestivalDataStore((s) => s.allProfiles);
 
   // Stage color resolver that substitutes a real token for web's `var(...)`
   // fallback so cells never receive an unparseable color (matches index.tsx's
@@ -184,6 +190,16 @@ export default function GridScreen() {
     }
     return m;
   }, [timedSets]);
+
+  const crewBySet = useMemo(
+    () =>
+      buildGridCrewAvatarsBySet(
+        timedSets.map((st) => st.id),
+        { hasActiveCrew, getCrewPicks: getCrewScopedOtherPicks, getOtherPicks },
+        allProfiles as GridCrewProfile[],
+      ),
+    [timedSets, hasActiveCrew, getCrewScopedOtherPicks, getOtherPicks, allProfiles],
+  );
 
   const bounds = useMemo<GridBounds | null>(() => {
     if (!timedSets.length) return null;
@@ -476,7 +492,9 @@ export default function GridScreen() {
           const pickColor = pick ? t.colors.priority[pick === 'want-to-see' ? 'want' : pick] : null;
           const cellColor = pickColor ?? stageColor;
           const dn = artistDisplayName(set, currentFestival.b2bSeparator);
-          const overlap = getOverlapCount(set.id);
+          const crew = crewBySet.get(set.id);
+          // Avatars need room beside the time line; narrow or short tiles keep the count.
+          const showAvatars = !!crew && colW >= AVATAR_MIN_COL_W && height >= 48;
           const mark = marks.get(set.id);
 
           const cellStyle = {
@@ -507,12 +525,26 @@ export default function GridScreen() {
                   {fmtShort(set.startTime!)}–{fmtShort(set.endTime!)}
                 </Text>
               ) : null}
-              {overlap > 0 ? (
+              {crew && showAvatars && crew.shown.length > 0 ? (
+                // Not pressable: a tap lands on the tile and opens the set. The tile's own label names the crew.
+                <View style={styles.avatarCluster} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                  {crew.shown.map((m, idx) => (
+                    <View key={m.key} style={idx > 0 ? styles.avatarOverlap : undefined}>
+                      <Avatar name={m.name} image={forExport ? null : m.avatarUrl} size="xxs" />
+                    </View>
+                  ))}
+                  {crew.overflow > 0 ? (
+                    <Text style={styles.overlapCount} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {`+${crew.overflow} `}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : crew ? (
                 <View style={styles.overlapBadge}>
                   {/* Sub-scale badge exception: iconSize.xs (12) overwhelms this
                       tiny in-cell overlap pill (micro text, 1px vertical pad). */}
                   <Ionicons name="people" size={9} color={t.colors.accent.aqua} />
-                  <Text style={styles.overlapCount}>{overlap}</Text>
+                  <Text style={styles.overlapCount}>{crew.total}</Text>
                 </View>
               ) : null}
             </>
@@ -526,8 +558,7 @@ export default function GridScreen() {
             );
           }
 
-          const overlapLabel =
-            overlap > 0 ? `, ${overlap} crew ${overlap === 1 ? 'member' : 'members'} going` : '';
+          const overlapLabel = crew ? `, ${crew.label}` : '';
           return (
             <Pressable
               key={set.id}
@@ -916,6 +947,16 @@ const useStyles = makeStyles((t: Tokens) => ({
     backgroundColor: t.colors.aquaAlpha[12],
     paddingHorizontal: 4,
     paddingVertical: 1,
+  },
+  avatarCluster: {
+    position: 'absolute',
+    bottom: 2,
+    right: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarOverlap: {
+    marginLeft: -7,
   },
   overlapCount: {
     ...typeStyle('micro'),

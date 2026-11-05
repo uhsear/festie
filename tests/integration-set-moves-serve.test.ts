@@ -79,6 +79,7 @@ async function cleanupById(pool: any) {
   await pool.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
   await pool.query('DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
   await pool.query('DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
+  await pool.query('DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
   await pool.query('DELETE FROM users WHERE username LIKE $1', like);
 }
 
@@ -89,7 +90,7 @@ async function loginAdmin(server: any) {
     password: ADMIN_PASSWORD,
     confirmPassword: ADMIN_PASSWORD,
     dateOfBirth: '1995-01-01',
-    tosAccepted: true,
+    tosAccepted: true, email: `${username}@example.com`,
   });
   if (reg.status === 201) {
     await withPool((pool) =>

@@ -78,6 +78,7 @@ import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
 import AlsoPickedSection from '../../components/AlsoPickedSection';
 import AlsoPlaysSection from '../../components/AlsoPlaysSection';
+import SetContextSection from '../../components/SetContextSection';
 import AppPressable from '../../components/AppPressable';
 import { undoNotifier } from '../../lib/undoNotifier';
 import { compassHref, stageMapHref } from '../../lib/dayOfRoutes';
@@ -466,7 +467,7 @@ export default function SetDetailScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessibilityViewIsModal>
       {/* Faux drag handle removed — the native formSheet (SDK 56) renders a real
           grabber (sheetGrabberVisible). Share and close sit in their own header
           row, not floating over the content: absolutely positioned, they covered
@@ -549,6 +550,7 @@ export default function SetDetailScreen() {
         ) : null}
 
         <AlsoPlaysSection set={set} nowMs={nowMs} />
+        <SetContextSection set={set} />
 
         {/* Priority picker: guests pick on this device */}
         {canPick ? (
@@ -584,8 +586,9 @@ export default function SetDetailScreen() {
                     <Text
                       style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
                       maxFontSizeMultiplier={MAX_FONT_SCALE}
+                      textBreakStrategy="simple"
                     >
-                      {option.short}
+                      {option.short + ' '}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -836,6 +839,9 @@ export default function SetDetailScreen() {
             currentSet={set}
             conflicts={conflicts}
             b2bSeparator={b2bSeparator}
+            days={days}
+            timeZone={timeZone}
+            stages={stages}
             getPriority={getMyPick}
             onClear={handleClashClear}
           />

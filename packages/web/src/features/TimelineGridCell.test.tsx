@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import type { FestivalSet } from '@festie/shared/types';
-import type { ClashMark } from '@festie/shared/utils';
+import type { ClashMark, GridCrewAvatars } from '@festie/shared/utils';
 import TimelineGridCell from './TimelineGridCell';
 
 const ROW_HEIGHT = 36;
@@ -24,7 +24,7 @@ function renderCell(
   topSlot: number,
   spanSlots: number,
   myPick: 'want-to-see' | null = null,
-  extra: { clash?: ClashMark; compact?: boolean; tabbable?: boolean; canPick?: boolean } = {},
+  extra: { clash?: ClashMark; compact?: boolean; tabbable?: boolean; canPick?: boolean; crew?: GridCrewAvatars } = {},
 ) {
   const { container } = render(
     <TimelineGridCell
@@ -36,7 +36,7 @@ function renderCell(
       spanSlots={spanSlots}
       rowHeight={ROW_HEIGHT}
       myPick={myPick}
-      others={[]}
+      crew={extra.crew}
       compact={extra.compact ?? false}
       tabbable={extra.tabbable ?? true}
       clash={extra.clash}
@@ -96,5 +96,40 @@ describe('TimelineGridCell block placement', () => {
   it('tabbable=false takes the open button out of the tab order', () => {
     const el = renderCell('f', 0, 4, null, { tabbable: false });
     expect(el.querySelector<HTMLElement>('[data-open]')!.tabIndex).toBe(-1);
+  });
+
+  const crew: GridCrewAvatars = {
+    total: 5,
+    overflow: 2,
+    label: '5 crew members picked this',
+    shown: [
+      { key: 'u1', name: 'Amy Lee', priority: 'must' },
+      { key: 'u2', name: 'Bo', priority: 'want-to-see' },
+      { key: 'u3', name: 'Cy', priority: 'maybe' },
+    ],
+  };
+
+  const AVATAR = '[class*="ring-[1.5px]"]';
+
+  it('draws up to three avatars plus +N and names the crew for screen readers', () => {
+    const el = renderCell('a', 0, 4, null, { crew });
+    expect(el.querySelectorAll(AVATAR)).toHaveLength(3);
+    expect(el.textContent).toContain('+2');
+    expect(el.textContent).toContain('5 crew members picked this: Amy Lee (must)');
+  });
+
+  it('falls back to the count on compact cells', () => {
+    const el = renderCell('a', 0, 4, null, { crew, compact: true });
+    expect(el.querySelectorAll(AVATAR)).toHaveLength(0);
+    expect(el.textContent).not.toContain('+2');
+    expect(el.textContent).toContain('5');
+  });
+
+  it('with no active crew (no avatars) shows the plain count on a full-size cell', () => {
+    const el = renderCell('a', 0, 4, null, { crew: { total: 4, shown: [], overflow: 0, label: '4 others picked this' } });
+    expect(el.querySelectorAll(AVATAR)).toHaveLength(0);
+    expect(el.textContent).toContain('4');
+    expect(el.textContent).toContain('4 others picked this');
+    expect(el.textContent).not.toContain('others picked this:');
   });
 });

@@ -329,7 +329,18 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1', activityRoutes);
   app.use('/api/v1', calendarSyncRoutes);
   app.use('/api/v1/analytics', analyticsInstallRoutes);
-  app.use('/api/v1/metrics', express.text({ type: '*/*', limit: '2kb' }), clientMetricsRoutes);
+  // The beacon parser's size error gets the same coded 413 as the JSON parser's.
+  app.use(
+    '/api/v1/metrics',
+    (req: Request, res: Response, next: any) =>
+      express.text({ type: '*/*', limit: '2kb' })(req, res, (err: any) => {
+        if (err?.type === 'entity.too.large') {
+          return ctx.sendError(res, 413, 'Request body too large', ctx.ErrorCodes.INVALID_INPUT);
+        }
+        next(err);
+      }),
+    clientMetricsRoutes,
+  );
   app.use(calendarFeedRoutes);
 
   // Health & metrics (available at both /api/v1 and /api for load balancer probes)

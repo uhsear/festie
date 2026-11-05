@@ -15,6 +15,7 @@
  */
 
 import type { CrewMemberDay, CrewMeetingPoint, CrewPoll, PeerLocation, SosEntry } from '../types/domain';
+import type { LocationPeerStoppedReason } from '../types/socket-events';
 import { useUIStore } from '../stores/uiStore';
 
 /**
@@ -85,7 +86,7 @@ export interface CrewRealtimeSink {
   onActivityLogged: (crewId: string) => void;
   // ── Live Location + SOS (full payloads; applied immediately, no debounce) ──
   onLocationPeerUpdate: (crewId: string, peer: PeerLocation) => void;
-  onLocationPeerStopped: (crewId: string, userId: string, reason: 'stop' | 'disconnect' | 'expired') => void;
+  onLocationPeerStopped: (crewId: string, userId: string, reason: LocationPeerStoppedReason) => void;
   onSosRaised: (crewId: string, sos: SosEntry) => void;
   onSosCleared: (crewId: string, userId: string, clearedBy: string) => void;
   /** Re-read the active SOS list (socket (re)connect). Optional so older sink doubles still compile. */

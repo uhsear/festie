@@ -82,11 +82,19 @@ export const COPY = {
     caught: (artist: string, when: string) => `Catching ${artist} ${when} instead.`,
     gone: 'That other set is no longer free. Pick another fix.',
   },
+  setContext: {
+    stageHeading: (stage: string) => (stage ? `On ${stage} that night` : 'On this stage that night'),
+    before: 'Before',
+    after: 'After',
+    overlapHeading: 'Playing at the same time',
+    openA11y: (artist: string, stage: string, time: string) => `${artist}, ${stage}, ${time}. Open this set.`,
+  },
   festivalLoad: {
     errorTitle: "Couldn't load festivals", errorBody: 'Check your connection, then try again.',
     retry: 'Try again', noneTitle: 'No festival selected',
   },
   status: { playing: 'Playing', playingA11y: 'Playing now', liveLocation: 'Live' },
+  session: { signedOut: 'You were signed out on this device. Sign in again to continue.' },
 } as const;
 
 export const FESTIVAL_STATUS_LABEL: Record<FestivalStatus, string> = {
@@ -112,6 +120,16 @@ export function clashPromptCopy(o: { hard: boolean; at: string | null; currentNa
     : { title: `2 sets${when}: keep one`,
         body: `${o.currentName} and ${o.otherName} overlap. Keep one and we'll clear the other.` };
 }
+
+/** Leave-at plan line under a clash: where to stay, when to walk, what is left of the second set. */
+export function leaveAtCopy(o: {
+  stayName: string; thenName: string; leaveAt: string; walk: string; catchFor: string;
+}): string {
+  const walk = o.walk === 'now' ? 'head over' : `walk about ${o.walk}`;
+  return `Stay at ${o.stayName} until ${o.leaveAt}, ${walk}, catch the last ${o.catchFor} of ${o.thenName}.`;
+}
+export const leaveAtHardCopy = (overlapMin: number): string =>
+  `Only ${overlapMin} min of overlap leaves too little for both after the walk. Keep one.`;
 
 /** The two meeting-point kinds users choose from. Stored in the existing server enum. */
 export const MEETING_POINT_KINDS = [

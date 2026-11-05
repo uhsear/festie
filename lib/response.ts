@@ -86,6 +86,8 @@ export function sendError(
     error.retryable = status >= 500;
   }
   if (details && Object.keys(details).length > 0) Object.assign(error, details);
+  // Read by the request log line, which otherwise records a bare status.
+  if (res.locals) res.locals.errorInfo = { code: code ?? undefined, message };
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   return res.status(status).json({ data: null, error });
 }
