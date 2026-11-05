@@ -766,3 +766,18 @@ describe('middleware: crews rate limit', () => {
     assert.deepEqual(calls, ['POST']);
   });
 });
+
+describe('middleware: request log error detail', () => {
+  it('adds the error code and message to a 5xx request log line (FND-096)', async () => {
+    const lines: any[] = [];
+    const { app } = makeMiddlewareApp({
+      ctx: { log: { info() {}, warn() {}, error: (_m: string, meta: any) => lines.push(meta) } },
+    });
+    app.get('/api/v1/boom', (_req: any, res: any) => sendError(res, 500, 'Could not load', ErrorCodes.INTERNAL_ERROR));
+
+    await request(app).get('/api/v1/boom').expect(500);
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].errorCode, ErrorCodes.INTERNAL_ERROR);
+    assert.equal(lines[0].errorMessage, 'Could not load');
+  });
+});

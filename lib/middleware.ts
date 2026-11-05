@@ -525,6 +525,10 @@ function configureMiddleware(app: Application, ctx: any) {
         traceId: req.traceId,
       };
       if (req.user?.userId) meta.userId = req.user.userId;
+      if (res.statusCode >= 400 && res.locals?.errorInfo) {
+        meta.errorCode = res.locals.errorInfo.code;
+        meta.errorMessage = res.locals.errorInfo.message;
+      }
       if (res.statusCode >= 500) log.error('request', meta);
       else if (res.statusCode >= 400) log.warn('request', meta);
       else log.info('request', meta);
