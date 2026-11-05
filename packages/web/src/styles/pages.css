@@ -139,6 +139,22 @@
   min-height: 0 !important;
 }
 
+/* ── Timeline/grid fill the shell at every width ─────────────────────── */
+/* Without this on desktop, #main-content grows past the shell and scrollIntoView
+   scrolls the clipped shell, which parks the grid toolbar above the viewport. */
+#main-content:has(.timeline-view) {
+  position: relative;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+}
+#main-content:has(.timeline-view) .timeline-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto !important;
+}
+
 /* ── Viewport-fill routes (mobile) ───────────────────────────────────── */
 @media (max-width: 768px) {
   /* Viewport-fill routes need to override the shell's overflow/height so the
@@ -147,18 +163,8 @@
      room). Keep the shell's `px-6 py-4` top inset; only neutralize the side pad
      so the full-bleed timeline/grid can use the full width. */
   #main-content:has(.timeline-view) {
-    position: relative;
-    min-height: 0 !important;
-    overflow: hidden !important;
-    display: flex;
-    flex-direction: column;
     padding-left: 0 !important;
     padding-right: 0 !important;
-  }
-  #main-content:has(.timeline-view) .timeline-view {
-    flex: 1;
-    min-height: 0;
-    overflow: auto !important;
   }
   #main-content:has(.timeline-view)::after {
     content: '';
