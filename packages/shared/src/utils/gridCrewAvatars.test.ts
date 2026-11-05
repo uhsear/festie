@@ -75,6 +75,6 @@ describe('buildGridCrewAvatarsBySet', () => {
   it('with no active crew, keeps the plain getOtherPicks count and draws no avatars', () => {
     const m = buildGridCrewAvatarsBySet(['a', 'b', 'c'], source(false), profiles);
     expect([...m.keys()]).toEqual(['a', 'b']);
-    expect(m.get('b')).toMatchObject({ total: 2, shown: [], overflow: 0, label: '2 crew members picked this' });
+    expect(m.get('b')).toMatchObject({ total: 2, shown: [], overflow: 0, label: '2 others picked this' });
   });
 });

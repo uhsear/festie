@@ -95,7 +95,7 @@ export function buildGridCrewAvatarsBySet(
     }
     const total = source.getOtherPicks(id).length;
     if (total > 0) {
-      bySet.set(id, { total, shown: [], overflow: 0, label: `${total} crew ${total === 1 ? 'member' : 'members'} picked this` });
+      bySet.set(id, { total, shown: [], overflow: 0, label: `${total} ${total === 1 ? 'other person' : 'others'} picked this` });
     }
   }
   return bySet;
