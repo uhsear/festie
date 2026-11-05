@@ -1707,6 +1707,27 @@ describe('routes/profiles.js', () => {
       assert.equal(res.status, 400);
     });
 
+    test('accepts a crew: note key for a known set (FND-003)', async () => {
+      const update = mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' }));
+      const { app } = await buildProfileApp({
+        normalizeNotePayload: mock.fn((n) => ({ value: n })),
+        stores: {
+          ...makeProfileDeps().stores,
+          profiles: {
+            ...makeProfileDeps().stores.profiles,
+            getById: mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' })),
+            update,
+          },
+        },
+      });
+      const res = await request(app)
+        .put('/profiles/p1')
+        .send({ notes: { 'crew:set-a': 'meet at front', 'set-b': 'private' } });
+      assert.equal(res.status, 200);
+      const bad = await request(app).put('/profiles/p1').send({ notes: { 'crew:nope': 'x' } });
+      assert.equal(bad.status, 400);
+    });
+
     test('drops reminders that reference an unknown set', async () => {
       const update = mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' }));
       const { app } = await buildProfileApp({

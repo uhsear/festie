@@ -169,7 +169,7 @@ export default function createProfilesRoutes(deps: any) {
       if (nextPicks !== undefined && Object.keys(nextPicks).some((setId) => !validSetIds.has(setId))) {
         return sendError(res, 400, 'Pick references an unknown set', ErrorCodes.INVALID_INPUT);
       }
-      if (nextNotes !== undefined && Object.keys(nextNotes).some((setId) => !validSetIds.has(setId))) {
+      if (nextNotes !== undefined && Object.keys(nextNotes).some((key) => !validSetIds.has(key.startsWith('crew:') ? key.slice(5) : key))) {
         return sendError(res, 400, 'Note references an unknown set', ErrorCodes.INVALID_INPUT);
       }
       // Drop reminders for sets removed from the lineup; rejecting would make every later save fail.
