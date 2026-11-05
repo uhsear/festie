@@ -2,13 +2,14 @@ import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 import { raiseSos, sosErrorMessage, type SosPosition } from '@festie/shared/services';
+import { resolveSosPosition } from './sosPosition';
 import { useHaptics } from './useHaptics';
 
 /**
  * Confirm-gated SOS raise, shared by the Crew tab, the map and Find. The
- * location fix is bounded: seed from the cached last-known position (instant)
- * and race a fresh reading against a 4s timeout, so a slow or denied GPS never
- * delays the alert. SOS is online-only; a failed send is surfaced, never queued.
+ * location fix is bounded: each step (permission, cached last-known seed, fresh
+ * reading) has its own timeout and the seed is the fallback, so a slow or denied
+ * GPS never delays the alert. SOS is online-only; a failed send is surfaced, never queued.
  */
 export function useSosRaise(crewId: string | null) {
   const haptics = useHaptics();
@@ -20,34 +21,26 @@ export function useSosRaise(crewId: string | null) {
     haptics.heavy();
     let position: SosPosition | undefined;
     try {
-      // One 4s budget covers the permission prompt and both reads: a hung
-      // native call must never hold the alert back.
-      const pos = await Promise.race([
-        (async () => {
-          const perm = await Location.requestForegroundPermissionsAsync();
-          if (!perm.granted) return null;
-          const seed = await Location.getLastKnownPositionAsync().catch(() => null);
-          const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(
-            () => null,
-          );
-          return fresh ?? seed;
-        })(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
-      ]);
-      if (pos) {
-        position = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy ?? undefined,
-          capturedAt: new Date(pos.timestamp).toISOString(),
-        };
-      }
+      // The permission prompt gets a long budget (a first-time user may take a
+      // while); the cached seed and the fresh read are short and independent,
+      // so a hung fresh read still falls back to the seed.
+      position = await resolveSosPosition(
+        {
+          requestPermission: async () => (await Location.requestForegroundPermissionsAsync()).granted,
+          getLastKnown: () => Location.getLastKnownPositionAsync(),
+          getCurrent: () => Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        },
+        { permissionMs: 30000, seedMs: 1000, freshMs: 4000 },
+      );
     } catch {
       // No location — still raise the SOS (the alert + push are the priority).
     }
     try {
       await raiseSos(crewId, position ? { position } : {});
       // The sos:raised broadcast populates the banner for the whole crew (incl. us).
+      if (!position) {
+        Alert.alert('SOS sent without your location', 'We could not get a location fix. Your crew was alerted; tell them where you are.');
+      }
     } catch (err) {
       Alert.alert('SOS not sent', sosErrorMessage(err, 'send'));
     } finally {
