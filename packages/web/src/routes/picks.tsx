@@ -215,7 +215,7 @@ function PicksViewInner() {
     return (
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
-          {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
           {viewTabRow}
           <PlanNotesList
             kind={view}
@@ -235,7 +235,7 @@ function PicksViewInner() {
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
           {guestBanner}
-          {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+          {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
           {viewTabRow}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
@@ -278,7 +278,7 @@ function PicksViewInner() {
     <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
       <div role="region" aria-label="My picks" className="flex flex-col max-w-[600px] mx-auto w-full">
         {guestBanner}
-        {actionButtons && <div className="flex justify-end gap-2 mb-3">{actionButtons}</div>}
+        {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
         {viewTabRow}
         <CrewSuggestionStrip />
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
