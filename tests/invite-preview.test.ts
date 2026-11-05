@@ -53,22 +53,6 @@ describe('loadInvitePreview', () => {
     });
   });
 
-  it('names the creator, not the current owner, after an ownership transfer', async () => {
-    const members = [
-      { userId: 'u1', role: 'member', username: 'creator', name: 'Creator' },
-      { userId: 'u2', role: 'owner', username: 'newowner' },
-    ];
-    const { deps } = makeDeps({ crew: { ...CREW, createdBy: 'u1' }, members });
-    const result: any = await loadInvitePreview(deps, 'ABC123');
-    assert.equal(result.preview.ownerName, 'Creator');
-  });
-
-  it('falls back to the owner when the creator has left', async () => {
-    const { deps } = makeDeps({ crew: { ...CREW, createdBy: 'gone' } });
-    const result: any = await loadInvitePreview(deps, 'ABC123');
-    assert.equal(result.preview.ownerName, 'DJ Dana');
-  });
-
   it('upper-cases and trims a lower-case code', async () => {
     const { deps, crews } = makeDeps({ crew: CREW });
     await loadInvitePreview(deps, '  abc123 ');

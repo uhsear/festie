@@ -56,7 +56,7 @@ describe('JoinCrewSheet', () => {
     const join = screen.getByRole('button', { name: 'Join crew' });
     expect(state.compareDocumentPosition(join) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText(/EDC Orlando/)).toBeInTheDocument();
-    expect(screen.getByText('Started by DJ Dana')).toBeInTheDocument();
+    expect(screen.getByText('Led by DJ Dana')).toBeInTheDocument();
     expect(screen.getByText('Crew members can see your picks and your status.')).toBeInTheDocument();
   });
 

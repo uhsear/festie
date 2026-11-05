@@ -99,7 +99,7 @@ describe('invite-pages: renderInviteJoinPage', () => {
       endDate: null,
     });
     assert.ok(html.includes('og:description" content="Crew of 6 · 2 spots left. Plan your sets together on Festie.">'));
-    assert.ok(!html.includes('Started by'));
+    assert.ok(!html.includes('Led by'));
     assert.ok(!html.includes('null'));
   });
 
@@ -116,7 +116,7 @@ describe('invite-pages: renderInviteJoinPage', () => {
       '<h1>Test Crew</h1>',
       'Crew of 6 · 2 spots left',
       'EDC Orlando · Nov 6 – Nov 8, 2026',
-      'Started by Dana',
+      'Led by Dana',
       '>Join Test Crew</a>',
       'New to Festie? You can create an account after you tap Join.',
     ].map((part) => html.indexOf(part, bodyStart));

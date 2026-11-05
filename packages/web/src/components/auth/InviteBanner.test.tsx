@@ -43,7 +43,7 @@ describe('InviteBanner', () => {
     mockGet.mockResolvedValue(preview({ crewName: 'Bass Gang', ownerName: 'DJ Dana', memberCount: 4 }));
     render(<InviteBanner />);
     expect(await screen.findByText('Bass Gang')).toBeInTheDocument();
-    expect(screen.getByText('Started by DJ Dana')).toBeInTheDocument();
+    expect(screen.getByText('Led by DJ Dana')).toBeInTheDocument();
     expect(screen.getByText('Crew of 4 · 26 spots left')).toBeInTheDocument();
     expect(screen.getByText(/EDC Orlando/)).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledWith('/crews/join-preview/ABC123');

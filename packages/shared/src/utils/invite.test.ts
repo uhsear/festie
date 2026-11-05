@@ -47,7 +47,7 @@ describe('describeInvitePreview', () => {
       title: 'Tent 9',
       stateLine: 'Crew of 6 · 24 spots left',
       festivalLine: 'EDC Orlando · Nov 6 – Nov 8, 2026',
-      ownerLine: 'Started by asir',
+      ownerLine: 'Led by asir',
     });
   });
 

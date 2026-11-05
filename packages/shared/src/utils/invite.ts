@@ -37,7 +37,7 @@ export function describeInvitePreview(p: InvitePreview): {
     title: p.crewName,
     stateLine: `Crew of ${p.memberCount} · ${spots}`,
     festivalLine: festivalParts.length ? festivalParts.join(' · ') : null,
-    ownerLine: p.ownerName ? `Started by ${p.ownerName}` : null,
+    ownerLine: p.ownerName ? `Led by ${p.ownerName}` : null,
   };
 }
 

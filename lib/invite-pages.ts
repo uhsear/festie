@@ -150,7 +150,7 @@ export function renderInviteJoinPage({
       <div class="invite-eyebrow">Crew invite</div>
       <h1>${escapeHtml(crewName)}</h1>
       <p class="invite-line">${escapeHtml(stateLine)}</p>
-${festivalLine ? `      <p class="invite-line">${escapeHtml(festivalLine)}</p>\n` : ''}${ownerName ? `      <p class="invite-line">Started by ${escapeHtml(ownerName)}</p>\n` : ''}      <a href="${joinUrl}" class="invite-button">Join ${escapeHtml(crewName)}</a>
+${festivalLine ? `      <p class="invite-line">${escapeHtml(festivalLine)}</p>\n` : ''}${ownerName ? `      <p class="invite-line">Led by ${escapeHtml(ownerName)}</p>\n` : ''}      <a href="${joinUrl}" class="invite-button">Join ${escapeHtml(crewName)}</a>
 ${saveLink}      <p class="invite-footer">New to Festie? You can create an account after you tap Join.</p>
     </div>
   </main>
