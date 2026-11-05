@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Crew, Festival } from '@festie/shared/types';
 
@@ -124,6 +124,25 @@ describe('CrewSelector', () => {
   it('has aria-haspopup=listbox on the trigger', () => {
     render(<CrewSelector {...defaultProps} />);
     expect(screen.getByLabelText('Select crew')).toHaveAttribute('aria-haspopup', 'listbox');
+  });
+
+  it('moves focus between options with the arrow keys', async () => {
+    const user = userEvent.setup();
+    render(<CrewSelector {...defaultProps} />);
+    await user.click(screen.getByLabelText('Select crew'));
+    const alpha = screen.getByRole('option', { name: /Alpha Crew/ });
+    const beta = screen.getByRole('option', { name: /Beta Squad/ });
+    // Opening focuses the first focusable element in the panel.
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    alpha.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(beta).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(alpha).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(beta).toHaveFocus();
+    await user.keyboard('{End}');
+    expect(beta).toHaveFocus();
   });
 
   it('closes on Escape key', async () => {
