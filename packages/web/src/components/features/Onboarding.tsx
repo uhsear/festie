@@ -90,6 +90,11 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
     setPending(false);
   }, []);
 
+  // Record the first showing, so a reload without Skip does not bring the walkthrough back.
+  useEffect(() => {
+    if (visible) markOnboardingCompleted();
+  }, [visible]);
+
   // Focus management + keyboard trap. The shared hook moves initial focus into
   // the card on mount, wraps Tab / Shift+Tab so focus can't escape to the page
   // behind the modal, closes on Escape (WCAG 2.1.2), and restores focus to the

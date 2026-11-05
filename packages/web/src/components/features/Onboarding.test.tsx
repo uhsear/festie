@@ -74,6 +74,14 @@ describe('Onboarding sequencing', () => {
     expect(screen.getByRole('dialog', { name: 'Welcome to Festie' })).toBeInTheDocument();
   });
 
+  it('does not return on the next mount after it was shown without Skip', () => {
+    const { unmount } = render(<Onboarding />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    unmount();
+    render(<Onboarding />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('dismisses with Skip and stays dismissed on the next mount', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<Onboarding />);
