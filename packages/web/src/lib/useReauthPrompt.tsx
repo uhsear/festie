@@ -23,6 +23,7 @@ interface ReauthPromptOptions {
 export function useReauthPrompt({ hasPassword = true, linked }: ReauthPromptOptions = {}) {
   const [open, setOpen] = useState(false);
   const resolver = useRef<((value: Answer) => void) | null>(null);
+  const [error, setError] = useState<string | undefined>();
 
   const settle = useCallback((value: Answer) => {
     resolver.current?.(value);
@@ -31,10 +32,11 @@ export function useReauthPrompt({ hasPassword = true, linked }: ReauthPromptOpti
   }, []);
 
   const ask = useCallback(
-    () =>
+    (message?: string) =>
       new Promise<Answer>((resolve) => {
         resolver.current?.(null);
         resolver.current = resolve;
+        setError(message);
         setOpen(true);
       }),
     [],
@@ -57,6 +59,7 @@ export function useReauthPrompt({ hasPassword = true, linked }: ReauthPromptOpti
       placeholder={REAUTH_COPY.label}
       confirmLabel={REAUTH_COPY.button}
       inputType="password"
+      error={error}
       onConfirm={(value) => settle(value)}
     />
   ) : (

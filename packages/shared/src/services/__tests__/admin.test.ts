@@ -142,6 +142,18 @@ describe('withReauth', () => {
     await expect(withReauth(() => Promise.reject(boom), async () => 'pw')).rejects.toBe(boom);
   });
 
+  it('asks again with the server message after a wrong password when retryWrongPassword is set', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(403, { data: null, error: { code: 'PASSWORD_INCORRECT', message: 'bad' } }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: { reauthUntil: 'x' }, error: null }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const run = vi.fn().mockRejectedValueOnce(reauthErr()).mockResolvedValueOnce('done');
+    const ask = vi.fn().mockResolvedValueOnce('wrong').mockResolvedValueOnce('right');
+    expect(await withReauth(run, ask, { retryWrongPassword: true })).toBe('done');
+    expect(ask.mock.calls).toEqual([[undefined], ['bad']]);
+  });
+
   it('re-throws PASSWORD_INCORRECT from the reauth call', async () => {
     vi.stubGlobal(
       'fetch',

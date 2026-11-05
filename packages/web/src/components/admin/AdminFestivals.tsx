@@ -276,7 +276,7 @@ export default function AdminFestivals() {
           notify: notifyPickers,
         });
         return { notice: res?.scheduleNotice };
-      }, askPassword);
+      }, askPassword, { retryWrongPassword: true });
       if (done === null) return;
       setPendingRemoval(null);
       await afterEditSave(done.notice);
@@ -308,7 +308,7 @@ export default function AdminFestivals() {
       const done = await withReauth(async () => {
         await api.delete<void>(`/admin/festivals/${id}`);
         return true;
-      }, askPassword);
+      }, askPassword, { retryWrongPassword: true });
       if (done === null) return;
       toast(`Deleted ${name}`, 'success');
       setConfirmDelete(null);
@@ -330,7 +330,7 @@ export default function AdminFestivals() {
     const ids = [...selected];
     setArchiveBusy(true);
     try {
-      const done = await withReauth(() => bulkArchiveFestivals(ids), askPassword);
+      const done = await withReauth(() => bulkArchiveFestivals(ids), askPassword, { retryWrongPassword: true });
       if (done === null) return;
       const archivedIds = new Set(done.results.filter((r) => r.status === 'archived').map((r) => r.festivalId));
       toast(summarizeBulkResults('archive', done.results), archivedIds.size === ids.length ? 'success' : 'error');
