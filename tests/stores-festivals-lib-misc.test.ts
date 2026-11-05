@@ -226,6 +226,20 @@ describe('lib/db/stores/festivals.js', () => {
       assert.equal(params[7], null);
     });
 
+    it('stores latitude 0 and longitude 0, not null', async () => {
+      const { pool, client } = makeTransactionPool([
+        { rows: [] }, // BEGIN
+        { rows: [] }, // INSERT
+        { rows: [{ id: 'f1' }] }, // SELECT
+        { rows: [] }, // COMMIT
+      ]);
+      const store = createFestivalsStore(pool, { buildFestivalRecords: mock.fn() });
+      await store.create({ id: 'f1', name: 'F', latitude: 0, longitude: 0, stages: [], days: [] });
+      const params = (client.query.mock.calls[1]! as any).arguments[1];
+      assert.equal(params[6], 0);
+      assert.equal(params[7], 0);
+    });
+
     it('returns null when SELECT finds no row after insert', async () => {
       const { pool } = makeTransactionPool([
         { rows: [] }, // BEGIN
