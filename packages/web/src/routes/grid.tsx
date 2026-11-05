@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { usePicks, useFestival, useDayClashes, usePickClear, useViewAs, useCrew } from '@festie/shared/hooks';
@@ -71,6 +72,7 @@ function GridViewInner() {
   const lowPowerMode = useFestivalModeStore((state) => state.lowPowerMode);
   const { getMyPick, getOtherPicks, savePick } = usePicks();
   const { getCrewScopedOtherPicks } = useCrew();
+  const hasActiveCrew = useCrewStore((s) => !!s.activeCrew);
   const allProfiles = useFestivalStore((state) => state.allProfiles);
   const clearPick = usePickClear(useUndoNotifier());
   const { toast } = useToast();
@@ -93,15 +95,15 @@ function GridViewInner() {
     timeBounds,
   } = useTimelineFilters();
 
-  // Crew-scoped only (same accessor as the set sheet), never every festival user.
+  // With an active crew: crew-scoped avatars only (same accessor as the set sheet). Without one: the plain count, as before.
   const crewBySet = useMemo(
     () =>
       buildGridCrewAvatarsBySet(
         timedSets.map((s) => s.id),
-        getCrewScopedOtherPicks,
+        { hasActiveCrew, getCrewPicks: getCrewScopedOtherPicks, getOtherPicks },
         allProfiles as GridCrewProfile[],
       ),
-    [timedSets, getCrewScopedOtherPicks, allProfiles],
+    [timedSets, hasActiveCrew, getCrewScopedOtherPicks, getOtherPicks, allProfiles],
   );
 
   // Matches on the other days, so a search that finds nothing here says where the artist plays.

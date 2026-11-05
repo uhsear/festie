@@ -124,4 +124,12 @@ describe('TimelineGridCell block placement', () => {
     expect(el.textContent).not.toContain('+2');
     expect(el.textContent).toContain('5');
   });
+
+  it('with no active crew (no avatars) shows the plain count on a full-size cell', () => {
+    const el = renderCell('a', 0, 4, null, { crew: { total: 4, shown: [], overflow: 0, label: '4 crew members picked this' } });
+    expect(el.querySelectorAll(AVATAR)).toHaveLength(0);
+    expect(el.textContent).toContain('4');
+    expect(el.textContent).toContain('4 crew members picked this');
+    expect(el.textContent).not.toContain('crew members picked this:');
+  });
 });

@@ -52,10 +52,29 @@ describe('buildGridCrewAvatars', () => {
 });
 
 describe('buildGridCrewAvatarsBySet', () => {
-  it('only includes sets with crew picks and uses the crew-scoped picker', () => {
-    const picks: Record<string, { profileId: string; priority: 'must' }[]> = { a: [{ profileId: 'p2', priority: 'must' }] };
-    const m = buildGridCrewAvatarsBySet(['a', 'b'], (id) => picks[id] ?? [], profiles);
+  const crewPicks: Record<string, { profileId: string; priority: 'must' }[]> = { a: [{ profileId: 'p2', priority: 'must' }] };
+  const allPicks: Record<string, { profileId: string; priority: 'must' }[]> = {
+    a: [{ profileId: 'p2', priority: 'must' }],
+    b: [
+      { profileId: 'p3', priority: 'must' },
+      { profileId: 'p4', priority: 'must' },
+    ],
+  };
+  const source = (hasActiveCrew: boolean) => ({
+    hasActiveCrew,
+    getCrewPicks: (id: string) => crewPicks[id] ?? [],
+    getOtherPicks: (id: string) => allPicks[id] ?? [],
+  });
+
+  it('with an active crew, uses only the crew-scoped picks and draws avatars', () => {
+    const m = buildGridCrewAvatarsBySet(['a', 'b'], source(true), profiles);
     expect([...m.keys()]).toEqual(['a']);
     expect(m.get('a')!.shown[0].name).toBe('Amy');
+  });
+
+  it('with no active crew, keeps the plain getOtherPicks count and draws no avatars', () => {
+    const m = buildGridCrewAvatarsBySet(['a', 'b', 'c'], source(false), profiles);
+    expect([...m.keys()]).toEqual(['a', 'b']);
+    expect(m.get('b')).toMatchObject({ total: 2, shown: [], overflow: 0, label: '2 crew members picked this' });
   });
 });

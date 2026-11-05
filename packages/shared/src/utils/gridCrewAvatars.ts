@@ -21,7 +21,7 @@ export interface GridCrewAvatar {
 export interface GridCrewAvatars {
   /** Distinct crew members who picked the set. */
   total: number;
-  /** At most GRID_CREW_AVATAR_MAX members, strongest pick first. */
+  /** At most GRID_CREW_AVATAR_MAX members, strongest pick first. Empty in the no-crew count fallback. */
   shown: GridCrewAvatar[];
   overflow: number;
   /** Screen-reader phrase for the tile, e.g. "3 crew members picked this". */
@@ -67,17 +67,36 @@ export function buildGridCrewAvatars(
   };
 }
 
-/** Per-set map for a whole grid; sets nobody in the crew picked are left out. */
+export interface GridCrewSource {
+  hasActiveCrew: boolean;
+  /** getCrewScopedOtherPicks */
+  getCrewPicks: (setId: string) => readonly CrewPick[];
+  /** getOtherPicks, the set sheet's fallback when there is no crew */
+  getOtherPicks: (setId: string) => readonly CrewPick[];
+}
+
+/**
+ * Per-set map for a whole grid; sets with no overlap are left out. With an active
+ * crew the entries carry avatars (crew-scoped only). Without one the grid keeps its
+ * plain count from getOtherPicks (no avatars: `shown` is empty), like the set sheet.
+ */
 export function buildGridCrewAvatarsBySet(
   setIds: readonly string[],
-  getCrewPicks: (setId: string) => readonly CrewPick[],
+  source: GridCrewSource,
   profiles: readonly GridCrewProfile[],
 ): Map<string, GridCrewAvatars> {
   const profilesById = new Map(profiles.map((p) => [p.id, p]));
   const bySet = new Map<string, GridCrewAvatars>();
   for (const id of setIds) {
-    const crew = buildGridCrewAvatars(getCrewPicks(id), profilesById);
-    if (crew) bySet.set(id, crew);
+    if (source.hasActiveCrew) {
+      const crew = buildGridCrewAvatars(source.getCrewPicks(id), profilesById);
+      if (crew) bySet.set(id, crew);
+      continue;
+    }
+    const total = source.getOtherPicks(id).length;
+    if (total > 0) {
+      bySet.set(id, { total, shown: [], overflow: 0, label: `${total} crew ${total === 1 ? 'member' : 'members'} picked this` });
+    }
   }
   return bySet;
 }

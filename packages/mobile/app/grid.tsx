@@ -15,7 +15,7 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useFestivalDataStore, useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import { useFestivalDataStore, useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
 import { usePicks, useFestival, useDayClashes, useViewAs, useCrew } from '@festie/shared/hooks';
 import { COPY } from '@festie/shared/constants';
 import {
@@ -141,9 +141,10 @@ export default function GridScreen() {
   const dayLabel = getDays()[selectedDay]?.label ?? 'Grid';
   const screenTitle = `${dayLabel} · Grid`;
 
-  // Crew-scoped avatars per set, the same accessor the set sheet uses (never every
-  // festival user). Built from the persisted profiles, so they render offline.
+  // With an active crew: crew-scoped avatars (same accessor as the set sheet). Without
+  // one: the plain count, as before. Built from the persisted profiles, so they render offline.
   const { getCrewScopedOtherPicks } = useCrew();
+  const hasActiveCrew = useCrewStore((s) => !!s.activeCrew);
   const allProfiles = useFestivalDataStore((s) => s.allProfiles);
 
   // Stage color resolver that substitutes a real token for web's `var(...)`
@@ -194,10 +195,10 @@ export default function GridScreen() {
     () =>
       buildGridCrewAvatarsBySet(
         timedSets.map((st) => st.id),
-        getCrewScopedOtherPicks,
+        { hasActiveCrew, getCrewPicks: getCrewScopedOtherPicks, getOtherPicks },
         allProfiles as GridCrewProfile[],
       ),
-    [timedSets, getCrewScopedOtherPicks, allProfiles],
+    [timedSets, hasActiveCrew, getCrewScopedOtherPicks, getOtherPicks, allProfiles],
   );
 
   const bounds = useMemo<GridBounds | null>(() => {
@@ -524,7 +525,7 @@ export default function GridScreen() {
                   {fmtShort(set.startTime!)}–{fmtShort(set.endTime!)}
                 </Text>
               ) : null}
-              {crew && showAvatars ? (
+              {crew && showAvatars && crew.shown.length > 0 ? (
                 // Not pressable: a tap lands on the tile and opens the set. The tile's own label names the crew.
                 <View style={styles.avatarCluster} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
                   {crew.shown.map((m, idx) => (

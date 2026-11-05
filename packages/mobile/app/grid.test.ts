@@ -25,7 +25,7 @@ describe('mobile Grid screen', () => {
     expect(src).toContain('activeGenreCount: activeGenres.length');
   });
   it('shows crew-scoped avatars, falls back to the count on narrow tiles, and labels the tile', () => {
-    for (const needle of ['getCrewScopedOtherPicks', 'buildGridCrewAvatarsBySet(', 'AVATAR_MIN_COL_W', 'size="xxs"', 'crew.label']) {
+    for (const needle of ['getCrewScopedOtherPicks', 'buildGridCrewAvatarsBySet(', 'AVATAR_MIN_COL_W', 'size="xxs"', 'crew.label', 'hasActiveCrew', 'getOtherPicks }']) {
       expect(src).toContain(needle);
     }
     expect(src).not.toContain('getOverlapCount');

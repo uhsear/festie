@@ -180,7 +180,9 @@ function TimelineGridCell({
         </span>
         <span className="sr-only">
           {`, ${stageName}${myPick ? `, priority: ${myPick}` : ''}${
-            crew ? `, ${crew.label}: ${crew.shown.map((o) => `${o.name} (${o.priority})`).join(', ')}${crew.overflow ? `, and ${crew.overflow} more` : ''}` : ''
+            crew
+              ? `, ${crew.label}${crew.shown.length ? `: ${crew.shown.map((o) => `${o.name} (${o.priority})`).join(', ')}` : ''}${crew.overflow ? `, and ${crew.overflow} more` : ''}`
+              : ''
           }${clash ? `, ${clash.text}` : ''}`}
         </span>
       </button>
@@ -242,8 +244,8 @@ function TimelineGridCell({
         </span>
       )}
 
-      {/* Compact crew marker: people glyph plus count (names are in the button's sr-only text) */}
-      {compact && crew && (
+      {/* Count marker: people glyph plus count, on compact cells and when there is no active crew (no avatars to draw) */}
+      {crew && (compact || crew.shown.length === 0) && (
         <span
           className="absolute bottom-[3px] right-[5px] flex items-center gap-[2px] rounded-full bg-[color-mix(in_srgb,var(--color-accent-aqua)_18%,transparent)] px-1 py-px text-[length:var(--font-size-10)] font-bold leading-none text-accent-aqua pointer-events-none tabular-nums"
           aria-hidden="true"
@@ -254,7 +256,7 @@ function TimelineGridCell({
       )}
 
       {/* Crew avatars (the shared Avatar, up to 3, then +N). Pointer-transparent, so a tap opens the set like the rest of the tile; names are in the button's sr-only text */}
-      {!compact && crew && (
+      {!compact && crew && crew.shown.length > 0 && (
         <div className="absolute top-[3px] right-[3px] flex items-center pointer-events-none" aria-hidden="true">
           {crew.shown.map((o, i) => (
             <Avatar
