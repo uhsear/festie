@@ -25,7 +25,7 @@ test('GET /admin/status sends a nonce CSP that matches the inline style', async 
   app.use(createAdminStatusRoutes(deps).router);
   const res = await request(app).get('/admin/status');
   assert.equal(res.status, 200);
-  const csp = res.headers['content-security-policy'];
+  const csp = String(res.headers['content-security-policy']);
   const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
   assert.ok(nonce, `no nonce in CSP: ${csp}`);
   assert.ok(res.text.includes(`<style nonce="${nonce}"`));
