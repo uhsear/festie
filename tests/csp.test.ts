@@ -237,6 +237,11 @@ describe('csp: Cross-Origin-Opener-Policy', () => {
     assert.match(policy, /camera=\(\)/);
   });
 
+  it('lets only the Spotify embed use encrypted media (FND-062)', async () => {
+    const policy = String((await headersFor({}))['permissions-policy']);
+    assert.match(policy, /encrypted-media=\(self "https:\/\/open\.spotify\.com"\)/);
+  });
+
   it('stays same-origin when no provider is enabled', async () => {
     assert.equal(await coopFor({}), 'same-origin');
   });
