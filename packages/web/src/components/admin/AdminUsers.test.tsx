@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { api, ApiClientError } from '@festie/shared/services/api';
 
@@ -133,6 +133,16 @@ describe('AdminUsers', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
       await waitFor(() => expect(writeText).toHaveBeenCalledWith(link.resetUrl));
       expect(api.post).toHaveBeenCalledWith('/auth/reauth', { password: 'hunter2' });
+    });
+
+    it('a double click on Create link sends one request', async () => {
+      vi.mocked(api.post).mockReset().mockReturnValue(new Promise(() => {}));
+      render(<AdminUsers />);
+      await userEvent.click(screen.getAllByRole('button', { name: 'Copy reset link' })[1]);
+      const create = await screen.findByRole('button', { name: 'Create link' });
+      fireEvent.click(create);
+      fireEvent.click(create);
+      expect(api.post).toHaveBeenCalledTimes(1);
     });
 
     it('cancel on the prompt makes no second request and shows no toast', async () => {
