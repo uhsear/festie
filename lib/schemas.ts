@@ -334,10 +334,8 @@ export type UpdateEmailInput = z.infer<typeof updateEmailSchema>;
 export const stageSchema = z.object({
   id: z.string().max(100).optional(),
   name: z.string().min(1).max(100),
-  color: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{3,8}$/)
-    .optional(),
+  // The shape is checked by validateFestivalIssues, which names the stage at fault.
+  color: z.string().max(20).optional(),
   // Festival-map: optional GPS pin for this stage (mirrors meetingPointCreateSchema
   // coords). Nullable — stages without coords simply don't render a map pin and the
   // "not mapped yet" fallback stays for festivals that were never mapped.
@@ -361,7 +359,8 @@ export type ArtistLinkInput = z.infer<typeof artistLinkSchema>;
 export const setSchema = z
   .object({
     id: z.string().max(100).optional(),
-    artists: z.array(artistLinkSchema).min(1).max(MAX_ARTISTS_PER_SET).optional(),
+    // An empty list or no artist at all is reported by validateFestivalIssues, which names the set.
+    artists: z.array(artistLinkSchema).max(MAX_ARTISTS_PER_SET).optional(),
     // Backward compat — old clients may still send artist/linkUrl
     artist: z.string().max(300).optional(),
     // Billed name for the whole set. Absent keeps the stored name; null or '' clears it.
@@ -380,9 +379,6 @@ export const setSchema = z
       .nullable()
       .or(z.literal('')),
     linkUrl: z.string().max(500).optional().nullable().or(z.literal('')),
-  })
-  .refine((d) => (d.artists?.length ?? 0) > 0 || (d.artist && d.artist.length > 0), {
-    message: 'At least one artist is required (via artists[] or artist)',
   });
 export type SetInput = z.infer<typeof setSchema>;
 
