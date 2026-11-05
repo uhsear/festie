@@ -324,7 +324,7 @@ describe('sanitizeFestivalPayload venue rule', () => {
 describe('PUT /:id venue and geocoding', () => {
   function festivalApp(existing: any) {
     const update = mock.fn(async (id: string, fields: any) => ({ ...existing, id, ...fields }));
-    const geocodeVenue = mock.fn(async () => null);
+    const geocodeVenue = mock.fn(async (): Promise<any> => null);
     const deps = baseDeps({
       getFestivalById: mock.fn(async () => existing),
       validateFestivalIssues: () => [],
@@ -360,6 +360,22 @@ describe('PUT /:id venue and geocoding', () => {
     const fields = (update.mock.calls[0]!.arguments as any)[1];
     assert.equal('latitude' in fields, false);
     assert.equal(geocodeVenue.mock.callCount(), 1);
+  });
+
+  test('a weak geocode match is stored and flagged in the save response', async () => {
+    const { app, update, geocodeVenue } = festivalApp(existing());
+    geocodeVenue.mock.mockImplementation(async () => ({ latitude: 28.5, longitude: -81.4, guessed: true }));
+    const res = await request(app).put('/f1').send({ location: 'Tampa' }).expect(200);
+    assert.equal(res.body.data.venueGuessed, true);
+    const geocodeFields = (update.mock.calls.at(-1)!.arguments as any)[1];
+    assert.deepEqual(geocodeFields, { latitude: 28.5, longitude: -81.4 });
+  });
+
+  test('a firm geocode match carries no venueGuessed flag', async () => {
+    const { app, geocodeVenue } = festivalApp(existing());
+    geocodeVenue.mock.mockImplementation(async () => ({ latitude: 28.5, longitude: -81.4, guessed: false }));
+    const res = await request(app).put('/f1').send({ location: 'Tampa' }).expect(200);
+    assert.equal('venueGuessed' in res.body.data, false);
   });
 
   test('a save without venue or location change leaves the venue alone', async () => {

@@ -41,24 +41,29 @@ export default function createFestivalsRoutes(deps: any) {
   const router = express.Router();
 
   // Fill a festival's venue coordinates from its free-text location (lib/geocode.ts),
-  // after the save has answered the admin. The map centres on them when nothing is
+  // during the admin save, so the response can flag a weak match. The map centres on them when nothing is
   // pinned, and the weather route needs them. Tests do not inject geocodeVenue.
-  async function fillVenueCoords(festivalId: string, location: string) {
-    if (!geocodeVenue || !location?.trim()) return;
+  // Resolves true when the stored venue was a weak match. The flag is not stored (no column),
+  // so the save response is the only place the admin sees it.
+  async function fillVenueCoords(festivalId: string, location: string): Promise<boolean> {
+    if (!geocodeVenue || !location?.trim()) return false;
     try {
-      const coords = await geocodeVenue(location);
-      if (!coords) {
+      const found = await geocodeVenue(location);
+      if (!found) {
         log.info('festival venue not found', { festivalId, location });
-        return;
+        return false;
       }
+      const { guessed, ...coords } = found;
       const festival = await stores.festivals.update(festivalId, coords);
-      if (!festival) return;
+      if (!festival) return false;
       invalidateFestivalCache();
       invalidateFestivalListCache();
       // A draft has no attendees, and the event goes to every socket.
       if (festival.publishedAt) emitter.festivalUpdated({ festival });
+      return guessed;
     } catch (error: any) {
       log.warn('festival venue geocode failed', { festivalId, error: error.message });
+      return false;
     }
   }
 
@@ -412,9 +417,10 @@ export default function createFestivalsRoutes(deps: any) {
         invalidateFestivalListCache();
         log.info('festival:created', { festivalId: festival.id, name: festival.name });
         audit(AUDIT_ACTIONS.FESTIVAL_CREATED, 'festival', festival.id, req, { name: festival.name });
-        if (typeof festival.latitude !== 'number') void fillVenueCoords(festival.id, festival.location);
+        const venueGuessed =
+          typeof festival.latitude !== 'number' && (await fillVenueCoords(festival.id, festival.location));
         res.status(201);
-        return sendSuccess(res, { ...festival, publishedAt: null });
+        return sendSuccess(res, { ...festival, publishedAt: null, ...(venueGuessed ? { venueGuessed } : {}) });
       } catch (error: any) {
         if (sendIdClash(res, error)) return;
         log.error('festival create failed', { error: error.message });
@@ -555,10 +561,11 @@ export default function createFestivalsRoutes(deps: any) {
           venueSent &&
           (nextFestival.latitude !== existingFestival.latitude ||
             nextFestival.longitude !== existingFestival.longitude);
-        if (!venueSetByAdmin && (venueMissing || nextFestival.location !== existingFestival.location)) {
-          void fillVenueCoords(festival.id, nextFestival.location);
-        }
-        return sendSuccess(res, { ...festival, scheduleNotice });
+        const venueGuessed =
+          !venueSetByAdmin &&
+          (venueMissing || nextFestival.location !== existingFestival.location) &&
+          (await fillVenueCoords(festival.id, nextFestival.location));
+        return sendSuccess(res, { ...festival, scheduleNotice, ...(venueGuessed ? { venueGuessed } : {}) });
       } catch (error: any) {
         if (sendIdClash(res, error)) return;
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });

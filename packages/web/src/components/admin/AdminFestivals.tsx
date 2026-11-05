@@ -83,6 +83,8 @@ export default function AdminFestivals() {
   const [meta, setMeta] = useState<FestivalMeta>({});
   const [issues, setIssues] = useState<FestivalIssue[]>([]);
   const [saving, setSaving] = useState(false);
+  // The save response is the only place the server reports a weak venue match; it is not stored.
+  const [venueGuessedFor, setVenueGuessedFor] = useState<string | null>(null);
   // Bumped by Discard to remount the form: SetEditor keeps artist-name drafts in local state.
   const [discardCount, setDiscardCount] = useState(0);
   const [initialExpandedDays, setInitialExpandedDays] = useState<Set<string>>(new Set());
@@ -237,14 +239,15 @@ export default function AdminFestivals() {
     setSaving(true);
     try {
       if (festivalId) {
-        const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${festivalId}`, {
-          ...formData,
-          expectedUpdatedAt: formData.updatedAt,
-          notify: notifyPickers,
-        });
+        const res = await api.put<{ scheduleNotice?: ScheduleNotice; venueGuessed?: boolean } | undefined>(
+          `/admin/festivals/${festivalId}`,
+          { ...formData, expectedUpdatedAt: formData.updatedAt, notify: notifyPickers },
+        );
+        setVenueGuessedFor(res?.venueGuessed ? festivalId : null);
         await afterEditSave(res?.scheduleNotice);
       } else {
-        const created = await api.post<{ id?: string }>('/admin/festivals', formData);
+        const created = await api.post<{ id?: string; venueGuessed?: boolean }>('/admin/festivals', formData);
+        setVenueGuessedFor(created?.venueGuessed && created.id ? created.id : null);
         toast('Festival created as a draft. Only admins can see it.', 'success');
         await refreshAdmin();
         go(created?.id ? { tab: 'festivals', festival: created.id, view: 'edit' } : { tab: 'festivals' });
@@ -420,6 +423,7 @@ export default function AdminFestivals() {
         changes={changes}
         issues={issues}
         saving={saving}
+        venueGuessed={!!festivalId && venueGuessedFor === festivalId}
         engagement={engagement}
         engagementError={engagementError}
         onSave={handleSave}

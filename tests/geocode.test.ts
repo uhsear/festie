@@ -3,7 +3,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createVenueGeocoder, venueQueries, backfillVenueCoords } from '../lib/geocode';
+import { createVenueGeocoder, venueQueries, backfillVenueCoords, isWeakVenueMatch } from '../lib/geocode';
 
 const hit = (lat: string, lon: string) => ({ ok: true, json: async () => [{ lat, lon }] });
 const miss = { ok: true, json: async () => [] };
@@ -28,7 +28,7 @@ describe('createVenueGeocoder', () => {
       return queries.length === 1 ? miss : hit('41.7648', '-87.8062');
     };
     const { geocodeVenue } = createVenueGeocoder({ fetchImpl });
-    assert.deepEqual(await geocodeVenue('SeatGeek Stadium · Chicago, IL'), { latitude: 41.7648, longitude: -87.8062 });
+    assert.deepEqual(await geocodeVenue('SeatGeek Stadium · Chicago, IL'), { latitude: 41.7648, longitude: -87.8062, guessed: false });
     assert.deepEqual(queries, ['SeatGeek Stadium, Chicago, IL', 'SeatGeek Stadium']);
   });
 
@@ -56,10 +56,34 @@ describe('backfillVenueCoords', () => {
         return { rowCount: 1 };
       },
     };
-    const geocodeVenue = async (loc: string) => (loc === 'Found' ? { latitude: 1, longitude: 2 } : null);
+    const geocodeVenue = async (loc: string) => (loc === 'Found' ? { latitude: 1, longitude: 2, guessed: false } : null);
     const filled = await backfillVenueCoords({ pool, geocodeVenue, onUpdated: () => reported++ });
     assert.equal(filled, 1);
     assert.deepEqual(updates, [[1, 2, 'a']]);
     assert.equal(reported, 1);
+  });
+});
+
+describe('isWeakVenueMatch', () => {
+  it('flags area-level and low-importance matches', () => {
+    assert.equal(isWeakVenueMatch({ addresstype: 'city', importance: 0.7 }), true);
+    assert.equal(isWeakVenueMatch({ addresstype: 'suburb' }), true);
+    assert.equal(isWeakVenueMatch({ addresstype: 'leisure', importance: 0.19 }), true);
+  });
+
+  it('keeps venue-level matches and rows with no evidence', () => {
+    assert.equal(isWeakVenueMatch({ addresstype: 'leisure', importance: 0.2 }), false);
+    assert.equal(isWeakVenueMatch({ addresstype: 'amenity', importance: 0.45 }), false);
+    assert.equal(isWeakVenueMatch({}), false);
+    assert.equal(isWeakVenueMatch(undefined), false);
+  });
+
+  it('reports guessed on the geocoder result', async () => {
+    const fetchImpl = async () => ({
+      ok: true,
+      json: async () => [{ lat: '28.5', lon: '-81.4', addresstype: 'city', importance: 0.6 }],
+    });
+    const { geocodeVenue } = createVenueGeocoder({ fetchImpl });
+    assert.deepEqual(await geocodeVenue('Orlando'), { latitude: 28.5, longitude: -81.4, guessed: true });
   });
 });
