@@ -484,7 +484,9 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
           headers,
           body: formData,
         });
-      } catch {
+      } catch (fetchErr) {
+        // Keep the real cause: every transport failure maps to the offline copy.
+        console.warn('uploadAvatar fetch failed', fetchErr);
         throw new ApiClientError(
           'You appear to be offline — check your connection and try again.',
           0,
