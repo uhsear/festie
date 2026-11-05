@@ -1364,24 +1364,10 @@ export type WrapQueryInput = z.infer<typeof wrapQuery>;
 
 // ── Expense schemas ─────────────────────────────────────────────
 // Keep in sync with CREW_CURRENCIES in packages/shared/src/constants/config.ts
-// (the backend cannot import @festie/shared, see lib/time-zone.ts). Every code
-// has 2 decimal places, so integer-cent ledger math stays valid.
-export const CREW_CURRENCIES = [
-  'USD',
-  'EUR',
-  'GBP',
-  'CAD',
-  'AUD',
-  'NZD',
-  'MXN',
-  'CHF',
-  'SEK',
-  'NOK',
-  'DKK',
-  'PLN',
-  'CZK',
-  'BRL',
-] as const;
+// (the backend cannot import @festie/shared, see lib/time-zone.ts). USD is the
+// only currency for new writes (FND-082); crews that already store another
+// code keep it, and every read path still accepts any string.
+export const CREW_CURRENCIES = ['USD'] as const;
 
 export const expenseShareSchema = z.object({
   userId: z.string().min(1).max(100),

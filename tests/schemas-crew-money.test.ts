@@ -73,11 +73,11 @@ describe('schemas: expenseCreate shares', () => {
 });
 
 describe('schemas: expenseCurrency', () => {
-  it('accepts EUR', () => {
-    assert.equal(schemas.expenseCurrency.safeParse({ currency: 'EUR' }).success, true);
+  it('accepts USD', () => {
+    assert.equal(schemas.expenseCurrency.safeParse({ currency: 'USD' }).success, true);
   });
 
-  for (const currency of ['eur', 'JPY', 'XXX']) {
+  for (const currency of ['EUR', 'eur', 'JPY', 'XXX']) {
     it(`rejects ${currency}`, () => {
       assert.equal(schemas.expenseCurrency.safeParse({ currency }).success, false);
     });

@@ -330,16 +330,16 @@ describe('DELETE /crews/:crewId/expenses/:expenseId — who may remove', () => {
 });
 
 describe('PUT /crews/:crewId/expenses/currency', () => {
-  test('the owner sets EUR; the plan and the settle activity use it', async () => {
+  test('the owner sets USD; a crew that already stores EUR still reads and settles in EUR', async () => {
     const deps = buildDeps({ currency: 'EUR' });
     const app = await mount(deps);
 
-    const res = await request(app).put('/crews/crew-1/expenses/currency').send({ currency: 'EUR' }).expect(200);
-    assert.deepEqual(res.body.data, { currency: 'EUR' });
-    assert.deepEqual(calls(deps.stores.expenses.setCurrency)[0], ['crew-1', 'EUR']);
+    const res = await request(app).put('/crews/crew-1/expenses/currency').send({ currency: 'USD' }).expect(200);
+    assert.deepEqual(res.body.data, { currency: 'USD' });
+    assert.deepEqual(calls(deps.stores.expenses.setCurrency)[0], ['crew-1', 'USD']);
     assert.deepEqual(calls(deps.emitter.crewExpenseUpdated)[0][0], { crewId: 'crew-1' });
     assert.equal(calls(deps.stores.activity.log)[0][0].type, 'currency-changed');
-    assert.equal(calls(deps.stores.activity.log)[0][0].detail, 'Currency set to EUR');
+    assert.equal(calls(deps.stores.activity.log)[0][0].detail, 'Currency set to USD');
     assert.equal(deps.stores.expenses.update.mock.callCount(), 0, 'currency is not taken as an expense id');
 
     const plan = await request(app).get('/crews/crew-1/expenses/settlement-plan').expect(200);
@@ -354,6 +354,14 @@ describe('PUT /crews/:crewId/expenses/currency', () => {
     assert.equal(settled[0].detail, '€20.00 to Sam');
   });
 
+  test('a non-USD currency is refused for new writes', async () => {
+    const deps = buildDeps();
+    const app = await mount(deps);
+
+    await request(app).put('/crews/crew-1/expenses/currency').send({ currency: 'EUR' }).expect(400);
+    assert.equal(deps.stores.expenses.setCurrency.mock.callCount(), 0);
+  });
+
   test('a member cannot change the currency', async () => {
     const deps = buildDeps();
     const app = await mount(deps);
@@ -361,7 +369,7 @@ describe('PUT /crews/:crewId/expenses/currency', () => {
     const res = await request(app)
       .put('/crews/crew-1/expenses/currency')
       .set('x-user', 'user-b')
-      .send({ currency: 'EUR' })
+      .send({ currency: 'USD' })
       .expect(403);
 
     assert.equal(res.body.error.message, 'Only the crew owner can change the currency.');

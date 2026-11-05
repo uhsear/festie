@@ -81,7 +81,7 @@ describe('Integration — crew money', { concurrency: 1 }, () => {
     assert.ok([-5000, -5001].includes(Math.round(bobBalance.balance * 100)));
   });
 
-  test('the owner currency change shows in the plan; a member change is 403', async () => {
+  test('the owner can set USD, a member gets 403, and any other currency is refused', async () => {
     const { server, crew, alice, bob } = await crewOfThree();
 
     assert.equal((await plan(server, crew.id, alice.token)).currency, 'USD');
@@ -89,15 +89,21 @@ describe('Integration — crew money', { concurrency: 1 }, () => {
     await server.request
       .put(`/api/v1/crews/${crew.id}/expenses/currency`)
       .set('x-user-token', bob.token)
-      .send({ currency: 'EUR' })
+      .send({ currency: 'USD' })
       .expect(403);
 
     await server.request
       .put(`/api/v1/crews/${crew.id}/expenses/currency`)
       .set('x-user-token', alice.token)
       .send({ currency: 'EUR' })
+      .expect(400);
+
+    await server.request
+      .put(`/api/v1/crews/${crew.id}/expenses/currency`)
+      .set('x-user-token', alice.token)
+      .send({ currency: 'USD' })
       .expect(200);
 
-    assert.equal((await plan(server, crew.id, bob.token)).currency, 'EUR');
+    assert.equal((await plan(server, crew.id, bob.token)).currency, 'USD');
   });
 });
