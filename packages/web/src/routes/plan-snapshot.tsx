@@ -108,7 +108,7 @@ export default function PlanSnapshotPage() {
             href={`https://www.google.com/maps/search/?api=1&query=${mp.lat},${mp.lng}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="underline"
+            className="inline-flex min-h-11 items-center underline"
           >
             Meet at {mp.label}
           </a>
