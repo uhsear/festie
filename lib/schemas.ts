@@ -1467,7 +1467,8 @@ export type AdminAddRoleInput = z.infer<typeof adminAddRoleSchema>;
 
 // ── Pagination query schema ────────────────────────────────────
 export const paginationQuery = z.object({
-  cursor: z.string().optional(),
+  // Postgres rejects NUL in text parameters, which would surface as a 500.
+  cursor: z.string().refine((v) => !v.includes('\u0000'), 'Invalid cursor').optional(),
   limit: z.coerce.number().int().min(1).max(MAX_PUBLIC_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });
 export type PaginationQueryInput = z.infer<typeof paginationQuery>;

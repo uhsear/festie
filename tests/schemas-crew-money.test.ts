@@ -132,4 +132,9 @@ describe('schemas: expense amount bounds and cursor (FND-006, FND-014)', () => {
     }
     assert.equal(schemas.expenseCreate.safeParse({ ...base, amount: 0.01 }).success, true);
   });
+
+  it('rejects a pagination cursor containing a NUL byte', () => {
+    assert.equal(schemas.paginationQuery.safeParse({ cursor: '\u0000bad' }).success, false);
+    assert.equal(schemas.paginationQuery.safeParse({ cursor: 'garbage' }).success, true);
+  });
 });
