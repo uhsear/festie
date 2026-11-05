@@ -659,9 +659,7 @@ export default function PicksImageScreen() {
                 accessibilityLabel={`Image ${i + 1} of ${pageCount}. Tap to see it full size.`}
                 style={[styles.preview, { width: previewW, height: layout.height * scale }]}
               >
-                <View style={{ transform: [{ scale }], transformOrigin: 'top left' }}>
-                  <LockscreenPoster model={lockModel} page={i} />
-                </View>
+                <LockscreenPoster model={lockModel} page={i} pointScale={scale} />
                 <LockscreenOverlay width={previewW} height={layout.height * scale} clock={clock} />
               </TouchableOpacity>
             ))}
@@ -919,9 +917,7 @@ export default function PicksImageScreen() {
               {lockModel.pages.map((_, i) => (
                 <ScrollView key={i} style={{ width }} contentContainerStyle={{ paddingTop: insets.top }}>
                   <View style={{ width, height: (layout.height * width) / layout.width, overflow: 'hidden' }}>
-                    <View style={{ transform: [{ scale: width / layout.width }], transformOrigin: 'top left' }}>
-                      <LockscreenPoster model={lockModel} page={i} />
-                    </View>
+                    <LockscreenPoster model={lockModel} page={i} pointScale={width / layout.width} />
                   </View>
                 </ScrollView>
               ))}

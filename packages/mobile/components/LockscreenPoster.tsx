@@ -44,6 +44,8 @@ interface Props {
   page: number;
   /**
    * Points per model pixel. 1 lays the image out at its pixel size in points.
+   * Previews pass a small value: on Android a full-size Svg is a bitmap of
+   * density x pixels and crashes with "trying to draw too large".
    * The capture copy passes 1 / PixelRatio so iOS snapshots it at the device
    * scale without exceeding its 8192 px limit.
    */
