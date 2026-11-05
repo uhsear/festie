@@ -50,13 +50,15 @@ export default function createAdminSiteplanRoutes(deps: any) {
     handleSiteplanUpload,
     async (req: any, res: any) => {
       const festivalId = req.params.id;
-      // The returned URL is stored in map_config, whose siteplan schema accepts https only.
-      if (!String(config.PUBLIC_ORIGIN || '').startsWith('https://')) {
-        return sendError(res, 503, 'Site-plan upload needs PUBLIC_ORIGIN set to an https address on the server.', ErrorCodes.SERVICE_UNAVAILABLE);
-      }
       try {
         const { rows } = await pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
         if (rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        // The returned URL is stored in map_config, whose siteplan schema accepts https only.
+        // A 4xx, not a retryable 503: a retry cannot fix the server origin, and the web client
+        // shows a 4xx message as written but hides a 5xx one.
+        if (!String(config.PUBLIC_ORIGIN || '').startsWith('https://')) {
+          return sendError(res, 400, 'Image upload is not available on this server. Paste an https image URL instead.', ErrorCodes.INVALID_INPUT);
+        }
         if (!req.file?.buffer) return sendError(res, 400, 'Choose an image to upload.', ErrorCodes.MISSING_FIELD);
 
         let webp: any;

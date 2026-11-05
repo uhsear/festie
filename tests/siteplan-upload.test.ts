@@ -161,10 +161,15 @@ describe('POST /api/v1/admin/festivals/:id/siteplan-image', () => {
     assert.equal(res.body.error.code, 'NOT_FOUND');
   });
 
-  it('returns 503 when PUBLIC_ORIGIN is not https', async () => {
+  it('returns a non-retryable 400 naming the cause when PUBLIC_ORIGIN is not https', async () => {
     const res = await upload(makeApp('http://localhost:4000'), 'fest-1', { buffer: await png(10, 10), filename: 'a.png', contentType: 'image/png' });
-    assert.equal(res.status, 503);
-    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
-    assert.equal(res.body.error.message, 'Site-plan upload needs PUBLIC_ORIGIN set to an https address on the server.');
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.match(res.body.error.message, /not available on this server/);
+  });
+
+  it('returns 404 for an unknown festival even when PUBLIC_ORIGIN is not https', async () => {
+    const res = await upload(makeApp('http://localhost:4000'), 'nope', { buffer: await png(10, 10), filename: 'a.png', contentType: 'image/png' });
+    assert.equal(res.status, 404);
   });
 });
