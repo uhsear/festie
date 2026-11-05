@@ -504,7 +504,9 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
                         </div>
                       ) : (
                         <div className="text-xs text-text-secondary">
-                          {s.toName} hasn't added a payment handle. Pay them directly, then confirm here.
+                          {Object.values(s.payeeHandles).some(Boolean)
+                            ? `${s.toName}'s payment apps don't support ${currency}. Pay them directly, then confirm here.`
+                            : `${s.toName} hasn't added a payment handle. Pay them directly, then confirm here.`}
                         </div>
                       )}
                       <Button
