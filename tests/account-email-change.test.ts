@@ -104,7 +104,7 @@ async function registerUser(server: any, username: string, email?: string) {
     password: DEFAULT_PASSWORD,
     confirmPassword: DEFAULT_PASSWORD,
     dateOfBirth: '1995-01-01',
-    tosAccepted: true,
+    tosAccepted: true, email: `${username}@example.com`,
   };
   if (email) body.email = email;
   const res = await server.request.post('/api/v1/auth/register').set(TRUSTED_MUTATION_HEADER, '1').send(body);

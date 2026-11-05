@@ -126,6 +126,7 @@ async function cleanupCreated() {
       await pool.query('DELETE FROM refresh_tokens WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM user_sessions WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM user_roles WHERE user_id = ANY($1)', [createdUserIds]);
+      await pool.query('DELETE FROM email_verification_tokens WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM users WHERE id = ANY($1)', [createdUserIds]);
     }
     for (const fid of createdFestivalIds) {
@@ -172,7 +173,7 @@ async function registerUser(server: any, username: any, password = DEFAULT_PASSW
   const res = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true });
+    .send({ username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` });
   assert.ok(res.status === 201 || res.status === 200, `register failed: ${res.status}`);
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
   try {

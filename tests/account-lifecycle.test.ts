@@ -110,7 +110,7 @@ async function register(server: Server, username: string, email?: string) {
   const res = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: PASSWORD, confirmPassword: PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email });
+    .send({ username, password: PASSWORD, confirmPassword: PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: email ?? `${username}@example.com` });
   assert.equal(res.status, 201, `register failed: ${JSON.stringify(res.body)}`);
   return { id: res.body.data.user.id as string, token: res.body.data.token as string };
 }

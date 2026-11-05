@@ -41,7 +41,7 @@ describe('schemas: register', () => {
       password: 'Str0ngTest!Pw',
       confirmPassword: 'Str0ngTest!Pw',
       dateOfBirth: DOB,
-      tosAccepted: true,
+      tosAccepted: true, email: `${'testuser'}@example.com`,
     });
     assert.ok(result.success);
   });
@@ -52,7 +52,7 @@ describe('schemas: register', () => {
       password: 'Str0ngTest!Pw',
       confirmPassword: 'Str0ngTest!Pw',
       dateOfBirth: DOB,
-      tosAccepted: true,
+      tosAccepted: true, email: `${''}@example.com`,
     });
     assert.ok(!result.success);
   });
@@ -63,7 +63,7 @@ describe('schemas: register', () => {
       password: 'short',
       confirmPassword: 'short',
       dateOfBirth: DOB,
-      tosAccepted: true,
+      tosAccepted: true, email: `${'user'}@example.com`,
     });
     assert.ok(!result.success);
   });
@@ -74,7 +74,7 @@ describe('schemas: register', () => {
       password: 'Str0ngTest!Pw',
       confirmPassword: 'different123',
       dateOfBirth: DOB,
-      tosAccepted: true,
+      tosAccepted: true, email: `${'user'}@example.com`,
     });
     assert.ok(!result.success);
   });
@@ -97,7 +97,7 @@ describe('schemas: register', () => {
       password: 'Str0ngTest!Pw',
       confirmPassword: 'Str0ngTest!Pw',
       dateOfBirth: tenYearsAgo,
-      tosAccepted: true,
+      tosAccepted: true, email: `${'kiddo'}@example.com`,
     });
     assert.ok(!result.success);
   });
@@ -108,7 +108,7 @@ describe('schemas: register', () => {
       password: 'Str0ngTest!Pw',
       confirmPassword: 'Str0ngTest!Pw',
       dateOfBirth: 'not-a-date',
-      tosAccepted: true,
+      tosAccepted: true, email: `${'user'}@example.com`,
     });
     assert.ok(!result.success);
   });
@@ -125,7 +125,7 @@ describe('schemas: register', () => {
     assert.ok(result.success);
   });
 
-  it('allows empty email string', () => {
+  it('rejects an empty email string (FND-023)', () => {
     const result = schemas.register.safeParse({
       username: 'user',
       password: 'Str0ngTest!Pw',
@@ -134,7 +134,7 @@ describe('schemas: register', () => {
       tosAccepted: true,
       email: '',
     });
-    assert.ok(result.success);
+    assert.ok(!result.success);
   });
 });
 

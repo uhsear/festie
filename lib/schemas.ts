@@ -53,7 +53,8 @@ const shortText = z.string().max(1000);
 // ════════════════════════════════════════════════════════════════════════════════
 // Authentication Schemas
 // ════════════════════════════════════════════════════════════════════════════════
-const email = z.string().email('Invalid email address').max(254).optional().or(z.literal(''));
+// Password resets need an address, so sign-up requires one (FND-023).
+const requiredEmail = z.string().trim().min(1, 'Email is required').email('Invalid email address').max(254);
 
 /** True if `iso` (YYYY-MM-DD) is a date at least `years` years before today. */
 export function isAtLeastYearsOld(iso: string, years: number): boolean {
@@ -83,7 +84,7 @@ export const registerSchema = z
     username,
     password,
     confirmPassword: z.string(),
-    email: email.optional(),
+    email: requiredEmail,
     dateOfBirth,
     tosAccepted,
     ref: signupRef,

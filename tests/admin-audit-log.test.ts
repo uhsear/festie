@@ -49,6 +49,7 @@ after(async () => {
     await pool.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
     await pool.query('DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
     await pool.query('DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
+    await pool.query('DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
     await pool.query('DELETE FROM users WHERE username LIKE $1', like);
   });
 });
@@ -69,7 +70,7 @@ describe('admin audit log', { skip, concurrency: 1 }, () => {
         api
           .post('/api/v1/auth/register')
           .set(TRUSTED_MUTATION_HEADER, '1')
-          .send({ username, password: ADMIN_PASSWORD, confirmPassword: ADMIN_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true })
+          .send({ username, password: ADMIN_PASSWORD, confirmPassword: ADMIN_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` })
           .expect(201);
       const registered = await register(ADMIN);
       const target = await register(TARGET);

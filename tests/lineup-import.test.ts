@@ -103,6 +103,7 @@ async function cleanupById(pool: any) {
   await pool.query(`DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
   await pool.query(`DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
   await pool.query(`DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
+  await pool.query(`DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)`, [`li-${RUN_ID}%`]);
   await pool.query(`DELETE FROM users WHERE username LIKE $1`, [`li-${RUN_ID}%`]);
 }
 
@@ -132,7 +133,7 @@ async function registerUser(server: any, suffix: any) {
   const res = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true })
+    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` })
     .expect(201);
   return { ...res.body.data, username };
 }
@@ -142,7 +143,7 @@ async function loginAdmin(server: any) {
   const regRes = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: ADMIN_PASSWORD, confirmPassword: ADMIN_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true });
+    .send({ username, password: ADMIN_PASSWORD, confirmPassword: ADMIN_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` });
   if (regRes.status === 201) {
     const pool = new Pool({ connectionString: TEST_DATABASE_URL, statement_timeout: 5000 });
     try {

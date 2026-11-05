@@ -85,7 +85,7 @@ async function registerUser(server: any, username: any, password = DEFAULT_PASSW
   const res = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true, ...extra })
+    .send({ username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com`, ...extra })
     .expect(201);
   return res.body.data;
 }
@@ -117,7 +117,7 @@ describe('POST /api/v1/auth/register — ToS', () => {
     const res = await server.request
       .post('/api/v1/auth/register')
       .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ username: 'tos_' + crypto.randomBytes(4).toString('hex'), password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true });
+      .send({ username: 'tos_' + crypto.randomBytes(4).toString('hex'), password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${'tos_' + crypto.randomBytes(4).toString('hex')}@example.com` });
     assert.equal(res.status, 201);
     assert.ok(res.body.data.user);
     assert.ok(res.body.data.user.username);
@@ -139,7 +139,7 @@ describe('POST /api/v1/auth/register — ToS', () => {
     const res = await server.request
       .post('/api/v1/auth/register')
       .set(TRUSTED_MUTATION_HEADER, '1')
-      .send({ username: 'withheader', password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true })
+      .send({ username: 'withheader', password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${'withheader'}@example.com` })
       .expect(201);
     assert.ok(res.body.data.user || res.body.data.username);
   });

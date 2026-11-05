@@ -2434,7 +2434,7 @@ describe('POST /register — signup ref counts', () => {
     password: 'Str0ngTest!Pw',
     confirmPassword: 'Str0ngTest!Pw',
     dateOfBirth: '1990-01-01',
-    tosAccepted: true,
+    tosAccepted: true, email: `${'newuser'}@example.com`,
   };
 
   function refDeps(query: any, overrides: any = {}) {

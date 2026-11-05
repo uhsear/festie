@@ -70,6 +70,7 @@ async function cleanupById(pool: Pool) {
   await pool.query('DELETE FROM festivals WHERE id = $1', [FEST_ID]);
   await pool.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', [users]);
   await pool.query('DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', [users]);
+  await pool.query('DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', [users]);
   await pool.query('DELETE FROM users WHERE username LIKE $1', [users]);
 }
 
@@ -93,7 +94,7 @@ async function registerUser(server: Server, suffix: string) {
   const res = await server.request
     .post('/api/v1/auth/register')
     .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true })
+    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` })
     .expect(201);
   return { ...res.body.data, username };
 }

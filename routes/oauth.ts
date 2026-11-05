@@ -37,6 +37,7 @@ interface PendingSignup {
   provider: IdentityProvider;
   subject: string;
   email: string | null;
+  emailVerified: boolean;
   isPrivateEmail: boolean;
   appleRefreshTokenEnc: string | null;
   name: string | null;
@@ -175,7 +176,8 @@ export default function createOAuthRoutes(deps: any): Router {
 
         const pending = await stores.identities.takeState('signup', sha256hex(signupToken));
         if (!pending) return sendError(res, 400, OAUTH_MESSAGES.SIGNUP_EXPIRED, ErrorCodes.SIGNUP_EXPIRED);
-        const { provider, subject, email, isPrivateEmail, appleRefreshTokenEnc, name } = pending as PendingSignup;
+        const { provider, subject, email, emailVerified, isPrivateEmail, appleRefreshTokenEnc, name } =
+          pending as PendingSignup;
         if (!isProviderEnabled(provider, config))
           return sendError(res, 404, OAUTH_MESSAGES.PROVIDER_NOT_CONFIGURED, ErrorCodes.PROVIDER_NOT_CONFIGURED);
 
@@ -193,7 +195,7 @@ export default function createOAuthRoutes(deps: any): Router {
             newUserId: createOpaqueId('user'),
             cleanEmail: email,
             dateOfBirth,
-            emailVerified: Boolean(email),
+            emailVerified: Boolean(email) && emailVerified,
           },
           deps,
         );
@@ -208,7 +210,7 @@ export default function createOAuthRoutes(deps: any): Router {
             provider,
             subject,
             email,
-            emailVerified: Boolean(email),
+            emailVerified: Boolean(email) && emailVerified,
             isPrivateEmail,
             appleRefreshTokenEnc,
           });
@@ -220,7 +222,7 @@ export default function createOAuthRoutes(deps: any): Router {
         }
 
         res.locals.auditDetail = { provider, outcome: 'created' };
-        return await finishSignIn(req, res, user, deps, { status: 201, extra: { emailVerificationSent: false } });
+        return await finishSignIn(req, res, user, deps, { status: 201, extra: { emailVerificationSent: Boolean(email) && !emailVerified } });
       } catch (err) {
         return sendRejection(res, err, 'oauth complete');
       }
@@ -252,7 +254,8 @@ export default function createOAuthRoutes(deps: any): Router {
           return sendError(res, 409, OAUTH_MESSAGES.IDENTITY_EMAIL_IN_USE, ErrorCodes.IDENTITY_EMAIL_IN_USE);
         }
 
-        const email = claims.emailVerified && claims.email ? claims.email.toLowerCase() : null;
+        // Keep an unverified provider email too: it is the recovery address, and sign-up sends a verification mail.
+        const email = claims.email ? claims.email.toLowerCase() : null;
         // Apple sends the name only on the first authorization, never in the token.
         const name =
           sanitizeString([body.name?.givenName, body.name?.familyName].filter(Boolean).join(' ').trim(), 50) || null;
@@ -261,6 +264,7 @@ export default function createOAuthRoutes(deps: any): Router {
           provider,
           subject: claims.subject,
           email,
+          emailVerified: claims.emailVerified,
           isPrivateEmail: claims.isPrivateEmail,
           appleRefreshTokenEnc,
           name,

@@ -50,7 +50,7 @@ async function createJoinedUser(page: Page, app: { baseUrl: string }) {
       password: DEFAULT_PASSWORD,
       confirmPassword: DEFAULT_PASSWORD,
       dateOfBirth: '1995-01-01',
-      tosAccepted: true,
+      tosAccepted: true, email: `${username}@example.com`,
     },
   });
   expect(register.ok(), `registration failed (${register.status()})`).toBe(true);
