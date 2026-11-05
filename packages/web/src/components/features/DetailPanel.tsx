@@ -17,6 +17,7 @@ import ClashPrompt from './ClashPrompt';
 import DetailPriorityPicker from './DetailPriorityPicker';
 import DetailCrewSection from './DetailCrewSection';
 import AlsoPlaysSection from './AlsoPlaysSection';
+import SetContextSection from './SetContextSection';
 import { isSchedulePath } from '../layout/ScheduleViewSwitcher';
 import AlsoPickedSection from './AlsoPickedSection';
 import DetailNotesSection from './DetailNotesSection';
@@ -304,6 +305,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 </Button>
               )}
               <AlsoPlaysSection set={set} />
+              <SetContextSection set={set} />
             </div>
 
             {canPick && (

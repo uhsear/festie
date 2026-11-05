@@ -164,6 +164,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 const mockViewAs = vi.hoisted(() => ({ start: vi.fn(), canView: vi.fn(() => true) }));
 vi.mock('./AlsoPlaysSection', () => ({ default: () => <div data-testid="also-plays" /> }));
+vi.mock('./SetContextSection', () => ({ default: () => <div data-testid="set-context" /> }));
 
 import DetailPanel from './DetailPanel';
 import { hasSetStarted, formatSetWhen } from '@festie/shared/utils';

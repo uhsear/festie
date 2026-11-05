@@ -41,5 +41,6 @@ export * from './useFestivalReady';
 export * from './useSetMove';
 export * from './useNudge';
 export * from './useAlsoPlays';
+export * from './useSetContext';
 export * from './useViewAs';
 export * from './useCrewOverlapStatus';

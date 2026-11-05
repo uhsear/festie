@@ -78,6 +78,7 @@ import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
 import AlsoPickedSection from '../../components/AlsoPickedSection';
 import AlsoPlaysSection from '../../components/AlsoPlaysSection';
+import SetContextSection from '../../components/SetContextSection';
 import AppPressable from '../../components/AppPressable';
 import { undoNotifier } from '../../lib/undoNotifier';
 import { compassHref, stageMapHref } from '../../lib/dayOfRoutes';
@@ -549,6 +550,7 @@ export default function SetDetailScreen() {
         ) : null}
 
         <AlsoPlaysSection set={set} nowMs={nowMs} />
+        <SetContextSection set={set} />
 
         {/* Priority picker: guests pick on this device */}
         {canPick ? (

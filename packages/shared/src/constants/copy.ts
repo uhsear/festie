@@ -82,6 +82,13 @@ export const COPY = {
     caught: (artist: string, when: string) => `Catching ${artist} ${when} instead.`,
     gone: 'That other set is no longer free. Pick another fix.',
   },
+  setContext: {
+    stageHeading: (stage: string) => (stage ? `On ${stage} that night` : 'On this stage that night'),
+    before: 'Before',
+    after: 'After',
+    overlapHeading: 'Playing at the same time',
+    openA11y: (artist: string, stage: string, time: string) => `${artist}, ${stage}, ${time}. Open this set.`,
+  },
   festivalLoad: {
     errorTitle: "Couldn't load festivals", errorBody: 'Check your connection, then try again.',
     retry: 'Try again', noneTitle: 'No festival selected',
