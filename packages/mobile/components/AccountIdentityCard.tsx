@@ -5,9 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { File } from 'expo-file-system';
 import { useAuth } from '@festie/shared/hooks';
 import { AVATAR_COPY, ACCOUNT_COPY } from '@festie/shared/constants';
-import { mapErrorToUserMessage } from '@festie/shared/services';
+import { getApiBase, mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
-import { displayInitials, identityLabel } from '@festie/shared/utils';
+import { absoluteAvatarUrl, displayInitials, identityLabel } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -86,7 +86,7 @@ export default function AccountIdentityCard() {
     };
   }, []);
 
-  const avatarUrl = user?.avatarUrl;
+  const avatarUrl = absoluteAvatarUrl(user?.avatarUrl, getApiBase().replace(/\/api\/v1\/?$/, ''));
   const displayName = user ? identityLabel(user) : 'Account';
   const emailVerified = !!user?.emailVerified;
   const hasEmail = !!user?.email;

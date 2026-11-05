@@ -158,6 +158,12 @@ export function memberAvatarUrl(
   return `${origin.replace(/\/$/, '')}/uploads/avatars/${encodeURIComponent(m.avatarKey)}.webp?v=${encodeURIComponent(m.avatarVersion)}`;
 }
 
+/** The server sends `avatarUrl` as a site-relative path; native Image needs it absolute. */
+export function absoluteAvatarUrl(url: string | null | undefined, origin = ''): string | undefined {
+  if (!url) return undefined;
+  return url.startsWith('/') ? `${origin.replace(/\/$/, '')}${url}` : url;
+}
+
 /** Everyone but `selfId`, earliest joiner first. Members without `joinedAt` go last. */
 export function handOverCandidates(members: CrewMember[], selfId: string): CrewMember[] {
   return members
