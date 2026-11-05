@@ -86,6 +86,9 @@ import { LowPowerIndicator } from '../../components/LowPowerControls';
 /** Mirrors IOS_NATIVE_TAB_BAR_HEIGHT in (tabs)/index.tsx: the native iOS tab bar overlays content. */
 const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
 
+// How often to retry a failed crew load while the error is showing.
+const CREW_ERROR_RETRY_MS = 30_000;
+
 export default function CrewScreen() {
   const t = useTokens();
   const largeText = useLargeText();
@@ -355,6 +358,21 @@ export default function CrewScreen() {
       loadCrewSections(activeCrew.id).catch(() => {});
     }
   }, [loadCrews, activeCrew, selectCrew, loadCrewSections]);
+
+  // Error states clear only on a new load, so a rate limit or a dropped connection
+  // left "Couldn't load" / "Failed to load" on screen until a force-stop. Retry
+  // every 30 s while the error shows, and restart the wait when the network returns.
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const hasLoadError = status === 'error' || sectionLoadError !== null;
+  const reloadAfterError = useCallback(() => {
+    if (status === 'error') retry();
+    else if (activeCrew?.id) loadCrewSections(activeCrew.id).catch(() => {});
+  }, [status, retry, activeCrew?.id, loadCrewSections]);
+  useEffect(() => {
+    if (!hasLoadError || offlineMode) return;
+    const timer = setInterval(reloadAfterError, CREW_ERROR_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [hasLoadError, offlineMode, reloadAfterError]);
 
   // Fast set lookup by id for overlap labels.
   const setsById = useMemo(() => {
