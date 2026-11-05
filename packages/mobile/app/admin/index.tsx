@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert, useWindowDimensions } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -180,6 +180,18 @@ export default function AdminScreen() {
       cancelled = true;
     };
   }, [isAdmin, load]);
+
+  // Returning from a festival screen (publish, create) must show the change; the first focus is the load above.
+  const focusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedOnce.current) {
+        focusedOnce.current = true;
+        return;
+      }
+      if (isAdmin) void load();
+    }, [isAdmin, load]),
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
