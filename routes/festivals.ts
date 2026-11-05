@@ -681,7 +681,7 @@ export default function createFestivalsRoutes(deps: any) {
         audit(hardDelete ? AUDIT_ACTIONS.FESTIVAL_PURGED : AUDIT_ACTIONS.FESTIVAL_DELETED, 'festival', festivalId, req, {
           name: festival.name,
         });
-        log.warn('admin:delete-festival', {
+        log.info('admin:delete-festival', {
           festivalId,
           festivalName: festival.name,
           hard: hardDelete,

@@ -812,7 +812,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           }
         }
 
-        log.warn('account:soft-delete', {
+        log.info('account:soft-delete', {
           userId: req.user.userId,
           username: currentUser.username,
           ip: getRequestIp(req),
