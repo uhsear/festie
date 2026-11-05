@@ -42,6 +42,15 @@ describe('ForgotPasswordPage', () => {
     expect(await screen.findByText('If an account uses a@b.co, a reset link is on its way.')).toBeInTheDocument();
   });
 
+  it("shows the app's message, not the browser tooltip, for a value without an @", async () => {
+    const user = userEvent.setup();
+    render(<ForgotPasswordPage />);
+    await user.type(screen.getByLabelText('Email'), 'not-an-email');
+    await user.click(screen.getByRole('button', { name: 'Send reset link' }));
+    expect(await screen.findByText('Invalid email address')).toBeInTheDocument();
+    expect(mockForgot).not.toHaveBeenCalled();
+  });
+
   it('returns to the form with the email kept', async () => {
     const user = userEvent.setup();
     render(<ForgotPasswordPage />);
