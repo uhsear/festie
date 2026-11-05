@@ -331,6 +331,14 @@ describe('SetCard', () => {
       expect(screen.getByText('B')).toBeInTheDocument();
     });
 
+    it('opens the set when the crew avatars are tapped', async () => {
+      const onTap = vi.fn();
+      const user = userEvent.setup();
+      render(<SetCard {...defaultProps} onTap={onTap} friendProfiles={[{ profileId: 'p1', name: 'Alice', priority: 'must' }]} />);
+      await user.click(screen.getByLabelText(/1 crew member going to Daft Punk/));
+      expect(onTap).toHaveBeenCalledOnce();
+    });
+
     it('uses singular phrasing in the accessible label for a single friend', () => {
       render(<SetCard {...defaultProps} friendProfiles={[{ profileId: 'p1', name: 'Alice', priority: 'must' }]} />);
       expect(screen.getByLabelText(/1 crew member going to Daft Punk/)).toBeInTheDocument();
