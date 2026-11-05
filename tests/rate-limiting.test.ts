@@ -338,6 +338,19 @@ describe('rate-limiting: createPasswordResetRateLimit', () => {
     assert.ok(nextCalled);
   });
 
+  it('keys on a URL param when paramKey is set (FND-020)', async () => {
+    const limiter = createPasswordResetRateLimit({}, { paramKey: 'id' });
+    const req = (id: string) => ({ body: {}, query: {}, params: { id } });
+    for (let i = 0; i < 3; i++) await limiter(req('u1'), mockRes(), () => {});
+    const res = mockRes();
+    let nextCalled = false;
+    await limiter(req('u1'), res, () => { nextCalled = true; });
+    assert.ok(!nextCalled);
+    assert.equal(res._status, 429);
+    await limiter(req('u2'), mockRes(), () => { nextCalled = true; });
+    assert.ok(nextCalled);
+  });
+
   it('blocks after 3 attempts for same email', async () => {
     const log = { warn: mock.fn() };
     const limiter = createPasswordResetRateLimit({}, { log });
