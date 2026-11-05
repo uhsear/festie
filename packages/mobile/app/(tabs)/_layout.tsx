@@ -1,6 +1,8 @@
 import { NativeTabs, type MaterialIcon, type SFSymbolIcon } from 'expo-router/native-tabs';
 import { colors } from '@festie/shared/tokens';
 import { useEffect } from 'react';
+import { View } from 'react-native';
+import { useSegments } from 'expo-router';
 import { useUIStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
 import { APP_SECTIONS, crewTabBadge, type AppSectionKey } from '@festie/shared/utils';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
@@ -89,25 +91,35 @@ export default function TabLayout() {
   // gate via AuthGate (crew shows an in-place "Sign in required" state). Hiding
   // them for guests removed the only discoverable sign-in path, so they stay.
 
+  // Android draws the set form sheet in the same window as the tabs, so TalkBack
+  // would still reach the screen behind it. iOS uses accessibilityViewIsModal.
+  const sheetOpen = useSegments()[0] === 'set';
+
   return (
-    <NativeTabs
-      tintColor={colors.accent.aqua}
-      minimizeBehavior="onScrollDown"
-      labelVisibilityMode="labeled"
-      {...daylightBar}
-    >
-      {APP_SECTIONS.map(({ key, label }) => {
-        const route = TAB_ROUTES[key];
-        return (
-          <NativeTabs.Trigger key={key} name={route.name}>
-            <NativeTabs.Trigger.Icon sf={route.sf} md={route.md} />
-            <NativeTabs.Trigger.Label>{key === 'more' && !user ? GUEST_PROMPT_COPY.signIn : label}</NativeTabs.Trigger.Label>
-            {key === 'crew' && (
-              <NativeTabs.Trigger.Badge hidden={badge.label === null}>{badge.label || undefined}</NativeTabs.Trigger.Badge>
-            )}
-          </NativeTabs.Trigger>
-        );
-      })}
-    </NativeTabs>
+    <View style={{ flex: 1 }} importantForAccessibility={sheetOpen ? 'no-hide-descendants' : 'auto'}>
+      <NativeTabs
+        tintColor={colors.accent.aqua}
+        minimizeBehavior="onScrollDown"
+        labelVisibilityMode="labeled"
+        {...daylightBar}
+      >
+        {APP_SECTIONS.map(({ key, label }) => {
+          const route = TAB_ROUTES[key];
+          return (
+            <NativeTabs.Trigger key={key} name={route.name}>
+              <NativeTabs.Trigger.Icon sf={route.sf} md={route.md} />
+              <NativeTabs.Trigger.Label>
+                {key === 'more' && !user ? GUEST_PROMPT_COPY.signIn : label}
+              </NativeTabs.Trigger.Label>
+              {key === 'crew' && (
+                <NativeTabs.Trigger.Badge hidden={badge.label === null}>
+                  {badge.label || undefined}
+                </NativeTabs.Trigger.Badge>
+              )}
+            </NativeTabs.Trigger>
+          );
+        })}
+      </NativeTabs>
+    </View>
   );
 }
