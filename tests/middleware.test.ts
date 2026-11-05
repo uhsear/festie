@@ -182,6 +182,26 @@ describe('middleware: audit-middleware', () => {
     assert.ok(deps.stores.auditLog.insert.mock.calls.length >= 1);
   });
 
+  it('names the resource from the mount path when the route is only /:id (FND-019)', async () => {
+    const deps = makeDeps();
+    const middleware = createAuditMiddleware(deps);
+    const req = mockReq({
+      method: 'DELETE',
+      baseUrl: '/api/v1/profiles',
+      route: { path: '/:id' },
+      params: { id: 'prof-1' },
+      user: { userId: 'admin-1' },
+    });
+    const res = mockRes();
+    middleware(req, res, () => {});
+    res._emit('finish');
+    await new Promise((r) => setTimeout(r, 50));
+    const entry = (deps.stores.auditLog.insert.mock.calls[0] as any).arguments[0];
+    assert.equal(entry.action, 'profiles.deleted');
+    assert.equal(entry.target_type, 'profiles');
+    assert.equal(entry.target_id, 'prof-1');
+  });
+
   it('handles audit log insert errors gracefully', async () => {
     const deps = makeDeps();
     deps.stores.auditLog.insert = mock.fn(async () => { throw new Error('db down'); });
