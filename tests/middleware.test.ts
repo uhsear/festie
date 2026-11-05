@@ -787,6 +787,25 @@ describe('middleware: crews rate limit', () => {
   });
 });
 
+describe('middleware: global rate limit skip', () => {
+  it('skips only the POST web-vitals beacon, not other methods on that path', async () => {
+    const counted: string[] = [];
+    const { app } = makeMiddlewareApp({
+      ctx: {
+        rateLimit: (...args: any[]) => (req: any, _res: any, next: any) => {
+          if (args.length === 0) counted.push(req.method);
+          next();
+        },
+      },
+    });
+    app.all('/api/v1/metrics/web-vitals', (_req: any, res: any) => res.json({ ok: true }));
+
+    await request(app).post('/api/v1/metrics/web-vitals').expect(200);
+    await request(app).get('/api/v1/metrics/web-vitals').expect(200);
+    assert.deepEqual(counted, ['GET']);
+  });
+});
+
 describe('middleware: request log error detail', () => {
   it('adds the error code and message to a 5xx request log line (FND-096)', async () => {
     const lines: any[] = [];
