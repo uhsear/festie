@@ -6,6 +6,7 @@ import {
   peerCompassHref,
   meetHref,
   meetingPointPrefillHref,
+  sosBannerHref,
   sosPushCrewId,
   stageMapHref,
 } from './dayOfRoutes';
@@ -68,6 +69,16 @@ describe('day-of routes', () => {
     );
     expect(meetHref({ kind: 'home-base', id: null }, [])).toBe(CREW_MEET_HREF);
     expect(meetHref(null, [])).toBe(CREW_MEET_HREF);
+  });
+
+  it('points the SOS banner at the compass only for a lone SOS from someone else with a position', () => {
+    const base = { crewId: 'c1', userId: 'u2', username: 'Ben', raisedAt: '2026-01-01T00:00:00Z' };
+    const withPos = { ...base, position: { lat: 35.5, lng: -86.25, capturedAt: '2026-01-01T00:00:00Z' } };
+    expect(sosBannerHref([withPos] as never, 'u1')).toEqual(compassHref('Ben', { latitude: 35.5, longitude: -86.25 }));
+    expect(sosBannerHref([withPos] as never, 'u2')).toBe(CREW_MEET_HREF);
+    expect(sosBannerHref([base] as never, 'u1')).toBe(CREW_MEET_HREF);
+    expect(sosBannerHref([withPos, withPos] as never, 'u1')).toBe(CREW_MEET_HREF);
+    expect(sosBannerHref([], 'u1')).toBe(CREW_MEET_HREF);
   });
 
   it('reads the crew id from an SOS push only', () => {

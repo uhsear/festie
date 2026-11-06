@@ -1,5 +1,5 @@
 import { meetingPointPrefill, type ActiveMeet, type Coord, type MapPlace } from '@festie/shared/utils';
-import type { CrewMeetingPoint } from '@festie/shared/types';
+import type { CrewMeetingPoint, SosEntry } from '@festie/shared/types';
 
 type Href = string | { pathname: string; params: Record<string, string> };
 
@@ -34,6 +34,19 @@ export function stageMapHref(stageId: string): Href {
 /** The compass, pointed at a fixed coordinate. */
 export function compassHref(label: string, c: Coord): Href {
   return { pathname: '/compass', params: { label, latitude: String(c.latitude), longitude: String(c.longitude) } };
+}
+
+/**
+ * Where the SOS banner goes. A lone SOS from someone else with a position opens the
+ * on-device compass at them (it works offline); your own SOS, several SOS or no
+ * position open the crew Find tab, where SOS are cleared and compared.
+ */
+export function sosBannerHref(entries: readonly SosEntry[], selfUserId?: string | null): Href {
+  const only = entries.length === 1 ? entries[0] : undefined;
+  if (!only || only.userId === selfUserId || !only.position) return CREW_MEET_HREF;
+  const { lat, lng } = only.position;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return CREW_MEET_HREF;
+  return compassHref(only.username, { latitude: lat, longitude: lng });
 }
 
 /** The compass, pointed at a sharing crewmate. */

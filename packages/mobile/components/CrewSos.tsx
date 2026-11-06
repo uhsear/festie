@@ -43,7 +43,8 @@ import { useLiveLocationStore } from '@festie/shared/stores';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useSosRaise } from '../hooks/useSosRaise';
-import { sosSeenLabel } from '@festie/shared/utils';
+import { sosSeenLabel, sosWhen } from '@festie/shared/utils';
+import { FIND_FRIEND_COPY } from '@festie/shared/constants';
 import MeetingPointCompass, { type MeetingPointTarget } from './MeetingPointCompass';
 
 interface CrewSosProps {
@@ -78,7 +79,14 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
   // doesn't disable every banner's button).
   const [clearingId, setClearingId] = useState<string | null>(null);
   // The SOS we're currently navigating toward (drives the single compass modal).
-  const [navTarget, setNavTarget] = useState<{ name: string; target: MeetingPointTarget } | null>(null);
+  // Only the raiser's id is kept: the entry is derived from sosList each render, so a
+  // cleared SOS closes the modal and the age line never goes stale.
+  const [navUserId, setNavUserId] = useState<string | null>(null);
+  const navEntry = navUserId ? sosList.find((s) => s.userId === navUserId) : undefined;
+  const navTarget = navEntry ? sosTargetFor(navEntry) : null;
+  useEffect(() => {
+    if (navUserId && !navTarget) setNavUserId(null);
+  }, [navUserId, navTarget]);
 
   const myActiveSos = sosList.some((s) => s.userId === currentUserId);
 
@@ -191,7 +199,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
           {target ? (
             <TouchableOpacity
               style={[styles.bannerButton, styles.bannerButtonPrimary]}
-              onPress={() => setNavTarget({ name: sos.username, target })}
+              onPress={() => setNavUserId(sos.userId)}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={`Get directions to ${sos.username}`}
@@ -260,16 +268,16 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
       <Modal
         visible={!!navTarget}
         animationType="slide"
-        onRequestClose={() => setNavTarget(null)}
+        onRequestClose={() => setNavUserId(null)}
         presentationStyle="pageSheet"
       >
         <View style={styles.modal} accessibilityViewIsModal>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle} numberOfLines={1}>
-              Walk toward {navTarget?.name}
+              Walk toward {navEntry?.username}
             </Text>
             <TouchableOpacity
-              onPress={() => setNavTarget(null)}
+              onPress={() => setNavUserId(null)}
               style={styles.modalClose}
               activeOpacity={0.7}
               accessibilityRole="button"
@@ -278,7 +286,13 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
               <Ionicons name="close" size={24} color={t.colors.text.primary} />
             </TouchableOpacity>
           </View>
-          {navTarget ? <MeetingPointCompass target={navTarget.target} /> : null}
+          {navTarget && navEntry ? (
+            <MeetingPointCompass
+              target={navTarget}
+              note={FIND_FRIEND_COPY.sosNote(navEntry.username)}
+              subNote={sosWhen([navEntry])}
+            />
+          ) : null}
         </View>
       </Modal>
     </View>
