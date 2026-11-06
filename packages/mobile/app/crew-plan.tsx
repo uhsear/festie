@@ -4,10 +4,11 @@ import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewFestival, useCrewHub, useFestival, usePicks } from '@festie/shared/hooks';
-import { artistDisplayName, formatTime, formatSetTimeRange, memberSummary, meetingTimeDisplay, resolveFestivalTimeZone, timeAgo } from '@festie/shared/utils';
-import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
+import { artistDisplayName, formatTime, memberCountLabel, formatSetTimeRange, memberSummary, meetingTimeDisplay, resolveFestivalTimeZone, timeAgo } from '@festie/shared/utils';
+import { COPY, GUEST_PROMPT_COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { setReturnTo } from '../lib/returnTo';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { priorityColor } from '../lib/priorityColor';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -48,7 +49,27 @@ export default function CrewPlanScreen() {
   );
 
   if (!user) {
-    return gate(<EmptyState icon="lock-closed" title={COPY.auth.signInRequired} message={signInTo("see your crew's plan")} />);
+    return gate(
+      <EmptyState
+        icon="lock-closed"
+        title={COPY.auth.signInRequired}
+        message={signInTo("see your crew's plan")}
+        action={{
+          label: GUEST_PROMPT_COPY.createAccount,
+          onPress: () => {
+            setReturnTo('/crew-plan');
+            router.push('/(auth)/register');
+          },
+        }}
+        secondaryAction={{
+          label: GUEST_PROMPT_COPY.signIn,
+          onPress: () => {
+            setReturnTo('/crew-plan');
+            router.push('/(auth)/login');
+          },
+        }}
+      />,
+    );
   }
   if (status === 'loading') return gate(<LoadingState label="Loading your crew…" />);
   if (status === 'error') {
@@ -116,7 +137,7 @@ export default function CrewPlanScreen() {
       <Stack.Screen options={{ title: `${crew.name}'s plan`, headerShown: true }} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
         <FreshnessChip surface="crew" />
-        <Text style={styles.secondaryLine}>{`${hub.festivalName ?? festival.festivalName} · ${hub.memberCount} members`}</Text>
+        <Text style={styles.secondaryLine}>{`${hub.festivalName ?? festival.festivalName} · ${memberCountLabel(hub.memberCount)}`}</Text>
 
         {/* Active meeting point */}
         <View style={styles.card}>
@@ -266,7 +287,7 @@ export default function CrewPlanScreen() {
               <Text style={styles.cardTitle}>Where everyone is</Text>
             </View>
             {hub.whereabouts.map((w) => {
-              const detail = w.sos ? 'Sent an SOS' : w.live === 'live' ? 'Sharing live location' : w.statusLabel;
+              const detail = w.sos ? 'Sent an SOS' : w.live === 'live' ? 'Sharing live location' : (w.statusLabel ?? 'Location shared');
               const at = w.liveAt ?? w.statusAt;
               return (
                 <Text key={w.userId} style={styles.secondaryLine}>
