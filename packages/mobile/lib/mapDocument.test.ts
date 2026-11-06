@@ -258,9 +258,16 @@ describe('map document — saved archive embedded as bytes', () => {
 
   it('leaves marker positioning to MapLibre', () => {
     const html = buildMapHtml(CENTER, RASTER_STYLE, null);
-    for (const cls of ['festie-marker', 'festie-peer', 'festie-sos', 'festie-stage', 'festie-amenity', 'festie-zone-label', 'festie-draft-dot']) {
+    for (const cls of ['festie-marker', 'festie-peer', 'festie-sos', 'festie-stage', 'festie-amenity', 'festie-zone-label', 'festie-draft-dot', 'festie-self']) {
       const rule = html.match(new RegExp(`\\.${cls} \\{([^}]*)\\}`))?.[1] ?? '';
       expect(rule).not.toMatch(/position\s*:/);
     }
+  });
+
+  it('exposes the self marker and frames meeting pins only once', () => {
+    const html = buildMapHtml(CENTER, RASTER_STYLE, null);
+    expect(html).toContain('window.__festieSetSelf');
+    expect(html).toContain('!FRAMED_PINS');
+    expect(html).toContain('FRAMED_PINS = true;');
   });
 });

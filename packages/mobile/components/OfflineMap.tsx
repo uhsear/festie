@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { WebView } from 'react-native-webview';
@@ -270,9 +270,8 @@ export default function OfflineMap({
   // react-native-webview 14 types the class as WebView<P = undefined>, which
   // collapses its props to `never`; pass `object` here and on the JSX tag.
   const webRef = useRef<WebView<object>>(null);
-  // Guards a single in-flight "find me" GPS request so a double-tap can't stack
-  // permission prompts / location fixes.
-  const [locating, setLocating] = useState(false);
+  // A "find me" tap waiting for the first GPS fix from the shared watch.
+  const [pendingRecenter, setPendingRecenter] = useState(false);
   // Placement mode: when on, the next single map tap drops a meeting point at
   // that coord (replaces the unreliable long-press/contextmenu gesture). The
   // WebView confirms the actual on/off state back via the 'placement' message.
@@ -581,6 +580,8 @@ export default function OfflineMap({
     setPlace(placeFromPin(pin));
     setPursue(null);
     setNearestNotice(null);
+    setPendingNearest(null);
+    setPendingRecenter(false);
   }, []);
   // Close a card whose pin is no longer mapped (deleted, coords removed, crew or
   // festival changed). An amenity hidden by its chip keeps its card: allPins ignores the filter.
@@ -592,6 +593,7 @@ export default function OfflineMap({
   useEffect(() => {
     setPlace(null);
     setPendingNearest(null);
+    setPendingRecenter(false);
     setNearestNotice(null);
   }, [interactive, festivalId]);
 
@@ -771,6 +773,11 @@ export default function OfflineMap({
   // phase stays 'map', so the inject effects key on this to replay into the new page.
   const [docGen, setDocGen] = useState(0);
 
+  // One-shot framing flags. A rebuilt document (theme/archive swap) starts with the
+  // default camera, so 'ready' resets them to replay the bounds fit and SOS framing.
+  const fitBoundsRef = useRef(false);
+  const framedSosRef = useRef<Set<string>>(new Set());
+
   const fellBackRef = useRef(false);
   // Holds the in-flight offline-fallback timer so a new onLoadStart (the WebView
   // can fire it repeatedly) clears the prior one instead of stacking timers, and
@@ -780,6 +787,11 @@ export default function OfflineMap({
     if (fellBackRef.current) return;
     fellBackRef.current = true;
     setPhase('fallback');
+  }, []);
+  // Clears the latched failure and remounts the WebView (phase 'loading').
+  const retryMap = useCallback(() => {
+    fellBackRef.current = false;
+    setPhase('loading');
   }, []);
 
   const onMessage = useCallback(
@@ -801,6 +813,9 @@ export default function OfflineMap({
       }
       if (msg.type === 'ready') {
         if (!fellBackRef.current) {
+          fitBoundsRef.current = false;
+          framedSosRef.current = new Set();
+          setPlacing(false);
           setPhase('map');
           setDocGen((g) => g + 1);
         }
@@ -815,6 +830,8 @@ export default function OfflineMap({
           Number.isFinite(longitude)
         ) {
           setPlace(null);
+          setPendingNearest(null);
+          setPendingRecenter(false);
           setPursue((prev) =>
             prev && prev.id === id
               ? null
@@ -989,7 +1006,6 @@ export default function OfflineMap({
   // config carries them) tighten the view to the grounds. Coords are numeric +
   // range-checked by the schema before they reach here. Fires once per map mount;
   // re-runs only if the bounds themselves change.
-  const fitBoundsRef = useRef(false);
   const boundsKey = camera.bounds ? camera.bounds.flat().join(',') : '';
   useEffect(() => {
     if (phase !== 'map') {
@@ -1041,7 +1057,6 @@ export default function OfflineMap({
   // exactly once per SOS (not on every position tick); the framed set is reset when
   // the map remounts, and a cleared SOS drops its flag so a re-raise re-frames.
   // With several at once the last-framed wins the camera. Web force-flies likewise.
-  const framedSosRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (phase !== 'map' || !webRef.current) {
       framedSosRef.current = new Set(); // re-frame after a remount
@@ -1091,30 +1106,34 @@ export default function OfflineMap({
     );
   }, [phase, placing]);
 
-  // "Find me": fetch the device position via expo-location (already a dep) and
-  // fly the WebView map to it. Permission denial / GPS failure is silent — the
-  // map simply stays put (no destructive effect, so no alert needed here).
-  const recenterToMe = useCallback(async () => {
-    if (locating) return;
-    setLocating(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = pos.coords;
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-      if (phase === 'map' && webRef.current) {
-        // Numeric, range-checked coords — safe to splice into the inject call.
-        webRef.current.injectJavaScript(
-          `window.__festieFlyTo && window.__festieFlyTo(${longitude}, ${latitude}, 16); true;`,
-        );
-      }
-    } catch {
-      // Best-effort: leave the map where it is on any failure.
-    } finally {
-      setLocating(false);
+  // "Find me": fly to the fix the shared watch already holds. With none yet, start
+  // the watch and finish the tap when the first fix lands; denied or unavailable
+  // shows the same location notice (with Try again) as Nearest.
+  const recenterToMe = useCallback(() => {
+    if (selfCoord) {
+      flyTo(selfCoord.longitude, selfCoord.latitude, 16);
+      return;
     }
-  }, [locating, phase]);
+    setPendingRecenter(true);
+    locate();
+  }, [selfCoord, flyTo, locate]);
+  useEffect(() => {
+    if (!selfCoord || !pendingRecenter) return;
+    setPendingRecenter(false);
+    flyTo(selfCoord.longitude, selfCoord.latitude, 16);
+  }, [selfCoord, pendingRecenter, flyTo]);
+
+  // Show the user's own position in the document (blue dot). Replays after a reload.
+  useEffect(() => {
+    if (phase !== 'map' || !webRef.current || !selfCoord) return;
+    const { longitude, latitude } = selfCoord;
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+    webRef.current.injectJavaScript(
+      `window.__festieSetSelf && window.__festieSetSelf(${longitude}, ${latitude}); true;`,
+    );
+  }, [phase, docGen, selfCoord]);
+
+  const loadFailed = canRenderMap && phase === 'fallback' && hasAnythingToPlot;
 
   // ── Fallback list (offline-honest) ─────────────────────────────────────────
   if (phase === 'fallback') {
@@ -1122,17 +1141,22 @@ export default function OfflineMap({
     const livePeerPins = livePins.filter((p) => p.kind === 'peer');
     const hasAny = coorded.length > 0 || uncoordedPoints.length > 0 || livePins.length > 0;
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={[styles.fallbackContent, { paddingBottom: bottomPad }]}>
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.fallbackContent, { paddingBottom: bottomPad + bottomInset }]}>
         <View style={styles.banner}>
           <Ionicons name="cloud-offline-outline" size={iconSize.action} color={t.colors.accent.amber} />
           {/* Say only what is true for THIS festival: a download helps only when
               an archive exists to download, and the control that starts it lives on
               Schedule, Map and My Picks (there is nothing to fetch once you are offline). */}
           <Text style={styles.bannerText}>
-            {remotePmtilesUrl
-              ? 'Download this festival from the Schedule or Map screen while you still have signal to use the map offline. Showing your saved meeting points.'
-              : 'This festival has no offline map. Showing your saved meeting points.'}
+            {loadFailed
+              ? "The map didn't load. Showing your saved meeting points."
+              : remotePmtilesUrl
+                ? 'Download this festival from the Schedule or Map screen while you still have signal to use the map offline. Showing your saved meeting points.'
+                : 'This festival has no offline map. Showing your saved meeting points.'}
           </Text>
+          {loadFailed ? (
+            <Button label="Retry map" size="sm" variant="secondary" onPress={retryMap} maxFontSizeMultiplier={MAX_FONT_SCALE} />
+          ) : null}
         </View>
 
         {/* SOS first — safety-critical, even with no map. One row per active SOS. */}
@@ -1182,7 +1206,7 @@ export default function OfflineMap({
           </View>
         ))}
 
-        {!hasAny ? (
+        {!hasAny && onSetMeetingPoint ? (
           <View style={styles.emptyBlock}>
             {/* One-off 32px: sits between iconSize.lg (24) and .xl (48) — neither
                 token fits this empty-state glyph without a visible size jump. */}
@@ -1249,6 +1273,8 @@ export default function OfflineMap({
   // ── Map (WebView) ───────────────────────────────────────────────────────────
   const showDock = hasAmenities && authoringMode === 'off';
   const showCard = interactive && !!place;
+  // Android's native tab bar already absorbs the bottom inset (see map.tsx), as SOS does.
+  const fabInset = (Platform.OS === 'ios' ? insets.bottom : 0) + bottomInset;
   const call911 = () => {
     Linking.openURL('tel:911').catch((err: unknown) => console.warn('OfflineMap call 911', err));
   };
@@ -1299,7 +1325,7 @@ export default function OfflineMap({
               testID="map-drop-pin-toggle"
               style={[
                 styles.dropPinButton,
-                { bottom: styles.dropPinButton.bottom + insets.bottom + bottomInset },
+                { bottom: styles.dropPinButton.bottom + fabInset },
                 placing ? styles.dropPinButtonActive : null,
               ]}
               onPress={togglePlacement}
@@ -1325,15 +1351,13 @@ export default function OfflineMap({
           {authoringMode === 'off' ? (
             <TouchableOpacity
               testID="map-recenter-fab"
-              style={[styles.recenterFab, { bottom: styles.recenterFab.bottom + insets.bottom + bottomInset }]}
+              style={[styles.recenterFab, { bottom: styles.recenterFab.bottom + fabInset }]}
               onPress={recenterToMe}
-              disabled={locating}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Recenter the map on my location"
-              accessibilityState={{ disabled: locating }}
             >
-              {locating ? (
+              {pendingRecenter && geoState === 'locating' ? (
                 <ActivityIndicator size="small" color={t.colors.accent.aqua} />
               ) : (
                 <Ionicons name="locate" size={20} color={t.colors.accent.aqua} />
@@ -1435,10 +1459,14 @@ export default function OfflineMap({
                 )}
                 <View style={styles.pursueBody}>
                   {selfCoord && pursuit ? (
-                    <Text style={styles.pursueLabel} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                      <Text style={styles.pursueName}>{liveTarget.label}</Text>
-                      {`  ${pursuit.distanceLabel}${pursuit.compass ? ' ' + pursuit.compass : ''}${pursuit.etaLabel !== '—' ? ' · ~' + pursuit.etaLabel : ''}`}
-                    </Text>
+                    <>
+                      <Text style={styles.pursueName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        {liveTarget.label}
+                      </Text>
+                      <Text style={styles.pursueLabel} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        {`${pursuit.distanceLabel}${pursuit.compass ? ' ' + pursuit.compass : ''}${pursuit.etaLabel !== '—' ? ' · ~' + pursuit.etaLabel : ''}`}
+                      </Text>
+                    </>
                   ) : (
                     <TouchableOpacity onPress={locate} accessibilityRole="button">
                       <Text style={styles.pursueEnable} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
@@ -1462,6 +1490,7 @@ export default function OfflineMap({
                 <TouchableOpacity
                   onPress={clearPursue}
                   style={styles.pursueClose}
+                  hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}
                   accessibilityRole="button"
                   accessibilityLabel={MAP_COPY.stopShowingWay}
                 >
@@ -1481,19 +1510,33 @@ export default function OfflineMap({
                 onLocate={locate}
                 onClose={() => setPlace(null)}
               />
-            ) : interactive && (nearestNotice || pendingNearest) ? (
+            ) : interactive && (nearestNotice || pendingNearest || pendingRecenter) ? (
               <View style={styles.notice}>
-                <Text
-                  style={styles.noticeText}
-                  accessibilityRole={nearestNotice ? 'alert' : 'text'}
-                  maxFontSizeMultiplier={MAX_FONT_SCALE}
-                >
-                  {nearestNotice
-                    ? nearestMissingCopy(nearestNotice.type)
-                    : geoState === 'denied' || geoState === 'unavailable'
-                      ? locationPromptCopy(geoState)
-                      : locationPromptCopy('locating')}
-                </Text>
+                <View style={styles.noticeRow}>
+                  <Text
+                    style={[styles.noticeText, styles.noticeBody]}
+                    accessibilityRole={nearestNotice ? 'alert' : 'text'}
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  >
+                    {nearestNotice
+                      ? nearestMissingCopy(nearestNotice.type)
+                      : geoState === 'denied' || geoState === 'unavailable'
+                        ? locationPromptCopy(geoState)
+                        : locationPromptCopy('locating')}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setNearestNotice(null);
+                      setPendingNearest(null);
+                      setPendingRecenter(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="close" size={16} color={t.colors.text.muted} />
+                  </TouchableOpacity>
+                </View>
                 {nearestNotice?.type === 'medical' ? (
                   <Button
                     label={MAP_COPY.call911}
@@ -1636,6 +1679,19 @@ const useStyles = makeStyles((t) => ({
   },
   pursueClose: {
     padding: t.spacing[1],
+    minWidth: 32,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+  },
+  noticeBody: {
+    flex: 1,
+    minWidth: 0,
   },
   // ── Nearest-X + amenity filter chip bar, top of the map ─────────────────────
   chipDock: {
