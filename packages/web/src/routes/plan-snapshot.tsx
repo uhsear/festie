@@ -56,7 +56,7 @@ export default function PlanSnapshotPage() {
     if (!snapshot || !festival) return { groups: [] as { label: string; rows: Row[] }[], missing: 0 };
     const stageNames = new Map((festival.stages ?? []).map((s) => [s.id, s.name]));
     const priorityBySetId = new Map(snapshot.picks.map((p) => [p.setId, p.priority]));
-    const groups: { label: string; rows: Row[] }[] = [];
+    const dayGroups: { label: string; rows: Row[] }[] = [];
     let found = 0;
     // Festival day order, then start time: the snapshot itself is ranked by priority.
     for (const day of festival.days ?? []) {
@@ -71,9 +71,9 @@ export default function PlanSnapshotPage() {
           priority: PRIORITY_LABELS[fromPickPriority(priorityBySetId.get(set.id)!)],
         }));
       found += rows.length;
-      if (rows.length > 0) groups.push({ label: day.label || day.date, rows });
+      if (rows.length > 0) dayGroups.push({ label: day.label || day.date, rows });
     }
-    return { groups, missing: snapshot.picks.length - found };
+    return { groups: dayGroups, missing: snapshot.picks.length - found };
   }, [snapshot, festival]);
 
   if (!snapshot) {
