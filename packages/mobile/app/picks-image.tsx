@@ -34,6 +34,7 @@ import {
   lockscreenSavedKey,
   lockscreenSnapshot,
   setMinuteRange,
+  type LockscreenCanvas,
   type LockscreenMode,
   type LockscreenModel,
   type ScheduleImageFormat,
@@ -58,7 +59,7 @@ const SHAPE_OPTIONS = [
 
 const MODE_OPTIONS = [
   { value: 'picks', label: 'My picks' },
-  { value: 'full', label: 'Full lineup' },
+  { value: 'full', label: 'Full day' },
   { value: 'stages', label: 'Stages' },
   { value: 'crew', label: 'Crew' },
 ] as const;
@@ -69,7 +70,12 @@ const THEME_OPTIONS = [
 ] as const;
 
 const LOOK_OPTIONS = [
-  { value: 'standard', label: 'Standard' },
+  { value: 'standard', label: 'Plain' },
+  { value: 'poster', label: 'Glow' },
+] as const;
+
+const CANVAS_OPTIONS = [
+  { value: 'lockscreen', label: 'Lock screen' },
   { value: 'poster', label: 'Poster' },
 ] as const;
 
@@ -108,6 +114,7 @@ const NOTIFICATION_TIP = IOS
   : 'Set lock-screen notifications to icons only.';
 
 const isMode = (v: unknown): v is LockscreenMode => MODE_OPTIONS.some((o) => o.value === v);
+const isCanvas = (v: unknown): v is LockscreenCanvas => CANVAS_OPTIONS.some((o) => o.value === v);
 const isClock = (v: unknown): v is LockscreenClock => CLOCK_OPTIONS.some((o) => o.value === v);
 
 /** Look options restored from the last visit. Mode and phone size are never restored. */
@@ -116,6 +123,7 @@ interface SavedOptions {
   lockStyle?: 'standard' | 'poster';
   priorities?: Priority[];
   clock?: LockscreenClock;
+  canvas?: LockscreenCanvas;
 }
 
 function parseSavedOptions(raw: string | null): SavedOptions {
@@ -131,6 +139,7 @@ function parseSavedOptions(raw: string | null): SavedOptions {
       lockStyle: o.lockStyle === 'standard' || o.lockStyle === 'poster' ? o.lockStyle : undefined,
       priorities: priorities.length ? priorities : undefined,
       clock,
+      canvas: isCanvas(o.canvas) ? o.canvas : undefined,
     };
   } catch (err) {
     console.warn('picks image: ignoring bad saved options', err);
@@ -206,11 +215,12 @@ export default function PicksImageScreen() {
     theme: 'dark' | 'light';
     lockStyle: 'standard' | 'poster';
     clock: LockscreenClock;
+    canvas: LockscreenCanvas;
     touched: boolean;
-  }>({ priorities: PRIORITIES, theme: 'dark', lockStyle: 'standard', clock: 'normal', touched: false });
-  const { priorities, theme, lockStyle, clock } = look;
+  }>({ priorities: PRIORITIES, theme: 'dark', lockStyle: 'standard', clock: 'normal', canvas: 'lockscreen', touched: false });
+  const { priorities, theme, lockStyle, clock, canvas } = look;
   const [fromNow, setFromNow] = useState(false);
-  const [onePage, setOnePage] = useState(false);
+  const [onePage, setOnePage] = useState(true);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [previewPage, setPreviewPage] = useState(0);
@@ -245,6 +255,7 @@ export default function PicksImageScreen() {
                 lockStyle: o.lockStyle ?? cur.lockStyle,
                 priorities: o.priorities ?? cur.priorities,
                 clock: o.clock ?? cur.clock,
+                canvas: o.canvas ?? cur.canvas,
               },
         );
       })
@@ -259,15 +270,16 @@ export default function PicksImageScreen() {
 
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(OPTIONS_KEY, JSON.stringify({ theme, lockStyle, priorities, clock })).catch((err: unknown) =>
+    AsyncStorage.setItem(OPTIONS_KEY, JSON.stringify({ theme, lockStyle, priorities, clock, canvas })).catch((err: unknown) =>
       console.warn('picks image: could not save options', err),
     );
-  }, [hydrated, theme, lockStyle, priorities, clock]);
+  }, [hydrated, theme, lockStyle, priorities, clock, canvas]);
 
   const setPriorities = (priorities: Priority[]) => setLook((cur) => ({ ...cur, priorities, touched: true }));
   const setTheme = (theme: 'dark' | 'light') => setLook((cur) => ({ ...cur, theme, touched: true }));
   const setLockStyle = (lockStyle: 'standard' | 'poster') => setLook((cur) => ({ ...cur, lockStyle, touched: true }));
   const setClock = (clock: LockscreenClock) => setLook((cur) => ({ ...cur, clock, touched: true }));
+  const setCanvas = (canvas: LockscreenCanvas) => setLook((cur) => ({ ...cur, canvas, touched: true }));
 
   const format: Exclude<ScheduleImageFormat, 'lockscreen'> = shape === 'lockscreen' ? 'story' : shape;
   const lockMode: LockscreenMode = mode === 'crew' && !activeCrew ? 'picks' : mode;
@@ -316,6 +328,7 @@ export default function PicksImageScreen() {
         width: size.width,
         height: size.height,
         clock,
+        canvas,
         fromMs: fromNow ? Date.now() : undefined,
         timeZone,
         onePage,
@@ -339,6 +352,7 @@ export default function PicksImageScreen() {
       size.width,
       size.height,
       clock,
+      canvas,
       fromNow,
       timeZone,
       onePage,
@@ -373,7 +387,7 @@ export default function PicksImageScreen() {
   const pageCount = lockModel?.pages.length ?? 1;
   const visiblePage = Math.min(previewPage, pageCount - 1);
   // A changed picture goes back to image 1.
-  const saveKey = JSON.stringify([shape, lockMode, lockDay, priorities, stageIds, theme, lockStyle, size, clock, fromNow, onePage]);
+  const saveKey = JSON.stringify([shape, lockMode, lockDay, priorities, stageIds, theme, lockStyle, size, clock, canvas, fromNow, onePage]);
   const layout = shape === 'lockscreen' ? size : SCHEDULE_IMAGE_LAYOUT[format];
   // The preview stays on screen while the options scroll under it; a short window keeps
   // at least 300pt of options visible.
@@ -660,7 +674,7 @@ export default function PicksImageScreen() {
                 style={[styles.preview, { width: previewW, height: layout.height * scale }]}
               >
                 <LockscreenPoster model={lockModel} page={i} pointScale={scale} />
-                <LockscreenOverlay width={previewW} height={layout.height * scale} clock={clock} />
+                {canvas === 'lockscreen' ? <LockscreenOverlay width={previewW} height={layout.height * scale} clock={clock} /> : null}
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -827,14 +841,22 @@ export default function PicksImageScreen() {
 
         {lockscreen ? (
           <>
-            {heading('Your lock screen')}
-            <SegmentedControl options={CLOCK_OPTIONS} value={clock} onChange={setClock} accessibilityLabel="Clock" />
-            <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              Pick Big clock or Clock + widgets if your clock is large or has widgets under it.
-            </Text>
+            {heading('Made for')}
+            <SegmentedControl options={CANVAS_OPTIONS} value={canvas} onChange={setCanvas} accessibilityLabel="Image type" />
+            {canvas === 'lockscreen' ? (
+              <>
+                {heading('Your lock screen')}
+                <SegmentedControl options={CLOCK_OPTIONS} value={clock} onChange={setClock} accessibilityLabel="Clock" />
+                <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  Pick Big clock or Clock + widgets if your clock is large or has widgets under it.
+                </Text>
+              </>
+            ) : null}
             {heading('Look')}
             <SegmentedControl options={THEME_OPTIONS} value={theme} onChange={setTheme} accessibilityLabel="Colours" />
-            <SegmentedControl options={LOOK_OPTIONS} value={lockStyle} onChange={setLockStyle} accessibilityLabel="Look" />
+            {canvas === 'lockscreen' ? (
+              <SegmentedControl options={LOOK_OPTIONS} value={lockStyle} onChange={setLockStyle} accessibilityLabel="Look" />
+            ) : null}
           </>
         ) : null}
 
@@ -855,7 +877,7 @@ export default function PicksImageScreen() {
 
         {moreOpen ? (
           <>
-            {lockscreen && grid ? switchRow('Fit on one image', onePage, setOnePage) : null}
+            {lockscreen && grid ? switchRow('Split long days into 2 images (bigger text)', !onePage, (v) => setOnePage(!v)) : null}
             {lockscreen ? (
               <>
                 {heading('Phone size')}
