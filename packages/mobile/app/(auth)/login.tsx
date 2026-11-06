@@ -8,14 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
-  Alert,
   type TextInputInstance,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore, ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores';
+import { useAuthStore, useUIStore, ACCOUNT_REACTIVATED_MESSAGE } from '@festie/shared/stores';
 import { AUTH_COPY, COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
@@ -109,6 +108,8 @@ const useStyles = makeStyles((t) => ({
   guestButton: {
     marginTop: t.spacing[5],
     alignItems: 'center' as const,
+    minHeight: 44,
+    justifyContent: 'center' as const,
   },
   // Sign-in CTA layout only — fill/ink/disabled live in components/Button (F8).
   button: {
@@ -117,10 +118,14 @@ const useStyles = makeStyles((t) => ({
   forgotButton: {
     marginTop: t.spacing[4],
     alignItems: 'center' as const,
+    minHeight: 44,
+    justifyContent: 'center' as const,
   },
   linkButton: {
     marginTop: t.spacing[5],
     alignItems: 'center' as const,
+    minHeight: 44,
+    justifyContent: 'center' as const,
   },
   linkText: {
     ...typeStyle('label'),
@@ -171,7 +176,7 @@ export default function LoginScreen() {
     setError(null);
     try {
       const result = await login({ username: username.trim(), password });
-      if (result.reactivated) Alert.alert(ACCOUNT_REACTIVATED_MESSAGE);
+      if (result.reactivated) useUIStore.getState().showToast(ACCOUNT_REACTIVATED_MESSAGE, { kind: 'success' });
       // A guest who arrived through an invite link finishes that join first.
       const invite = getPendingInvite();
       if (invite) {

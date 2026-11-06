@@ -20,20 +20,29 @@ interface Props {
 }
 
 // Best-effort one-shot fix to attach to the SOS so the crew can actually find
-// the person. Never blocks the raise — resolves undefined on denial/timeout.
+// the person. Never blocks the raise: a cached fix returns at once and the whole
+// wait is capped at SOS_FIX_BUDGET_MS, because the geolocation timeout only
+// starts after the permission prompt is answered. Matches mobile's budget.
+const SOS_FIX_BUDGET_MS = 4_000;
 function oneShotPosition(): Promise<{ lat: number; lng: number; accuracy?: number; capturedAt: string } | undefined> {
   return new Promise((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(undefined);
+    const budget = setTimeout(() => resolve(undefined), SOS_FIX_BUDGET_MS);
     navigator.geolocation.getCurrentPosition(
-      (pos) =>
+      (pos) => {
+        clearTimeout(budget);
         resolve({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy ?? undefined,
           capturedAt: new Date(pos.timestamp).toISOString(),
-        }),
-      () => resolve(undefined),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 8_000 },
+        });
+      },
+      () => {
+        clearTimeout(budget);
+        resolve(undefined);
+      },
+      { enableHighAccuracy: true, maximumAge: 60_000, timeout: SOS_FIX_BUDGET_MS },
     );
   });
 }

@@ -51,7 +51,7 @@ export default function Button({
     danger:
       'bg-accent-coral-strong text-text-on-accent hover:bg-[var(--color-accent-coral-strong-hover)] focus-visible:outline-accent-coral',
     ghost:
-      'bg-transparent text-text-primary border border-border-light hover:bg-bg-card focus-visible:outline-text-primary',
+      'bg-transparent text-text-secondary border border-transparent hover:text-text-primary hover:bg-bg-card focus-visible:outline-text-primary',
     // R3 outline-secondary: the canonical demoted CTA — transparent fill, 1px
     // aqua/70 border, secondary text; hover lifts the border to full aqua + text to primary.
     // Single solid aqua per screen lives on `primary`; this is everything else.

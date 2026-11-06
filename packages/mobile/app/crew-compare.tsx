@@ -20,9 +20,10 @@ import CrewCompareSummary from '../components/CrewCompareSummary';
 const ROW_HEADER_W = 168;
 const CELL_W = 76;
 // Fixed heights keep the pinned set column and the scrolling pick cells aligned
-// row for row (they render in two separate views). Sized for MAX_FONT_SCALE.
+// row for row (they render in two separate views). Sized for MAX_FONT_SCALE:
+// two lines of artist name plus the time line.
 const HEADER_H = 56;
-const ROW_H = 64;
+const ROW_H = 84;
 
 export default function CrewCompareScreen() {
   const t = useTokens();
@@ -58,7 +59,7 @@ export default function CrewCompareScreen() {
     try {
       await useFestivalStore.getState().loadProfiles(festivalId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't load crew picks.");
+      setError(mapErrorToUserMessage(err, "Couldn't load crew picks."));
     } finally {
       setRefreshing(false);
     }
@@ -70,6 +71,13 @@ export default function CrewCompareScreen() {
   }, [refresh, ready]);
 
   const days = useMemo(() => getDays(), [getDays]);
+
+  // A failed refresh keeps a grid that already loaded; only an empty grid gets the full-screen error.
+  useEffect(() => {
+    // Toast once per error, not on every row-count change (error clears only when the next refresh starts).
+    if (error && rows.length > 0) useUIStore.getState().showToast(error, { kind: 'error' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rows.length read at error time only
+  }, [error]);
 
   const handleAdd = useCallback(
     (setId: string, priority: Parameters<typeof savePick>[2]) => {
@@ -86,7 +94,12 @@ export default function CrewCompareScreen() {
   if (!user) {
     return (
       <Wrapper>
-        <EmptyState icon="lock-closed" title={COPY.auth.signInRequired} message={signInTo('compare schedules')} />
+        <EmptyState
+          icon="lock-closed"
+          title={COPY.auth.signInRequired}
+          message={signInTo('compare schedules')}
+          action={{ label: COPY.auth.signIn, onPress: () => router.push('/(auth)/login') }}
+        />
       </Wrapper>
     );
   }
@@ -164,7 +177,7 @@ export default function CrewCompareScreen() {
     );
   }
 
-  if (error) {
+  if (error && rows.length === 0) {
     return (
       <Wrapper>
         <EmptyState
@@ -318,7 +331,7 @@ export default function CrewCompareScreen() {
                         ]}
                       />
                       <View style={styles.rowHeaderText}>
-                        <Text style={styles.setArtist} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        <Text style={styles.setArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                           {name}
                         </Text>
                         <Text style={styles.setTime} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>

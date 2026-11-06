@@ -36,8 +36,10 @@ export async function authReady(): Promise<void> {
 export const isAuthenticated = () => !!useAuthStore.getState().user;
 export const isAdmin = () => useAuthStore.getState().user?.isAdmin || false;
 
-/** beforeLoad for /login and /register: a signed-in user has no use for them. */
-export async function redirectIfSignedIn() {
+/** beforeLoad for /login and /register: a signed-in user has no use for them, so send them on to `next` (already sanitised by the route's validateSearch). */
+export async function redirectIfSignedIn(next?: string) {
   await authReady();
-  if (isAuthenticated()) throw redirect({ to: '/cards' });
+  if (!isAuthenticated()) return;
+  if (next) throw redirect({ href: next });
+  throw redirect({ to: '/cards' });
 }

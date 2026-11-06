@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { usePicks, useFestival, useDayClashes, usePickClear, useViewAs, useCrew } from '@festie/shared/hooks';
+import { usePicks, useCanPick, useFestival, useDayClashes, usePickClear, useViewAs, useCrew } from '@festie/shared/hooks';
 import { Priority } from '@festie/shared/types';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
@@ -61,7 +61,7 @@ export default function GridView() {
 }
 
 function GridViewInner() {
-  const user = useAuthStore((state) => state.user);
+  const canPick = useCanPick();
   const days = useFestivalStore((state) => state.days);
   const sets = useFestivalStore((state) => state.sets);
   const searchQuery = useFestivalStore((state) => state.searchQuery);
@@ -247,7 +247,7 @@ function GridViewInner() {
             getMyPick={getMyPick}
             getOtherPicks={getOtherPicks}
             conflictIds={conflictIds}
-            canPick={!!user}
+            canPick={canPick}
             currentFestival={currentFestival}
             getStageColor={getStageColor}
             onSavePick={handleSavePick}
@@ -353,7 +353,7 @@ function GridViewInner() {
             vpW={vpW}
             nowIndicator={nowIndicator}
             clashMarks={clashMarks}
-            canPick={!!user}
+            canPick={canPick}
             currentFestival={currentFestival}
             gridRef={gridRef}
             getMyPick={getMyPick}
@@ -397,7 +397,7 @@ function GridViewInner() {
               getMyPick={getMyPick}
               getOtherPicks={getOtherPicks}
               conflictIds={conflictIds}
-              canPick={!!user}
+              canPick={canPick}
               currentFestival={currentFestival}
               getStageColor={getStageColor}
               onSavePick={handleSavePick}

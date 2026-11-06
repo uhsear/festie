@@ -20,8 +20,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useCrewStore, useFestivalStore, useLiveLocationStore } from '@festie/shared/stores';
-import { LIVE_SHARE_COPY } from '@festie/shared/constants';
+import { useCrewStore, useFestivalModeStore, useFestivalStore, useLiveLocationStore } from '@festie/shared/stores';
+import { LIVE_SHARE_COPY, LOW_POWER_COPY } from '@festie/shared/constants';
 import { useShareExplainer } from '@festie/shared/hooks';
 import {
   formatCountdown,
@@ -33,6 +33,7 @@ import {
 } from '@festie/shared/utils';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import AppSwitch from './AppSwitch';
+import Button from './Button';
 import { useHaptics } from '../hooks/useHaptics';
 import { useNow } from '../hooks/useNow';
 import { BACKGROUND_SHARE_AVAILABLE } from '../lib/backgroundShare';
@@ -52,6 +53,9 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
   const setSharePaused = useLiveLocationStore((s) => s.setSharePaused);
   const endShare = useLiveLocationStore((s) => s.endShare);
   const clearShareEnded = useLiveLocationStore((s) => s.clearShareEnded);
+  // Low power ends any share at once (useLiveShareSession), so the switch stays off while it is on.
+  const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
+  const setLowPowerMode = useFestivalModeStore((s) => s.setLowPowerMode);
   const days = useFestivalStore((s) => s.days);
   const sets = useFestivalStore((s) => s.sets);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
@@ -77,6 +81,12 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
     setShareBattery(false);
     setKeepLocked(false);
   }, [crewId]);
+
+  // Low power refuses sharing: close an open chooser so no chip can start a share it ends at once.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- event-driven reset when low power turns on.
+    if (lowPowerMode) setChoosing(false);
+  }, [lowPowerMode]);
 
   const { options, defaultId } = useMemo(
     () => liveShareOptions({ days, sets, timeZone, nowMs: now }),
@@ -212,17 +222,20 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>{LIVE_SHARE_COPY.title}</Text>
-          <Text style={styles.rowSub}>{LIVE_SHARE_COPY.ruleNative}</Text>
+          <Text style={styles.rowSub}>{lowPowerMode ? LOW_POWER_COPY.livePaused : LIVE_SHARE_COPY.ruleNative}</Text>
         </View>
         <AppSwitch
           value={sharing || choosing}
           onValueChange={onToggle}
-          disabled={busy}
+          disabled={busy || lowPowerMode}
           accessibilityRole="switch"
           accessibilityLabel={LIVE_SHARE_COPY.switchA11y}
-          accessibilityState={{ checked: sharing || choosing, disabled: busy }}
+          accessibilityState={{ checked: sharing || choosing, disabled: busy || lowPowerMode }}
         />
       </View>
+      {lowPowerMode ? (
+        <Button label={LOW_POWER_COPY.turnOff} size="sm" variant="secondary" onPress={() => setLowPowerMode(false)} />
+      ) : null}
 
       {notice && !sharing && !choosing ? (
         <View style={styles.notice}>

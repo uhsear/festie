@@ -66,6 +66,14 @@ describe('Input', () => {
     });
   });
 
+  describe('caller aria-describedby', () => {
+    it('merges with the error id instead of replacing it', () => {
+      render(<Input label="Email" id="em" error="Required" aria-describedby="rules" />);
+      const ids = screen.getByLabelText('Email').getAttribute('aria-describedby')!.split(' ');
+      expect(ids).toEqual(['em-error', 'rules']);
+    });
+  });
+
   describe('helper text', () => {
     it('displays helper text when no error', () => {
       render(<Input label="Email" helperText="We will never share your email" />);

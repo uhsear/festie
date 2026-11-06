@@ -3,12 +3,13 @@ import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl, Sha
 import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
-import { FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
+import { COPY, FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
 import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
+import EmptyState from './EmptyState';
 import { Skeleton } from './Skeleton';
 import FollowButton from './FollowButton';
 
@@ -55,17 +56,6 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'center' as const,
     gap: t.spacing[3],
     paddingHorizontal: t.spacing[6],
-  },
-  errorText: {
-    ...typeStyle('label'),
-    color: t.colors.text.secondary,
-    textAlign: 'center',
-    marginTop: t.spacing[1],
-  },
-  // Retry CTA layout only — fill/ink/radius live in components/Button (F8).
-  retryButton: {
-    paddingHorizontal: t.spacing[5],
-    marginTop: t.spacing[2],
   },
   selectError: {
     ...typeStyle('label'),
@@ -373,10 +363,12 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   if (error && festivals.length === 0) {
     return (
       <ScrollView contentContainerStyle={styles.scrollCentered} refreshControl={refreshControl}>
-        <Ionicons name="alert-circle-outline" size={48} color={t.colors.status.error} />
-        <Text style={styles.errorText}>{error}</Text>
-        {/* F6/F8: canonical Button — primary variant pairs onLightAccent ink on aqua. */}
-        <Button label="Retry" icon="refresh" onPress={handleRefresh} style={styles.retryButton} />
+        <EmptyState
+          icon="cloud-offline-outline"
+          title={COPY.festivalLoad.errorTitle}
+          message={error ?? COPY.festivalLoad.errorBody}
+          action={{ label: COPY.festivalLoad.retry, onPress: handleRefresh }}
+        />
       </ScrollView>
     );
   }

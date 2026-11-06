@@ -32,6 +32,14 @@ describe('formatFestivalDateRange', () => {
     expect(formatFestivalDateRange('2026-09-04', '2026-09-06')).toBe('Sep 4 – Sep 6, 2026');
   });
 
+  it('collapses a one-day festival to a single date', () => {
+    expect(formatFestivalDateRange('2026-09-04', '2026-09-04')).toBe('Sep 4, 2026');
+  });
+
+  it('keeps both years across New Year', () => {
+    expect(formatFestivalDateRange('2026-12-30', '2027-01-02')).toBe('Dec 30, 2026 – Jan 2, 2027');
+  });
+
   it('accepts ISO datetime strings (uses the date portion)', () => {
     expect(formatFestivalDateRange('2026-09-04T12:00:00Z', '2026-09-06T00:00:00Z')).toBe('Sep 4 – Sep 6, 2026');
   });

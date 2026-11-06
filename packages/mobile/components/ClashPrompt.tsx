@@ -159,7 +159,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
                 accessibilityLabel={`Keep ${currentName}, clear ${otherName}`}
               >
                 <Ionicons name="checkmark" size={t.iconSize.xs} color={t.colors.accent.aqua} />
-                <Text style={styles.keepText} numberOfLines={1}>{`Keep ${currentName}`}</Text>
+                <Text style={styles.keepText} numberOfLines={2}>{`Keep ${currentName}`}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.keepButton}
@@ -169,7 +169,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
                 accessibilityLabel={`Keep ${otherName}, clear ${currentName}`}
               >
                 <Ionicons name="checkmark" size={t.iconSize.xs} color={t.colors.accent.aqua} />
-                <Text style={styles.keepText} numberOfLines={1}>{`Keep ${otherName}`}</Text>
+                <Text style={styles.keepText} numberOfLines={2}>{`Keep ${otherName}`}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.dismissButton}

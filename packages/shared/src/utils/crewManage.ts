@@ -29,6 +29,10 @@ export const crewCopy = {
   inviteCardBody: (crew: string) => `${crew} is just you so far. Share the link and friends join in one tap.`,
   addTotem: 'Add a crew totem',
   totemExplainer: 'A crew totem is the flag or sign you hold up so friends can spot you in the crowd.',
+  endPoll: (isSchedule: boolean) =>
+    isSchedule
+      ? 'Voting stops and everyone sees the result. The winning set becomes a meeting point for the whole crew, and you get a reminder 15 min before.'
+      : 'Voting stops and everyone sees the result.',
   pollCap: `Close a poll to start another. A crew can have ${MAX_OPEN_POLLS_PER_CREW} open polls.`,
   deleteOwnedTitle: 'Crews you own',
   deleteOwnedBody: 'Choose who takes over each crew. If you skip this, the member who joined first takes over.',

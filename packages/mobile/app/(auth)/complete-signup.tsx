@@ -16,7 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { isApiClientError, mapErrorToUserMessage } from '@festie/shared/services';
 import { REGISTER_COPY, isAtLeast18, registerErrorField, usernameError } from '@festie/shared/utils';
 import { AUTH_COPY, PROVIDER_COPY } from '@festie/shared/constants';
@@ -166,9 +166,11 @@ export default function CompleteSignupScreen() {
         dateOfBirth: toIso(dob),
         tosAccepted: true,
       });
-      if (emailVerificationSent && payload.email) {
-        Alert.alert(AUTH_COPY.accountCreated, AUTH_COPY.checkEmailToConfirm(payload.email));
-      }
+      const sent = emailVerificationSent && payload.email;
+      useUIStore.getState().showToast(
+        sent ? `${AUTH_COPY.accountCreated}. ${AUTH_COPY.checkEmailToConfirm(payload.email!)}` : AUTH_COPY.accountCreated,
+        { kind: 'success', durationMs: sent ? 6000 : undefined },
+      );
       // A guest who arrived through an invite link finishes that join first.
       const invite = getPendingInvite();
       if (invite) {

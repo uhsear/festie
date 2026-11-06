@@ -26,6 +26,12 @@ const OFFLINE = 'Connect to the internet to see these picks.';
 
 type Item = { kind: 'day'; key: string; label: string } | { kind: 'row'; key: string; row: ComparedSet };
 
+// A bad or dead link never fixes itself; offline and generic failures can.
+function isRetryable(err: unknown): boolean {
+  const e = err as { status?: number; code?: string } | null;
+  return e?.status !== 404 && !(e?.status === 0 && e.code === 'INVALID_INPUT');
+}
+
 function errorText(err: unknown): string {
   const e = err as { status?: number; code?: string } | null;
   if (e?.status === 404) return NOT_FOUND;
@@ -49,7 +55,10 @@ export default function FriendPicksScreen() {
   const [payload, setPayload] = useState<SharedPicksPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!!ref);
-  const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [retryable, setRetryable] = useState(false);
+  const [reload, setReload] = useState(0);
+  // null until the first toggle, so the default ticks follow the comparison instead of being re-seeded.
+  const [userTicks, setUserTicks] = useState<Set<string> | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -65,27 +74,17 @@ export default function FriendPicksScreen() {
       .catch((err) => {
         if (cancelled) return;
         setError(errorText(err));
+        setRetryable(isRetryable(err));
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [ref]);
+  }, [ref, reload]);
 
   const sameFestival = !!payload && currentFestivalId === payload.festivalId;
   const mine = sameFestival ? currentProfile?.picks : undefined;
   const comparison = useMemo(() => (payload ? compareSharedPicks(payload, mine) : null), [payload, mine]);
-
-  // Their Must See picks start ticked. Re-seed only when the comparison changes.
-  useEffect(() => {
-    if (!comparison) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- seeds default ticks from derived comparison data
-    setTicked(
-      new Set(
-        comparison.days.flatMap((d) => d.rows.filter((r) => r.addable && r.theirs === 'must').map((r) => r.setId)),
-      ),
-    );
-  }, [comparison]);
 
   const items = useMemo<Item[]>(
     () =>
@@ -96,13 +95,22 @@ export default function FriendPicksScreen() {
     [comparison],
   );
 
-  const toggle = useCallback((setId: string) => {
-    setTicked((prev) => {
-      const next = new Set(prev);
+  // Their Must See picks start ticked.
+  const ticked = useMemo(() => {
+    if (userTicks) return userTicks;
+    return new Set(
+      (comparison?.days ?? []).flatMap((d) => d.rows.filter((r) => r.addable && r.theirs === 'must').map((r) => r.setId)),
+    );
+  }, [userTicks, comparison]);
+
+  const toggle = useCallback(
+    (setId: string) => {
+      const next = new Set(ticked);
       if (!next.delete(setId)) next.add(setId);
-      return next;
-    });
-  }, []);
+      setUserTicks(next);
+    },
+    [ticked],
+  );
 
   const canAdd = !!user && !!mine;
   const addableCount = items.filter((i) => i.kind === 'row' && i.row.addable).length;
@@ -117,6 +125,7 @@ export default function FriendPicksScreen() {
       for (const priority of Object.keys(plan.byPriority) as Priority[]) {
         added += await store.bulkSavePicks(plan.byPriority[priority] ?? [], priority);
       }
+      setUserTicks(new Set());
       haptics.success();
       useUIStore.getState().showToast(`Added ${added} ${added === 1 ? 'pick' : 'picks'} to your plan.`, {
         kind: 'success',
@@ -164,7 +173,22 @@ export default function FriendPicksScreen() {
     return (
       <>
         {screen}
-        <EmptyState icon="cloud-offline-outline" title={error ?? BAD_LINK} />
+        <EmptyState
+          icon="cloud-offline-outline"
+          title={error ?? BAD_LINK}
+          action={
+            error && retryable
+              ? {
+                  label: 'Try again',
+                  onPress: () => {
+                    setError(null);
+                    setLoading(true);
+                    setReload((n) => n + 1);
+                  },
+                }
+              : undefined
+          }
+        />
       </>
     );
   }

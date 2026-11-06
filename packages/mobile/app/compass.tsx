@@ -176,7 +176,7 @@ export default function CompassScreen() {
         {target ? (
           <MeetingPointCompass
             target={target}
-            note={usePeer ? FIND_FRIEND_COPY.peerNote(name) : undefined}
+            note={usePeer ? FIND_FRIEND_COPY.peerNote(name) : hasExplicit ? FIND_FRIEND_COPY.explicitNote : undefined}
             subNote={usePeer && peer ? FIND_FRIEND_COPY.peerAge(formatStaleness(peer.serverAt)) : undefined}
           />
         ) : peerGone ? (

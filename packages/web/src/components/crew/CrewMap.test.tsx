@@ -252,6 +252,33 @@ describe('CrewMap', () => {
     await waitFor(() => expect(mapInstances).toHaveLength(1));
   });
 
+  describe('map load errors', () => {
+    const PIN = { id: 'mp1', kind: 'meeting-point', label: 'Main Gate', sublabel: '', latitude: 41.88, longitude: -87.62 };
+    function handler(i: number, name: string): (e?: unknown) => void {
+      const call = mapInstances[i].on.mock.calls.find((c) => c[0] === name);
+      return call![1] as (e?: unknown) => void;
+    }
+
+    it('ignores a single tile error and keeps the map', async () => {
+      extractMeetingPointPins.mockReturnValue([PIN]);
+      render(<CrewMap meetingPoints={[POINT_WITH_COORDS]} />);
+      await waitFor(() => expect(mapInstances).toHaveLength(1));
+      act(() => handler(0, 'error')({ sourceId: 'openmaptiles' }));
+      expect(screen.queryByText(/needs signal/)).toBeNull();
+    });
+
+    it('shows a retry that rebuilds the map after a fatal error', async () => {
+      extractMeetingPointPins.mockReturnValue([PIN]);
+      render(<CrewMap meetingPoints={[POINT_WITH_COORDS]} />);
+      await waitFor(() => expect(mapInstances).toHaveLength(1));
+      act(() => handler(0, 'error')({}));
+      expect(screen.getByText('Map needs signal to load.')).toBeTruthy();
+      expect(screen.queryByText(/listed below/)).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      await waitFor(() => expect(mapInstances).toHaveLength(2));
+    });
+  });
+
   it('retries the pmtiles registration after a failed chunk load', async () => {
     // The registration latch is process-global, so a failed attempt that left it
     // claimed would skip registration for every later mount and leave the offline

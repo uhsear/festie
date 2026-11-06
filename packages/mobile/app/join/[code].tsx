@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, AccessibilityInfo } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, useCrewStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
@@ -58,6 +58,11 @@ export default function JoinInviteScreen() {
   const error = useCrewStore((s) => s.error);
   const setError = useCrewStore((s) => s.setError);
 
+  // A failure left over from an earlier screen must not show on a fresh invite.
+  useEffect(() => {
+    setError(null);
+  }, [setError]);
+
   const validCode = isValidInviteCode(code) ? code : null;
   const [inviteStatus, setInviteStatus] = useState<InviteStatus>('loading');
   const [preview, setPreview] = useState<InvitePreview | null>(null);
@@ -88,7 +93,7 @@ export default function JoinInviteScreen() {
         return;
       }
       if (outcome.kind === 'already') {
-        AccessibilityInfo.announceForAccessibility(`You're already in ${outcome.crew.name}`);
+        useUIStore.getState().showToast(`You're already in ${outcome.crew.name}`, { kind: 'info' });
         router.replace({ pathname: '/(tabs)/crew', params: { tab: 'members' } });
         return;
       }

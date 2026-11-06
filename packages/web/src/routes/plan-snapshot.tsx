@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { api } from '@festie/shared/services';
 import { PRIORITY_LABELS, planBLine } from '@festie/shared/constants';
 import type { Festival, FestivalDay, FestivalSet, Stage } from '@festie/shared/types';
-import { artistDisplayName, decodePlanSnapshot, formatTime, fromPickPriority } from '@festie/shared/utils';
+import { artistDisplayName, byStartTime, decodePlanSnapshot, formatTime, fromPickPriority } from '@festie/shared/utils';
 
 /** Shape returned by GET /festivals/:id (after envelope unwrap). */
 interface FestivalDetailResponse extends Festival {
@@ -55,29 +55,25 @@ export default function PlanSnapshotPage() {
   const { groups, missing } = useMemo(() => {
     if (!snapshot || !festival) return { groups: [] as { label: string; rows: Row[] }[], missing: 0 };
     const stageNames = new Map((festival.stages ?? []).map((s) => [s.id, s.name]));
-    const byId = new Map<string, { set: FestivalSet; dayLabel: string }>();
+    const priorityBySetId = new Map(snapshot.picks.map((p) => [p.setId, p.priority]));
+    const dayGroups: { label: string; rows: Row[] }[] = [];
+    let found = 0;
+    // Festival day order, then start time: the snapshot itself is ranked by priority.
     for (const day of festival.days ?? []) {
-      for (const set of day.sets ?? []) byId.set(set.id, { set, dayLabel: day.label || day.date });
+      const rows = (day.sets ?? [])
+        .filter((set) => priorityBySetId.has(set.id))
+        .sort(byStartTime)
+        .map((set) => ({
+          key: set.id,
+          artist: artistDisplayName(set, festival.b2bSeparator),
+          time: set.startTime ? formatTime(set.startTime) : 'TBA',
+          stage: set.stageName || stageNames.get(set.stageId) || '',
+          priority: PRIORITY_LABELS[fromPickPriority(priorityBySetId.get(set.id)!)],
+        }));
+      found += rows.length;
+      if (rows.length > 0) dayGroups.push({ label: day.label || day.date, rows });
     }
-    const out = new Map<string, Row[]>();
-    let notFound = 0;
-    for (const pick of snapshot.picks) {
-      const hit = byId.get(pick.setId);
-      if (!hit) {
-        notFound++;
-        continue;
-      }
-      const rows = out.get(hit.dayLabel) ?? [];
-      rows.push({
-        key: pick.setId,
-        artist: artistDisplayName(hit.set),
-        time: hit.set.startTime ? formatTime(hit.set.startTime) : 'TBA',
-        stage: hit.set.stageName || stageNames.get(hit.set.stageId) || '',
-        priority: PRIORITY_LABELS[fromPickPriority(pick.priority)],
-      });
-      out.set(hit.dayLabel, rows);
-    }
-    return { groups: [...out].map(([label, rows]) => ({ label, rows })), missing: notFound };
+    return { groups: dayGroups, missing: snapshot.picks.length - found };
   }, [snapshot, festival]);
 
   if (!snapshot) {

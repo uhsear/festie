@@ -359,6 +359,22 @@ describe('PicksView', () => {
     expect(screen.getByRole('tab', { name: 'My day' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('My day lists each day with picks once and dayless picks in one group', () => {
+    setStoreState({
+      sets: [
+        makeSet('s1', 'Daft Punk'),
+        makeSet('s2', 'Justice', { dayIndex: 1 }),
+        makeSet('s3', 'Mystery', { dayIndex: null, startTime: '' }),
+      ],
+      profile: picksOf({ s1: 'must', s2: 'want-to-see', s3: 'maybe' }),
+    });
+    render(<PicksView />);
+    fireEvent.click(screen.getByRole('tab', { name: 'My day' }));
+    expect(screen.getAllByTestId('my-day-list')).toHaveLength(3);
+    expect(screen.getByRole('heading', { name: 'Day 1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Day 2' })).toBeInTheDocument();
+  });
+
   it('gives a guest with picks the My day tab but no export buttons', () => {
     setStoreState({ user: null, profile: null, sets: [makeSet('s1', 'Daft Punk')] });
     useFestivalStore.setState({ guestPicks: { f1: { s1: 'must' } } } as never);

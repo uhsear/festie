@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 
 import { Check, Copy, Lock, QrCode, RefreshCw, Share2 } from 'lucide-react';
 import { useCrewStore } from '@festie/shared/stores';
 import { COPY } from '@festie/shared/constants';
-import { buildJoinUrl, formatInviteExpiry, inviteShareMessage } from '@festie/shared/utils';
+import { buildJoinUrl, crewCopy, formatInviteExpiry, inviteShareMessage } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Switch from '../ui/Switch';
@@ -75,7 +75,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
     setRegenBusy(true);
     try {
       await regenerateInvite(crewId);
-      toast('Invite code regenerated', 'success');
+      toast(crewCopy.inviteRegenerated, 'success');
       setConfirmRegen(false);
     } catch (e) {
       toastError(e, "Couldn't regenerate the invite code. Try again.");

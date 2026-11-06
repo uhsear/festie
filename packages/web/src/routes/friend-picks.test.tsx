@@ -114,6 +114,28 @@ describe('FriendPicksView', () => {
     await waitFor(() => expect(restorePicks).toHaveBeenCalledWith({ s1: undefined, s3: undefined }));
   });
 
+  it('ticks sets on their own row and lists each set once', async () => {
+    renderView();
+    await screen.findByRole('button', { name: 'Add 1 to my plan' });
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    expect(screen.getAllByText('Three')).toHaveLength(1);
+  });
+
+  it('offers Try again on an offline error and refetches, but not on a dead link', async () => {
+    fetchSharedPicks.mockRejectedValueOnce(new ApiClientError('offline', 0, 'NETWORK_ERROR'));
+    renderView();
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('1 in common · 2 only alice · 0 only you')).toBeTruthy();
+    expect(fetchSharedPicks).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers no Try again on a 404', async () => {
+    fetchSharedPicks.mockRejectedValue(new ApiClientError('nope', 404, 'NOT_FOUND'));
+    renderView();
+    await screen.findByText('This link no longer works. Ask your friend for a new one.');
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
   it('shows the 404 text', async () => {
     fetchSharedPicks.mockRejectedValue(new ApiClientError('nope', 404, 'NOT_FOUND'));
     renderView();

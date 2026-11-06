@@ -30,7 +30,10 @@ export default function AccountPublicScheduleSection() {
   const on = user?.publicSchedule === true;
 
   useEffect(() => {
-    if (!on) return;
+    if (!on) {
+      setStatus(null);
+      return;
+    }
     let live = true;
     fetchSharingStatus()
       .then((s) => live && setStatus(s))
@@ -140,7 +143,7 @@ export default function AccountPublicScheduleSection() {
             Stops every picks link and calendar subscription you've shared. Your public schedule page is not affected; turn it off above.
           </Text>
         </View>
-        <Button label="Reset" accessibilityLabel={RESET_LABEL} size="sm" variant="danger" onPress={onReset} testID="reset-share-links" />
+        <Button label="Reset" accessibilityLabel={RESET_LABEL} size="sm" variant="danger" onPress={onReset} disabled={offlineMode} testID="reset-share-links" />
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>

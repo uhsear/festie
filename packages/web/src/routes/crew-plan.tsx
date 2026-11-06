@@ -208,7 +208,7 @@ function CrewPlanContent() {
       <Card padding="md">
         <Card.Header>
           <Home className="w-5 h-5 text-accent-aqua flex-shrink-0" aria-hidden="true" />
-          <span className="font-semibold text-text-primary">Home base</span>
+          <span className="font-semibold text-text-primary">{COPY.homeBase.name}</span>
         </Card.Header>
         <Card.Body>
           {crew.homeBaseLocation || crew.homeBaseTime ? (
@@ -222,14 +222,14 @@ function CrewPlanContent() {
             </div>
           ) : isOwner ? (
             <div className="space-y-2">
-              <p className="text-sm text-text-secondary">No home base yet.</p>
+              <p className="text-sm text-text-secondary">No Home Base yet.</p>
               <Button variant="secondary" size="sm" onClick={() => openCrew('find')}>
-                Set home base
+                {COPY.homeBase.set}
               </Button>
             </div>
           ) : (
             <p className="text-sm text-text-secondary">
-              No home base yet. Ask {ownerName ?? 'the crew owner'} to set one.
+              No Home Base yet. Ask {ownerName ?? 'the crew owner'} to set one.
             </p>
           )}
         </Card.Body>
@@ -302,7 +302,7 @@ function CrewPlanContent() {
                               e.preventDefault();
                               setDetailSet(g.set);
                             }}
-                            className="flex flex-1 min-w-0 items-center gap-2 min-h-11 text-sm hover:underline"
+                            className="flex flex-1 min-w-0 items-start gap-2 min-h-11 text-sm hover:underline"
                           >
                             <span
                               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 ${PRIORITY_BADGE[g.priority]}`}
@@ -311,7 +311,7 @@ function CrewPlanContent() {
                               <PriorityIcon priority={g.priority} className="w-3 h-3" filled />
                               {PRIORITY_LABEL[g.priority]}
                             </span>
-                            <span className="truncate">
+                            <span className="min-w-0 break-words">
                               <span className="text-text-primary font-medium">{artistDisplayName(g.set)}</span>
                               <span className="text-text-secondary tabular-nums"> · {formatSetTimeRange(g.set) || 'TBA'}</span>
                               {stageName && <span className="text-text-secondary"> · {stageName}</span>}

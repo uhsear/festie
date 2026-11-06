@@ -31,6 +31,7 @@ export const ACCOUNT_COPY = {
   verifySent: 'Verification email sent',
   emailChange: 'Change',
   emailAdd: 'Add email',
+  vibrationHint: 'Buzz on taps, saves and clashes. SOS alerts always vibrate.',
   emailPending: (email: string) => `Waiting for you to confirm ${email}. Check that inbox.`,
   verified: 'Verified',
   unverified: 'Unverified',

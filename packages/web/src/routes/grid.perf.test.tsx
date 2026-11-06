@@ -48,6 +48,7 @@ vi.mock('@festie/shared/hooks', () => {
   const picks = () => (storeState.picks ?? {}) as Record<string, Priority>;
   return {
     usePickClear: () => vi.fn(),
+    useCanPick: () => true,
     useCrew: () => ({ getCrewScopedOtherPicks: () => [] }),
     usePicks: () => ({
       getMyPick: (id: string) => picks()[id] ?? null,

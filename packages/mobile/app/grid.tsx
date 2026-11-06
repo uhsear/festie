@@ -15,8 +15,8 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useFestivalDataStore, useFestivalStore, useAuthStore, useCrewStore } from '@festie/shared/stores';
-import { usePicks, useFestival, useDayClashes, useViewAs, useCrew } from '@festie/shared/hooks';
+import { useFestivalDataStore, useFestivalStore, useCrewStore } from '@festie/shared/stores';
+import { usePicks, useCanPick, useFestival, useDayClashes, useViewAs, useCrew } from '@festie/shared/hooks';
 import { COPY } from '@festie/shared/constants';
 import {
   festivalLoadState,
@@ -40,6 +40,7 @@ import {
   type GridCrewProfile,
   searchEmptyCopy,
   searchHiddenByFilters,
+  searchOtherDays,
   type GridBounds,
   type HourMark,
 } from '@festie/shared/utils';
@@ -52,10 +53,12 @@ import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import { SCHEDULE_HREF } from '../lib/dayOfRoutes';
+import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import Avatar from '../components/Avatar';
 import ClashHatch from '../components/ClashHatch';
 import ClashChip from '../components/ClashChip';
 import TBASection from '../components/TBASection';
+import OtherDayMatches from '../components/OtherDayMatches';
 import ScheduleDayChips from '../components/ScheduleDayChips';
 import ScheduleResultsRow from '../components/ScheduleResultsRow';
 
@@ -124,7 +127,7 @@ export default function GridScreen() {
       loadFestivals().catch(() => {});
     }
   }, [currentFestival, festivals.length, loadFestivals]);
-  const user = useAuthStore((s) => s.user);
+  const canPick = useCanPick();
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const activeStages = useFestivalStore((s) => s.activeStages);
   const onlyMine = useFestivalStore((s) => s.onlyMine);
@@ -134,9 +137,10 @@ export default function GridScreen() {
   const setActiveGenres = useFestivalStore((s) => s.setActiveGenres);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
+  const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
   const picks = useFestivalDataStore((s) => s.currentProfile)?.picks;
-  const { getMyPick, getOtherPicks, savePick, removePick } = usePicks();
-  const currentProfile = useFestivalDataStore((s) => s.currentProfile);
+  const { getMyPick, getOtherPicks } = usePicks();
+  const allSets = useFestivalDataStore((s) => s.sets);
   const { getStageColor, getStageName, getDays, getFilteredSets, getCurrentDaySets } = useFestival();
   const dayLabel = getDays()[selectedDay]?.label ?? 'Grid';
   const screenTitle = `${dayLabel} · Grid`;
@@ -250,6 +254,10 @@ export default function GridScreen() {
   // mount their gridlines and set cells; the rest are empty same-width spacers.
   const [firstCol, setFirstCol] = useState(0);
   const lastCol = firstCol + Math.ceil(windowW / colW);
+  // A new day starts uncentred, so today re-centres on NOW when the user comes back to it.
+  useEffect(() => {
+    didAutoScroll.current = false;
+  }, [selectedDay]);
   useEffect(() => {
     if (didAutoScroll.current || nowPx == null || bodyH === 0) return;
     didAutoScroll.current = true;
@@ -330,19 +338,6 @@ export default function GridScreen() {
 
   const openSet = useCallback((s: FestivalSet) => router.push(`/set/${s.id}`), [router]);
 
-  const handleMenuPick = useCallback(
-    (setId: string, next: Priority | null) => {
-      if (!currentFestival) return;
-      if (!currentProfile) {
-        router.push(user ? `/set/${setId}` : '/(auth)/login');
-        return;
-      }
-      const write = next === null ? removePick(currentFestival.id, setId) : savePick(currentFestival.id, setId, next);
-      write.catch(() => {});
-    },
-    [currentFestival, currentProfile, user, router, savePick, removePick],
-  );
-
   // ── Empty states (mirror the web grid) ──
   if (!currentFestival) {
     const loadState = festivalLoadState({ currentFestival, festivals, isLoading: festivalsLoading, error: festivalsError });
@@ -382,6 +377,16 @@ export default function GridScreen() {
     setActiveGenres([]);
     viewAs.clear();
   };
+  const otherDayGroups = searchQuery.trim() ? searchOtherDays(allSets, searchQuery, selectedDay, stages) : [];
+  const otherDayMatches = (
+    <OtherDayMatches
+      groups={otherDayGroups}
+      days={getDays()}
+      getStageName={getStageName}
+      b2bSeparator={currentFestival.b2bSeparator}
+      onSelectDay={setSelectedDay}
+    />
+  );
   const resultsRow = filterNarrows ? (
     <ScheduleResultsRow
       summary={scheduleResultsSummary({
@@ -406,7 +411,7 @@ export default function GridScreen() {
             <TBASection
               sets={untimedSets}
               stages={stages}
-              canPick={!!user}
+              canPick={canPick}
               currentFestival={currentFestival}
               getMyPick={getMyPick}
               getOtherPicks={getOtherPicks}
@@ -435,10 +440,11 @@ export default function GridScreen() {
       const clearFilters = () => {
         setOnlyMine(false);
         setActiveStages([]);
+        setActiveGenres([]);
         viewAs.clear();
       };
       empty = {
-        ...searchEmptyCopy(searchQuery, dayLabel, false, hidden),
+        ...searchEmptyCopy(searchQuery, dayLabel, otherDayGroups.length > 0, hidden),
         onAction: hidden ? clearFilters : () => setSearchQuery(''),
       };
     } else if (reason === 'viewAs') {
@@ -466,6 +472,7 @@ export default function GridScreen() {
           message={empty.message}
           action={empty.actionLabel && empty.onAction ? { label: empty.actionLabel, onPress: empty.onAction } : undefined}
         />
+        {otherDayMatches}
       </View>
     );
   }
@@ -569,7 +576,7 @@ export default function GridScreen() {
               accessibilityActions={pickMenuItems(pick).map((item) => ({ name: item.key, label: item.label }))}
               onAccessibilityAction={(e) => {
                 const key = e.nativeEvent.actionName as Priority | 'remove';
-                handleMenuPick(set.id, nextPickFromMenu(pick, key));
+                setPick(set.id, nextPickFromMenu(pick, key));
               }}
               accessibilityLabel={`${dn} at ${getStageName(st.id) || st.id}, ${fmtShort(set.startTime!)} to ${fmtShort(set.endTime!)}${pick ? ', ' + pick : ''}${overlapLabel}${mark ? ', ' + mark.text : ''}`}
             >
@@ -734,7 +741,34 @@ export default function GridScreen() {
             </View>
           </ScrollView>
         </ScrollView>
+        {nowPx != null ? (
+          <TouchableOpacity
+            style={[styles.fab, { backgroundColor: t.colors.accent.aqua }]}
+            onPress={() => bodyScrollRef.current?.scrollTo({ y: Math.max(0, nowPx - bodyH / 2) })}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={COPY.jumpToNow.a11y}
+          >
+            <Ionicons name={CONCEPT_IONICON.jumpToNow} size={16} color={t.colors.text.onLightAccent} />
+            <Text style={styles.fabText}>{COPY.jumpToNow.label}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
+      {untimedSets.length > 0 ? (
+        <ScrollView style={styles.tbaWrap}>
+          <TBASection
+            sets={untimedSets}
+            stages={stages}
+            canPick={canPick}
+            currentFestival={currentFestival}
+            getMyPick={getMyPick}
+            getOtherPicks={getOtherPicks}
+            getStageColor={resolveStageColor}
+            onSavePick={setPick}
+            onOpenDetail={openSet}
+          />
+        </ScrollView>
+      ) : null}
 
       {/* Off-screen export poster: a flat clone of the grid at explicit pixel
           dimensions. collapsable={false} keeps the View in the native tree so
@@ -846,6 +880,26 @@ const useStyles = makeStyles((t: Tokens) => ({
   bodyRow: {
     flex: 1,
     flexDirection: 'row',
+  },
+  tbaWrap: {
+    maxHeight: '40%',
+    flexGrow: 0,
+  },
+  fab: {
+    position: 'absolute',
+    right: t.spacing[4],
+    bottom: t.spacing[5],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
+    paddingHorizontal: t.spacing[4],
+    paddingVertical: t.spacing[3],
+    borderRadius: t.radii.pill,
+    minHeight: 44,
+  },
+  fabText: {
+    ...typeStyle('label', 700),
+    color: t.colors.text.onLightAccent,
   },
   gutterStrip: {
     width: GUTTER_W,

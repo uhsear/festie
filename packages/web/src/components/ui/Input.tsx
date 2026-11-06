@@ -20,6 +20,7 @@ export default function Input({
   className,
   type,
   id,
+  'aria-describedby': ariaDescribedBy,
   ...props
 }: InputProps) {
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +30,7 @@ export default function Input({
   const labelOnly = label && !props['aria-label'];
   const errorId = error ? `${inputId}-error` : undefined;
   const helperId = helperText && !error ? `${inputId}-helper` : undefined;
-  const describedBy = [errorId, helperId, props['aria-describedby']].filter(Boolean).join(' ') || undefined;
+  const describedBy = [errorId, helperId, ariaDescribedBy].filter(Boolean).join(' ') || undefined;
 
   const isSearch = variant === 'search';
 

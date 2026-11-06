@@ -198,6 +198,13 @@ describe('ownedCrewsForDeletion', () => {
   });
 });
 
+describe('crewCopy.endPoll', () => {
+  it('explains the meeting point and reminder only for schedule polls', () => {
+    expect(crewCopy.endPoll(false)).toBe('Voting stops and everyone sees the result.');
+    expect(crewCopy.endPoll(true)).toContain('meeting point');
+  });
+});
+
 describe('crewCopy.deleteSolo', () => {
   it('uses the singular for 1', () => {
     expect(crewCopy.deleteSolo(1)).toBe("You're the only member of 1 crew. It is deleted with your account after 30 days.");

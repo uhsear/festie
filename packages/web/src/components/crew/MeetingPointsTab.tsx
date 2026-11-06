@@ -612,7 +612,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
             </div>
           }
         >
-          <CrewMap meetingPoints={current} peers={peers} activeSosList={sosList} festival={mapFestival} focusSosUserId={focusSosUserId}
+          <CrewMap hasList meetingPoints={current} peers={peers} activeSosList={sosList} festival={mapFestival} focusSosUserId={focusSosUserId}
             onMapClick={placing ? startCreateAt : undefined}
             onSetMeetingPoint={handleSetMeetingPoint}
             authoring={placing}

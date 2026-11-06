@@ -1,8 +1,9 @@
 import { Component, type ReactNode } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { typeStyle, useTokens, makeStyles } from '../hooks/useTokens';
 import DisplayWords from './DisplayWords';
+import Button from './Button';
 
 /**
  * App-wide render error boundary — the mobile analog of the web
@@ -45,41 +46,9 @@ function ErrorFallback({ onReset, onEscape }: { onReset: () => void; onEscape?: 
       <Text style={[styles.description, { color: t.colors.text.secondary }]}>
         An unexpected error occurred. Tap retry to reload this screen.
       </Text>
-      <TouchableOpacity
-        onPress={onReset}
-        style={[
-          styles.button,
-          {
-            backgroundColor: t.colors.accent.aqua,
-            borderRadius: t.radii.default,
-            paddingVertical: t.spacing[3],
-            paddingHorizontal: t.spacing[6],
-            marginTop: t.spacing[5],
-          },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Retry"
-      >
-        <Text style={[styles.buttonLabel, { color: t.colors.text.onLightAccent }]}>Retry</Text>
-      </TouchableOpacity>
+      <Button label="Retry" onPress={onReset} style={{ marginTop: t.spacing[5] }} />
       {onEscape && (
-        <TouchableOpacity
-          onPress={onEscape}
-          style={[
-            styles.button,
-            {
-              backgroundColor: t.colors.bg.secondary,
-              borderRadius: t.radii.default,
-              paddingVertical: t.spacing[3],
-              paddingHorizontal: t.spacing[6],
-              marginTop: t.spacing[3],
-            },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Go to Schedule"
-        >
-          <Text style={[styles.buttonLabel, { color: t.colors.text.primary }]}>Go to Schedule</Text>
-        </TouchableOpacity>
+        <Button variant="secondary" label="Go to Schedule" onPress={onEscape} style={{ marginTop: t.spacing[3] }} />
       )}
     </View>
   );
@@ -133,12 +102,5 @@ const useStyles = makeStyles((t) => ({
     textAlign: 'center',
     marginTop: t.spacing[2],
     maxWidth: 320, // fallback copy is short; fixed cap keeps it centered without a token
-  },
-  button: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonLabel: {
-    ...typeStyle('label'),
   },
 }));

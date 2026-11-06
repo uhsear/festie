@@ -137,6 +137,15 @@ describe('RatePage', () => {
     expect(screen.getByRole('button', { name: 'Saw it' })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('Skip right after a rating cancels the pending auto-advance instead of skipping a second set', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByText('rate-five'));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByText('Artist B')).toBeInTheDocument();
+    expect(screen.queryByText('All rated')).toBeNull();
+  });
+
   it('skip advances, and a festival that is not over links back to picks', async () => {
     mocks.unlocked = false;
     renderPage();

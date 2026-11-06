@@ -182,7 +182,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                       <button
                         type="button"
                         className={cn(
-                          'min-h-[44px] truncate text-left text-sm font-bold text-text-primary hover:text-accent-aqua',
+                          'min-h-[44px] break-words [overflow-wrap:anywhere] line-clamp-2 text-left text-sm font-bold text-text-primary hover:text-accent-aqua',
                           'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                         )}
                         aria-label={`Open details for ${dn}`}

@@ -9,7 +9,9 @@ import {
   buildWrapCards,
   formatAmount,
   isWrapUnlocked,
+  artistOf,
   selectSetsToRate,
+  sortRatingsForWrap,
   summarizePlan,
   wrapByline,
 } from '@festie/shared/utils';
@@ -73,13 +75,7 @@ function WrapPageInner() {
   // Hooks above and below must run on every render, before the early returns.
   const cards = useMemo(() => (data ? buildWrapCards(data) : []), [data]);
   const toRate = useMemo(() => (data ? selectSetsToRate(data.planned, data.festival) : []), [data]);
-  const allSorted = useMemo(
-    () =>
-      (data?.allRatings || [])
-        .slice()
-        .sort((a, b) => b.rating - a.rating || (a.startTime || '').localeCompare(b.startTime || '')),
-    [data?.allRatings],
-  );
+  const allSorted = useMemo(() => sortRatingsForWrap(data?.allRatings || []), [data?.allRatings]);
 
   const handleShare = useCallback(
     async (node: HTMLElement, index: number) => {
@@ -125,7 +121,7 @@ function WrapPageInner() {
             icon={<Sparkles className="w-12 h-12" aria-hidden="true" />}
             title={`Couldn't load your ${COPY.wrap.name}`}
             description={`Something went wrong loading your ${COPY.wrap.name}.`}
-            cta={{ label: 'Retry', onClick: () => refetch() }}
+            cta={{ label: 'Try again', onClick: () => refetch() }}
           />
         </Card>
       </div>
@@ -301,7 +297,7 @@ function WrapPageInner() {
                   className="flex items-center gap-3 py-2 border-b border-border last:border-b-0 first:pt-0 last:pb-0"
                 >
                   <RatingTag rating={s.rating} compact />
-                  <span className="flex-1 text-sm text-text-primary truncate">{s.artist || s.setId}</span>
+                  <span className="flex-1 min-w-0 text-sm text-text-primary break-words [overflow-wrap:anywhere] line-clamp-2">{artistOf(s)}</span>
                   {s.stageName && <span className="text-xs text-text-muted">{s.stageName}</span>}
                 </div>
               ))}
@@ -407,7 +403,7 @@ function CrewWrapTab({
             icon={<Users className="w-12 h-12" aria-hidden="true" />}
             title={`Couldn't load your ${COPY.wrap.crewName}`}
             description={`Something went wrong loading the ${COPY.wrap.crewName}.`}
-            cta={{ label: 'Retry', onClick: () => refetch() }}
+            cta={{ label: 'Try again', onClick: () => refetch() }}
           />
         </Card>
       </div>
@@ -476,7 +472,7 @@ function CrewWrapTab({
           <div className="rounded-xl bg-bg-card border border-border p-4 space-y-2">
             {wrap.setsSeenTogether.slice(0, 10).map((s) => (
               <div key={s.setId} className="flex items-center gap-3">
-                <span className="flex-1 text-sm text-text-primary truncate">{s.artist || s.setId}</span>
+                <span className="flex-1 min-w-0 text-sm text-text-primary break-words [overflow-wrap:anywhere] line-clamp-2">{artistOf(s)}</span>
                 <span className="text-xs font-semibold text-accent-aqua">{s.count} loved it</span>
               </div>
             ))}
@@ -506,7 +502,7 @@ function CrewWrapTab({
                           const Icon = RATING_META[s.rating]?.Icon ?? Trophy;
                           return <Icon className="w-3 h-3" aria-hidden="true" />;
                         })()}
-                        {s.artist || s.setId}
+                        {artistOf(s)}
                       </span>
                     ))}
                   </div>

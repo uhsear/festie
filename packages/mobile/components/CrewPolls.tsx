@@ -17,7 +17,9 @@ import {
   tallyPoll,
   QUEUED_WRITE_MESSAGE,
   openPollState,
+  crewCopy,
 } from '@festie/shared/utils';
+import { mapErrorToUserMessage } from '@festie/shared/services';
 import type { PollEndChoice } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -245,9 +247,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
     // A schedule poll (carries `set_refs`) gets the winning set's meeting point
     // from the server on close, plus a reminder seeded here; surface that in the confirm copy.
     const isSchedule = !!poll.set_refs?.some((r) => r != null);
-    const message = isSchedule
-      ? `End "${poll.question}"? Voting stops and everyone sees the result. The winning set becomes a meeting point for the whole crew, and you get a reminder 15 min before.`
-      : `End "${poll.question}"? Voting stops and everyone sees the result.`;
+    const message = `End "${poll.question}"? ${crewCopy.endPoll(isSchedule)}`;
     Alert.alert('End poll', message, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -275,7 +275,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
       AccessibilityInfo.announceForAccessibility(`Reminder sent to ${n} ${n === 1 ? 'person' : 'people'}`);
       haptics.success();
     } catch (err) {
-      Alert.alert('Reminder not sent', err instanceof Error ? err.message : 'Try again in a moment.');
+      Alert.alert('Reminder not sent', mapErrorToUserMessage(err, 'Try again in a moment.'));
     }
   };
 

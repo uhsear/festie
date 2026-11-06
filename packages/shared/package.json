@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "papaparse": "5.5.3",
-    "socket.io-client": "^4.8.3",
+    "socket.io-client": "^4.8.4",
     "zod": "^4.6.6",
     "zustand": "^5.0.15"
   },

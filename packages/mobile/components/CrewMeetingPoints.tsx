@@ -297,7 +297,12 @@ export default function CrewMeetingPoints({
       if (isPending(saved)) AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
       reset();
     } catch {
-      // Error surfaced via the crew store.
+      // The crew tab renders the crew store's error; the standalone form (Map tab) does not, so toast it.
+      if (formOnly) {
+        useUIStore
+          .getState()
+          .showToast(useCrewStore.getState().error ?? "Couldn't save the meeting point. Try again.", { kind: 'error' });
+      }
     } finally {
       setCreateBusy(false);
     }
@@ -317,7 +322,8 @@ export default function CrewMeetingPoints({
 
   const visiblePoints = meetingPoints.filter((p) => !hiddenIds.has(p.id));
   const { current, past } = splitMeetingPoints(visiblePoints, pastPoints, nowMs);
-  const canCreate = !!label.trim() && !!location.trim();
+  // A picked day with no time would save an untimed point, so wait for the time.
+  const canCreate = !!label.trim() && !!location.trim() && (dayIndex === null || !!time);
 
   const renderRow = (point: CrewMeetingPoint, isPast: boolean) => {
     // A queued create has no server id yet, so it cannot be edited or removed.
@@ -564,7 +570,7 @@ export default function CrewMeetingPoints({
                   accessibilityRole="button"
                   accessibilityLabel="Meeting time"
                 >
-                  <Text style={styles.timeFieldText}>{timeLabel ?? 'Pick a time'}</Text>
+                  <Text style={styles.timeFieldText}>{timeLabel ?? 'Pick a time (or choose No time)'}</Text>
                 </TouchableOpacity>
               ) : null}
               {dayIndex !== null && time && !recursDaily ? (
@@ -644,7 +650,7 @@ export default function CrewMeetingPoints({
             loadingLabel={editingId ? 'Saving…' : 'Adding…'}
             disabled={!canCreate}
             onPress={handleCreate}
-            accessibilityLabel="Add meeting point"
+            accessibilityLabel={editingId ? 'Save meeting point' : 'Add meeting point'}
           />
         </View>
       ) : formOnly ? null : (

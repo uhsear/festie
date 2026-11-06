@@ -10,8 +10,8 @@ import {
 } from '@festie/shared/stores';
 import type { CrewMember } from '@festie/shared/types';
 import { crewCopy, ownedCrewsForDeletion, type OwnedCrewHandover } from '@festie/shared/utils';
-import { api, exportErrorMessage, withReauth } from '@festie/shared/services';
-import { DATA_COPY } from '@festie/shared/constants';
+import { api, exportErrorMessage, mapErrorToUserMessage, withReauth } from '@festie/shared/services';
+import { ACCOUNT_COPY, DATA_COPY } from '@festie/shared/constants';
 import { useReauthPrompt } from './admin';
 import { ModalSelect } from './admin/AdminFields';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -142,7 +142,7 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
       onDeleted();
     } catch (err) {
       haptics.warning();
-      setError(err instanceof Error ? err.message : 'Could not delete account.');
+      setError(mapErrorToUserMessage(err, ACCOUNT_COPY.deleteFailed));
     } finally {
       setSubmitting(false);
     }

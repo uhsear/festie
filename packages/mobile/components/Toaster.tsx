@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AccessibilityInfo, Platform, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { FullWindowOverlay } from 'react-native-screens';
 import { useUIStore, type Toast } from '@festie/shared/stores';
 import { durationEffects, durationSpatial } from '@festie/shared/tokens';
@@ -10,6 +11,12 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
 import { haptic } from '../hooks/useHaptics';
 
 const MAX_VISIBLE = 3;
+const TOAST_ICON = {
+  info: 'information-circle',
+  success: 'checkmark-circle',
+  warning: 'warning',
+  error: 'alert-circle',
+} as const;
 // Clears the tab bar.
 const TAB_BAR_CLEARANCE = 72;
 
@@ -44,8 +51,9 @@ function ToastCard({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolea
       entering={reduceMotion ? FadeIn.duration(durationEffects.fast) : FadeInDown.duration(durationSpatial.med)}
       exiting={FadeOut.duration(durationEffects.fast)}
       style={[styles.card, { borderLeftColor: accent }]}
-      accessibilityRole={toast.kind === 'error' ? 'alert' : undefined}
+      accessibilityRole={toast.kind === 'error' || toast.kind === 'warning' ? 'alert' : undefined}
     >
+      <Ionicons name={TOAST_ICON[toast.kind]} size={t.iconSize.action} color={accent} />
       <Pressable
         onPress={() => dismissToast(toast.id)}
         style={styles.messageHit}

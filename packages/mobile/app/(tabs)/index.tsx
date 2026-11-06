@@ -410,10 +410,12 @@ export default function TimelineScreen() {
   // its sets. Ended sets of today sit behind one "Earlier today (n)" row first.
   // Don't fold what the person asked for (a search) or the only thing there is
   // (late night, nothing left to come) behind the collapsed row.
-  const showEarlier = earlierOpen || restSets.length === 0 || searchQuery.trim() !== '';
+  // The row stays while open so it can fold the sets away again; only the forced cases hide it.
+  const earlierForced = restSets.length === 0 || searchQuery.trim() !== '';
+  const showEarlier = earlierOpen || earlierForced;
   const rows = useMemo<ListRow[]>(
     () => [
-      ...(earlierSets.length > 0 && !showEarlier
+      ...(earlierSets.length > 0 && !earlierForced
         ? [{ kind: 'earlier' as const, key: 'earlier' as const, count: earlierSets.length }]
         : []),
       ...groupScheduleSets(
@@ -434,6 +436,7 @@ export default function TimelineScreen() {
     ],
     [
       earlierSets.length,
+      earlierForced,
       showEarlier,
       filteredSets,
       restSets,
@@ -804,7 +807,7 @@ export default function TimelineScreen() {
       // single top of the screen.
       <View style={styles.container}>
         <ScreenHeader
-          title="Select a Festival"
+          title="Choose a festival"
           icon="musical-notes"
           right={
             pickingFestival && currentFestival ? (
@@ -1382,6 +1385,7 @@ export default function TimelineScreen() {
             <>
               <View style={[styles.timelineBody, { height: timelineViewportH || Math.round(height * 0.6) }]}>
                 <TimelineView
+                  key={selectedDay}
                   visibleStages={visibleStages}
                   timedSets={timedSets}
                   timeBounds={timeBounds}

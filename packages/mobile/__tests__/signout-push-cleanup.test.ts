@@ -20,3 +20,18 @@ describe('sign-out push cleanup (source-level guards)', () => {
     expect(body.indexOf('await unregisterPushOnSignOut()')).toBeLessThan(body.indexOf('await logout()'));
   });
 });
+
+describe('push cleanup on delete and forced sign-out (source-level guards)', () => {
+  it('account deletion unregisters push before navigating away', () => {
+    const src = read('app/(tabs)/account.tsx');
+    const body = src.slice(src.indexOf('onDeleted={'));
+    expect(body.indexOf('void unregisterPushOnSignOut()')).toBeGreaterThan(-1);
+    expect(body.indexOf('void unregisterPushOnSignOut()')).toBeLessThan(body.indexOf("router.replace('/(auth)/login')"));
+  });
+
+  it('onUnauthorized unregisters AFTER logout() so the token DELETE is not re-401ed', () => {
+    const src = read('app/_layout.tsx');
+    const body = src.slice(src.indexOf('onUnauthorized'));
+    expect(body.indexOf('await unregisterPushOnSignOut()')).toBeGreaterThan(body.indexOf('.logout()'));
+  });
+});

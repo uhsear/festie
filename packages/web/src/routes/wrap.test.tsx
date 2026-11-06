@@ -33,7 +33,9 @@ vi.mock('@festie/shared/stores', () => {
   const hook = (sel: (s: typeof state) => unknown) => sel(state);
   return { useAuthStore: hook, useFestivalStore: hook, useCrewStore: hook, useUIStore: hook };
 });
-vi.mock('@festie/shared/utils', () => ({
+vi.mock('@festie/shared/utils', async (orig) => ({
+  artistOf: (await orig<typeof import('@festie/shared/utils')>()).artistOf,
+  sortRatingsForWrap: (await orig<typeof import('@festie/shared/utils')>()).sortRatingsForWrap,
   buildWrapCards: () => mocks.cards,
   isWrapUnlocked: () => true,
   selectSetsToRate: () => mocks.toRate,

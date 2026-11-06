@@ -23,11 +23,12 @@ export default function AccountDevicesSection() {
   const [actionError, setActionError] = useState<string | null>(null);
   const { devices, loading, error, reload, signOut, signOutOthers } = useSignedInDevices(open);
 
-  const run = async (action: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>, message: string) => {
     setActionError(null);
     try {
       await action();
       haptics.success();
+      useUIStore.getState().showToast(message, { kind: 'success' });
     } catch (err) {
       haptics.warning();
       setActionError(mapErrorToUserMessage(err, ACCOUNT_COPY.signOutFailed));
@@ -37,7 +38,7 @@ export default function AccountDevicesSection() {
   const confirmSignOutOthers = () => {
     Alert.alert(ACCOUNT_COPY.signOutOthersTitle, ACCOUNT_COPY.signOutOthersBody, [
       { text: 'Cancel', style: 'cancel' },
-      { text: ACCOUNT_COPY.signOutOthersConfirm, style: 'destructive', onPress: () => void run(signOutOthers) },
+      { text: ACCOUNT_COPY.signOutOthersConfirm, style: 'destructive', onPress: () => void run(signOutOthers, ACCOUNT_COPY.signedOutOthers) },
     ]);
   };
 
@@ -55,7 +56,7 @@ export default function AccountDevicesSection() {
           variant="secondary"
           size="sm"
           disabled={offlineMode}
-          onPress={() => void run(() => signOut(d.id))}
+          onPress={() => void run(() => signOut(d.id), ACCOUNT_COPY.signedOutDevice(deviceTitle(d)))}
           accessibilityLabel={`${ACCOUNT_COPY.signOutDevice} ${deviceTitle(d)}`}
         />
       ) : null}

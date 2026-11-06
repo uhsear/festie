@@ -122,8 +122,8 @@ function toTimedSets(sets: OngoingSetInput[], days: FestivalDay[], timeZone?: st
  * Optimistic-offline placeholders are eligible (they ARE the user's cached
  * intent). Returns null when there are no usable points.
  *
- * NOTE: distinct from `crewPlan.pickActiveMeetingPoint(points, nowMs)` — that one
- * picks the soonest future timed point for the crew-plan screen. This variant is
+ * NOTE: distinct from `crewPlan.pickActiveMeetingPoint(points, days, nowMs)` — that one
+ * picks the soonest upcoming timed point for the crew-plan screen. This variant is
  * scoped to the notification (most-recent active), hence the `Ongoing` name.
  */
 export function pickOngoingMeetingPoint(meetingPoints: CrewMeetingPoint[] = []): CrewMeetingPoint | null {

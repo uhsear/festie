@@ -8,8 +8,8 @@ import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useActiveCrew, usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
-import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, resolveFestivalTimeZone } from '@festie/shared/utils';
-import type { PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
+import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, isSetScheduled, resolveFestivalTimeZone } from '@festie/shared/utils';
+import type { MyDay, PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
@@ -72,7 +72,6 @@ function PicksViewInner() {
   const sets = useFestivalStore((state) => state.sets);
   const days = useFestivalStore((state) => state.days);
   const stages = useFestivalStore((state) => state.stages);
-  const selectedDay = useFestivalStore((state) => state.selectedDay);
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
   // A direct load never opens a crew screen, so nothing selects a crew and the crew suggestion strip stays empty.
@@ -123,22 +122,35 @@ function PicksViewInner() {
   const reminderItems = useMemo(() => buildPlanList('reminders', planInput), [planInput]);
   const noteItems = useMemo(() => buildPlanList('notes', planInput), [planInput]);
 
-  const myDay = useMemo(() => {
+  // One MyDay per festival day, like mobile: buildMyDay lists picks with no known day as
+  // unscheduled on every day, so keep each day's own and list the dayless picks once.
+  const myDayGroups = useMemo(() => {
     if (view !== 'myday') return null;
     const picks = myPicks ?? {};
-    const dayGroups = buildPickConflicts({ sets, myPicks: picks, selectedDay, days, timeZone, stages });
-    return buildMyDay({
-      sets,
-      myPicks: picks,
-      dayIndex: selectedDay,
-      days,
-      timeZone,
-      stages,
-      meetingPoints,
-      conflictGroups: dayGroups,
-      b2bSeparator: currentFestival?.b2bSeparator,
+    const groups: Array<{ key: string; label: string | null; myDay: MyDay }> = [];
+    days.forEach((day, dayIndex) => {
+      const dayGroups = buildPickConflicts({ sets, myPicks: picks, selectedDay: dayIndex, days, timeZone, stages });
+      const myDay = buildMyDay({
+        sets,
+        myPicks: picks,
+        dayIndex,
+        days,
+        timeZone,
+        stages,
+        meetingPoints,
+        conflictGroups: dayGroups,
+        b2bSeparator: currentFestival?.b2bSeparator,
+      });
+      const unscheduled = myDay.unscheduled.filter((s) => s.dayIndex === dayIndex);
+      if (myDay.sections.length === 0 && unscheduled.length === 0) return;
+      groups.push({ key: `day-${dayIndex}`, label: day.label || day.date, myDay: { ...myDay, unscheduled } });
     });
-  }, [view, sets, myPicks, selectedDay, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator]);
+    const noDay = sets.filter((s) => picks[s.id] && !isSetScheduled(s, days));
+    if (noDay.length > 0) {
+      groups.push({ key: 'no-day', label: null, myDay: { sections: [], unscheduled: noDay, pickCount: noDay.length } });
+    }
+    return groups;
+  }, [view, sets, myPicks, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator]);
 
   // Share, calendar and image export need a profile; the view tabs do not.
   const actionButtons = currentProfile && hasAnyPicks ? (
@@ -171,7 +183,7 @@ function PicksViewInner() {
           icon={<UserPlus className="w-9 h-9" aria-hidden="true" />}
           title="No picks yet"
           description="Tap Must See, Want to See or Maybe on any set to start your plan. Your first pick joins the festival."
-          cta={{ label: 'Browse Artists', onClick: () => navigate({ to: '/cards' }) }}
+          cta={{ label: 'Browse the lineup', onClick: () => navigate({ to: '/cards' }) }}
         />
       </div>
     );
@@ -279,7 +291,20 @@ function PicksViewInner() {
         <CrewSuggestionStrip />
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
 
-        {view === 'myday' && myDay && <MyDayList myDay={myDay} onOpenSet={setDetailSet} timeZone={timeZone} />}
+        {view === 'myday' && myDayGroups && myDayGroups.length === 0 && (
+          <EmptyState
+            icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
+            title="No matching picks"
+            description="No picks in this view."
+          />
+        )}
+        {view === 'myday' &&
+          myDayGroups?.map((group) => (
+            <div key={group.key} data-testid="my-day-group">
+              {group.label && <h2 className="mt-2 mb-2 text-sm font-bold text-text-primary">{group.label}</h2>}
+              <MyDayList myDay={group.myDay} onOpenSet={setDetailSet} timeZone={timeZone} underDayHeading={!!group.label} />
+            </div>
+          ))}
 
         {view === 'plan' && (
           <>
