@@ -3,9 +3,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
-import { geoStateFromErrorCode, type Coord, type GeoState } from '@festie/shared/utils';
+import { geoStateFromErrorCode, RECENT_FIX_MS, type Coord, type GeoState } from '@festie/shared/utils';
 
 export type { GeoState };
+
+/** The browser's own timeout never starts while a permission prompt is pending, so the app keeps its own. */
+const NO_FIX_TIMEOUT_MS = 15_000;
 
 export interface GeolocationWatch {
   /** The user's own GPS fix, or null until they enable location / on failure. */
@@ -37,11 +40,21 @@ export function useGeolocationWatch(): GeolocationWatch {
   const lowPowerRef = useRef(lowPowerMode);
   lowPowerRef.current = lowPowerMode;
 
+  const noFixTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True once the watch itself delivered a fix, so a late cached seed never overwrites it.
+  const watchFixRef = useRef(false);
+
+  const clearNoFixTimer = useCallback(() => {
+    if (noFixTimerRef.current) clearTimeout(noFixTimerRef.current);
+    noFixTimerRef.current = null;
+  }, []);
+
   const clearWatch = useCallback(() => {
+    clearNoFixTimer();
     const geo = typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
     if (geo && watchIdRef.current != null) geo.clearWatch(watchIdRef.current);
     watchIdRef.current = null;
-  }, []);
+  }, [clearNoFixTimer]);
 
   const startWatch = useCallback(() => {
     const geo = typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
@@ -51,10 +64,30 @@ export function useGeolocationWatch(): GeolocationWatch {
     }
     if (watchIdRef.current != null) return; // already watching
     setGeoState((s) => (s === 'on' ? s : 'locating'));
+    watchFixRef.current = false;
+    // Show the browser's recent fix at once; the watch refines it and wins when it lands.
+    geo.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        if (watchFixRef.current || watchIdRef.current == null) return;
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        setSelfCoord({ latitude, longitude });
+        setAccuracyM(Number.isFinite(accuracy) ? accuracy : null);
+        setGeoState('on');
+      },
+      () => {},
+      { enableHighAccuracy: false, maximumAge: RECENT_FIX_MS, timeout: 5_000 },
+    );
+    noFixTimerRef.current = setTimeout(() => {
+      noFixTimerRef.current = null;
+      setGeoState((s) => (s === 'on' ? s : 'unavailable'));
+    }, NO_FIX_TIMEOUT_MS);
     watchIdRef.current = geo.watchPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+          watchFixRef.current = true;
+          clearNoFixTimer();
           setSelfCoord({ latitude, longitude });
           setAccuracyM(Number.isFinite(accuracy) ? accuracy : null);
           setGeoState('on');
@@ -74,7 +107,7 @@ export function useGeolocationWatch(): GeolocationWatch {
         ? { enableHighAccuracy: false, maximumAge: 30_000, timeout: 20_000 }
         : { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
     );
-  }, [clearWatch]);
+  }, [clearWatch, clearNoFixTimer]);
 
   const enableLocation = useCallback(() => {
     wantedRef.current = true;
