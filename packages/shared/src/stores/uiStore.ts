@@ -188,14 +188,15 @@ const uiStore: StateCreator<UIStore> = (set, get) => ({
 
   showToast: (message: string, options?: ToastOptions) => {
     const id = ++_toastSeq;
+    const kind = options?.kind ?? 'info';
     const toast: Toast = {
       id,
       message,
-      kind: options?.kind ?? 'info',
-      durationMs: options?.durationMs ?? 2500,
+      kind,
+      durationMs: options?.durationMs ?? (kind === 'error' || kind === 'warning' ? 5000 : 3000),
       onUndo: options?.onUndo,
     };
-    set((state) => ({ toasts: [...state.toasts, toast] }));
+    set((state) => ({ toasts: [...state.toasts, toast].slice(-3) }));
     return id;
   },
 

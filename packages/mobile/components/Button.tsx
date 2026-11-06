@@ -88,23 +88,18 @@ export default function Button({
       accessibilityState={{ disabled: isDisabled }}
       {...rest}
     >
-      {loading ? (
-        <ActivityIndicator size="small" color={iconColor} />
-      ) : (
-        <>
-          {icon ? <Ionicons name={icon} size={size === 'sm' ? t.iconSize.sm : t.iconSize.action} color={iconColor} style={styles.icon} /> : null}
-          <Text
-            style={[styles.label, VARIANT_TEXT[variant](styles), variant === 'primary' && { color: primaryInkColor }]}
-            numberOfLines={numberOfLines}
-            maxFontSizeMultiplier={maxFontSizeMultiplier}
-          >
-            {/* Trailing NBSP when a leading icon exists: Android under-measures
-                a Text following an icon-font sibling and clips the last glyph;
-                the sacrificial space absorbs the shortfall. */}
-            {(loading ? (loadingLabel ?? label) : label) + (icon ? ' ' : '')}
-          </Text>
-        </>
-      )}
+      {loading ? <ActivityIndicator size="small" color={iconColor} /> : null}
+      {!loading && icon ? <Ionicons name={icon} size={size === 'sm' ? t.iconSize.sm : t.iconSize.action} color={iconColor} style={styles.icon} /> : null}
+      <Text
+        style={[styles.label, VARIANT_TEXT[variant](styles), variant === 'primary' && { color: primaryInkColor }, loading && styles.loadingLabel]}
+        numberOfLines={numberOfLines}
+        maxFontSizeMultiplier={maxFontSizeMultiplier}
+      >
+        {/* Trailing NBSP when a leading icon exists: Android under-measures
+            a Text following an icon-font sibling and clips the last glyph;
+            the sacrificial space absorbs the shortfall. */}
+        {(loading ? (loadingLabel ?? label) : label) + (icon && !loading ? ' ' : '')}
+      </Text>
     </AppPressable>
   );
 }
@@ -191,6 +186,9 @@ const useStyles = makeStyles((t) => ({
   label: {
     ...typeStyle('label', 600, { brandFace: true }),
     textAlign: 'center',
+  },
+  loadingLabel: {
+    marginLeft: t.spacing[2],
   },
   labelPrimary: {
     color: t.colors.text.onLightAccent,
