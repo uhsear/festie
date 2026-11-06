@@ -338,7 +338,7 @@ export default function TimelineView({
 }: TimelineViewProps) {
   const t = useTokens();
   const styles = useStyles();
-  const { width, height: windowHeight } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const festivalTimeZone = useFestivalDataStore((s) => resolveFestivalTimeZone(s.currentFestival));
   const { nowIndicator, scrollRef, scrollToNow } = useNowIndicator(
     timeBounds,
@@ -603,8 +603,7 @@ export default function TimelineView({
         // to the parent's available height. Without it the list sizes to its
         // tall content and overflows the frame, which both breaks the per-column
         // vertical scroll and lets content paint over the tab bar.
-        // Floor: a tall header stack (Android) must not squeeze the stage columns to ~100px.
-        style={[styles.carouselList, { minHeight: Math.round(windowHeight * 0.4) }]}
+        style={styles.carouselList}
         contentContainerStyle={styles.carousel}
       />
 

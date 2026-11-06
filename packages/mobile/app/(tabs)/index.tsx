@@ -1328,7 +1328,10 @@ export default function TimelineScreen() {
         </>
       ) : timeBounds && visibleStages.length > 0 ? (
         <>
-          {controls}
+          {/* Bound the fixed controls so a tall stack (pre-festival Festival ready card, open search/filters) scrolls instead of pushing the timeline off screen. */}
+          <ScrollView style={{ flexGrow: 0, maxHeight: Math.round(height * 0.3) }} keyboardShouldPersistTaps="handled">
+            {controls}
+          </ScrollView>
           <View style={[styles.viewBody, { marginBottom: scheduleViewportBottomInset }]}>
             <TimelineView
               visibleStages={visibleStages}
