@@ -40,7 +40,7 @@ const FIELD_IDS: Record<RegisterField, string> = {
 };
 
 // Screen order; the first invalid field in this order takes focus.
-const FIELD_ORDER: RegisterField[] = ['username', 'password', 'confirmPassword', 'dateOfBirth', 'email', 'tosAccepted'];
+const FIELD_ORDER: RegisterField[] = ['username', 'email', 'password', 'confirmPassword', 'dateOfBirth', 'tosAccepted'];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -144,6 +144,24 @@ function RegisterPageInner() {
 
         <div className="mb-3">
           <Input
+            id={FIELD_IDS.email}
+            label={AUTH_COPY.emailLabel}
+            type="email"
+            helperText={AUTH_COPY.emailHint}
+            autoComplete="email"
+            maxLength={254}
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearError('email');
+            }}
+            disabled={isLoading}
+            error={errors.email}
+          />
+        </div>
+
+        <div className="mb-3">
+          <Input
             id={FIELD_IDS.password}
             label="Password"
             isPassword
@@ -189,24 +207,6 @@ function RegisterPageInner() {
             }}
             disabled={isLoading}
             error={errors.dateOfBirth}
-          />
-        </div>
-
-        <div className="mb-3">
-          <Input
-            id={FIELD_IDS.email}
-            label={AUTH_COPY.emailLabel}
-            type="email"
-            helperText={AUTH_COPY.emailHint}
-            autoComplete="email"
-            maxLength={254}
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              clearError('email');
-            }}
-            disabled={isLoading}
-            error={errors.email}
           />
         </div>
 

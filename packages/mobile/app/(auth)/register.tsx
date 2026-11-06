@@ -9,7 +9,6 @@ import {
   Platform,
   Keyboard,
   Linking,
-  Alert,
   Modal,
   Pressable,
   type HostInstance,
@@ -22,7 +21,7 @@ import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { useAuthStore } from '@festie/shared/stores';
+import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import {
   firstInvalidField,
@@ -171,6 +170,8 @@ const useStyles = makeStyles((t) => ({
   guestButton: {
     marginTop: t.spacing[5],
     alignItems: 'center' as const,
+    minHeight: 44,
+    justifyContent: 'center' as const,
   },
   // Create-account CTA layout only — fill/ink/disabled live in components/Button (F8).
   button: {
@@ -179,6 +180,8 @@ const useStyles = makeStyles((t) => ({
   linkButton: {
     marginTop: t.spacing[5],
     alignItems: 'center' as const,
+    minHeight: 44,
+    justifyContent: 'center' as const,
   },
   linkText: {
     ...typeStyle('label'),
@@ -367,9 +370,12 @@ export default function RegisterScreen() {
         tosAccepted,
         dateOfBirth: toIso(dob!),
       });
-      if (emailVerificationSent) {
-        Alert.alert(AUTH_COPY.accountCreated, AUTH_COPY.checkEmailToConfirm(email.trim()));
-      }
+      useUIStore.getState().showToast(
+        emailVerificationSent
+          ? `${AUTH_COPY.accountCreated}. ${AUTH_COPY.checkEmailToConfirm(email.trim())}`
+          : AUTH_COPY.accountCreated,
+        { kind: 'success', durationMs: emailVerificationSent ? 6000 : undefined },
+      );
       // A guest who arrived through an invite link finishes that join first.
       const invite = getPendingInvite();
       if (invite) {
@@ -436,6 +442,7 @@ export default function RegisterScreen() {
           ]}
           placeholder="Username"
           placeholderTextColor={t.colors.text.placeholder}
+          maxLength={30}
           accessibilityLabel="Username"
           accessibilityHint={errors.username}
           value={username}
@@ -477,6 +484,7 @@ export default function RegisterScreen() {
           ]}
           placeholder={AUTH_COPY.emailLabel}
           placeholderTextColor={t.colors.text.placeholder}
+          maxLength={254}
           accessibilityLabel="Email address, required for password reset"
           accessibilityHint={errors.email}
           value={email}
@@ -546,7 +554,7 @@ export default function RegisterScreen() {
             {errors.password}
           </Text>
         ) : null}
-        <Text style={styles.hint}>At least 8 characters. Avoid common passwords and your name.</Text>
+        <Text style={styles.hint}>{AUTH_COPY.passwordHint}</Text>
 
         <Text style={styles.label} accessible={false} importantForAccessibility="no">
           Confirm password
