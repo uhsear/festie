@@ -173,14 +173,15 @@ function CrewViewInner() {
   const submitDestroy = async () => {
     if (!activeCrew || !confirmKind) return;
     const deleting = confirmKind === 'delete';
+    const crewName = activeCrew.name;
     setConfirmBusy(true);
     try {
       if (deleting) {
         await deleteCrew(activeCrew.id);
-        toast('Crew deleted', 'success');
+        toast(crewCopy.deleted(crewName), 'success');
       } else {
         await leaveCrew(activeCrew.id);
-        toast('Left crew', 'success');
+        toast(crewCopy.left(crewName), 'success');
       }
       setConfirmKind(null);
     } catch (e) {

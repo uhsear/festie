@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useInvitePreview, useJoinCrewByInvite } from '@festie/shared/hooks';
-import { describeInvitePreview, inviteIsDead, inviteStatusMessage } from '@festie/shared/utils';
+import { crewCopy, describeInvitePreview, inviteIsDead, inviteStatusMessage } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import Sheet from '../ui/Sheet';
 import Button from '../ui/Button';
@@ -43,7 +43,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
     try {
       const outcome = await joinByInvite(code);
       if (outcome.kind === 'joined') {
-        toast(`Joined ${outcome.crew.name}`, 'success');
+        toast(crewCopy.joined(outcome.crew.name), 'success');
         navigate({ to: '/crew', search: { tab: 'members' } });
       } else if (outcome.kind === 'already') {
         toast(`You're already in ${outcome.crew.name}`, 'info');

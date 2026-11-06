@@ -103,7 +103,7 @@ describe('JoinCrewSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join crew' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(h.join).toHaveBeenCalledWith('ABC123');
-    expect(h.toast).toHaveBeenCalledWith('Joined Bass Gang', 'success');
+    expect(h.toast).toHaveBeenCalledWith('You joined Bass Gang', 'success');
     expect(h.navigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'members' } });
   });
 
