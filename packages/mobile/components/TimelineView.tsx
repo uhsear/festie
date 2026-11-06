@@ -180,6 +180,8 @@ function StageColumn({
         ref={registerScrollRef}
         style={styles.columnScroll}
         contentContainerStyle={{ height: totalHeight }}
+        // The schedule page scrolls vertically too; Android needs this to hand the drag to the column.
+        nestedScrollEnabled
         showsVerticalScrollIndicator={false}
         onScrollBeginDrag={onUserScroll}
         scrollEventThrottle={100}
