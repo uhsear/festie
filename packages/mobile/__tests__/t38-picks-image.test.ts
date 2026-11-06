@@ -36,7 +36,7 @@ describe('T38 mobile Save image', () => {
     expect(screen).toContain("'Save without crew'");
     expect(screen).toContain("const OPTIONS_KEY = 'festie.lockscreen.options.v1';");
     // Mode and phone size are never stored.
-    expect(screen).toContain('JSON.stringify({ theme, lockStyle, priorities, clock })');
+    expect(screen).toContain('JSON.stringify({ theme, lockStyle, priorities, clock, canvas })');
     for (const text of [
       'Set it as your wallpaper',
       'Tap Share, then Use as Wallpaper.',
@@ -72,7 +72,20 @@ describe('T38 mobile Save image', () => {
     expect(screen).toContain("IOS ? 'Next: tap Save Image.' : 'Next: pick Photos or Files to keep it.'");
   });
 
-  it('opens Full lineup from the schedule grid', () => {
+  it('the Poster canvas hides the clock and passes canvas to the model', () => {
+    expect(screen).toContain("{ value: 'poster', label: 'Poster' }");
+    expect(screen).toContain("{canvas === 'lockscreen' ? (");
+    expect(screen).toMatch(/canvas,\s+fromMs:/);
+    expect(screen).toContain("{canvas === 'lockscreen' ? <LockscreenOverlay");
+    expect(screen).toContain("label: 'Full day'");
+  });
+
+  it('shows the whole day on one image unless the user splits it', () => {
+    expect(screen).toContain('const [onePage, setOnePage] = useState(true);');
+    expect(screen).toContain("switchRow('Split long days into 2 images (bigger text)', !onePage, (v) => setOnePage(!v))");
+  });
+
+  it('opens Full day from the schedule grid', () => {
     expect(grid).toContain("'/picks-image?mode=full'");
   });
 
