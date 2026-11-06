@@ -60,16 +60,18 @@ export function PlanListRow({
   item,
   listKind,
   stageName,
+  b2bSeparator,
   onPress,
 }: {
   item: PlanListItem;
   listKind: PlanListKind;
   stageName: string;
+  b2bSeparator?: string;
   onPress: () => void;
 }) {
   const t = useTokens();
   const styles = useStyles();
-  const name = artistDisplayName(item.set);
+  const name = artistDisplayName(item.set, b2bSeparator);
   const time = formatTime(item.set.startTime);
   const detail =
     listKind === 'reminders' && item.reminderMinutes != null ? reminderBeforeLabel(item.reminderMinutes) : item.note;
@@ -84,7 +86,7 @@ export function PlanListRow({
     >
       <View style={styles.planHead}>
         {item.priority ? <View style={[styles.dot, { backgroundColor: priorityColor(t, item.priority) }]} /> : null}
-        <Text style={styles.rowTitle} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+        <Text style={styles.rowTitle} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={2}>
           {name}
         </Text>
       </View>

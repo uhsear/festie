@@ -166,7 +166,7 @@ function ClashCard({
   const card = (
     <View style={styles.clashCard}>
       <View style={styles.clashCardHead}>
-        <Text style={styles.clashCardTime} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+        <Text style={styles.clashCardTime} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={2}>
           {topLine}
         </Text>
         {group.tight ? (
@@ -200,7 +200,7 @@ function ClashCard({
               <View style={[styles.clashPriorityDot, { backgroundColor: priorityColor(t, pick.priority) }]} />
               <Text
                 style={[styles.clashActName, recommended && styles.clashActNameKeep]}
-                numberOfLines={1}
+                numberOfLines={2}
                 maxFontSizeMultiplier={MAX_FONT_SCALE}
               >
                 {name}
@@ -287,7 +287,7 @@ function ActionButton({
       accessibilityLabel={a11y}
       accessibilityState={{ disabled }}
     >
-      <Text style={styles.actionButtonText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+      <Text style={styles.actionButtonText} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {label}
       </Text>
     </TouchableOpacity>
