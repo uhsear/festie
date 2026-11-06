@@ -57,15 +57,16 @@ export function byStartTime(a: FestivalSet, b: FestivalSet): number {
 }
 
 /**
- * Compact "Artist — HH:MM" label for a set, used in the crew overlap list.
+ * Compact "Artist — h:mm AM" label for a set, used in the crew overlap list.
  *
  * Falls back to a truncated set id when the set is not found, so the UI always
  * has *something* to display rather than crashing or showing a blank row.
  */
 export function setLabel(set: FestivalSet | undefined, fallbackId: string): string {
   if (!set) return `Set ${fallbackId.slice(0, 6)}`;
-  const artist = set.artist ?? set.artists?.[0]?.name ?? `Set ${fallbackId.slice(0, 6)}`;
-  const time = set.startTime ? ` — ${set.startTime}` : '';
+  const hasName = set.displayName || set.artist || set.artists?.length;
+  const artist = hasName ? artistDisplayName(set) : `Set ${fallbackId.slice(0, 6)}`;
+  const time = set.startTime ? ` — ${formatTime(set.startTime)}` : '';
   return `${artist}${time}`;
 }
 

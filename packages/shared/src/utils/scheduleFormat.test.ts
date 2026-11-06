@@ -116,13 +116,13 @@ describe('setLabel', () => {
     updatedAt: '',
   };
 
-  it('returns "Artist — HH:MM" when set has artist + startTime', () => {
-    expect(setLabel(base, base.id)).toBe('Daft Punk — 14:00');
+  it('returns "Artist — h:mm AM" when set has artist + startTime', () => {
+    expect(setLabel(base, base.id)).toBe('Daft Punk — 2:00 PM');
   });
 
   it('falls back to first artist in artists array when artist field absent', () => {
     const set = { ...base, artist: undefined, artists: [{ name: 'Bicep' }] };
-    expect(setLabel(set, set.id)).toBe('Bicep — 14:00');
+    expect(setLabel(set, set.id)).toBe('Bicep — 2:00 PM');
   });
 
   it('omits the time part when startTime is empty', () => {
@@ -137,7 +137,7 @@ describe('setLabel', () => {
   it('falls back to truncated id + time when neither artist nor artists present', () => {
     // The fallback id is still combined with the startTime when present.
     const set = { ...base, artist: undefined, artists: undefined };
-    expect(setLabel(set, 'abc123xyz')).toBe('Set abc123 — 14:00');
+    expect(setLabel(set, 'abc123xyz')).toBe('Set abc123 — 2:00 PM');
   });
 
   it('falls back to truncated id only when no artist, no artists, and no startTime', () => {

@@ -14,10 +14,7 @@ export function formatFestivalDateRange(startDate?: string | null, endDate?: str
   const start = createDateInLocalFrame(startDate, 0, 0);
   const end = createDateInLocalFrame(endDate, 0, 0);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  const startStr = start.toLocaleDateString('en-US', opts);
-  const endStr = end.toLocaleDateString('en-US', { ...opts, year: 'numeric' });
-  return `${startStr} – ${endStr}`;
+  return formatDateSpan(startDate, endDate);
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
