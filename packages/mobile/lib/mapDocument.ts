@@ -292,6 +292,13 @@ export function buildMapHtml(
       box-shadow: 0 0 6px rgba(25,227,211,0.85);
       pointer-events: none;
     }
+    /* "You are here" dot. No position property: MapLibre positions markers absolutely. */
+    .festie-self {
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #2f80ff; border: 3px solid #fff;
+      box-shadow: 0 0 0 6px rgba(47,128,255,0.25);
+      pointer-events: none;
+    }
     .maplibregl-popup-content { font-family: -apple-system, system-ui, sans-serif; font-size: 13px; }
   </style>
 </head>
@@ -317,6 +324,8 @@ export function buildMapHtml(
     // appears, not on every position tick (which would yank the camera as peers
     // move). RN owns the one-shot SOS framing separately (__festieFlyTo).
     var FRAMED_LIVE = false;
+    // Same one-shot for meeting pins: a crew edit must not yank a panned view.
+    var FRAMED_PINS = false;
     // Camera padding: the right side clears the find-me and Drop pin column, the
     // top clears the chip bar.
     var FIT_PADDING = { top: 72, bottom: 72, left: 40, right: 72 };
@@ -380,7 +389,8 @@ export function buildMapHtml(
           bounds.extend([p.longitude, p.latitude]);
         }
       });
-      if (bounds && pins.length > 1) {
+      if (bounds && pins.length > 1 && !FRAMED_PINS) {
+        FRAMED_PINS = true;
         map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 16, duration: 0 });
       }
     }
@@ -684,6 +694,25 @@ export function buildMapHtml(
             map.flyTo({ center: [lng, lat], zoom: zoom || 16, duration: 600 });
             post({ type: 'recentered' });
           } catch (err) { post({ type: 'error', reason: 'flyto' }); }
+        };
+
+        // RN pushes the user's own GPS fix here; non-finite coords remove the dot.
+        var SELF = null;
+        window.__festieSetSelf = function (lng, lat) {
+          try {
+            if (typeof lng !== 'number' || !isFinite(lng) || typeof lat !== 'number' || !isFinite(lat)) {
+              if (SELF) { SELF.remove(); SELF = null; }
+              return;
+            }
+            if (!SELF) {
+              var el = document.createElement('div');
+              el.className = 'festie-self';
+              el.setAttribute('aria-label', 'You are here');
+              SELF = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+            } else {
+              SELF.setLngLat([lng, lat]);
+            }
+          } catch (e) {}
         };
 
         // RN pushes meeting-point pins here (after 'ready', and on any change).
