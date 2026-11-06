@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Platform, type ScrollViewInstance } from 'react-native';
 import { useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
 import { useFestival } from '@festie/shared/hooks';
 import { formatDayChip, logicalDayIndexAt, resolveFestivalTimeZone, visibleDayIndexes } from '@festie/shared/utils';
@@ -17,6 +18,18 @@ export default function ScheduleDayChips({ hPad }: { hPad: number }) {
   const hiddenDays = useFestivalStore((s) => s.hiddenDays);
   const setHiddenDays = useFestivalStore((s) => s.setHiddenDays);
   const nowMs = useNow(60_000);
+  // Three ~150pt chips overflow a 375pt phone, so bring the selected day into view
+  // whenever it changes (cold-start restore, resume-to-today, "Show another day").
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const chipX = useRef(new Map<number, number>());
+  const scrollToDay = (x: number | undefined) => {
+    if (x !== undefined) scrollRef.current?.scrollTo({ x: Math.max(0, x - hPad), animated: true });
+  };
+  useEffect(() => {
+    scrollToDay(chipX.current.get(selectedDay));
+    // scrollToDay only reads refs and hPad.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDay, hPad]);
 
   const days = getDays();
   if (days.length <= 1) return null;
@@ -28,6 +41,7 @@ export default function ScheduleDayChips({ hPad }: { hPad: number }) {
   return (
     <View style={styles.daysWrap}>
       <ScrollView
+        ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[styles.daysContent, { paddingHorizontal: hPad }]}
@@ -45,6 +59,10 @@ export default function ScheduleDayChips({ hPad }: { hPad: number }) {
               onPress={() => {
                 haptics.select();
                 setSelectedDay(day.index);
+              }}
+              onLayout={(e) => {
+                chipX.current.set(day.index, e.nativeEvent.layout.x);
+                if (active) scrollToDay(e.nativeEvent.layout.x);
               }}
               activeOpacity={0.7}
               accessibilityRole="button"
