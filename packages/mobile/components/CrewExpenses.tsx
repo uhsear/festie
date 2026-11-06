@@ -290,8 +290,10 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
           createSettleUpFlow(s, (req) => settleExpense(crewId, req), currency)
             .confirmPaid()
             .then((outcome) => {
-              if (outcome === 'queued') Alert.alert('Not sent yet', QUEUED_WRITE_MESSAGE);
-              else haptics.success();
+              if (outcome !== 'queued') haptics.success();
+              useUIStore.getState().showToast(writeOutcomeMessage(outcome, 'Payment recorded'), {
+                kind: outcome === 'queued' ? 'info' : 'success',
+              });
             })
             .catch(() => {})
             .finally(() => {
@@ -321,12 +323,11 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
   const handleRemind = (s: CrewSettlement) => {
     remindPayment(crewId, s.fromUserId)
       .then((outcome) => {
-        if (outcome === 'queued') {
-          AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
-          return;
-        }
-        AccessibilityInfo.announceForAccessibility(`Reminder sent to ${s.fromName}.`);
-        haptics.success();
+        const queued = outcome === 'queued';
+        useUIStore.getState().showToast(queued ? QUEUED_WRITE_MESSAGE : `Reminder sent to ${s.fromName}.`, {
+          kind: queued ? 'info' : 'success',
+        });
+        if (!queued) haptics.success();
       })
       .catch((err) => Alert.alert('Reminder not sent', mapErrorToUserMessage(err, 'Try again.')));
   };
