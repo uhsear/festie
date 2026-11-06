@@ -184,6 +184,9 @@ export default function SetDetailScreen() {
   // set belongs to, load it, and the set then appears. Runs once; on failure we
   // fall through to the "not found" state below.
   const [resolveFailed, setResolveFailed] = useState(false);
+  // A network error is not a missing set: offer a retry instead of "Set not found".
+  const [resolveOffline, setResolveOffline] = useState(false);
+  const [resolveAttempt, setResolveAttempt] = useState(0);
   const resolveTried = useRef(false);
   useEffect(() => {
     if (set || resolveTried.current || !setId) return;
@@ -197,11 +200,12 @@ export default function SetDetailScreen() {
         if (!useFestivalDataStore.getState().sets.some((x) => x.id === setId)) {
           setResolveFailed(true);
         }
-      } catch {
+      } catch (err) {
+        if ((err as { isNetworkError?: boolean })?.isNetworkError) setResolveOffline(true);
         setResolveFailed(true);
       }
     })();
-  }, [set, setId, currentFestivalId, selectFestival]);
+  }, [set, setId, currentFestivalId, selectFestival, resolveAttempt]);
 
   const b2bSeparator = currentFestival?.b2bSeparator;
 
@@ -450,6 +454,27 @@ export default function SetDetailScreen() {
         <View style={[styles.container, styles.loadingContainer]}>
           <CloseButton onPress={dismiss} style={[styles.floatingClose, { top: topInset }]} />
           <LoadingState />
+        </View>
+      );
+    }
+    if (resolveOffline) {
+      return (
+        <View style={styles.container}>
+          <CloseButton onPress={dismiss} style={[styles.floatingClose, { top: topInset }]} />
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="You're offline"
+            message="You're offline, so this set link can't open yet."
+            action={{
+              label: 'Try again',
+              onPress: () => {
+                resolveTried.current = false;
+                setResolveFailed(false);
+                setResolveOffline(false);
+                setResolveAttempt((n) => n + 1);
+              },
+            }}
+          />
         </View>
       );
     }
