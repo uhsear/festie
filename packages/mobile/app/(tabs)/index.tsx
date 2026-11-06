@@ -1353,7 +1353,7 @@ export default function TimelineScreen() {
                 instead of ballooning and pushing itself + the timeline past
                 viewBody's clipped (overflow:hidden) bottom edge, which made the
                 TBA cards unreachable. */}
-            {tbaSection ? <ScrollView style={{ maxHeight: Math.round(height * 0.4) }}>{tbaSection}</ScrollView> : null}
+            {tbaSection ? <ScrollView style={{ flexGrow: 0, maxHeight: Math.round(height * 0.4) }}>{tbaSection}</ScrollView> : null}
           </View>
         </>
       ) : (

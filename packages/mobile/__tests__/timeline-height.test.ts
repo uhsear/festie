@@ -13,4 +13,9 @@ describe('mobile timeline height (FND-025)', () => {
       /<ScrollView style=\{\{ flexGrow: 0, maxHeight: Math\.round\(height \* 0\.3\) \}\}[^>]*>\s*\{controls\}/,
     );
   });
+  it('keeps the collapsed TBA list from taking half the body', () => {
+    expect(read('../app/(tabs)/index.tsx')).toMatch(
+      /<ScrollView style=\{\{ flexGrow: 0, maxHeight: Math\.round\(height \* 0\.4\) \}\}>\{tbaSection\}/,
+    );
+  });
 });
