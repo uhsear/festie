@@ -46,6 +46,7 @@ const GRID_MIN_U: Record<LockscreenCanvas, number> = { lockscreen: 2.2, poster: 
 /** A footnote row, and the smallest footnote text size (it shrinks to fit one row). */
 const NOTE_ROW_U = GRID_LABEL_U * 1.25;
 const NOTE_MIN_U = 2.0;
+const MAX_NOTE_ROWS = 12;
 /** Blocks shorter than this show only the footnote marker. */
 const MIN_TEXT_BLOCK_U = 1.4;
 /** Footer and grid legend sit between the torch and camera buttons. */
@@ -804,21 +805,25 @@ function gridPageModels(items: Item[], ctx: Ctx): GridPlan[] {
         noteSizeU: Math.max(NOTE_MIN_U, Math.min(GRID_LABEL_U, noteFitU)),
         noteRowU: NOTE_ROW_U,
         legendX: SAFE_X,
-        legendY: gridY + hoursInPage * hourU + 0.3,
+        legendY: gridY + hoursInPage * hourU + 0.3 + (notes.length ? LEGEND_H : 0),
         legendWidth: SAFE_W,
         labelSizeU: GRID_LABEL_U,
       };
       return { page, items: inPage.filter((i) => i.start >= p.startMinute), span: spanLabel(p.startMinute, p.endMinute) };
     });
   };
-  // Footnote rows replace the legend and take height from the grid, which can create more notes: settle in 3 passes.
+  // Footnote rows replace the legend and take height from the grid, which can create more notes. Try each row
+  // count and keep the one whose notes overflow its rows least (a runaway grid of all-note blocks never wins).
+  const rowsFor = (r: GridPlan[]) => Math.max(...r.map((x) => x.page.notes.length));
   let result = plan(ctx.contentEndU - gridY - LEGEND_H);
-  let rows = 0;
-  for (let pass = 0; pass < 3; pass++) {
-    const need = Math.max(...result.map((r) => r.page.notes.length));
-    if (need <= rows) break;
-    rows = need;
-    result = plan(ctx.contentEndU - gridY - rows * NOTE_ROW_U);
+  let overflow = rowsFor(result);
+  for (let rows = 1; rows <= MAX_NOTE_ROWS && overflow > 0; rows++) {
+    const tryPlan = plan(ctx.contentEndU - gridY - LEGEND_H - rows * NOTE_ROW_U);
+    const over = Math.max(0, rowsFor(tryPlan) - rows);
+    if (over < overflow) {
+      result = tryPlan;
+      overflow = over;
+    }
   }
   return result;
 }
