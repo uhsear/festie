@@ -77,7 +77,9 @@ export default function SosRaiseButton({ crewId, compact = false, alerting = fal
       const position = await oneShotPosition();
       const text = message.trim();
       await raiseSos(crewId, { ...(text ? { message: text } : {}), ...(position ? { position } : {}) });
-      toast('SOS sent to your crew', 'success');
+      // Same honesty as mobile: without a fix the crew was alerted but cannot see where.
+      if (position) toast('SOS sent to your crew', 'success');
+      else toast('SOS sent without your location. Your crew was alerted; tell them where you are.', 'warning');
       setOpen(false);
       setMessage('');
     } catch (err) {

@@ -25,6 +25,7 @@ describe('config: DEFAULTS object', () => {
     assert.equal(DEFAULTS.RATE_LIMIT_MAX, 120);
     assert.equal(DEFAULTS.SESSION_TTL, 86400000);
     assert.equal(DEFAULTS.MAX_USERS, 2000);
+    assert.equal(DEFAULTS.MAX_PROFILES_PER_FESTIVAL, 2000);
     assert.equal(DEFAULTS.MAX_STAGES, 20);
     assert.equal(DEFAULTS.MAX_DAYS, 10);
     assert.equal(DEFAULTS.MAX_SETS_PER_DAY, 200);

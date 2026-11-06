@@ -46,14 +46,43 @@ describe('OfflineMap location, stale fix and fallback rows', () => {
   it('drops the stale fix and the blue dot when the tab loses focus', () => {
     const cleanup = between(src, 'useFocusEffect(', '// Frame a point.');
     expect(cleanup).toContain('setSelfCoord(null)');
+    // Nothing is left running to finish a pending Find me or Nearest tap.
+    expect(cleanup).toContain('setPendingRecenter(false)');
+    expect(cleanup).toContain('setPendingNearest(null)');
+    expect(cleanup).toContain('setFarNoticeM(null)');
     expect(src).toContain('window.__festieSetSelf && window.__festieSetSelf(null); true;');
   });
 
-  it('offers Open Settings (not Try again) after a permanent denial', () => {
+  it('offers Open Settings and Try again after a denial', () => {
     expect(src).toContain("geoState === 'denied' ? (");
-    expect(src).toContain('label={LIVE_SHARE_COPY.openSettings}');
-    expect(src).toContain('Linking.openSettings()');
+    const denied = between(src, "geoState === 'denied' ? (", "geoState === 'unavailable' ? (");
+    expect(denied).toContain('label={LIVE_SHARE_COPY.openSettings}');
+    expect(denied).toContain('onPress={openLocationSettings}');
+    expect(denied).toContain('label={MAP_COPY.tryAgain}');
     expect(src).toContain("geoState === 'unavailable' ? (");
+  });
+
+  it('seeds Find me from a last-known fix and cancels a start that outlives the tab', () => {
+    const start = between(src, 'const enableLocation = useCallback', 'const retryLocation');
+    expect(start).toContain('Location.getLastKnownPositionAsync({ maxAge: RECENT_FIX_MS })');
+    expect(start).toContain('Location.hasServicesEnabledAsync()');
+    expect(start).toContain('focusedRef.current');
+    expect(start).toContain('sub.remove()');
+  });
+
+  it('flies to a far fix, says how far, and offers Show festival', () => {
+    expect(src).toContain('distanceFromFestivalM(fix, camera)');
+    expect(src).toContain('farFromFestivalCopy(farNoticeM ?? 0, festival?.name)');
+    expect(src).toContain('label={MAP_COPY.showFestival}');
+  });
+
+  it('draws the blue dot above the stage and amenity markers', () => {
+    expect(read('lib/mapDocument.ts')).toMatch(/\.festie-self \{[^}]*z-index: 3;/);
+  });
+
+  it('points both navigate arrows with the shared glyph offset', () => {
+    expect(read('components/OfflineMap.tsx')).toContain('NAVIGATE_GLYPH_OFFSET_DEG');
+    expect(read('components/MeetingPointCompass.tsx')).toContain('NAVIGATE_GLYPH_OFFSET_DEG');
   });
 
   it('opens the offline compass from fallback SOS, peer and meeting-point rows', () => {
