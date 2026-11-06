@@ -19,12 +19,13 @@
  * instead of a spinning or bogus arrow.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { buildPursuit, relativeArrowAngle, formatDistance } from '@festie/shared/utils';
 import type { Coord } from '@festie/shared/utils';
 import { useFestivalModeStore } from '@festie/shared/stores';
+import { LIVE_SHARE_COPY } from '@festie/shared/constants';
 import { headingFromReading, needsCalibration, smoothHeading } from '../lib/compass';
 import Button from './Button';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
@@ -51,6 +52,8 @@ const REDUCE_MOTION_INTERVAL_MS = 400;
 const NO_FIX_TIMEOUT_MS = 20_000;
 // A device without a magnetometer often subscribes fine and then never emits.
 const NO_HEADING_TIMEOUT_MS = 5_000;
+
+const DEFAULT_NOTE = 'Straight-line direction to a point you saved. Works without signal.';
 
 type Phase = 'init' | 'denied' | 'no-sensor' | 'no-fix' | 'no-coords' | 'ready';
 
@@ -194,8 +197,17 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
         <Text style={styles.stateTitle}>Location permission needed</Text>
         <Text style={styles.stateBody}>
           The compass needs your location to point toward “{target.label}”. Enable location access in Settings, then
-          reopen this screen.
+          come back and try again.
         </Text>
+        <Button label={LIVE_SHARE_COPY.openSettings} onPress={() => void Linking.openSettings()} />
+        <Button
+          label="Try again"
+          variant="secondary"
+          onPress={() => {
+            setPhase('init');
+            setRetry((n) => n + 1);
+          }}
+        />
       </View>
     );
   }
@@ -225,13 +237,23 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
           This device has no compass, so the arrow can’t show which way you’re facing. The distance below is still
           accurate.
         </Text>
-        <Text
-          style={styles.distance}
-          accessibilityRole="text"
-          accessibilityLabel={`${formatDistance(distanceM)} to ${target.label}, straight-line distance`}
-        >
-          <DisplayWords text={formatDistance(distanceM)} fontSize={styles.distance.fontSize} />
-        </Text>
+        {Number.isFinite(distanceM) ? (
+          <Text
+            style={styles.distance}
+            accessibilityRole="text"
+            accessibilityLabel={`${formatDistance(distanceM)} to ${target.label}, straight-line distance`}
+          >
+            <DisplayWords text={formatDistance(distanceM)} fontSize={styles.distance.fontSize} />
+          </Text>
+        ) : (
+          <View style={styles.waiting}>
+            <ActivityIndicator color={t.colors.accent.aqua} />
+            <Text style={styles.stateBody}>Getting your bearings…</Text>
+          </View>
+        )}
+        {Number.isFinite(distanceM) && p.etaLabel !== '—' ? <Text style={styles.honest}>{`~${p.etaLabel} walk`}</Text> : null}
+        <Text style={styles.honest}>{note ?? DEFAULT_NOTE}</Text>
+        {subNote ? <Text style={styles.honest}>{subNote}</Text> : null}
       </View>
     );
   }
@@ -281,9 +303,7 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
           Move your phone in a figure 8 to calibrate the compass.
         </Text>
       ) : null}
-      <Text style={styles.honest}>
-        {note ?? 'Straight-line direction to a point you saved. Works without signal.'}
-      </Text>
+      <Text style={styles.honest}>{note ?? DEFAULT_NOTE}</Text>
       {subNote ? <Text style={styles.honest}>{subNote}</Text> : null}
     </View>
   );
@@ -341,6 +361,10 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('title'),
     color: t.colors.text.primary,
     textAlign: 'center',
+  },
+  waiting: {
+    alignItems: 'center',
+    gap: t.spacing[3],
   },
   stateBody: {
     ...typeStyle('body'),
