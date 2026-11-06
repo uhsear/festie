@@ -82,6 +82,12 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
     setKeepLocked(false);
   }, [crewId]);
 
+  // Low power refuses sharing: close an open chooser so no chip can start a share it ends at once.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- event-driven reset when low power turns on.
+    if (lowPowerMode) setChoosing(false);
+  }, [lowPowerMode]);
+
   const { options, defaultId } = useMemo(
     () => liveShareOptions({ days, sets, timeZone, nowMs: now }),
     [days, sets, timeZone, now],
