@@ -847,6 +847,36 @@ export default function CrewScreen() {
     />
   );
 
+  const inviteCard = members.length <= 1 && crew.inviteCode ? (
+    <View style={styles.inviteCard}>
+      <Text style={styles.inviteCardTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        {crewCopy.inviteCardTitle}
+      </Text>
+      <Text style={styles.inviteCardBody} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        {crewCopy.inviteCardBody(crew.name)}
+      </Text>
+      <View style={styles.forceAddRow}>
+        <Button
+          label="Share invite link"
+          onPress={() => handleShareInvite(crew.inviteCode!, crew.name)}
+          accessibilityLabel="Share invite link"
+          style={styles.flexButton}
+        />
+        <TouchableOpacity
+          style={[styles.outlineButton, styles.flexButton]}
+          onPress={() => setInviteQrOpen(true)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Show QR code"
+        >
+          <Text style={styles.outlineButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Show QR code
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  ) : null;
+
   return (
     // KAV is dropped: behavior='padding' is a no-op on Android and
     // behavior='height' doesn't scroll the focused field into view when it's
@@ -917,8 +947,8 @@ export default function CrewScreen() {
       ) : null}
 
       {/* Persistent crew chrome — one status row (totem, freshness, SOS) and
-          the crew switcher. The invite code is setup, so it lives in the
-          Members tab to keep this pinned header short. */}
+          the crew switcher. The invite card and code are setup, so they scroll
+          inside each tab body to keep this pinned header short. */}
       <View style={[styles.crewChrome, tabletInset]}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {sectionLoadError ? (
@@ -970,36 +1000,6 @@ export default function CrewScreen() {
           >
             {notice}
           </Text>
-        ) : null}
-
-        {members.length <= 1 && crew.inviteCode ? (
-          <View style={styles.inviteCard}>
-            <Text style={styles.inviteCardTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {crewCopy.inviteCardTitle}
-            </Text>
-            <Text style={styles.inviteCardBody} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {crewCopy.inviteCardBody(crew.name)}
-            </Text>
-            <View style={styles.forceAddRow}>
-              <Button
-                label="Share invite link"
-                onPress={() => handleShareInvite(crew.inviteCode!, crew.name)}
-                accessibilityLabel="Share invite link"
-                style={styles.flexButton}
-              />
-              <TouchableOpacity
-                style={[styles.outlineButton, styles.flexButton]}
-                onPress={() => setInviteQrOpen(true)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Show QR code"
-              >
-                <Text style={styles.outlineButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                  Show QR code
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         ) : null}
       </View>
 
@@ -1073,6 +1073,7 @@ export default function CrewScreen() {
           }}
           ListHeaderComponent={
             <View style={styles.membersHeader}>
+              {inviteCard}
               {crew.inviteCode ? (
                 <View style={styles.inviteBar}>
                   <Ionicons name="key-outline" size={16} color={t.colors.accent.aqua} />
@@ -1388,6 +1389,7 @@ export default function CrewScreen() {
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
         >
+          {inviteCard}
           <View style={styles.planIndexRow}>
             {planIndex.map(({ key, testID, label, count }) => (
               <TouchableOpacity
@@ -1581,6 +1583,7 @@ export default function CrewScreen() {
           {/* DC2: SOS must be reachable without any scroll — top of the pane,
               always visible the instant the Find tab opens. */}
           <CrewSos crewId={crew.id} currentUserId={user.id} />
+          {inviteCard}
           <CrewCheckIn crewId={crew.id} />
 
           <TouchableOpacity
@@ -1643,6 +1646,7 @@ export default function CrewScreen() {
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
         >
+          {inviteCard}
           <View style={styles.sectionLabelRow}>
             <SectionLabel>Expenses</SectionLabel>
             {hasUnsettledBalance ? (
