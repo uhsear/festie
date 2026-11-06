@@ -137,6 +137,7 @@ describe('scheduleEmptyReason', () => {
   it('blames the filters, not the search, when a day match is hidden', () => {
     const copy = searchEmptyCopy('justice', 'Friday', true, true);
     expect(copy.title).toBe('“justice” is hidden by your filters');
+    expect(copy.message).toBe('Your filters hide it. Clear them to see it.');
     expect(copy.actionLabel).toBe('Clear filters');
   });
   it('detects a day match the filters hide', () => {

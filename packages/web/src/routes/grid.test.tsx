@@ -46,6 +46,7 @@ vi.mock('@festie/shared/hooks', async () => {
   const { filterScheduleSets } = await import('@festie/shared/utils');
   return {
     usePickClear: () => vi.fn(),
+    useCanPick: () => storeState.canPick !== false,
     useCrew: () => ({ getCrewScopedOtherPicks: () => [] }),
     usePicks: vi.fn(() => ({
       getMyPick: vi.fn(() => null),
@@ -395,6 +396,26 @@ describe('GridView', () => {
     expect(screen.getByTestId('timeline-grid')).toBeInTheDocument();
     expect(screen.getByText('TBA — Times Not Yet Announced')).toBeInTheDocument();
     expect(screen.queryByText("Set times aren't out yet")).not.toBeInTheDocument();
+  });
+
+  it('lets a guest pick from the TBA list (canPick comes from useCanPick, not the signed-in user)', () => {
+    storeState.user = null;
+    setFilters({
+      ...timedDay,
+      timelessSets: [{ id: 's2', artist: 'TBA Artist', stageId: 'st1', dayIndex: 0 }],
+    });
+    render(<GridView />);
+    expect(screen.getAllByRole('button', { name: /must/i }).length).toBeGreaterThan(0);
+  });
+
+  it('hides the TBA pick buttons before a festival is chosen to pick in', () => {
+    storeState.canPick = false;
+    setFilters({
+      ...timedDay,
+      timelessSets: [{ id: 's2', artist: 'TBA Artist', stageId: 'st1', dayIndex: 0 }],
+    });
+    render(<GridView />);
+    expect(screen.queryByRole('button', { name: /must/i })).not.toBeInTheDocument();
   });
 
   it('wraps content in RefreshableView', () => {

@@ -264,7 +264,7 @@ export function searchEmptyCopy(
   if (hiddenByFilters) {
     return {
       title: `“${q}” is hidden by your filters`,
-      message: 'Your stage or My picks filters hide it. Clear them to see it.',
+      message: 'Your filters hide it. Clear them to see it.',
       actionLabel: 'Clear filters',
     };
   }
