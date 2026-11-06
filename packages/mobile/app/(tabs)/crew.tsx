@@ -947,8 +947,8 @@ export default function CrewScreen() {
       ) : null}
 
       {/* Persistent crew chrome — one status row (totem, freshness, SOS) and
-          the crew switcher. The invite card and code are setup, so they scroll
-          inside each tab body to keep this pinned header short. */}
+          the crew switcher. The invite card is setup, so it scrolls inside each
+          tab body; the code strip lives in the Members header. */}
       <View style={[styles.crewChrome, tabletInset]}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {sectionLoadError ? (
@@ -1073,7 +1073,7 @@ export default function CrewScreen() {
           }}
           ListHeaderComponent={
             <View style={styles.membersHeader}>
-              {inviteCard}
+              {inviteCard ? <View style={styles.inviteCardSpacer}>{inviteCard}</View> : null}
               {crew.inviteCode ? (
                 <View style={styles.inviteBar}>
                   <Ionicons name="key-outline" size={16} color={t.colors.accent.aqua} />
@@ -1688,6 +1688,9 @@ const useStyles = makeStyles((t) => ({
   },
   // Members-tab header: the invite bar (setup) moved out of the pinned chrome.
   membersHeader: {
+    marginBottom: t.spacing[3],
+  },
+  inviteCardSpacer: {
     marginBottom: t.spacing[3],
   },
   // Header meta row: freshness badge + low-power indicator.
