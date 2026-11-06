@@ -504,6 +504,7 @@ export default function PicksScreen() {
     },
     [
       styles,
+      separator,
       getStageName,
       getStageColor,
       getMyPick,
