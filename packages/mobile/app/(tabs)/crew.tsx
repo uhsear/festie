@@ -319,10 +319,12 @@ export default function CrewScreen() {
   const sectionsFailed = !!sectionLoadError;
   useFocusEffect(
     useCallback(() => {
+      // A stale failure (e.g. from the invite screen) must not greet the user on return.
+      setError(null);
       if (sectionsFailed) reloadCrewSections();
       // Only re-run on focus, not when the error flips, or a failed retry would loop.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [reloadCrewSections]),
+    }, [reloadCrewSections, setError]),
   );
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -465,8 +467,8 @@ export default function CrewScreen() {
         const invited = res.reform?.invited?.length ?? 0;
         Alert.alert(
           'Crew reformed',
-          `Started fresh for ${festivalName}. ${added} member${added === 1 ? '' : 's'} added; ` +
-            `share the invite code with the other ${invited} to bring them across.`,
+          `Started fresh for ${festivalName}. ${added} member${added === 1 ? '' : 's'} added.` +
+            (invited > 0 ? ` Share the invite link with the other ${invited} to bring them across.` : ''),
         );
       } catch (err) {
         Alert.alert("Couldn't reform crew", mapErrorToUserMessage(err, 'Try again.'));
@@ -552,8 +554,8 @@ export default function CrewScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Transfer',
-          style: 'destructive',
+          text: 'Make owner',
+          style: 'default',
           onPress: async () => {
             try {
               await transferOwnership(crewId, member.userId);
