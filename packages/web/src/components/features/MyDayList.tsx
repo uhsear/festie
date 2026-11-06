@@ -112,7 +112,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone }: MyDayListProps
               className="flex items-center gap-x-3 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 cursor-pointer hover:bg-bg-card-hover focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
               onClick={() => onOpenSet(set)}
             >
-              <span className="flex-1 text-sm font-bold min-w-0 truncate">{artistDisplayName(set, b2bSeparator)}</span>
+              <span className="flex-1 text-sm font-bold min-w-0 break-words [overflow-wrap:anywhere] line-clamp-2">{artistDisplayName(set, b2bSeparator)}</span>
               <StageBadge variant="pick" stageName={getStageName(set.stageId) || ''} stageColor={stageColor(set.stageId)} />
             </button>
           ))}

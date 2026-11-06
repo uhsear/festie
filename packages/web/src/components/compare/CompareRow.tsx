@@ -45,7 +45,7 @@ export default memo(function CompareRow({
     <tr className="border-t border-border">
       <th scope="row" className="sticky left-0 bg-bg-primary z-10 py-3 pr-3 align-top text-left pl-2.5">
         <Link to="/set/$setId" params={{ setId: set.id }} aria-label={`Open ${artist}`} className="block">
-          <div className="font-semibold text-text-primary truncate max-w-[180px]">{artist}</div>
+          <div className="font-semibold text-text-primary break-words [overflow-wrap:anywhere] line-clamp-2">{artist}</div>
           <div className="text-xs text-text-secondary">
             {formatTime(set.startTime)}
             {'–'}
