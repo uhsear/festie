@@ -30,3 +30,87 @@ describe('Map tab SOS FAB and empty states', () => {
     expect(map).toContain("label: 'Choose a festival'");
   });
 });
+
+describe('OfflineMap location, stale fix and fallback rows', () => {
+  const src = read('components/OfflineMap.tsx');
+
+  it('drops the stale fix and the blue dot when the tab loses focus', () => {
+    const cleanup = src.slice(src.indexOf('useFocusEffect('), src.indexOf('// Frame a point.'));
+    expect(cleanup).toContain('setSelfCoord(null)');
+    expect(src).toContain('window.__festieSetSelf && window.__festieSetSelf(null); true;');
+  });
+
+  it('offers Open Settings (not Try again) after a permanent denial', () => {
+    expect(src).toContain("geoState === 'denied' ? (");
+    expect(src).toContain('label={LIVE_SHARE_COPY.openSettings}');
+    expect(src).toContain('Linking.openSettings()');
+    expect(src).toContain("geoState === 'unavailable' ? (");
+  });
+
+  it('opens the offline compass from fallback SOS, peer and meeting-point rows', () => {
+    const list = src.slice(src.indexOf('SOS first'), src.indexOf('uncoordedPoints.map'));
+    expect(list).toContain('compassHref(s.username');
+    expect(list).toContain("peerCompassHref(p.id.slice('peer:'.length))");
+    expect(list).toContain('compassHref(pin.label');
+    expect(list).toContain('accessibilityHint={MAP_COPY.pointMeThere}');
+    expect(list).toContain('FIND_FRIEND_COPY.openCompassA11y(p.label)');
+    expect(list).not.toContain('accessibilityRole="text"');
+  });
+});
+
+describe('Compass states', () => {
+  const src = read('components/MeetingPointCompass.tsx');
+  const noSensor = src.slice(src.indexOf("phase === 'no-sensor'"), src.indexOf("phase === 'init' ||"));
+
+  it('denied card has Open Settings and Try again', () => {
+    const denied = src.slice(src.indexOf("phase === 'denied'"), src.indexOf("phase === 'no-fix'"));
+    expect(denied).toContain('LIVE_SHARE_COPY.openSettings');
+    expect(denied).toContain('Linking.openSettings()');
+    expect(denied).toContain('setRetry((n) => n + 1)');
+  });
+
+  it('no-sensor card never prints a dash distance and keeps ETA, note and age', () => {
+    expect(noSensor).toContain('Number.isFinite(distanceM)');
+    expect(noSensor).toContain('Getting your bearings');
+    expect(noSensor).toContain('walk`');
+    expect(noSensor).toContain('{note ?? DEFAULT_NOTE}');
+    expect(noSensor).toContain('{subNote}');
+  });
+
+  it('explicit-coordinate targets get the neutral note, not "a point you saved"', () => {
+    expect(read('app/compass.tsx')).toContain('hasExplicit ? FIND_FRIEND_COPY.explicitNote');
+  });
+});
+
+describe('SOS surfaces', () => {
+  it('CrewSos derives the compass entry from the live list and closes when it clears', () => {
+    const src = read('components/CrewSos.tsx');
+    expect(src).toContain('sosList.find((s) => s.userId === navUserId)');
+    expect(src).toContain('setNavUserId(null)');
+    expect(src).toContain('FIND_FRIEND_COPY.sosNote(navEntry.username)');
+    expect(src).toContain('subNote={sosWhen([navEntry])}');
+  });
+
+  it('SosBanner routes through sosBannerHref and labels the destination', () => {
+    const src = read('components/SosBanner.tsx');
+    expect(src).toContain('sosBannerHref(entries, selfId)');
+    expect(src).toContain('Open the compass to find them');
+  });
+});
+
+describe('Live share and meeting point form', () => {
+  it('disables the live-share switch in low power and offers to turn it off', () => {
+    const src = read('components/CrewLiveLocation.tsx');
+    expect(src).toContain('useFestivalModeStore((s) => s.lowPowerMode)');
+    expect(src).toContain('disabled={busy || lowPowerMode}');
+    expect(src).toContain('LOW_POWER_COPY.livePaused');
+    expect(src).toContain('setLowPowerMode(false)');
+  });
+
+  it('toasts a failed standalone meeting-point save and labels Save correctly', () => {
+    const src = read('components/CrewMeetingPoints.tsx');
+    expect(src).toContain('if (formOnly) {');
+    expect(src).toContain("Couldn't save the meeting point. Try again.");
+    expect(src).toContain("editingId ? 'Save meeting point' : 'Add meeting point'");
+  });
+});
