@@ -5,6 +5,7 @@ import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { api } from '@festie/shared/services';
+import { createSendGuard, isRateLimited } from '../lib/pushSendGuard';
 
 const TOKEN_KEY = 'festie-push-token';
 // Festival id last reported to the server as covered by on-device reminders.
@@ -12,6 +13,8 @@ const LOCAL_FESTIVAL_KEY = 'festie-push-local-festival';
 // Fire time (epoch ms) of the last local reminder; the server still pushes later ones.
 const LOCAL_COVERS_KEY = 'festie-push-local-covers-until';
 const NO_FESTIVAL = '';
+// Reconciles run concurrently; this dedupes their identical POSTs and backs off after a 429.
+const localRemindersGuard = createSendGuard();
 
 /**
  * Tell the server which festival this phone schedules local set reminders for,
@@ -28,17 +31,19 @@ export async function reportLocalRemindersFestival(festivalId: string | null, co
     const reportedUntil = await AsyncStorage.getItem(LOCAL_COVERS_KEY);
     const cutoff = festivalId ? coversUntil : null;
     if (reported === (festivalId ?? NO_FESTIVAL) && (reportedUntil || null) === (cutoff === null ? null : String(cutoff))) return;
-    await api.post('/notifications/token', {
-      token,
-      platform: Platform.OS,
-      localRemindersFestivalId: festivalId,
-      localRemindersCoversUntil: cutoff,
+    await localRemindersGuard.run(JSON.stringify([token, festivalId, cutoff]), async () => {
+      await api.post('/notifications/token', {
+        token,
+        platform: Platform.OS,
+        localRemindersFestivalId: festivalId,
+        localRemindersCoversUntil: cutoff,
+      });
+      await AsyncStorage.setItem(LOCAL_FESTIVAL_KEY, festivalId ?? NO_FESTIVAL);
+      if (cutoff === null) await AsyncStorage.removeItem(LOCAL_COVERS_KEY);
+      else await AsyncStorage.setItem(LOCAL_COVERS_KEY, String(cutoff));
     });
-    await AsyncStorage.setItem(LOCAL_FESTIVAL_KEY, festivalId ?? NO_FESTIVAL);
-    if (cutoff === null) await AsyncStorage.removeItem(LOCAL_COVERS_KEY);
-    else await AsyncStorage.setItem(LOCAL_COVERS_KEY, String(cutoff));
   } catch (e) {
-    Sentry.captureException(e);
+    if (!isRateLimited(e)) Sentry.captureException(e);
   }
 }
 
@@ -75,6 +80,7 @@ export async function unregisterPushOnSignOut(): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (token) await api.delete('/notifications/token', { body: { token } }).catch(() => {});
+    localRemindersGuard.reset();
     await AsyncStorage.multiRemove([TOKEN_KEY, LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (e) {
@@ -249,6 +255,7 @@ export function useMobilePush(): MobilePush {
         deviceName: Device.deviceName ?? undefined,
       });
       await AsyncStorage.setItem(TOKEN_KEY, token);
+      localRemindersGuard.reset();
       await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       setRegistered(true);
     } catch (err) {
@@ -268,6 +275,7 @@ export function useMobilePush(): MobilePush {
       if (token) {
         await api.delete('/notifications/token', { body: { token } });
         await AsyncStorage.removeItem(TOKEN_KEY);
+        localRemindersGuard.reset();
         await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       }
       setRegistered(false);
