@@ -1328,7 +1328,10 @@ export default function TimelineScreen() {
         </>
       ) : timeBounds && visibleStages.length > 0 ? (
         <>
-          {controls}
+          {/* Bound the fixed controls so a tall stack (pre-festival Festival ready card, open search/filters) scrolls instead of pushing the timeline off screen. */}
+          <ScrollView style={{ flexGrow: 0, maxHeight: Math.round(height * 0.3) }} keyboardShouldPersistTaps="handled">
+            {controls}
+          </ScrollView>
           <View style={[styles.viewBody, { marginBottom: scheduleViewportBottomInset }]}>
             <TimelineView
               visibleStages={visibleStages}
@@ -1350,7 +1353,7 @@ export default function TimelineScreen() {
                 instead of ballooning and pushing itself + the timeline past
                 viewBody's clipped (overflow:hidden) bottom edge, which made the
                 TBA cards unreachable. */}
-            {tbaSection ? <ScrollView style={{ maxHeight: Math.round(height * 0.4) }}>{tbaSection}</ScrollView> : null}
+            {tbaSection ? <ScrollView style={{ flexGrow: 0, maxHeight: Math.round(height * 0.4) }}>{tbaSection}</ScrollView> : null}
           </View>
         </>
       ) : (
