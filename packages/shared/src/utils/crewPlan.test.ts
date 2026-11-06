@@ -46,25 +46,37 @@ describe('pickActiveMeetingPoint', () => {
   const nowMs = at(12, 0);
 
   it('returns null for no points', () => {
-    expect(pickActiveMeetingPoint([], nowMs)).toBeNull();
+    expect(pickActiveMeetingPoint([], [day], nowMs)).toBeNull();
   });
 
   it('ignores inactive points', () => {
     const p = mp({ id: 'a', active: false, meet_at: new Date(at(15)).toISOString() } as Partial<CrewMeetingPoint>);
-    expect(pickActiveMeetingPoint([p], nowMs)).toBeNull();
+    expect(pickActiveMeetingPoint([p], [day], nowMs)).toBeNull();
   });
 
   it('picks the soonest future-or-now timed point', () => {
     const later = mp({ id: 'later', active: true, meet_at: new Date(at(18)).toISOString() } as Partial<CrewMeetingPoint>);
     const soon = mp({ id: 'soon', active: true, meet_at: new Date(at(13)).toISOString() } as Partial<CrewMeetingPoint>);
     const past = mp({ id: 'past', active: true, meet_at: new Date(at(9)).toISOString() } as Partial<CrewMeetingPoint>);
-    expect(pickActiveMeetingPoint([later, soon, past], nowMs)?.id).toBe('soon');
+    expect(pickActiveMeetingPoint([later, soon, past], [day], nowMs)?.id).toBe('soon');
   });
 
   it('falls back to an active untimed point when no future timed point exists', () => {
     const past = mp({ id: 'past', active: true, meet_at: new Date(at(9)).toISOString() } as Partial<CrewMeetingPoint>);
     const standing = mp({ id: 'standing', active: true, meet_at: null });
-    expect(pickActiveMeetingPoint([past, standing], nowMs)?.id).toBe('standing');
+    expect(pickActiveMeetingPoint([past, standing], [day], nowMs)?.id).toBe('standing');
+  });
+
+  it('keeps a point for the 30-minute grace after it starts', () => {
+    const justStarted = mp({ id: 'now', active: true, meet_at: new Date(at(11, 45)).toISOString() } as Partial<CrewMeetingPoint>);
+    expect(pickActiveMeetingPoint([justStarted], [day], nowMs)?.id).toBe('now');
+  });
+
+  it('still picks a recurring point whose meet_at is on day 1 when it is day 2', () => {
+    const day2: FestivalDay = { date: '2026-09-05' } as FestivalDay;
+    const daily = mp({ id: 'daily', active: true, recurs_daily: true, meet_at: new Date(at(15)).toISOString() } as Partial<CrewMeetingPoint>);
+    const day2Noon = createDateInLocalFrame(day2.date, 12, 0).getTime();
+    expect(pickActiveMeetingPoint([daily], [day, day2], day2Noon)?.id).toBe('daily');
   });
 });
 
