@@ -87,7 +87,7 @@ describe('PollsTab failed refetch', () => {
 });
 
 describe('PollsTab end poll', () => {
-  it('says a schedule poll creates a meeting point, and seeds the reminder for the crew festival', async () => {
+  it('says a schedule poll creates a meeting point, and skips the reminder when the crew festival is not the open one', async () => {
     closePoll.mockResolvedValue(undefined);
     apiGet.mockResolvedValue({ polls: [poll('s1', { set_refs: [{ setId: 'x' }, null] }), poll('p1')] });
     renderTab();
@@ -95,7 +95,8 @@ describe('PollsTab end poll', () => {
     expect(await screen.findByText(/becomes a meeting point/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'End poll' }));
     await waitFor(() => expect(closePoll).toHaveBeenCalled());
-    expect(closePoll.mock.calls[0]![2]).toMatchObject({ festivalId: 'f-crew' });
+    // f-crew is not the open festival (f1): a reminder would land in f1's profile, so none is seeded.
+    expect(closePoll.mock.calls[0]![2]).toMatchObject({ festivalId: undefined });
   });
 
   it('keeps the short copy for a plain poll', async () => {
