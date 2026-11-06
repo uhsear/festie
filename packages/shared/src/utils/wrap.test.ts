@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WrapCaughtSet, WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
-import { buildWrapCards, isWrapUnlocked, selectSetsToRate, summarizePlan, wrapByline, wrapCardShareText } from './wrap';
+import { artistOf, buildWrapCards, sortRatingsForWrap, isWrapUnlocked, selectSetsToRate, summarizePlan, wrapByline, wrapCardShareText } from './wrap';
 
 const festival: WrapFestival = {
   id: 'f1',
@@ -357,5 +357,30 @@ describe('added caught sets (caughtExtra)', () => {
 
   it('behaves as before when caughtExtra is undefined', () => {
     expect(buildWrapCards(wrap({ caughtExtra: undefined }))).toEqual([]);
+  });
+});
+
+describe('sortRatingsForWrap and artistOf', () => {
+  const ratedSet = (setId: string, rating: number, startTime: string | null): WrapRatedSet => ({
+    setId,
+    rating,
+    note: null,
+    artist: setId,
+    stageId: null,
+    stageName: null,
+    dayIndex: 0,
+    startTime,
+    endTime: null,
+  });
+
+  it('sorts by rating, then start time, without mutating the input', () => {
+    const input = [ratedSet('late', 5, '22:00'), ratedSet('low', 3, '10:00'), ratedSet('early', 5, '18:00')];
+    expect(sortRatingsForWrap(input).map((r) => r.setId)).toEqual(['early', 'late', 'low']);
+    expect(input.map((r) => r.setId)).toEqual(['late', 'low', 'early']);
+  });
+
+  it('falls back to Unknown artist, never a set id', () => {
+    expect(artistOf({ artist: null })).toBe('Unknown artist');
+    expect(artistOf({ artist: 'Aurora' })).toBe('Aurora');
   });
 });

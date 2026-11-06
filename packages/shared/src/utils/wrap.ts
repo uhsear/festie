@@ -11,7 +11,12 @@ const MAX_ROWS = 5;
 type Row = NonNullable<WrapCard['rows']>[number];
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-const artistOf = (s: { artist: string | null }) => s.artist || UNKNOWN_ARTIST;
+export const artistOf = (s: { artist: string | null }) => s.artist || UNKNOWN_ARTIST;
+
+/** Wrap ratings: best first, ties by start time, so web and mobile list the same order. */
+export function sortRatingsForWrap(ratings: readonly WrapRatedSet[]): WrapRatedSet[] {
+  return ratings.slice().sort((a, b) => b.rating - a.rating || (a.startTime || '').localeCompare(b.startTime || ''));
+}
 const startMin = (s: { startTime: string | null }) => (s.startTime ? timeToMinutes(s.startTime) : Infinity);
 const byDayThenStart = (a: WrapPlannedSet, b: WrapPlannedSet) =>
   (a.dayIndex ?? Infinity) - (b.dayIndex ?? Infinity) || startMin(a) - startMin(b);

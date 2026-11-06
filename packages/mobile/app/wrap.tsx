@@ -3,13 +3,13 @@ import { View, Text, ScrollView, FlatList, TouchableOpacity, ActivityIndicator, 
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@festie/shared/services';
 import { useFestivalDataStore, useCrewStore, useAuthStore, useUIStore } from '@festie/shared/stores';
-import { buildWrapCards, formatAmount, isWrapUnlocked, selectSetsToRate, wrapByline, wrapCardShareText } from '@festie/shared/utils';
+import { artistOf, buildWrapCards, formatAmount, isWrapUnlocked, selectSetsToRate, sortRatingsForWrap, wrapByline, wrapCardShareText } from '@festie/shared/utils';
 import type { WrapRatedSet, WrapResponse } from '@festie/shared/types';
-import { COPY, RATING_LABEL } from '@festie/shared/constants';
+import { COPY, RATING_LABEL, signInTo } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import AppSwitch from '../components/AppSwitch';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -38,7 +38,8 @@ export default function WrapScreen() {
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const activeCrew = useCrewStore((s) => s.activeCrew);
-  const username = useAuthStore((s) => s.user?.username ?? null);
+  const user = useAuthStore((s) => s.user);
+  const username = user?.username ?? null;
   const showHandle = useUIStore((s) => s.wrapShowHandle);
   const setShowHandle = useUIStore((s) => s.setWrapShowHandle);
 
@@ -55,30 +56,29 @@ export default function WrapScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const posterRef = useRef<HostInstance>(null);
 
-  useEffect(() => {
-    if (!festivalId) return;
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: clear the previous error before the async GET.
-    setError(false);
-    api
-      .get<WrapResponse>(`/ratings/wrap/${festivalId}${crewParam ? `?crewId=${encodeURIComponent(crewParam)}` : ''}`)
-      .then((res) => {
-        if (!cancelled) setData(res);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [festivalId, crewParam, reloadKey]);
+  // Refetch on every focus: Rate and Caught change what the wrap shows, and Back returns to this mounted screen.
+  useFocusEffect(
+    useCallback(() => {
+      if (!festivalId || !user) return;
+      let cancelled = false;
+      setError(false);
+      api
+        .get<WrapResponse>(`/ratings/wrap/${festivalId}${crewParam ? `?crewId=${encodeURIComponent(crewParam)}` : ''}`)
+        .then((res) => {
+          if (!cancelled) setData(res);
+        })
+        .catch(() => {
+          if (!cancelled) setError(true);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [festivalId, user, crewParam, reloadKey]),
+  );
 
   const cards = useMemo(() => (data ? buildWrapCards(data) : []), [data]);
   const toRate = useMemo(() => (data ? selectSetsToRate(data.planned, data.festival).length : 0), [data]);
-  const allSorted = useMemo(
-    () => (data?.allRatings ?? []).slice().sort((a, b) => b.rating - a.rating),
-    [data?.allRatings],
-  );
+  const allSorted = useMemo(() => sortRatingsForWrap(data?.allRatings ?? []), [data?.allRatings]);
   const unlocked = !!data && isWrapUnlocked(data.festival);
   const festivalName = data?.festival.name ?? '';
   const byline = data ? wrapByline(data.festival, username, showHandle) : null;
@@ -135,12 +135,22 @@ export default function WrapScreen() {
         />
       );
     }
+    if (!user) {
+      return (
+        <EmptyState
+          icon={CONCEPT_IONICON.wrap}
+          title={COPY.auth.signInRequired}
+          message={signInTo('see your wrap')}
+          action={{ label: COPY.auth.signIn, onPress: () => router.push('/(auth)/login') }}
+        />
+      );
+    }
     if (error && !data) {
       return (
         <EmptyState
           icon="cloud-offline-outline"
-          title="Couldn't load your wrap"
-          message="Something went wrong loading your festival wrap."
+          title={`Couldn't load your ${COPY.wrap.name}`}
+          message={`Something went wrong loading your ${COPY.wrap.name}.`}
           action={{ label: 'Try again', onPress: () => setReloadKey((k) => k + 1) }}
         />
       );
@@ -265,8 +275,8 @@ export default function WrapScreen() {
             {allSorted.map((s) => (
               <View key={s.setId} style={styles.allRow}>
                 <RatingTag rating={s.rating} compact />
-                <Text style={styles.allArtist} numberOfLines={1}>
-                  {s.artist || s.setId}
+                <Text style={styles.allArtist} numberOfLines={2}>
+                  {artistOf(s)}
                 </Text>
                 <Text style={styles.allStage} numberOfLines={1}>
                   {stageLabel(s)}
@@ -309,7 +319,7 @@ export default function WrapScreen() {
               style={[styles.tabText, tab === 'crew' && styles.tabTextActive]}
               maxFontSizeMultiplier={MAX_FONT_SCALE}
             >
-              Crew wrap
+              {COPY.wrap.crewName}
             </Text>
           </TouchableOpacity>
         </View>
@@ -552,6 +562,17 @@ function CrewWrapTab({
     wrap.memberCount > 0 &&
     (wrap.topOverlap !== null || wrap.setsSeenTogether.length > 0 || wrap.totalSplit > 0);
 
+  const shareText = async () => {
+    if (!wrap) return;
+    try {
+      await Share.share({
+        message: `Our ${festivalName} Crew Wrap\n${crewName} · ${wrap.memberCount} in the crew\nfestie.us`,
+      });
+    } catch {
+      // User dismissed the share sheet.
+    }
+  };
+
   const handleShare = async () => {
     if (!wrap || sharing) return;
     setSharing(true);
@@ -570,12 +591,11 @@ function CrewWrapTab({
           dialogTitle: 'Share your Crew Wrap',
         });
       } else {
-        await Share.share({
-          message: `Our ${festivalName} Crew Wrap\n${crewName} · ${wrap.memberCount} in the crew\nfestie.us`,
-        });
+        await shareText();
       }
     } catch {
-      // Capture failed or sheet dismissed.
+      // Capture failed (or sheet dismissed): degrade to a text share.
+      await shareText();
     } finally {
       setSharing(false);
     }
@@ -658,8 +678,8 @@ function CrewWrapTab({
             <SectionLabel>Sets you saw together</SectionLabel>
             {wrap.setsSeenTogether.slice(0, 10).map((set) => (
               <View key={set.setId} style={styles.allRow}>
-                <Text style={styles.allArtist} numberOfLines={1}>
-                  {set.artist || set.setId}
+                <Text style={styles.allArtist} numberOfLines={2}>
+                  {artistOf(set)}
                 </Text>
                 <Text style={styles.seenCount}>{set.count} loved it</Text>
               </View>
@@ -675,7 +695,7 @@ function CrewWrapTab({
                 <Text style={styles.memberName}>{m.name}</Text>
                 {m.topSets.length > 0 ? (
                   <Text style={styles.memberPicks} numberOfLines={2}>
-                    {m.topSets.map((set) => set.artist || set.setId).join(' · ')}
+                    {m.topSets.map((set) => artistOf(set)).join(' · ')}
                   </Text>
                 ) : (
                   <Text style={styles.memberEmpty}>No sets rated 4 or higher yet</Text>
