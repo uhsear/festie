@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useAuthStore, useCrewStore, useLiveLocationStore, useFestivalDataStore } from '@festie/shared/stores';
-import { FIND_FRIEND_COPY, LIVE_LOCATION } from '@festie/shared/constants';
-import { isPeerStale } from '@festie/shared/utils';
+import { COPY, FIND_FRIEND_COPY, LIVE_LOCATION } from '@festie/shared/constants';
+import { festivalLoadState, isPeerStale } from '@festie/shared/utils';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useNow';
 import { useSosRaise } from '../../hooks/useSosRaise';
-import { CREW_MEET_HREF, meetingPointPrefillHref } from '../../lib/dayOfRoutes';
+import { CREW_MEET_HREF, SCHEDULE_HREF, meetingPointPrefillHref } from '../../lib/dayOfRoutes';
 import OfflineMap from '../../components/OfflineMap';
 import FreshnessChip from '../../components/FreshnessChip';
 import OfflineStatusChip from '../../components/OfflineStatusChip';
 import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
 import ScreenHeader from '../../components/ScreenHeader';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
 
@@ -69,6 +70,10 @@ export default function MapScreen() {
   // wrong festival (e.g. it kept FK 2K26 after switching to another festival).
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const festivalStages = useFestivalDataStore((s) => s.stages);
+  const festivals = useFestivalDataStore((s) => s.festivals);
+  const festivalsLoading = useFestivalDataStore((s) => s.isLoading);
+  const festivalsError = useFestivalDataStore((s) => s.error);
+  const loadFestivals = useFestivalDataStore((s) => s.loadFestivals);
   const mapFestival = useMemo(
     () => (currentFestival ? { ...currentFestival, stages: festivalStages } : null),
     [currentFestival, festivalStages],
@@ -88,7 +93,7 @@ export default function MapScreen() {
     () => activeSosList.filter((e) => e.crewId === activeCrew?.id),
     [activeSosList, activeCrew?.id],
   );
-  const { confirmRaise } = useSosRaise(activeCrew?.id ?? null);
+  const { confirmRaise, raising } = useSosRaise(activeCrew?.id ?? null);
   const reduceMotion = useReduceMotion();
   const sosFabGlow = useSharedValue(0);
   const sosActive = crewSosList.length > 0;
@@ -148,14 +153,27 @@ export default function MapScreen() {
   ) : undefined;
 
   if (!mapFestival) {
+    const loadState = festivalLoadState({ currentFestival, festivals, isLoading: festivalsLoading, error: festivalsError });
     return (
       <View testID="map-screen" style={styles.screen}>
         <ScreenHeader title="Map" subtitle={activeCrew?.name} icon="map-outline" right={compassButton} />
-        <EmptyState
-          icon="map-outline"
-          title="No festival selected"
-          message="Pick a festival on the Lineup tab to see its map."
-        />
+        {loadState === 'error' ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title={COPY.festivalLoad.errorTitle}
+            message={festivalsError ?? COPY.festivalLoad.errorBody}
+            action={{ label: COPY.festivalLoad.retry, onPress: () => void loadFestivals().catch(() => {}) }}
+          />
+        ) : loadState === 'loading' ? (
+          <LoadingState />
+        ) : (
+          <EmptyState
+            icon="map-outline"
+            title={COPY.festivalLoad.noneTitle}
+            message="Pick a festival on the Lineup tab to see its map."
+            action={{ label: 'Choose a festival', onPress: () => router.navigate(SCHEDULE_HREF) }}
+          />
+        )}
       </View>
     );
   }
@@ -213,15 +231,23 @@ export default function MapScreen() {
               if (mySosActive) router.push(CREW_MEET_HREF);
               else confirmRaise();
             }}
+            disabled={raising}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Send an SOS to your crew"
-            accessibilityHint="Asks for confirmation before sending"
+            accessibilityLabel={mySosActive ? 'Your SOS is active. Open crew to mark yourself safe' : 'Send an SOS to your crew'}
+            accessibilityHint={mySosActive ? undefined : 'Asks for confirmation before sending'}
+            accessibilityState={{ disabled: raising, busy: raising }}
           >
-            <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
-            <Text style={styles.sosFabText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              SOS
-            </Text>
+            {raising ? (
+              <ActivityIndicator color={t.colors.text.onAccent} />
+            ) : (
+              <>
+                <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
+                <Text style={styles.sosFabText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {mySosActive ? 'SOS active' : 'SOS'}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       ) : null}
