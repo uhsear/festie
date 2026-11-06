@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import type { CrewMember } from '@festie/shared/types';
 import { crewCopy, FESTIE_ORIGIN, memberAvatarUrl } from '@festie/shared/utils';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Avatar from './Avatar';
 import Button from './Button';
@@ -19,6 +20,7 @@ interface HandOverSheetProps {
 /** Owner picks who takes over the crew before leaving it. The first candidate is preselected. */
 export default function HandOverSheet({ visible, crewName, candidates, busy, onConfirm, onClose }: HandOverSheetProps) {
   const t = useTokens();
+  const insets = useSafeAreaInsets();
   const styles = useStyles();
   const firstId = candidates[0]?.userId ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(firstId);
@@ -39,7 +41,7 @@ export default function HandOverSheet({ visible, crewName, candidates, busy, onC
           accessibilityRole="button"
           accessibilityLabel="Close hand over"
         />
-        <View style={styles.sheet} accessibilityViewIsModal>
+        <View style={[styles.sheet, { paddingBottom: t.spacing[5] + insets.bottom }]} accessibilityViewIsModal>
           <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {crewCopy.handOverTitle(crewName)}
           </Text>

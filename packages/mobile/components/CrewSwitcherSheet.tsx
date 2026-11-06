@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import {
   groupCrewsByFestival,
@@ -28,6 +29,7 @@ export default function CrewSwitcherSheet({ visible, onClose, initialMode = 'lis
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
+  const insets = useSafeAreaInsets();
 
   const crews = useCrewStore((s) => s.crews);
   const activeCrew = useCrewStore((s) => s.activeCrew);
@@ -70,14 +72,14 @@ export default function CrewSwitcherSheet({ visible, onClose, initialMode = 'lis
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.root}>
+      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Pressable
           style={styles.backdrop}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel="Close your crews"
         />
-        <View style={styles.sheet} accessibilityViewIsModal>
+        <View style={[styles.sheet, { paddingBottom: t.spacing[5] + insets.bottom }]} accessibilityViewIsModal>
           <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             Your crews
           </Text>
@@ -161,7 +163,7 @@ export default function CrewSwitcherSheet({ visible, onClose, initialMode = 'lis
             </>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
