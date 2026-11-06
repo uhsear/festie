@@ -123,6 +123,10 @@ export default function TimelineScreen() {
     requestedView === 'cards' || requestedView === 'timeline' ? requestedView : null;
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  // Timeline view: the page scrolls as one, like Cards. These sizes let the
+  // timeline fill the whole viewport once the controls scroll away.
+  const [timelineViewportH, setTimelineViewportH] = useState(0);
+  const [timelineControlsH, setTimelineControlsH] = useState(0);
 
   // Responsive horizontal gutter. Phones keep the standard spacing[4] (16px)
   // edge padding. On tablet-class widths a flat 16px gutter leaves the chrome
@@ -1256,10 +1260,10 @@ export default function TimelineScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Schedule body — view-mode specific. In Cards view the `controls` ride
-          in the FlatList's ListHeaderComponent so the WHOLE page scrolls as one
-          (cards get full height); in Timeline view they stay fixed above the
-          bounded 2D timeline. */}
+      {/* Schedule body — view-mode specific. In both views the WHOLE page
+          scrolls as one: Cards carries the `controls` in the FlatList's
+          ListHeaderComponent, and Timeline puts them above a timeline sized to
+          the full viewport, so scrolling past them shows the timeline full size. */}
       {viewMode === 'cards' ? (
         <>
           <FlatList
@@ -1328,33 +1332,42 @@ export default function TimelineScreen() {
         </>
       ) : timeBounds && visibleStages.length > 0 ? (
         <>
-          {/* Bound the fixed controls so a tall stack (pre-festival Festival ready card, open search/filters) scrolls instead of pushing the timeline off screen. */}
-          <ScrollView style={{ flexGrow: 0, maxHeight: Math.round(height * 0.3) }} keyboardShouldPersistTaps="handled">
-            {controls}
+          <ScrollView
+            style={[styles.scrollBody, { marginBottom: scheduleViewportBottomInset }]}
+            onLayout={(e) => setTimelineViewportH(Math.round(e.nativeEvent.layout.height))}
+            // Rest either on the controls or on the full-size timeline, never half way.
+            snapToOffsets={timelineControlsH > 0 ? [0, timelineControlsH] : undefined}
+            decelerationRate="fast"
+            showsVerticalScrollIndicator={false}
+            refreshControl={refreshControl}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            <View onLayout={(e) => setTimelineControlsH(Math.round(e.nativeEvent.layout.height))}>{controls}</View>
+            <View style={[styles.timelineBody, { height: timelineViewportH || Math.round(height * 0.6) }]}>
+              <TimelineView
+                visibleStages={visibleStages}
+                timedSets={timedSets}
+                timeBounds={timeBounds}
+                selectedDay={selectedDay}
+                b2bSeparator={currentFestival.b2bSeparator}
+                getMyPick={getMyPick}
+                getStageColor={resolveStageColor}
+                onSetPress={handleSetPress}
+                days={days}
+                allSets={allSets}
+                picks={myPicks}
+              />
+              {/* Dock the TBA list below the timeline in its own bounded scroll so
+                  it's always reachable. A ScrollView with a fixed maxHeight stays
+                  content-sized while the section is collapsed (just its header) and,
+                  once expanded, caps at ~40% of the screen and scrolls internally —
+                  instead of ballooning and pushing itself + the timeline past
+                  the timeline body's clipped (overflow:hidden) bottom edge, which made the
+                  TBA cards unreachable. */}
+              {tbaSection ? <ScrollView style={{ flexGrow: 0, maxHeight: Math.round(height * 0.4) }} nestedScrollEnabled>{tbaSection}</ScrollView> : null}
+            </View>
           </ScrollView>
-          <View style={[styles.viewBody, { marginBottom: scheduleViewportBottomInset }]}>
-            <TimelineView
-              visibleStages={visibleStages}
-              timedSets={timedSets}
-              timeBounds={timeBounds}
-              selectedDay={selectedDay}
-              b2bSeparator={currentFestival.b2bSeparator}
-              getMyPick={getMyPick}
-              getStageColor={resolveStageColor}
-              onSetPress={handleSetPress}
-              days={days}
-              allSets={allSets}
-              picks={myPicks}
-            />
-            {/* Dock the TBA list below the timeline in its own bounded scroll so
-                it's always reachable. A ScrollView with a fixed maxHeight stays
-                content-sized while the section is collapsed (just its header) and,
-                once expanded, caps at ~40% of the screen and scrolls internally —
-                instead of ballooning and pushing itself + the timeline past
-                viewBody's clipped (overflow:hidden) bottom edge, which made the
-                TBA cards unreachable. */}
-            {tbaSection ? <ScrollView style={{ flexGrow: 0, maxHeight: Math.round(height * 0.4) }}>{tbaSection}</ScrollView> : null}
-          </View>
         </>
       ) : (
         <ScrollView
@@ -1670,10 +1683,8 @@ const useStyles = makeStyles((t) => ({
   scrollBody: {
     flex: 1,
   },
-  viewBody: {
-    flex: 1,
-    // Bound the timeline to the body so its internal scroll never bleeds over
-    // the tab bar (see container note).
+  timelineBody: {
+    // A fixed height, not flex: inside a ScrollView flex:1 resolves to 0.
     overflow: 'hidden',
   },
   fallbackScroll: {
