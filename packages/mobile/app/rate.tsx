@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { api, markCaught } from '@festie/shared/services';
-import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { formatTime, isWrapUnlocked, selectSetsToRate } from '@festie/shared/utils';
 import type { WrapFestival, WrapPlannedSet, WrapResponse } from '@festie/shared/types';
 import EmptyState from '../components/EmptyState';
@@ -10,6 +10,7 @@ import Button from '../components/Button';
 import RatingButtons from '../components/RatingButtons';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useHaptics } from '../hooks/useHaptics';
 
 type Loaded = { festival: WrapFestival; sets: WrapPlannedSet[] };
 
@@ -28,6 +29,7 @@ export default function RateScreen() {
   const t = useTokens();
   const router = useRouter();
   const reduceMotion = useReduceMotion();
+  const haptics = useHaptics();
   const { festival: festivalParam } = useLocalSearchParams<{ festival?: string }>();
   const currentFestivalId = useFestivalDataStore((s) => s.currentFestival?.id);
   const festivalId = festivalParam || currentFestivalId;
@@ -65,7 +67,11 @@ export default function RateScreen() {
     [],
   );
 
-  const advance = useCallback(() => setIndex((i) => i + 1), []);
+  // Clearing the pending auto-advance keeps a quick Skip or Skipped from advancing twice.
+  const advance = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    setIndex((i) => i + 1);
+  }, []);
   const next = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(advance, reduceMotion ? 0 : 300);
@@ -74,9 +80,12 @@ export default function RateScreen() {
   const mark = useCallback(
     (setId: string, caught: boolean) => {
       if (!userId) return;
-      markCaught(setId, caught, userId).catch((err) => console.warn('Mark set caught failed', err));
+      markCaught(setId, caught, userId).catch(() => {
+        haptics.warning();
+        useUIStore.getState().showToast("Couldn't save that. Try again.", { kind: 'error' });
+      });
     },
-    [userId],
+    [userId, haptics],
   );
 
   const header = <Stack.Screen options={{ title: 'Rate your night', headerShown: true }} />;

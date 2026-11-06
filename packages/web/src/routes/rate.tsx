@@ -83,6 +83,12 @@ function RateFlow({ festivalId }: { festivalId: string }) {
     timer.current = setTimeout(() => setIndex((i) => i + 1), reduceMotion ? 0 : ADVANCE_DELAY_MS);
   }, [reduceMotion]);
 
+  // Clearing the pending auto-advance keeps a quick Skip or Skipped from advancing twice.
+  const advance = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    setIndex((i) => i + 1);
+  }, []);
+
   const mark = useCallback(
     (setId: string, caught: boolean) => {
       if (!userId) return;
@@ -180,7 +186,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
             type="button"
             onClick={() => {
               mark(set.setId, false);
-              setIndex((i) => i + 1);
+              advance();
             }}
             className={chipClass}
           >
@@ -203,7 +209,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
       <div className="mt-4 flex justify-center">
         <button
           type="button"
-          onClick={() => setIndex((i) => i + 1)}
+          onClick={advance}
           className="min-h-11 px-5 rounded-full border border-border text-sm font-semibold text-text-secondary cursor-pointer"
         >
           Skip
