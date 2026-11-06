@@ -56,7 +56,24 @@ describe('SosRaiseButton', () => {
     await user.click(screen.getByRole('button', { name: 'Send SOS' }));
 
     expect(raiseSosSpy).toHaveBeenCalledWith('c1', { message: 'Lost near Main Stage' });
-    expect(toastSpy).toHaveBeenCalledWith('SOS sent to your crew', 'success');
+    expect(toastSpy).toHaveBeenCalledWith(expect.stringContaining('without your location'), 'warning');
+  });
+
+  it('toasts plain success when a position was attached', async () => {
+    Object.defineProperty(global.navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: vi.fn((ok: PositionCallback) =>
+          ok({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 10 }, timestamp: 0 } as GeolocationPosition),
+        ),
+      },
+    });
+    raiseSosSpy.mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    render(<SosRaiseButton crewId="c1" />);
+    await user.click(screen.getByRole('button', { name: 'Send an SOS to your crew' }));
+    await user.click(screen.getByRole('button', { name: 'Send SOS' }));
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith('SOS sent to your crew', 'success'));
   });
 
   it('sends without a position when the permission prompt is never answered', async () => {
