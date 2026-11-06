@@ -176,12 +176,12 @@ export default function CrewPollCard({
                   <View style={styles.optionTextRow}>
                     {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
                     {isMine ? <Ionicons name="checkmark-circle" size={16} color={t.colors.accent.aqua} /> : null}
-                    <Text style={styles.optionText} numberOfLines={1}>
+                    <Text style={styles.optionText} numberOfLines={2}>
                       {text}
                     </Text>
                   </View>
                   {voterLine ? (
-                    <Text style={styles.voterLine} numberOfLines={1}>
+                    <Text style={styles.voterLine} numberOfLines={2}>
                       {voterLine}
                     </Text>
                   ) : null}

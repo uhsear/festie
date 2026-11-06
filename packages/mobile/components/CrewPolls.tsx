@@ -458,7 +458,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
                       size={t.iconSize.action}
                       color={checked ? t.colors.accent.aqua : t.colors.text.secondary}
                     />
-                    <Text style={styles.optionPickText} numberOfLines={1}>
+                    <Text style={styles.optionPickText} numberOfLines={2}>
                       {artistDisplayName(set)}
                     </Text>
                     {stage ? <Text style={styles.slotMeta}>{stage}</Text> : null}

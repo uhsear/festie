@@ -449,7 +449,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
                     </Text>
                   </View>
                   {targetLabel ? (
-                    <Text style={styles.statusRowTarget} numberOfLines={1}>
+                    <Text style={styles.statusRowTarget} numberOfLines={2}>
                       → {targetLabel}
                       {typeof s.eta_minutes === 'number' ? ` · ETA ~${s.eta_minutes} min` : ''}
                     </Text>
