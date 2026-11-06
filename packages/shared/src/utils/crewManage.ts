@@ -9,6 +9,8 @@ import { festivalStatus, type FestivalStatus } from './festivalTime';
 export const crewCopy = {
   joined: (crew: string) => `You joined ${crew}`,
   removed: (name: string) => `Removed ${name}`,
+  left: (crew: string) => `You left ${crew}`,
+  deleted: (crew: string) => `Deleted ${crew}`,
   transferred: (name: string) => `${name} now owns the crew`,
   inviteRegenerated: 'New invite code ready',
   renamed: 'Crew renamed',
