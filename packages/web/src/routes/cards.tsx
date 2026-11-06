@@ -113,7 +113,9 @@ function CardsViewInner() {
     [getFilteredSets, days, nowMs, currentFestival],
   );
   const filteredSets = useMemo(() => [...earlier, ...rest], [earlier, rest]);
-  const visibleSets = showEarlier ? filteredSets : rest;
+  // Don't fold a search, or the only sets left (late night), behind the collapsed row.
+  const earlierForced = rest.length === 0 || searchQuery.trim() !== '';
+  const visibleSets = showEarlier || earlierForced ? filteredSets : rest;
   // Sections for the remembered "Group by" (Time, Stage or A-Z).
   const groups = useMemo(
     () => groupScheduleSets(visibleSets, groupBy, stages, currentFestival?.b2bSeparator),
@@ -250,7 +252,7 @@ function CardsViewInner() {
           role="region"
           aria-label="Card view"
         >
-          {earlier.length > 0 && (
+          {earlier.length > 0 && !earlierForced && (
             <button
               type="button"
               className="col-span-full inline-flex items-center justify-center gap-1.5 min-h-11 rounded-xl border border-glass-border bg-bg-card text-sm font-medium text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
