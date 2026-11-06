@@ -80,7 +80,16 @@ export function useGeolocationWatch(): GeolocationWatch {
     );
     noFixTimerRef.current = setTimeout(() => {
       noFixTimerRef.current = null;
-      setGeoState((s) => (s === 'on' ? s : 'unavailable'));
+      const markUnavailable = () => setGeoState((s) => (s === 'on' ? s : 'unavailable'));
+      // An unanswered permission prompt is not a missing signal: keep "Finding you" until it is answered.
+      const perms = typeof navigator !== 'undefined' ? navigator.permissions : undefined;
+      if (!perms?.query) return markUnavailable();
+      perms.query({ name: 'geolocation' }).then(
+        (status) => {
+          if (status.state !== 'prompt' && watchIdRef.current != null) markUnavailable();
+        },
+        markUnavailable,
+      );
     }, NO_FIX_TIMEOUT_MS);
     watchIdRef.current = geo.watchPosition(
       (pos) => {

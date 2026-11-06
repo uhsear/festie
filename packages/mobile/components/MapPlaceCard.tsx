@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Share, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   MAP_COPY,
@@ -21,6 +21,8 @@ interface MapPlaceCardProps {
   onSetMeetingPoint?: (place: MapPlace) => void;
   /** The no-fix line's tap: the map starts or retries location. */
   onLocate: () => void;
+  /** Set only when Settings is the way out (blocked permission, Location Services off). */
+  onOpenSettings?: () => void;
   onClose: () => void;
 }
 
@@ -32,6 +34,7 @@ export default function MapPlaceCard({
   onShowWay,
   onSetMeetingPoint,
   onLocate,
+  onOpenSettings,
   onClose,
 }: MapPlaceCardProps) {
   const t = useTokens();
@@ -59,8 +62,8 @@ export default function MapPlaceCard({
             </Text>
           ) : (
             <TouchableOpacity
-              // A blocked permission cannot be re-prompted from here: Settings is the only way.
-              onPress={geoState === 'denied' ? () => void Linking.openSettings() : onLocate}
+              // A soft deny can still be re-prompted; only a hard block or services off needs Settings.
+              onPress={geoState === 'denied' && onOpenSettings ? onOpenSettings : onLocate}
               accessibilityRole="button" style={styles.locate}>
               <Text style={styles.locateText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {locationPromptCopy(geoState)}

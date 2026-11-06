@@ -492,23 +492,30 @@ export default function OfflineMap({
   }, []);
   // Weak signal, not refusal: keep the watch, and never override a fix that already arrived.
   const markUnavailable = useCallback(() => setGeoState((s) => (s === 'on' ? s : 'unavailable')), []);
+  // Why 'denied' is showing: Settings is the only fix for a hard block or Location Services off.
+  const [settingsOnly, setSettingsOnly] = useState(false);
+  const [servicesOff, setServicesOff] = useState(false);
   const enableLocation = useCallback(async () => {
     if (watchSubRef.current || startingRef.current) return; // already watching
     startingRef.current = true;
     watchFixRef.current = false;
     setGeoState('locating');
+    setServicesOff(false);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
+        setSettingsOnly(!canAskAgain);
         setGeoState('denied');
         return;
       }
+      setSettingsOnly(false);
       if (!focusedRef.current) {
         setGeoState('idle');
         return;
       }
-      // Device Location Services off: a watch would only time out, so send the user to Settings now.
+      // Device Location Services off: a watch would only time out, so ask the user to turn it on now.
       if (!(await Location.hasServicesEnabledAsync())) {
+        setServicesOff(true);
         setGeoState('denied');
         return;
       }
@@ -568,6 +575,14 @@ export default function OfflineMap({
     clearNoFixTimer();
     void enableLocation();
   }, [clearNoFixTimer, enableLocation]);
+  // Android has a system dialog that switches device location on; elsewhere (or if it fails) open Settings.
+  const openLocationSettings = useCallback(() => {
+    if (servicesOff && Platform.OS === 'android') {
+      Location.enableNetworkProviderAsync().then(retryLocation, () => void Linking.openSettings());
+      return;
+    }
+    void Linking.openSettings();
+  }, [servicesOff, retryLocation]);
   // Every no-fix line's tap: retry after a refusal or weak signal, else start.
   const locate = useCallback(() => {
     if (geoState === 'unavailable' || geoState === 'denied') retryLocation();
@@ -1190,6 +1205,15 @@ export default function OfflineMap({
     },
     [flyTo, camera],
   );
+  // A more accurate fix can move the user back in range: refresh or clear the shown notice.
+  useEffect(() => {
+    if (!selfCoord) return;
+    setFarNoticeM((m) => {
+      if (m === null) return null;
+      const distanceM = distanceFromFestivalM(selfCoord, camera);
+      return distanceM !== null && distanceM > FAR_FROM_FESTIVAL_M ? distanceM : null;
+    });
+  }, [selfCoord, camera]);
   const showFestival = useCallback(() => {
     setFarNoticeM(null);
     if (camera.bounds) {
@@ -1611,6 +1635,7 @@ export default function OfflineMap({
                 }}
                 onSetMeetingPoint={onSetMeetingPoint}
                 onLocate={locate}
+                onOpenSettings={settingsOnly || servicesOff ? openLocationSettings : undefined}
                 onClose={() => setPlace(null)}
               />
             ) : interactive && (nearestNotice || pendingNearest || pendingRecenter || farNoticeM !== null) ? (
@@ -1664,7 +1689,7 @@ export default function OfflineMap({
                       label={LIVE_SHARE_COPY.openSettings}
                       size="sm"
                       variant="secondary"
-                      onPress={() => void Linking.openSettings()}
+                      onPress={openLocationSettings}
                       maxFontSizeMultiplier={MAX_FONT_SCALE}
                     />
                     <Button
