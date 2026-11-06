@@ -2,7 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, AlertTriangle, Navigation, X, LocateFixed } from 'lucide-react';
+import { MapPin, AlertTriangle, Navigation, X, LocateFixed, Loader2 } from 'lucide-react';
 import {
   extractMeetingPointPins,
   extractStagePins,
@@ -21,6 +21,10 @@ import {
   isPeerStale,
   formatShareWindow,
   locationPromptCopy,
+  type Coord,
+  distanceFromFestivalM,
+  farFromFestivalCopy,
+  FAR_FROM_FESTIVAL_M,
   nearestMissingCopy,
   nearestStep,
   nearestTarget,
@@ -406,6 +410,18 @@ export default function CrewMap({
     [selfCoord, liveTarget],
   );
 
+  // "Show my location": fly to the fix now, or ask for one and fly when it lands.
+  const flyToSelfRef = useRef(false);
+  // True from the tap until a fix lands, so a blocked or failed location shows a message.
+  const [awaitingSelf, setAwaitingSelf] = useState(false);
+  // Metres from the festival when Show my location lands on a fix far outside the grounds.
+  const [farNoticeM, setFarNoticeM] = useState<number | null>(null);
+  // A later pick (a place, Nearest) must not be undone by a late fix flying back to the user.
+  const cancelSelfFly = useCallback(() => {
+    flyToSelfRef.current = false;
+    setAwaitingSelf(false);
+  }, []);
+
   // Tapping a marker opens its place card. Remember the marker so closing the card
   // can return focus to it.
   const openerRef = useRef<HTMLElement | null>(null);
@@ -414,7 +430,8 @@ export default function CrewMap({
     openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
     setPlace(placeFromPin(pin));
     setPursue(null);
-  }, []);
+    cancelSelfFly();
+  }, [cancelSelfFly]);
   const closePlace = useCallback(() => {
     setPlace(null);
     const opener = openerRef.current;
@@ -439,13 +456,14 @@ export default function CrewMap({
         locate();
         return;
       }
+      cancelSelfFly();
       setPursue(nearestTarget(step));
       setPlace(null);
       setNearestNotice(null);
       setPendingNearest(null);
       mapRef.current?.flyTo({ center: [step.pin.longitude, step.pin.latitude], zoom: 16, duration: 600 });
     },
-    [selfCoord, locate],
+    [selfCoord, locate, cancelSelfFly],
   );
   const pursueNearest = useCallback(
     (type: AmenityType) => applyNearestStep(nearestStep(type, amenityPins, selfCoord)),
@@ -458,25 +476,36 @@ export default function CrewMap({
     applyNearestStep(nearestStep(type, amenityPins, selfCoord));
   }, [selfCoord, pendingNearest, amenityPins, applyNearestStep]);
 
-  // "Show my location": fly to the fix now, or ask for one and fly when it lands.
-  const flyToSelfRef = useRef(false);
-  // True from the tap until a fix lands, so a blocked or failed location shows a message.
-  const [awaitingSelf, setAwaitingSelf] = useState(false);
+  // A fix far from the grounds still gets the dot, plus a notice with a way back
+  // (the offline basemap covers only the venue, so the map there is blank).
+  const flyToSelf = useCallback((fix: Coord) => {
+    mapRef.current?.flyTo({ center: [fix.longitude, fix.latitude], zoom: 16, duration: 600 });
+    const distanceM = distanceFromFestivalM(fix, cameraRef.current);
+    setFarNoticeM(distanceM !== null && distanceM > FAR_FROM_FESTIVAL_M ? distanceM : null);
+  }, []);
+  const showFestival = useCallback(() => {
+    setFarNoticeM(null);
+    const { bounds, center: venue } = cameraRef.current;
+    if (bounds) mapRef.current?.fitBounds(bounds, { padding: 56, maxZoom: 17, duration: 600 });
+    else if (venue) mapRef.current?.flyTo({ center: [venue.longitude, venue.latitude], zoom: 15, duration: 600 });
+  }, []);
   const showMyLocation = useCallback(() => {
     if (selfCoord) {
-      mapRef.current?.flyTo({ center: [selfCoord.longitude, selfCoord.latitude], zoom: 16, duration: 600 });
+      flyToSelf(selfCoord);
       return;
     }
     flyToSelfRef.current = true;
     setAwaitingSelf(true);
     locate();
-  }, [selfCoord, locate]);
+  }, [selfCoord, locate, flyToSelf]);
   useEffect(() => {
     if (!flyToSelfRef.current || !selfCoord) return;
     flyToSelfRef.current = false;
     setAwaitingSelf(false);
-    mapRef.current?.flyTo({ center: [selfCoord.longitude, selfCoord.latitude], zoom: 16, duration: 600 });
-  }, [selfCoord]);
+    flyToSelf(selfCoord);
+  }, [selfCoord, flyToSelf]);
+  const locating = awaitingSelf && geoState === 'locating';
+  const awaitingFix = !nearestNotice && (pendingNearest !== null || awaitingSelf);
 
   // Close the card when its pin is gone (stage deleted, festival or crew changed).
   // A filtered-out amenity keeps its card: the check uses the full pin list.
@@ -492,12 +521,14 @@ export default function CrewMap({
     setPlace(null);
     setPendingNearest(null);
     setNearestNotice(null);
+    setFarNoticeM(null);
   }, [interactive]);
   const festivalId = festival?.id;
   useEffect(() => {
     setPlace(null);
     setPendingNearest(null);
     setNearestNotice(null);
+    setFarNoticeM(null);
   }, [festivalId]);
 
   // Keep the latest camera for the lazy map creation without making it an effect
@@ -759,9 +790,51 @@ export default function CrewMap({
             onClick={showMyLocation}
             className="absolute left-2 top-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-elevated/95 text-text-primary shadow-lg hover:border-accent-aqua"
             aria-label={MAP_COPY.showMyLocation}
+            aria-busy={locating}
           >
-            <LocateFixed className="w-5 h-5" aria-hidden="true" />
+            {locating ? (
+              <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+            ) : (
+              <LocateFixed className="w-5 h-5" aria-hidden="true" />
+            )}
           </button>
+        )}
+
+        {/* ── Location status over the map, next to the button: below the canvas it sat
+            behind the bottom nav on a phone, so a failed tap looked like nothing happened. */}
+        {interactive && status !== 'error' && (awaitingFix || farNoticeM !== null) && (
+          <div
+            role="status"
+            className="absolute left-14 right-2 top-2 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border bg-bg-elevated/95 px-3 py-2 text-xs text-text-secondary shadow-lg"
+          >
+            {awaitingFix ? (
+              geoState === 'denied' || geoState === 'unavailable' ? (
+                <>
+                  <span>{locationPromptCopy(geoState)}</span>
+                  <button type="button" onClick={retryLocation} className="min-h-11 text-accent-aqua underline">
+                    {MAP_COPY.tryAgain}
+                  </button>
+                </>
+              ) : (
+                <span>{locationPromptCopy('locating')}</span>
+              )
+            ) : (
+              <>
+                <span>{farFromFestivalCopy(farNoticeM ?? 0, festival?.name)}</span>
+                <button type="button" onClick={showFestival} className="min-h-11 text-accent-aqua underline">
+                  {MAP_COPY.showFestival}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFarNoticeM(null)}
+                  aria-label="Dismiss"
+                  className="inline-flex h-11 w-11 items-center justify-center text-text-muted"
+                >
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </>
+            )}
+          </div>
         )}
 
         {/* ── Place card: what a tapped pin is, how far, and what to do next. */}
@@ -771,6 +844,7 @@ export default function CrewMap({
             selfCoord={selfCoord}
             geoState={geoState}
             onShowWay={() => {
+              cancelSelfFly();
               setPursue(placeTarget(place));
               setPlace(null);
             }}
@@ -870,21 +944,6 @@ export default function CrewMap({
           )}
         </p>
       )}
-      {interactive && !nearestNotice && (pendingNearest || awaitingSelf) && (
-        <p role="status" className="text-xs text-text-secondary">
-          {geoState === 'denied' || geoState === 'unavailable' ? (
-            <>
-              {locationPromptCopy(geoState)}{' '}
-              <button type="button" onClick={retryLocation} className="text-accent-aqua underline">
-                {MAP_COPY.tryAgain}
-              </button>
-            </>
-          ) : (
-            locationPromptCopy('locating')
-          )}
-        </p>
-      )}
-
       {/* ── Amenity filter chips: toggle each category on/off (local only). */}
       {hasAmenities && (
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter amenities by category">
