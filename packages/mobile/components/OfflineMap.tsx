@@ -49,15 +49,16 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
-import { FIND_FRIEND_COPY } from '@festie/shared/constants';
+import { FIND_FRIEND_COPY, LIVE_SHARE_COPY } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
+import AppPressable from './AppPressable';
 import { useNow } from '../hooks/useNow';
 import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '../lib/webviewBridge';
 import type { AuthoringMode } from '../lib/webviewBridge';
 import { basemapCacheInfo, ensureBasemapCached, readCachedBase64 } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
-import { peerCompassHref } from '../lib/dayOfRoutes';
+import { compassHref, peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
 import MapPlaceCard from './MapPlaceCard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -242,6 +243,11 @@ interface OfflineMapProps {
   onFocusHandled?: () => void;
   /** Shows "Set as meeting point" on the place card. Omit for guests and the admin editor. */
   onSetMeetingPoint?: (place: MapPlace) => void;
+}
+
+/** An SOS entry carries a usable fix, so its row can open the offline compass. */
+function sosHasFix(s: SosEntry): boolean {
+  return !!s.position && Number.isFinite(s.position.lat) && Number.isFinite(s.position.lng);
 }
 
 export default function OfflineMap({
@@ -549,6 +555,9 @@ export default function OfflineMap({
         watchSubRef.current = null;
         clearNoFixTimer();
         setGeoState((g) => (g === 'denied' ? g : 'idle'));
+        // The last fix goes stale once the watch stops: drop it so Find me,
+        // Nearest and the walk ETAs ask for a fresh one instead of using it.
+        setSelfCoord(null);
       };
     }, [enableLocation, clearNoFixTimer]),
   );
@@ -1142,7 +1151,11 @@ export default function OfflineMap({
 
   // Show the user's own position in the document (blue dot). Replays after a reload.
   useEffect(() => {
-    if (phase !== 'map' || !webRef.current || !selfCoord) return;
+    if (phase !== 'map' || !webRef.current) return;
+    if (!selfCoord) {
+      webRef.current.injectJavaScript('window.__festieSetSelf && window.__festieSetSelf(null); true;');
+      return;
+    }
     const { longitude, latitude } = selfCoord;
     if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
     webRef.current.injectJavaScript(
@@ -1178,12 +1191,18 @@ export default function OfflineMap({
 
         {/* SOS first — safety-critical, even with no map. One row per active SOS. */}
         {sosList.map((s) => (
-          <View
+          <AppPressable
             key={`sos:${s.userId}`}
             style={styles.sosRow}
             accessible
-            accessibilityRole="alert"
+            // Only a row with a fix opens the offline compass; the rest stay inert alerts.
+            accessibilityRole={sosHasFix(s) ? 'button' : 'alert'}
             accessibilityLabel={`SOS from ${s.username}${s.message ? ', ' + s.message : ''}`}
+            accessibilityHint={s.position ? MAP_COPY.pointMeThere : undefined}
+            disabled={!sosHasFix(s)}
+            onPress={() => {
+              if (s.position) router.push(compassHref(s.username, { latitude: s.position.lat, longitude: s.position.lng }));
+            }}
           >
             <Ionicons name="warning" size={20} color={t.colors.accent.coral} />
             <View style={styles.rowBody}>
@@ -1197,20 +1216,19 @@ export default function OfflineMap({
                 </Text>
               ) : null}
             </View>
-          </View>
+          </AppPressable>
         ))}
 
         {/* Live peers — honest "last seen N ago" with no map. */}
         {livePeerPins.map((p) => (
-          <View
+          <AppPressable
             key={p.id}
             style={styles.row}
             accessible
-            // Non-interactive info row (no onPress) — 'text', not 'button', so
-            // screen readers don't announce a phantom actionable control.
-            accessibilityRole="text"
+            accessibilityRole="button"
             accessibilityLabel={`${p.label}, ${p.sublabel}`}
-            accessibilityHint={`${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`}
+            accessibilityHint={FIND_FRIEND_COPY.openCompassA11y(p.label)}
+            onPress={() => router.push(peerCompassHref(p.id.slice('peer:'.length)))}
           >
             <Ionicons name="navigate-circle" size={iconSize.action} color={t.colors.accent.aqua} />
             <View style={styles.rowBody}>
@@ -1220,7 +1238,7 @@ export default function OfflineMap({
                 {p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}
               </Text>
             </View>
-          </View>
+          </AppPressable>
         ))}
 
         {!hasAny && onSetMeetingPoint ? (
@@ -1236,16 +1254,16 @@ export default function OfflineMap({
         ) : null}
 
         {coorded.map((pin) => (
-          <View
+          <AppPressable
             key={pin.id}
             style={styles.row}
             // a11y: announce the whole row as one meeting-point entry so the
             // coords read as metadata, not a separate flat list item.
             accessible={true}
-            // Non-interactive info row (no onPress) — 'text', not 'button'.
-            accessibilityRole="text"
+            accessibilityRole="button"
             accessibilityLabel={`Meeting point: ${pin.label}${pin.sublabel ? ', ' + pin.sublabel : ''}`}
-            accessibilityHint={`${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
+            accessibilityHint={MAP_COPY.pointMeThere}
+            onPress={() => router.push(compassHref(pin.label, { latitude: pin.latitude, longitude: pin.longitude }))}
           >
             {/* Aqua, not coral: a meeting-point pin is a neutral location cue;
                 coral is danger/SOS-only per the one-accent rule. */}
@@ -1257,7 +1275,7 @@ export default function OfflineMap({
                 {pin.latitude.toFixed(5)}, {pin.longitude.toFixed(5)}
               </Text>
             </View>
-          </View>
+          </AppPressable>
         ))}
 
         {uncoordedPoints.map((p) => (
@@ -1564,7 +1582,17 @@ export default function OfflineMap({
                     maxFontSizeMultiplier={MAX_FONT_SCALE}
                   />
                 ) : null}
-                {!nearestNotice && (geoState === 'denied' || geoState === 'unavailable') ? (
+                {!nearestNotice && geoState === 'denied' ? (
+                  // A permanent denial never re-prompts, so Try again would be a dead end.
+                  <Button
+                    label={LIVE_SHARE_COPY.openSettings}
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => void Linking.openSettings()}
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  />
+                ) : null}
+                {!nearestNotice && geoState === 'unavailable' ? (
                   <Button
                     label={MAP_COPY.tryAgain}
                     size="sm"
