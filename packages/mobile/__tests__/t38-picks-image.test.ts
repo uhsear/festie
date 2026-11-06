@@ -82,7 +82,7 @@ describe('T38 mobile Save image', () => {
 
   it('shows the whole day on one image unless the user splits it', () => {
     expect(screen).toContain('const [onePage, setOnePage] = useState(true);');
-    expect(screen).toContain("switchRow('Split long days into 2 images (bigger text)', !onePage, (v) => setOnePage(!v))");
+    expect(screen).toContain("switchRow('Split long days into 2 images', !onePage, (v) => setOnePage(!v))");
   });
 
   it('opens Full day from the schedule grid', () => {

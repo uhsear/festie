@@ -241,8 +241,11 @@ export interface LockscreenGridPage {
   hours: { label: string; y: number; dashed: boolean }[];
   blocks: LockscreenGridBlock[];
   legend: string;
-  /** Names that did not fit their block, listed in place of the legend from `legendY`, one row of `noteRowU` each. */
-  notes: Array<{ n: number; text: string }>;
+  /**
+   * Names that did not fit their block, listed in place of the legend from `legendY`. Each note is wrapped
+   * into `lines` (one row of `noteRowU` each) inside its own `x`, `y`, `width` box, in one or two columns.
+   */
+  notes: Array<{ n: number; text: string; lines: string[]; x: number; y: number; width: number }>;
   noteSizeU: number;
   noteRowU: number;
   /** Right of the hour gutter, so the legend never covers the last hour label. */
@@ -329,9 +332,6 @@ export const LOCKSCREEN_PRESETS: readonly LockscreenPreset[] = [
 ];
 
 /** Fractions of image height. Estimates until measured on devices (spec 7.3). */
-/** Poster canvas: where the header starts, in u from the image top. */
-export const POSTER_TOP_U = 3;
-
 export const LOCKSCREEN_ZONES = {
   top: 0.38,
   tallTop: 0.45,
@@ -345,4 +345,7 @@ export const LOCKSCREEN_ZONES = {
   cornerSafe: 0.875,
   sidePadU: 6,
 } as const;
+
+/** Poster canvas: where the header starts, in u from the image top. */
+export const POSTER_TOP_U = 3;
 

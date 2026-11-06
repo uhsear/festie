@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FestivalDay, FestivalSet, Priority, Stage } from '../types/domain';
 import { EDC_SETS, EDC_STAGES } from './lockscreen.fixture';
-import { POSTER_TOP_U, type LockscreenGridPage, type LockscreenInput, type LockscreenListPage } from './lockscreen';
+import { LOCKSCREEN_ZONES, POSTER_TOP_U, type LockscreenGridPage, type LockscreenInput, type LockscreenListPage } from './lockscreen';
 import { artistDisplayName } from './format';
 import {
   balancedRanges,
@@ -586,7 +586,7 @@ describe('grid legibility', () => {
         expect(g.legendX).toBeGreaterThanOrEqual(26);
         expect(g.legendX + g.legendWidth).toBeLessThanOrEqual(74);
         for (const b of g.blocks) {
-          expect(b.artistSizeU).toBeGreaterThanOrEqual(2.2);
+          if (b.note === null) expect(b.artistSizeU).toBeGreaterThanOrEqual(2.2);
           if (!b.picked) expect(b.ink).toBe(m.palette.text2);
         }
       }
@@ -618,12 +618,14 @@ describe('full-day grid on every EDC day', () => {
   const rebuild = (lines: string[]) =>
     lines.reduce((out, l) => (out.endsWith('-') ? out.slice(0, -1) + l : out.endsWith('/') ? out + l : out ? `${out} ${l}` : l), '');
 
-  it('draws every set of the day as exactly one block on one image', () => {
-    eachCase((m, day) => {
-      expect(m.pages).toHaveLength(1);
+  it('draws every set of the day once, on one image except a dense lock-screen day', () => {
+    eachCase((m, day, canvas) => {
+      if (m.pages.length > 1) expect(canvas).toBe('lockscreen');
+      expect(m.pages.length).toBeLessThanOrEqual(2);
+      const blocks = m.pages.flatMap((_, i) => grid(m, i).blocks);
       const want = sets.filter((s) => s.dayIndex === day).map((s) => s.id).sort();
-      expect(blocksOf(m).map((b) => b.setId).sort()).toEqual(want);
-      expect(blocksOf(m).some((b) => b.carryOver)).toBe(false);
+      expect([...new Set(blocks.filter((b) => !b.carryOver).map((b) => b.setId))].sort()).toEqual(want);
+      if (m.pages.length === 1) expect(blocks.some((b) => b.carryOver)).toBe(false);
     });
   });
   it('keeps blocks in one column from overlapping', () => {
@@ -657,6 +659,37 @@ describe('full-day grid on every EDC day', () => {
       const marked = blocksOf(m).filter((b) => b.note !== null);
       expect(g.notes.map((n) => n.n)).toEqual(marked.map((b) => b.note));
       for (const b of marked) expect(g.notes.find((n) => n.n === b.note)!.text).toContain(` ${b.artist} `);
+    });
+  });
+  it('keeps footnotes inside the content area, and clear of the corner buttons unless inside the safe band', () => {
+    eachCase((m) => {
+      const g = grid(m);
+      const cornerSafeU = LOCKSCREEN_ZONES.cornerSafe * m.heightU;
+      for (const n of g.notes) {
+        const bottom = n.y + n.lines.length * g.noteRowU;
+        expect(bottom).toBeLessThanOrEqual(m.contentEndU + 1e-6);
+        expect(n.x + n.width).toBeLessThanOrEqual(100 - m.sideU + 1e-6);
+        if (bottom > cornerSafeU + 1e-6) {
+          expect(n.x).toBeGreaterThanOrEqual(g.legendX - 1e-6);
+          expect(n.x + n.width).toBeLessThanOrEqual(g.legendX + g.legendWidth + 1e-6);
+        }
+      }
+    });
+  });
+  it('breaks a name at a hyphen only when no size shows its words whole', () => {
+    eachCase((m, _day, canvas) => {
+      for (const b of blocksOf(m)) {
+        if (b.note !== null || !b.artistLines.some((l) => l.endsWith('-'))) continue;
+        const words = artistDisplayName(sets.find((s) => s.id === b.setId)!, 'B2B').split(/\s+/);
+        const floor = canvas === 'poster' ? 2.0 : 2.2;
+        expect(words.every((w) => wordWidthU(w, floor) <= b.textWidth)).toBe(false);
+      }
+    });
+    expect(fitBlockText('Afrojack', 4, 2.2, 14.2, 9)!.lines).toEqual(['Afrojack']);
+  });
+  it('sizes the footnote marker to its block', () => {
+    eachCase((m) => {
+      for (const b of blocksOf(m)) if (b.note !== null && b.height >= 1.4) expect(b.artistSizeU * 1.12 + 1.2).toBeLessThanOrEqual(b.height + 1e-6);
     });
   });
   it('the poster at 1320x2868 needs at most 1 footnote a day; the lock screen needs more', () => {

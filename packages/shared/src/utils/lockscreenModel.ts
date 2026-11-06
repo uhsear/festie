@@ -188,7 +188,10 @@ export function wrapArtist(text: string, sizeU: number, widthU: number): string[
   return lines.length ? lines : [''];
 }
 
-/** Largest size from `startU` down to `minU` (steps of 0.2u) whose wrapped lines fit `heightU`; null when none does. */
+/**
+ * Largest size from `startU` down to `minU` (steps of 0.2u) whose wrapped lines fit `widthU` and `heightU`; null when
+ * none does. A first pass keeps every word whole; hyphen breaks are allowed only when no size shows the words whole.
+ */
 export function fitBlockText(
   text: string,
   startU: number,
@@ -196,9 +199,13 @@ export function fitBlockText(
   widthU: number,
   heightU: number,
 ): { sizeU: number; lines: string[] } | null {
-  for (let size = startU; size >= minU - 1e-9; size = Math.round((size - 0.2) * 10) / 10) {
-    const lines = wrapArtist(text, size, widthU);
-    if (lines.length * size * 1.12 + 1.2 <= heightU) return { sizeU: size, lines };
+  const words = text.split(/\s+/).filter(Boolean);
+  for (const whole of [true, false]) {
+    for (let size = startU; size >= minU - 1e-9; size = Math.round((size - 0.2) * 10) / 10) {
+      if (whole && !words.every((w) => wordWidthU(w, size) <= widthU)) continue;
+      const lines = wrapArtist(text, size, widthU);
+      if (lines.length * size * 1.12 + 1.2 <= heightU && lines.every((l) => wordWidthU(l, size) <= widthU)) return { sizeU: size, lines };
+    }
   }
   return null;
 }
@@ -243,7 +250,7 @@ export interface GridPagePlan {
 /**
  * Cuts a grid's time span into pages on whole hours. Every page gets the same hour height.
  * `startMinutes` are the sets' start times; cuts balance how many sets start on each page.
- * `onePage` forces one page and lets the hour height fall below the minimum.
+ * `onePage` forces one page and lets the hour height fall below the minimum; `minPages` overrides it.
  */
 export function gridPages(
   startMinute: number,
@@ -252,10 +259,11 @@ export function gridPages(
   cols: number,
   availU: number,
   onePage: boolean,
+  minPages = 1,
 ): { pages: GridPagePlan[]; hourU: number } {
   const hours = Math.max(1, Math.round((endMinute - startMinute) / 60));
   const maxHours = Math.max(1, Math.floor(availU / minHourU(cols) + 1e-9));
-  const k = onePage ? 1 : Math.ceil(hours / maxHours);
+  const k = Math.min(hours, Math.max(minPages, onePage ? 1 : Math.ceil(hours / maxHours)));
   const cuts: number[] = [0];
   for (let j = 1; j < k; j++) {
     const ideal = (startMinutes.length * j) / k;
@@ -688,7 +696,7 @@ function buildBlock(
   page: { startMinute: number; endMinute: number; gridY: number; hourU: number },
   ctx: Ctx,
   cols: number,
-  notes: LockscreenGridPage['notes'],
+  notes: Array<{ n: number; text: string }>,
 ): LockscreenGridBlock {
   const { input, palette } = ctx;
   const picked = it.priority !== null;
@@ -710,7 +718,7 @@ function buildBlock(
   let note: number | null = null;
   if (!fit) {
     note = notes.length + 1;
-    notes.push({ n: note, text: `${note} ${artist} ${compactRange(it.start, it.end)} ${shortStageName(stage?.name ?? '')}` });
+    notes.push({ n: note, text: `${note} ${artist} ${shortStageName(stage?.name ?? '')}` });
   }
   // The hour axis already shows the time; add a start-time line only when one more line fits.
   const timeShown = !!fit && !inlineTime && !carryOver && fit.lines.length * fit.sizeU * 1.12 + 1.2 + GRID_LABEL_U * 1.15 <= height;
@@ -724,7 +732,7 @@ function buildBlock(
     height,
     time: shortTime(it.start),
     artist,
-    artistSizeU: fit?.sizeU ?? GRID_LABEL_U,
+    artistSizeU: fit?.sizeU ?? Math.max(0, Math.min(GRID_LABEL_U, (height - 1.2) / 1.12)),
     textX,
     textWidth,
     textMode: fit ? 'full' : 'note',
@@ -748,6 +756,41 @@ interface GridPlan {
   page: LockscreenGridPage;
   items: Item[];
   span: string;
+}
+
+/** Rows a page's footnotes use: the lowest line of any note, counted from the first note row. */
+const noteRows = (page: LockscreenGridPage) =>
+  Math.max(0, ...page.notes.map((n) => Math.round((n.y - page.legendY) / NOTE_ROW_U) + n.lines.length));
+
+interface NoteArea {
+  x: number;
+  width: number;
+  cols: 1 | 2;
+  /** Lowest y the notes may reach. */
+  endU: number;
+}
+
+/**
+ * Wraps footnotes into one or two columns inside `area`. The size is the largest from the label size down
+ * to the floor at which every note fits one line; at the floor a long note wraps to more rows. Row `y` is relative to the first row.
+ */
+function layoutNotes(notes: Array<{ n: number; text: string }>, area: NoteArea) {
+  const { x: left, cols } = area;
+  const gap = 2;
+  const width = (area.width - (cols - 1) * gap) / cols;
+  let sizeU = GRID_LABEL_U;
+  while (sizeU > NOTE_MIN_U + 1e-9 && !notes.every((n) => wordWidthU(n.text, sizeU) <= width)) sizeU = Math.round((sizeU - 0.2) * 10) / 10;
+  const wrapped = notes.map((n) => ({ ...n, lines: wrapArtist(n.text, sizeU, width) }));
+  const perColumn = Math.ceil(wrapped.reduce((sum, n) => sum + n.lines.length, 0) / cols);
+  const cursor = new Array<number>(cols).fill(0);
+  let col = 0;
+  const placed = wrapped.map((n) => {
+    if (col < cols - 1 && cursor[col]! > 0 && cursor[col]! + n.lines.length > perColumn) col++;
+    const y = cursor[col]! * NOTE_ROW_U;
+    cursor[col] = cursor[col]! + n.lines.length;
+    return { ...n, x: left + col * (width + gap), y, width };
+  });
+  return { sizeU, notes: placed };
 }
 
 function gridPageModels(items: Item[], ctx: Ctx): GridPlan[] {
@@ -774,11 +817,11 @@ function gridPageModels(items: Item[], ctx: Ctx): GridPlan[] {
   const gridY = headerY + STAGE_ROW_H;
   const first = Math.floor(Math.min(...items.map((i) => i.start)) / 60) * 60;
   const last = Math.ceil(Math.max(...items.map((i) => i.end)) / 60) * 60;
-  const plan = (availU: number): GridPlan[] => {
-    const { pages, hourU } = gridPages(first, last, items.map((i) => i.start), cols, availU, input.onePage ?? true);
+  const plan = (availU: number, noteArea: NoteArea, minPages = 1): GridPlan[] => {
+    const { pages, hourU } = gridPages(first, last, items.map((i) => i.start), cols, availU, input.onePage ?? true, minPages);
     return pages.map((p) => {
       const inPage = items.filter((i) => i.end > p.startMinute && i.start < p.endMinute);
-      const notes: LockscreenGridPage['notes'] = [];
+      const notes: Array<{ n: number; text: string }> = [];
       const blocks = inPage.map((it) =>
         buildBlock(it, columns.find((c) => c.stageId === it.set.stageId)!, { ...p, gridY, hourU }, ctx, cols, notes),
       );
@@ -787,8 +830,7 @@ function gridPageModels(items: Item[], ctx: Ctx): GridPlan[] {
         const min = p.startMinute + i * 60;
         return { label: shortTime(min), y: gridY + i * hourU, dashed: min === 1440 };
       });
-      const noteChars = Math.max(1, ...notes.map((n) => [...n.text].length));
-      const noteFitU = Math.floor(((100 - 2 * ctx.sideU) / (noteChars * 0.62 * FIT_SLACK)) * 10) / 10;
+      const laid = layoutNotes(notes, noteArea);
       const page: LockscreenGridPage = {
         kind: 'grid',
         columns,
@@ -801,28 +843,42 @@ function gridPageModels(items: Item[], ctx: Ctx): GridPlan[] {
         hours,
         blocks,
         legend: LEGEND,
-        notes,
-        noteSizeU: Math.max(NOTE_MIN_U, Math.min(GRID_LABEL_U, noteFitU)),
+        notes: [],
+        noteSizeU: laid.sizeU,
         noteRowU: NOTE_ROW_U,
         legendX: SAFE_X,
-        legendY: gridY + hoursInPage * hourU + 0.3 + (notes.length ? LEGEND_H : 0),
+        legendY: gridY + hoursInPage * hourU + 0.3,
         legendWidth: SAFE_W,
         labelSizeU: GRID_LABEL_U,
       };
+      page.notes = laid.notes.map((n) => ({ ...n, y: n.y + page.legendY }));
       return { page, items: inPage.filter((i) => i.start >= p.startMinute), span: spanLabel(p.startMinute, p.endMinute) };
     });
   };
-  // Footnote rows replace the legend and take height from the grid, which can create more notes. Try each row
-  // count and keep the one whose notes overflow its rows least (a runaway grid of all-note blocks never wins).
-  const rowsFor = (r: GridPlan[]) => Math.max(...r.map((x) => x.page.notes.length));
-  let result = plan(ctx.contentEndU - gridY - LEGEND_H);
+  // Footnote rows replace the legend and take height from the grid, which can create more notes. Try, in order, one
+  // then two columns above the torch and camera buttons (cornerSafeU), then one column in the safe band down to
+  // contentEndU. Each tries every row count; keep the plan whose notes overflow its rows least (a runaway grid of
+  // all-note blocks never wins).
+  const wide = { x: ctx.sideU + GUTTER_W, width: 100 - 2 * ctx.sideU - GUTTER_W };
+  const areas: NoteArea[] = [
+    { ...wide, cols: 1, endU: ctx.cornerSafeU },
+    { ...wide, cols: 2, endU: ctx.cornerSafeU },
+    { x: SAFE_X, width: SAFE_W, cols: 1, endU: ctx.contentEndU },
+  ];
+  const rowsFor = (r: GridPlan[]) => Math.max(...r.map((x) => noteRows(x.page)));
+  let result = plan(ctx.contentEndU - gridY - LEGEND_H, areas[0]!);
   let overflow = rowsFor(result);
-  for (let rows = 1; rows <= MAX_NOTE_ROWS && overflow > 0; rows++) {
-    const tryPlan = plan(ctx.contentEndU - gridY - LEGEND_H - rows * NOTE_ROW_U);
-    const over = Math.max(0, rowsFor(tryPlan) - rows);
-    if (over < overflow) {
-      result = tryPlan;
-      overflow = over;
+  // Last resort when no layout fits the notes: cut the day into up to four images, which raises the hour height.
+  for (const minPages of [1, 2, 3, 4]) {
+    for (const area of areas) {
+      for (let rows = 1; rows <= MAX_NOTE_ROWS && overflow > 0; rows++) {
+        const tryPlan = plan(area.endU - gridY - 0.3 - rows * NOTE_ROW_U, area, minPages);
+        const over = Math.max(0, rowsFor(tryPlan) - rows);
+        if (over < overflow) {
+          result = tryPlan;
+          overflow = over;
+        }
+      }
     }
   }
   return result;
