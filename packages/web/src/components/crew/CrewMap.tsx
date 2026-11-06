@@ -133,7 +133,11 @@ interface Props {
   onFocusHandled?: () => void;
   /** Offers "Set as meeting point" on a place card. Omit for guests. */
   onSetMeetingPoint?: (place: MapPlace) => void;
+  /** True when the caller renders a meeting-point list next to the map (keyboard-accessible alternative). */
+  hasList?: boolean;
 }
+
+const PEER_REFRESH_MS = 15_000;
 
 // One-shot guard for the process-global `maplibregl.addProtocol('pmtiles', …)`
 // registration below (see the map-lifecycle effect). It holds the in-flight
@@ -165,12 +169,15 @@ export default function CrewMap({
   focusPinId,
   onFocusHandled,
   onSetMeetingPoint,
+  hasList = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // 'pending' until we know whether the GL library mounted; flips to 'error' on
   // a load/init failure so we never leave a blank canvas behind. 'ready' once the
   // map's `load` fired — marker effects gate on it.
   const [status, setStatus] = useState<'pending' | 'ready' | 'error'>('pending');
+  // Bumped by "Try again" so the init effect below runs again after a failed load.
+  const [initAttempt, setInitAttempt] = useState(0);
 
   // Live MapLibre handles, kept across re-renders. Markers are tracked per kind
   // so each effect only churns its own layer. The refs live here (not in the
@@ -325,7 +332,18 @@ export default function CrewMap({
         .join('|'),
     [zones],
   );
-  const peersKey = useMemo(() => peers.map((p) => `${p.userId}:${p.lat},${p.lng}:${p.serverAt}`).join('|'), [peers]);
+  // Ticks while peers are shown so markers rebuild with fresh "N ago" labels and
+  // flip to the stale style when a friend stops publishing.
+  const [peerTick, setPeerTick] = useState(0);
+  useEffect(() => {
+    if (!hasPeers) return;
+    const id = setInterval(() => setPeerTick((t) => t + 1), PEER_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [hasPeers]);
+  const peersKey = useMemo(
+    () => `${peerTick}#${peers.map((p) => `${p.userId}:${p.lat},${p.lng}:${p.serverAt}`).join('|')}`,
+    [peers, peerTick],
+  );
   // SOS keys are SPLIT: the IDENTITY set (which raisers have a plotted SOS) drives
   // the build/reconcile + one-shot fly/open per new SOS, while the COORD set only
   // repositions the existing markers (no re-fly/re-open every tick). Keying the
@@ -561,11 +579,16 @@ export default function CrewMap({
         map.on('styleimagemissing', (e) => {
           if (!map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
         });
-        map.on('error', () => {
-          if (!cancelled) setStatus('error');
+        // Same rule as mobile mapDocument.ts: an error that names a source (one
+        // dropped tile) or arrives after load never hides a working map.
+        let loaded = false;
+        map.on('error', (e) => {
+          if (cancelled || loaded || (e as { sourceId?: string }).sourceId) return;
+          setStatus('error');
         });
         map.on('load', () => {
           if (cancelled) return;
+          loaded = true;
           setStatus('ready');
         });
         // Authoring: report each map click's coord to the current handler (if
@@ -601,7 +624,7 @@ export default function CrewMap({
     };
     // Only (re)create when content first appears / disappears or the theme
     // changes the basemap. The refs read inside are intentionally not deps.
-  }, [shouldRenderMap, theme]);
+  }, [shouldRenderMap, theme, initAttempt]);
 
   // ── Per-concern layers (each keys its own effect on a stable content string,
   //    reads its live data through a ref → honest deps, no suppressions). ──────
@@ -695,7 +718,7 @@ export default function CrewMap({
           Interactive map. Use Tab to reach map markers, then Enter or Space to open one. Tap a crew member, stage,
           amenity or meeting point to see what it is and how far it is. Choose Show the way for a direction arrow,
           distance and walking time. While the map is focused, use the arrow keys to pan and the plus and minus keys to
-          zoom. The List view shows every meeting point and is fully keyboard accessible.
+          zoom.{hasList ? ' The List view shows every meeting point and is fully keyboard accessible.' : ''}
         </p>
         {status === 'pending' && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-text-secondary bg-bg-secondary/80">
@@ -705,9 +728,17 @@ export default function CrewMap({
         {status === 'error' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center bg-bg-secondary">
             <AlertTriangle className="w-8 h-8 text-accent-amber" aria-hidden="true" />
-            <p className="text-sm text-text-secondary">
-              Map needs signal to load. Your pinned points are still listed below.
-            </p>
+            <p className="text-sm text-text-secondary">Map needs signal to load.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setStatus('pending');
+                setInitAttempt((n) => n + 1);
+              }}
+              className="min-h-11 rounded-lg border border-border bg-bg-elevated px-4 text-sm text-text-primary hover:border-accent-aqua"
+            >
+              {MAP_COPY.tryAgain}
+            </button>
           </div>
         )}
 
