@@ -57,7 +57,7 @@ describe('OfflineMap location, stale fix and fallback rows', () => {
     expect(src).toContain("geoState === 'denied' ? (");
     const denied = between(src, "geoState === 'denied' ? (", "geoState === 'unavailable' ? (");
     expect(denied).toContain('label={LIVE_SHARE_COPY.openSettings}');
-    expect(denied).toContain('Linking.openSettings()');
+    expect(denied).toContain('onPress={openLocationSettings}');
     expect(denied).toContain('label={MAP_COPY.tryAgain}');
     expect(src).toContain("geoState === 'unavailable' ? (");
   });

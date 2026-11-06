@@ -478,11 +478,21 @@ export default function CrewMap({
 
   // A fix far from the grounds still gets the dot, plus a notice with a way back
   // (the offline basemap covers only the venue, so the map there is blank).
+  // A coarse fix whose error radius exceeds its distance cannot say the user is away.
+  const farDistanceM = useCallback((fix: Coord) => {
+    const distanceM = distanceFromFestivalM(fix, cameraRef.current);
+    if (distanceM === null || distanceM <= FAR_FROM_FESTIVAL_M) return null;
+    return accuracyM !== null && accuracyM > distanceM ? null : distanceM;
+  }, [accuracyM]);
   const flyToSelf = useCallback((fix: Coord) => {
     mapRef.current?.flyTo({ center: [fix.longitude, fix.latitude], zoom: 16, duration: 600 });
-    const distanceM = distanceFromFestivalM(fix, cameraRef.current);
-    setFarNoticeM(distanceM !== null && distanceM > FAR_FROM_FESTIVAL_M ? distanceM : null);
-  }, []);
+    setFarNoticeM(farDistanceM(fix));
+  }, [farDistanceM]);
+  // A more accurate fix can move the user back in range: refresh or clear the shown notice.
+  useEffect(() => {
+    if (!selfCoord) return;
+    setFarNoticeM((m) => (m === null ? null : farDistanceM(selfCoord)));
+  }, [selfCoord, farDistanceM]);
   const showFestival = useCallback(() => {
     setFarNoticeM(null);
     const { bounds, center: venue } = cameraRef.current;
@@ -805,7 +815,7 @@ export default function CrewMap({
         {interactive && status !== 'error' && (awaitingFix || farNoticeM !== null) && (
           <div
             role="status"
-            className="absolute left-14 right-2 top-2 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border bg-bg-elevated/95 px-3 py-2 text-xs text-text-secondary shadow-lg"
+            className="absolute left-14 right-14 top-2 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border bg-bg-elevated/95 px-3 py-2 text-xs text-text-secondary shadow-lg"
           >
             {awaitingFix ? (
               geoState === 'denied' || geoState === 'unavailable' ? (
@@ -813,6 +823,17 @@ export default function CrewMap({
                   <span>{locationPromptCopy(geoState)}</span>
                   <button type="button" onClick={retryLocation} className="min-h-11 text-accent-aqua underline">
                     {MAP_COPY.tryAgain}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelSelfFly();
+                      setPendingNearest(null);
+                    }}
+                    aria-label="Dismiss"
+                    className="inline-flex h-11 w-11 items-center justify-center text-text-muted"
+                  >
+                    <X className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </>
               ) : (
