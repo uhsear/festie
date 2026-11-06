@@ -41,7 +41,7 @@ export default function ListenList({ sets, days, festivalName, separator }: Prop
             <ul>
               {day.rows.map((row) => (
                 <li key={row.setId} className="flex items-center gap-2 min-h-11 text-sm">
-                  <span className="flex-1 min-w-0 truncate">{row.name}</span>
+                  <span className="flex-1 min-w-0 break-words [overflow-wrap:anywhere] line-clamp-2">{row.name}</span>
                   {row.spotifyUrl && (
                     <a
                       href={row.spotifyUrl}

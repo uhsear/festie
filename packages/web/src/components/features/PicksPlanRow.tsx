@@ -84,7 +84,7 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
       >
         <div className="text-xs text-text-muted min-w-[56px] font-semibold tabular-nums">{time}</div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold overflow-hidden text-ellipsis whitespace-nowrap">{artist}</div>
+          <div className="text-sm font-bold break-words [overflow-wrap:anywhere] line-clamp-2">{artist}</div>
           {(hasNote || hasReminder || hasClash || !!move) && (
             <div className="mt-0.5 flex items-center gap-2 text-xs text-text-muted">
               {hasNote && (

@@ -64,7 +64,7 @@ export default function PlanNotesList({ kind, items, days, onOpenSet }: PlanNote
                 onClick={() => onOpenSet(set)}
               >
                 <span className="flex items-center gap-2">
-                  <span className="flex-1 min-w-0 truncate text-sm font-bold">{name}</span>
+                  <span className="flex-1 min-w-0 break-words [overflow-wrap:anywhere] line-clamp-2 text-sm font-bold">{name}</span>
                   {item.priority && <PriorityIcon priority={item.priority} className="w-4 h-4" />}
                 </span>
                 <span className="text-xs text-text-muted tabular-nums">
