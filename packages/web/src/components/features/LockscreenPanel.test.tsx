@@ -97,7 +97,7 @@ describe('LockscreenPanel', () => {
 
   it('preselects the initial mode', () => {
     setup({ initialMode: 'full' });
-    expect(screen.getByRole('button', { name: 'Full lineup' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Full day' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'My picks' })).toHaveAttribute('aria-pressed', 'false');
     expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'full', dayIndex: 0 }));
   });
@@ -130,12 +130,24 @@ describe('LockscreenPanel', () => {
     expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'stages', stageIds: ['st1'] }));
   });
 
-  it('offers Fit on one image only for grid modes', () => {
+  it('offers the split checkbox only for grid modes, and one image is the default', () => {
     setup();
-    expect(screen.queryByLabelText('Fit on one image')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Full lineup' }));
-    fireEvent.click(screen.getByLabelText('Fit on one image'));
+    expect(screen.queryByLabelText('Split long days into 2 images')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Full day' }));
     expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ onePage: true }));
+    fireEvent.click(screen.getByLabelText('Split long days into 2 images'));
+    expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ onePage: false }));
+  });
+
+  it('the Poster canvas hides Clock and Look and passes canvas to the model', () => {
+    setup();
+    expect(screen.getByRole('group', { name: 'Look' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Poster' }));
+    expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ canvas: 'poster' }));
+    expect(screen.queryByRole('button', { name: 'Big clock' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Look' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Wallpaper' }));
+    expect(screen.getByRole('button', { name: 'Big clock' })).toBeTruthy();
   });
 
   it('passes theme, clock and the day choice to the model', () => {
@@ -200,7 +212,7 @@ describe('LockscreenPanel', () => {
     setup({ picks: { s1: 'must' } });
     const sat = screen.getByRole('option', { name: 'Sat' }) as HTMLOptionElement;
     expect(sat.disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Full lineup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Full day' }));
     expect((screen.getByRole('option', { name: 'Sat' }) as HTMLOptionElement).disabled).toBe(false);
   });
 
@@ -256,6 +268,6 @@ describe('LockscreenPanel', () => {
     setup({ picks: {} });
     expect(screen.getByText('You have no picks yet.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Show full lineup' }));
-    expect(screen.getByRole('button', { name: 'Full lineup' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Full day' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

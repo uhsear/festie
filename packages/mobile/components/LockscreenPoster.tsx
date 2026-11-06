@@ -360,11 +360,25 @@ function GridBody({ body, u, side, p }: { body: LockscreenGridPage; u: number; s
       {body.blocks.map((b) => (
         <GridBlock key={`${b.setId}-${b.carryOver ? 'c' : 'n'}`} b={b} u={u} p={p} label={label} />
       ))}
-      <View style={{ position: 'absolute', left: body.legendX * u, width: body.legendWidth * u, top: body.legendY * u }}>
-        <T style={txt(u, label, GROTESK_500, p.text2, { textAlign: 'center' })} lines={1}>
-          {body.legend}
-        </T>
-      </View>
+      {body.notes.length ? (
+        <>
+          {body.notes.map((n) => (
+            <View key={n.n} style={{ position: 'absolute', left: n.x * u, top: n.y * u, width: n.width * u }}>
+              {n.lines.map((line, i) => (
+                <Text key={i} allowFontScaling={false} numberOfLines={1} ellipsizeMode="clip" style={txt(u, body.noteSizeU, GROTESK_500, p.text2, { height: body.noteRowU * u })}>
+                  {line}
+                </Text>
+              ))}
+            </View>
+          ))}
+        </>
+      ) : (
+        <View style={{ position: 'absolute', left: body.legendX * u, width: body.legendWidth * u, top: body.legendY * u }}>
+          <T style={txt(u, label, GROTESK_500, p.text2, { textAlign: 'center' })} lines={1}>
+            {body.legend}
+          </T>
+        </View>
+      )}
     </>
   );
 }
@@ -373,6 +387,8 @@ function GridBlock({ b, u, p, label }: { b: LockscreenGridBlock; u: number; p: L
   const must = b.priority === 'must';
   const corner = b.picked && b.priority && !must ? GLYPH[b.priority] : null;
   const ringColor = b.outline ?? (b.ring ? p.text : null);
+  const ringW = ringColor ? (b.outline ? 0.3 : 0.4) : 0;
+  const borderL = b.picked ? ringW : 0.8;
   return (
     <View
       style={{
@@ -385,32 +401,28 @@ function GridBlock({ b, u, p, label }: { b: LockscreenGridBlock; u: number; p: L
         borderRadius: 0.8 * u,
         borderTopLeftRadius: b.carryOver ? 0 : 0.8 * u,
         borderTopRightRadius: b.carryOver ? 0 : 0.8 * u,
-        borderWidth: ringColor ? (b.outline ? 0.3 : 0.4) * u : 0,
+        borderWidth: ringW * u,
         borderColor: ringColor ?? undefined,
-        borderLeftWidth: b.picked ? (ringColor ? (b.outline ? 0.3 : 0.4) * u : 0) : 0.8 * u,
+        borderLeftWidth: borderL * u,
         borderLeftColor: b.picked ? (ringColor ?? undefined) : b.edge,
-        paddingTop: 0.8 * u,
-        paddingBottom: 0.8 * u,
-        paddingLeft: 0.9 * u,
-        paddingRight: 1.2 * u,
+        paddingTop: b.textPadU * u,
+        paddingBottom: b.textPadU * u,
+        paddingLeft: (b.textX - b.x - borderL) * u,
+        paddingRight: (b.width - (b.textX - b.x) - b.textWidth - ringW) * u,
         overflow: 'hidden',
       }}
     >
-      {b.textMode === 'none' ? null : (
-        <>
-          {b.textMode === 'full' && !b.inlineTime && !b.carryLabel ? (
-            <T style={txt(u, label, GROTESK_600, b.ink)} lines={1}>
-              {must ? '★ ' : ''}
-              {b.time}
-            </T>
-          ) : null}
-          {b.artistLines.map((line, n) => (
-            <Text key={n} allowFontScaling={false} numberOfLines={1} style={txt(u, b.artistSizeU, b.picked ? CLASH_700 : CLASH_600, b.ink)}>
-              {line}
-            </Text>
-          ))}
-        </>
-      )}
+      {b.timeShown ? (
+        <T style={txt(u, label, GROTESK_600, b.ink)} lines={1}>
+          {must ? '★ ' : ''}
+          {b.time}
+        </T>
+      ) : null}
+      {b.artistLines.map((line, n) => (
+        <Text key={n} allowFontScaling={false} numberOfLines={1} ellipsizeMode="clip" style={txt(u, b.artistSizeU, b.picked ? CLASH_700 : CLASH_600, b.ink)}>
+          {line}
+        </Text>
+      ))}
       {corner ? (
         <View style={{ position: 'absolute', top: 0.4 * u, right: 0.6 * u }}>
           <T style={txt(u, label, GROTESK_700, b.ink, { lineHeight: label * u })}>{corner}</T>

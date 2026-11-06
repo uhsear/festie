@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { FestivalDay, FestivalSet, Priority, Stage } from '../types/domain';
 import { EDC_SETS, EDC_STAGES } from './lockscreen.fixture';
-import type { LockscreenGridPage, LockscreenInput, LockscreenListPage } from './lockscreen';
+import { LOCKSCREEN_ZONES, POSTER_TOP_U, type LockscreenGridPage, type LockscreenInput, type LockscreenListPage } from './lockscreen';
+import { artistDisplayName } from './format';
 import {
   balancedRanges,
   buildLockscreenModel,
   contrastRatio,
   fitArtistU,
+  fitBlockText,
   gridPages,
   inkOn,
   lockscreenFilename,
@@ -14,6 +16,7 @@ import {
   paginateRows,
   stageMark,
   stageText,
+  wordWidthU,
   wrapArtist,
   LOCKSCREEN_FOOTER_MAX,
 } from './lockscreenModel';
@@ -65,12 +68,24 @@ describe('helpers', () => {
     expect(fitArtistU('Extraordinarily', 4, 2.6, 25)).toBeLessThan(4);
     expect(fitArtistU('Supercalifragilisticexpialidocious', 4, 2.6, 10)).toBe(2.6);
   });
-  it('wrapArtist never splits a word: it wraps between words and ellipsizes an overlong one', () => {
+  it('a word wider than the line breaks with a hyphen, and the joined lines rebuild the word', () => {
     expect(wrapArtist('Fury with MC Dino', 6.4, 55)).toEqual(['Fury with MC', 'Dino']);
-    const lines = wrapArtist('Supercalifragilisticexpialidocious', 4, 20);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]!.endsWith('…')).toBe(true);
-    expect(lines[0]!).not.toContain('-');
+    const word = 'Supercalifragilisticexpialidocious';
+    const lines = wrapArtist(word, 4, 20);
+    expect(lines.length).toBeGreaterThan(1);
+    for (const l of lines.slice(0, -1)) expect(l.endsWith('-')).toBe(true);
+    for (const l of lines) expect(l).not.toContain('…');
+    expect(lines.map((l) => l.replace(/-$/, '')).join('')).toBe(word);
+    for (const l of lines) expect(l.replace(/-$/, '').length).toBeGreaterThanOrEqual(2);
+  });
+  it('wrapArtist breaks after an existing slash without adding a hyphen', () => {
+    expect(wrapArtist('Alpha/Bravo', 4, 18)).toEqual(['Alpha/', 'Bravo']);
+  });
+  it('fitBlockText steps the size down, and returns null when no size fits', () => {
+    const fit = fitBlockText('Interplanetary Criminal', 4, 2.2, 14.2, 20)!;
+    expect(fit.sizeU).toBeLessThan(4);
+    expect(fit.lines.length * fit.sizeU * 1.12 + 1.2).toBeLessThanOrEqual(20);
+    expect(fitBlockText('Interplanetary Criminal', 4, 2.2, 14.2, 3)).toBeNull();
   });
   it('gridPages cuts on whole hours with one hour height', () => {
     const { pages, hourU } = gridPages(780, 1440, [800, 900, 1000, 1300], 5, 72, false);
@@ -306,8 +321,15 @@ describe('theme and zones', () => {
 });
 
 describe('grid modes', () => {
-  it('full Friday (44 sets, 5 stages) gives 2 pages with every set once', () => {
-    const m = build({ mode: 'full', picks: pick(friday, 6) });
+  it('the default gives one page per day, with every set once', () => {
+    for (const dayIndex of [0, 1, 2]) {
+      const m = build({ mode: 'full', picks: {}, dayIndex });
+      expect(m.pages).toHaveLength(1);
+      expect(ids(m).sort()).toEqual(sets.filter((s) => s.dayIndex === dayIndex).map((s) => s.id).sort());
+    }
+  });
+  it('full Friday (44 sets, 5 stages) with onePage:false gives 2 pages with every set once', () => {
+    const m = build({ mode: 'full', picks: pick(friday, 6), onePage: false });
     expect(m.pages).toHaveLength(2);
     expect(ids(m).sort()).toEqual(friday.map((s) => s.id).sort());
     const [a, b] = [grid(m, 0), grid(m, 1)];
@@ -322,7 +344,7 @@ describe('grid modes', () => {
   });
   it('highlights picks and flags sets cut by a page edge as carry-overs', () => {
     const picks = pick(friday, 6);
-    const m = build({ mode: 'full', picks });
+    const m = build({ mode: 'full', picks, onePage: false });
     const blocks = m.pages.flatMap((p) => (p.body as LockscreenGridPage).blocks);
     expect(new Set(blocks.filter((b) => b.picked).map((b) => b.setId))).toEqual(new Set(Object.keys(picks)));
     expect(blocks.filter((b) => !b.picked).every((b) => b.fill === m.palette.surface)).toBe(true);
@@ -386,28 +408,20 @@ describe('defaultScheduleImageDay with a mode', () => {
   describe('lock-screen polish', () => {
     const fullFriday = () => build({ mode: 'full', picks: pick(friday, 6) });
 
-    it('5-column grid blocks never split inside a word', () => {
+    it('5-column grid blocks never end a line in an ellipsis', () => {
       for (const p of fullFriday().pages) {
         for (const b of (p.body as LockscreenGridPage).blocks) {
-          const words = new Set(b.artist.split(/\s+/));
-          for (const line of b.artistLines) {
-            for (const w of line.split(' ').filter((x) => x !== '↑' && !/^\d/.test(x))) {
-              const stem = w.replace(/…$/, '');
-              expect(w.endsWith('-')).toBe(false);
-              // Either a whole artist word, or the clipped head of one that ends in an ellipsis.
-              expect(words.has(w) || (w !== stem && [...words].some((x) => x.startsWith(stem)))).toBe(true);
-            }
-          }
+          for (const line of b.artistLines) expect(line).not.toContain('…');
         }
       }
     });
-    it('a long single word shrinks to the floor, then ellipsizes, in a 5-column block', () => {
+    it('a long single word breaks with hyphens in a 5-column block, or moves to a footnote', () => {
       const long = { ...sets.find((s) => s.dayIndex === 0)!, id: 'long', artist: 'Supercalifragilisticexpialidocious', startTime: '16:00', endTime: '18:00' };
       const m = buildLockscreenModel({ ...base, sets: [long, ...sets], mode: 'full', onePage: true, picks: {} });
       const b = grid(m).blocks.find((x) => x.setId === 'long')!;
-      expect(b.artistSizeU).toBe(2.8);
-      expect(b.artistLines).toHaveLength(1);
-      expect(b.artistLines[0]).toMatch(/…$/);
+      expect(b.artistLines.join('').replace(/-/g, '')).toBe(b.note === null ? 'Supercalifragilisticexpialidocious' : String(b.note));
+      expect(b.artistLines.join('')).not.toContain('…');
+      expect(b.artistSizeU).toBeGreaterThanOrEqual(2.2);
     });
     it('sizes the list time column to fit the widest time', () => {
       const late = { ...sets.find((s) => s.dayIndex === 0)!, id: 'late', artist: 'Late One', startTime: '22:30', endTime: '23:30' };
@@ -416,11 +430,12 @@ describe('defaultScheduleImageDay with a mode', () => {
       const need = (l.timeSizeU * 0.6 * 5) + 0.3 * 2.27 + 2.27 * 0.76 * 2;
       expect(l.layout.timeWidth).toBeGreaterThanOrEqual(need);
     });
-    it('a two-word name wraps onto extra lines in a short tile before any ellipsis', () => {
+    it('a two-word name wraps onto extra lines in a short tile, or moves to a footnote', () => {
       const two = { ...sets.find((s) => s.dayIndex === 0)!, id: 'two', artist: 'Adventure Club Sunset', startTime: '16:00', endTime: '17:00' };
       const m = buildLockscreenModel({ ...base, sets: [two, ...sets], mode: 'full', onePage: true, picks: {} });
       const b = grid(m).blocks.find((x) => x.setId === 'two')!;
-      if (b.textMode !== 'none' && !b.ellipsis) expect(b.artistLines.join(' ')).toBe(b.artist);
+      if (b.note === null) expect(b.artistLines.join(' ')).toBe(b.artist);
+      else expect(grid(m).notes.find((n) => n.n === b.note)!.text).toContain('Adventure Club Sunset');
     });
     it('reserves the legend below the last hour label', () => {
       const m = fullFriday();
@@ -510,7 +525,7 @@ describe('clashes, names and emphasis', () => {
     expect(by('maybe').artistColor).toBe(c.maybe);
     expect(contrastRatio(c.maybe, '#0a0a0a')).toBeGreaterThanOrEqual(4.5);
   });
-  it('long and B2B names shrink before they ellipsize, and a cut word ends the name', () => {
+  it('long and B2B names shrink before they hyphenate, and no name ends in an ellipsis', () => {
     const names = [
       at('n1', 'Interplanetary Criminal', 'stereo-bloom', '18:00', '19:00'),
       at('n2', 'Bullet Tooth B2B Sidney Charles', 'stereo-bloom', '19:00', '20:00'),
@@ -521,16 +536,14 @@ describe('clashes, names and emphasis', () => {
     for (const n of [4, 5]) {
       const rows = list(build({ sets: names.slice(0, n), picks: all(names.slice(0, n)) })).rows;
       for (const r of rows) {
-        const cut = r.artistLines.findIndex((l) => l.endsWith('…'));
-        // A cut word is always the last thing drawn.
-        if (cut >= 0) expect(cut).toBe(r.artistLines.length - 1);
+        for (const l of r.artistLines) expect(l.endsWith('…')).toBe(false);
         if (r.setId !== 'n5') expect(r.artistLines.join(' ')).toBe(r.artist);
         expect(r.artistSizeU).toBeGreaterThanOrEqual(4.2);
       }
     }
     const cutLines = wrapArtist('Interplanetary Criminal', 6, 30);
-    expect(cutLines).toHaveLength(1);
-    expect(cutLines[0]).toMatch(/^Interpl.*…$/);
+    expect(cutLines.every((l) => !l.includes('…'))).toBe(true);
+    expect(cutLines.map((l) => l.replace(/-$/, '')).join('').replace(/ /g, '')).toBe('InterplanetaryCriminal');
   });
   it('splits a set tag off the name', () => {
     const m = build({ sets: [at('t', 'Alesso (Sunset Set)', 'kinetic-field', '17:28', '18:44')], picks: { t: 'must' } });
@@ -564,7 +577,7 @@ describe('from now', () => {
 });
 
 describe('grid legibility', () => {
-  it('no grid text below 2.8u; the legend sits between the corner buttons; unpicked names are text2', () => {
+  it('grid labels stay at 2.8u and names at the 0.8u shrink floor; the legend sits between the corner buttons; unpicked names are text2', () => {
     for (const onePage of [false, true]) {
       const m = build({ mode: 'full', picks: pick(friday, 6), onePage });
       for (const p of m.pages) {
@@ -573,16 +586,156 @@ describe('grid legibility', () => {
         expect(g.legendX).toBeGreaterThanOrEqual(26);
         expect(g.legendX + g.legendWidth).toBeLessThanOrEqual(74);
         for (const b of g.blocks) {
-          expect(b.artistSizeU).toBeGreaterThanOrEqual(2.8);
+          if (b.note === null) expect(b.artistSizeU).toBeGreaterThanOrEqual(0.8);
           if (!b.picked) expect(b.ink).toBe(m.palette.text2);
         }
       }
     }
   });
   it('a short carry-over block keeps the name and drops the start time', () => {
-    const m = build({ mode: 'full', picks: pick(friday, 6) });
+    const m = build({ mode: 'full', picks: pick(friday, 6), onePage: false });
     for (const b of grid(m, 1).blocks.filter((x) => x.carryOver)) {
-      expect(b.carryLabel).toBe(b.textMode === 'full' ? `↑ ${b.time} ${b.artist}` : `↑ ${b.artist}`);
+      expect(b.carryLabel).toBe(b.height < 7.6 ? `↑ ${b.artist}` : `↑ ${b.time} ${b.artist}`);
+    }
+  });
+});
+
+describe('full-day grid on every EDC day', () => {
+  const sizes = [[1320, 2868], [1080, 2340]] as const;
+  const eachCase = (check: (m: Model, day: number, canvas: 'lockscreen' | 'poster', size: readonly [number, number]) => void) => {
+    for (const day of [0, 1, 2]) {
+      for (const canvas of ['lockscreen', 'poster'] as const) {
+        for (const clock of ['normal', 'big', 'widgets'] as const) {
+          for (const size of sizes) {
+            const m = build({ mode: 'full', picks: {}, dayIndex: day, canvas, clock, width: size[0], height: size[1] });
+            check(m, day, canvas, size);
+          }
+        }
+      }
+    }
+  };
+  const blocksOf = (m: Model) => grid(m).blocks;
+  const rebuild = (lines: string[]) =>
+    lines.reduce((out, l) => (out.endsWith('-') ? out.slice(0, -1) + l : out.endsWith('/') ? out + l : out ? `${out} ${l}` : l), '');
+
+  it('keeps want and maybe names clear of the corner mark', () => {
+    const m = build({ mode: 'full', picks: pick(friday, 9), dayIndex: 0, canvas: 'lockscreen', width: 1320, height: 2868 });
+    for (const b of grid(m).blocks) {
+      const marked = b.priority === 'want-to-see' || b.priority === 'maybe';
+      expect(b.x + b.width - (b.textX + b.textWidth)).toBeGreaterThanOrEqual((marked ? 2.8 : 0.4) - 1e-6);
+    }
+  });
+  it('shrinks names to fit instead of footnoting them, one image per day', () => {
+    eachCase((m) => {
+      expect(m.pages).toHaveLength(1);
+      const bs = grid(m).blocks;
+      expect(bs.filter((b) => b.note !== null)).toEqual([]);
+      expect(Math.min(...bs.map((b) => b.artistSizeU))).toBeGreaterThanOrEqual(1.4);
+    });
+  });
+  it('draws every set of the day once, on one image except a dense lock-screen day', () => {
+    eachCase((m, day, canvas) => {
+      if (m.pages.length > 1) expect(canvas).toBe('lockscreen');
+      expect(m.pages.length).toBeLessThanOrEqual(2);
+      const blocks = m.pages.flatMap((_, i) => grid(m, i).blocks);
+      const want = sets.filter((s) => s.dayIndex === day).map((s) => s.id).sort();
+      expect([...new Set(blocks.filter((b) => !b.carryOver).map((b) => b.setId))].sort()).toEqual(want);
+      if (m.pages.length === 1) expect(blocks.some((b) => b.carryOver)).toBe(false);
+    });
+  });
+  it('keeps blocks in one column from overlapping', () => {
+    eachCase((m) => {
+      for (const c of grid(m).columns) {
+        const col = blocksOf(m).filter((b) => b.stageId === c.stageId).sort((a, b) => a.y - b.y);
+        col.slice(1).forEach((b, i) => expect(b.y).toBeGreaterThanOrEqual(col[i]!.y + col[i]!.height - 1e-6));
+      }
+    });
+  });
+  it('gives each block a footnote marker or text that passes the width check and fits its height', () => {
+    eachCase((m) => {
+      for (const b of blocksOf(m)) {
+        if (b.note !== null) continue;
+        for (const line of b.artistLines) expect(wordWidthU(line, b.artistSizeU)).toBeLessThanOrEqual(b.textWidth + 1e-6);
+        // Roomy blocks fit with the 1.2u allowance; short blocks shrink with tight padding top and bottom.
+        const pad = b.textPadU >= 0.8 ? 1.2 : 2 * b.textPadU;
+        expect(b.artistLines.length * b.artistSizeU * 1.12 + pad).toBeLessThanOrEqual(b.height + 1e-6);
+        expect(b.artistSizeU).toBeGreaterThanOrEqual(0.8);
+      }
+    });
+  });
+  it('rebuilds the display name from the lines with hyphen breaks removed', () => {
+    eachCase((m) => {
+      for (const b of blocksOf(m)) {
+        if (b.note === null) expect(rebuild(b.artistLines)).toBe(artistDisplayName(sets.find((s) => s.id === b.setId)!, 'B2B'));
+      }
+    });
+  });
+  it('lists every footnote with its full name', () => {
+    eachCase((m) => {
+      const g = grid(m);
+      const marked = blocksOf(m).filter((b) => b.note !== null);
+      expect(g.notes.map((n) => n.n)).toEqual(marked.map((b) => b.note));
+      for (const b of marked) expect(g.notes.find((n) => n.n === b.note)!.text).toContain(` ${b.artist} `);
+    });
+  });
+  it('keeps footnotes inside the content area, and clear of the corner buttons unless inside the safe band', () => {
+    eachCase((m) => {
+      const g = grid(m);
+      const cornerSafeU = LOCKSCREEN_ZONES.cornerSafe * m.heightU;
+      for (const n of g.notes) {
+        const bottom = n.y + n.lines.length * g.noteRowU;
+        expect(bottom).toBeLessThanOrEqual(m.contentEndU + 1e-6);
+        expect(n.x + n.width).toBeLessThanOrEqual(100 - m.sideU + 1e-6);
+        if (bottom > cornerSafeU + 1e-6) {
+          expect(n.x).toBeGreaterThanOrEqual(g.legendX - 1e-6);
+          expect(n.x + n.width).toBeLessThanOrEqual(g.legendX + g.legendWidth + 1e-6);
+        }
+      }
+    });
+  });
+  it('breaks a name at a hyphen only when no size shows its words whole', () => {
+    eachCase((m, _day, canvas) => {
+      for (const b of blocksOf(m)) {
+        if (b.note !== null || !b.artistLines.some((l) => l.endsWith('-'))) continue;
+        const words = artistDisplayName(sets.find((s) => s.id === b.setId)!, 'B2B').split(/\s+/);
+        const floor = canvas === 'poster' ? 2.0 : 2.2;
+        expect(words.every((w) => wordWidthU(w, floor) <= b.textWidth)).toBe(false);
+      }
+    });
+    expect(fitBlockText('Afrojack', 4, 2.2, 14.2, 9)!.lines).toEqual(['Afrojack']);
+  });
+  it('sizes the footnote marker to its block', () => {
+    eachCase((m) => {
+      for (const b of blocksOf(m)) if (b.note !== null && b.height >= 1.4) expect(b.artistSizeU * 1.12 + 1.2).toBeLessThanOrEqual(b.height + 1e-6);
+    });
+  });
+  it('the poster starts at the top with no clock gap and no beam art', () => {
+    const m = build({ mode: 'full', picks: {}, canvas: 'poster', style: 'poster', clock: 'widgets' });
+    expect(m.contentTopU).toBe(POSTER_TOP_U);
+    expect(m.poster).toBeNull();
+    expect(m.pages[0]!.poster).toBeUndefined();
+    expect(build({ mode: 'full', picks: {}, style: 'poster' }).poster).not.toBeNull();
+  });
+  it('a past-midnight set sits below the 24:00 line', () => {
+    const late: FestivalSet[] = [
+      { ...friday[0]!, id: 'x1', startTime: '22:00', endTime: '23:30', stageId: 'bacardi' },
+      { ...friday[1]!, id: 'x2', startTime: '00:30', endTime: '02:00', stageId: 'bacardi' },
+    ];
+    const g = grid(build({ mode: 'full', sets: late, picks: {} }));
+    const midnight = g.hours.find((h) => h.dashed)!;
+    expect(g.blocks.find((b) => b.setId === 'x2')!.y).toBeGreaterThan(midnight.y);
+  });
+  it('weighs maybe below want below must, with readable ink', () => {
+    const three = friday.filter((s) => s.stageId === 'kinetic-field').slice(0, 3);
+    const picks: Record<string, Priority> = { [three[0]!.id]: 'maybe', [three[1]!.id]: 'want-to-see', [three[2]!.id]: 'must' };
+    for (const theme of ['dark', 'light'] as const) {
+      const m = build({ mode: 'full', picks, theme });
+      const [maybe, want, must] = three.map((s) => blocksOf(m).find((b) => b.setId === s.id)!);
+      const weight = (b: typeof maybe) => contrastRatio(b!.fill, m.palette.surface);
+      expect(weight(maybe)).toBeLessThan(weight(want));
+      expect(weight(want)).toBeLessThanOrEqual(weight(must));
+      expect([maybe!.ring, want!.ring, must!.ring]).toEqual([false, false, true]);
+      for (const b of [maybe, want, must]) expect(contrastRatio(b!.ink, b!.fill)).toBeGreaterThanOrEqual(4.5);
     }
   });
 });
