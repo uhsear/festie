@@ -18,8 +18,12 @@ describe('crew invite card scrolls with the tab body', () => {
   });
 
   it('sits after SOS on Find so SOS stays visible without scrolling', () => {
-    const sos = src.indexOf('<CrewSos');
-    expect(src.indexOf('{inviteCard}', sos)).toBeGreaterThan(sos);
+    const find = src.indexOf("crewTab === 'find' ?");
+    const sos = src.indexOf('<CrewSos', find);
+    const card = src.indexOf('{inviteCard}', find);
+    expect(sos).toBeGreaterThan(find);
+    expect(card).toBeGreaterThan(sos);
+    expect(card).toBeLessThan(src.indexOf('<CrewCheckIn', find));
   });
 
   it('keeps the iOS tab bar inset', () => {
