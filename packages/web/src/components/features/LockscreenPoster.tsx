@@ -397,7 +397,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
               ...abs(b.x, b.y, b.width, b.height),
               boxSizing: 'border-box',
               overflow: 'hidden',
-              padding: `${px(0.8)} ${px(b.width - (b.textX - b.x) - b.textWidth)} ${px(0.8)} ${px(b.textX - b.x - borderL)}`,
+              padding: `${px(b.textPadU)} ${px(b.width - (b.textX - b.x) - b.textWidth)} ${px(b.textPadU)} ${px(b.textX - b.x - borderL)}`,
               borderRadius: px(0.8),
               ...(b.carryOver && { borderTopLeftRadius: 0, borderTopRightRadius: 0 }),
               backgroundColor: b.fill,

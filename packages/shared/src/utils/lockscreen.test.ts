@@ -577,7 +577,7 @@ describe('from now', () => {
 });
 
 describe('grid legibility', () => {
-  it('grid labels stay at 2.8u and names at the canvas floor; the legend sits between the corner buttons; unpicked names are text2', () => {
+  it('grid labels stay at 2.8u and names at the 0.8u shrink floor; the legend sits between the corner buttons; unpicked names are text2', () => {
     for (const onePage of [false, true]) {
       const m = build({ mode: 'full', picks: pick(friday, 6), onePage });
       for (const p of m.pages) {
@@ -586,7 +586,7 @@ describe('grid legibility', () => {
         expect(g.legendX).toBeGreaterThanOrEqual(26);
         expect(g.legendX + g.legendWidth).toBeLessThanOrEqual(74);
         for (const b of g.blocks) {
-          if (b.note === null) expect(b.artistSizeU).toBeGreaterThanOrEqual(2.2);
+          if (b.note === null) expect(b.artistSizeU).toBeGreaterThanOrEqual(0.8);
           if (!b.picked) expect(b.ink).toBe(m.palette.text2);
         }
       }
@@ -618,6 +618,21 @@ describe('full-day grid on every EDC day', () => {
   const rebuild = (lines: string[]) =>
     lines.reduce((out, l) => (out.endsWith('-') ? out.slice(0, -1) + l : out.endsWith('/') ? out + l : out ? `${out} ${l}` : l), '');
 
+  it('keeps want and maybe names clear of the corner mark', () => {
+    const m = build({ mode: 'full', picks: pick(friday, 9), dayIndex: 0, canvas: 'lockscreen', width: 1320, height: 2868 });
+    for (const b of grid(m).blocks) {
+      const marked = b.priority === 'want-to-see' || b.priority === 'maybe';
+      expect(b.x + b.width - (b.textX + b.textWidth)).toBeGreaterThanOrEqual((marked ? 2.8 : 0.4) - 1e-6);
+    }
+  });
+  it('shrinks names to fit instead of footnoting them, one image per day', () => {
+    eachCase((m) => {
+      expect(m.pages).toHaveLength(1);
+      const bs = grid(m).blocks;
+      expect(bs.filter((b) => b.note !== null)).toEqual([]);
+      expect(Math.min(...bs.map((b) => b.artistSizeU))).toBeGreaterThanOrEqual(1.4);
+    });
+  });
   it('draws every set of the day once, on one image except a dense lock-screen day', () => {
     eachCase((m, day, canvas) => {
       if (m.pages.length > 1) expect(canvas).toBe('lockscreen');
@@ -641,8 +656,10 @@ describe('full-day grid on every EDC day', () => {
       for (const b of blocksOf(m)) {
         if (b.note !== null) continue;
         for (const line of b.artistLines) expect(wordWidthU(line, b.artistSizeU)).toBeLessThanOrEqual(b.textWidth + 1e-6);
-        expect(b.artistLines.length * b.artistSizeU * 1.12 + 1.2).toBeLessThanOrEqual(b.height + 1e-6);
-        expect(b.artistSizeU).toBeGreaterThanOrEqual(2.0);
+        // Roomy blocks fit with the 1.2u allowance; short blocks shrink with tight padding top and bottom.
+        const pad = b.textPadU >= 0.8 ? 1.2 : 2 * b.textPadU;
+        expect(b.artistLines.length * b.artistSizeU * 1.12 + pad).toBeLessThanOrEqual(b.height + 1e-6);
+        expect(b.artistSizeU).toBeGreaterThanOrEqual(0.8);
       }
     });
   });
@@ -691,15 +708,6 @@ describe('full-day grid on every EDC day', () => {
     eachCase((m) => {
       for (const b of blocksOf(m)) if (b.note !== null && b.height >= 1.4) expect(b.artistSizeU * 1.12 + 1.2).toBeLessThanOrEqual(b.height + 1e-6);
     });
-  });
-  it('the poster at 1320x2868 needs at most 1 footnote a day; the lock screen needs more', () => {
-    let lockMax = 0;
-    eachCase((m, _day, canvas, size) => {
-      if (size[0] !== 1320) return;
-      if (canvas === 'poster') expect(grid(m).notes.length).toBeLessThanOrEqual(1);
-      else lockMax = Math.max(lockMax, grid(m).notes.length);
-    });
-    expect(lockMax).toBeGreaterThan(0);
   });
   it('the poster starts at the top with no clock gap and no beam art', () => {
     const m = build({ mode: 'full', picks: {}, canvas: 'poster', style: 'poster', clock: 'widgets' });

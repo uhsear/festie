@@ -49,6 +49,10 @@ const NOTE_MIN_U = 2.0;
 const MAX_NOTE_ROWS = 12;
 /** Blocks shorter than this show only the footnote marker. */
 const MIN_TEXT_BLOCK_U = 1.4;
+/** A name that does not fit at GRID_MIN_U shrinks down to this size, with tight padding, before it becomes a footnote. */
+const TINY_MIN_U = 0.8;
+const BLOCK_PAD_U = 0.8;
+const TIGHT_PAD_U = 0.2;
 /** Footer and grid legend sit between the torch and camera buttons. */
 const SAFE_X = 26;
 const SAFE_W = 48;
@@ -713,8 +717,13 @@ function buildBlock(
   const carryLabel = carryOver ? (height < 7.6 ? `↑ ${artist}` : `↑ ${shortTime(it.start)} ${artist}`) : null;
   const text = carryLabel ?? (inlineTime ? `${artist} ${inlineTime}` : artist);
   const textX = col.x + 1.2;
-  const textWidth = col.width - 1.6;
-  const fit = height < MIN_TEXT_BLOCK_U ? null : fitBlockText(text, cols <= 2 ? 4.8 : 4, GRID_MIN_U[ctx.canvas], textWidth, height);
+  // Want and maybe draw a corner mark at the top right; keep the name clear of it.
+  const markRoom = it.priority === 'want-to-see' || it.priority === 'maybe' ? 2.4 : 0;
+  const textWidth = col.width - 1.6 - markRoom;
+  const roomy = height < MIN_TEXT_BLOCK_U ? null : fitBlockText(text, cols <= 2 ? 4.8 : 4, GRID_MIN_U[ctx.canvas], textWidth, height);
+  // fitBlockText allows 1.2u of padding; give that back minus the tight padding so short sets keep their name.
+  const tight = roomy ? null : fitBlockText(text, GRID_MIN_U[ctx.canvas], TINY_MIN_U, textWidth, height + 1.2 - 2 * TIGHT_PAD_U);
+  const fit = roomy ?? tight;
   let note: number | null = null;
   if (!fit) {
     note = notes.length + 1;
@@ -735,6 +744,7 @@ function buildBlock(
     artistSizeU: fit?.sizeU ?? Math.max(0, Math.min(GRID_LABEL_U, (height - 1.2) / 1.12)),
     textX,
     textWidth,
+    textPadU: roomy ? BLOCK_PAD_U : TIGHT_PAD_U,
     textMode: fit ? 'full' : 'note',
     artistLines: fit ? fit.lines : [String(note)],
     note,

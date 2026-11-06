@@ -200,6 +200,8 @@ export interface LockscreenGridBlock {
   /** Text box the model measured with: renderers draw the lines inside it. */
   textX: number;
   textWidth: number;
+  /** Top and bottom inner padding of the block. Short blocks use less so a shrunk name still fits. */
+  textPadU: number;
   /** 'full' draws the name; 'note' draws only the footnote marker, and the page `notes` list the name. */
   textMode: 'full' | 'note';
   /** Wrapped artist lines (a word wider than the line breaks with a hyphen); the marker alone in 'note' mode. */
