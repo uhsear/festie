@@ -59,6 +59,20 @@ describe('SosRaiseButton', () => {
     expect(toastSpy).toHaveBeenCalledWith('SOS sent to your crew', 'success');
   });
 
+  it('sends without a position when the permission prompt is never answered', async () => {
+    Object.defineProperty(global.navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition: vi.fn() },
+    });
+    raiseSosSpy.mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    render(<SosRaiseButton crewId="c1" />);
+    await user.click(screen.getByRole('button', { name: 'Send an SOS to your crew' }));
+    await user.click(screen.getByRole('button', { name: 'Send SOS' }));
+    expect(raiseSosSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(raiseSosSpy).toHaveBeenCalledWith('c1', {}), { timeout: 6_000 });
+  }, 10_000);
+
   it('on 429 shows the already-active line and closes the dialog', async () => {
     const user = userEvent.setup();
     raiseSosSpy.mockRejectedValueOnce({ status: 429 });
