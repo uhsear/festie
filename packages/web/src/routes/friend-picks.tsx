@@ -30,6 +30,11 @@ function errorText(err: unknown): string {
   return mapErrorToUserMessage(err);
 }
 
+// A bad or dead link never fixes itself; offline and generic failures can.
+function isRetryable(err: unknown): boolean {
+  return !(isApiClientError(err) && (err.status === 404 || (err.status === 0 && err.code === 'INVALID_INPUT')));
+}
+
 const plural = (n: number) => `${n} ${n === 1 ? 'pick' : 'picks'}`;
 
 export default function FriendPicksView() {
@@ -50,11 +55,28 @@ function PriorityMark({ label, priority }: { label: string; priority?: Priority 
   );
 }
 
-function Row({ row, username }: { row: ComparedSet; username: string }) {
+function Row({
+  row,
+  username,
+  check,
+}: {
+  row: ComparedSet;
+  username: string;
+  check?: { ticked: boolean; onToggle: () => void };
+}) {
   const mark = row.bucket === 'both' ? 'Both' : row.bucket === 'theirs' ? `Only ${username}` : 'Only you';
   return (
     <li className="flex flex-col gap-1 py-2 border-b border-border-subtle">
       <div className="flex items-center gap-2 flex-wrap">
+        {check && (
+          <input
+            type="checkbox"
+            className="w-5 h-5 shrink-0"
+            checked={check.ticked}
+            onChange={check.onToggle}
+            aria-label={`${row.artist}, ${row.time}`}
+          />
+        )}
         <span className="type-meta text-text-muted tabular-nums">{row.time}</span>
         <span className="font-semibold">{row.artist}</span>
         {row.stage && (
@@ -73,12 +95,17 @@ function Row({ row, username }: { row: ComparedSet; username: string }) {
   );
 }
 
-function Message({ text }: { text: string }) {
+function Message({ text, onRetry }: { text: string; onRetry?: () => void }) {
   return (
     <>
       <h1 className="sr-only">Friend picks</h1>
-      <div className="max-w-2xl mx-auto py-8 px-4 text-center" role="alert">
+      <div className="max-w-2xl mx-auto py-8 px-4 text-center flex flex-col items-center gap-3" role="alert">
         {text}
+        {onRetry && (
+          <button type="button" className="btn-secondary min-h-11 px-4" onClick={onRetry}>
+            Try again
+          </button>
+        )}
       </div>
     </>
   );
@@ -146,13 +173,21 @@ function FriendPicksInner() {
       </div>
     );
   }
-  if (query.isError || !payload || !comparison) return <Message text={errorText(query.error)} />;
+  if (query.isError || !payload || !comparison) {
+    return (
+      <Message
+        text={errorText(query.error)}
+        onRetry={query.isError && isRetryable(query.error) ? () => void query.refetch() : undefined}
+      />
+    );
+  }
 
   const { username, festivalName } = payload;
   // No festival selected counts as another festival, as on mobile, so Switch is offered.
   const otherFestival = currentFestivalId !== payload.festivalId && !(currentFestivalId === null && festivalsPending);
   const notJoined = !otherFestival && !!user && !currentProfile;
-  const addableRows = comparison.days.flatMap((d) => d.rows).filter((r) => r.addable);
+  const canTick = !!user && mine !== undefined;
+  const addableCount = comparison.days.flatMap((d) => d.rows).filter((r) => r.addable).length;
   const plan = planSharedPicksAdd(comparison, ticked);
 
   const toggle = (id: string) => {
@@ -229,7 +264,12 @@ function FriendPicksInner() {
           <h2 className="type-heading mb-1">{day.label}</h2>
           <ul>
             {day.rows.map((row) => (
-              <Row key={row.setId} row={row} username={username} />
+              <Row
+                key={row.setId}
+                row={row}
+                username={username}
+                check={canTick && row.addable ? { ticked: ticked.has(row.setId), onToggle: () => toggle(row.setId) } : undefined}
+              />
             ))}
           </ul>
         </section>
@@ -238,10 +278,10 @@ function FriendPicksInner() {
         <p className="type-meta text-text-muted">{`${comparison.missing} of their picks are no longer in the lineup.`}</p>
       )}
 
-      {user && mine !== undefined && (
+      {canTick && (
         <section id="add" className="flex flex-col gap-2">
           <h2 className="type-heading">Add their picks to your plan</h2>
-          {addableRows.length === 0 ? (
+          {addableCount === 0 ? (
             <p className="text-sm">You already have all of their picks.</p>
           ) : (
             <>
@@ -249,16 +289,6 @@ function FriendPicksInner() {
                 Their Must See picks are ticked. Nothing changes until you tap Add. A pick you already rated higher stays
                 as it is.
               </p>
-              <ul>
-                {addableRows.map((row) => (
-                  <li key={row.setId}>
-                    <label className="flex items-center gap-2 min-h-11">
-                      <input type="checkbox" checked={ticked.has(row.setId)} onChange={() => toggle(row.setId)} />
-                      <span>{`${row.artist} ${row.time}`}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
               {plan.total === 0 ? (
                 <p className="text-sm">Tick the sets you want to add.</p>
               ) : (
