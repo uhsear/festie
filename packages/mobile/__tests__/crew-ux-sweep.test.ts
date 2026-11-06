@@ -50,7 +50,7 @@ describe('crew UX sweep guards', () => {
     expect(crew).toContain("text: 'Make owner'");
     expect(crew).not.toContain("text: 'Transfer'");
     expect(crew).toContain('invited > 0');
-    expect(crew).toContain('invite link');
+    expect(crew).toContain('Share the invite link with the other ${invited} to bring them across.');
     const polls = read('components/CrewPolls.tsx');
     expect(polls).toContain("mapErrorToUserMessage(err, 'Try again in a moment.')");
     expect(polls).toContain('crewCopy.endPoll(isSchedule)');

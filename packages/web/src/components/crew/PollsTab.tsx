@@ -129,7 +129,8 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     mutationFn: async (pollId: string) => {
       const knownPoints = new Set(useCrewStore.getState().meetingPoints.map((m) => m.id));
       await closePollStore(crewId, pollId, {
-        festivalId: activeCrew?.festivalId ?? undefined,
+        // Reminders save into the current festival's profile, so seed one only when the crew's festival is open (as mobile does).
+        festivalId: crewFestivalIsCurrent ? (festivalId ?? undefined) : undefined,
         seedReminder: (setId, fId) =>
           useFestivalDataStore.getState().saveReminder({
             festivalId: fId,
