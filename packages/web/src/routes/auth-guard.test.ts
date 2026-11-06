@@ -84,6 +84,11 @@ describe('redirectIfSignedIn', () => {
     await expect(redirectIfSignedIn()).rejects.toMatchObject({ options: { to: '/cards' } });
   });
 
+  it('sends a signed-in user to the sanitised next path instead of /cards', async () => {
+    state.user = { id: 'u1' };
+    await expect(redirectIfSignedIn('/join/ABC')).rejects.toMatchObject({ options: { href: '/join/ABC' } });
+  });
+
   it('resolves when no user is set', async () => {
     state.sessionChecked = true;
     await expect(redirectIfSignedIn()).resolves.toBeUndefined();
