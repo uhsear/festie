@@ -34,8 +34,15 @@ describe('Schedule tab audit fixes', () => {
   });
   it('unfolds Earlier today for a search or when nothing is left to come', () => {
     const src = index();
-    expect(src).toMatch(/const showEarlier = earlierOpen \|\| restSets\.length === 0 \|\| searchQuery\.trim\(\) !== '';/);
-    expect(src).toMatch(/earlierSets\.length > 0 && !showEarlier/);
+    expect(src).toMatch(/const earlierForced = restSets\.length === 0 \|\| searchQuery\.trim\(\) !== '';/);
+    expect(src).toMatch(/const showEarlier = earlierOpen \|\| earlierForced;/);
+  });
+  it('keeps the Earlier today row after it opens so it can be collapsed again', () => {
+    expect(index()).toMatch(/earlierSets\.length > 0 && !earlierForced/);
+    expect(index()).not.toMatch(/earlierSets\.length > 0 && !showEarlier/);
+  });
+  it('remounts the timeline per day so every column starts at the top', () => {
+    expect(index()).toMatch(/<TimelineView\s+key=\{selectedDay\}/);
   });
   it('clamps the timeline active page when a stage filter shrinks the carousel', () => {
     expect(read('../components/TimelineView.tsx')).toMatch(
