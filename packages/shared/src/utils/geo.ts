@@ -172,6 +172,9 @@ export function initialBearingDeg(a: Coord | null | undefined, b: Coord | null |
   return bearing(a, b);
 }
 
+/** The Ionicons "navigate" glyph points NE: subtract this from a bearing so a due-north target points straight up. */
+export const NAVIGATE_GLYPH_OFFSET_DEG = 45;
+
 /** The eight principal compass points, clockwise from north. */
 export type Compass8 = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
 

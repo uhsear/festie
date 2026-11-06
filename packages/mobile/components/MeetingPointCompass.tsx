@@ -22,7 +22,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { buildPursuit, relativeArrowAngle, formatDistance } from '@festie/shared/utils';
+import { buildPursuit, relativeArrowAngle, formatDistance, NAVIGATE_GLYPH_OFFSET_DEG } from '@festie/shared/utils';
 import type { Coord } from '@festie/shared/utils';
 import { useFestivalModeStore } from '@festie/shared/stores';
 import { LIVE_SHARE_COPY } from '@festie/shared/constants';
@@ -284,7 +284,7 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
         on every heading tick would drown out navigation.
       */}
       <View style={styles.dial} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <View style={[styles.arrow, { transform: [{ rotate: `${arrowAngle}deg` }] }]}>
+        <View style={[styles.arrow, { transform: [{ rotate: `${arrowAngle - NAVIGATE_GLYPH_OFFSET_DEG}deg` }] }]}>
           {/* hero exception: the compass dial's arrow, not a token-scale icon */}
           <Ionicons name="navigate" size={96} color={t.colors.accent.aqua} />
         </View>
