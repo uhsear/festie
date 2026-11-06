@@ -40,7 +40,7 @@ describe('OfflineMap audit source guards', () => {
     expect(src).not.toContain('getCurrentPositionAsync');
     expect(src).not.toContain('setLocating');
     expect(src).toContain('const [pendingRecenter, setPendingRecenter]');
-    expect(src).toContain('interactive && (nearestNotice || pendingNearest || pendingRecenter)');
+    expect(src).toContain('interactive && (nearestNotice || pendingNearest || pendingRecenter || farNoticeM !== null)');
   });
 
   it('pushes the self position into the document', () => {
@@ -68,6 +68,6 @@ describe('OfflineMap audit source guards', () => {
 describe('map GPS watch lifecycle', () => {
   it('stops the location watch when the Map screen loses focus', () => {
     const src = readFileSync(join(__dirname, '../components/OfflineMap.tsx'), 'utf8');
-    expect(src).toMatch(/useFocusEffect\(\s*useCallback\(\(\) => \{[\s\S]*?return \(\) => \{\s*watchSubRef\.current\?\.remove\(\);/);
+    expect(src).toMatch(/useFocusEffect\(\s*useCallback\(\(\) => \{[\s\S]*?return \(\) => \{\s*focusedRef\.current = false;\s*watchSubRef\.current\?\.remove\(\);/);
   });
 });
