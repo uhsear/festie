@@ -18,6 +18,8 @@ import {
   NEAREST_AMENITY_TYPES,
   MAP_COPY,
   humanizeAmenityType,
+  isPeerStale,
+  formatShareWindow,
   locationPromptCopy,
   nearestMissingCopy,
   nearestStep,
@@ -32,7 +34,7 @@ import {
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import EmptyState from '../ui/EmptyState';
-import { type MapLibre, type PursueTarget } from './crew-map/mapDom';
+import { relAge, type MapLibre, type PursueTarget } from './crew-map/mapDom';
 import { useGeolocationWatch } from './crew-map/useGeolocationWatch';
 import { useSelfMarker } from './crew-map/useSelfMarker';
 import PlaceCard from './crew-map/PlaceCard';
@@ -340,10 +342,19 @@ export default function CrewMap({
     const id = setInterval(() => setPeerTick((t) => t + 1), PEER_REFRESH_MS);
     return () => clearInterval(id);
   }, [hasPeers]);
-  const peersKey = useMemo(
-    () => `${peerTick}#${peers.map((p) => `${p.userId}:${p.lat},${p.lng}:${p.serverAt}`).join('|')}`,
-    [peers, peerTick],
-  );
+  // The key carries each peer's tick-dependent output (stale flag, age and share-window
+  // labels), not the tick itself, so markers rebuild only when something visible changed
+  // and keyboard focus / an open popup survive the quiet ticks.
+  const peersKey = useMemo(() => {
+    void peerTick;
+    const now = Date.now();
+    return peers
+      .map(
+        (p) =>
+          `${p.userId}:${p.lat},${p.lng}:${p.serverAt}:${isPeerStale(p.serverAt, now)}:${relAge(p.serverAt)}:${formatShareWindow(p.expiresAt, now) ?? ''}`,
+      )
+      .join('|');
+  }, [peers, peerTick]);
   // SOS keys are SPLIT: the IDENTITY set (which raisers have a plotted SOS) drives
   // the build/reconcile + one-shot fly/open per new SOS, while the COORD set only
   // repositions the existing markers (no re-fly/re-open every tick). Keying the

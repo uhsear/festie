@@ -1198,7 +1198,7 @@ export default function OfflineMap({
             // Only a row with a fix opens the offline compass; the rest stay inert alerts.
             accessibilityRole={sosHasFix(s) ? 'button' : 'alert'}
             accessibilityLabel={`SOS from ${s.username}${s.message ? ', ' + s.message : ''}`}
-            accessibilityHint={s.position ? MAP_COPY.pointMeThere : undefined}
+            accessibilityHint={sosHasFix(s) ? MAP_COPY.pointMeThere : undefined}
             disabled={!sosHasFix(s)}
             onPress={() => {
               if (s.position) router.push(compassHref(s.username, { latitude: s.position.lat, longitude: s.position.lng }));

@@ -95,11 +95,14 @@ function MapViewInner() {
     );
   }
 
+  // The row is min-h-11 plus space-y-2 (3.25rem); the canvas calc below gives that back.
+  const showSosRow = hasCrew && !sosList.some((e) => e.userId === user?.id);
+
   return (
     <div className="space-y-2 px-4 py-2">
       <h1 className="sr-only">Map</h1>
       {/* A row above the canvas, not an overlay, so it never fights the place card or pursue bar. */}
-      {hasCrew && !sosList.some((e) => e.userId === user?.id) && (
+      {showSosRow && (
         <div className="flex justify-end">
           <SosRaiseButton crewId={crewId} compact alerting={sosList.length > 0} />
         </div>
@@ -118,7 +121,11 @@ function MapViewInner() {
           festival={mapFestival}
           focusPinId={focusStage ?? null}
           onFocusHandled={() => navigate({ to: '/map', search: {}, replace: true })}
-          canvasClassName="h-[calc(100dvh-var(--bottom-nav-h,0px)-11rem)] min-h-[320px]"
+          canvasClassName={
+            showSosRow
+              ? 'h-[calc(100dvh-var(--bottom-nav-h,0px)-14.25rem)] min-h-[320px]'
+              : 'h-[calc(100dvh-var(--bottom-nav-h,0px)-11rem)] min-h-[320px]'
+          }
         />
       </Suspense>
       {hasCrew && pointsFailed && (

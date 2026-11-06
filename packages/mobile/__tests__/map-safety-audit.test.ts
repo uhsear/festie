@@ -4,6 +4,15 @@ import { describe, it, expect } from 'vitest';
 
 const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8');
 
+// A renamed marker must fail the test, not widen the slice to the whole file.
+function between(src: string, from: string, to: string): string {
+  const start = src.indexOf(from);
+  const end = src.indexOf(to);
+  expect(start, `marker not found: ${from}`).toBeGreaterThanOrEqual(0);
+  expect(end, `marker not found: ${to}`).toBeGreaterThan(start);
+  return src.slice(start, end);
+}
+
 describe('Map tab SOS FAB and empty states', () => {
   const map = read('app/(tabs)/map.tsx');
   const hook = read('hooks/useSosRaise.ts');
@@ -35,7 +44,7 @@ describe('OfflineMap location, stale fix and fallback rows', () => {
   const src = read('components/OfflineMap.tsx');
 
   it('drops the stale fix and the blue dot when the tab loses focus', () => {
-    const cleanup = src.slice(src.indexOf('useFocusEffect('), src.indexOf('// Frame a point.'));
+    const cleanup = between(src, 'useFocusEffect(', '// Frame a point.');
     expect(cleanup).toContain('setSelfCoord(null)');
     expect(src).toContain('window.__festieSetSelf && window.__festieSetSelf(null); true;');
   });
@@ -48,11 +57,12 @@ describe('OfflineMap location, stale fix and fallback rows', () => {
   });
 
   it('opens the offline compass from fallback SOS, peer and meeting-point rows', () => {
-    const list = src.slice(src.indexOf('SOS first'), src.indexOf('uncoordedPoints.map'));
+    const list = between(src, 'SOS first', 'uncoordedPoints.map');
     expect(list).toContain('compassHref(s.username');
     expect(list).toContain("peerCompassHref(p.id.slice('peer:'.length))");
     expect(list).toContain('compassHref(pin.label');
     expect(list).toContain('accessibilityHint={MAP_COPY.pointMeThere}');
+    expect(list).toContain('accessibilityHint={sosHasFix(s) ? MAP_COPY.pointMeThere : undefined}');
     expect(list).toContain('FIND_FRIEND_COPY.openCompassA11y(p.label)');
     expect(list).not.toContain('accessibilityRole="text"');
   });
@@ -60,10 +70,10 @@ describe('OfflineMap location, stale fix and fallback rows', () => {
 
 describe('Compass states', () => {
   const src = read('components/MeetingPointCompass.tsx');
-  const noSensor = src.slice(src.indexOf("phase === 'no-sensor'"), src.indexOf("phase === 'init' ||"));
+  const noSensor = between(src, "phase === 'no-sensor'", "phase === 'init' ||");
 
   it('denied card has Open Settings and Try again', () => {
-    const denied = src.slice(src.indexOf("phase === 'denied'"), src.indexOf("phase === 'no-fix'"));
+    const denied = between(src, "phase === 'denied'", "phase === 'no-fix'");
     expect(denied).toContain('LIVE_SHARE_COPY.openSettings');
     expect(denied).toContain('Linking.openSettings()');
     expect(denied).toContain('setRetry((n) => n + 1)');

@@ -42,6 +42,7 @@ import { clearCrewSos, sosErrorMessage } from '@festie/shared/services';
 import { useLiveLocationStore } from '@festie/shared/stores';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { useNow } from '../hooks/useNow';
 import { useSosRaise } from '../hooks/useSosRaise';
 import { sosSeenLabel, sosWhen } from '@festie/shared/utils';
 import { FIND_FRIEND_COPY } from '@festie/shared/constants';
@@ -82,6 +83,8 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
   // Only the raiser's id is kept: the entry is derived from sosList each render, so a
   // cleared SOS closes the modal and the age line never goes stale.
   const [navUserId, setNavUserId] = useState<string | null>(null);
+  // Ticks so the compass modal's "SOS 2m ago" note keeps counting while it is open.
+  useNow(60_000);
   const navEntry = navUserId ? sosList.find((s) => s.userId === navUserId) : undefined;
   const navTarget = navEntry ? sosTargetFor(navEntry) : null;
   useEffect(() => {
