@@ -1,8 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import Avatar from './Avatar';
 
 describe('Avatar', () => {
+  it('falls back to initials when the image fails to load', () => {
+    render(<Avatar name="Jane Doe" image="https://example.invalid/x.png" />);
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByText('JD')).toBeInTheDocument();
+  });
+
   describe('fallback (no image)', () => {
     it('renders initials from name', () => {
       render(<Avatar name="Jane Doe" />);
