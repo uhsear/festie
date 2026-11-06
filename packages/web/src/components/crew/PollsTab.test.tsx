@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import PollsTab from './PollsTab';
 
-const { apiGet } = vi.hoisted(() => ({ apiGet: vi.fn() }));
+const { apiGet, closePoll } = vi.hoisted(() => ({ apiGet: vi.fn(), closePoll: vi.fn() }));
 
 vi.mock('@festie/shared', async (orig) => {
   const actual = await orig<typeof import('@festie/shared')>();
@@ -11,7 +11,7 @@ vi.mock('@festie/shared', async (orig) => {
     ...actual,
     api: { get: apiGet, post: vi.fn() },
     useCrewStore: Object.assign(
-      (sel: (s: Record<string, unknown>) => unknown) => sel({ closePoll: vi.fn() }),
+      (sel: (s: Record<string, unknown>) => unknown) => sel({ closePoll, activeCrew: { id: 'c1', festivalId: 'f-crew', members: [] } }),
       { getState: () => ({ meetingPoints: [] }) },
     ),
     useFestivalStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ currentFestival: { id: 'f1' } }),
@@ -19,7 +19,11 @@ vi.mock('@festie/shared', async (orig) => {
 });
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }) }));
 vi.mock('../../hooks/useHaptics', () => ({ useHaptics: () => ({ select: vi.fn(), warning: vi.fn() }) }));
-vi.mock('./PollItem', () => ({ default: () => <div /> }));
+vi.mock('./PollItem', () => ({
+  default: ({ poll: p, onClose }: { poll: { id: string }; onClose: (id: string) => void }) => (
+    <button onClick={() => onClose(p.id)}>{`end ${p.id}`}</button>
+  ),
+}));
 vi.mock('./SchedulePollComposer', () => ({ default: () => <div /> }));
 
 const poll = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -79,5 +83,26 @@ describe('PollsTab failed refetch', () => {
     expect(await screen.findByText(/Showing saved data/)).toBeInTheDocument();
     expect(screen.queryByText("Couldn't load polls")).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Create Poll/ })).toBeInTheDocument();
+  });
+});
+
+describe('PollsTab end poll', () => {
+  it('says a schedule poll creates a meeting point, and seeds the reminder for the crew festival', async () => {
+    closePoll.mockResolvedValue(undefined);
+    apiGet.mockResolvedValue({ polls: [poll('s1', { set_refs: [{ setId: 'x' }, null] }), poll('p1')] });
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: 'end s1' }));
+    expect(await screen.findByText(/becomes a meeting point/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'End poll' }));
+    await waitFor(() => expect(closePoll).toHaveBeenCalled());
+    expect(closePoll.mock.calls[0]![2]).toMatchObject({ festivalId: 'f-crew' });
+  });
+
+  it('keeps the short copy for a plain poll', async () => {
+    apiGet.mockResolvedValue({ polls: [poll('p1')] });
+    renderTab();
+    fireEvent.click(await screen.findByRole('button', { name: 'end p1' }));
+    expect(await screen.findByText('Voting stops and everyone sees the result.')).toBeInTheDocument();
+    expect(screen.queryByText(/becomes a meeting point/)).not.toBeInTheDocument();
   });
 });

@@ -8,6 +8,7 @@ import {
   writeOutcomeOf,
   writeOutcomeMessage,
   openPollState,
+  crewCopy,
   splitPolls,
   nextVoteIndexes,
   tallyPoll,
@@ -128,7 +129,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     mutationFn: async (pollId: string) => {
       const knownPoints = new Set(useCrewStore.getState().meetingPoints.map((m) => m.id));
       await closePollStore(crewId, pollId, {
-        festivalId: festivalId ?? undefined,
+        festivalId: activeCrew?.festivalId ?? undefined,
         seedReminder: (setId, fId) =>
           useFestivalDataStore.getState().saveReminder({
             festivalId: fId,
@@ -446,7 +447,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
           if (!open) setConfirmClosePollId(null);
         }}
         title="End this poll?"
-        description="Voting stops and everyone sees the result."
+        description={crewCopy.endPoll(!!polls.find((p) => p.id === confirmClosePollId)?.set_refs?.some((r) => r != null))}
         confirmLabel="End poll"
         onConfirm={() => {
           if (confirmClosePollId) close.mutate(confirmClosePollId);
