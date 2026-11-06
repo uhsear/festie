@@ -361,13 +361,17 @@ function GridBody({ body, u, side, p }: { body: LockscreenGridPage; u: number; s
         <GridBlock key={`${b.setId}-${b.carryOver ? 'c' : 'n'}`} b={b} u={u} p={p} label={label} />
       ))}
       {body.notes.length ? (
-        <View style={{ position: 'absolute', left: side, right: side, top: body.legendY * u }}>
+        <>
           {body.notes.map((n) => (
-            <T key={n.n} style={txt(u, body.noteSizeU, GROTESK_500, p.text2, { height: body.noteRowU * u })} lines={1}>
-              {n.text}
-            </T>
+            <View key={n.n} style={{ position: 'absolute', left: n.x * u, top: n.y * u, width: n.width * u }}>
+              {n.lines.map((line, i) => (
+                <Text key={i} allowFontScaling={false} numberOfLines={1} ellipsizeMode="clip" style={txt(u, body.noteSizeU, GROTESK_500, p.text2, { height: body.noteRowU * u })}>
+                  {line}
+                </Text>
+              ))}
+            </View>
           ))}
-        </View>
+        </>
       ) : (
         <View style={{ position: 'absolute', left: body.legendX * u, width: body.legendWidth * u, top: body.legendY * u }}>
           <T style={txt(u, label, GROTESK_500, p.text2, { textAlign: 'center' })} lines={1}>
@@ -415,7 +419,7 @@ function GridBlock({ b, u, p, label }: { b: LockscreenGridBlock; u: number; p: L
         </T>
       ) : null}
       {b.artistLines.map((line, n) => (
-        <Text key={n} allowFontScaling={false} numberOfLines={1} ellipsizeMode="clip" style={txt(u, b.note === null ? b.artistSizeU : label, b.picked ? CLASH_700 : CLASH_600, b.ink)}>
+        <Text key={n} allowFontScaling={false} numberOfLines={1} ellipsizeMode="clip" style={txt(u, b.artistSizeU, b.picked ? CLASH_700 : CLASH_600, b.ink)}>
           {line}
         </Text>
       ))}

@@ -52,7 +52,7 @@ type Shape = 'lockscreen' | Exclude<ScheduleImageFormat, 'lockscreen'>;
 type DayChoice = number | 'all';
 
 const SHAPE_OPTIONS = [
-  { value: 'lockscreen', label: 'Lock screen' },
+  { value: 'lockscreen', label: 'Wallpaper' },
   { value: 'story', label: 'Story' },
   { value: 'print', label: 'Print' },
 ] as const;
@@ -75,7 +75,7 @@ const LOOK_OPTIONS = [
 ] as const;
 
 const CANVAS_OPTIONS = [
-  { value: 'lockscreen', label: 'Lock screen' },
+  { value: 'lockscreen', label: 'Wallpaper' },
   { value: 'poster', label: 'Poster' },
 ] as const;
 
@@ -877,7 +877,7 @@ export default function PicksImageScreen() {
 
         {moreOpen ? (
           <>
-            {lockscreen && grid ? switchRow('Split long days into 2 images (bigger text)', !onePage, (v) => setOnePage(!v)) : null}
+            {lockscreen && grid ? switchRow('Split long days into 2 images', !onePage, (v) => setOnePage(!v)) : null}
             {lockscreen ? (
               <>
                 {heading('Phone size')}

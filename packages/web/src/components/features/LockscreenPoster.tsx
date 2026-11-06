@@ -416,7 +416,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
               style={{
                 fontFamily: CLASH,
                 fontWeight: b.picked ? 700 : 600,
-                fontSize: px(b.note === null ? b.artistSizeU : body.labelSizeU),
+                fontSize: px(b.artistSizeU),
                 lineHeight: 1.1,
                 whiteSpace: 'nowrap',
               }}
@@ -436,13 +436,17 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
         );
       })}
       {body.notes.length > 0 ? (
-        <div style={{ ...abs(sideU, body.legendY, 100 - 2 * sideU), color: c.text2, fontWeight: 500, whiteSpace: 'nowrap' }}>
+        <>
           {body.notes.map((n) => (
-            <div key={n.n} style={{ height: px(body.noteRowU), fontSize: px(body.noteSizeU), lineHeight: 1.1 }}>
-              {n.text}
+            <div key={n.n} style={{ ...abs(n.x, n.y, n.width), color: c.text2, fontWeight: 500, whiteSpace: 'nowrap' }}>
+              {n.lines.map((line, i) => (
+                <div key={i} style={{ height: px(body.noteRowU), fontSize: px(body.noteSizeU), lineHeight: 1.1 }}>
+                  {line}
+                </div>
+              ))}
             </div>
           ))}
-        </div>
+        </>
       ) : (
         <div
           style={{
