@@ -218,7 +218,7 @@ const loginRoute = new Route({
       ...(s.reset === 1 || s.reset === '1' || s.reset === true ? { reset: true as const } : {}),
     };
   },
-  beforeLoad: redirectIfSignedIn,
+  beforeLoad: ({ search }) => redirectIfSignedIn(search.next),
 });
 
 const registerRoute = new Route({
@@ -229,14 +229,14 @@ const registerRoute = new Route({
     const next = safeReturnPath(s.next);
     return next ? { next } : {};
   },
-  beforeLoad: redirectIfSignedIn,
+  beforeLoad: ({ search }) => redirectIfSignedIn(search.next),
 });
 
 const finishSignupRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/signup/finish',
   component: FinishSignupPage,
-  beforeLoad: redirectIfSignedIn,
+  beforeLoad: () => redirectIfSignedIn(),
 });
 
 const forgotPasswordRoute = new Route({
