@@ -12,6 +12,7 @@ export type LockscreenTheme = 'dark' | 'light';
 export type LockscreenTier = 'XL' | 'L' | 'M' | 'S';
 /** Where the lock-screen clock ends: 'big' is the tall iOS clock, 'widgets' a big clock plus a widget row. */
 export type LockscreenClock = 'normal' | 'big' | 'widgets';
+export type LockscreenCanvas = 'lockscreen' | 'poster';
 /** 'poster' adds stage-colour beams, a panel behind the schedule and a gradient headline; layout and safe zones are the same. */
 export type LockscreenStyle = 'standard' | 'poster';
 
@@ -60,8 +61,10 @@ export interface LockscreenInput {
   fromMs?: number;
   /** Festival IANA zone for `fromMs`; omitted uses the device-local frame. */
   timeZone?: string;
-  /** Grid modes: force a single image. */
+  /** Grid modes: default true; false splits long days. */
   onePage?: boolean;
+  /** 'poster' drops the clock gap and the beam art: same phone size, the grid starts at POSTER_TOP_U. Default 'lockscreen'. */
+  canvas?: LockscreenCanvas;
   savedAt: Date;
 }
 
@@ -194,14 +197,17 @@ export interface LockscreenGridBlock {
   artist: string;
   /** Artist font size in u after fitting. */
   artistSizeU: number;
-  /** Lines the block height allows for the artist; 0 = show no text. */
-  maxLines: number;
-  /** 'name' under two lines of height, 'none' under 4.5u. */
-  textMode: 'full' | 'name' | 'none';
-  /** Wrapped artist lines (never split inside a word; an overlong word ends in an ellipsis), clamped to `maxLines`. */
+  /** Text box the model measured with: renderers draw the lines inside it. */
+  textX: number;
+  textWidth: number;
+  /** 'full' draws the name; 'note' draws only the footnote marker, and the page `notes` list the name. */
+  textMode: 'full' | 'note';
+  /** Wrapped artist lines (a word wider than the line breaks with a hyphen); the marker alone in 'note' mode. */
   artistLines: string[];
-  /** True when the name was clamped or a word was cut; the last line ends with an ellipsis. */
-  ellipsis: boolean;
+  /** Footnote marker number, or null when the full name is drawn. */
+  note: number | null;
+  /** Draw the start time line above the name. */
+  timeShown: boolean;
   /** Modes with 1-2 columns: time goes inline after the name, e.g. "1-2:25"; the lines already include it. */
   inlineTime: string | null;
   priority: Priority | null;
@@ -235,6 +241,10 @@ export interface LockscreenGridPage {
   hours: { label: string; y: number; dashed: boolean }[];
   blocks: LockscreenGridBlock[];
   legend: string;
+  /** Names that did not fit their block, listed in place of the legend from `legendY`, one row of `noteRowU` each. */
+  notes: Array<{ n: number; text: string }>;
+  noteSizeU: number;
+  noteRowU: number;
   /** Right of the hour gutter, so the legend never covers the last hour label. */
   legendX: number;
   legendY: number;
@@ -319,6 +329,9 @@ export const LOCKSCREEN_PRESETS: readonly LockscreenPreset[] = [
 ];
 
 /** Fractions of image height. Estimates until measured on devices (spec 7.3). */
+/** Poster canvas: where the header starts, in u from the image top. */
+export const POSTER_TOP_U = 3;
+
 export const LOCKSCREEN_ZONES = {
   top: 0.38,
   tallTop: 0.45,

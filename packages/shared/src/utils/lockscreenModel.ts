@@ -4,6 +4,8 @@ import { parseHex, relativeLuminance, toHex } from './contrast';
 import { artistDisplayName, formatTime } from './format';
 import {
   LOCKSCREEN_ZONES,
+  POSTER_TOP_U,
+  type LockscreenCanvas,
   type LockscreenGridBlock,
   type LockscreenGridPage,
   type LockscreenHeader,
@@ -17,7 +19,7 @@ import {
   type LockscreenTheme,
   type LockscreenTier,
 } from './lockscreen';
-import { buildPosterArt, buildPosterPage } from './lockscreenPoster';
+import { buildPosterArt, buildPosterPage, mixHex } from './lockscreenPoster';
 import { formatDayChip } from './scheduleFormat';
 import { festivalStartMinutes, getSetTimeBounds, setMinuteRange, startsAfterMidnight } from './setStatus';
 
@@ -39,6 +41,13 @@ const FALLBACK_STAGE = '#9999bb';
 const LEGEND = '■ pick  ★ must  ● want  ○ maybe';
 /** Grid text floor: hour labels, stage headers, block times, names and the legend. */
 const GRID_LABEL_U = 2.8;
+/** Smallest artist size in a grid block before the name moves to a footnote. */
+const GRID_MIN_U: Record<LockscreenCanvas, number> = { lockscreen: 2.2, poster: 2.0 };
+/** A footnote row, and the smallest footnote text size (it shrinks to fit one row). */
+const NOTE_ROW_U = GRID_LABEL_U * 1.25;
+const NOTE_MIN_U = 2.0;
+/** Blocks shorter than this show only the footnote marker. */
+const MIN_TEXT_BLOCK_U = 1.4;
 /** Footer and grid legend sit between the torch and camera buttons. */
 const SAFE_X = 26;
 const SAFE_W = 48;
@@ -125,7 +134,9 @@ export const inkOn = (fill: string) =>
 // shortcut: width table, not measured text; replace with per-platform measuring if a name clips in QA.
 // Calibrated on Clash Display 600-700, measured on staging and local renders: capitals run wider than lowercase.
 const glyphEm = (ch: string) => (ch === ' ' ? 0.3 : ch !== ch.toLowerCase() ? 0.76 : 0.6);
-const wordWidthU = (word: string, sizeU: number) => [...word].reduce((sum, ch) => sum + glyphEm(ch), 0) * sizeU;
+/** The real font may run a little wider than the table; every width check leaves this much room. */
+export const FIT_SLACK = 1.06;
+export const wordWidthU = (word: string, sizeU: number) => [...word].reduce((sum, ch) => sum + glyphEm(ch), 0) * sizeU * FIT_SLACK;
 
 /** Largest size from `startU` down to `floorU` (steps of 0.2u) at which the longest word fits `widthU`. */
 export function fitArtistU(text: string, startU: number, floorU: number, widthU: number): number {
@@ -136,41 +147,59 @@ export function fitArtistU(text: string, startU: number, floorU: number, widthU:
   return floorU;
 }
 
-/** Cuts `word` to fit `widthU` and ends it with an ellipsis. Never returns an empty string. */
-function ellipsizeWord(word: string, sizeU: number, widthU: number): string {
-  if (wordWidthU(word, sizeU) <= widthU) return word;
-  const chars = [...word];
-  let n = chars.length - 1;
-  while (n > 1 && wordWidthU(`${chars.slice(0, n).join('')}…`, sizeU) > widthU) n--;
-  return `${chars.slice(0, n).join('')}…`;
+/** Pieces of a word wider than the line: breaks after an existing "/" or "-" first, then inside a part with a new "-". */
+function breakWord(word: string, sizeU: number, widthU: number): string[] {
+  const out: string[] = [];
+  for (const part of word.match(/[^/-]+[/-]?|[/-]/g) ?? [word]) {
+    let rest = part;
+    while (wordWidthU(rest, sizeU) > widthU && [...rest].length >= 4) {
+      const chars = [...rest];
+      let n = chars.length - 2;
+      while (n > 2 && wordWidthU(`${chars.slice(0, n).join('')}-`, sizeU) > widthU) n--;
+      out.push(`${chars.slice(0, n).join('')}-`);
+      rest = chars.slice(n).join('');
+    }
+    out.push(rest);
+  }
+  return out;
 }
 
 /**
- * Greedy word wrap using the width table. Lines break only between words. A word wider than a line
- * is ellipsized and ends the name, so a cut word is never followed by more text.
+ * Greedy word wrap using the width table. Lines break between words. A word wider than a line
+ * breaks with a hyphen (at least 2 characters stay on each side), so no name is ever cut.
  */
 export function wrapArtist(text: string, sizeU: number, widthU: number): string[] {
   const lines: string[] = [];
   let line = '';
-  for (const raw of text.split(/\s+/).filter(Boolean)) {
-    const word = ellipsizeWord(raw, sizeU, widthU);
-    const joined = line ? `${line} ${word}` : word;
+  const put = (piece: string, space: boolean) => {
+    const joined = line ? `${line}${space ? ' ' : ''}${piece}` : piece;
     if (!line || wordWidthU(joined, sizeU) <= widthU) line = joined;
     else {
       lines.push(line);
-      line = word;
+      line = piece;
     }
-    if (word !== raw) break;
+  };
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (wordWidthU(word, sizeU) <= widthU) put(word, true);
+    else breakWord(word, sizeU, widthU).forEach((piece, i) => put(piece, i === 0));
   }
   if (line) lines.push(line);
   return lines.length ? lines : [''];
 }
 
-function clampLines(lines: string[], max: number): { lines: string[]; clamped: boolean } {
-  if (lines.length <= max) return { lines, clamped: false };
-  const kept = lines.slice(0, Math.max(1, max));
-  kept[kept.length - 1] = `${kept[kept.length - 1]!.replace(/[-…]$/, '')}…`;
-  return { lines: kept, clamped: true };
+/** Largest size from `startU` down to `minU` (steps of 0.2u) whose wrapped lines fit `heightU`; null when none does. */
+export function fitBlockText(
+  text: string,
+  startU: number,
+  minU: number,
+  widthU: number,
+  heightU: number,
+): { sizeU: number; lines: string[] } | null {
+  for (let size = startU; size >= minU - 1e-9; size = Math.round((size - 0.2) * 10) / 10) {
+    const lines = wrapArtist(text, size, widthU);
+    if (lines.length * size * 1.12 + 1.2 <= heightU) return { sizeU: size, lines };
+  }
+  return null;
 }
 
 // ---- pagination ---------------------------------------------------------
@@ -327,6 +356,7 @@ interface Ctx {
   contentEndU: number;
   cornerSafeU: number;
   sideU: number;
+  canvas: LockscreenCanvas;
 }
 
 function stageColors(stage: Stage | undefined, theme: LockscreenTheme) {
@@ -541,27 +571,28 @@ function wrapName(text: string, sizeU: number, widthU: number, sep: string): str
   const at = [sep, 'b2b'].map((s) => lower.indexOf(` ${s.toLowerCase()} `)).find((i) => i > 0) ?? -1;
   if (plain.length < 2 || at < 0) return plain;
   const split = [...wrapArtist(text.slice(0, at), sizeU, widthU), ...wrapArtist(text.slice(at + 1), sizeU, widthU)];
-  return split.length <= plain.length && !split.some((l) => l.endsWith('…')) ? split : plain;
+  return split.length <= plain.length ? split : plain;
 }
 
 /**
  * A long name first shrinks (to NAME_SHRINK of the tier, never below 4.2u) to stay within `preferLines`,
- * then wraps up to maxLines, then shrinks to 4.2u. It ellipsizes only when it still does not fit.
+ * then wraps up to maxLines, then shrinks to 4.2u. It keeps every line (a taller row) when it still does not fit.
  */
 function fitName(text: string, spec: TierSpec, widthU: number, sep: string): { sizeU: number; lines: string[] } {
   const floor = Math.max(NAME_FLOOR_U, Math.round(spec.artistU * NAME_SHRINK * 10) / 10);
   const preferLines = spec.twoLine ? spec.maxLines : 2;
   let lines: string[] = [];
   let size = spec.artistU;
-  // Last resort before a cut word: shrink to the 4.2u floor.
-  for (const [limit, min] of [[preferLines, floor], [spec.maxLines, floor], [spec.maxLines, NAME_FLOOR_U]] as const) {
+  // Last resort: shrink to the 4.2u floor.
+  // A hyphen break (a word split across lines) is accepted only at the last stage, after every size shrank.
+  for (const [limit, min, hyphen] of [[preferLines, floor, false], [spec.maxLines, floor, false], [spec.maxLines, NAME_FLOOR_U, true]] as const) {
     for (size = spec.artistU; ; size = Math.round((size - 0.2) * 10) / 10) {
       lines = wrapName(text, size, widthU, sep);
-      if (lines.length <= limit && !lines.some((l) => l.endsWith('…'))) return { sizeU: size, lines };
+      if (lines.length <= limit && (hyphen || lines.join(' ') === text.trim().replace(/\s+/g, ' '))) return { sizeU: size, lines };
       if (size - 0.2 < min - 1e-9) break;
     }
   }
-  return { sizeU: size, lines: clampLines(lines, spec.maxLines).lines };
+  return { sizeU: size, lines };
 }
 
 /** Lays one page's rows out at `spec`, or null when they do not fit `availU`. */
@@ -586,7 +617,7 @@ function layoutList(
     const last = lines.at(-1)!;
     // Compact tiers draw the tag after the last name line, at LOCKSCREEN_TAG_SCALE of the name size.
     const tagFits = (tag: string) =>
-      spec.twoLine || (!last.endsWith('…') && wordWidthU(last, sizeU) + wordWidthU(` ${tag}`, sizeU * LOCKSCREEN_TAG_SCALE) <= widthU);
+      spec.twoLine || (wordWidthU(last, sizeU) + wordWidthU(` ${tag}`, sizeU * LOCKSCREEN_TAG_SCALE) <= widthU);
     const prev = rows[i - 1];
     const row = {
       ...r,
@@ -656,10 +687,12 @@ function buildBlock(
   page: { startMinute: number; endMinute: number; gridY: number; hourU: number },
   ctx: Ctx,
   cols: number,
+  notes: LockscreenGridPage['notes'],
 ): LockscreenGridBlock {
   const { input, palette } = ctx;
   const picked = it.priority !== null;
-  const colors = stageColors(ctx.stageById.get(it.set.stageId), input.theme);
+  const stage = ctx.stageById.get(it.set.stageId);
+  const colors = stageColors(stage, input.theme);
   const from = Math.max(it.start, page.startMinute);
   const to = Math.min(it.end, page.endMinute);
   const y = page.gridY + ((from - page.startMinute) / 60) * page.hourU;
@@ -667,22 +700,20 @@ function buildBlock(
   const artist = artistDisplayName(it.set, input.festival.b2bSeparator);
   const carryOver = it.start < page.startMinute;
   const inlineTime = cols <= 2 && !carryOver ? compactRange(it.start, it.end) : null;
-  const textMode = height < 4.5 ? 'none' : height < 7.6 ? 'name' : 'full';
   // A short carry-over block keeps the name and drops the start time.
-  const carryLabel = carryOver ? (textMode === 'full' ? `↑ ${shortTime(it.start)} ${artist}` : `↑ ${artist}`) : null;
+  const carryLabel = carryOver ? (height < 7.6 ? `↑ ${artist}` : `↑ ${shortTime(it.start)} ${artist}`) : null;
   const text = carryLabel ?? (inlineTime ? `${artist} ${inlineTime}` : artist);
-  const textW = col.width - 0.8 - 1 - 1.2;
-  const timeLine = textMode === 'full' && !inlineTime && !carryOver ? GRID_LABEL_U * 1.15 : 0;
-  const maxLinesFor = (size: number) => Math.max(0, Math.floor((height - 1.6 - timeLine) / (size * 1.12)));
-  const start = cols <= 2 ? 4.8 : 4;
-  let size = fitArtistU(text, start, GRID_LABEL_U, textW);
-  let lines = wrapArtist(text, size, textW);
-  while (size > GRID_LABEL_U && lines.length > maxLinesFor(size)) {
-    size = Math.round((size - 0.2) * 10) / 10;
-    lines = wrapArtist(text, size, textW);
+  const textX = col.x + 1.2;
+  const textWidth = col.width - 1.6;
+  const fit = height < MIN_TEXT_BLOCK_U ? null : fitBlockText(text, cols <= 2 ? 4.8 : 4, GRID_MIN_U[ctx.canvas], textWidth, height);
+  let note: number | null = null;
+  if (!fit) {
+    note = notes.length + 1;
+    notes.push({ n: note, text: `${note} ${artist} ${compactRange(it.start, it.end)} ${shortStageName(stage?.name ?? '')}` });
   }
-  const maxLines = textMode === 'none' ? 0 : maxLinesFor(size);
-  const clamped = clampLines(lines, maxLines);
+  // The hour axis already shows the time; add a start-time line only when one more line fits.
+  const timeShown = !!fit && !inlineTime && !carryOver && fit.lines.length * fit.sizeU * 1.12 + 1.2 + GRID_LABEL_U * 1.15 <= height;
+  const fill = !picked ? palette.surface : it.priority === 'maybe' ? mixHex(colors.mark, palette.surface, 0.4) : colors.mark;
   return {
     setId: it.set.id,
     stageId: it.set.stageId,
@@ -692,17 +723,19 @@ function buildBlock(
     height,
     time: shortTime(it.start),
     artist,
-    artistSizeU: size,
-    maxLines,
-    textMode,
-    artistLines: textMode === 'none' ? [] : clamped.lines,
-    ellipsis: textMode !== 'none' && (clamped.clamped || !!clamped.lines.at(-1)?.endsWith('…')),
+    artistSizeU: fit?.sizeU ?? GRID_LABEL_U,
+    textX,
+    textWidth,
+    textMode: fit ? 'full' : 'note',
+    artistLines: fit ? fit.lines : [String(note)],
+    note,
+    timeShown,
     inlineTime,
     priority: it.priority,
     picked,
-    fill: picked ? colors.mark : palette.surface,
+    fill,
     edge: colors.mark,
-    ink: picked ? colors.ink : palette.text2,
+    ink: picked ? inkOn(fill) : palette.text2,
     outline: picked && input.theme === 'light' ? '#0b0b12' : null,
     ring: it.priority === 'must',
     carryOver,
@@ -710,7 +743,13 @@ function buildBlock(
   };
 }
 
-function gridPageModels(items: Item[], ctx: Ctx): { page: LockscreenGridPage; items: Item[]; span: string }[] {
+interface GridPlan {
+  page: LockscreenGridPage;
+  items: Item[];
+  span: string;
+}
+
+function gridPageModels(items: Item[], ctx: Ctx): GridPlan[] {
   const { input } = ctx;
   const stageIds = [...new Set(items.map((i) => i.set.stageId))].sort(
     (a, b) => (ctx.stageOrder.get(a) ?? 1e6) - (ctx.stageOrder.get(b) ?? 1e6),
@@ -732,39 +771,56 @@ function gridPageModels(items: Item[], ctx: Ctx): { page: LockscreenGridPage; it
   });
   const headerY = ctx.contentTopU + HEADER_H + HEADER_GAP;
   const gridY = headerY + STAGE_ROW_H;
-  const availU = ctx.contentEndU - gridY - LEGEND_H;
   const first = Math.floor(Math.min(...items.map((i) => i.start)) / 60) * 60;
   const last = Math.ceil(Math.max(...items.map((i) => i.end)) / 60) * 60;
-  const { pages, hourU } = gridPages(first, last, items.map((i) => i.start), cols, availU, !!input.onePage);
-  return pages.map((p) => {
-    const inPage = items.filter((i) => i.end > p.startMinute && i.start < p.endMinute);
-    const blocks = inPage.map((it) =>
-      buildBlock(it, columns.find((c) => c.stageId === it.set.stageId)!, { ...p, gridY, hourU }, ctx, cols),
-    );
-    const hoursInPage = (p.endMinute - p.startMinute) / 60;
-    const hours = Array.from({ length: hoursInPage + 1 }, (_, i) => {
-      const min = p.startMinute + i * 60;
-      return { label: shortTime(min), y: gridY + i * hourU, dashed: min === 1440 };
+  const plan = (availU: number): GridPlan[] => {
+    const { pages, hourU } = gridPages(first, last, items.map((i) => i.start), cols, availU, input.onePage ?? true);
+    return pages.map((p) => {
+      const inPage = items.filter((i) => i.end > p.startMinute && i.start < p.endMinute);
+      const notes: LockscreenGridPage['notes'] = [];
+      const blocks = inPage.map((it) =>
+        buildBlock(it, columns.find((c) => c.stageId === it.set.stageId)!, { ...p, gridY, hourU }, ctx, cols, notes),
+      );
+      const hoursInPage = (p.endMinute - p.startMinute) / 60;
+      const hours = Array.from({ length: hoursInPage + 1 }, (_, i) => {
+        const min = p.startMinute + i * 60;
+        return { label: shortTime(min), y: gridY + i * hourU, dashed: min === 1440 };
+      });
+      const noteChars = Math.max(1, ...notes.map((n) => [...n.text].length));
+      const noteFitU = Math.floor(((100 - 2 * ctx.sideU) / (noteChars * 0.62 * FIT_SLACK)) * 10) / 10;
+      const page: LockscreenGridPage = {
+        kind: 'grid',
+        columns,
+        gutterWidth: GUTTER_W,
+        startMinute: p.startMinute,
+        endMinute: p.endMinute,
+        hourU,
+        headerY,
+        gridY,
+        hours,
+        blocks,
+        legend: LEGEND,
+        notes,
+        noteSizeU: Math.max(NOTE_MIN_U, Math.min(GRID_LABEL_U, noteFitU)),
+        noteRowU: NOTE_ROW_U,
+        legendX: SAFE_X,
+        legendY: gridY + hoursInPage * hourU + 0.3,
+        legendWidth: SAFE_W,
+        labelSizeU: GRID_LABEL_U,
+      };
+      return { page, items: inPage.filter((i) => i.start >= p.startMinute), span: spanLabel(p.startMinute, p.endMinute) };
     });
-    const page: LockscreenGridPage = {
-      kind: 'grid',
-      columns,
-      gutterWidth: GUTTER_W,
-      startMinute: p.startMinute,
-      endMinute: p.endMinute,
-      hourU,
-      headerY,
-      gridY,
-      hours,
-      blocks,
-      legend: LEGEND,
-      legendX: SAFE_X,
-      legendY: gridY + hoursInPage * hourU + 0.3,
-      legendWidth: SAFE_W,
-      labelSizeU: GRID_LABEL_U,
-    };
-    return { page, items: inPage.filter((i) => i.start >= p.startMinute), span: spanLabel(p.startMinute, p.endMinute) };
-  });
+  };
+  // Footnote rows replace the legend and take height from the grid, which can create more notes: settle in 3 passes.
+  let result = plan(ctx.contentEndU - gridY - LEGEND_H);
+  let rows = 0;
+  for (let pass = 0; pass < 3; pass++) {
+    const need = Math.max(...result.map((r) => r.page.notes.length));
+    if (need <= rows) break;
+    rows = need;
+    result = plan(ctx.contentEndU - gridY - rows * NOTE_ROW_U);
+  }
+  return result;
 }
 
 /** Theme-adjusted marks of the stages a page draws, in festival stage order. */
@@ -782,7 +838,8 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
   const heightU = (height / width) * 100;
   const clock = input.clock ?? (input.tallClock ? 'big' : 'normal');
   const top = { normal: LOCKSCREEN_ZONES.top, big: LOCKSCREEN_ZONES.tallTop, widgets: LOCKSCREEN_ZONES.widgetsTop }[clock];
-  const contentTopU = top * heightU;
+  const canvas = input.canvas ?? 'lockscreen';
+  const contentTopU = canvas === 'poster' ? POSTER_TOP_U : top * heightU;
   const ctx: Ctx = {
     input,
     palette: LOCKSCREEN_PALETTES[theme],
@@ -792,6 +849,7 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
     contentEndU: LOCKSCREEN_ZONES.contentEnd * heightU,
     cornerSafeU: LOCKSCREEN_ZONES.cornerSafe * heightU,
     sideU: LOCKSCREEN_ZONES.sidePadU,
+    canvas,
   };
 
   const series: { dayIndex: number; pages: Omit<LockscreenPageModel, 'footer'>[] }[] = [];
@@ -834,7 +892,7 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
   }
 
   const poster =
-    input.style === 'poster'
+    input.style === 'poster' && canvas === 'lockscreen'
       ? buildPosterArt({
           stageMarks: input.stages.map((st) => stageColors(st, theme).mark),
           palette: ctx.palette,
