@@ -389,6 +389,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
         const shadow = [b.ring && `inset 0 0 0 ${px(0.4)} ${c.text}`, b.outline && `inset 0 0 0 ${px(0.3)} ${b.outline}`]
           .filter(Boolean)
           .join(', ');
+        const borderL = b.picked ? 0 : 0.8;
         return (
           <div
             key={`${b.setId}-${b.carryOver ? 'c' : 'n'}`}
@@ -396,7 +397,7 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
               ...abs(b.x, b.y, b.width, b.height),
               boxSizing: 'border-box',
               overflow: 'hidden',
-              padding: `${px(0.8)} ${px(1.2)} ${px(0.8)} ${px(0.9)}`,
+              padding: `${px(0.8)} ${px(b.width - (b.textX - b.x) - b.textWidth)} ${px(0.8)} ${px(b.textX - b.x - borderL)}`,
               borderRadius: px(0.8),
               ...(b.carryOver && { borderTopLeftRadius: 0, borderTopRightRadius: 0 }),
               backgroundColor: b.fill,
@@ -405,36 +406,25 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
               boxShadow: shadow || undefined,
             }}
           >
-            {b.textMode !== 'none' && (
-              <>
-                {b.textMode === 'full' && !b.inlineTime && !b.carryLabel && (
-                  <div style={{ fontSize: px(body.labelSizeU), fontWeight: 600, whiteSpace: 'nowrap', lineHeight: 1.1 }}>
-                    {b.priority === 'must' && '★ '}
-                    {b.time}
-                  </div>
-                )}
-                <div
-                  style={{
-                    fontFamily: CLASH,
-                    fontWeight: b.picked ? 700 : 600,
-                    fontSize: px(b.artistSizeU),
-                    lineHeight: 1.1,
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    ...(b.textMode === 'full' &&
-                      b.maxLines > 0 && {
-                        display: '-webkit-box',
-                        WebkitLineClamp: b.maxLines,
-                        WebkitBoxOrient: 'vertical',
-                      }),
-                  }}
-                >
-                  {b.artistLines.map((line, n) => (
-                    <div key={n} style={{ overflow: 'hidden' }}>{line}</div>
-                  ))}
-                </div>
-              </>
+            {b.timeShown && (
+              <div style={{ fontSize: px(body.labelSizeU), fontWeight: 600, whiteSpace: 'nowrap', lineHeight: 1.1 }}>
+                {b.priority === 'must' && '★ '}
+                {b.time}
+              </div>
             )}
+            <div
+              style={{
+                fontFamily: CLASH,
+                fontWeight: b.picked ? 700 : 600,
+                fontSize: px(b.note === null ? b.artistSizeU : body.labelSizeU),
+                lineHeight: 1.1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {b.artistLines.map((line, n) => (
+                <div key={n}>{line}</div>
+              ))}
+            </div>
             {b.picked && b.priority && b.priority !== 'must' && (
               <span
                 style={{ position: 'absolute', top: px(0.4), right: px(0.6), fontSize: px(body.labelSizeU), lineHeight: 1, color: b.ink }}
@@ -445,19 +435,29 @@ function GridBody({ body, model, px, abs }: BodyProps<LockscreenGridPage>) {
           </div>
         );
       })}
-      <div
-        style={{
-          ...abs(body.legendX, body.legendY, body.legendWidth),
-          textAlign: 'center',
-          fontSize: px(body.labelSizeU),
-          lineHeight: 1.1,
-          color: c.text2,
-          fontWeight: 500,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {body.legend}
-      </div>
+      {body.notes.length > 0 ? (
+        <div style={{ ...abs(sideU, body.legendY, 100 - 2 * sideU), color: c.text2, fontWeight: 500, whiteSpace: 'nowrap' }}>
+          {body.notes.map((n) => (
+            <div key={n.n} style={{ height: px(body.noteRowU), fontSize: px(body.noteSizeU), lineHeight: 1.1 }}>
+              {n.text}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          style={{
+            ...abs(body.legendX, body.legendY, body.legendWidth),
+            textAlign: 'center',
+            fontSize: px(body.labelSizeU),
+            lineHeight: 1.1,
+            color: c.text2,
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {body.legend}
+        </div>
+      )}
     </>
   );
 }
