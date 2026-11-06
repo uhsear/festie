@@ -91,7 +91,7 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
             <View key={set.id} style={styles.row}>
               <View style={styles.rowMain}>
                 <View style={styles.titleRow}>
-                  <Text style={styles.artist} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  <Text style={styles.artist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                     {name}
                   </Text>
                   <View style={styles.stagePill}>
@@ -202,6 +202,7 @@ const useStyles = makeStyles((t) => ({
   },
   titleRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: t.spacing[2],
   },

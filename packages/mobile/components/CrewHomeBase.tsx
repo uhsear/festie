@@ -174,7 +174,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
       <View style={styles.cardInfo}>
         {hasHomeBase ? (
           <View style={styles.cardRow}>
-            <Text style={styles.cardLocation} numberOfLines={1}>
+            <Text style={styles.cardLocation} numberOfLines={3}>
               {location}
             </Text>
             {timeDisplay ? <Text style={styles.cardTime}>{timeDisplay}</Text> : null}
