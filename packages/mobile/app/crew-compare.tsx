@@ -74,8 +74,10 @@ export default function CrewCompareScreen() {
 
   // A failed refresh keeps a grid that already loaded; only an empty grid gets the full-screen error.
   useEffect(() => {
+    // Toast once per error, not on every row-count change (error clears only when the next refresh starts).
     if (error && rows.length > 0) useUIStore.getState().showToast(error, { kind: 'error' });
-  }, [error, rows.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rows.length read at error time only
+  }, [error]);
 
   const handleAdd = useCallback(
     (setId: string, priority: Parameters<typeof savePick>[2]) => {
