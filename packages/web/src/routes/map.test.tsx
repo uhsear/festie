@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   setActiveCrew: vi.fn(),
   search: {} as { focusStage?: string },
   navigate: vi.fn(),
+  sosList: [] as unknown[],
   error: null as string | null,
   queryError: false,
   refetch: vi.fn(),
@@ -44,7 +45,7 @@ vi.mock('@festie/shared/hooks', () => ({
 }));
 
 vi.mock('@festie/shared/stores/liveLocationStore', () => {
-  const state = { peers: {}, activeSosList: [] };
+  const state = { peers: {}, get activeSosList() { return h.sosList; } };
   const useLiveLocationStore = (sel: (s: typeof state) => unknown) => sel(state);
   useLiveLocationStore.getState = () => ({ setActiveCrew: h.setActiveCrew, sweepStale: vi.fn() });
   return { useLiveLocationStore };
@@ -74,6 +75,10 @@ vi.mock('../components/crew/CrewMap', () => ({
   },
 }));
 
+vi.mock('../components/crew/SosRaiseButton', () => ({
+  default: () => <button type="button">SOS</button>,
+}));
+
 import MapView from './map';
 
 beforeEach(() => {
@@ -84,6 +89,7 @@ beforeEach(() => {
   h.search = {};
   h.error = null;
   h.queryError = false;
+  h.sosList = [];
 });
 
 describe('MapView', () => {
@@ -161,5 +167,24 @@ describe('MapView', () => {
     render(<MapView />);
     await screen.findByTestId('crew-map');
     expect(h.crewMapProps.mock.calls[0]![0].focusPinId).toBeNull();
+  });
+
+  it('offers SOS to a crew member, and hides it while their own SOS is active', async () => {
+    h.user = { id: 'u1' };
+    h.crew = { id: 'c1' };
+    const { unmount } = render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(screen.getByRole('button', { name: 'SOS' })).toBeInTheDocument();
+    unmount();
+    h.sosList = [{ crewId: 'c1', userId: 'u1' }];
+    render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(screen.queryByRole('button', { name: 'SOS' })).not.toBeInTheDocument();
+  });
+
+  it('shows no SOS for a guest', async () => {
+    render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(screen.queryByRole('button', { name: 'SOS' })).not.toBeInTheDocument();
   });
 });
