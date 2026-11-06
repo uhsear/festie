@@ -207,7 +207,6 @@ export function buildMapHtml(
     /* Live peer: aqua avatar disc with the member's initials + a pulsing ring,
        visually distinct from the coral meeting-point pins. */
     .festie-peer {
-      position: relative;
       width: 26px; height: 26px; border-radius: 50%;
       background: #00e8d0; color: #080810; border: 2px solid #fff;
       font: 700 11px -apple-system, system-ui, sans-serif;
@@ -257,7 +256,6 @@ export function buildMapHtml(
        distinct from the coral meeting dots + aqua peer discs. Color is set inline
        per-marker from the shared amenityGlyph/stage-color source on the RN side. */
     .festie-stage {
-      position: relative;
       width: 14px; height: 14px; border-radius: 50%;
       border: 2px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,0.5);
     }
