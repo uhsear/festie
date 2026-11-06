@@ -223,16 +223,20 @@ export default function TimelineScreen() {
   // One automatic try per id: a failed fetch leaves the id with no festival, which
   // would otherwise re-fire this effect forever. The picker retries by hand.
   const reloadTriedRef = useRef<string | null>(null);
+  const revalidatedRef = useRef(false);
   useEffect(() => {
     if (!currentFestivalId || currentFestival || isLoading || reloadTriedRef.current === currentFestivalId) return;
     reloadTriedRef.current = currentFestivalId;
+    // This load is already fresh, so the cold-start revalidate below must not repeat it.
+    revalidatedRef.current = true;
     selectFestival(currentFestivalId).catch(() => {});
   }, [currentFestivalId, currentFestival, isLoading, selectFestival]);
 
   // A cached festival shows at once, but a cold start must still revalidate it in
   // the background. Resume moves the day tab to today (no fetch).
-  const revalidatedRef = useRef(false);
   useEffect(() => {
+    // A load seen in flight (picker choice) is already fresh; skip the duplicate.
+    if (isLoading) revalidatedRef.current = true;
     if (revalidatedRef.current || !currentFestivalId || !currentFestival || isLoading) return;
     revalidatedRef.current = true;
     selectFestival(currentFestivalId).catch(() => {});
