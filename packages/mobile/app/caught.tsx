@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, SectionList, Text, TextInput, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { api, markCaught, mapErrorToUserMessage } from '@festie/shared/services';
-import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import {
   applyCaughtMark,
   artistDisplayName,
@@ -53,13 +53,11 @@ export default function CaughtScreen() {
   const [data, setData] = useState<WrapResponse | null>(null);
   const [error, setError] = useState(false);
   const [reload, setReload] = useState(0);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [detail, setDetail] = useState<FestivalDetail | null>(null);
   const [detailError, setDetailError] = useState(false);
   const [detailTry, setDetailTry] = useState(0);
-  const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -100,17 +98,8 @@ export default function CaughtScreen() {
     };
   }, [adding, isCurrent, festivalId, detail, detailTry]);
 
-  useEffect(
-    () => () => {
-      if (errorTimer.current) clearTimeout(errorTimer.current);
-    },
-    [],
-  );
-
   const showError = useCallback((e: unknown) => {
-    setSaveError(mapErrorToUserMessage(e, SAVE_ERROR));
-    if (errorTimer.current) clearTimeout(errorTimer.current);
-    errorTimer.current = setTimeout(() => setSaveError(null), 3000);
+    useUIStore.getState().showToast(mapErrorToUserMessage(e, SAVE_ERROR), { kind: 'error' });
   }, []);
 
   const mark = useCallback(
@@ -370,6 +359,7 @@ export default function CaughtScreen() {
         )}
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.top}>
@@ -390,16 +380,7 @@ export default function CaughtScreen() {
             ) : null}
           </View>
         }
-        ListFooterComponent={
-          <>
-            {saveError ? (
-              <Text style={styles.error} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityLiveRegion="polite">
-                {saveError}
-              </Text>
-            ) : null}
-            {footer}
-          </>
-        }
+        ListFooterComponent={footer}
       />
     </View>
   );
@@ -434,7 +415,6 @@ const useStyles = makeStyles((t) => ({
   buttons: { flexDirection: 'row', gap: t.spacing[2] },
   buttonsStacked: { flexDirection: 'column' },
   button: { flex: 1 },
-  error: { ...typeStyle('caption'), color: t.colors.accent.coral, marginTop: t.spacing[2] },
   addSection: { marginTop: t.spacing[4], gap: t.spacing[2] },
   addBody: { gap: t.spacing[2] },
   input: {
