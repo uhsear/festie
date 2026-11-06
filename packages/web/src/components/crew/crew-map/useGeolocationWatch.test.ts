@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { useGeolocationWatch } from './useGeolocationWatch';
 
 const watchPosition = vi.fn();
 const clearWatch = vi.fn();
+const getCurrentPosition = vi.fn();
 
 function setVisibility(state: 'hidden' | 'visible') {
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
@@ -17,13 +18,55 @@ beforeEach(() => {
   watchPosition.mockImplementation(() => ++id);
   Object.defineProperty(global.navigator, 'geolocation', {
     configurable: true,
-    value: { watchPosition, clearWatch },
+    value: { watchPosition, clearWatch, getCurrentPosition },
   });
   useFestivalModeStore.getState().setLowPowerMode(false);
   setVisibility('visible');
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('useGeolocationWatch', () => {
+  it('seeds from a recent low-accuracy fix when the watch never calls back', () => {
+    const { result } = renderHook(() => useGeolocationWatch());
+    act(() => result.current.enableLocation());
+    expect(getCurrentPosition.mock.calls[0][2]).toMatchObject({ enableHighAccuracy: false, maximumAge: 300_000 });
+    act(() => getCurrentPosition.mock.calls[0][0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 900 } }));
+    expect(result.current.selfCoord).toEqual({ latitude: 28.5, longitude: -81.4 });
+    expect(result.current.geoState).toBe('on');
+  });
+
+  it('does not let a late seed overwrite a watch fix', () => {
+    const { result } = renderHook(() => useGeolocationWatch());
+    act(() => result.current.enableLocation());
+    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 5 } }));
+    act(() => getCurrentPosition.mock.calls[0][0]({ coords: { latitude: 1, longitude: 2, accuracy: 900 } }));
+    expect(result.current.selfCoord).toEqual({ latitude: 28.5, longitude: -81.4 });
+    expect(result.current.accuracyM).toBe(5);
+  });
+
+  it('gives up on Finding you after 15 s, and a later fix still wins', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useGeolocationWatch());
+    act(() => result.current.enableLocation());
+    act(() => vi.advanceTimersByTime(14_999));
+    expect(result.current.geoState).toBe('locating');
+    act(() => vi.advanceTimersByTime(1));
+    expect(result.current.geoState).toBe('unavailable');
+    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 5 } }));
+    expect(result.current.geoState).toBe('on');
+  });
+
+  it('clears the no-fix timer on unmount', () => {
+    vi.useFakeTimers();
+    const { result, unmount } = renderHook(() => useGeolocationWatch());
+    act(() => result.current.enableLocation());
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('starts with high accuracy', () => {
     const { result } = renderHook(() => useGeolocationWatch());
     act(() => result.current.enableLocation());
