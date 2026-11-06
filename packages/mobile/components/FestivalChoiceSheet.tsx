@@ -1,5 +1,6 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Button from './Button';
 
 interface FestivalChoiceSheetProps {
@@ -13,12 +14,14 @@ interface FestivalChoiceSheetProps {
 
 /** Scrolling festival list with Cancel. Alert.alert caps Android at 3 buttons, so it cannot list festivals. */
 export default function FestivalChoiceSheet({ visible, title, message, options, onSelect, onClose }: FestivalChoiceSheetProps) {
+  const t = useTokens();
   const styles = useStyles();
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.root}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Cancel" />
-        <View style={styles.sheet} accessibilityViewIsModal>
+        <View style={[styles.sheet, { paddingBottom: t.spacing[5] + insets.bottom }]} accessibilityViewIsModal>
           <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {title}
           </Text>

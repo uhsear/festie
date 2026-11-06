@@ -140,7 +140,7 @@ export default function AccountPublicScheduleSection() {
             Stops every picks link and calendar subscription you've shared. Your public schedule page is not affected; turn it off above.
           </Text>
         </View>
-        <Button label={RESET_LABEL} size="sm" variant="danger" onPress={onReset} testID="reset-share-links" />
+        <Button label="Reset" accessibilityLabel={RESET_LABEL} size="sm" variant="danger" onPress={onReset} testID="reset-share-links" />
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>

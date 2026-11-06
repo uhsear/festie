@@ -279,7 +279,7 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
                     accessibilityRole="button"
                     accessibilityLabel={`Rename ${item.label}`}
                   >
-                    <Text style={styles.itemLabel} numberOfLines={1}>
+                    <Text style={styles.itemLabel} numberOfLines={2}>
                       {item.label}
                     </Text>
                   </TouchableOpacity>

@@ -81,7 +81,6 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[3],
-    marginHorizontal: t.spacing[4],
     marginBottom: t.spacing[3],
     padding: t.spacing[3],
     borderRadius: t.radii.default,

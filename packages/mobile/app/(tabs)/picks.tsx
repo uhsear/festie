@@ -39,6 +39,8 @@ import {
   listenListText,
   buildMyDay,
   buildPlanList,
+  buildPicksRows,
+  isSetScheduled,
   clashBadgeBySetId,
   fmtZonedClock,
   foldSearch,
@@ -219,8 +221,21 @@ export default function PicksScreen() {
     if (!myDayMode) return rows;
 
     // My day covers the picks the current filter and search leave in the plan.
+    // Membership ignores collapsed groups in By day / By priority, which emit only their header.
+    const eligible = buildPicksRows({
+      sets,
+      picks: myPicks ?? undefined,
+      days: storeDays,
+      stages,
+      groupMode: 'day',
+      filter: effectiveFilter,
+      search,
+      collapsed: new Set(),
+      clashIds: conflictIds,
+      compare: () => 0,
+    });
     const visiblePicks: Record<string, Priority> = {};
-    for (const row of rows) if (row.kind === 'set' && myPicks?.[row.set.id]) visiblePicks[row.set.id] = myPicks[row.set.id]!;
+    for (const row of eligible) if (row.kind === 'set' && myPicks?.[row.set.id]) visiblePicks[row.set.id] = myPicks[row.set.id]!;
     const out: Row[] = [];
     days.forEach((day) => {
       const myDay = buildMyDay({
@@ -287,6 +302,14 @@ export default function PicksScreen() {
         );
       }
     });
+    const noDay = sets.filter((s) => visiblePicks[s.id] && !isSetScheduled(s, storeDays));
+    if (noDay.length > 0) {
+      const collapsed = plan.collapsed.has('myday-tba');
+      out.push({ kind: 'group', key: 'g-myday-tba', groupId: 'myday-tba', label: 'Unscheduled', count: noDay.length, collapsed });
+      if (!collapsed) {
+        noDay.forEach((set) => out.push({ kind: 'set', key: `set-${set.id}`, set, priority: visiblePicks[set.id]! }));
+      }
+    }
     return out;
   }, [
     activePlanList,
@@ -299,6 +322,8 @@ export default function PicksScreen() {
     plan.collapsed,
     myDayMode,
     rows,
+    effectiveFilter,
+    conflictIds,
     myPicks,
     sets,
     storeDays,
@@ -346,6 +371,7 @@ export default function PicksScreen() {
   const setGroupModeHaptic = useCallback(
     (mode: PicksGroupMode | 'myday') => {
       haptics.select();
+      setPlanList(null);
       setMyDayMode(mode === 'myday');
       if (mode !== 'myday') setGroupMode(mode);
     },
@@ -363,6 +389,7 @@ export default function PicksScreen() {
   const setOrderHaptic = useCallback(
     (next: PicksOrder) => {
       haptics.select();
+      setPlanList(null);
       setOrder(next);
     },
     [haptics, setOrder],
@@ -450,6 +477,7 @@ export default function PicksScreen() {
             item={item.item}
             listKind={item.listKind}
             stageName={getStageName(item.item.set.stageId) || 'Unknown'}
+            b2bSeparator={separator}
             onPress={() => router.push(`/set/${item.item.set.id}`)}
           />
         );
@@ -476,6 +504,7 @@ export default function PicksScreen() {
     },
     [
       styles,
+      separator,
       getStageName,
       getStageColor,
       getMyPick,
@@ -665,7 +694,7 @@ export default function PicksScreen() {
                 </Text>
                 {day.rows.map((row) => (
                   <View key={row.setId} style={styles.listenRow}>
-                    <Text style={styles.listenName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                    <Text style={styles.listenName} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                       {row.name}
                     </Text>
                     {row.spotifyUrl ? (
@@ -812,6 +841,7 @@ export default function PicksScreen() {
           style={[styles.iconControl, (searchOpen || search.length > 0) && styles.iconControlActive]}
           onPress={() => {
             haptics.tap();
+            if (searchOpen) setSearch('');
             setSearchOpen((v) => !v);
           }}
           activeOpacity={0.8}
@@ -829,7 +859,7 @@ export default function PicksScreen() {
     ) : null;
 
   const orderRow =
-    stats.total > 0 ? (
+    stats.total > 0 && !myDayMode ? (
       <View style={styles.controlsRow}>
         <View style={styles.segment} accessibilityRole="radiogroup" accessibilityLabel="Order sets">
           {(['openers', 'headliners'] as const).map((value) => {
@@ -901,7 +931,7 @@ export default function PicksScreen() {
         accessibilityLabel="Bulk add picks for all days"
       >
         <Ionicons name="add-circle-outline" size={16} color={t.colors.accent.aqua} />
-        <Text style={styles.bulkHeaderText}>{`Bulk add picks · ${BULK_SCOPE_LABEL}`}</Text>
+        <Text style={styles.bulkHeaderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{`Bulk add picks · ${BULK_SCOPE_LABEL}`}</Text>
         <Ionicons
           name={bulkOpen ? 'chevron-up' : 'chevron-down'}
           size={16}
@@ -917,7 +947,7 @@ export default function PicksScreen() {
             accessibilityRole="radiogroup"
             accessibilityLabel="Priority for bulk add"
           >
-            <Text style={styles.bulkSubLabel}>Add as</Text>
+            <Text style={styles.bulkSubLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>Add as</Text>
             {PRIORITY_CHOICES.map((p) => {
               const active = bulkPriority === p.value;
               return (
@@ -934,7 +964,7 @@ export default function PicksScreen() {
                   style={[styles.bulkChip, active && styles.bulkChipActive]}
                 >
                   <Ionicons name={priorityIconName(p.value)} size={t.iconSize.xs} color={priorityColor(t, p.value)} />
-                  <Text style={[styles.bulkChipText, active && styles.bulkChipTextActive]}>{p.label}</Text>
+                  <Text style={[styles.bulkChipText, active && styles.bulkChipTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{p.label}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -942,7 +972,7 @@ export default function PicksScreen() {
 
           {stageGroups.length > 0 && (
             <View style={styles.bulkGroup}>
-              <Text style={styles.bulkSubLabel}>By stage</Text>
+              <Text style={styles.bulkSubLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>By stage</Text>
               <View style={styles.bulkPillRow}>
                 {stageGroups.map((g) => (
                   <BulkPill
@@ -960,7 +990,7 @@ export default function PicksScreen() {
 
           {genreGroups.length > 0 && (
             <View style={styles.bulkGroup}>
-              <Text style={styles.bulkSubLabel}>By genre</Text>
+              <Text style={styles.bulkSubLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>By genre</Text>
               <View style={styles.bulkPillRow}>
                 {genreGroups.map((g) => (
                   <BulkPill
@@ -1081,15 +1111,6 @@ export default function PicksScreen() {
         message="Choose a festival from the Schedule tab to start saving picks."
       />
     );
-  } else if (user && !currentProfile) {
-    body = (
-      <EmptyState
-        icon="musical-note-outline"
-        title="No picks yet"
-        message="Tap Must See, Want to See or Maybe on any set to start your plan. Your first pick joins the festival."
-        action={{ label: 'Go to Schedule', onPress: () => router.navigate('/(tabs)/') }}
-      />
-    );
   } else if (isLoading && stats.total === 0 && rows.length === 0) {
     body = <PicksSkeleton />;
   } else if (error && stats.total === 0) {
@@ -1117,6 +1138,7 @@ export default function PicksScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={64}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         removeClippedSubviews={false}
       />
     );
@@ -1258,11 +1280,11 @@ function BulkPill({
         <ActivityIndicator size="small" color={t.colors.accent.aqua} />
       ) : (
         <>
-          <Text style={styles.bulkActionPillText} numberOfLines={1}>
+          <Text style={styles.bulkActionPillText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {label}
           </Text>
           <View style={styles.bulkActionCount}>
-            <Text style={styles.bulkActionCountText}>{count}</Text>
+            <Text style={styles.bulkActionCountText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{count}</Text>
           </View>
         </>
       )}
@@ -1593,6 +1615,7 @@ const useStyles = makeStyles((t) => ({
   bulkHeaderText: {
     ...typeStyle('label'),
     color: t.colors.text.primary,
+    flexShrink: 1,
   },
   bulkChevron: {
     marginLeft: 'auto',

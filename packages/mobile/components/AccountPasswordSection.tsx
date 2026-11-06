@@ -63,6 +63,7 @@ function SetPasswordForm({ onDone }: { onDone: () => void }) {
       const done = await withReauth(() => setPassword({ newPassword: next, confirmPassword: confirm }), ask);
       if (done === null) return;
       haptics.success();
+      useUIStore.getState().showToast('Password set. You can now sign in with it too.', { kind: 'success' });
       onDone();
     } catch (err) {
       haptics.warning();

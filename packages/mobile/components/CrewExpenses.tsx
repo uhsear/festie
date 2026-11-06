@@ -59,6 +59,8 @@ interface CrewExpensesProps {
   crewId: string;
   members: CrewMember[];
   currentUserId: string;
+  /** Called with the form's y inside this component when it opens, so the parent can scroll it into view. */
+  onFormShown?: (y: number) => void;
 }
 
 /**
@@ -67,7 +69,7 @@ interface CrewExpensesProps {
  * crewStore actions (addExpense / removeExpense / settleExpense). The screen
  * owns the initial load.
  */
-export default function CrewExpenses({ crewId, members, currentUserId }: CrewExpensesProps) {
+export default function CrewExpenses({ crewId, members, currentUserId, onFormShown }: CrewExpensesProps) {
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
@@ -106,6 +108,8 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   const [busy, setBusy] = useState(false);
   const [settling, setSettling] = useState(false);
   const settlingRef = useRef(false);
+  const scrollOnLayout = useRef(false);
+  const formY = useRef(0);
   // Planned-vs-actual filter. 'actual' = the real ledger (feeds settle-up);
   // 'planned' = the budget/forecast view; 'all' = both.
   const [view, setView] = useState<'all' | 'actual' | 'planned'>('actual');
@@ -128,6 +132,9 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
   };
 
   const startEdit = (e: CrewExpense) => {
+    // An open form does not re-layout, so scroll now instead of arming the flag.
+    if (showForm) onFormShown?.(formY.current);
+    else scrollOnLayout.current = true;
     setEditing(e);
     setDescription(e.description);
     setAmount(String(e.amount));
@@ -617,7 +624,15 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
       ) : null}
 
       {showForm ? (
-        <View style={styles.formBox}>
+        <View
+          style={styles.formBox}
+          onLayout={(e) => {
+            formY.current = e.nativeEvent.layout.y;
+            if (!scrollOnLayout.current) return;
+            scrollOnLayout.current = false;
+            onFormShown?.(e.nativeEvent.layout.y);
+          }}
+        >
           <View style={styles.formHeader}>
             <Text style={styles.formTitle}>{editing ? 'Edit expense' : 'New expense'}</Text>
             <TouchableOpacity
@@ -820,6 +835,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
           style={styles.toggle}
           onPress={() => {
             reset();
+            scrollOnLayout.current = true;
             setShowForm(true);
           }}
           activeOpacity={0.8}
@@ -837,7 +853,14 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
           illustration="emptyList"
           title="No expenses yet"
           message="Add the first one, for example: Gas, $60, split 4 ways."
-          action={{ label: 'Add expense', onPress: () => setShowForm(true) }}
+          action={{
+            label: 'Add expense',
+            onPress: () => {
+              reset();
+              scrollOnLayout.current = true;
+              setShowForm(true);
+            },
+          }}
         />
       ) : visibleExpenses.length === 0 ? (
         <Text style={styles.empty}>
@@ -887,7 +910,7 @@ export default function CrewExpenses({ crewId, members, currentUserId }: CrewExp
                 <Ionicons name={EXPENSE_IONICON[cat.icon]} size={t.iconSize.md} color={t.colors.text.secondary} />
                 <View style={styles.expenseInfo}>
                   <View style={styles.expenseTitleRow}>
-                    <Text style={styles.expenseDesc} numberOfLines={1}>
+                    <Text style={styles.expenseDesc} numberOfLines={2}>
                       {e.description}
                     </Text>
                     {e.planned ? (

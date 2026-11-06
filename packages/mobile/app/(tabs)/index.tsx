@@ -13,6 +13,7 @@ import {
   Platform,
   useWindowDimensions,
   type ListRenderItem,
+  type ScrollViewInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
@@ -199,6 +200,7 @@ export default function TimelineScreen() {
   // Cards view: a scroll-to-top affordance for long lineups. We track whether
   // the list is scrolled past a threshold and expose a ref to snap it back.
   const listRef = useRef<FlatList<ListRow>>(null);
+  const timelineScrollRef = useRef<ScrollViewInstance>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   // Sets that ended earlier today fold into one row; collapsed by default.
   const [earlierOpen, setEarlierOpen] = useState(false);
@@ -218,16 +220,23 @@ export default function TimelineScreen() {
   }, [festivals.length, loadFestivals]);
 
   // The persisted festival data is restored; this reloads it when only the id survived.
+  // One automatic try per id: a failed fetch leaves the id with no festival, which
+  // would otherwise re-fire this effect forever. The picker retries by hand.
+  const reloadTriedRef = useRef<string | null>(null);
+  const revalidatedRef = useRef(false);
   useEffect(() => {
-    if (currentFestivalId && !currentFestival && !isLoading) {
-      selectFestival(currentFestivalId).catch(() => {});
-    }
+    if (!currentFestivalId || currentFestival || isLoading || reloadTriedRef.current === currentFestivalId) return;
+    reloadTriedRef.current = currentFestivalId;
+    // This load is already fresh, so the cold-start revalidate below must not repeat it.
+    revalidatedRef.current = true;
+    selectFestival(currentFestivalId).catch(() => {});
   }, [currentFestivalId, currentFestival, isLoading, selectFestival]);
 
   // A cached festival shows at once, but a cold start must still revalidate it in
   // the background. Resume moves the day tab to today (no fetch).
-  const revalidatedRef = useRef(false);
   useEffect(() => {
+    // A load seen in flight (picker choice) is already fresh; skip the duplicate.
+    if (isLoading) revalidatedRef.current = true;
     if (revalidatedRef.current || !currentFestivalId || !currentFestival || isLoading) return;
     revalidatedRef.current = true;
     selectFestival(currentFestivalId).catch(() => {});
@@ -399,13 +408,16 @@ export default function TimelineScreen() {
 
   // Cards view: a header row per "Group by" section (Time, Stage or A-Z), then
   // its sets. Ended sets of today sit behind one "Earlier today (n)" row first.
+  // Don't fold what the person asked for (a search) or the only thing there is
+  // (late night, nothing left to come) behind the collapsed row.
+  const showEarlier = earlierOpen || restSets.length === 0 || searchQuery.trim() !== '';
   const rows = useMemo<ListRow[]>(
     () => [
-      ...(earlierSets.length > 0
+      ...(earlierSets.length > 0 && !showEarlier
         ? [{ kind: 'earlier' as const, key: 'earlier' as const, count: earlierSets.length }]
         : []),
       ...groupScheduleSets(
-        earlierOpen ? filteredSets : restSets,
+        showEarlier ? filteredSets : restSets,
         groupBy,
         stages,
         currentFestival?.b2bSeparator,
@@ -422,7 +434,7 @@ export default function TimelineScreen() {
     ],
     [
       earlierSets.length,
-      earlierOpen,
+      showEarlier,
       filteredSets,
       restSets,
       groupBy,
@@ -472,6 +484,7 @@ export default function TimelineScreen() {
     if (!activeStages || activeStages.length === 0) return stages;
     return stages.filter((st) => activeStages.includes(st.id));
   }, [stages, activeStages]);
+  const hasTimeline = timeBounds !== null && visibleStages.length > 0;
 
   // Stage chips are tap-to-show-only, the same model as web (shared toggleStageFilter).
   const allStageIds = useMemo(() => stages.map((st) => st.id), [stages]);
@@ -517,6 +530,13 @@ export default function TimelineScreen() {
     listRef.current?.scrollToOffset({ offset: 0, animated: !reduceMotion });
     setShowScrollTop(false);
   }, [haptics, reduceMotion]);
+
+  // The search field and filter rows live in the scrolling controls, so bring
+  // them into view when a toggle opens them.
+  const revealControls = () => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: !reduceMotion });
+    timelineScrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion });
+  };
 
   const renderRow = useCallback<ListRenderItem<ListRow>>(
     ({ item }) => {
@@ -933,9 +953,9 @@ export default function TimelineScreen() {
 
       {/* Stage + my-picks filters, then the days the person attends — folded
           behind the filter toggle (DC1). */}
-      {filtersOpen && (currentProfile || stages.length > 1 || days.length > 1) ? (
+      {filtersOpen && (currentProfile || stages.length > 1 || days.length > 1 || genreChips.length > 0) ? (
         <View style={styles.filterRow}>
-          {currentProfile || stages.length > 1 ? (
+          {currentProfile || stages.length > 1 || genreChips.length > 0 ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1031,7 +1051,7 @@ export default function TimelineScreen() {
                   })}
                 </>
               ) : null}
-              {stages.length > 1 && genreChips.length > 0 ? (
+              {genreChips.length > 0 ? (
                 <View style={styles.genreGroup} accessibilityRole="toolbar" accessibilityLabel={DISCOVER_COPY.genres.groupA11y}>
                   <TouchableOpacity
                     style={[styles.filterChip, !genreFilterActive && styles.filterChipActiveTinted]}
@@ -1226,6 +1246,7 @@ export default function TimelineScreen() {
               setSearchQuery('');
               setShowSearch(false);
             } else {
+              revealControls();
               setShowSearch(true);
             }
           }}
@@ -1245,7 +1266,10 @@ export default function TimelineScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleButton, filtersOpen && styles.toggleButtonActive]}
-          onPress={() => setShowFilters((v) => !v)}
+          onPress={() => {
+            if (!filtersOpen) revealControls();
+            setShowFilters((v) => !v);
+          }}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityState={{ expanded: filtersOpen }}
@@ -1330,61 +1354,63 @@ export default function TimelineScreen() {
             </TouchableOpacity>
           ) : null}
         </>
-      ) : timeBounds && visibleStages.length > 0 ? (
-        <>
-          <ScrollView
-            style={[styles.scrollBody, { marginBottom: scheduleViewportBottomInset }]}
-            onLayout={(e) => setTimelineViewportH(Math.round(e.nativeEvent.layout.height))}
-            // Rest either on the controls or on the full-size timeline, never half way.
-            snapToOffsets={timelineControlsH > 0 ? [0, timelineControlsH] : undefined}
-            decelerationRate="fast"
-            showsVerticalScrollIndicator={false}
-            refreshControl={refreshControl}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-          >
-            <View onLayout={(e) => setTimelineControlsH(Math.round(e.nativeEvent.layout.height))}>{controls}</View>
-            <View style={[styles.timelineBody, { height: timelineViewportH || Math.round(height * 0.6) }]}>
-              <TimelineView
-                visibleStages={visibleStages}
-                timedSets={timedSets}
-                timeBounds={timeBounds}
-                selectedDay={selectedDay}
-                b2bSeparator={currentFestival.b2bSeparator}
-                getMyPick={getMyPick}
-                getStageColor={resolveStageColor}
-                onSetPress={handleSetPress}
-                days={days}
-                allSets={allSets}
-                picks={myPicks}
-              />
-              {/* Dock the TBA list below the timeline in its own bounded scroll so
-                  it's always reachable. A ScrollView with a fixed maxHeight stays
-                  content-sized while the section is collapsed (just its header) and,
-                  once expanded, caps at ~40% of the screen and scrolls internally —
-                  instead of ballooning and pushing itself + the timeline past
-                  the timeline body's clipped (overflow:hidden) bottom edge, which made the
-                  TBA cards unreachable. */}
-              {tbaSection ? <ScrollView style={{ flexGrow: 0, maxHeight: Math.round(height * 0.4) }} nestedScrollEnabled>{tbaSection}</ScrollView> : null}
-            </View>
-          </ScrollView>
-        </>
       ) : (
         <ScrollView
+          ref={timelineScrollRef}
           style={[styles.scrollBody, { marginBottom: scheduleViewportBottomInset }]}
-          contentContainerStyle={[styles.fallbackScroll, { paddingBottom: listBottomPad }]}
+          onLayout={(e) => setTimelineViewportH(Math.round(e.nativeEvent.layout.height))}
+          // Rest either on the controls or on the full-size timeline, never half way
+          // (only when the controls fit the viewport; a taller stack scrolls freely).
+          snapToOffsets={
+            hasTimeline && timelineControlsH > 0 && timelineControlsH <= timelineViewportH
+              ? [0, timelineControlsH]
+              : undefined
+          }
+          snapToEnd={false}
+          decelerationRate={hasTimeline ? 'fast' : undefined}
+          showsVerticalScrollIndicator={!hasTimeline}
           refreshControl={refreshControl}
-          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={hasTimeline ? undefined : [styles.fallbackScroll, { paddingBottom: listBottomPad }]}
+          contentInsetAdjustmentBehavior={hasTimeline ? undefined : 'automatic'}
         >
-          {controls}
-          {scheduleColdLoading ? (
-            <ScheduleSkeleton hPad={hPad} />
-          ) : scheduleLoadError ? (
-            errorScheduleState
+          {/* One ScrollView for both states so the search TextInput inside
+              `controls` is never remounted (which would drop the keyboard). */}
+          <View onLayout={(e) => setTimelineControlsH(Math.round(e.nativeEvent.layout.height))}>{controls}</View>
+          {hasTimeline ? (
+            <>
+              <View style={[styles.timelineBody, { height: timelineViewportH || Math.round(height * 0.6) }]}>
+                <TimelineView
+                  visibleStages={visibleStages}
+                  timedSets={timedSets}
+                  timeBounds={timeBounds}
+                  selectedDay={selectedDay}
+                  b2bSeparator={currentFestival.b2bSeparator}
+                  getMyPick={getMyPick}
+                  getStageColor={resolveStageColor}
+                  onSetPress={handleSetPress}
+                  days={days}
+                  allSets={allSets}
+                  picks={myPicks}
+                />
+              </View>
+              {/* The TBA list sits below the full-size timeline as part of the
+                  page scroll, so it never shrinks the timeline's viewport. */}
+              {tbaSection}
+            </>
           ) : (
-            emptyScheduleState
+            <>
+              {scheduleColdLoading ? (
+                <ScheduleSkeleton hPad={hPad} />
+              ) : scheduleLoadError ? (
+                errorScheduleState
+              ) : (
+                emptyScheduleState
+              )}
+              {tbaSection}
+            </>
           )}
-          {tbaSection}
         </ScrollView>
       )}
     </View>

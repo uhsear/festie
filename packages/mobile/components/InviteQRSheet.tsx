@@ -4,7 +4,8 @@
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { buildJoinUrl } from '@festie/shared/utils';
-import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Button from './Button';
 
 interface InviteQRSheetProps {
@@ -16,7 +17,9 @@ interface InviteQRSheetProps {
 
 /** Shows the invite link as a QR code so friends standing together can join by scanning. */
 export default function InviteQRSheet({ visible, crewName, code, onClose }: InviteQRSheetProps) {
+  const t = useTokens();
   const styles = useStyles();
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.root}>
@@ -26,7 +29,7 @@ export default function InviteQRSheet({ visible, crewName, code, onClose }: Invi
           accessibilityRole="button"
           accessibilityLabel="Close QR code"
         />
-        <View style={styles.sheet} accessibilityViewIsModal>
+        <View style={[styles.sheet, { paddingBottom: t.spacing[5] + insets.bottom }]} accessibilityViewIsModal>
           <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             Scan to join {crewName}
           </Text>
