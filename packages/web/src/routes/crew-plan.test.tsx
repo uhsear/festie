@@ -197,6 +197,13 @@ describe('CrewPlanView', () => {
     expect(screen.getByText('Invite your crew')).toBeInTheDocument();
   });
 
+  it('wraps long artist names in Up next instead of truncating', () => {
+    render(<CrewPlanView />);
+    const label = screen.getByText('Disclosure').parentElement!;
+    expect(label).toHaveClass('break-words');
+    expect(label).not.toHaveClass('truncate');
+  });
+
   it('opens the set panel in place on a plain click, not on a modified click', () => {
     setDetailSet.mockClear();
     render(<CrewPlanView />);
@@ -262,20 +269,20 @@ describe('CrewPlanView', () => {
     expect(screen.queryByRole('button', { name: 'Add Disclosure to my picks' })).not.toBeInTheDocument();
   });
 
-  it('a member sees who to ask and no Set home base button', () => {
+  it('a member sees who to ask and no Set Home Base button', () => {
     Object.assign(
       hubState,
       baseHub({ isOwner: false, crew: { ...baseCrew('u-sam'), homeBaseLocation: null, homeBaseTime: null } }),
     );
     render(<CrewPlanView />);
     expect(screen.getByText(/Ask Sam to set one\./)).toBeInTheDocument();
-    expect(screen.queryByText('Set home base')).not.toBeInTheDocument();
+    expect(screen.queryByText('Set Home Base')).not.toBeInTheDocument();
   });
 
-  it('the owner sees Set home base when none is set', () => {
+  it('the owner sees Set Home Base when none is set', () => {
     Object.assign(hubState, baseHub({ crew: { ...baseCrew(), homeBaseLocation: null, homeBaseTime: null } }));
     render(<CrewPlanView />);
-    expect(screen.getByText('Set home base')).toBeInTheDocument();
+    expect(screen.getByText('Set Home Base')).toBeInTheDocument();
   });
 
   it('shows an HH:MM home base time as 12 h and keeps free text', () => {

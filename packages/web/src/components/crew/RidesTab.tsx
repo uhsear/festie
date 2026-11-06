@@ -305,7 +305,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
                   <Car className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-text-primary truncate">{title}</p>
+                  <p className="text-sm font-medium text-text-primary line-clamp-2 break-words">{title}</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                     {directionLabel ? (
                       <span className="text-xs px-1.5 rounded bg-accent-aqua/15 text-accent-aqua">

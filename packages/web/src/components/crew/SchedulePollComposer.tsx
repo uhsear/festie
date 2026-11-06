@@ -219,7 +219,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
                       onChange={() => toggle(set.id)}
                       aria-label={`Include ${artistDisplayName(set)}`}
                     />
-                    <span className="flex-1 text-text-primary text-sm truncate">{artistDisplayName(set)}</span>
+                    <span className="flex-1 min-w-0 text-text-primary text-sm line-clamp-2 break-words">{artistDisplayName(set)}</span>
                     {stage && <span className="text-xs text-text-muted truncate">{stage}</span>}
                   </label>
                 );
