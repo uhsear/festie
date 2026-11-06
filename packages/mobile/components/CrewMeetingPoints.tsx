@@ -336,7 +336,7 @@ export default function CrewMeetingPoints({
       >
         <View style={styles.pointInfo}>
           <View style={styles.pointTitleRow}>
-            <Text style={styles.pointLabel} numberOfLines={1}>
+            <Text style={styles.pointLabel} numberOfLines={2}>
               {point.label}
             </Text>
             <Text style={styles.pointType} numberOfLines={1}>{meetingPointKind(point.type).label}</Text>
@@ -347,12 +347,12 @@ export default function CrewMeetingPoints({
               </View>
             ) : null}
           </View>
-          <Text style={styles.pointLocation} numberOfLines={1}>
+          <Text style={styles.pointLocation} numberOfLines={3}>
             {point.location}
           </Text>
           <CrewSyncMarker item={point} />
           {point.stage_reference ? (
-            <Text style={styles.pointStage} numberOfLines={1}>
+            <Text style={styles.pointStage} numberOfLines={2}>
               Near {point.stage_reference}
             </Text>
           ) : null}

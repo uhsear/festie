@@ -398,12 +398,12 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
                 <Ionicons name="car" size={16} color={t.colors.accent.aqua} />
               </View>
               <View style={styles.itemBody}>
-                <Text style={styles.itemLabel} numberOfLines={1}>
+                <Text style={styles.itemLabel} numberOfLines={2}>
                   {title}
                 </Text>
                 {directionLabel ? <Text style={styles.directionChip}>{directionLabel}</Text> : null}
                 {meta ? (
-                  <Text style={styles.itemMeta} numberOfLines={1}>
+                  <Text style={styles.itemMeta} numberOfLines={2}>
                     {meta}
                   </Text>
                 ) : null}
