@@ -39,7 +39,7 @@ import HeaderTitle from '../components/HeaderTitle';
 import { TopBannerContext } from '../components/ScreenHeader';
 import { snoozeReminder, useLocalReminders } from '../hooks/useLocalReminders';
 import { useOngoingNotification } from '../hooks/useOngoingNotification';
-import { ensureAndroidChannels, usePushTokenRotation } from '../hooks/useMobilePush';
+import { ensureAndroidChannels, unregisterPushOnSignOut, usePushTokenRotation } from '../hooks/useMobilePush';
 import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
 import { isGuestBlocked } from '../lib/authRoutes';
@@ -118,6 +118,9 @@ configureApi({
       return true;
     } catch {
       await useAuthStore.getState().logout();
+      // AFTER logout: with a dead session the token DELETE would 401 and re-enter
+      // this handler. The guest guard above returns false once userToken is null.
+      await unregisterPushOnSignOut();
       useUIStore.getState().showToast(COPY.session.signedOut);
       return false;
     }
