@@ -17,6 +17,9 @@ import {
   findMapPin,
   showingWayLabel,
   MAP_COPY,
+  distanceFromFestivalM,
+  farFromFestivalCopy,
+  placeWalkLine,
 } from './mapPlace';
 import { buildPursuit } from './geo';
 import type { MapPin } from './mapPins';
@@ -36,7 +39,7 @@ describe('locationPromptCopy', () => {
     expect(locationPromptCopy('idle')).toBe('Turn on location to see how far it is');
     expect(locationPromptCopy('locating')).toBe('Finding you…');
     expect(locationPromptCopy('denied')).toBe(
-      'Location is blocked. Allow location for Festie in your settings, then try again.',
+      'Location is off or blocked. Turn it on for Festie in your device or browser settings, then try again.',
     );
     expect(locationPromptCopy('unavailable')).toBe("Can't get a GPS fix. Move into the open and try again.");
     expect(locationPromptCopy('on')).toBe('');
@@ -191,5 +194,58 @@ describe('showingWayLabel and MAP_COPY', () => {
   it('exposes the copy table', () => {
     expect(MAP_COPY.showWay).toBe('Show the way');
     expect(MAP_COPY.call911).toBe('Call 911');
+  });
+});
+
+describe('distanceFromFestivalM', () => {
+  const camera = {
+    center: { latitude: 28.538, longitude: -81.402 },
+    bounds: [
+      [-81.41, 28.532],
+      [-81.394, 28.544],
+    ] as [[number, number], [number, number]],
+  };
+  it('is 0 inside the bounds', () => {
+    expect(distanceFromFestivalM({ latitude: 28.538, longitude: -81.402 }, camera)).toBe(0);
+  });
+  it('is 0 within the margin just outside the edge', () => {
+    // ~1.1 km north of the north edge
+    expect(distanceFromFestivalM({ latitude: 28.554, longitude: -81.402 }, camera)).toBe(0);
+  });
+  it('is the centre distance about 5 km away', () => {
+    const d = distanceFromFestivalM({ latitude: 28.538 + 5000 / 111_320, longitude: -81.402 }, camera);
+    expect(d).toBeGreaterThan(4900);
+    expect(d).toBeLessThan(5100);
+  });
+  it('is about 1.5e6 from New York', () => {
+    const d = distanceFromFestivalM({ latitude: 40.71, longitude: -74.0 }, camera) as number;
+    expect(d).toBeGreaterThan(1.4e6);
+    expect(d).toBeLessThan(1.6e6);
+  });
+  it('is null without a camera centre or a fix', () => {
+    expect(distanceFromFestivalM({ latitude: 1, longitude: 1 }, { center: null, bounds: null })).toBeNull();
+    expect(distanceFromFestivalM(null, camera)).toBeNull();
+  });
+  it('uses the centre alone when there are no bounds', () => {
+    expect(distanceFromFestivalM({ latitude: 28.538, longitude: -81.402 }, { center: camera.center, bounds: null })).toBe(0);
+  });
+});
+
+describe('farFromFestivalCopy', () => {
+  it('names the festival and the distance', () => {
+    expect(farFromFestivalCopy(120_400, 'EDC Orlando')).toBe(
+      "You're 120.4 km from EDC Orlando. The map shows the festival grounds only.",
+    );
+    expect(farFromFestivalCopy(5000)).toContain('from the festival.');
+  });
+});
+
+describe('placeWalkLine far away', () => {
+  const place = { id: 's', kind: 'stage', name: 'Kinetic Field', kindLabel: 'Stage', coord: { latitude: 28.538, longitude: -81.402 } } as const;
+  it('shows distance only beyond walking range', () => {
+    expect(placeWalkLine({ latitude: 40.71, longitude: -74.0 }, place)).toMatch(/ km away$/);
+  });
+  it('is null with no fix', () => {
+    expect(placeWalkLine(null, place)).toBeNull();
   });
 });
