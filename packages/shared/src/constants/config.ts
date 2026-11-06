@@ -388,6 +388,8 @@ export const FIND_FRIEND_COPY = {
   pointTo: 'Point to',
   pointToA11y: (label: string) => `Point the compass at ${label}`,
   peerNote: (name: string) => `Straight-line direction to where ${name} last shared. It moves when they do.`,
+  explicitNote: 'Straight-line direction. Works without signal.',
+  sosNote: (name: string) => `Where ${name} raised the SOS. Works without signal.`,
   peerAge: (age: string) => `Location ${age}`, // age from formatStaleness: "as of 2m ago"
   peerGoneTitle: (name: string) => `${name} isn't sharing their location now`,
   peerGoneBody: 'The compass needs them to share. You can still tell them you are looking.',
