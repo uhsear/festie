@@ -2,7 +2,7 @@
   "expo": {
     "name": "Festie",
     "slug": "festie",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "scheme": "festie",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -207,7 +207,21 @@
           "photosPermission": "Allow Festie to access your photos to set your avatar."
         }
       ],
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/clash-display/ClashDisplay-Regular.otf",
+            "./assets/fonts/clash-display/ClashDisplay-Medium.otf",
+            "./assets/fonts/clash-display/ClashDisplay-Semibold.otf",
+            "./assets/fonts/clash-display/ClashDisplay-Bold.otf",
+            "./node_modules/@expo-google-fonts/space-grotesk/400Regular/SpaceGrotesk_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/space-grotesk/500Medium/SpaceGrotesk_500Medium.ttf",
+            "./node_modules/@expo-google-fonts/space-grotesk/600SemiBold/SpaceGrotesk_600SemiBold.ttf",
+            "./node_modules/@expo-google-fonts/space-grotesk/700Bold/SpaceGrotesk_700Bold.ttf"
+          ]
+        }
+      ],
       [
         "expo-notifications",
         {
