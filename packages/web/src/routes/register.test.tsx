@@ -128,7 +128,7 @@ describe('RegisterPage', () => {
     render(<RegisterPage />);
     await user.type(screen.getByLabelText('Username'), 'alice');
     await user.click(screen.getByRole('button', { name: 'Create account' }));
-    expect(screen.getByLabelText('Password')).toHaveFocus();
+    expect(screen.getByLabelText('Email')).toHaveFocus();
   });
 
   it('shows "Password must be at least 8 characters" for short password', async () => {
