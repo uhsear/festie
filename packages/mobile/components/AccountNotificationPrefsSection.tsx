@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Alert, AppState, Linking, Platform } from 'react-native';
+import { View, Text, AppState, Linking, Platform } from 'react-native';
 import AppSwitch from './AppSwitch';
 import * as Notifications from 'expo-notifications';
 import { AndroidImportance } from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, useNotificationPrefsStore } from '@festie/shared/stores';
+import { useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import { useNotificationTopics } from '@festie/shared/hooks';
 import {
   MUST_SEE_REMINDER_OPTIONS,
@@ -70,7 +70,7 @@ function FestivalTopicsRows() {
   const onTopic = (topic: 'crew' | 'schedule', value: boolean) => {
     haptics.select();
     setTopic(topic, value).catch(() => {
-      Alert.alert('Update failed', "Couldn't update notification setting. Try again.");
+      useUIStore.getState().showToast("Couldn't update notification setting. Try again.", { kind: 'error' });
     });
   };
 
@@ -110,11 +110,11 @@ function FestivalTopicsRows() {
                   {globalOff ? <Text style={styles.rowHint}>Off for every festival</Text> : null}
                 </View>
                 <AppSwitch
-                  value={subs[r.key]}
+                  value={!globalOff && subs[r.key]}
                   disabled={globalOff}
                   onValueChange={(v) => onTopic(r.key, v)}
                   accessibilityLabel={`${r.title} for ${festival.name}`}
-                  accessibilityState={{ disabled: globalOff }}
+                  accessibilityState={{ disabled: globalOff, checked: !globalOff && subs[r.key] }}
                 />
               </View>
             );
