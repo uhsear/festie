@@ -65,3 +65,10 @@ describe('crew tab behaviour fixes', () => {
     expect(read('components', 'CrewCheckIn.tsx')).toContain('getLastKnownPositionAsync({ maxAge: 5 * 60_000 })');
   });
 });
+
+describe('expense edit while the form is open', () => {
+  it('scrolls to the open form instead of arming a stale layout flag', () => {
+    const src = readFileSync(join(__dirname, '../components/CrewExpenses.tsx'), 'utf8');
+    expect(src).toMatch(/if \(showForm\) onFormShown\?\.\(formY\.current\);\s*else scrollOnLayout\.current = true;/);
+  });
+});

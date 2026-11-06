@@ -109,6 +109,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
   const [settling, setSettling] = useState(false);
   const settlingRef = useRef(false);
   const scrollOnLayout = useRef(false);
+  const formY = useRef(0);
   // Planned-vs-actual filter. 'actual' = the real ledger (feeds settle-up);
   // 'planned' = the budget/forecast view; 'all' = both.
   const [view, setView] = useState<'all' | 'actual' | 'planned'>('actual');
@@ -131,7 +132,9 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
   };
 
   const startEdit = (e: CrewExpense) => {
-    scrollOnLayout.current = true;
+    // An open form does not re-layout, so scroll now instead of arming the flag.
+    if (showForm) onFormShown?.(formY.current);
+    else scrollOnLayout.current = true;
     setEditing(e);
     setDescription(e.description);
     setAmount(String(e.amount));
@@ -624,6 +627,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
         <View
           style={styles.formBox}
           onLayout={(e) => {
+            formY.current = e.nativeEvent.layout.y;
             if (!scrollOnLayout.current) return;
             scrollOnLayout.current = false;
             onFormShown?.(e.nativeEvent.layout.y);
