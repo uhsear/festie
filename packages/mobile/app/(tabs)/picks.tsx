@@ -604,7 +604,10 @@ export default function PicksScreen() {
     try {
       await Linking.openURL(links.webcalUrl);
     } catch {
-      Linking.openURL(links.googleUrl).catch(() => haptics.warning());
+      Linking.openURL(links.googleUrl).catch(() => {
+        haptics.warning();
+        useUIStore.getState().showToast("Couldn't open your calendar. Try Download once.", { kind: 'error' });
+      });
     }
   }, [currentFestival, haptics]);
 

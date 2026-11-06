@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { mapErrorToUserMessage } from '@festie/shared/services';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { useClashResolver, type ClashResolution } from '@festie/shared/hooks';
 import { artistDisplayName, fmtDurationMinutes, formatTime } from '@festie/shared/utils';
@@ -62,7 +63,7 @@ export default function ClashCards({ groups, days }: { groups: ConflictGroup[]; 
         timer.current = setTimeout(() => setBar(null), UNDO_BAR_MS);
       } catch (err) {
         haptics.warning();
-        setBar({ message: (err instanceof Error && err.message) || COPY.clash.failed, undo: null });
+        setBar({ message: mapErrorToUserMessage(err, COPY.clash.failed), undo: null });
         timer.current = setTimeout(() => setBar(null), UNDO_BAR_MS);
       } finally {
         setBusy(false);

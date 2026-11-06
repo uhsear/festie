@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CompareView from './compare';
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   compare: vi.fn(),
   strip: vi.fn(),
   navigate: vi.fn(() => Promise.resolve()),
+  savePick: vi.fn(() => Promise.resolve()),
+  toastError: vi.fn(),
   days: [
     { id: 'd0', date: '2026-11-06', label: 'Friday' },
     { id: 'd1', date: '2026-11-07', label: 'Saturday' },
@@ -26,12 +28,13 @@ vi.mock('@festie/shared/hooks', () => ({
   useCrewFestival: () => mocks.festState,
   useCrewCompare: (sort: string) => mocks.compare(sort),
   useFestival: () => ({ getStageColor: () => '#fff', getStageName: () => 'Main' }),
-  usePicks: () => ({ savePick: vi.fn(() => Promise.resolve()) }),
+  usePicks: () => ({ savePick: mocks.savePick }),
 }));
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: React.ReactNode }) => <a href="#test">{children}</a>,
   useNavigate: () => mocks.navigate,
 }));
+vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toastError: mocks.toastError }) }));
 vi.mock('../components/features/GuestTeaser', () => ({ default: () => <div>guest-teaser</div> }));
 vi.mock('../components/features/CrewSuggestionStrip', () => ({
   default: (p: { title?: string }) => {
@@ -47,6 +50,7 @@ vi.mock('../hooks/useAnimatedNumber', () => ({ useAnimatedNumber: (n: number) =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.user = { id: 'u1' };
+  mocks.savePick.mockImplementation(() => Promise.resolve());
   mocks.crewState = { status: 'ready', crew: { id: 'c1', name: 'Sam Crew' }, crews: [], retry: vi.fn() };
   mocks.festState = { state: 'match', festivalName: 'Forbidden Kingdom', retry: vi.fn() };
   mocks.compare.mockReturnValue({
@@ -126,6 +130,13 @@ describe('CompareView', () => {
     render(<CompareView />);
     expect(screen.getByText(/Sam Crew · Forbidden Kingdom · 2 members/)).toBeInTheDocument();
     expect(screen.getByText('Daft Punk')).toBeInTheDocument();
+  });
+
+  it('toasts when adding a pick fails', async () => {
+    mocks.savePick.mockImplementation(() => Promise.reject(new Error('Network request failed')));
+    render(<CompareView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Daft Punk to my picks' }));
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(expect.any(Error), "Couldn't save your pick. Try again."));
   });
 
   it('passes the new title to the suggestion strip', () => {

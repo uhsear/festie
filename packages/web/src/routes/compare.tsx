@@ -14,6 +14,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import { Users } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useToast } from '../lib/toastContext';
 
 export default function CompareView() {
   return (
@@ -38,6 +39,7 @@ function CompareViewInner() {
   const days = useFestivalStore((s) => s.days);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { savePick } = usePicks();
+  const { toastError } = useToast();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)');
@@ -49,10 +51,9 @@ function CompareViewInner() {
   const handleAdd = useCallback(
     (setId: string, priority: Priority) => {
       if (!festivalId) return;
-      // savePick is optimistic and offline-queued; the store surfaces its own error.
-      savePick(festivalId, setId, priority).catch(() => {});
+      savePick(festivalId, setId, priority).catch((err) => toastError(err, "Couldn't save your pick. Try again."));
     },
-    [festivalId, savePick],
+    [festivalId, savePick, toastError],
   );
 
   if (!user) return <GuestTeaser mode="crew" />;
