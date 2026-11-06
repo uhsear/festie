@@ -883,6 +883,7 @@ const useStyles = makeStyles((t: Tokens) => ({
   },
   tbaWrap: {
     maxHeight: '40%',
+    flexGrow: 0,
   },
   fab: {
     position: 'absolute',
