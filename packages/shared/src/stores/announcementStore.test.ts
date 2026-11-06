@@ -20,7 +20,12 @@ const item = (id: string): FestivalAnnouncement => ({
 });
 
 describe('announcementStore', () => {
+  let clock = Date.parse('2026-11-06T00:00:00Z');
   beforeEach(() => {
+    // Each test starts past any back-off the previous one left behind.
+    clock += 120_000;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(clock);
     list.mockReset();
     localStorage.clear();
     useAnnouncementStore.setState({ festivalId: null, items: [], dismissed: [] });
@@ -92,5 +97,28 @@ describe('announcementStore', () => {
     useAnnouncementStore.getState().dismiss('a');
     const saved = JSON.parse(localStorage.getItem('festie-announcements')!);
     expect(Object.keys(saved.state)).toEqual(['dismissed']);
+  });
+
+  it('concurrent loads for one festival share a single request', async () => {
+    list.mockResolvedValue([item('a')]);
+    const { load } = useAnnouncementStore.getState();
+    await Promise.all([load('f1'), load('f1'), load('f1')]);
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not request a festival again for 60 s after a failure', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    list.mockRejectedValue(new Error('429'));
+    const { load } = useAnnouncementStore.getState();
+    await load('f1');
+    await load('f1');
+    expect(list).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(clock + 59_000);
+    await load('f1');
+    expect(list).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(clock + 61_000);
+    await load('f1');
+    expect(list).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
   });
 });
