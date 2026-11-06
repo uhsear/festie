@@ -115,6 +115,7 @@ vi.mock('lucide-react', () => ({
   Navigation: () => <span />,
   X: () => <span />,
   LocateFixed: () => <span />,
+  Loader2: () => <span data-testid="locating-spinner" />,
 }));
 
 import CrewMap from './CrewMap';
@@ -395,7 +396,7 @@ function stubGeolocation() {
   watchPosition.mockReset().mockReturnValue(1);
   Object.defineProperty(global.navigator, 'geolocation', {
     configurable: true,
-    value: { watchPosition, clearWatch: vi.fn() },
+    value: { watchPosition, clearWatch: vi.fn(), getCurrentPosition: vi.fn() },
   });
 }
 
@@ -464,7 +465,47 @@ describe('CrewMap place card and Nearest', () => {
     await renderReadyMap();
     fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
     act(() => watchPosition.mock.calls[0][1]({ code: 1 }));
-    expect(screen.getByText(/Location is blocked/)).toBeInTheDocument();
+    expect(screen.getByText(/Location is off or blocked/)).toBeInTheDocument();
+  });
+
+  it('shows the failure status over the map with a Try again, and marks the button busy while locating', async () => {
+    await renderReadyMap();
+    const button = screen.getByRole('button', { name: 'Show my location' });
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    act(() => watchPosition.mock.calls[0][1]({ code: 3 }));
+    expect(button).toHaveAttribute('aria-busy', 'false');
+    const status = screen.getByRole('status');
+    expect(screen.getByRole('region', { name: /Crew map/ }).parentElement).toContainElement(status);
+    expect(status).toHaveTextContent("Can't get a GPS fix");
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('says how far a distant fix is and Show festival flies back to the venue', async () => {
+    await renderReadyMap();
+    fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 20 } }));
+    expect(screen.getByRole('status')).toHaveTextContent(/km from/);
+    fireEvent.click(screen.getByRole('button', { name: 'Show festival' }));
+    expect(mapInstances[0].flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ center: [-87.62, 41.88], zoom: 15 }));
+    expect(screen.queryByText(/km from/)).toBeNull();
+  });
+
+  it('gives no far-away notice for a fix at the venue', async () => {
+    await renderReadyMap();
+    fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 41.88, longitude: -87.62, accuracy: 20 } }));
+    expect(screen.queryByText(/km from|m from/)).toBeNull();
+  });
+
+  it('does not let a late fix from a failed Show my location override a Nearest pick', async () => {
+    extractAmenityPins.mockReturnValue([amenity('a1', 'water', 'Water')]);
+    await renderReadyMap();
+    fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+    act(() => watchPosition.mock.calls[0][1]({ code: 3 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show the way to the nearest water' }));
+    act(() => watchPosition.mock.calls[1][0]({ coords: { latitude: 10, longitude: 10, accuracy: 20 } }));
+    expect(mapInstances[0].flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ center: [-81.4, 28.5], zoom: 16 }));
   });
 
   it('opens the card for a mapped focusPinId once and reports it handled', async () => {
