@@ -298,6 +298,7 @@ export function buildMapHtml(
       background: #2f80ff; border: 3px solid #fff;
       box-shadow: 0 0 0 6px rgba(47,128,255,0.25);
       pointer-events: none;
+      z-index: 3; /* above stage and amenity markers, which are re-added after it */
     }
     .maplibregl-popup-content { font-family: -apple-system, system-ui, sans-serif; font-size: 13px; }
   </style>

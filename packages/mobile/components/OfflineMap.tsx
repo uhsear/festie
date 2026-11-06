@@ -41,6 +41,11 @@ import {
   findMapPin,
   showingWayLabel,
   locationPromptCopy,
+  NAVIGATE_GLYPH_OFFSET_DEG,
+  distanceFromFestivalM,
+  farFromFestivalCopy,
+  FAR_FROM_FESTIVAL_M,
+  RECENT_FIX_MS,
   nearStageName,
   type Coord,
   type GeoState,
@@ -278,6 +283,8 @@ export default function OfflineMap({
   const webRef = useRef<WebView<object>>(null);
   // A "find me" tap waiting for the first GPS fix from the shared watch.
   const [pendingRecenter, setPendingRecenter] = useState(false);
+  // Metres from the festival when Find me lands on a fix far outside the grounds.
+  const [farNoticeM, setFarNoticeM] = useState<number | null>(null);
   // Placement mode: when on, the next single map tap drops a meeting point at
   // that coord (replaces the unreliable long-press/contextmenu gesture). The
   // WebView confirms the actual on/off state back via the 'placement' message.
@@ -474,6 +481,10 @@ export default function OfflineMap({
   // Set while the permission prompt or watch start is in flight, so a second tap
   // cannot start (and leak) a second watch.
   const startingRef = useRef(false);
+  // False while the tab is blurred, so a start still in flight cannot attach a watch to a hidden screen.
+  const focusedRef = useRef(true);
+  // True once the watch itself delivered a fix, so a late last-known seed never overwrites it.
+  const watchFixRef = useRef(false);
   const noFixTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearNoFixTimer = useCallback(() => {
     if (noFixTimerRef.current) clearTimeout(noFixTimerRef.current);
@@ -484,6 +495,7 @@ export default function OfflineMap({
   const enableLocation = useCallback(async () => {
     if (watchSubRef.current || startingRef.current) return; // already watching
     startingRef.current = true;
+    watchFixRef.current = false;
     setGeoState('locating');
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -491,16 +503,37 @@ export default function OfflineMap({
         setGeoState('denied');
         return;
       }
+      if (!focusedRef.current) {
+        setGeoState('idle');
+        return;
+      }
+      // Device Location Services off: a watch would only time out, so send the user to Settings now.
+      if (!(await Location.hasServicesEnabledAsync())) {
+        setGeoState('denied');
+        return;
+      }
+      // Show the OS's recent fix at once (indoors a cold GPS fix can take the full
+      // timeout); the watch below refines it and wins as soon as it delivers.
+      void Location.getLastKnownPositionAsync({ maxAge: RECENT_FIX_MS })
+        .then((pos) => {
+          if (!pos || watchFixRef.current || !focusedRef.current) return;
+          const { latitude, longitude } = pos.coords;
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+          setSelfCoord({ latitude, longitude });
+          setGeoState('on');
+        })
+        .catch((err) => console.warn('OfflineMap last known fix', err));
       // Festival low-power mode (F-battery): trade GPS freshness for battery —
       // Balanced accuracy + a slower 10s tick instead of High/4s. The pursue
       // arrow just updates less often; nothing else about the feature changes.
-      watchSubRef.current = await Location.watchPositionAsync(
+      const sub = await Location.watchPositionAsync(
         lowPowerMode
           ? { accuracy: Location.Accuracy.Balanced, distanceInterval: 3, timeInterval: 10000 }
           : { accuracy: Location.Accuracy.High, distanceInterval: 3, timeInterval: 4000 },
         (pos) => {
           const { latitude, longitude } = pos.coords;
           if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            watchFixRef.current = true;
             clearNoFixTimer();
             setSelfCoord({ latitude, longitude });
             setGeoState('on');
@@ -511,6 +544,12 @@ export default function OfflineMap({
           markUnavailable();
         },
       );
+      if (!focusedRef.current) {
+        sub.remove();
+        setGeoState((g) => (g === 'denied' ? g : 'idle'));
+        return;
+      }
+      watchSubRef.current = sub;
       clearNoFixTimer();
       noFixTimerRef.current = setTimeout(() => {
         noFixTimerRef.current = null;
@@ -549,8 +588,10 @@ export default function OfflineMap({
   }, [pursue]);
   useFocusEffect(
     useCallback(() => {
+      focusedRef.current = true;
       if (pursueActiveRef.current) void enableLocation();
       return () => {
+        focusedRef.current = false;
         watchSubRef.current?.remove();
         watchSubRef.current = null;
         clearNoFixTimer();
@@ -558,6 +599,10 @@ export default function OfflineMap({
         // The last fix goes stale once the watch stops: drop it so Find me,
         // Nearest and the walk ETAs ask for a fresh one instead of using it.
         setSelfCoord(null);
+        // Nothing runs to finish these taps any more: drop them so no "Finding you…" sticks.
+        setPendingRecenter(false);
+        setPendingNearest(null);
+        setFarNoticeM(null);
       };
     }, [enableLocation, clearNoFixTimer]),
   );
@@ -1135,19 +1180,42 @@ export default function OfflineMap({
   // "Find me": fly to the fix the shared watch already holds. With none yet, start
   // the watch and finish the tap when the first fix lands; denied or unavailable
   // shows the same location notice (with Try again) as Nearest.
+  // A fix far from the grounds still gets the dot, plus a notice with a way back
+  // (the offline basemap covers only the venue, so the map there is blank).
+  const flyToSelf = useCallback(
+    (fix: Coord) => {
+      flyTo(fix.longitude, fix.latitude, 16);
+      const distanceM = distanceFromFestivalM(fix, camera);
+      setFarNoticeM(distanceM !== null && distanceM > FAR_FROM_FESTIVAL_M ? distanceM : null);
+    },
+    [flyTo, camera],
+  );
+  const showFestival = useCallback(() => {
+    setFarNoticeM(null);
+    if (camera.bounds) {
+      const [[west, south], [east, north]] = camera.bounds;
+      if ([west, south, east, north].every((n) => Number.isFinite(n)) && webRef.current) {
+        webRef.current.injectJavaScript(
+          `window.__festieFitBounds && window.__festieFitBounds(${west}, ${south}, ${east}, ${north}); true;`,
+        );
+        return;
+      }
+    }
+    if (camera.center) flyTo(camera.center.longitude, camera.center.latitude, 15);
+  }, [camera, flyTo]);
   const recenterToMe = useCallback(() => {
     if (selfCoord) {
-      flyTo(selfCoord.longitude, selfCoord.latitude, 16);
+      flyToSelf(selfCoord);
       return;
     }
     setPendingRecenter(true);
     locate();
-  }, [selfCoord, flyTo, locate]);
+  }, [selfCoord, flyToSelf, locate]);
   useEffect(() => {
     if (!selfCoord || !pendingRecenter) return;
     setPendingRecenter(false);
-    flyTo(selfCoord.longitude, selfCoord.latitude, 16);
-  }, [selfCoord, pendingRecenter, flyTo]);
+    flyToSelf(selfCoord);
+  }, [selfCoord, pendingRecenter, flyToSelf]);
 
   // Show the user's own position in the document (blue dot). Replays after a reload.
   useEffect(() => {
@@ -1487,7 +1555,7 @@ export default function OfflineMap({
                     // The Ionicons "navigate" glyph points NE (45°) at rotation 0,
                     // so subtract 45° from the compass bearing — a due-north target
                     // (bearing 0) then points straight up.
-                    style={{ transform: [{ rotate: `${pursuit.bearingDeg - 45}deg` }] }}
+                    style={{ transform: [{ rotate: `${pursuit.bearingDeg - NAVIGATE_GLYPH_OFFSET_DEG}deg` }] }}
                   />
                 ) : (
                   <Ionicons name="navigate-outline" size={24} color={t.colors.text.muted} />
@@ -1545,25 +1613,32 @@ export default function OfflineMap({
                 onLocate={locate}
                 onClose={() => setPlace(null)}
               />
-            ) : interactive && (nearestNotice || pendingNearest || pendingRecenter) ? (
+            ) : interactive && (nearestNotice || pendingNearest || pendingRecenter || farNoticeM !== null) ? (
               <View style={styles.notice}>
                 <View style={styles.noticeRow}>
                   <Text
                     style={[styles.noticeText, styles.noticeBody]}
-                    accessibilityRole={nearestNotice ? 'alert' : 'text'}
+                    accessibilityRole={
+                      nearestNotice || geoState === 'denied' || geoState === 'unavailable' || farNoticeM !== null
+                        ? 'alert'
+                        : 'text'
+                    }
                     maxFontSizeMultiplier={MAX_FONT_SCALE}
                   >
                     {nearestNotice
                       ? nearestMissingCopy(nearestNotice.type)
                       : geoState === 'denied' || geoState === 'unavailable'
                         ? locationPromptCopy(geoState)
-                        : locationPromptCopy('locating')}
+                        : pendingNearest || pendingRecenter
+                          ? locationPromptCopy('locating')
+                          : farFromFestivalCopy(farNoticeM ?? 0, festival?.name)}
                   </Text>
                   <TouchableOpacity
                     onPress={() => {
                       setNearestNotice(null);
                       setPendingNearest(null);
                       setPendingRecenter(false);
+                      setFarNoticeM(null);
                     }}
                     accessibilityRole="button"
                     accessibilityLabel="Dismiss"
@@ -1583,14 +1658,23 @@ export default function OfflineMap({
                   />
                 ) : null}
                 {!nearestNotice && geoState === 'denied' ? (
-                  // A permanent denial never re-prompts, so Try again would be a dead end.
-                  <Button
-                    label={LIVE_SHARE_COPY.openSettings}
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => void Linking.openSettings()}
-                    maxFontSizeMultiplier={MAX_FONT_SCALE}
-                  />
+                  // Try again re-prompts after a soft deny and re-checks once the user is back from Settings.
+                  <>
+                    <Button
+                      label={LIVE_SHARE_COPY.openSettings}
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => void Linking.openSettings()}
+                      maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    />
+                    <Button
+                      label={MAP_COPY.tryAgain}
+                      size="sm"
+                      variant="secondary"
+                      onPress={retryLocation}
+                      maxFontSizeMultiplier={MAX_FONT_SCALE}
+                    />
+                  </>
                 ) : null}
                 {!nearestNotice && geoState === 'unavailable' ? (
                   <Button
@@ -1598,6 +1682,15 @@ export default function OfflineMap({
                     size="sm"
                     variant="secondary"
                     onPress={retryLocation}
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  />
+                ) : null}
+                {!nearestNotice && farNoticeM !== null ? (
+                  <Button
+                    label={MAP_COPY.showFestival}
+                    size="sm"
+                    variant="secondary"
+                    onPress={showFestival}
                     maxFontSizeMultiplier={MAX_FONT_SCALE}
                   />
                 ) : null}

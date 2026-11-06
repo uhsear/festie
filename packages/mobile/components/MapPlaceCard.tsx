@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Share } from 'react-native';
+import { View, Text, TouchableOpacity, Share, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   MAP_COPY,
@@ -58,7 +58,10 @@ export default function MapPlaceCard({
               {walkLine}
             </Text>
           ) : (
-            <TouchableOpacity onPress={onLocate} accessibilityRole="button" style={styles.locate}>
+            <TouchableOpacity
+              // A blocked permission cannot be re-prompted from here: Settings is the only way.
+              onPress={geoState === 'denied' ? () => void Linking.openSettings() : onLocate}
+              accessibilityRole="button" style={styles.locate}>
               <Text style={styles.locateText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {locationPromptCopy(geoState)}
               </Text>
