@@ -54,6 +54,13 @@ describe('NowNextStrip', () => {
     expect(nav).toHaveBeenCalledWith({ to: '/festival-mode' });
   });
 
+  it('wraps the artist name on two lines and truncates only the stage', () => {
+    nowMs = local(2030, 5, 15, 20, 48);
+    render(<NowNextStrip />);
+    expect(screen.getByText('Alpha')).toHaveClass('line-clamp-2');
+    expect(screen.getByText('Main Stage')).toHaveClass('truncate');
+  });
+
   it('shows UP NEXT with minutes for a pick later the same day', () => {
     nowMs = local(2030, 5, 15, 19, 35);
     render(<NowNextStrip />);

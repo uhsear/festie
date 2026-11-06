@@ -68,6 +68,12 @@ describe('CaughtNowCard', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('wraps a long artist name instead of cutting it to one line', () => {
+    renderCard();
+    expect(screen.getByText('Odesza')).toHaveClass('line-clamp-2');
+    expect(screen.getByText('Odesza')).not.toHaveClass('truncate');
+  });
+
   it('lists live and recently ended picks with meta', () => {
     renderCard();
     expect(screen.getByRole('heading', { name: 'Did you catch it?' })).toBeInTheDocument();
