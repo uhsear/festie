@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
@@ -535,6 +535,23 @@ export default function OfflineMap({
       clearNoFixTimer();
     };
   }, [clearNoFixTimer]);
+  // The tab stays mounted, so stop GPS when the screen loses focus. On return,
+  // resume only while a pursue target still needs live position.
+  const pursueActiveRef = useRef(false);
+  useEffect(() => {
+    pursueActiveRef.current = pursue !== null;
+  }, [pursue]);
+  useFocusEffect(
+    useCallback(() => {
+      if (pursueActiveRef.current) void enableLocation();
+      return () => {
+        watchSubRef.current?.remove();
+        watchSubRef.current = null;
+        clearNoFixTimer();
+        setGeoState((g) => (g === 'denied' ? g : 'idle'));
+      };
+    }, [enableLocation, clearNoFixTimer]),
+  );
 
   // Frame a point. `__festieFlyTo` only exists once the map is up; the `&&` guard
   // no-ops otherwise, and webRef is null while the fallback list shows. Only

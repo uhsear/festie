@@ -64,3 +64,10 @@ describe('OfflineMap audit source guards', () => {
     expect(src).toContain('styles.recenterFab.bottom + fabInset');
   });
 });
+
+describe('map GPS watch lifecycle', () => {
+  it('stops the location watch when the Map screen loses focus', () => {
+    const src = readFileSync(join(__dirname, '../components/OfflineMap.tsx'), 'utf8');
+    expect(src).toMatch(/useFocusEffect\(\s*useCallback\(\(\) => \{[\s\S]*?return \(\) => \{\s*watchSubRef\.current\?\.remove\(\);/);
+  });
+});
