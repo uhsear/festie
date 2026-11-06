@@ -55,11 +55,11 @@ export default function PollOptionButton({
       />
       <div className="relative flex items-center justify-between px-3 py-2">
         <span className="min-w-0 flex flex-col">
-          <span className="text-sm text-text-primary flex items-center gap-2 truncate">
+          <span className="text-sm text-text-primary flex items-center gap-2">
             {isMine && <Check className="w-3.5 h-3.5 text-accent-aqua flex-shrink-0" />}
-            <span className="truncate">{text}</span>
+            <span className="line-clamp-2 break-words">{text}</span>
           </span>
-          {voterLine && <span className="text-xs text-text-muted truncate">{voterLine}</span>}
+          {voterLine && <span className="text-xs text-text-muted line-clamp-2 break-words">{voterLine}</span>}
         </span>
         <span
           className={cn('text-xs font-medium flex-shrink-0 ml-2', isMine ? 'text-accent-aqua' : 'text-text-secondary')}

@@ -266,7 +266,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
                       className="flex items-center gap-1.5 max-w-full text-left text-sm text-text-primary min-h-11"
                     >
                       {packed ? <Check className="w-4 h-4 flex-shrink-0 text-accent-aqua" aria-hidden="true" /> : null}
-                      <span className="truncate">{item.label}</span>
+                      <span className="line-clamp-2 break-words">{item.label}</span>
                     </button>
                   )}
                   {claimerId ? (
