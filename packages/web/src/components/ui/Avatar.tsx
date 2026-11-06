@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getAvatarColor, getInitials, normalizeIdentityName } from '@festie/shared';
 import { cn } from '../../lib/utils';
 import { avatarInk } from '../../lib/avatarInk';
@@ -52,6 +52,9 @@ export default function Avatar({
   const initials = getInitials(normalizedName);
   // Darken the generated background where needed so white initials clear WCAG AA
   // (fixed text-white failed on the lighter hues — axe color-contrast).
+  // Keyed by URL so a new image gets a fresh try; a dead URL falls back to initials.
+  const [failedImage, setFailedImage] = useState<string | undefined>();
+  const showImage = !!image && failedImage !== image;
   const { background: bgColor, color: textColor } = avatarInk(getAvatarColor(normalizedName));
 
   // R23: one-shot presence flip ring. Track prev isOnline value; when it
@@ -76,7 +79,7 @@ export default function Avatar({
 
   return (
     <div className={cn('relative inline-flex flex-shrink-0', className)}>
-      {image ? (
+      {showImage ? (
         <img
           src={image}
           alt={normalizedName}
@@ -84,6 +87,7 @@ export default function Avatar({
           height={sizePx[size]}
           loading="lazy"
           decoding="async"
+          onError={() => setFailedImage(image)}
           className={cn('rounded-full object-cover', sizeMap[size])}
         />
       ) : (

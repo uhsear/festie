@@ -1,6 +1,7 @@
 import React from 'react';
 import { useFestivalStore } from '@festie/shared';
 import { identityLabel } from '@festie/shared/utils';
+import { PRIORITY_LABELS } from '@festie/shared/constants';
 import Avatar from '../ui/Avatar';
 
 interface UserMenuProfileCardProps {
@@ -100,8 +101,8 @@ export default function UserMenuProfileCard({ user }: UserMenuProfileCardProps) 
               {(
                 [
                   [summary.total, 'Total picks'],
-                  [summary.must, 'Must see'],
-                  [summary.want, 'Want to see'],
+                  [summary.must, PRIORITY_LABELS.must],
+                  [summary.want, PRIORITY_LABELS['want-to-see']],
                   [summary.notes, 'Notes'],
                 ] as const
               ).map(([value, label]) => (

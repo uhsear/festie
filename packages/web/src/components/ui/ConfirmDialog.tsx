@@ -33,10 +33,10 @@ export default function ConfirmDialog({
   busy = false,
 }: Props) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={title} description={description}>
+    <Dialog open={open} onOpenChange={(o) => { if (o || !busy) onOpenChange(o); }} title={title} description={description}>
       <div className="flex gap-2">
         <RadixDialog.Close asChild>
-          <Button variant="secondary" type="button" className="flex-1 min-h-11">
+          <Button variant="secondary" type="button" disabled={busy} className="flex-1 min-h-11">
             {cancelLabel}
           </Button>
         </RadixDialog.Close>

@@ -33,6 +33,8 @@ describe('Button', () => {
     it('applies ghost variant', () => {
       render(<Button variant="ghost">Ghost</Button>);
       expect(screen.getByRole('button').className).toContain('bg-transparent');
+      expect(screen.getByRole('button').className).toContain('text-text-secondary');
+      expect(screen.getByRole('button').className).not.toContain('border-border-light');
     });
 
     it('applies secondary variant', () => {

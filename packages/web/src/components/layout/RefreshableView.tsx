@@ -45,11 +45,10 @@ export default function RefreshableView({
     <div
       {...bind}
       className={cn(
-        'overflow-y-auto overscroll-behavior-none',
-        'touch-action-pan-y',
+        'overflow-y-auto overscroll-none',
+        'touch-pan-y',
         className,
       )}
-      /* overscroll-behavior + touch-action already set via Tailwind in className */
     >
       <PullRefreshIndicator progress={pullProgress} isRefreshing={isRefreshing} />
       {children}
