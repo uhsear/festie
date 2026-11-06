@@ -50,4 +50,24 @@ describe('createSendGuard', () => {
     await guard.run('a', send);
     expect(send).toHaveBeenCalledTimes(2);
   });
+  it("still sends a key whose overlapping send failed", async () => {
+    const guard = createSendGuard();
+    const fail = () => Promise.reject(new Error("offline"));
+    const a = guard.run("k1", fail);
+    const b = guard.run("k2", fail);
+    await expect(a).rejects.toThrow();
+    await expect(b).rejects.toThrow();
+    const send = vi.fn(() => Promise.resolve());
+    await guard.run("k1", send);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("reset clears the 429 back-off", async () => {
+    const guard = createSendGuard();
+    await expect(guard.run("a", () => Promise.reject(rateLimit()))).rejects.toThrow();
+    guard.reset();
+    const send = vi.fn(() => Promise.resolve());
+    await guard.run("b", send);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
 });

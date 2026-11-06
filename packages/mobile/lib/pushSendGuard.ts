@@ -19,10 +19,11 @@ export function createSendGuard(now: () => number = Date.now, backoffMs = PUSH_B
       const pending = inFlight.get(key);
       if (pending) return pending;
       if (key === lastKey || now() < blockedUntil) return;
-      const previous = lastKey;
       lastKey = key;
       const promise = send().catch((e) => {
-        lastKey = previous;
+        // Forget only our own key: with overlapping sends, restoring an older key could
+        // mark a never-sent payload as sent and drop every later attempt at it.
+        if (lastKey === key) lastKey = null;
         if (isRateLimited(e)) blockedUntil = now() + backoffMs;
         throw e;
       }).finally(() => inFlight.delete(key));
@@ -32,6 +33,7 @@ export function createSendGuard(now: () => number = Date.now, backoffMs = PUSH_B
     /** Forget what was sent, e.g. after register or sign-out changes the server row. */
     reset(): void {
       lastKey = null;
+      blockedUntil = 0;
     },
   };
 }
