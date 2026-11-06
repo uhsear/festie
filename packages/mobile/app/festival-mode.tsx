@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, BackHandler } from 'react-native';
+import { View, Text, ScrollView, BackHandler, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
+import { COPY } from '@festie/shared/constants';
 import type { FestivalSet } from '@festie/shared/types';
 import {
+  festivalLoadState,
   festivalTimeLabel,
   fmtZonedClock,
   isFixRecent,
@@ -14,10 +17,12 @@ import {
   stageCoord,
   walkToStage,
 } from '@festie/shared/utils';
-import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens } from '../hooks/useTokens';
+import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
 import { useLastKnownFix } from '../hooks/useLastKnownFix';
+import { useSosRaise } from '../hooks/useSosRaise';
 import EmptyState from '../components/EmptyState';
+import LoadingState from '../components/LoadingState';
 import FreshnessChip from '../components/FreshnessChip';
 import OfflineStatusChip from '../components/OfflineStatusChip';
 import WeatherStrip from '../components/WeatherStrip';
@@ -43,6 +48,18 @@ export default function FestivalModeScreen() {
 
   const user = useAuthStore((s) => s.user);
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const festivals = useFestivalDataStore((s) => s.festivals);
+  const festivalsLoading = useFestivalDataStore((s) => s.isLoading);
+  const festivalsError = useFestivalDataStore((s) => s.error);
+  const loadFestivals = useFestivalDataStore((s) => s.loadFestivals);
+  // A cold start lands here before any screen has loaded the catalogue; without this the empty state never resolves.
+  useEffect(() => {
+    const { isLoading, error } = useFestivalDataStore.getState();
+    if (!currentFestival && festivals.length === 0 && !isLoading && !error) {
+      loadFestivals().catch(() => {});
+    }
+  }, [currentFestival, festivals.length, loadFestivals]);
+  const loadState = festivalLoadState({ currentFestival, festivals, isLoading: festivalsLoading, error: festivalsError });
   const sets = useFestivalDataStore((s) => s.sets) as FestivalSet[];
   const days = useFestivalDataStore((s) => s.days);
   const picks = useFestivalDataStore((s) => s.currentProfile?.picks);
@@ -67,6 +84,7 @@ export default function FestivalModeScreen() {
   const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
   const after = selection.phase === 'after';
   const crewId = crew?.id;
+  const { confirmRaise, raising } = useSosRaise(crewId ?? null);
   const balance = expenseBalances.find((b) => b.userId === user?.id)?.balance ?? 0;
 
   // The wrap-up card shows my balance, so refresh it once the festival is over.
@@ -94,7 +112,16 @@ export default function FestivalModeScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Now & Next', headerShown: true }} />
-      {!currentFestival ? (
+      {!currentFestival && loadState === 'error' ? (
+        <EmptyState
+          icon="cloud-offline-outline"
+          title={COPY.festivalLoad.errorTitle}
+          message={festivalsError ?? COPY.festivalLoad.errorBody}
+          action={{ label: COPY.festivalLoad.retry, onPress: () => void loadFestivals().catch(() => {}) }}
+        />
+      ) : !currentFestival && loadState === 'loading' ? (
+        <LoadingState />
+      ) : !currentFestival ? (
         <EmptyState
           icon="calendar-outline"
           title="No festival selected"
@@ -112,11 +139,30 @@ export default function FestivalModeScreen() {
             <Text style={styles.festivalName} numberOfLines={2} maxFontSizeMultiplier={typeScaleCap('title')}>
               {currentFestival.name}
             </Text>
-            <View style={[styles.clockWrap, largeText && { alignItems: 'flex-start' }]}>
-              <Text style={styles.clock} accessibilityLabel={`Festival time ${fmtZonedClock(nowMs, timeZone)}`}>
-                {fmtZonedClock(nowMs, timeZone)}
-              </Text>
-              {festivalTimeLabel(timeZone, nowMs) ? <Text style={styles.clockCaption}>Festival time</Text> : null}
+            <View style={styles.headerEnd}>
+              {user && crew && !after ? (
+                <TouchableOpacity
+                  testID="festival-mode-sos"
+                  style={[styles.sosButton, raising && styles.sosButtonBusy]}
+                  onPress={confirmRaise}
+                  disabled={raising}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send an SOS to your crew"
+                  accessibilityHint="Asks for confirmation before sending"
+                  accessibilityState={{ disabled: raising }}
+                >
+                  <Ionicons name="alert-circle" size={18} color={t.colors.text.onAccent} />
+                  <Text style={styles.sosButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                    SOS
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              <View style={[styles.clockWrap, largeText && { alignItems: 'flex-start' }]}>
+                <Text style={styles.clock} accessibilityLabel={`Festival time ${fmtZonedClock(nowMs, timeZone)}`}>
+                  {fmtZonedClock(nowMs, timeZone)}
+                </Text>
+                {festivalTimeLabel(timeZone, nowMs) ? <Text style={styles.clockCaption}>Festival time</Text> : null}
+              </View>
             </View>
           </View>
           <View style={styles.metaRow}>
@@ -232,6 +278,21 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('title'),
     color: t.colors.text.primary,
     flex: 1,
+  },
+  headerEnd: { flexDirection: 'row', alignItems: 'center', gap: t.spacing[3] },
+  sosButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.pill,
+    backgroundColor: t.colors.accent.coralStrong,
+  },
+  sosButtonBusy: { opacity: 0.5 },
+  sosButtonText: {
+    ...typeStyle('label', 700),
+    color: t.colors.text.onAccent,
   },
   clockWrap: { alignItems: 'flex-end' },
   clockCaption: {

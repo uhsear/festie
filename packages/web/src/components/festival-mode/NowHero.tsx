@@ -7,6 +7,7 @@ import {
   fmtTimeLeft,
   fmtZonedClock,
   fmtZonedDayClock,
+  fmtZonedWeekday,
   type DayOfSet,
   type NowNextSelection,
   type StageWalk,
@@ -37,8 +38,8 @@ interface Props {
 
 const DAY_MS = 86_400_000;
 
-function startsInWords(startsAt: number, nowMs: number, timeZone?: string): string {
-  if (startsAt - nowMs < DAY_MS / 2) return `First set ${fmtStartsIn(startsAt, nowMs, timeZone)}.`;
+function startsInWords(startsAt: number, nowMs: number, timeZone: string | undefined, timed: boolean): string | undefined {
+  if (startsAt - nowMs < DAY_MS / 2) return timed ? `First set ${fmtStartsIn(startsAt, nowMs, timeZone)}.` : undefined;
   const days = Math.ceil((startsAt - nowMs) / DAY_MS);
   return `In ${days} day${days === 1 ? '' : 's'}.`;
 }
@@ -78,7 +79,7 @@ export default function NowHero({
   onWrap,
   walk,
 }: Props) {
-  const { phase, current, upcoming, todayCount, startsAt } = selection;
+  const { phase, current, upcoming, todayCount, startsAt, startsAtTimed } = selection;
   const live = current.length > 0;
   const next = upcoming[0];
   const name = (s: FestivalSet) => artistDisplayName(s, b2bSeparator);
@@ -114,13 +115,17 @@ export default function NowHero({
       </div>
     );
   } else if (phase === 'none') {
-    body = <Quiet icon={<CalendarClock />} title="Set times aren't out yet" body="Now and next appear once the festival publishes its schedule." />;
+    body = <Quiet icon={<CalendarClock />} title="Set times aren't out yet" body="Now and next appear once the schedule is published." />;
   } else if (phase === 'before') {
     body = (
       <Quiet
         icon={<CalendarClock />}
-        title={startsAt ? `Starts ${fmtZonedDayClock(startsAt, timeZone)}` : 'Not started yet'}
-        body={startsAt ? startsInWords(startsAt, nowMs, timeZone) : undefined}
+        title={
+          startsAt
+            ? `Starts ${startsAtTimed ? fmtZonedDayClock(startsAt, timeZone) : fmtZonedWeekday(startsAt, timeZone)}`
+            : 'Not started yet'
+        }
+        body={startsAt ? startsInWords(startsAt, nowMs, timeZone, startsAtTimed) : undefined}
       />
     );
   } else if (phase === 'after') {

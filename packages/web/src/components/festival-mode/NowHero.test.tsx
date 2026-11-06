@@ -54,3 +54,30 @@ describe('NowHero walk time', () => {
     expect(screen.getByText('in 1h 30m')).not.toHaveClass('text-accent-coral');
   });
 });
+
+describe('NowHero before the festival', () => {
+  const before = (startsAtTimed: boolean) =>
+    render(
+      <NowHero
+        selection={{ phase: 'before', current: [], upcoming: [], todayCount: 0, startsAt: NOW + 3 * 3_600_000, startsAtTimed } as unknown as NowNextSelection}
+        nowMs={NOW}
+        timeZone="UTC"
+        lineupMode
+        getStageName={() => 'Main'}
+        onOpenSet={vi.fn()}
+        onBrowse={vi.fn()}
+      />,
+    );
+
+  it('names only the weekday and skips "First set" when no set has a time yet', () => {
+    before(false);
+    expect(screen.getByText(/^Starts Fri/)).not.toHaveTextContent(/\d:\d\d/);
+    expect(screen.queryByText(/First set/)).not.toBeInTheDocument();
+  });
+
+  it('shows the start clock and the countdown once set times exist', () => {
+    before(true);
+    expect(screen.getByText(/^Starts Fri.*\d/)).toBeInTheDocument();
+    expect(screen.getByText(/^First set/)).toBeInTheDocument();
+  });
+});

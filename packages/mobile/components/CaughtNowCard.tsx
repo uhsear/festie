@@ -100,7 +100,7 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
         return (
           <View key={item.set.id} style={[styles.row, largeText && styles.rowStacked]}>
             <View style={styles.text}>
-              <Text style={styles.artist} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              <Text style={styles.artist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {artist}
               </Text>
               <Text style={styles.meta} maxFontSizeMultiplier={MAX_FONT_SCALE}>

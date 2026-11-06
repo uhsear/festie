@@ -63,9 +63,9 @@ export default function NowNextStrip() {
           {isNow && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-accent-coral" />}
           {isNow ? 'NOW' : 'UP NEXT'}
         </span>
-        <span className="min-w-0 flex-1 truncate">
-          <span className="font-semibold text-text-primary">{name}</span>
-          {stage && <span className="text-text-secondary">{` · ${stage}`}</span>}
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold text-text-primary line-clamp-2 break-words">{name}</span>
+          {stage && <span className="block truncate text-text-secondary">{stage}</span>}
         </span>
         <span className="shrink-0 text-sm text-text-secondary tabular-nums">{timing}</span>
         {isNow && (

@@ -69,7 +69,7 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
           return (
             <li key={item.set.id} className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <div className="truncate text-text-primary">{artist}</div>
+                <div className="line-clamp-2 break-words text-text-primary">{artist}</div>
                 <div className="text-xs text-text-secondary">
                   {catchableMeta(item, nowMs, item.set.stageId ? getStageName(item.set.stageId) : null)}
                 </div>

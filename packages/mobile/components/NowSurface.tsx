@@ -161,7 +161,7 @@ export function NowHero({
             ? `Your next pick is ${name(next.set)}, ${fmtStartsIn(next.start, nowMs, timeZone)}.`
             : 'Pick the sets you want to see today.'
         }
-        action={<Button label="Browse lineup" variant="secondary" onPress={onBrowse} />}
+        action={<Button label="Browse the lineup" variant="secondary" onPress={onBrowse} />}
       />
     );
   } else if (next) {

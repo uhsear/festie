@@ -113,7 +113,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
         )}
       </View>
       <View style={styles.info}>
-        <Text style={styles.artist} numberOfLines={1}>
+        <Text style={styles.artist} numberOfLines={2}>
           {name}
         </Text>
         <View style={styles.metaRow}>
