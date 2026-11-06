@@ -6,8 +6,8 @@
  * Everything here reads only its arguments (no stores, no fetches, no globals) so
  * the screens stay thin wiring and a Vitest unit can exercise the logic directly.
  *
- * NOTE: this `pickActiveMeetingPoint(points, nowMs)` is the crew-plan variant
- * (soonest future-or-now timed point, else most-recent untimed). It is distinct
+ * NOTE: this `pickActiveMeetingPoint(points, days, nowMs)` is the crew-plan variant
+ * (the Now chip's `selectActiveMeet` pick). It is distinct
  * from `ongoingNotification.pickActiveMeetingPoint(points)`, which picks the most
  * recently-set active point for the ongoing-set notification — different inputs,
  * different intent, kept separate on purpose.
@@ -23,23 +23,25 @@ import type {
   Profile,
 } from '../types/domain';
 import { PRIORITY_WEIGHT } from './crewNudges';
+import { selectActiveMeet } from './dayOf';
 import { festivalStartMinutes, getSetTimeBounds } from './setStatus';
 
 /** Default number of upcoming start-time slots surfaced by `buildSlots`. */
 export const CREW_PLAN_SLOTS = 3;
 
-/** The soonest still-active meeting point with a future-or-now meet time. */
-export function pickActiveMeetingPoint(points: CrewMeetingPoint[], nowMs: number): CrewMeetingPoint | null {
-  const future = points
-    .filter((p) => p.active && p.meet_at)
-    .map((p) => ({ p, ms: new Date(p.meet_at as string).getTime() }))
-    .filter(({ ms }) => Number.isFinite(ms) && ms >= nowMs)
-    .sort((a, b) => a.ms - b.ms);
-  if (future.length > 0) return future[0]!.p;
-  // No timed future point — fall back to the most recent active untimed point so
-  // a standing meetup (e.g. "the big tree") still shows.
-  const untimed = points.filter((p) => p.active && !p.meet_at);
-  return untimed[0] ?? null;
+/**
+ * The meeting point the crew-plan card shows. Delegates to `selectActiveMeet` so
+ * it matches the Now chip: recurring points roll to their next day, a point
+ * stays for 30 minutes after it starts, and expired points drop out.
+ */
+export function pickActiveMeetingPoint(
+  points: CrewMeetingPoint[],
+  days: ReadonlyArray<Pick<FestivalDay, 'date'>>,
+  nowMs: number,
+  timeZone?: string,
+): CrewMeetingPoint | null {
+  const meet = selectActiveMeet({ meetingPoints: points, crew: null, days, nowMs, timeZone });
+  return (meet?.id && points.find((p) => p.id === meet.id)) || null;
 }
 
 /**

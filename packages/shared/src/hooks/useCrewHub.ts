@@ -94,7 +94,7 @@ export function useCrewHub(nowMs: number): CrewHub {
       festivalName: crewFestivalName(crew, festivals, currentFestival),
       memberCount: members.length,
       ...owner,
-      meetingPoint: pickActiveMeetingPoint(meetingPoints, nowMs),
+      meetingPoint: pickActiveMeetingPoint(meetingPoints, days, nowMs, timeZone),
       isPast,
       upNext,
       howWeDid: isPast ? buildCrewMix({ sets, days, profiles: crewProfiles, timeZone, limit: 5, isAttending: attending }) : [],
