@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 import { raiseSos, sosErrorMessage, type SosPosition } from '@festie/shared/services';
+import { useUIStore } from '@festie/shared/stores';
 import { resolveSosPosition } from './sosPosition';
 import { useHaptics } from './useHaptics';
 
@@ -14,9 +15,12 @@ import { useHaptics } from './useHaptics';
 export function useSosRaise(crewId: string | null) {
   const haptics = useHaptics();
   const [raising, setRaising] = useState(false);
+  // The state is a stale closure for two confirms back to back; the ref is not.
+  const inFlight = useRef(false);
 
   const doRaise = useCallback(async () => {
-    if (!crewId || raising) return;
+    if (!crewId || inFlight.current) return;
+    inFlight.current = true;
     setRaising(true);
     haptics.heavy();
     let position: SosPosition | undefined;
@@ -38,15 +42,18 @@ export function useSosRaise(crewId: string | null) {
     try {
       await raiseSos(crewId, position ? { position } : {});
       // The sos:raised broadcast populates the banner for the whole crew (incl. us).
-      if (!position) {
+      if (position) {
+        useUIStore.getState().showToast('SOS sent to your crew', { kind: 'success' });
+      } else {
         Alert.alert('SOS sent without your location', 'We could not get a location fix. Your crew was alerted; tell them where you are.');
       }
     } catch (err) {
       Alert.alert('SOS not sent', sosErrorMessage(err, 'send'));
     } finally {
+      inFlight.current = false;
       setRaising(false);
     }
-  }, [crewId, raising, haptics]);
+  }, [crewId, haptics]);
 
   const confirmRaise = useCallback(() => {
     if (!crewId) return;
