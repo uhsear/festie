@@ -297,7 +297,7 @@ export default function CrewMeetingPoints({
       if (isPending(saved)) AccessibilityInfo.announceForAccessibility(QUEUED_WRITE_MESSAGE);
       reset();
     } catch {
-      // Error surfaced via the crew store; the form-only map sheet has no chrome that renders it.
+      // The crew tab renders the crew store's error; the standalone form (Map tab) does not, so toast it.
       if (formOnly) {
         useUIStore
           .getState()
@@ -650,7 +650,7 @@ export default function CrewMeetingPoints({
             loadingLabel={editingId ? 'Saving…' : 'Adding…'}
             disabled={!canCreate}
             onPress={handleCreate}
-            accessibilityLabel="Add meeting point"
+            accessibilityLabel={editingId ? 'Save meeting point' : 'Add meeting point'}
           />
         </View>
       ) : formOnly ? null : (
