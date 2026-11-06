@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { getAvatarColor, getInitials, normalizeIdentityName } from '@festie/shared/utils';
@@ -62,6 +62,9 @@ export default function Avatar({
   const normalizedName = normalizeIdentityName(name ?? undefined);
   const initials = getInitials(normalizedName);
   const fallbackColor = getAvatarColor(normalizedName);
+  // Keyed by URL so a new image gets a fresh try; a dead URL falls back to initials.
+  const [failedImage, setFailedImage] = useState<string | undefined>();
+  const showImage = !!image && failedImage !== image;
 
   // R23: one-shot ring on presence flip false to true.
   // Ring Animated.View scales 1 to 2.8 and fades opacity 0.7 to 0 in 600ms once.
@@ -94,14 +97,14 @@ export default function Avatar({
           height: sz,
           borderRadius: sz / 2,
           borderColor: borderColor ?? t.colors.bg.card,
-          backgroundColor: image ? t.colors.bg.secondary : fallbackColor,
+          backgroundColor: showImage ? t.colors.bg.secondary : fallbackColor,
         },
       ]}
       accessibilityRole="image"
       accessibilityLabel={normalizedName}
     >
-      {image ? (
-        <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
+      {showImage ? (
+        <Image source={{ uri: image }} style={styles.image} resizeMode="cover" onError={() => setFailedImage(image)} />
       ) : (
         <Text style={[styles.initials, { fontSize: Math.round(sz / 3) }]} numberOfLines={1}>
           {initials}

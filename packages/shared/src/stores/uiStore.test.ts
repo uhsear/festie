@@ -173,8 +173,21 @@ describe('uiStore', () => {
       expect(toasts).toHaveLength(1);
       expect(toasts[0]!.message).toBe('Reminder set');
       expect(toasts[0]!.kind).toBe('info');
-      expect(toasts[0]!.durationMs).toBe(2500);
+      expect(toasts[0]!.durationMs).toBe(3000);
       expect(toasts[0]!.id).toBe(id);
+    });
+
+    it('keeps error and warning toasts up for 5 s', () => {
+      useUIStore.getState().showToast('Failed', { kind: 'error' });
+      useUIStore.getState().showToast('Careful', { kind: 'warning' });
+      const [e, w] = useUIStore.getState().toasts;
+      expect(e!.durationMs).toBe(5000);
+      expect(w!.durationMs).toBe(5000);
+    });
+
+    it('keeps only the newest 3 toasts', () => {
+      for (const m of ['A', 'B', 'C', 'D']) useUIStore.getState().showToast(m);
+      expect(useUIStore.getState().toasts.map((t) => t.message)).toEqual(['B', 'C', 'D']);
     });
 
     it('honors kind and durationMs options', () => {
