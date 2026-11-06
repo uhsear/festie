@@ -458,6 +458,12 @@ export default function TimelineView({
     activePageRef.current = activePage;
     scrollRef.current = columnRefs.current.get(activePage) ?? null;
   }, [activePage, scrollRef]);
+  // A stage filter can shrink the carousel below the active page; the FlatList
+  // clamps its offset without a guaranteed onScroll, so clamp the page here and
+  // the effect above re-aims scrollRef at the column that is now registered.
+  useEffect(() => {
+    if (activePage >= visibleStages.length) setActivePage(Math.max(0, visibleStages.length - 1));
+  }, [visibleStages.length, activePage]);
   const registerColumnRef = useCallback(
     (index: number, node: ScrollViewInstance | null) => {
       if (node) columnRefs.current.set(index, node);
