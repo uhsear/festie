@@ -70,7 +70,7 @@ export default function AccountPrivacySection() {
       useUIStore.getState().showToast(PRIVACY_COPY.done);
     } catch {
       haptics.warning();
-      Alert.alert(PRIVACY_COPY.title, PRIVACY_COPY.error);
+      useUIStore.getState().showToast(PRIVACY_COPY.error, { kind: 'error' });
       load();
     } finally {
       setBusy(false);

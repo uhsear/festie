@@ -9,12 +9,13 @@ import {
   Platform,
   Keyboard,
   Linking,
+  Alert,
 } from 'react-native';
 import { Link, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@festie/shared/stores';
-import { AUTH_COPY } from '@festie/shared/constants';
+import { ACCOUNT_COPY, AUTH_COPY } from '@festie/shared/constants';
 import { isValidEmail } from '@festie/shared/utils';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
@@ -259,7 +260,12 @@ export default function ForgotPasswordScreen() {
           <Text
             style={styles.supportLink}
             accessibilityRole="link"
-            onPress={() => Linking.openURL(`mailto:${AUTH_COPY.supportEmail}`)}
+            onPress={() =>
+              // No mail account set up: show the address instead of a dead tap (same fallback as Account).
+              Linking.openURL(`mailto:${AUTH_COPY.supportEmail}`).catch(() =>
+                Alert.alert(ACCOUNT_COPY.contactSupport, ACCOUNT_COPY.contactSupportNoMail(AUTH_COPY.supportEmail)),
+              )
+            }
           >
             {AUTH_COPY.supportEmail}
           </Text>

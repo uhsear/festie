@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DATA_COPY } from '@festie/shared/constants';
 import { exportErrorMessage } from '@festie/shared/services';
@@ -29,7 +29,7 @@ export default function AccountDataSection() {
       haptics.success();
     } catch (err) {
       haptics.warning();
-      Alert.alert(DATA_COPY.title, exportErrorMessage(err));
+      useUIStore.getState().showToast(exportErrorMessage(err), { kind: 'error' });
     } finally {
       setBusy(false);
     }

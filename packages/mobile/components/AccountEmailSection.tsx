@@ -73,6 +73,7 @@ export default function AccountEmailSection({ hasPassword }: { hasPassword: bool
       setPassword('');
       setOpen(false);
       setSentTo(clean);
+      await useAuthStore.getState().checkSession();
     } catch (err) {
       haptics.warning();
       setError(mapErrorToUserMessage(err, ACCOUNT_COPY.emailSendFailed));
@@ -112,6 +113,12 @@ export default function AccountEmailSection({ hasPassword }: { hasPassword: bool
         <View style={styles.notice} accessibilityLiveRegion="polite">
           <Ionicons name="checkmark-circle" size={14} color={t.colors.status.verified} style={styles.noticeIcon} />
           <Text style={styles.noticeText}>{ACCOUNT_COPY.emailSent(sentTo)}</Text>
+        </View>
+      ) : null}
+
+      {user?.pendingEmail && !sentTo && !open ? (
+        <View style={styles.notice} accessibilityLiveRegion="polite">
+          <Text style={styles.rowHint}>{ACCOUNT_COPY.emailPending(user.pendingEmail)}</Text>
         </View>
       ) : null}
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Platform, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ACCOUNT_REACTIVATED_MESSAGE, useAuthStore, useUIStore } from '@festie/shared/stores';
 import { PROVIDER_COPY } from '@festie/shared/constants';
@@ -84,6 +84,7 @@ export default function ProviderButtons({ mode, register, onCredential, only }: 
     return googleAvailable() && (platform !== 'ios' || appleOk);
   });
   if (providers.length === 0) return null;
+  const googleLabel = mode === 'link' ? PROVIDER_COPY.linkGoogle : PROVIDER_COPY.continueGoogle;
 
   const run = async (provider: ProviderName) => {
     if (busy || !cfg) return;
@@ -108,7 +109,7 @@ export default function ProviderButtons({ mode, register, onCredential, only }: 
         router.push({ pathname: '/(auth)/complete-signup', params: { k } });
         return;
       }
-      if (result.reactivated) Alert.alert(ACCOUNT_REACTIVATED_MESSAGE);
+      if (result.reactivated) useUIStore.getState().showToast(ACCOUNT_REACTIVATED_MESSAGE, { kind: 'success' });
       // A guest who arrived through an invite link finishes that join first.
       const invite = getPendingInvite();
       if (invite) {
@@ -145,12 +146,12 @@ export default function ProviderButtons({ mode, register, onCredential, only }: 
         ) : (
           <Button
             key={p}
-            label={PROVIDER_COPY.continueGoogle}
+            label={googleLabel}
             variant="utility"
             icon="logo-google"
             loading={busy}
             onPress={() => void run('google')}
-            accessibilityLabel={PROVIDER_COPY.continueGoogle}
+            accessibilityLabel={googleLabel}
           />
         ),
       )}
