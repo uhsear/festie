@@ -50,11 +50,11 @@ export default function Avatar({
 }: AvatarProps) {
   const normalizedName = normalizeIdentityName(name);
   const initials = getInitials(normalizedName);
-  // Darken the generated background where needed so white initials clear WCAG AA
-  // (fixed text-white failed on the lighter hues — axe color-contrast).
   // Keyed by URL so a new image gets a fresh try; a dead URL falls back to initials.
   const [failedImage, setFailedImage] = useState<string | undefined>();
   const showImage = !!image && failedImage !== image;
+  // Darken the generated background where needed so white initials clear WCAG AA
+  // (fixed text-white failed on the lighter hues — axe color-contrast).
   const { background: bgColor, color: textColor } = avatarInk(getAvatarColor(normalizedName));
 
   // R23: one-shot presence flip ring. Track prev isOnline value; when it
