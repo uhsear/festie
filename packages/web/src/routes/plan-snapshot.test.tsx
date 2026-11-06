@@ -51,6 +51,30 @@ describe('PlanSnapshotPage', () => {
     setHash('');
   });
 
+  it('orders days by the festival and rows by start time, not by priority', async () => {
+    apiGet.mockResolvedValue({
+      ...festival,
+      days: [
+        { id: 'd1', date: '2026-07-10', label: 'Friday', sets: [
+          { id: 'a', stageId: 'st-1', startTime: '22:00', artist: 'Late' },
+          { id: 'b', stageId: 'st-1', startTime: '18:00', artist: 'Early' },
+        ] },
+        { id: 'd2', date: '2026-07-11', label: 'Saturday', sets: [{ id: 'c', stageId: 'st-1', startTime: '20:00', artist: 'Sat' }] },
+      ],
+    });
+    setHash(snapshotHash([
+      { setId: 'c', priority: 'must' },
+      { setId: 'a', priority: 'want' },
+      { setId: 'b', priority: 'maybe' },
+    ]));
+    render(<PlanSnapshotPage />);
+    await screen.findByText('Early');
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Friday', 'Saturday']);
+    const text = document.body.textContent ?? '';
+    expect(text.indexOf('Early')).toBeLessThan(text.indexOf('Late'));
+  });
+
   it('renders picks by day from the festival, with the meeting point link', async () => {
     apiGet.mockResolvedValue(festival);
     setHash(snapshotHash([{ setId: 'set-1', priority: 'must' }], true));
