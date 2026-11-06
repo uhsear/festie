@@ -302,7 +302,7 @@ function PicksViewInner() {
           myDayGroups?.map((group) => (
             <div key={group.key} data-testid="my-day-group">
               {group.label && <h2 className="mt-2 mb-2 text-sm font-bold text-text-primary">{group.label}</h2>}
-              <MyDayList myDay={group.myDay} onOpenSet={setDetailSet} timeZone={timeZone} />
+              <MyDayList myDay={group.myDay} onOpenSet={setDetailSet} timeZone={timeZone} underDayHeading={!!group.label} />
             </div>
           ))}
 
