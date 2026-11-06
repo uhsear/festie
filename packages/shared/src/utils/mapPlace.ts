@@ -6,10 +6,10 @@
  * web CrewMap and the mobile OfflineMap, so both show the same copy and math.
  */
 
-import { buildPursuit, etaMinutes, nearestPin } from './geo';
+import { buildPursuit, etaMinutes, formatDistance, haversineMeters, nearestPin } from './geo';
 import type { Coord, Pursuit } from './geo';
 import { humanizeAmenityType } from './mapAuthoring';
-import type { MapPin } from './mapPins';
+import type { FestivalCamera, MapPin } from './mapPins';
 import type { AmenityType, Stage } from '../types/domain';
 
 /** Location state shared by web and mobile maps. */
@@ -28,7 +28,7 @@ export function locationPromptCopy(state: GeoState, targetName?: string): string
     case 'locating':
       return 'Finding you…';
     case 'denied':
-      return 'Location is blocked. Allow location for Festie in your settings, then try again.';
+      return 'Location is off or blocked. Turn it on for Festie in your device or browser settings, then try again.';
     case 'unavailable':
       return "Can't get a GPS fix. Move into the open and try again.";
     case 'on':
@@ -116,7 +116,9 @@ export function placeShareText(place: MapPlace): string {
 /** The place's walking line, `4 min walk · 310 m`, or null when there is no fix. */
 export function placeWalkLine(self: Coord | null | undefined, place: MapPlace): string | null {
   const pursuit = buildPursuit(self, place.coord);
-  return pursuit.etaLabel === '—' ? null : `${pursuit.etaLabel} walk · ${pursuit.distanceLabel}`;
+  if (pursuit.etaLabel !== '—') return `${pursuit.etaLabel} walk · ${pursuit.distanceLabel}`;
+  // Far away there is no walk time, but the fix is real: say how far.
+  return pursuit.distanceLabel === '—' ? null : `${pursuit.distanceLabel} away`;
 }
 
 /** The stage's coord when both numbers are finite, else null. */
@@ -135,6 +137,36 @@ export const RECENT_FIX_MS = 300_000;
 
 export function isFixRecent(fixAtMs: number | null | undefined, nowMs: number): boolean {
   return typeof fixAtMs === 'number' && Number.isFinite(fixAtMs) && nowMs - fixAtMs <= RECENT_FIX_MS;
+}
+
+/** A fix this far (metres) from the festival grounds gets the "you are far away" notice. */
+export const FAR_FROM_FESTIVAL_M = 3000;
+
+/** Slack around the camera bounds before a fix counts as away from the grounds. */
+const FESTIVAL_BOUNDS_MARGIN_M = 2000;
+
+/**
+ * Metres from a fix to the festival camera centre, or 0 when the fix is inside the
+ * camera bounds plus a margin. Null when there is no camera centre or fix to compare.
+ */
+export function distanceFromFestivalM(self: Coord | null | undefined, camera: FestivalCamera): number | null {
+  if (!camera.center) return null;
+  const distanceM = haversineMeters(self, camera.center);
+  if (!Number.isFinite(distanceM)) return null;
+  if (camera.bounds) {
+    const [[west, south], [east, north]] = camera.bounds;
+    const clamped = {
+      latitude: Math.min(Math.max(self!.latitude, south), north),
+      longitude: Math.min(Math.max(self!.longitude, west), east),
+    };
+    if (haversineMeters(self, clamped) <= FESTIVAL_BOUNDS_MARGIN_M) return 0;
+  }
+  return distanceM;
+}
+
+/** Notice for a fix outside the festival map, e.g. "You're 120.4 km from EDC Orlando. ..." */
+export function farFromFestivalCopy(distanceM: number, festivalName?: string | null): string {
+  return `You're ${formatDistance(distanceM)} from ${festivalName || 'the festival'}. The map shows the festival grounds only.`;
 }
 
 /** Walk from origin to a stage, against the time left before startMs. */
@@ -219,6 +251,7 @@ export const MAP_COPY = {
   nearest: 'Nearest',
   call911: 'Call 911',
   tryAgain: 'Try again',
+  showFestival: 'Show festival',
   showStageOnMap: 'Show stage on map',
   pointMeThere: 'Point me there',
 } as const;

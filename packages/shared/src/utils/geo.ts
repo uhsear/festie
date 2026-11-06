@@ -143,7 +143,7 @@ export function formatDistance(meters: number): string {
   if (!Number.isFinite(meters) || meters < 0) return '—';
   if (meters < 1000) {
     const rounded = Math.max(0, Math.round(meters / 10) * 10);
-    return `${rounded} m`;
+    if (rounded < 1000) return `${rounded} m`;
   }
   return `${(meters / 1000).toFixed(1)} km`;
 }
@@ -284,6 +284,9 @@ export interface Pursuit {
   etaLabel: string;
 }
 
+/** Beyond this straight-line distance (metres) no walking ETA is shown. */
+const MAX_WALK_ETA_M = 10_000;
+
 /**
  * Build the pursuit bundle from `self` → `target` in one call: bearing,
  * distance, distance label, 8-point compass, and walking ETA label. Pure and
@@ -293,7 +296,8 @@ export interface Pursuit {
 export function buildPursuit(self: Coord | null | undefined, target: Coord | null | undefined): Pursuit {
   const distanceM = haversineDistance(self, target);
   const bearingDeg = bearing(self, target);
-  const etaLabel = formatEta(etaWalkMinutes(distanceM));
+  // A multi-day walk estimate is noise: past this range show the distance only.
+  const etaLabel = distanceM > MAX_WALK_ETA_M ? '—' : formatEta(etaWalkMinutes(distanceM));
   return {
     bearingDeg,
     distanceM,

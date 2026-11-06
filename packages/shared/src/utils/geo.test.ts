@@ -345,3 +345,18 @@ describe('geo.stageWalkMinutes', () => {
     expect(stageWalkMinutes(stages, 's1', 's2')).toBe(7);
   });
 });
+
+describe('far-distance labels', () => {
+  it('formatDistance switches to km once rounding reaches 1000 m', () => {
+    expect(formatDistance(994)).toBe('990 m');
+    expect(formatDistance(996)).toBe('1.0 km');
+    expect(formatDistance(1000)).toBe('1.0 km');
+  });
+  it('buildPursuit keeps a short ETA and drops a multi-day one', () => {
+    const venue = { latitude: 28.538, longitude: -81.402 };
+    expect(buildPursuit({ latitude: 28.5395, longitude: -81.402 }, venue).etaLabel).toBe('3 min');
+    const far = buildPursuit({ latitude: 40.71, longitude: -74.0 }, venue);
+    expect(far.etaLabel).toBe('—');
+    expect(far.distanceLabel).toMatch(/^1\d{3}\.\d km$/);
+  });
+});
