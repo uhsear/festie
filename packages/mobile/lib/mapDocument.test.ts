@@ -255,4 +255,12 @@ describe('map document — saved archive embedded as bytes', () => {
     });
     expect(hostile).not.toContain('<script>alert(1)');
   });
+
+  it('leaves marker positioning to MapLibre', () => {
+    const html = buildMapHtml(CENTER, RASTER_STYLE, null);
+    for (const cls of ['festie-marker', 'festie-peer', 'festie-sos', 'festie-stage', 'festie-amenity', 'festie-zone-label', 'festie-draft-dot']) {
+      const rule = html.match(new RegExp(`\\.${cls} \\{([^}]*)\\}`))?.[1] ?? '';
+      expect(rule).not.toMatch(/position\s*:/);
+    }
+  });
 });
