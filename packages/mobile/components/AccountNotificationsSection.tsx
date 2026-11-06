@@ -2,6 +2,7 @@ import { View, Text, Alert, Linking } from 'react-native';
 import AppSwitch from './AppSwitch';
 import { Ionicons } from '@expo/vector-icons';
 import { useUIStore } from '@festie/shared/stores';
+import { mapErrorToUserMessage } from '@festie/shared/services';
 import { useMobilePush } from '../hooks/useMobilePush';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -27,7 +28,7 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
       else await unregister();
     } catch (err) {
       haptics.warning();
-      Alert.alert('Notifications', err instanceof Error ? err.message : 'Could not update notifications.');
+      Alert.alert('Notifications', mapErrorToUserMessage(err, 'Could not update notifications.'));
     }
   };
 
