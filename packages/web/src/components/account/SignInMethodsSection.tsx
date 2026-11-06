@@ -15,6 +15,7 @@ import { useIdentities } from '../../lib/useIdentities';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import ProviderButtons from '../auth/ProviderButtons';
 import Button from '../ui/Button';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import Input from '../ui/Input';
 
 /** Lists Password, Google and Apple with Link or Unlink, and lets a provider-only user set a password. */
@@ -28,6 +29,7 @@ export default function SignInMethodsSection() {
   const hasPassword = data?.hasPassword !== false;
   const { ask, reauthDialog } = useReauthPrompt({ hasPassword, linked: identities.map((i) => i.provider) });
   const [busy, setBusy] = useState(false);
+  const [confirmUnlink, setConfirmUnlink] = useState<ProviderName | null>(null);
   const [showSetPassword, setShowSetPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -111,15 +113,17 @@ export default function SignInMethodsSection() {
                     {identity.isPrivateEmail ? PROVIDER_COPY.privateRelay : identity.email}
                   </span>
                 )}
+                {identity && methodCount <= 1 && (
+                  <span className="block text-xs text-text-muted">{PROVIDER_COPY.lastMethod}</span>
+                )}
               </span>
               {identity ? (
                 <Button
                   variant="secondary"
                   size="sm"
                   aria-label={`${PROVIDER_COPY.unlink} ${label}`}
-                  title={methodCount <= 1 ? PROVIDER_COPY.lastMethod : undefined}
                   disabled={offlineMode || busy || methodCount <= 1}
-                  onClick={() => void unlink(provider)}
+                  onClick={() => setConfirmUnlink(provider)}
                 >
                   {PROVIDER_COPY.unlink}
                 </Button>
@@ -174,6 +178,18 @@ export default function SignInMethodsSection() {
           onCredential={link}
         />
       )}
+      <ConfirmDialog
+        open={confirmUnlink !== null}
+        onOpenChange={(o) => !o && setConfirmUnlink(null)}
+        title={confirmUnlink ? `${PROVIDER_COPY.unlink} ${PROVIDER_COPY.providerLabel[confirmUnlink]}?` : ''}
+        confirmLabel={PROVIDER_COPY.unlink}
+        destructive
+        onConfirm={() => {
+          const provider = confirmUnlink;
+          setConfirmUnlink(null);
+          if (provider) void unlink(provider);
+        }}
+      />
       {reauthDialog}
     </section>
   );
