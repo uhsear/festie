@@ -218,6 +218,8 @@ export default function CrewScreen() {
   // Plan index: each chip scrolls its section label to the top of the Plan pane.
   const reduceMotion = useReduceMotion();
   const planScrollRef = useRef<ScrollViewInstance>(null);
+  const moneyScrollRef = useRef<ScrollViewInstance>(null);
+  const expensesY = useRef(0);
   const planSectionY = useRef<{ polls?: number; packing?: number; rides?: number }>({});
 
   // Loads crews and selects the first one; status drives the loading/error/none branches.
@@ -497,6 +499,11 @@ export default function CrewScreen() {
   );
 
   const handleToggleOverlap = async (crewId: string) => {
+    // The crew's lineup is not the one the Schedule tab loaded, so only the compare screen can name its sets.
+    if (activeCrew?.festivalId && activeCrew.festivalId !== currentFestival?.id) {
+      router.push('/crew-compare');
+      return;
+    }
     if (showOverlap) {
       setShowOverlap(false);
       return;
@@ -512,6 +519,7 @@ export default function CrewScreen() {
       await loadOverlap(crewId, festivalId);
       setShowOverlap(true);
     } catch (e) {
+      setError(null);
       setOverlapError(mapErrorToUserMessage(e, 'Couldn’t load schedule overlap'));
     } finally {
       setOverlapBusy(false);
@@ -584,7 +592,9 @@ export default function CrewScreen() {
         text: 'Leave crew',
         style: 'destructive',
         onPress: () => {
-          leaveCrew(crewId).catch(() => {});
+          leaveCrew(crewId)
+            .then(() => showNotice(crewCopy.left(crewName)))
+            .catch(() => {});
         },
       },
     ]);
@@ -597,7 +607,9 @@ export default function CrewScreen() {
         text: 'Delete crew',
         style: 'destructive',
         onPress: () => {
-          deleteCrew(crewId).catch(() => {});
+          deleteCrew(crewId)
+            .then(() => showNotice(crewCopy.deleted(crewName)))
+            .catch(() => {});
         },
       },
     ]);
@@ -1008,7 +1020,10 @@ export default function CrewScreen() {
           scroll; every prior section is still reachable inside a tab. */}
       <CrewTabBar
         activeTab={crewTab}
-        onTabChange={setCrewTab}
+        onTabChange={(tab) => {
+          setError(null);
+          setCrewTab(tab);
+        }}
         badges={{ plan: openPollCount, money: hasUnsettledBalance }}
       />
 
@@ -1474,7 +1489,7 @@ export default function CrewScreen() {
                   return (
                     <View key={o.setId} style={styles.overlapRow}>
                       <View style={styles.overlapInfo}>
-                        <Text style={styles.overlapSet} numberOfLines={1}>
+                        <Text style={styles.overlapSet} numberOfLines={2}>
                           {setLabel(setsById.get(o.setId), o.setId)}
                         </Text>
                         <Text style={styles.overlapMeta}>
@@ -1638,6 +1653,7 @@ export default function CrewScreen() {
         </ScrollView>
       ) : (
         <ScrollView
+          ref={moneyScrollRef}
           style={tabBodyStyle}
           contentContainerStyle={tabScrollStyle}
           contentInsetAdjustmentBehavior="automatic"
@@ -1653,7 +1669,23 @@ export default function CrewScreen() {
               <View style={styles.unsettledDot} accessibilityLabel="You have an unsettled balance" />
             ) : null}
           </View>
-          <CrewExpenses crewId={crew.id} members={members} currentUserId={user.id} />
+          <View
+            onLayout={(e) => {
+              expensesY.current = e.nativeEvent.layout.y;
+            }}
+          >
+            <CrewExpenses
+              crewId={crew.id}
+              members={members}
+              currentUserId={user.id}
+              onFormShown={(y) =>
+                moneyScrollRef.current?.scrollTo({
+                  y: Math.max(0, expensesY.current + y - t.spacing[2]),
+                  animated: !reduceMotion,
+                })
+              }
+            />
+          </View>
         </ScrollView>
       )}
     </View>

@@ -19,7 +19,7 @@ async function lastLocation(): Promise<SosPosition | undefined> {
     const perm = await Location.getForegroundPermissionsAsync();
     if (!perm.granted) return undefined;
     const pos = await Promise.race([
-      Location.getLastKnownPositionAsync().then(
+      Location.getLastKnownPositionAsync({ maxAge: 5 * 60_000 }).then(
         (seed) => seed ?? Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
       ),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
