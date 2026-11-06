@@ -268,7 +268,7 @@ export default function AccountScreen() {
           <View style={styles.rowBody}>
             <Text style={styles.rowTitle}>Vibration</Text>
             <Text style={styles.rowHint} numberOfLines={3}>
-              Taps, saves and clashes
+              {ACCOUNT_COPY.vibrationHint}
             </Text>
           </View>
           <AppSwitch
@@ -388,7 +388,10 @@ export default function AccountScreen() {
     danger: (
       <AccountDangerSection
         hasPassword={identities?.hasPassword ?? true}
-        onDeleted={() => router.replace('/(auth)/login')}
+        onDeleted={() => {
+          void unregisterPushOnSignOut();
+          router.replace('/(auth)/login');
+        }}
       />
     ),
   };
