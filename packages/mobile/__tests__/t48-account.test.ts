@@ -38,3 +38,32 @@ describe('T48 mobile Account: your data and who sees it', () => {
     expect(src).toContain("socket.off('crew:status-updated'");
   });
 });
+
+describe('Account audit fixes', () => {
+  it('owner handover uses ModalSelect, not a capped Alert.alert picker', () => {
+    const src = read('components/AccountDangerSection.tsx');
+    expect(src).toContain('<ModalSelect');
+    expect(src).not.toContain('h.candidates.slice(0, 10)');
+    expect(src).not.toContain('pickOwner');
+  });
+
+  it('history cards allow two lines for artist names and map errors', () => {
+    const src = read('components/AccountHistorySection.tsx');
+    expect(src).not.toMatch(/artistName\} numberOfLines=\{1\}/);
+    expect(src).toContain('mapErrorToUserMessage(err');
+    expect(src).not.toContain('err.message');
+  });
+
+  it('reset share links button is short with a full accessibility label', () => {
+    expect(read('components/AccountPublicScheduleSection.tsx')).toContain('label="Reset" accessibilityLabel={RESET_LABEL}');
+  });
+
+  it('push toggle is disabled offline', () => {
+    const src = read('components/AccountNotificationsSection.tsx');
+    expect(src).toContain('disabled={busy || offlineMode}');
+  });
+
+  it('setting a password confirms with a toast', () => {
+    expect(read('components/AccountPasswordSection.tsx')).toContain("showToast('Password set.");
+  });
+});

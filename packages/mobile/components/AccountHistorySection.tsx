@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '@festie/shared/services';
+import { api, mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
 import { festivalPhase, formatDateSpan } from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
@@ -87,7 +87,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
         if (!cancelled) setData(res);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load history.');
+        if (!cancelled) setError(mapErrorToUserMessage(err, 'Could not load history.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -171,7 +171,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
             accessibilityLabel={`${r.artist}, ${r.festivals} festivals`}
             style={[styles.artistRow, i === seenMost.length - 1 && styles.lastRow]}
           >
-            <Text style={styles.artistName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            <Text style={styles.artistName} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               {r.artist}
             </Text>
             <Text style={styles.artistMeta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
@@ -271,7 +271,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
               <View style={[styles.rank, i < 3 && { borderColor: MEDAL[i] }]}>
                 <Text style={styles.rankText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{i + 1}</Text>
               </View>
-              <Text style={styles.artistName} numberOfLines={1}>
+              <Text style={styles.artistName} numberOfLines={2}>
                 {a.artist}
               </Text>
               <View style={styles.artistMetaWrap}>

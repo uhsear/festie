@@ -13,6 +13,7 @@ import { crewCopy, ownedCrewsForDeletion, type OwnedCrewHandover } from '@festie
 import { api, exportErrorMessage, withReauth } from '@festie/shared/services';
 import { DATA_COPY } from '@festie/shared/constants';
 import { useReauthPrompt } from './admin';
+import { ModalSelect } from './admin/AdminFields';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { shareAccountExport } from '../lib/exportData';
@@ -85,15 +86,6 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
       return !prev;
     });
   };
-
-  const pickOwner = (h: OwnedCrewHandover) =>
-    Alert.alert(crewCopy.newOwnerFor(h.crew.name), undefined, [
-      ...h.candidates.slice(0, 10).map((m) => ({
-        text: memberLabel(m),
-        onPress: () => setChosenOwners((prev) => ({ ...prev, [h.crew.id]: m.userId })),
-      })),
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
 
   const confirmDelete = () => {
     if (hasPassword && !password) {
@@ -191,26 +183,16 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
             <View style={styles.owned}>
               <Text style={styles.calloutTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteOwnedTitle}</Text>
               <Text style={styles.calloutText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteOwnedBody}</Text>
-              {handover.map((h) => {
-                const owner = h.candidates.find((m) => m.userId === ownerFor(h));
-                return (
-                  <TouchableOpacity
-                    key={h.crew.id}
-                    style={styles.ownedRow}
-                    onPress={() => pickOwner(h)}
-                    disabled={submitting}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${h.crew.name}. New owner: ${owner ? memberLabel(owner) : 'none'}. Change`}
-                  >
-                    <View style={styles.rowBody}>
-                      <Text style={styles.rowTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>{h.crew.name}</Text>
-                      <Text style={styles.rowHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>New owner: {owner ? memberLabel(owner) : 'None'}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={t.colors.text.secondary} />
-                  </TouchableOpacity>
-                );
-              })}
+              {handover.map((h) => (
+                <ModalSelect
+                  key={h.crew.id}
+                  label={crewCopy.newOwnerFor(h.crew.name)}
+                  value={ownerFor(h)}
+                  options={h.candidates.map((m) => ({ label: memberLabel(m), value: m.userId }))}
+                  onSelect={(id) => setChosenOwners((prev) => ({ ...prev, [h.crew.id]: id }))}
+                  editable={!submitting}
+                />
+              ))}
             </View>
           ) : null}
           {soloCount > 0 ? <Text style={styles.calloutText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{crewCopy.deleteSolo(soloCount)}</Text> : null}
@@ -357,17 +339,6 @@ const useStyles = makeStyles((t) => ({
   },
   owned: {
     gap: t.spacing[2],
-  },
-  ownedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    minHeight: 56,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.primary,
   },
   input: {
     ...typeStyle('body'),

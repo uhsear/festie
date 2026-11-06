@@ -1,6 +1,7 @@
 import { View, Text, Alert, Linking } from 'react-native';
 import AppSwitch from './AppSwitch';
 import { Ionicons } from '@expo/vector-icons';
+import { useUIStore } from '@festie/shared/stores';
 import { useMobilePush } from '../hooks/useMobilePush';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -16,6 +17,7 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
   const styles = useStyles();
   const haptics = useHaptics();
   const { registered, busy, error, register, unregister, permission, canAskAgain } = push;
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const blocked = permission === 'denied' && !canAskAgain && !registered;
 
   const onToggle = async (next: boolean) => {
@@ -64,9 +66,9 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
         <AppSwitch
           value={registered}
           onValueChange={(v) => void onToggle(v)}
-          disabled={busy}
+          disabled={busy || offlineMode}
           accessibilityLabel="Push notifications"
-          accessibilityState={{ disabled: busy, checked: registered }}
+          accessibilityState={{ disabled: busy || offlineMode, checked: registered }}
         />
         )}
       </View>
