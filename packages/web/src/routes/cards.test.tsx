@@ -109,6 +109,20 @@ describe('CardsView order and earlier row', () => {
     expect(ids()).toEqual(['now', 'late']);
   });
 
+  it('shows ended sets, with no fold row, when nothing is left today', () => {
+    festivalState.sets = [mkSet('early', '14:00', '15:00'), mkSet('mid', '18:00', '19:00')];
+    render(<CardsView />);
+    expect(screen.queryByText(/Earlier today/)).not.toBeInTheDocument();
+    expect(ids()).toEqual(['early', 'mid']);
+  });
+
+  it('does not fold a search behind the earlier row', () => {
+    festivalState.searchQuery = 'early';
+    render(<CardsView />);
+    expect(screen.queryByText(/Earlier today/)).not.toBeInTheDocument();
+    expect(ids()).toEqual(['early', 'mid', 'now', 'late']);
+  });
+
   it('shows no earlier row before the festival starts', () => {
     festivalState.days = [{ index: 0, date: '2026-11-20', label: 'Day 1' }];
     render(<CardsView />);
