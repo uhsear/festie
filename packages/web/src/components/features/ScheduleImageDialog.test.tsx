@@ -135,9 +135,9 @@ describe('ScheduleImageDialog', () => {
     expect(screen.getByRole('button', { name: 'Download printable page' })).toBeInTheDocument();
   });
 
-  it('opens the lock-screen options on Full lineup from the schedule entry, even with no picks', () => {
+  it('opens the lock-screen options on Full day from the schedule entry, even with no picks', () => {
     setup([set('s1', 0, '20:00')], {}, 'full');
-    expect(screen.getByRole('button', { name: 'Full lineup' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Full day' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('group', { name: 'Shape' })).toBeNull();
   });
 });
