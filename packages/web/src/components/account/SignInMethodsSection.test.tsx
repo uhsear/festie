@@ -81,7 +81,18 @@ describe('SignInMethodsSection', () => {
     renderSection();
     const button = await screen.findByRole('button', { name: 'Unlink Google' });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'Add another way to sign in before you remove this one.');
+    expect(screen.getByText('Add another way to sign in before you remove this one.')).toBeInTheDocument();
+  });
+
+  it('asks before unlinking and does nothing on cancel', async () => {
+    const user = userEvent.setup();
+    mockList.mockResolvedValue({ hasPassword: true, identities: [google] });
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Unlink Google' }));
+    expect(await screen.findByText('Unlink Google?')).toBeInTheDocument();
+    expect(mockUnlink).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(mockUnlink).not.toHaveBeenCalled();
   });
 
   it('shows Set a password only when the account has no password', async () => {
@@ -106,6 +117,7 @@ describe('SignInMethodsSection', () => {
 
     renderSection();
     await user.click(await screen.findByRole('button', { name: 'Unlink Google' }));
+    await user.click(await screen.findByRole('button', { name: 'Unlink' }));
 
     await waitFor(() => expect(mockUnlink).toHaveBeenCalledTimes(2));
     expect(mockAsk).toHaveBeenCalledTimes(1);
