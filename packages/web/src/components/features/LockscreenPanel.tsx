@@ -9,7 +9,7 @@ import {
   formatTime,
   setMinuteRange,
 } from '@festie/shared/utils';
-import type { LockscreenMode, LockscreenStyle, LockscreenTheme } from '@festie/shared/utils';
+import type { LockscreenCanvas, LockscreenMode, LockscreenStyle, LockscreenTheme } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
 import type { Priority } from '@festie/shared/types';
 import Button from '../ui/Button';
@@ -23,7 +23,7 @@ const FALLBACK_SIZE = { width: 1290, height: 2796 };
 const PRIORITIES: Priority[] = ['must', 'want-to-see', 'maybe'];
 const MODES: Array<{ value: LockscreenMode; label: string }> = [
   { value: 'picks', label: 'My picks' },
-  { value: 'full', label: 'Full lineup' },
+  { value: 'full', label: 'Full day' },
   { value: 'stages', label: 'Stages' },
   { value: 'crew', label: 'Crew' },
 ];
@@ -32,6 +32,10 @@ const CLOCKS: Array<{ value: Clock; label: string }> = [
   { value: 'normal', label: 'Normal' },
   { value: 'big', label: 'Big clock' },
   { value: 'widgets', label: 'Clock + widgets' },
+];
+const CANVASES: Array<{ value: LockscreenCanvas; label: string }> = [
+  { value: 'lockscreen', label: 'Wallpaper' },
+  { value: 'poster', label: 'Poster' },
 ];
 const HINT_IOS =
   'Open Photos, tap Share, then Use as Wallpaper. Turn off Perspective Zoom and do not pinch. If notifications cover your schedule: Settings › Notifications › Display As › Count.';
@@ -44,6 +48,7 @@ interface SavedOptions {
   lockStyle?: LockscreenStyle;
   priorities?: Priority[];
   clock?: Clock;
+  canvas?: LockscreenCanvas;
 }
 
 /** Look options from the last visit; mode and phone size are never restored. */
@@ -57,6 +62,7 @@ export function readSavedOptions(): SavedOptions {
       lockStyle: o.lockStyle === 'standard' || o.lockStyle === 'poster' ? o.lockStyle : undefined,
       priorities: priorities.length ? priorities : undefined,
       clock: CLOCKS.some((c) => c.value === o.clock) ? (o.clock as Clock) : undefined,
+      canvas: CANVASES.some((c) => c.value === o.canvas) ? (o.canvas as LockscreenCanvas) : undefined,
     };
   } catch (err) {
     console.warn('lock-screen: ignoring saved options', err);
@@ -111,10 +117,11 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   const [theme, setTheme] = useState<LockscreenTheme>(saved.theme ?? 'dark');
   const [lockStyle, setLockStyle] = useState<LockscreenStyle>(saved.lockStyle ?? 'standard');
   const [clock, setClock] = useState<Clock>(saved.clock ?? 'normal');
+  const [canvas, setCanvas] = useState<LockscreenCanvas>(saved.canvas ?? 'lockscreen');
   const [fromNow, setFromNow] = useState(false);
   const [savedAtMs, setSavedAtMs] = useState(() => Date.now());
   const [nowMs] = useState(() => Date.now());
-  const [onePage, setOnePage] = useState(false);
+  const [onePage, setOnePage] = useState(true);
   const [presetId, setPresetId] = useState('auto');
   const [pageIndex, setPageIndex] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -124,11 +131,11 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
 
   useEffect(() => {
     try {
-      localStorage.setItem(OPTIONS_KEY, JSON.stringify({ theme, lockStyle, priorities, clock }));
+      localStorage.setItem(OPTIONS_KEY, JSON.stringify({ theme, lockStyle, priorities, clock, canvas }));
     } catch (err) {
       console.warn('lock-screen: could not save options', err);
     }
-  }, [theme, lockStyle, priorities, clock]);
+  }, [theme, lockStyle, priorities, clock, canvas]);
   const preset = LOCKSCREEN_PRESETS.find((p) => p.id === presetId);
   const size = preset ? { width: preset.width, height: preset.height } : device;
   const isPickMode = mode === 'picks' || mode === 'crew';
@@ -185,13 +192,14 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             width: size.width,
             height: size.height,
             clock,
+            canvas,
             fromMs: fromNow ? nowMs : undefined,
             timeZone: festival.timeZone,
             onePage,
             savedAt: new Date(savedAtMs),
           })
         : null,
-    [festival, sets, stages, days, picks, dayIndex, mode, priorities, stageIds, crewOverlap, crewLoaded, selfUserId, theme, lockStyle, size.width, size.height, clock, fromNow, nowMs, onePage, savedAtMs],
+    [festival, sets, stages, days, picks, dayIndex, mode, priorities, stageIds, crewOverlap, crewLoaded, selfUserId, theme, lockStyle, size.width, size.height, clock, canvas, fromNow, nowMs, onePage, savedAtMs],
   );
 
   // One click to fit a multi-image picks day on one image by leaving out Maybe picks.
@@ -222,11 +230,12 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         width: size.width,
         height: size.height,
         clock,
+        canvas,
         fromMs: fromNow ? nowMs : undefined,
         timeZone: festival.timeZone,
         savedAt: new Date(savedAtMs),
       }).pages.length === 1,
-    [festival, dayIndex, maybeCount, model, sets, stages, days, picks, mode, priorities, theme, lockStyle, size.width, size.height, clock, fromNow, nowMs, savedAtMs],
+    [festival, dayIndex, maybeCount, model, sets, stages, days, picks, mode, priorities, theme, lockStyle, size.width, size.height, clock, canvas, fromNow, nowMs, savedAtMs],
   );
 
   if (!festival) return null;
@@ -376,17 +385,32 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         </label>
       )}
 
-      <span id="lockscreen-clock" className="block text-sm text-text-secondary">
-        Your lock screen
+      <span id="lockscreen-canvas" className="block text-sm text-text-secondary">
+        Made for
       </span>
-      <div role="group" aria-labelledby="lockscreen-clock" className="flex flex-wrap gap-2">
-        {CLOCKS.map((c) => (
-          <button key={c.value} type="button" aria-pressed={clock === c.value} className={optionClass(clock === c.value)} onClick={() => setClock(c.value)}>
+      <div role="group" aria-labelledby="lockscreen-canvas" className="flex flex-wrap gap-2">
+        {CANVASES.map((c) => (
+          <button key={c.value} type="button" aria-pressed={canvas === c.value} className={optionClass(canvas === c.value)} onClick={() => setCanvas(c.value)}>
             {c.label}
           </button>
         ))}
       </div>
-      <p className="text-xs text-text-muted">Pick Big clock or Clock + widgets if your clock is large or has widgets under it.</p>
+
+      {canvas === 'lockscreen' && (
+        <>
+        <span id="lockscreen-clock" className="block text-sm text-text-secondary">
+          Your lock screen
+        </span>
+        <div role="group" aria-labelledby="lockscreen-clock" className="flex flex-wrap gap-2">
+          {CLOCKS.map((c) => (
+            <button key={c.value} type="button" aria-pressed={clock === c.value} className={optionClass(clock === c.value)} onClick={() => setClock(c.value)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-text-muted">Pick Big clock or Clock + widgets if your clock is large or has widgets under it.</p>
+        </>
+      )}
 
       <span id="lockscreen-look" className="block text-sm text-text-secondary">
         Look
@@ -398,17 +422,19 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
           </button>
         ))}
       </div>
-      <div role="group" aria-label="Look" className="flex flex-wrap gap-2">
-        {(['standard', 'poster'] as const).map((l) => (
-          <button key={l} type="button" aria-pressed={lockStyle === l} className={optionClass(lockStyle === l)} onClick={() => setLockStyle(l)}>
-            {l === 'standard' ? 'Standard' : 'Poster'}
-          </button>
-        ))}
-      </div>
+      {canvas === 'lockscreen' && (
+        <div role="group" aria-label="Look" className="flex flex-wrap gap-2">
+          {(['standard', 'poster'] as const).map((l) => (
+            <button key={l} type="button" aria-pressed={lockStyle === l} className={optionClass(lockStyle === l)} onClick={() => setLockStyle(l)}>
+              {l === 'standard' ? 'Plain' : 'Glow'}
+            </button>
+          ))}
+        </div>
+      )}
       {(mode === 'full' || mode === 'stages') && (
         <label className="flex items-center gap-2 text-sm text-text-secondary">
-          <input type="checkbox" checked={onePage} onChange={(e) => setOnePage(e.target.checked)} />
-          Fit on one image
+          <input type="checkbox" checked={!onePage} onChange={(e) => setOnePage(!e.target.checked)} />
+          Split long days into 2 images
         </label>
       )}
 
