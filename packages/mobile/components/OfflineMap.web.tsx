@@ -828,7 +828,6 @@ export default function OfflineMap({
       const color = p.color || '#19e3d3';
       const el = document.createElement('div');
       el.style.cssText = [
-        'position:relative',
         'display:flex',
         'align-items:center',
         'justify-content:center',
@@ -942,10 +941,6 @@ export default function OfflineMap({
       const initials = getInitials(peer.username || 'User') || '?';
       const el = document.createElement('div');
       el.className = stale ? 'festie-peer-marker festie-peer-marker--stale' : 'festie-peer-marker';
-      // This export ships no components.css, so anchor the heading caret + stale
-      // chip to the avatar explicitly (relative positioning) rather than the
-      // MapLibre-transformed wrapper.
-      el.style.position = 'relative';
       el.setAttribute('role', 'button');
       el.setAttribute('tabindex', '0');
       el.setAttribute('aria-label', `${peer.username} — ${stale ? `last seen ${rel}` : `live location, ${rel}`}`);
