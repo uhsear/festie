@@ -8,7 +8,7 @@ import { useActiveSos, useLiveLocationCrewSync } from '@festie/shared/hooks';
 import { sosHeadline, sosSeenLabel, sosWhen } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
-import { CREW_MEET_HREF } from '../lib/dayOfRoutes';
+import { sosBannerHref } from '../lib/dayOfRoutes';
 import AppPressable from './AppPressable';
 
 interface SosBannerProps {
@@ -22,7 +22,7 @@ interface SosBannerProps {
  * App-wide SOS banner, mounted at the root under the OfflineBanner. While any
  * crew member's SOS is active it shows on every screen in filled coral
  * (coralStrong behind white, the AA-safe fill), names who and when, and opens
- * the crew logistics tab (SOS, live map, meeting points) in one tap. It has no
+ * the on-device compass at a lone raiser, else the crew logistics tab, in one tap. It has no
  * dismiss control: it clears when the SOS does. Screen readers hear it once
  * per change in who raised an SOS, not on every minute tick.
  */
@@ -51,14 +51,16 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   const newest = entries[0];
   if (!newest) return null;
   const own = newest.userId === selfId;
+  const href = sosBannerHref(entries, selfId);
+  const toCompass = typeof href !== 'string' && href.pathname === '/compass';
   const when = sosWhen(entries) + (own ? ` · ${sosSeenLabel(newest)}` : '');
 
   return (
     <AppPressable
       style={[s.banner, { paddingTop: (padTop ? insets.top : 0) + t.spacing[2] }]}
-      onPress={() => router.push(CREW_MEET_HREF)}
+      onPress={() => router.push(href)}
       accessibilityRole="button"
-      accessibilityLabel={`${headline}, ${when}. Open crew to find them`}
+      accessibilityLabel={`${headline}, ${when}. ${toCompass ? 'Open the compass to find them' : 'Open crew to find them'}`}
       rippleColor={t.colors.shade[9]}
     >
       <Ionicons name="alert-circle" size={iconSize.md} color={t.colors.text.onAccent} />
