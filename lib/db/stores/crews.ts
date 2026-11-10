@@ -1626,6 +1626,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     // Replaces the member's full answer set, so a replay of the same body is a no-op.
     async replaceMine(crewId: string, userId: string, days: Array<{ dayIndex: number; answer: string }>) {
       return withTransaction(pool, async (client) => {
+        // Serialize concurrent PUTs (double tap): a second writer waits here, so its DELETE sees the first's rows.
+        await client.query('SELECT 1 FROM crew_members WHERE crew_id = $1 AND user_id = $2 FOR UPDATE', [crewId, userId]);
         await client.query('DELETE FROM crew_member_days WHERE crew_id = $1 AND user_id = $2', [crewId, userId]);
         if (days.length) {
           await client.query(

@@ -114,7 +114,7 @@ describe('routes/crew-days.ts', () => {
     assert.deepEqual(second.body.data.days, first.body.data.days);
   });
 
-  test('a repeated dayIndex is 400', async () => {
+  test('a repeated dayIndex keeps the last answer', async () => {
     const { app, crewDays } = await build();
     const res = await request(app)
       .put('/crew-1/days')
@@ -124,10 +124,9 @@ describe('routes/crew-days.ts', () => {
           { dayIndex: 1, answer: 'no' },
         ],
       });
-    assert.equal(res.status, 400);
-    assert.equal(res.body.error.code, 'VALIDATION_ERROR');
-    assert.equal(res.body.error.message, 'Each day can appear only once.');
-    assert.equal(crewDays.replaceMine.mock.callCount(), 0);
+    assert.equal(res.status, 200);
+    assert.equal(crewDays.replaceMine.mock.callCount(), 1);
+    assert.deepEqual(crewDays.replaceMine.mock.calls[0]!.arguments[2], [{ dayIndex: 1, answer: 'no' }]);
   });
 
   test('an unknown answer or a dayIndex above 60 is 400', async () => {

@@ -107,6 +107,30 @@ describe('Integration — crew days and "I\'ll be there"', { concurrency: 1 }, (
     assert.deepEqual(points[0].coming, [bob.user.id]);
   });
 
+  test('concurrent PUTs and a repeated dayIndex are 200 and leave the last body', async () => {
+    const { server, crew, alice, bob } = await crewOfThree();
+    const put = (token: string, days: any[]) =>
+      server.request.put(`/api/v1/crews/${crew.id}/days`).set('x-user-token', token).send({ days });
+    const bodyA = [
+      { dayIndex: 0, answer: 'going' },
+      { dayIndex: 1, answer: 'no' },
+    ];
+    const results = await Promise.all([put(bob.token, bodyA), put(bob.token, bodyA), put(bob.token, bodyA)]);
+    assert.deepEqual(
+      results.map((r) => r.status),
+      [200, 200, 200],
+    );
+    const repeated = await put(bob.token, [
+      { dayIndex: 1, answer: 'going' },
+      { dayIndex: 1, answer: 'maybe' },
+    ]);
+    assert.equal(repeated.status, 200);
+    const list = (
+      await server.request.get(`/api/v1/crews/${crew.id}/days`).set('x-user-token', alice.token).expect(200)
+    ).body.data.days;
+    assert.deepEqual(list, [{ userId: bob.user.id, dayIndex: 1, answer: 'maybe' }]);
+  });
+
   test("leaving the crew clears that member's days and taps", async () => {
     const { server, crew, point, bob, charlie } = await crewOfThree();
     await answerAndTap(server, crew.id, point.id, bob.token);

@@ -1266,7 +1266,7 @@ export type paths = {
                         };
                     };
                 };
-                /** @description A repeated day, or a day that is not part of this festival */
+                /** @description A day that is not part of this festival */
                 400: {
                     headers: {
                         [name: string]: unknown;
