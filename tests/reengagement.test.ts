@@ -233,7 +233,7 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
   it('countLineupDrop returns the fresh count and sends nothing', async () => {
     const { triggers, sends } = build(mockPool('North Coast', ['p1', 'p2']));
     const r = await triggers.countLineupDrop('fest-2027');
-    assert.deepEqual(r, { festivalName: 'North Coast', recipients: 2 });
+    assert.deepEqual(r, { festivalName: 'North Coast', recipients: 2, priorAttendees: 2 });
     assert.equal(sends.length, 0);
   });
 

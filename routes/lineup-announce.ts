@@ -55,13 +55,14 @@ export default function createLineupAnnounceRoute(deps: any) {
         // The push deep-links to the festival, which attendees cannot open while it is a draft.
         return sendError(res, 409, 'Publish the festival before you announce its lineup.', ErrorCodes.INVALID_INPUT);
       }
-      const { festivalName, recipients } = await reengagementExecutor.countLineupDrop(festivalId);
+      const { festivalName, recipients, priorAttendees } = await reengagementExecutor.countLineupDrop(festivalId);
       if (!festivalName) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-      if (recipients === 0) {
+      // Push may be fully deduped while email still retries (its own dedup key), so only block when nobody is eligible.
+      if (priorAttendees === 0) {
         return sendError(
           res,
           400,
-          'No one to notify. Everyone who follows this festival or went to an earlier edition already got this announcement.',
+          'No one to notify. No one follows this festival or went to an earlier edition.',
           ErrorCodes.INVALID_INPUT,
         );
       }
