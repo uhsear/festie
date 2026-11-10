@@ -172,6 +172,12 @@ function configureMiddleware(app: Application, ctx: any) {
   app.disable('x-powered-by');
   app.set('trust proxy', config.TRUST_PROXY);
 
+  // Sentry tracing adds per-layer finish/close listeners on top of ours; raise the cap so Node's MaxListenersExceededWarning stays quiet.
+  app.use((_req: any, res: any, next: any) => {
+    res.setMaxListeners(20);
+    next();
+  });
+
   // ── Sentry per-request isolation scope ──────────────────────────────────
   // Mounted FIRST so its wrapped next() covers every middleware, route, and
   // the error handler that follow (see lib/sentry.ts requestScope() for why
