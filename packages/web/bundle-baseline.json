@@ -1,0 +1,29 @@
+{
+  "compression": "gzip",
+  "groups": {
+    "assets/index-<hash>.js": {
+      "bytes": 48183,
+      "files": 1
+    },
+    "assets/festie-shared-<hash>.js": {
+      "bytes": 124869,
+      "files": 1
+    },
+    "assets/react-core-<hash>.js": {
+      "bytes": 65019,
+      "files": 1
+    },
+    "assets/router-<hash>.js": {
+      "bytes": 37653,
+      "files": 1
+    },
+    "assets/**/*.js": {
+      "bytes": 759323,
+      "files": 82
+    },
+    "assets/**/*.css": {
+      "bytes": 35472,
+      "files": 2
+    }
+  }
+}
