@@ -15,7 +15,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "test-storybook": "test-storybook",
-    "test-storybook:ci": "concurrently -k -s first -n SB,A11Y \"http-server storybook-static -p 6006 -a 127.0.0.1 --silent\" \"wait-on tcp:127.0.0.1:6006 && test-storybook --url http://127.0.0.1:6006 --maxWorkers=2\""
+    "test-storybook:ci": "node .storybook/a11y-baseline.mjs clean && concurrently -k -s first -n SB,A11Y \"http-server storybook-static -p 6006 -a 127.0.0.1 --silent\" \"wait-on tcp:127.0.0.1:6006 && test-storybook --url http://127.0.0.1:6006 --maxWorkers=2\" && node .storybook/a11y-baseline.mjs check"
   },
   "dependencies": {
     "@festie/shared": "workspace:*",

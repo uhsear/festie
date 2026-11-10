@@ -1,6 +1,8 @@
 import type { TestRunnerConfig } from '@storybook/test-runner';
 import { getStoryContext } from '@storybook/test-runner';
 import { injectAxe, configureAxe, getViolations } from 'axe-playwright';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 
 /**
  * CI a11y enforcement for Storybook stories.
@@ -8,13 +10,17 @@ import { injectAxe, configureAxe, getViolations } from 'axe-playwright';
  * The `@storybook/addon-a11y` addon already runs axe inside the Storybook UI so
  * authors *see* violations while developing. This test-runner hook is what makes
  * a PR actually FAIL on them: axe is injected on every story and the run throws
- * on `serious` + `critical` WCAG violations. `minor`/`moderate` are logged for
- * triage but do not fail yet — tighten `GATE` once the tail is clean.
+ * on `serious` + `critical` WCAG violations. `minor`/`moderate` are ratcheted: each
+ * story's per-rule node counts go to a result file (workers run in parallel), and
+ * `.storybook/a11y-baseline.mjs check` fails when any count exceeds
+ * `.storybook/a11y-baseline.json`. New stories start at zero.
  *
  * Each story's own `parameters.a11y` (disable + rule overrides) is honoured, so
  * a story can opt out or relax a specific rule the same way it does in the UI.
  */
 const GATE = new Set(['serious', 'critical']);
+const RATCHET = new Set(['minor', 'moderate']);
+const RESULTS_DIR = process.env.A11Y_RESULTS_DIR ?? path.resolve(process.cwd(), '.a11y-results');
 
 const config: TestRunnerConfig = {
   async preVisit(page) {
@@ -35,6 +41,11 @@ const config: TestRunnerConfig = {
       // eslint-disable-next-line no-console
       console.log(`[a11y] ${context.id}: ${summary}`);
     }
+
+    const counts: Record<string, number> = {};
+    for (const v of violations) if (RATCHET.has(v.impact ?? '')) counts[v.id] = v.nodes.length;
+    mkdirSync(RESULTS_DIR, { recursive: true });
+    writeFileSync(path.join(RESULTS_DIR, `${context.id}.json`), JSON.stringify({ id: context.id, counts }));
 
     const gating = violations.filter((v) => GATE.has(v.impact ?? ''));
     if (gating.length) {
