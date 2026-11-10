@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Crew, Festival } from '@festie/shared/types';
@@ -175,6 +175,14 @@ describe('CrewSelector', () => {
       makeCrew({ id: 'c-now', name: 'New Crew', festivalId: 'f-now' }),
     ];
     const props = { ...defaultProps, crews, selectedCrewId: 'c-now', festivals, currentFestivalId: 'f-now' };
+    // Pin the clock inside EDC so the "current" group never ages into a dimmed past one.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-07T12:00:00Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
     it('renders labelled groups with the current festival first and past ones dimmed', async () => {
       const user = userEvent.setup();
