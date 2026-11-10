@@ -12,9 +12,12 @@
  *   [star]/5 * * * * cd /path/to/festie && node scripts/error-rate-alert.js >> logs/alert.log 2>&1
  *
  * Environment:
- *   ALERT_WEBHOOK_URL   - POST webhook for alerts (required for actual notifications)
+ *   ALERT_WEBHOOK_URL   - POST webhook for alerts (required for actual notifications).
+ *                         When unset, falls back to https://ntfy.sh/<topic> with the topic
+ *                         read from ~/.config/festie-ntfy-topic; no file = log only.
  *   ALERT_THRESHOLD     - Error count threshold per window (default: 10)
  *   ALERT_COOLDOWN_MIN  - Minutes between repeat alerts (default: 30)
+ *   ALERT_MEMORY_MB     - Per-instance memory (MB) that triggers an alert (default: 600)
  *   HEALTH_URL          - Health endpoint URL (default: http://127.0.0.1:4000/api/health)
  */
 
@@ -39,7 +42,18 @@ try {
 
 // ── Config ──
 const HEALTH_URL = process.env.HEALTH_URL || 'http://127.0.0.1:4000/api/health';
-const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL || '';
+const ALERT_MEMORY_MB = parseInt(process.env.ALERT_MEMORY_MB, 10) || 600;
+
+// Same server and JSON body the other host scripts post to ntfy with.
+function ntfyUrlFromTopicFile() {
+  try {
+    const topic = fs.readFileSync(path.join(require('os').homedir(), '.config', 'festie-ntfy-topic'), 'utf8').trim();
+    return topic ? `https://ntfy.sh/${encodeURIComponent(topic)}` : '';
+  } catch {
+    return '';
+  }
+}
+const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL || ntfyUrlFromTopicFile();
 const ALERT_THRESHOLD = parseInt(process.env.ALERT_THRESHOLD, 10) || 10;
 const ALERT_COOLDOWN_MIN = parseInt(process.env.ALERT_COOLDOWN_MIN, 10) || 30;
 const LOG_DIR = path.join(__dirname, '..', 'logs');
@@ -109,7 +123,7 @@ function checkPM2Processes() {
     const procs = JSON.parse(output);
     const fpProcs = procs.filter((p) => p.name === 'festie');
     const stopped = fpProcs.filter((p) => p.pm2_env.status !== 'online');
-    const highMem = fpProcs.filter((p) => (p.monit?.memory || 0) > 200 * 1024 * 1024); // >200MB
+    const highMem = fpProcs.filter((p) => (p.monit?.memory || 0) > ALERT_MEMORY_MB * 1024 * 1024);
     return {
       total: fpProcs.length,
       online: fpProcs.length - stopped.length,
@@ -128,7 +142,7 @@ function sendAlert(message) {
   console.log(`[ALERT ${timestamp}] ${message}`);
 
   if (!ALERT_WEBHOOK_URL) {
-    console.log('[ALERT] No ALERT_WEBHOOK_URL configured — logging only');
+    console.log('[ALERT] No ALERT_WEBHOOK_URL or ~/.config/festie-ntfy-topic configured — logging only');
     return Promise.resolve();
   }
 
@@ -170,7 +184,7 @@ async function main() {
     alerts.push(`${pm2.stopped}/${pm2.total} PM2 instances are NOT online`);
   }
   if (pm2.highMemory > 0) {
-    alerts.push(`${pm2.highMemory}/${pm2.total} instances over 200MB (avg: ${pm2.avgMemoryMB}MB)`);
+    alerts.push(`${pm2.highMemory}/${pm2.total} instances over ${ALERT_MEMORY_MB}MB (avg: ${pm2.avgMemoryMB}MB)`);
   }
 
   // 4. Decide whether to alert
