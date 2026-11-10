@@ -91,8 +91,70 @@ describe('Button', () => {
   });
 
   describe('loading state', () => {
-    it('disables button when loading', () => {
+    it('marks the button aria-disabled and busy, not natively disabled, when loading', () => {
       render(<Button isLoading>Save</Button>);
+      const btn = screen.getByRole('button');
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('aria-busy', 'true');
+      expect(btn).not.toBeDisabled();
+    });
+
+    it('stays focusable when loading', async () => {
+      const user = userEvent.setup();
+      render(<Button isLoading>Save</Button>);
+      await user.tab();
+      expect(screen.getByRole('button')).toHaveFocus();
+    });
+
+    it('does not fire onClick when loading', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      render(
+        <Button isLoading onClick={onClick}>
+          Save
+        </Button>,
+      );
+      await user.click(screen.getByRole('button'));
+      screen.getByRole('button').focus();
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('does not submit the form when loading', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      render(
+        <form onSubmit={onSubmit}>
+          <Button type="submit" isLoading>
+            Save
+          </Button>
+        </form>,
+      );
+      await user.click(screen.getByRole('button'));
+      screen.getByRole('button').focus();
+      await user.keyboard('{Enter}');
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('submits the form when not loading', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+      render(
+        <form onSubmit={onSubmit}>
+          <Button type="submit">Save</Button>
+        </form>,
+      );
+      await user.click(screen.getByRole('button'));
+      expect(onSubmit).toHaveBeenCalledOnce();
+    });
+
+    it('keeps native disabled when both disabled and loading', () => {
+      render(
+        <Button disabled isLoading>
+          Save
+        </Button>,
+      );
       expect(screen.getByRole('button')).toBeDisabled();
     });
 
