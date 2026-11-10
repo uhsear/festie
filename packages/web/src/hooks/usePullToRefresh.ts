@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useHaptics } from './useHaptics';
 
+const AXIS_LOCK_PX = 8;
+const PROGRESS_LEVELS = 20;
+
 export interface UsePullToRefreshReturn {
   pullProgress: number;
   isRefreshing: boolean;
@@ -9,6 +12,7 @@ export interface UsePullToRefreshReturn {
     onTouchStart: (e: React.TouchEvent) => void;
     onTouchMove: (e: React.TouchEvent) => void;
     onTouchEnd: (e: React.TouchEvent) => void;
+    onTouchCancel: (e: React.TouchEvent) => void;
   };
 }
 
@@ -60,49 +64,76 @@ export function usePullToRefresh({
   const [pullProgress, setPullProgress] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const startXRef = useRef(0);
   const startYRef = useRef(0);
   const currentYRef = useRef(0);
-  const isDraggingRef = useRef(false);
+  // idle: not armed; armed: finger down, direction undecided; pulling: vertical lock
+  const phaseRef = useRef<'idle' | 'armed' | 'pulling'>('idle');
+  const lastProgressRef = useRef(0);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Check if element is scrolled to top
-  const isAtTop = useCallback((element: Element): boolean => {
-    return element.scrollTop === 0;
+  // Render at most ~20 times per pull instead of once per touchmove
+  const publishProgress = useCallback((progress: number) => {
+    const stepped = Math.round(progress * PROGRESS_LEVELS) / PROGRESS_LEVELS;
+    if (stepped === lastProgressRef.current) return;
+    lastProgressRef.current = stepped;
+    setPullProgress(stepped);
   }, []);
 
+  const cancelGesture = useCallback(() => {
+    if (phaseRef.current === 'idle') return;
+    phaseRef.current = 'idle';
+    publishProgress(0);
+  }, [publishProgress]);
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // Only track if at top of scroll
-    const target = e.currentTarget as Element;
-    if (!isAtTop(target)) {
-      isDraggingRef.current = false;
-      return;
+    phaseRef.current = 'idle';
+    // An inner scroller that is scrolled owns the gesture, as does the wrapper itself
+    const wrapper = e.currentTarget as Element;
+    for (let el = e.target as Element | null; el; el = el.parentElement) {
+      if (el.scrollTop !== 0) return;
+      if (el === wrapper) break;
     }
 
-    startYRef.current = e.touches[0]?.clientY || 0;
+    const touch = e.touches[0];
+    startXRef.current = touch?.clientX || 0;
+    startYRef.current = touch?.clientY || 0;
     currentYRef.current = startYRef.current;
-    isDraggingRef.current = true;
-  }, [isAtTop]);
+    phaseRef.current = 'armed';
+  }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isDraggingRef.current) return;
+    if (phaseRef.current === 'idle') return;
 
-    currentYRef.current = e.touches[0]?.clientY || 0;
-    const distance = Math.max(0, currentYRef.current - startYRef.current);
+    const touch = e.touches[0];
+    const dx = (touch?.clientX || 0) - startXRef.current;
+    const dy = (touch?.clientY || 0) - startYRef.current;
 
-    // Calculate progress (0-1) up to threshold, capped at 1
-    const progress = Math.min(distance / threshold, 1);
-    setPullProgress(progress);
-  }, [threshold]);
+    if (phaseRef.current === 'armed') {
+      if (Math.hypot(dx, dy) < AXIS_LOCK_PX) return;
+      // Horizontal or upward drags belong to the content, not to refresh
+      if (Math.abs(dx) > Math.abs(dy) || dy <= 0) {
+        phaseRef.current = 'idle';
+        return;
+      }
+      phaseRef.current = 'pulling';
+    }
+
+    currentYRef.current = startYRef.current + dy;
+    publishProgress(Math.min(Math.max(0, dy) / threshold, 1));
+  }, [threshold, publishProgress]);
 
   const handleTouchEnd = useCallback(() => {
-    if (!isDraggingRef.current) return;
+    const wasPulling = phaseRef.current === 'pulling';
+    phaseRef.current = 'idle';
+    if (!wasPulling) return;
 
     const distance = Math.max(0, currentYRef.current - startYRef.current);
-    isDraggingRef.current = false;
 
     // Trigger refresh if threshold met
     if (distance >= threshold) {
       setIsRefreshing(true);
+      lastProgressRef.current = 1;
       setPullProgress(1);
       success(); // Haptic feedback
 
@@ -119,13 +150,14 @@ export function usePullToRefresh({
       // Auto-reset after delay
       resetTimeoutRef.current = setTimeout(() => {
         setIsRefreshing(false);
+        lastProgressRef.current = 0;
         setPullProgress(0);
       }, resetDelay);
     } else {
       // Reset if threshold not met
-      setPullProgress(0);
+      publishProgress(0);
     }
-  }, [threshold, queryKeys, queryClient, success, resetDelay]);
+  }, [threshold, queryKeys, queryClient, success, resetDelay, publishProgress]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -143,6 +175,7 @@ export function usePullToRefresh({
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
+      onTouchCancel: cancelGesture,
     },
   };
 }
