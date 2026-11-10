@@ -711,7 +711,7 @@ export const meetingPointComingSchema = z.object({ coming: z.boolean() });
 export type MeetingPointComingInput = z.infer<typeof meetingPointComingSchema>;
 
 // 090: the member's full set of day answers. A day left out is cleared; `days: []` clears all.
-// The route rejects a dayIndex at or past the festival's day count.
+// The route rejects a dayIndex at or past the festival's day count. A repeated dayIndex: last wins.
 export const crewDaysSchema = z
   .object({
     days: z
@@ -723,9 +723,8 @@ export const crewDaysSchema = z
       )
       .max(61),
   })
-  .refine((body) => new Set(body.days.map((d) => d.dayIndex)).size === body.days.length, {
-    message: 'Each day can appear only once.',
-  });
+  // A repeated dayIndex keeps the last answer: a duplicate would collide on the primary key.
+  .transform((body) => ({ days: [...new Map(body.days.map((d) => [d.dayIndex, d])).values()] }));
 export type CrewDaysInput = z.infer<typeof crewDaysSchema>;
 
 // ── Validation middleware factory ───────────────────────────────────
