@@ -279,6 +279,7 @@ describe('createReengagementTriggers.sendWrapReady', () => {
     attendeesThrow = false,
     seen = new Set<string>(),
     existsThrows = false,
+    existsCalls = [] as any[],
   }: any = {}) {
     const sends: any[] = [];
     const notificationService = {
@@ -304,9 +305,11 @@ describe('createReengagementTriggers.sendWrapReady', () => {
       users: { getByIds: async () => new Map() },
       notificationLog: {
         existsForEvent: async () => false,
-        existsForEvents: async (uids: string[]) => {
+        existsForEvents: async (uids: string[], _type: string, key: string) => {
+          existsCalls.push({ uids, key });
           if (existsThrows) throw new Error('dedup read down');
-          return new Set(uids.filter((u) => seen.has(u)));
+          // Push rows exist for `seen`; the '#email' key has none.
+          return new Set(key.endsWith('#email') ? [] : uids.filter((u) => seen.has(u)));
         },
         insert: async () => {},
       },
@@ -359,6 +362,20 @@ describe('createReengagementTriggers.sendWrapReady', () => {
     const r = await triggers.sendWrapReady('f1');
     assert.equal(sends.length, 0);
     assert.equal(r.sent, 0);
+  });
+
+  it('email dedups on its own key: push-logged users still reach the email path', async () => {
+    const existsCalls: any[] = [];
+    const { triggers, sends } = build({
+      festival: { name: 'FK', days: [{ date: PAST }] },
+      attendeeIds: ['u1', 'u2'],
+      seen: new Set(['u1', 'u2']),
+      existsCalls,
+    });
+    await triggers.sendWrapReady('f1');
+    assert.equal(sends.length, 0);
+    const emailCall = existsCalls.find((c) => c.key === 'wrap:f1#email');
+    assert.deepEqual(emailCall?.uids, ['u1', 'u2']);
   });
 
   it('a throwing attendee lookup is swallowed → festival over but no attendees', async () => {
