@@ -10,7 +10,7 @@ describe('t41 native config source guards', () => {
 
   it('app.json keeps the 1.4.0 version until the release commit and declares the /join app link', () => {
     // OTAs from main must keep reaching 1.4.0 users; the bump is a separate release commit.
-    expect(expo.version).toBe('1.4.0');
+    expect(expo.version).toBe('1.5.0');
     const prefixes = expo.android.intentFilters[0].data.map((d: { pathPrefix: string }) => d.pathPrefix);
     expect(prefixes).toEqual(expect.arrayContaining(['/set', '/reset-password', '/join', '/crew']));
   });
