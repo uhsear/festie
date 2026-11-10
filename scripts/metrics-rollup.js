@@ -1,27 +1,28 @@
 #!/usr/bin/env node
-'use strict';
 
 /**
  * Metrics rollup cron — runs hourly to persist in-memory metrics to PostgreSQL.
  * Cron: 0 * * * * cd /path/to/festie && node scripts/metrics-rollup.js
  */
 
-const { Pool } = require('pg');
+import http from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+import pg from 'pg';
 
-// Load .env if DATABASE_URL not already set (cron doesn't inherit env)
-if (!process.env.DATABASE_URL) {
-  const envPath = require('path').join(__dirname, '..', '.env');
-  const envContent = require('fs').readFileSync(envPath, 'utf8');
-  const match = envContent.match(/^DATABASE_URL=(.*)$/m);
-  if (match) process.env.DATABASE_URL = match[1].trim();
-}
+const { Pool } = pg;
+
+// Load .env the way the app does (cron doesn't inherit env). Never overrides a
+// var already set, so an explicit DATABASE_URL still wins. The root package is
+// "type": "module", so this file is ESM and has no require/__dirname.
+dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env'), quiet: true });
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost/festival_planner';
 
 async function rollup() {
   const pool = new Pool({ connectionString: DATABASE_URL, max: 2 });
   try {
     // Fetch current metrics from the health endpoint
-    const http = require('http');
     // Use internal metrics endpoint (localhost-only, no auth required)
     const data = await new Promise((resolve, reject) => {
       const req = http.get('http://127.0.0.1:4000/api/internal/metrics-json', (res) => {
