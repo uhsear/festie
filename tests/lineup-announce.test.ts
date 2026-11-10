@@ -10,7 +10,12 @@ import express from 'express';
 import request from 'supertest';
 import createLineupAnnounceRoute from '../routes/lineup-announce';
 
-function build({ recipients = 2, priorAttendees = recipients, name = 'Test Fest 2026', publishedAt = '2026-01-01T00:00:00.000Z' as string | null } = {}) {
+function build({
+  recipients = 2,
+  priorAttendees,
+  name = 'Test Fest 2026',
+  publishedAt = '2026-01-01T00:00:00.000Z' as string | null,
+}: { recipients?: number; priorAttendees?: number; name?: string; publishedAt?: string | null } = {}) {
   const calls = { sendLineupDrop: 0, audit: [] as any[] };
   const deps: any = {
     express,
@@ -29,7 +34,7 @@ function build({ recipients = 2, priorAttendees = recipients, name = 'Test Fest 
         calls.sendLineupDrop += 1;
       },
     },
-    reengagementExecutor: { countLineupDrop: async () => ({ festivalName: name, recipients, priorAttendees }) },
+    reengagementExecutor: { countLineupDrop: async () => ({ festivalName: name, recipients, priorAttendees: priorAttendees ?? recipients }) },
   };
   const app = express();
   app.use('/api/v1/admin/festivals', createLineupAnnounceRoute(deps));
