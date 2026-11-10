@@ -333,8 +333,9 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   /** Dry run for the admin "Announce lineup" button: how many people would be notified. */
   async function countLineupDrop(festivalId: string) {
     const r = await resolveLineupDropRecipients(festivalId);
-    if ('reason' in r) return { festivalName: '', recipients: 0, reason: r.reason };
-    return { festivalName: r.festivalName, recipients: r.fresh.length };
+    if ('reason' in r) return { festivalName: '', recipients: 0, priorAttendees: 0, reason: r.reason };
+    // priorAttendees counts everyone sendLineupDrop emails; recipients counts only push-fresh users.
+    return { festivalName: r.festivalName, recipients: r.fresh.length, priorAttendees: r.priorIds.length };
   }
 
   async function sendLineupDrop(festivalId: string) {
