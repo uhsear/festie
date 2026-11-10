@@ -191,8 +191,9 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       data: { festivalId, eventKey, deepLink },
     }));
 
-    // Email (best-effort; degrades when RESEND_API_KEY unset).
-    const emailSent = await emailFanout(fresh, 'wrap_ready', eventKey, async (user) =>
+    // Email (best-effort; degrades when RESEND_API_KEY unset). Gets the full list, not
+    // `fresh`: its own '#email' dedup must decide, so a failed email retries after push logged.
+    const emailSent = await emailFanout(attendeeIds, 'wrap_ready', eventKey, async (user) =>
       sendWrapReadyEmail({
         to: user.email,
         username: user.username,
@@ -342,7 +343,6 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const { festivalName, priorIds, fresh } = r;
     if (priorIds.length === 0) return { sent: 0, reason: 'no_prior_attendees' };
     const eventKey = `lineup:${festivalId}`;
-    if (fresh.length === 0) return { sent: 0, reason: 'all_deduped' };
 
     // Prior-year attendees are NOT in the new festival, so we push per-user
     // (each respects pref + DND) — now over ALL of them in bounded chunks
@@ -355,7 +355,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       data: { festivalId, eventKey, deepLink },
     }));
 
-    const emailSent = await emailFanout(fresh, 'lineup_drop', eventKey, async (user) =>
+    const emailSent = await emailFanout(priorIds, 'lineup_drop', eventKey, async (user) =>
       sendLineupDropEmail({ to: user.email, username: user.username, festivalName, festivalId, config, log }),
     );
 
@@ -440,7 +440,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       body: 'See who plays when and build your plan.',
       data: { festivalId, eventKey, deepLink },
     }));
-    const emailSent = await emailFanout(fresh, 'set_times_out', eventKey, async (user) =>
+    const emailSent = await emailFanout(userIds, 'set_times_out', eventKey, async (user) =>
       sendSetTimesOutEmail({ to: user.email, username: user.username, festivalName, festivalId, config, log }),
     );
 
@@ -462,7 +462,6 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
     const eventKey = `reform:${newCrewId}`;
     const fresh = await filterFresh(invited, 'crew_reformed', eventKey);
-    if (fresh.length === 0) return { sent: 0, reason: 'all_deduped' };
 
     const reformDeepLink = inviteUrl || appLink(config, '/crew');
     const pushSent = await pushFanout(fresh, () => ({
@@ -472,7 +471,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       data: { crewId: newCrewId, eventKey, deepLink: reformDeepLink },
     }));
 
-    const emailSent = await emailFanout(fresh, 'crew_reformed', eventKey, async (user) =>
+    const emailSent = await emailFanout(invited, 'crew_reformed', eventKey, async (user) =>
       sendCrewReformEmail({
         to: user.email,
         username: user.username,
