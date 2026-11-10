@@ -34,6 +34,7 @@ export default function Button({
   icon,
   className,
   children,
+  onClick,
   ...props
 }: ButtonProps) {
   const variant: CanonicalVariant =
@@ -41,7 +42,7 @@ export default function Button({
       ? VARIANT_ALIASES[variantProp as DeprecatedButtonVariant]
       : (variantProp as CanonicalVariant);
   const baseStyles =
-    'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-[color,background-color,border-color,box-shadow,transform,outline-color] duration-200 ease-out cursor-pointer active:scale-[0.97] active:brightness-95 motion-reduce:transform-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2';
+    'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-[color,background-color,border-color,box-shadow,transform,outline-color] duration-200 ease-out cursor-pointer active:scale-[0.97] active:brightness-95 motion-reduce:transform-none disabled:opacity-50 disabled:cursor-not-allowed aria-busy:opacity-50 aria-busy:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2';
 
   const variantStyles: Record<CanonicalVariant, string> = {
     primary:
@@ -76,10 +77,22 @@ export default function Button({
         ? '' // sizing baked into variant
         : sizeStyles[size];
 
+  // A busy button stays focusable (aria-disabled, not native disabled) so keyboard
+  // focus is not dropped mid-request; activation is blocked here instead.
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (isLoading) {
+      event.preventDefault();
+      return;
+    }
+    onClick?.(event);
+  };
+
   return (
     <button
       {...props}
-      disabled={disabled || isLoading}
+      onClick={handleClick}
+      disabled={disabled}
+      aria-disabled={isLoading || undefined}
       aria-busy={isLoading || undefined}
       className={cn(baseStyles, variantStyles[variant], appliedSize, fullWidth && 'w-full', className)}
     >
