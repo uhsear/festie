@@ -47,7 +47,16 @@ async function rollup() {
     await pool.query(`
       INSERT INTO metrics_rollups (bucket_start, bucket_end, total_requests, total_errors, avg_duration_ms, status_2xx, status_4xx, status_5xx, peak_connections, active_users)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (bucket_start) DO UPDATE SET
+        bucket_end = EXCLUDED.bucket_end,
+        total_requests = EXCLUDED.total_requests,
+        total_errors = EXCLUDED.total_errors,
+        avg_duration_ms = EXCLUDED.avg_duration_ms,
+        status_2xx = EXCLUDED.status_2xx,
+        status_4xx = EXCLUDED.status_4xx,
+        status_5xx = EXCLUDED.status_5xx,
+        peak_connections = EXCLUDED.peak_connections,
+        active_users = EXCLUDED.active_users
     `, [
       bucketStart.toISOString(),
       bucketEnd.toISOString(),
