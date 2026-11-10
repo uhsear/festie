@@ -1,0 +1,22 @@
+{
+  "app/(auth)/complete-signup.tsx": 1,
+  "app/(auth)/register.tsx": 1,
+  "app/(tabs)/index.tsx": 1,
+  "app/(tabs)/map.tsx": 1,
+  "app/(tabs)/picks.tsx": 1,
+  "app/admin/festival-edit.tsx": 1,
+  "app/admin/festival-map.tsx": 4,
+  "app/grid.tsx": 1,
+  "app/picks-image.tsx": 3,
+  "components/AccountHistorySection.tsx": 3,
+  "components/InviteQRSheet.tsx": 3,
+  "components/LockscreenOverlay.tsx": 4,
+  "components/MapPlaceCard.tsx": 1,
+  "components/OfflineMap.tsx": 5,
+  "components/OfflineMap.web.tsx": 17,
+  "components/PlanQRShare.tsx": 3,
+  "components/admin/AdminFields.tsx": 13,
+  "lib/backgroundShare.ts": 1,
+  "lib/mapDocument.ts": 44,
+  "widgets/NowNextActivity.ios.tsx": 2
+}
