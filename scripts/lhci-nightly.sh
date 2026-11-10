@@ -15,8 +15,10 @@ trap 'rm -f "$LOCK"' EXIT
 
 {
   echo "=== lhci-nightly $TS ==="
-  npm run lhci:localhost 2>&1 || echo "lhci exited non-zero"
-  echo "=== done $(date -Iseconds) ==="
+  status=0
+  npm run lhci:localhost 2>&1 || status=$?
+  echo "=== done $(date -Iseconds) exit=${status} ==="
+  exit "${status}"
 } >> "$LOG" 2>&1
 
 # Retain only last 14 logs
