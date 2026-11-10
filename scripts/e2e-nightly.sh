@@ -26,7 +26,10 @@ if [ ! -x "${TOOLCHAIN}/node_modules/.bin/playwright" ]; then
   mkdir -p "${TOOLCHAIN}"
   (
     cd "${TOOLCHAIN}"
-    [ -f package.json ] || npm init -y >/dev/null 2>&1
+    # Write package.json by hand: `npm init -y` names the package after the dir and
+    # rejects ".festie-e2e" as an invalid name, which killed the script before
+    # npm install ever ran (the toolchain dir stayed empty every night).
+    [ -f package.json ] || echo '{"name":"festie-e2e-toolchain","private":true}' > package.json
     npm install --no-audit --no-fund --loglevel=error "@playwright/test@${PW_VERSION}"
     # Browsers only; --with-deps would need sudo, which cron does not have.
     ./node_modules/.bin/playwright install chromium
