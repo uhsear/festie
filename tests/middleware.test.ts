@@ -742,6 +742,15 @@ describe('middleware: in-flight request tracking', () => {
   });
 });
 
+describe('middleware: response listener cap', () => {
+  it('raises the ServerResponse max listeners to 20 before any other middleware', async () => {
+    const { app } = makeMiddlewareApp();
+    app.get('/__cap__', (_req: any, res: any) => res.json({ cap: res.getMaxListeners() }));
+    const res = await request(app).get('/__cap__');
+    assert.equal(res.body.cap, 20);
+  });
+});
+
 // ── Request timeout (real configureMiddleware registration) ──────────────
 
 describe('middleware: request timeout (real configureMiddleware)', () => {
