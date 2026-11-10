@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Toast from './Toast';
 import { ApiClientError } from '@festie/shared/services/api';
@@ -14,7 +14,8 @@ vi.mock('../../lib/toastContext', async (importOriginal) => {
 });
 
 import { useToast, ToastProvider } from '../../lib/toastContext';
-const realUseToast = (await vi.importActual<typeof import('../../lib/toastContext')>('../../lib/toastContext')).useToast;
+const realUseToast = (await vi.importActual<typeof import('../../lib/toastContext')>('../../lib/toastContext'))
+  .useToast;
 const mockUseToast = vi.mocked(useToast);
 
 function setupMockToast(
@@ -44,31 +45,16 @@ describe('Toast', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('renders a success toast with status role', () => {
-    setupMockToast([{ id: '1', message: 'Saved!', type: 'success' }]);
-    render(<Toast />);
-    expect(screen.getByText('Saved!')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toBeInTheDocument();
-  });
-
-  it('renders an error toast with alert role', () => {
-    setupMockToast([{ id: '1', message: 'Failed', type: 'error' }]);
-    render(<Toast />);
-    expect(screen.getByText('Failed')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-  });
-
-  it('renders a warning toast with alert role', () => {
-    setupMockToast([{ id: '1', message: 'Watch out', type: 'warning' }]);
-    render(<Toast />);
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-  });
-
-  it('renders an info toast with status role', () => {
-    setupMockToast([{ id: '1', message: 'FYI', type: 'info' }]);
-    render(<Toast />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
-  });
+  it.each(['success', 'error', 'warning', 'info'] as const)(
+    'renders a %s toast without a live role (the provider announces it)',
+    (type) => {
+      setupMockToast([{ id: '1', message: 'Hello', type }]);
+      render(<Toast />);
+      expect(screen.getByText('Hello')).toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    },
+  );
 
   it('renders multiple toasts', () => {
     setupMockToast([
@@ -147,14 +133,11 @@ describe('Toast', () => {
     expect(mockUseToast().pauseToast).not.toHaveBeenCalledWith('u1');
   });
 
-  it('announces each toast via its own role, with no nested live region on the wrapper', () => {
-    // Each toast carries role=status/alert (its own live region). A wrapper
-    // aria-live would nest live regions and double-announce, so the wrapper
-    // must NOT be a live region.
+  it('is not itself a live region, so only the provider regions announce', () => {
     setupMockToast([{ id: '1', message: 'Saved!', type: 'success' }]);
     const { container } = render(<Toast />);
     expect(container.querySelector('[aria-live]')).toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent('Saved!');
+    expect(container.querySelector('[role]')).toBeNull();
   });
 
   it('hides the close icon from assistive tech and drops the solid-white hover', () => {
@@ -168,7 +151,7 @@ describe('Toast', () => {
   it('colours error text with the danger token', () => {
     setupMockToast([{ id: '1', message: 'Failed', type: 'error' }]);
     render(<Toast />);
-    expect(screen.getByRole('alert').className).toContain('text-[var(--color-text-danger)]');
+    expect(screen.getByText('Failed').closest('.glass')?.className).toContain('text-[var(--color-text-danger)]');
   });
 });
 
@@ -192,7 +175,7 @@ describe('toastError', () => {
       </ToastProvider>,
     );
     await userEvent.setup().click(screen.getByText('go'));
-    expect(screen.getByText('x')).toBeInTheDocument();
+    expect(screen.getByText('x', { selector: 'p' })).toBeInTheDocument();
   });
 
   it('shows the friendly 429 copy', async () => {
@@ -202,6 +185,93 @@ describe('toastError', () => {
       </ToastProvider>,
     );
     await userEvent.setup().click(screen.getByText('go'));
-    expect(screen.getByText('Too many tries. Wait 30 seconds and try again.')).toBeInTheDocument();
+    expect(screen.getByText('Too many tries. Wait 30 seconds and try again.', { selector: 'p' })).toBeInTheDocument();
+  });
+});
+
+describe('ToastProvider live regions', () => {
+  beforeEach(() => {
+    mockUseToast.mockImplementation(realUseToast);
+  });
+
+  function Caller() {
+    const { toast, toastUndo, toastError } = realUseToast();
+    return (
+      <div>
+        <button onClick={() => toast('Saved!', 'success')}>success</button>
+        <button onClick={() => toast('Failed', 'error')}>error</button>
+        <button onClick={() => toast('Careful', 'warning')}>warning</button>
+        <button onClick={() => toastUndo('Removed', () => {})}>undo</button>
+        <button onClick={() => toastError(new Error('Boom'), 'Fallback')}>toastError</button>
+      </div>
+    );
+  }
+
+  function renderProvider() {
+    render(
+      <ToastProvider>
+        <Caller />
+        <Toast />
+      </ToastProvider>,
+    );
+    return {
+      polite: screen.getByTestId('toast-live-polite'),
+      assertive: screen.getByTestId('toast-live-assertive'),
+    };
+  }
+
+  it('mounts empty polite and assertive regions before any toast', () => {
+    const { polite, assertive } = renderProvider();
+    expect(polite).toHaveAttribute('aria-live', 'polite');
+    expect(polite).toBeEmptyDOMElement();
+    expect(assertive).toHaveAttribute('aria-live', 'assertive');
+    expect(assertive).toBeEmptyDOMElement();
+  });
+
+  it('writes non-alert toasts to the polite region only', async () => {
+    const { polite, assertive } = renderProvider();
+    await userEvent.setup().click(screen.getByText('success'));
+    await waitFor(() => expect(polite).toHaveTextContent('Saved!'));
+    expect(assertive).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ['error', 'Failed'],
+    ['warning', 'Careful'],
+  ])('writes a %s toast to the assertive region only', async (label, message) => {
+    const { polite, assertive } = renderProvider();
+    await userEvent.setup().click(screen.getByText(label));
+    await waitFor(() => expect(assertive).toHaveTextContent(message));
+    expect(polite).toBeEmptyDOMElement();
+  });
+
+  it('announces toastUndo politely and keeps Undo reachable by keyboard', async () => {
+    const { polite } = renderProvider();
+    const user = userEvent.setup();
+    await user.click(screen.getByText('undo'));
+    await waitFor(() => expect(polite).toHaveTextContent('Removed'));
+    const undo = screen.getByRole('button', { name: 'Undo: Removed' });
+    for (let i = 0; i < 10 && document.activeElement !== undo; i++) await user.tab();
+    expect(undo).toHaveFocus();
+  });
+
+  it('announces toastError assertively', async () => {
+    const { assertive } = renderProvider();
+    await userEvent.setup().click(screen.getByText('toastError'));
+    await waitFor(() => expect(assertive).toHaveTextContent('Boom'));
+  });
+
+  it('re-announces an identical message by clearing before setting', async () => {
+    const { polite } = renderProvider();
+    const user = userEvent.setup();
+    await user.click(screen.getByText('success'));
+    await waitFor(() => expect(polite).toHaveTextContent('Saved!'));
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(polite.textContent ?? ''));
+    observer.observe(polite, { childList: true, characterData: true, subtree: true });
+    await user.click(screen.getByText('success'));
+    await waitFor(() => expect(seen).toContain('Saved!'));
+    observer.disconnect();
+    expect(seen[0]).toBe('');
   });
 });
