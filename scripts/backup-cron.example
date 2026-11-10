@@ -27,7 +27,7 @@ APP_DIR=/opt/festie
 */5 * * * * cd $APP_DIR && bash scripts/health-check.sh >> logs/health-check.log 2>&1
 
 # Error rate alerting every 5 minutes (checks PM2 error logs + /api/health)
-*/5 * * * * cd $APP_DIR && node scripts/error-rate-alert.js >> logs/alert.log 2>&1
+*/5 * * * * cd $APP_DIR && node scripts/error-rate-alert.cjs >> logs/alert.log 2>&1
 
 # Health monitor (Node.js version, more comprehensive) every 5 minutes
 # Use EITHER health-check.sh OR health-monitor.js, not both
