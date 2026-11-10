@@ -22,6 +22,7 @@
     "dev": "node --import tsx/esm server.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:fast": "tsgo --noEmit",
+    "check:docs": "node scripts/ci/check-docs.mjs",
     "gen:api-types": "node scripts/gen-api-types.mjs",
     "gen:api-types:check": "node scripts/gen-api-types.mjs && git diff --exit-code -- lib/openapi.generated.json packages/shared/src/types/api.gen.ts",
     "build": "node scripts/build.mjs",

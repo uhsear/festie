@@ -11,6 +11,8 @@ module.exports = {
   'lib/**/*.{ts,tsx,js,cjs}': 'eslint --fix',
   'routes/**/*.{ts,tsx,js,cjs}': 'eslint --fix',
   'server.ts': 'eslint --fix',
+  // The docs are gitignored, so public CI cannot check them. Run the check where they exist.
+  '{server.ts,{lib,routes}/**/*.{ts,js,mjs,cjs}}': () => 'npm run check:docs',
 
   // ── packages/web ────────────────────────────────────────────────────────────
   'packages/web/src/**/*.{ts,tsx,js,jsx}': (files) =>
