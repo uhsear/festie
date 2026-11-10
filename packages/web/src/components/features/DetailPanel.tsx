@@ -25,6 +25,7 @@ import { useDetailPanelData } from './useDetailPanelData';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useSetStatus } from '../../hooks/useSetStatus';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useReturnFocus } from '../../hooks/useReturnFocus';
 import { useToast } from '../../lib/toastContext';
 import { useUndoNotifier } from '../../lib/useUndoNotifier';
 import { MapPin, Share2 } from 'lucide-react';
@@ -112,6 +113,10 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
 
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  // Vaul has no Trigger here. Return focus to the opener, or to the set's grid cell if it is gone.
+  const returnFocus = useReturnFocus(() =>
+    document.querySelector<HTMLElement>(`[data-set-id="${CSS.escape(set.id)}"] [data-open]`),
+  );
 
   // Share the set's own page (festie.us/set/<id>). Where the browser has no share
   // sheet, copy the link instead.
@@ -231,9 +236,11 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                      lg:w-[420px] lg:max-w-full
                      lg:rounded-none lg:rounded-l-[16px]"
           onOpenAutoFocus={(e: Event) => {
+            returnFocus.onOpenAutoFocus();
             e.preventDefault();
             closeBtnRef.current?.focus();
           }}
+          onCloseAutoFocus={returnFocus.onCloseAutoFocus}
         >
           <div aria-hidden="true" className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-border-light flex-shrink-0 lg:hidden" />
           <Drawer.Title className="sr-only">{artistDisplayName(set, b2bSeparator)}</Drawer.Title>

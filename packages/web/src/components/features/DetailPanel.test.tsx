@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import React from 'react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalSet, Priority } from '@festie/shared/types';
@@ -17,11 +18,32 @@ vi.mock('vaul', () => ({
     }) => (open ? <div data-testid="drawer-root">{children}</div> : null),
     Portal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
     Overlay: () => <div data-testid="drawer-overlay" />,
-    Content: ({ children, ...props }: { children: React.ReactNode; 'aria-label'?: string }) => (
-      <div data-testid="drawer-content" aria-label={props['aria-label']}>
-        {children}
-      </div>
-    ),
+    // Radix runs onOpenAutoFocus on mount and onCloseAutoFocus on unmount; mirror that.
+    Content: ({
+      children,
+      onOpenAutoFocus,
+      onCloseAutoFocus,
+      ...props
+    }: {
+      children: React.ReactNode;
+      'aria-label'?: string;
+      onOpenAutoFocus?: (e: Event) => void;
+      onCloseAutoFocus?: (e: Event) => void;
+    }) => {
+      const open = React.useRef(onOpenAutoFocus);
+      const close = React.useRef(onCloseAutoFocus);
+      open.current = onOpenAutoFocus;
+      close.current = onCloseAutoFocus;
+      React.useLayoutEffect(() => {
+        open.current?.(new Event('focusScope.autoFocusOnMount', { cancelable: true }));
+        return () => close.current?.(new Event('focusScope.autoFocusOnUnmount', { cancelable: true }));
+      }, []);
+      return (
+        <div data-testid="drawer-content" aria-label={props['aria-label']}>
+          {children}
+        </div>
+      );
+    },
     Title: ({ children, className }: { children: React.ReactNode; className?: string }) => (
       <h2 className={className}>{children}</h2>
     ),
@@ -248,6 +270,38 @@ describe('DetailPanel', () => {
     render(<DetailPanel {...defaultProps} />);
     expect(screen.queryByRole('button', { name: 'Show stage on map' })).not.toBeInTheDocument();
     storeStages.value = [];
+  });
+
+  describe('focus return', () => {
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('focuses the close button on open and returns focus to the opener on close', () => {
+      const opener = document.createElement('button');
+      document.body.appendChild(opener);
+      opener.focus();
+      const { unmount } = render(<DetailPanel {...defaultProps} />);
+      expect(screen.getByRole('button', { name: 'Close detail panel' })).toHaveFocus();
+      unmount();
+      expect(opener).toHaveFocus();
+    });
+
+    it('falls back to the grid cell open button when the opener is gone', () => {
+      const cell = document.createElement('div');
+      cell.setAttribute('data-set-id', 'set-1');
+      const cellButton = document.createElement('button');
+      cellButton.setAttribute('data-open', '');
+      cell.appendChild(cellButton);
+      document.body.appendChild(cell);
+      const opener = document.createElement('button');
+      document.body.appendChild(opener);
+      opener.focus();
+      const { unmount } = render(<DetailPanel {...defaultProps} />);
+      opener.remove();
+      unmount();
+      expect(cellButton).toHaveFocus();
+    });
   });
 
   it('renders the drawer with set detail aria-label', () => {
