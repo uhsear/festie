@@ -575,12 +575,12 @@ describe('middleware: idempotency key logic', () => {
     });
     let executions = 0;
     const res1 = mkIdemRes();
-    await middleware({ method: 'POST', headers: { 'idempotency-key': 'k-ip' }, ip: '10.0.0.1' }, res1, () => {
+    await middleware({ method: 'POST', headers: { 'idempotency-key': 'k-ip' }, ip: '192.0.2.1' }, res1, () => {
       executions += 1;
       res1.json({ id: 'e1' });
     });
     const res2 = mkIdemRes();
-    await middleware({ method: 'POST', headers: { 'idempotency-key': 'k-ip' }, ip: '172.16.0.9' }, res2, () => {
+    await middleware({ method: 'POST', headers: { 'idempotency-key': 'k-ip' }, ip: '198.51.100.9' }, res2, () => {
       executions += 1;
       res2.json({ id: 'e2' });
     });
