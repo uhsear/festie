@@ -34,12 +34,9 @@ export default function Toast() {
   return (
     <div className="fixed bottom-[calc(var(--bottom-nav-h,0px)+16px+env(safe-area-inset-bottom,0px))] right-4 left-4 z-[var(--z-toast)] flex flex-col gap-2 pointer-events-none sm:left-auto sm:max-w-sm">
       {toasts.map((t) => {
-        const isAlert = t.type === 'error' || t.type === 'warning';
-        const roleAttr: { role: 'alert' | 'status' } = { role: isAlert ? 'alert' : 'status' };
         return (
           <div
             key={t.id}
-            {...roleAttr}
             className={cn(
               'glass p-4 rounded-lg flex-between gap-3 pointer-events-auto toast-enter',
               getColorClasses(t.type),

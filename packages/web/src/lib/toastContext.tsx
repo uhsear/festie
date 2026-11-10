@@ -34,6 +34,15 @@ interface ToastTimer {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef<Map<string, ToastTimer>>(new Map());
+  const [announcement, setAnnouncement] = useState({ polite: '', assertive: '' });
+
+  // The visible toast has no live role (a live region inserted with its text is often missed), so the
+  // message goes into a persistent region. Clearing first, then setting next frame, re-announces repeats.
+  const announce = useCallback((message: string, type: ToastType) => {
+    const region = type === 'error' || type === 'warning' ? 'assertive' : 'polite';
+    setAnnouncement((prev) => ({ ...prev, [region]: '' }));
+    requestAnimationFrame(() => setAnnouncement((prev) => ({ ...prev, [region]: message })));
+  }, []);
 
   const clearTimer = useCallback((id: string) => {
     const t = timers.current.get(id);
@@ -83,12 +92,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       const newToast: Toast = { id, message, type, duration };
 
       setToasts((prev) => [...prev.slice(-2), newToast]); // Keep max 3 visible
+      announce(message, type);
 
       if (duration > 0) {
         scheduleRemoval(id, duration);
       }
     },
-    [scheduleRemoval],
+    [scheduleRemoval, announce],
   );
 
   const toastUndo = useCallback(
@@ -97,12 +107,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       const newToast: Toast = { id, message, type: 'info', duration, onUndo };
 
       setToasts((prev) => [...prev.slice(-2), newToast]);
+      announce(message, 'info');
 
       if (duration > 0) {
         scheduleRemoval(id, duration);
       }
     },
-    [scheduleRemoval],
+    [scheduleRemoval, announce],
   );
 
   const toastError = useCallback(
@@ -117,7 +128,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [toasts, toast, toastUndo, toastError, removeToast, pauseToast, resumeToast],
   );
 
-  return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;
+  return (
+    <ToastContext.Provider value={value}>
+      {children}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="toast-live-polite">
+        {announcement.polite}
+      </div>
+      <div className="sr-only" role="alert" aria-live="assertive" aria-atomic="true" data-testid="toast-live-assertive">
+        {announcement.assertive}
+      </div>
+    </ToastContext.Provider>
+  );
 }
 
 export function useToast() {

@@ -22,7 +22,7 @@ import type { Page } from '@playwright/test';
  *   - [data-testid="profile-badge"] .............. UserMenu trigger
  *   - "Schedule"/"Cards"/"Grid" tabs ............. Header desktop nav + ScheduleViewSwitcher
  *   - "Picks"/"Crew" nav ......................... Header (desktop) / BottomNav (mobile)
- *   - toast role="status"/"alert" ................ Toast.tsx
+ *   - toast live regions role="status"/"alert" ... toastContext.tsx (ToastProvider)
  *
  * No screenshot/visual assertions (the CI run uses --grep-invert screenshot).
  */
@@ -153,7 +153,8 @@ test.describe('festival planner browser regression', () => {
     await page.getByRole('button', { name: 'Create account' }).click();
 
     // formError region (role="alert") renders the TOS message.
-    await expect(page.getByRole('alert')).toContainText('Terms of Service');
+    // The always-mounted toast live region is also role="alert", so scope to the form.
+    await expect(page.locator('form').getByRole('alert')).toContainText('Terms of Service');
   });
 
   // ── Authenticated planner journeys ──────────────────────────────────────────
