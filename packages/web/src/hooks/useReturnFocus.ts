@@ -6,18 +6,20 @@ import { useRef } from 'react';
  * `triggerRef`, which is null when the dialog is controlled, so focus fell to
  * `body`. Pass these to the Content: they remember what had focus on open
  * and restore it on close, or leave focus on `body` if that element is gone.
+ * `fallback` finds a replacement when the opener is gone or was just `body`.
  */
-export function useReturnFocus() {
+export function useReturnFocus(fallback?: () => HTMLElement | null) {
   const returnTo = useRef<HTMLElement | null>(null);
   return {
     onOpenAutoFocus: () => {
-      returnTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const active = document.activeElement;
+      returnTo.current = active instanceof HTMLElement && active !== document.body ? active : null;
     },
     onCloseAutoFocus: (event: Event) => {
       event.preventDefault();
       const el = returnTo.current;
       returnTo.current = null;
-      if (el?.isConnected) el.focus();
+      (el?.isConnected ? el : fallback?.())?.focus();
     },
   };
 }
