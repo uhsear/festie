@@ -61,8 +61,8 @@ trustPolicyExclude:
 # version bump cannot clear them and the alternative is deleting a feature.
 # Keyed by GHSA id, never by package name, so a future advisory against the same
 # package still fails the audit.
-# RE-CHECK TRIGGER: drop the node-forge and http-cache-semantics entries when a
-# release past 1.4.0 / 4.2.0 appears, the zod entry when Expo's CLI moves off
+# RE-CHECK TRIGGER: drop the http-cache-semantics entry when a release past
+# 4.2.0 appears, the zod entry when Expo's CLI moves off
 # zod 3, and the image-size entries when image-size publishes >2.0.2,
 # and the extract-zip entry when extract-zip publishes >2.0.1. Both were the
 # latest published version as of 2026-09-08 and both are inside the vulnerable
@@ -85,10 +85,6 @@ auditConfig:
     # path, and still no published fix: every release up to and including 2.0.1,
     # the latest, is inside the vulnerable range.
     - "GHSA-7pqw-9j4j-h8q3"
-    # node-forge RSA PKCS#1 v1.5 signature verification (<=1.4.0, no patched
-    # release). Reached only via mobile>expo>@expo/cli, the Expo dev CLI; it does
-    # not ship in the app binary and verifies no untrusted signatures.
-    - "GHSA-86w9-cpqp-85rv"
     # http-cache-semantics max-stale disclosure (<=4.2.0, no patched release).
     # Dev-only, via mobile>@expo/ngrok>got, the tunnel helper of the Expo dev CLI.
     - "GHSA-ch52-4w7c-c8xp"
