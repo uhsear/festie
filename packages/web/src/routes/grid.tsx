@@ -323,8 +323,9 @@ function GridViewInner() {
             scroll position in the left gutter. */}
         <div className="timeline-content relative min-h-full max-w-[1440px] mx-auto">
           <div className="timeline-beam" aria-hidden="true" />
-          {/* Not sticky: it scrolls away so the stage header row owns the top edge (stage names stay visible). */}
-          <div className="bg-bg-sticky">
+          {/* Not sticky: it scrolls away so the stage header row owns the top edge (stage names stay visible).
+              Its own snap point keeps the proximity snap on the hour rows from pinning it out of view at scrollTop 0. */}
+          <div className="bg-bg-sticky [scroll-snap-align:start_none]">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <TimelineLegend />
               <div className="flex items-center gap-1.5 flex-wrap pr-3 py-0.5">
