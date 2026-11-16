@@ -8,15 +8,18 @@
 # carried plaintext SSH + login credentials. This script:
 #
 #   1. SSHes to the prod box (KEY AUTH ONLY — no password support).
-#   2. git fetch + reset --hard origin/main.
+#   2. git fetch + reset --hard origin/main, then installs root (npm) and
+#      packages/ (pnpm) dependencies.
 #   3. Migrations are app-managed (applied on backend boot); no deploy step.
-#   4. Builds the web bundle. (The backend runs from server.ts under tsx; the
-#      dist/ bundle is built by `npm run build` but is NOT on the boot path yet.)
-#   6. Restarts the PM2 app ("festie").
-#   7. Tags the deploy `deploy-<UTC timestamp>` and pushes the tag (P14).
-#   8. Health-gates on /api/ready; if it is non-200, ABORTS and prints the
+#   4. Bundles the backend with `npm run build` (esbuild -> dist/server.js, which
+#      PM2 runs).
+#   5. Builds the web bundle (fetches the private fonts first).
+#   6. Restarts the PM2 app ("festie") by name. A restart does not pick up a
+#      changed script or interpreter; that needs `pm2 delete` + `pm2 start`.
+#   7. Health-gates on /api/ready; if it is non-200, ABORTS and prints the
 #      rollback command (P16).
-#   9. Smoke-tests a real login (200) if test creds are provided.
+#   8. Smoke-tests a real login (200) if test creds are provided.
+#   9. Tags the deploy `deploy-<UTC timestamp>` and pushes the tag (P14).
 #
 # Configuration (all via environment — nothing secret is committed):
 #   FESTIE_SSH_HOST       prod host/IP                 (default 192.168.0.150)

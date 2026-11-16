@@ -5,6 +5,33 @@ All notable changes to Festie are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-11-10
+
+Entries below this one describe the earlier JavaScript layout (`server.js`, `lib/*.js`). The backend is now TypeScript, bundled with esbuild into `dist/server.js` for production, and the mobile app runs on Expo SDK 58. This entry summarises the work from 2026-10-29 to 2026-11-10.
+
+### Added
+- **Crews**: polls with auto-close and nudges, an activity feed, invite lock, Plan B home base, meet-up edits, day-by-day attendance, and a find-your-crew view with compass, nudge and low-battery alerts.
+- **Map**: a field map with an offline basemap, a festival site-plan overlay, background live location sharing, honest compass directions, and clear messages when a location fix is far from the festival.
+- **Schedule**: a day grid that fits one festival day on one image, lock-screen and poster images for picks, the full lineup, stages and crew, friend-pick views, moved-set marks and shift alerts, and a "caught" checklist with a most-seen list.
+- **Sharing and discovery**: a public festival page, an opt-in public schedule, festival announcements, and following festivals.
+- **Accounts**: Sign in with Google and Apple, a notification inbox with a push budget, and a view of your own data.
+- **Try first**: guests can pick sets before signing up and keep their place when they become members.
+- **Admin**: festival drafts, publish, archive and restore, a lineup import wizard with undo and B2B editing, audit search, and pick insight per festival without user ids.
+- **Privacy**: a published privacy policy and a daily retention cleanup.
+
+### Changed
+- Web and mobile share one set of toast, dialog, button and empty-state components, and one wording for each concept.
+- Festival times follow the festival's own time zone and the 6 AM rule.
+- Backend CI runs as four parallel shards, with new gates for public-text leaks, docs drift, bundle growth and accessibility regressions.
+- Production runs the esbuild bundle `dist/server.js`; local development still runs `tsx`.
+
+### Fixed
+- Picks, notes and reminders no longer get lost, and offline edits are queued per change so a second edit is not dropped.
+- SOS and meet-ups are more reliable across the crew, including on weak signal.
+- Invite links, sign-in and recovery flows no longer dead-end.
+- Many layout, text-clipping and accessibility problems across web and mobile, including large text sizes, TalkBack, voice control and focus handling.
+- Rate limits for sign-in, registration and password reset are keyed by IP plus account, and `?token=` values are kept out of error reports.
+
 ## [1.10.2] - 2026-03-22
 
 ### Changed

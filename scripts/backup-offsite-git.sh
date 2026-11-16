@@ -23,6 +23,10 @@ set -euo pipefail
 #   BACKUP_GPG_PASSPHRASE   strong random passphrase (generated, stored once)
 #   BACKUP_DIR              optional, default $HOME/backups/festie
 #
+# FAILURE ALERT: on any non-zero exit, if ~/.config/festie-ntfy-topic exists and
+# is non-empty, a short message is POSTed to https://ntfy.sh/<topic>. The topic
+# is never logged or echoed.
+#
 # Deploy key:  /home/asir/.ssh/festie_backups_deploy   (ed25519, no passphrase)
 # Local clone: /home/asir/festie-backups-git           (shallow)
 # Repo:        git@github.com:uhsear/festie-backups.git
@@ -68,7 +72,23 @@ CLONE_DIR="${BACKUP_GIT_CLONE:-$HOME/festie-backups-git}"
 DUMPS_SUBDIR="dumps"
 KEEP=14
 
+NTFY_TOPIC_FILE="$HOME/.config/festie-ntfy-topic"
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
+
+# Alert on ANY non-zero exit (set -e abort or explicit exit 1). A failed alert
+# must not mask the original exit status, so curl errors are swallowed.
+alert_on_failure() {
+  local rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  [ -s "$NTFY_TOPIC_FILE" ] && [ -r "$NTFY_TOPIC_FILE" ] || return 0
+  local topic
+  topic="$(tr -d '[:space:]' < "$NTFY_TOPIC_FILE")"
+  [ -n "$topic" ] || return 0
+  curl -fsS -m 10 -d "Festie off-site git backup FAILED (exit $rc). See offsite-git.log." \
+    "https://ntfy.sh/$topic" >/dev/null 2>&1 || true
+}
+trap alert_on_failure EXIT
 
 export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 
