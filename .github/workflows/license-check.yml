@@ -13,7 +13,7 @@ on:
       - 'scripts/ci/check-licenses.mjs'
       - '.github/workflows/license-check.yml'
   push:
-    branches: [main, master]
+    branches: [main]
     paths:
       - 'package.json'
       - 'package-lock.json'
