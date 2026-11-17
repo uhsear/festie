@@ -11,11 +11,13 @@ import {
   LINEUP_SAMPLE_CSV,
   buildResultCsv,
   defaultMapping,
+  defaultUpdateExisting,
   looksLikeHeader,
   mappingProblems,
   parseLineupTable,
   planSummary,
   toImportRows,
+  updateOffBanner,
   type LineupColumnMapping,
   type LineupImportCommitResult,
   type LineupImportField,
@@ -216,9 +218,11 @@ export default function LineupImportScreen() {
       );
       return;
     }
+    const update = defaultUpdateExisting(mapping);
     setImportRows(rows);
-    void runPreview(rows, updateExisting, createMissing);
-  }, [table, lines, mapping, hasHeader, updateExisting, createMissing, runPreview, say]);
+    setUpdateExisting(update);
+    void runPreview(rows, update, createMissing);
+  }, [table, lines, mapping, hasHeader, createMissing, runPreview, say]);
 
   const handleToggle = useCallback(
     (which: 'update' | 'create', value: boolean) => {
@@ -514,6 +518,17 @@ export default function LineupImportScreen() {
             <Text style={styles.helpNote}>
               New days: {plan.newDays.map((d) => `${d.label} (${d.date})`).join(', ')}
             </Text>
+          ) : null}
+          {updateOffBanner(plan.counts, updateExisting) ? (
+            <View style={styles.card}>
+              <Text style={styles.helpNote}>{updateOffBanner(plan.counts, updateExisting)}</Text>
+              <Button
+                label="Turn on Update"
+                variant="secondary"
+                onPress={() => handleToggle('update', true)}
+                disabled={working}
+              />
+            </View>
           ) : null}
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>

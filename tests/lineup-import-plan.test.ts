@@ -385,3 +385,87 @@ describe('lineup export round trip', () => {
     }
   });
 });
+
+describe('planLineupImport: re-import visibility', () => {
+  const kai = { id: 'set-kai', artist: 'Kai', artists: [{ name: 'Kai', links: {} }], stageId: 'forest', startTime: '20:00', endTime: '21:00', linkUrl: null };
+
+  it('skips a set_id row that names another day, with a warning, and still commits the other rows', () => {
+    const f = withSets([{ day: 0, set: alpha }, { day: 0, set: kai }]);
+    const { plan: p, writes } = plan(
+      [
+        row(2, { setId: 'set-a', artist: 'DJ Alpha', day: 'Saturday', startTime: '22:00', endTime: '23:00' }),
+        row(3, { setId: 'set-kai', artist: 'Kai', day: 'Friday', startTime: '20:30', endTime: '21:30' }),
+      ],
+      { updateExisting: true },
+      f,
+    );
+    const skipped = p.rows[0]!;
+    assert.equal(skipped.status, 'unchanged');
+    assert.equal(skipped.skipped, true);
+    assert.equal(skipped.setId, 'set-a');
+    assert.equal(skipped.dayLabel, 'Friday');
+    assert.deepEqual(skipped.changes, []);
+    assert.deepEqual(skipped.warnings, [
+      'Skipped: the file says Saturday, the stored day is Friday. Import cannot move a set to another day. Move it in the editor, then import again.',
+    ]);
+    assert.equal(p.rows[1]!.status, 'changed');
+    assert.equal(p.rows[1]!.skipped, undefined);
+    assert.deepEqual(writes.updates.map((u) => u.setId), ['set-kai']);
+    assert.equal(writes.inserts.length, 0);
+    assert.equal(p.counts.missingFromFile, 0);
+  });
+
+  it('skips a set_id row whose day is a new date and creates no day', () => {
+    const f = withSets([{ day: 0, set: alpha }]);
+    const { plan: p, writes } = plan([row(2, { setId: 'set-a', artist: 'DJ Alpha', date: '2026-08-23', startTime: '22:00' })], { updateExisting: true }, f);
+    assert.equal(p.rows[0]!.skipped, true);
+    assert.equal(p.counts.newDays, 0);
+    assert.equal(writes.updates.length, 0);
+  });
+
+  it('does not skip a set_id row that names the stored day or no day', () => {
+    const f = withSets([{ day: 0, set: alpha }]);
+    for (const day of ['Friday', undefined]) {
+      const { plan: p } = plan([row(2, { setId: 'set-a', artist: 'DJ Alpha', day, startTime: '22:00' })], { updateExisting: true }, f);
+      assert.equal(p.rows[0]!.skipped, undefined);
+      assert.equal(p.rows[0]!.status, 'changed');
+    }
+  });
+
+  it('warns when a row with no set_id adds a second set on another day', () => {
+    const f = withSets([{ day: 0, set: alpha }]);
+    const { plan: p, writes } = plan([row(2, { artist: 'DJ Alpha', stage: 'Main Stage', day: 'Saturday', startTime: '20:00', endTime: '21:00' })], {}, f);
+    assert.equal(p.rows[0]!.status, 'new');
+    assert.deepEqual(p.rows[0]!.warnings, [
+      'This artist already has a set on Friday. This row adds a second set on Saturday. Use the export file to change a day.',
+    ]);
+    assert.equal(writes.inserts.length, 1);
+    const other = plan([row(2, { artist: 'DJ Beta', stage: 'Main Stage', day: 'Saturday' })], {}, f);
+    assert.deepEqual(other.plan.rows[0]!.warnings, []);
+  });
+
+  it('says to use the export file when two sets match on the given stage', () => {
+    const f = withSets([
+      { day: 0, set: alpha },
+      { day: 0, set: { ...alpha, id: 'set-a2', startTime: '22:00', endTime: '23:00' } },
+    ]);
+    const { plan: p } = plan([row(2, { artist: 'DJ Alpha', day: 'Friday', stage: 'Main Stage' })], {}, f);
+    assert.equal(p.rows[0]!.errors[0]!.message, 'Matches 2 sets on Friday at Main Stage. Use the export file with set_id.');
+  });
+
+  it('matches an artist across curly and straight quotes and a leading The', () => {
+    const lair = { ...kai, id: 'set-lair', artist: "The Dragon's Lair", artists: [{ name: "The Dragon's Lair", links: {} }] };
+    const f = withSets([{ day: 0, set: lair }]);
+    for (const artist of ['The Dragon’s Lair', 'The Dragonʼs Lair', "The Dragon's Lair"]) {
+      const { plan: p } = plan([row(2, { artist, day: 'Friday', stage: 'Forest', startTime: '20:00', endTime: '21:00' })], {}, f);
+      assert.equal(p.rows[0]!.setId, 'set-lair', artist);
+      assert.equal(p.counts.new, 0, artist);
+    }
+  });
+
+  it('keeps the plain fold for stage names, so a curly quote still names a new stage', () => {
+    const f = festival({ stages: [{ id: 'den', name: "Dragon's Den", color: '#ff3366' }] });
+    const { plan: p } = plan([row(2, { artist: 'A', stage: 'Dragon’s Den', day: 'Friday' })], {}, f);
+    assert.deepEqual(p.newStages.map((s) => s.name), ['Dragon’s Den']);
+  });
+});

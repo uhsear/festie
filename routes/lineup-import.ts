@@ -33,6 +33,8 @@ import {
 
 const SKIPPED_MESSAGE = 'Matches an existing set. Not updated because Update sets that match was off.';
 
+const DAY_SKIPPED_MESSAGE = 'Not changed. The file names another day than the stored set, and an import cannot move a set to another day.';
+
 const makeId = (prefix: string) => `${prefix}-${crypto.randomBytes(6).toString('hex')}`;
 
 /** One result entry per request row, plus the counts the admin sees after a commit. */
@@ -46,6 +48,7 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
     if (updated.has(i)) {
       return { row: r.row, status: 'updated' as const, setId: r.setId, artist, message: `Updated: ${r.changes.join('; ')}.` };
     }
+    if (r.skipped) return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: DAY_SKIPPED_MESSAGE };
     if (r.status === 'changed') return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: SKIPPED_MESSAGE };
     return { row: r.row, status: 'unchanged' as const, setId: r.setId, artist, message: 'No change.' };
   });
@@ -60,7 +63,11 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
     newDays: writes.newDays.length,
     spotifyMatched: writes.spotifyMatched,
     rows,
-    warnings: [...plan.rows.flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)), ...warnings],
+    // Rows that kept their stored day come first, so the admin sees what the import did not apply.
+    warnings: [
+      ...[...plan.rows].sort((a, b) => Number(!!b.skipped) - Number(!!a.skipped)).flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)),
+      ...warnings,
+    ],
   };
 }
 

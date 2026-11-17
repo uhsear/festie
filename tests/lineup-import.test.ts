@@ -373,6 +373,35 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     assert.deepEqual(sets.rows.map((r: any) => r.start_time), ['21:00']);
   });
 
+  test('a set_id row on another day is skipped and listed first, and the other rows commit', async () => {
+    if (!createFestivalPlanner) return;
+    const { server, admin } = await adminServer();
+    const alpha = { row: 2, artist: 'DJ Alpha', stage: 'Main Stage', day: 'Friday', startTime: '20:00', endTime: '21:00' };
+    const beta = { row: 3, artist: 'DJ Beta', stage: 'Forest', day: 'Friday', startTime: '20:00', endTime: '21:00' };
+    const seeded = await postImport(server, admin, FEST_ID, { rows: [alpha, beta], skipSpotify: true }).expect(200);
+    const [alphaId, betaId] = seeded.body.data.result.rows.map((r: any) => r.setId);
+
+    const res = await postImport(server, admin, FEST_ID, {
+      rows: [
+        { row: 2, setId: betaId, artist: 'DJ Beta', day: 'Friday', startTime: '21:00', endTime: '22:00' },
+        { row: 3, setId: alphaId, artist: 'DJ Alpha', day: 'Saturday', startTime: '22:00', endTime: '23:00' },
+      ],
+      updateExisting: true,
+      skipSpotify: true,
+    }).expect(200);
+
+    const { result } = res.body.data;
+    assert.deepEqual(result.rows.map((r: any) => r.status), ['updated', 'skipped']);
+    assert.equal(result.skipped, 1);
+    assert.match(result.warnings[0], /^Row 3: Skipped: the file says Saturday, the stored day is Friday\./);
+    const sets = await withPool((pool) => pool.query(
+      `SELECT id, start_time FROM festival_sets WHERE festival_id = $1 ORDER BY id`, [FEST_ID]));
+    assert.deepEqual(
+      Object.fromEntries(sets.rows.map((r: any) => [r.id, r.start_time])),
+      { [alphaId]: '20:00', [betaId]: '21:00' },
+    );
+  });
+
   test('undo removes created sets, restores updated ones, keeps picked ones and drops new stages and days', async () => {
     if (!createFestivalPlanner) return;
     const { server, admin } = await adminServer();

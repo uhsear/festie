@@ -6,11 +6,13 @@ import {
   LINEUP_SAMPLE_CSV,
   buildResultCsv,
   defaultMapping,
+  defaultUpdateExisting,
   looksLikeHeader,
   mappingProblems,
   parseLineupTable,
   planSummary,
   toImportRows,
+  updateOffBanner,
   type LineupColumnMapping,
   type LineupImportCommitResult,
   type LineupImportField,
@@ -133,8 +135,15 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
 
   const handleCheckRows = () => {
     const nextRows = toImportRows(table, mapping, hasHeader, lines);
+    const update = defaultUpdateExisting(mapping);
     setRows(nextRows);
-    void runPreview(nextRows);
+    setUpdateExisting(update);
+    void runPreview(nextRows, update);
+  };
+
+  const turnOnUpdate = () => {
+    setUpdateExisting(true);
+    void runPreview(rows, true, createMissing);
   };
 
   const editCell = (row: number, field: LineupImportField, value: string) =>
@@ -296,6 +305,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
 
   const renderPreview = (p: LineupImportPlan) => {
     const blocked = p.counts.error > 0 || p.problems.length > 0;
+    const updateBanner = updateOffBanner(p.counts, updateExisting);
     const shown = p.rows.filter((r) => filter === 'all' || r.status === filter);
     const chips: [string, number][] = [
       ['New', p.counts.new],
@@ -319,6 +329,14 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
           <p className="text-sm text-text-muted">
             New days: {p.newDays.map((d) => `${d.label} (${d.date})`).join(', ')}
           </p>
+        )}
+        {updateBanner && (
+          <div role="status" className="flex flex-wrap items-center gap-3 bg-accent-aqua/10 border border-accent-aqua/30 rounded-lg p-3 text-sm text-text-primary">
+            <span>{updateBanner}</span>
+            <button type="button" className={secondaryButton} disabled={loading} onClick={turnOnUpdate}>
+              Turn on Update
+            </button>
+          </div>
         )}
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm text-text-primary">

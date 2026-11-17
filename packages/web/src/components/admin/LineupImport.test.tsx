@@ -108,6 +108,32 @@ describe('LineupImport', () => {
     expect(await screen.findByRole('button', { name: 'Approve' })).toBeEnabled();
   });
 
+  it('leaves Update off for a file with no set_id column and offers a banner button for changed rows', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
+    await pasteSampleAndCheck();
+    expect(api.preview.mock.calls[0][1].updateExisting).toBe(false);
+    expect(await screen.findByText('2 rows change existing sets. Turn on Update to apply them.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on Update' }));
+    expect(api.preview).toHaveBeenCalledTimes(2);
+    expect(api.preview.mock.calls[1][1].updateExisting).toBe(true);
+    expect(screen.getByLabelText('Update sets that match')).toBeChecked();
+    expect(screen.queryByText(/Turn on Update to apply/)).toBeNull();
+  });
+
+  it('turns Update on by default when a set_id column is mapped', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
+    render(<LineupImport festivalId="f1" festivalName="Fest" />);
+    fireEvent.change(screen.getByLabelText(/paste cells from google sheets/i), {
+      target: { value: 'set_id,day,stage,artist,start,end\nset-1,Friday,Main Stage,Aurora Lights,21:00,22:00' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Next: match columns' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
+    await screen.findByRole('button', { name: 'Approve' });
+    expect(api.preview.mock.calls[0][1].updateExisting).toBe(true);
+    expect(screen.getByLabelText('Update sets that match')).toBeChecked();
+    expect(screen.queryByText(/Turn on Update to apply/)).toBeNull();
+  });
+
   it('disables Approve when the plan has an error row', async () => {
     api.preview.mockResolvedValue(
       plan([planRow({ status: 'error', errors: [{ field: 'day', message: 'Unknown day "Fryday".' }] })], { error: 1 }),

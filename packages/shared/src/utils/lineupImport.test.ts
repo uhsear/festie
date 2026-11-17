@@ -6,6 +6,8 @@ import {
   mappingProblems,
   toImportRows,
   planSummary,
+  defaultUpdateExisting,
+  updateOffBanner,
   buildResultCsv,
   buildLineupCsv,
   defaultMapping,
@@ -155,6 +157,19 @@ describe('planSummary', () => {
     expect(planSummary({ ...c, new: 3, changed: 2, error: 2 }, true)).toBe(
       'Add 3 sets. Update 2. 2 rows have errors.',
     );
+  });
+});
+
+describe('update default and banner', () => {
+  it('defaults Update on only when a set_id column is mapped', () => {
+    expect(defaultUpdateExisting({ artist: 0, setId: 1 })).toBe(true);
+    expect(defaultUpdateExisting({ artist: 0, day: 1 })).toBe(false);
+  });
+  it('shows the banner only for changed rows with Update off', () => {
+    expect(updateOffBanner({ changed: 3 }, false)).toBe('3 rows change existing sets. Turn on Update to apply them.');
+    expect(updateOffBanner({ changed: 1 }, false)).toBe('1 row changes an existing set. Turn on Update to apply it.');
+    expect(updateOffBanner({ changed: 3 }, true)).toBeNull();
+    expect(updateOffBanner({ changed: 0 }, false)).toBeNull();
   });
 });
 

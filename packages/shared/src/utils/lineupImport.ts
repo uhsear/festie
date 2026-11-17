@@ -40,6 +40,8 @@ export interface LineupImportPlanRow {
     message: string;
   }[];
   warnings: string[];
+  /** The row names another day than the stored set. Nothing is written for it. */
+  skipped?: true;
 }
 
 export interface LineupImportPlanCounts {
@@ -234,6 +236,16 @@ export function planSummary(
   if (counts.newDays) parts.push(`Create ${plural(counts.newDays, 'day')}.`);
   if (counts.error) parts.push(`${plural(counts.error, 'row')} ${counts.error === 1 ? 'has' : 'have'} errors.`);
   return parts.length ? parts.join(' ') : 'Nothing to change.';
+}
+
+/** A file with a set_id column is an export of this lineup, so its changed rows are meant to apply. */
+export const defaultUpdateExisting = (mapping: LineupColumnMapping): boolean => mapping.setId !== undefined;
+
+/** The banner for a preview whose changed rows an off Update switch would leave unapplied, or null. */
+export function updateOffBanner(counts: Pick<LineupImportPlanCounts, 'changed'>, updateExisting: boolean): string | null {
+  if (updateExisting || counts.changed === 0) return null;
+  const n = counts.changed;
+  return `${n} ${n === 1 ? 'row changes an existing set' : 'rows change existing sets'}. Turn on Update to apply ${n === 1 ? 'it' : 'them'}.`;
 }
 
 export function buildResultCsv(result: LineupImportCommitResult): string {
