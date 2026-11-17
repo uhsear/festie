@@ -12,7 +12,7 @@ import {
   searchLineupEntries,
   selectLineupEntries,
 } from '@festie/shared/utils';
-import { useAnnouncedLineup, type AnnouncedLineupModel } from '../../hooks/useAnnouncedLineup';
+import type { AnnouncedLineupModel } from '../../hooks/useAnnouncedLineup';
 import { useNow } from '../../hooks/useSetStatus';
 import { cn } from '../../lib/utils';
 
@@ -112,10 +112,10 @@ function Rows({ entries, textClass, ctx }: { entries: LineupEntry[]; textClass: 
 
 /**
  * The announced lineup: acts the organizer has named before, or without, set times. Shows above the
- * day cards and below the grid. A search replaces it with the acts that match.
+ * day cards and below the grid. A search replaces it with the acts that match. The route computes
+ * the model once (useAnnouncedLineup) because it also decides whether this block replaces an empty state.
  */
-export default function AnnouncedLineup({ className }: { className?: string }) {
-  const model = useAnnouncedLineup();
+export default function AnnouncedLineup({ model, className }: { model: AnnouncedLineupModel; className?: string }) {
   const festival = useFestivalStore((s) => s.currentFestival);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const sets = useFestivalStore((s) => s.sets);

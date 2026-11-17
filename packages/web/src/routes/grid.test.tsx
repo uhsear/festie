@@ -415,6 +415,23 @@ describe('GridView', () => {
       expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
     });
 
+    it('keeps the empty state when a filter emptied a day that has sets', () => {
+      storeState.sets = [timedSet];
+      setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+      render(<GridView />);
+      expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+      expect(screen.queryByText('Announced Act')).not.toBeInTheDocument();
+    });
+
+    it('lists matching announced acts under the no-results state of a search', () => {
+      storeState.searchQuery = 'ann';
+      setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+      render(<GridView />);
+      expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Announced acts' })).toBeInTheDocument();
+      expect(screen.getByText('Announced Act')).toBeInTheDocument();
+    });
+
     it('leaves the empty state to the search when nothing announced matches', () => {
       storeState.searchQuery = 'zzz';
       setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });

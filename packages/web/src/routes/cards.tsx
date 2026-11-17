@@ -13,6 +13,7 @@ import {
   groupScheduleSets,
   resolveStageColor,
   searchOtherDays,
+  lineupReplacesEmptyState,
   SCHEDULE_GROUP_BYS,
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
@@ -164,9 +165,8 @@ function CardsViewInner() {
   }
 
   const hasCrew = crews.some((c) => !c.festivalId || c.festivalId === currentFestival.id);
-  // The announced lineup stands in for "No sets for this day" while it has acts to show on this day.
-  const lineupStandsIn =
-    announced.visible && !q && (announced.noSets || announced.selection.active.length > 0);
+  // The announced lineup stands in for "No sets for this day" only when the day has no sets at all.
+  const lineupStandsIn = lineupReplacesEmptyState(announced, q);
   const actions = getHomeActions({
     phase,
     signedIn: !!user,
@@ -186,7 +186,8 @@ function CardsViewInner() {
 
       <SetTimesBanner />
       <DiscoverRow />
-      <AnnouncedLineup />
+      {/* A search lists the matching announced acts under the set results instead (below). */}
+      {q ? null : <AnnouncedLineup model={announced} />}
 
       {filteredSets.length > 0 && (
         <div className="flex items-center gap-2 w-full mx-auto max-w-[1440px] mb-[var(--space-3)]">
@@ -340,6 +341,7 @@ function CardsViewInner() {
           onSelectDay={setSelectedDay}
         />
       )}
+      {q ? <AnnouncedLineup model={announced} /> : null}
     </>
   );
 }

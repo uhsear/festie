@@ -303,7 +303,7 @@ describe('lineup-import commit: set times are out (mocked deps)', () => {
 });
 
 describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
-  function build(publishedAt: string | null) {
+  function build(publishedAt: string | null, calls: string[] = []) {
     const festivalUpdated = mock.fn((_arg: any) => {});
     const invalidateFestivalListCache = mock.fn(() => {});
     const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
@@ -323,7 +323,12 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
       sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
       ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
       stores: {
-        festivals: { getById: async () => festival },
+        festivals: {
+          getById: async () => {
+            calls.push('getById');
+            return festival;
+          },
+        },
         lineupImports: {
           commit: async () => ({
             committed: true,
@@ -331,7 +336,10 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
             importId: 'imp-1',
             writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
           }),
-          undo: async () => ({ result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } }),
+          undo: async () => {
+            calls.push('undo');
+            return { result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } };
+          },
         },
         auditLog: null,
       },
@@ -361,6 +369,13 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
     await request(app).post('/f-1/imports/imp-1/undo').expect(200);
     assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
     assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
+    const calls: string[] = [];
+    const { app } = build(PUBLISHED, calls);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.deepEqual(calls, ['getById', 'undo']);
   });
 
   test('a draft festival has no attendees, so nothing is emitted, but the list cache still drops', async () => {

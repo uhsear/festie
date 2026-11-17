@@ -15,6 +15,7 @@ import {
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
   buildGridCrewAvatarsBySet,
+  lineupReplacesEmptyState,
   type GridCrewProfile,
 } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
@@ -257,14 +258,14 @@ function GridViewInner() {
             onSavePick={handleSavePick}
             onOpenDetail={setDetailSet}
           />
-          <AnnouncedLineup className="mt-5" />
+          <AnnouncedLineup model={announced} className="mt-5" />
         </div>
       </RefreshableView>
     );
   }
 
-  // The announced lineup stands in for "No sets scheduled for this day" while it has acts to show on this day.
-  if (!allDaySets.length && announced.visible && !searchQuery.trim() && (announced.noSets || announced.selection.active.length > 0)) {
+  // The announced lineup stands in for "No sets scheduled for this day" only when the day has no sets at all.
+  if (lineupReplacesEmptyState(announced, searchQuery)) {
     return (
       <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
         <div
@@ -273,7 +274,7 @@ function GridViewInner() {
           aria-label={COPY.grid.regionLabel}
           data-scroll-sentinel
         >
-          <AnnouncedLineup className="mt-5" />
+          <AnnouncedLineup model={announced} className="mt-5" />
         </div>
       </RefreshableView>
     );
@@ -308,6 +309,8 @@ function GridViewInner() {
             }
           />
         )}
+        {/* A search lists the matching announced acts under the set results, even when no set matches. */}
+        {!allDaySets.length && searchQuery.trim() ? <AnnouncedLineup model={announced} className="mt-5" /> : null}
       </RefreshableView>
     );
   }
@@ -426,7 +429,7 @@ function GridViewInner() {
               onOpenDetail={setDetailSet}
             />
           )}
-          <AnnouncedLineup className="mt-5" />
+          <AnnouncedLineup model={announced} className="mt-5" />
         </div>
       </div>
     </RefreshableView>

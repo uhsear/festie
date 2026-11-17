@@ -22,9 +22,11 @@ vi.mock('@festie/shared/hooks', () => ({
     getStageColor: () => '#ccc',
     getStageName: () => 'Main',
     getDays: () => (festivalState.days as unknown[]) ?? [],
-    // No filter is active in this fixture, so the selected day's sets pass through.
+    // The day's sets pass through, unless a test turns on `hideAll` to stand in for My picks, a stage or genre filter.
     getFilteredSets: () =>
-      (festivalState.sets as { dayIndex: number }[]).filter((s) => s.dayIndex === festivalState.selectedDay),
+      festivalState.hideAll
+        ? []
+        : (festivalState.sets as { dayIndex: number }[]).filter((s) => s.dayIndex === festivalState.selectedDay),
   }),
 }));
 vi.mock('../hooks/useSetStatus', () => ({ useNow: () => nowMs }));
@@ -165,6 +167,7 @@ describe('CardsView announced lineup', () => {
       selectedDay: 0,
       stages: [],
       searchQuery: '',
+      hideAll: false,
       isLoading: false,
       error: null,
     });
@@ -190,6 +193,27 @@ describe('CardsView announced lineup', () => {
     setLineup([entry('1', 'Announced Act')]);
     render(<CardsView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+
+  it('keeps the empty state when a filter emptied a day that has sets', () => {
+    festivalState.sets = [mkSet('s1', '20:00', '21:00')];
+    festivalState.hideAll = true;
+    render(<CardsView />);
+    festivalState.hideAll = false;
+    // The lineup block stays above, as on any day; it must not take the filter's empty state with it.
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+
+  it('lists the announced acts that match a search under the set results', () => {
+    festivalState.sets = [mkSet('s1', '20:00', '21:00')];
+    festivalState.searchQuery = 'second';
+    const { container } = render(<CardsView />);
+    expect(screen.getByRole('heading', { name: 'Announced acts' })).toBeInTheDocument();
+    expect(screen.getByText('Second Act')).toBeInTheDocument();
+    expect(screen.queryByText('Announced Act')).not.toBeInTheDocument();
+    const grid = container.querySelector('[aria-label="Card view"]');
+    const heading = screen.getByRole('heading', { name: 'Announced acts' });
+    expect(grid && grid.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('keeps the empty state for a festival with no announced acts', () => {

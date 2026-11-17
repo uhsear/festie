@@ -261,6 +261,8 @@ export default function createLineupImportRoute(deps: any) {
         const festivalId = sanitizeIdentifier(req.params.id, 100);
         const importId = sanitizeIdentifier(req.params.importId, 100);
         if (!festivalId || !importId) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
+        // Read before the undo commits: a failed read then fails the request while nothing has changed.
+        const festival = await stores.festivals.getById(festivalId);
         const outcome = await stores.lineupImports.undo(festivalId, importId);
         if ('notFound' in outcome) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
         if ('refused' in outcome) {
@@ -272,7 +274,7 @@ export default function createLineupImportRoute(deps: any) {
           );
         }
         invalidateFestivalCache();
-        announceSetsChanged(await stores.festivals.getById(festivalId));
+        announceSetsChanged(festival);
         log.info('lineup import undone', { festivalId, importId, ...outcome.result, kept: outcome.result.kept.length });
         await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORT_UNDONE, festivalId, {
           importId,

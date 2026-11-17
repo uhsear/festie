@@ -1,6 +1,7 @@
-import type { FestivalDay, FestivalSet, LineupEntry, Stage } from '../types/domain';
+import type { Festival, FestivalDay, FestivalSet, LineupEntry, Stage } from '../types/domain';
+import { festivalPhase } from './festivalTime';
 import { formatTime } from './format';
-import { lineupNameKey, type LineupCover } from './lineupCover';
+import { coverLineup, lineupNameKey, type LineupCover } from './lineupCover';
 import { byStartTime, formatDayChip } from './scheduleFormat';
 import { foldSearch } from './setSearch';
 
@@ -83,7 +84,7 @@ export interface LineupSummary {
   /** Acts covered by at least one set, timed or not. */
   scheduled: number;
   cancelled: number;
-  /** "118 acts announced · Set times TBA", or "31 of 118 acts are on the timetable". */
+  /** "118 acts announced · Set times TBA", "31 of 118 acts are on the timetable", or "No acts announced" when only cancelled acts are left. */
   header: string;
 }
 
@@ -97,7 +98,12 @@ export function lineupSummary(lineup: readonly LineupEntry[], cover: Record<stri
   }
   const total = lineup.length - cancelled;
   const acts = `${total} ${total === 1 ? 'act' : 'acts'}`;
-  const header = scheduled === 0 ? `${acts} announced · Set times TBA` : `${scheduled} of ${acts} are on the timetable`;
+  const header =
+    total === 0
+      ? 'No acts announced'
+      : scheduled === 0
+        ? `${acts} announced · Set times TBA`
+        : `${scheduled} of ${acts} ${scheduled === 1 ? 'is' : 'are'} on the timetable`;
   return { total, scheduled, cancelled, header };
 }
 
@@ -195,4 +201,63 @@ export function groupLineupAlphabetically(
     else groups.push({ letter, entries: [entry] });
   }
   return groups;
+}
+
+export interface AnnouncedLineupModel {
+  /** False when there is nothing to show: no entries, or the festival is over. */
+  visible: boolean;
+  /** The festival has announced acts but no sets at all. */
+  noSets: boolean;
+  /** How many sets the selected day has before any filter. Zero means the day is empty, not filtered. */
+  daySetCount: number;
+  lineup: LineupEntry[];
+  days: LineupDay[];
+  cover: Record<string, LineupCover>;
+  summary: LineupSummary;
+  /** The default view for the selected day: acts with no set, no scheduled ones. */
+  selection: LineupSelection;
+}
+
+const NO_LINEUP: LineupEntry[] = [];
+
+/**
+ * Everything the attendee lineup block needs for the selected day. An unscheduled festival is over
+ * once its last day has passed; its acts that never got a set then drop out (`visible` is false).
+ */
+export function announcedLineupModel(
+  festival: Festival | null | undefined,
+  storeDays: FestivalDay[] | null | undefined,
+  sets: FestivalSet[] | null | undefined,
+  selectedDay: number,
+  now: number,
+): AnnouncedLineupModel {
+  const lineup = festival?.lineup ?? NO_LINEUP;
+  const allSets = sets ?? [];
+  const days = lineupDays(storeDays ?? [], allSets);
+  const cover = coverLineup(lineup, days, festival?.b2bSeparator || 'b2b');
+  const over = festival ? festivalPhase(festival, storeDays, new Date(now)) === 'post' : false;
+  return {
+    visible: lineup.length > 0 && !over,
+    noSets: allSets.length === 0,
+    daySetCount: allSets.filter((set) => set.dayIndex === selectedDay).length,
+    lineup,
+    days,
+    cover,
+    summary: lineupSummary(lineup, cover),
+    selection: selectLineupEntries(lineup, cover, allSets, { dayIndex: selectedDay, fullLineup: false }),
+  };
+}
+
+/**
+ * Whether the lineup block takes the place of the "no sets" empty state. Only a day that has no sets
+ * at all qualifies: when a filter (My picks, stage, genre, view-as, search) emptied the day, the
+ * empty state must stay, because it names the filter and offers the button that undoes it.
+ */
+export function lineupReplacesEmptyState(model: AnnouncedLineupModel, searchQuery: string): boolean {
+  return (
+    model.visible &&
+    searchQuery.trim() === '' &&
+    model.daySetCount === 0 &&
+    (model.noSets || model.selection.active.length > 0)
+  );
 }

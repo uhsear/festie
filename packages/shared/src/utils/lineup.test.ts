@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { FestivalDay, FestivalSet, LineupEntry, Stage } from '../types/domain';
+import type { Festival, FestivalDay, FestivalSet, LineupEntry, Stage } from '../types/domain';
 import { coverLineup } from './lineupCover';
 import {
+  announcedLineupModel,
   groupLineupAlphabetically,
   groupLineupByTier,
   lineupCoveringSets,
@@ -9,6 +10,7 @@ import {
   lineupEntryBadge,
   lineupEntryMatchesSearch,
   lineupEntryName,
+  lineupReplacesEmptyState,
   lineupSetWhen,
   lineupSummary,
   searchLineupEntries,
@@ -128,7 +130,14 @@ describe('lineupSummary', () => {
     const lineup = [entry('1', ['A']), entry('2', ['B']), entry('3', ['C'])];
     const { cover } = build(lineup, [set('s1', 'A', 0), set('s2', 'B', 1, '20:00')]);
     expect(lineupSummary(lineup, cover).header).toBe('2 of 3 acts are on the timetable');
-    expect(lineupSummary([lineup[0]!], cover).header).toBe('1 of 1 act are on the timetable');
+    expect(lineupSummary([lineup[0]!], cover).header).toBe('1 of 1 act is on the timetable');
+    expect(lineupSummary(lineup.slice(0, 2), cover).header).toBe('2 of 2 acts are on the timetable');
+  });
+
+  it('says no acts are announced when only cancelled acts are left', () => {
+    const lineup = [entry('1', ['A'], { status: 'cancelled' })];
+    const { cover } = build(lineup, []);
+    expect(lineupSummary(lineup, cover).header).toBe('No acts announced');
   });
 });
 
@@ -209,5 +218,42 @@ describe('lineupCoveringSets and lineupSetWhen', () => {
     expect(covering.map((s) => s.id)).toEqual(['early', 'tba', 'late']);
     expect(lineupSetWhen(covering[0]!, DAYS, stages)).toBe('Fri · 8:00 PM · Main Stage');
     expect(lineupSetWhen(covering[1]!, DAYS, stages)).toBe('Fri · Main Stage · Time TBA');
+  });
+});
+
+describe('announcedLineupModel and lineupReplacesEmptyState', () => {
+  const festival = (lineup: LineupEntry[], extra: Partial<Festival> = {}) =>
+    ({ id: 'f', lineup, startDate: '2026-11-06', endDate: '2026-11-07', ...extra }) as Festival;
+  const BEFORE = Date.UTC(2026, 10, 1);
+  const AFTER = Date.UTC(2026, 10, 20);
+  const dayTba = [entry('1', ['A'])];
+
+  it('replaces the empty state on a day with no sets at all', () => {
+    const model = announcedLineupModel(festival(dayTba), DAYS, [], 0, BEFORE);
+    expect(model).toMatchObject({ visible: true, noSets: true, daySetCount: 0 });
+    expect(lineupReplacesEmptyState(model, '')).toBe(true);
+  });
+
+  it('replaces it on an empty day of a mixed festival while a Day TBA act is unscheduled', () => {
+    const model = announcedLineupModel(festival(dayTba), DAYS, [set('s1', 'Z', 1, '20:00')], 0, BEFORE);
+    expect(model).toMatchObject({ noSets: false, daySetCount: 0 });
+    expect(lineupReplacesEmptyState(model, '')).toBe(true);
+  });
+
+  it('keeps the empty state when a filter, not the day, emptied the list', () => {
+    const model = announcedLineupModel(festival(dayTba), DAYS, [set('s1', 'Z', 0, '20:00')], 0, BEFORE);
+    expect(model.daySetCount).toBe(1);
+    expect(lineupReplacesEmptyState(model, '')).toBe(false);
+  });
+
+  it('keeps the empty state during a search, with nothing to list, or after the festival', () => {
+    const empty = announcedLineupModel(festival(dayTba), DAYS, [], 0, BEFORE);
+    expect(lineupReplacesEmptyState(empty, 'a')).toBe(false);
+    const scheduled = announcedLineupModel(festival(dayTba), DAYS, [set('s1', 'A', 1, '20:00')], 0, BEFORE);
+    expect(lineupReplacesEmptyState(scheduled, '')).toBe(false);
+    const over = announcedLineupModel(festival(dayTba), DAYS, [], 0, AFTER);
+    expect(over.visible).toBe(false);
+    expect(lineupReplacesEmptyState(over, '')).toBe(false);
+    expect(announcedLineupModel(null, DAYS, [], 0, BEFORE).visible).toBe(false);
   });
 });

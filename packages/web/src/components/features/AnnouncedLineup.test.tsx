@@ -17,7 +17,13 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 
-import AnnouncedLineup from './AnnouncedLineup';
+import { useAnnouncedLineup } from '../../hooks/useAnnouncedLineup';
+import AnnouncedLineupView from './AnnouncedLineup';
+
+// The routes compute the model once and pass it in; the tests do the same.
+function AnnouncedLineup() {
+  return <AnnouncedLineupView model={useAnnouncedLineup()} />;
+}
 
 const entry = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
   id,
@@ -142,7 +148,7 @@ describe('AnnouncedLineup', () => {
   it('says every act is on the timetable when none is left to list', () => {
     setFestival([entry('1', 'Covered Act')], [set('s1', 'Covered Act', 0, '20:00')]);
     render(<AnnouncedLineup />);
-    expect(screen.getByText('1 of 1 act are on the timetable')).toBeInTheDocument();
+    expect(screen.getByText('1 of 1 act is on the timetable')).toBeInTheDocument();
     expect(screen.getByText(/Every announced act for this day is on the timetable/)).toBeInTheDocument();
   });
 
