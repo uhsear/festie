@@ -130,6 +130,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       name: payload.name,
       avatarUrl: payload.avatarUrl,
       picks: payload.picks,
+      // A boolean only: the payload also reaches crew rooms, and marks are private to their owner.
+      interestsChanged: payload.interestsChanged === true,
       updatedAt: payload.updatedAt,
     });
   }
@@ -169,6 +171,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       name: profile.name,
       avatarUrl: buildAvatarUrl(user),
       picks: profile.picks || {},
+      // Rapid writes merge into one broadcast, so a later pick write must not hide an earlier interest change.
+      interestsChanged: changedFields.interests === true || _profileBatchPayloads.get(key)?.interestsChanged === true,
       updatedAt: profile.updatedAt || new Date().toISOString(),
       _batchedAt: Date.now(),
     });

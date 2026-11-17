@@ -21,6 +21,8 @@ export interface UndoResult {
   restored: number;
   removedStages: number;
   removedDays: number;
+  /** Picks that interest conversion made on the removed sets and nobody changed. Their marks are open again. */
+  autoPicksRemoved: number;
   kept: { setId: string; artist: string; reason: 'picked' | 'edited' }[];
 }
 
@@ -151,9 +153,75 @@ async function newestOpenImportId(client: any, festivalId: string): Promise<stri
   return rows[0]?.id ?? null;
 }
 
+/**
+ * Takes back the picks that conversion made on these sets: the profile's converted mark lists the set,
+ * the pick is still want-to-see, and the profile has no note, reminder or rating on it. The mark loses
+ * the set id and goes back to `open` when none are left. Any other pick stays and keeps its set.
+ * Returns the profiles it changed, so the caller can tell their open devices.
+ */
+async function removeConversionPicks(client: any, festivalId: string, setIds: string[], result: UndoResult) {
+  const { rows } = await client.query(
+    `
+  SELECT
+    fp.id,
+    fp.interests_json AS marks,
+    ARRAY(
+      SELECT
+        p.set_id
+      FROM
+        festival_profile_picks p
+      WHERE
+        p.profile_id = fp.id
+        AND p.set_id = ANY ($2::text[])
+        AND p.priority = 'want-to-see'
+        AND NOT EXISTS (SELECT 1 FROM festival_profile_notes n WHERE n.profile_id = fp.id AND n.set_id = p.set_id)
+        AND NOT (COALESCE(fp.reminders_json, '{}'::jsonb) ? p.set_id)
+        AND NOT EXISTS (SELECT 1 FROM set_ratings sr WHERE sr.user_id = fp.user_id AND sr.set_id = p.set_id)
+    ) AS candidates
+  FROM
+    festival_profiles fp
+  WHERE
+    fp.festival_id = $1
+    AND fp.deleted_at IS NULL
+    AND fp.interests_json <> '{}'::jsonb
+  ORDER BY
+    fp.id
+  FOR UPDATE OF
+    fp
+`,
+    [festivalId, setIds],
+  );
+  const changedProfileIds: string[] = [];
+  for (const row of rows) {
+    const marks: Record<string, any> = { ...row.marks };
+    const removed = new Set<string>();
+    for (const [entryId, mark] of Object.entries(marks)) {
+      if (mark?.state !== 'converted') continue;
+      const taken = (mark.sets ?? []).filter((setId: string) => row.candidates.includes(setId));
+      if (taken.length === 0) continue;
+      taken.forEach((setId: string) => removed.add(setId));
+      const left = (mark.sets ?? []).filter((setId: string) => !taken.includes(setId));
+      marks[entryId] = left.length > 0 ? { ...mark, sets: left } : { state: 'open' };
+    }
+    if (removed.size === 0) continue;
+    const ids = [...removed];
+    await client.query('DELETE FROM festival_profile_picks WHERE profile_id = $1 AND set_id = ANY($2::text[])', [row.id, ids]);
+    await client.query(
+      `UPDATE festival_profiles
+       SET interests_json = $2::jsonb, picks_json = COALESCE(picks_json, '{}'::jsonb) - $3::text[], updated_at = NOW()
+       WHERE id = $1`,
+      [row.id, JSON.stringify(marks), ids],
+    );
+    result.autoPicksRemoved += ids.length;
+    changedProfileIds.push(row.id);
+  }
+  return changedProfileIds;
+}
+
 /** Deletes the created sets nobody picked, noted, rated or set a reminder on. */
 async function removeCreatedSets(client: any, festivalId: string, setIds: string[], result: UndoResult) {
-  if (setIds.length === 0) return;
+  if (setIds.length === 0) return [];
+  const changedProfileIds = await removeConversionPicks(client, festivalId, setIds, result);
   const { rows } = await client.query(
     `
   SELECT
@@ -202,9 +270,10 @@ async function removeCreatedSets(client: any, festivalId: string, setIds: string
   );
   const removable = rows.filter((r: any) => !r.referenced).map((r: any) => r.id);
   for (const r of rows) if (r.referenced) result.kept.push({ setId: r.id, artist: r.artist, reason: 'picked' });
-  if (removable.length === 0) return;
+  if (removable.length === 0) return changedProfileIds;
   result.removed = removable.length;
   await client.query('DELETE FROM festival_sets WHERE festival_id = $1 AND id = ANY($2::text[])', [festivalId, removable]);
+  return changedProfileIds;
 }
 
 /** Puts back each changed set that nobody edited after the import. */
@@ -401,8 +470,8 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           return { refused: true as const };
         }
 
-        const result: UndoResult = { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] };
-        await removeCreatedSets(client, festivalId, record.created_set_ids, result);
+        const result: UndoResult = { removed: 0, restored: 0, removedStages: 0, removedDays: 0, autoPicksRemoved: 0, kept: [] };
+        const changedProfileIds = await removeCreatedSets(client, festivalId, record.created_set_ids, result);
         await restoreUpdatedSets(client, festivalId, record.updated_sets || [], result, markContext(locked));
         await removeCreatedStagesAndDays(client, festivalId, record, result);
         await client.query('UPDATE lineup_imports SET undone_at = NOW(), undo_summary = $2 WHERE id = $1', [
@@ -410,7 +479,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           JSON.stringify(result),
         ]);
         await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
-        return { result };
+        return { result, changedProfileIds };
       });
     },
   };

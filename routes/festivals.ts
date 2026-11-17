@@ -566,6 +566,8 @@ export default function createFestivalsRoutes(deps: any) {
         if (notified) void emitter.scheduleChanged({ festival, changes, pickersBySet });
         // The executor checks publish state, the marker and the times itself.
         if (daysSent) notifySetTimesOut(festival.id);
+        // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
+        if (daysSent || body.lineup !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
         // An admin-set venue wins over the geocoder until the location text changes in a later save.
         const venueSetByAdmin =
