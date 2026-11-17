@@ -234,7 +234,7 @@
 
             <h3>Core Architecture</h3>
             <div class="security-feature">
-                <strong>Application Servers:</strong> PM2 cluster mode with 4 Node.js instances for horizontal scalability, automatic failover, and zero-downtime deployments
+                <strong>Application Servers:</strong> A single Node.js process supervised by PM2, which restarts it automatically after a crash. Deployments restart the process, so connected clients reconnect within seconds
             </div>
             <div class="security-feature">
                 <strong>Database:</strong> PostgreSQL 16 with replication support, transaction logging, and ACID compliance for data integrity
@@ -515,13 +515,13 @@
                     </tr>
                     <tr>
                         <td>Backups</td>
-                        <td>7 daily + 4 weekly cycles (28 days)</td>
+                        <td>Dumps every 6 hours kept 30 days, plus weekly snapshots</td>
                         <td>Automatic purge after retention period</td>
                     </tr>
                     <tr>
                         <td>Audit Logs</td>
-                        <td>12 months</td>
-                        <td>Automatic archival and deletion</td>
+                        <td>90 days</td>
+                        <td>Automatic deletion</td>
                     </tr>
                     <tr>
                         <td>Session Data</td>
@@ -601,7 +601,7 @@
             <h3>Log Storage & Access</h3>
             <ul>
                 <li><strong>Storage:</strong> PostgreSQL with tamper-evident checksums</li>
-                <li><strong>Retention:</strong> 12-month retention policy with automatic archival and deletion</li>
+                <li><strong>Retention:</strong> 90-day retention policy with automatic deletion</li>
                 <li><strong>Access Control:</strong> Restricted to administrators; all log access logged</li>
                 <li><strong>Query Interface:</strong> Admin panel with filtering by user, action, date range, result status</li>
                 <li><strong>Export:</strong> Bulk export capabilities for security investigations and audits</li>
@@ -629,7 +629,7 @@
                 <strong>Compression:</strong> Gzip compression reduces backup size by 70-80%
             </div>
             <div class="security-feature">
-                <strong>Retention:</strong> 7 daily backups + 4 weekly backups (28-day rolling window)
+                <strong>Retention:</strong> Dumps every 6 hours kept for 30 days, plus weekly snapshots taken on Sundays
             </div>
 
             <h3>Retention Policy</h3>
@@ -644,22 +644,16 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Daily Backups</td>
-                        <td>Last 7 days</td>
-                        <td>7 backups</td>
-                        <td>7 days</td>
+                        <td>Regular Dumps</td>
+                        <td>Last 30 days</td>
+                        <td>Every 6 hours</td>
+                        <td>30 days</td>
                     </tr>
                     <tr>
-                        <td>Weekly Backups</td>
-                        <td>Last 4 weeks</td>
-                        <td>4 backups</td>
-                        <td>4 weeks</td>
-                    </tr>
-                    <tr>
-                        <td>Oldest Backup</td>
-                        <td>Previous weekly</td>
-                        <td>1 backup</td>
-                        <td>~28 days total</td>
+                        <td>Weekly Snapshots</td>
+                        <td>Sunday dumps</td>
+                        <td>Several recent weeks</td>
+                        <td>Rolling window</td>
                     </tr>
                 </tbody>
             </table>
