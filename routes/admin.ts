@@ -235,7 +235,7 @@ export default function createAdminRoutes(deps: any): Router {
     }
   });
 
-  // ── GET /growth — read-only growth report: sign-ups by ref, follows, news sends and held pushes ──
+  // ── GET /growth — read-only growth report: sign-ups by ref, follows, and people reached by news pushes, emails and held pushes ──
   // Every ref count is a floor: mobile sign-ups and visitors who cleared storage carry no ref.
   router.get('/growth', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
     try {
@@ -247,7 +247,7 @@ export default function createAdminRoutes(deps: any): Router {
         stores.pool.query(
           `SELECT ${dayOf('ff.created_at')} AS day, ff.festival_id AS "festivalId", f.name AS "festivalName", COUNT(*)::int AS follows
            FROM festival_follows ff JOIN festivals f ON f.id = ff.festival_id
-           WHERE ff.created_at::date > CURRENT_DATE - $1::int
+           WHERE ff.created_at >= CURRENT_DATE - ($1::int - 1)
            GROUP BY 1, 2, 3 ORDER BY 1 DESC, 4 DESC, 3 ASC`,
           days,
         ),
@@ -268,22 +268,42 @@ export default function createAdminRoutes(deps: any): Router {
     2 ASC
 `,
         ),
+        // People, not rows: send.ts logs one row per device and reengagement.ts one per email.
         stores.pool.query(
-          `SELECT ${dayOf('created_at')} AS day, type, status, COUNT(*)::int AS count
-           FROM notification_log
-           WHERE type = ANY($2::text[]) AND status IN ('sent', 'held') AND created_at::date > CURRENT_DATE - $1::int
-           GROUP BY 1, 2, 3 ORDER BY 1 DESC, 2 ASC`,
+          `
+  SELECT
+    type,
+    CASE
+      WHEN status = 'held' THEN 'held'
+      WHEN platform = 'email' THEN 'email'
+      ELSE 'push'
+    END AS channel,
+    COUNT(DISTINCT user_id)::int AS count
+  FROM
+    notification_log
+  WHERE
+    type = ANY ($2::text[])
+    AND status IN ('sent', 'held')
+    AND created_at >= CURRENT_DATE - ($1::int - 1)
+  GROUP BY
+    1,
+    2
+  ORDER BY
+    1 ASC,
+    2 ASC
+`,
           [...days, GROWTH_NEWS_TYPES],
         ),
       ]);
-      const newsBy = (status: string) =>
-        news.rows.filter((row: any) => row.status === status).map(({ day, type, count }: any) => ({ day, type, count }));
+      const newsBy = (channel: string) =>
+        news.rows.filter((row: any) => row.channel === channel).map(({ type, count }: any) => ({ type, count }));
       return sendSuccess(res, {
         days: req.validatedQuery.days,
         signupsByRef: signups.rows,
         followsPerDay: followsPerDay.rows,
         followers: followers.rows,
-        newsSends: newsBy('sent'),
+        newsPushes: newsBy('push'),
+        newsEmails: newsBy('email'),
         newsHeld: newsBy('held'),
         generatedAt: new Date().toISOString(),
       });

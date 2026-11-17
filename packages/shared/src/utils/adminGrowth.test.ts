@@ -14,10 +14,11 @@ const report: AdminGrowthReport = {
     { day: '2026-11-01', festivalId: 'f2', festivalName: null, follows: 9 },
   ],
   followers: [{ festivalId: 'f1', festivalName: 'Fest One', followers: 12 }],
-  newsSends: [
-    { day: '2026-11-01', type: 'lineup_drop', count: 4 },
-    { day: '2026-11-02', type: 'lineup_drop', count: 6 },
+  newsPushes: [
+    { type: 'lineup_drop', count: 4 },
+    { type: 'set_times_out', count: 6 },
   ],
+  newsEmails: [{ type: 'lineup_drop', count: 3 }],
   newsHeld: [],
   generatedAt: '2026-11-03T00:00:00Z',
 };
@@ -34,7 +35,11 @@ describe('summarizeGrowth', () => {
       ['Fest One', 4],
     ]);
     expect(summary.followers[0]).toEqual({ key: 'f1', label: 'Fest One', total: 12 });
-    expect(summary.newsSent).toEqual([{ key: 'lineup_drop', label: 'lineup_drop', total: 10 }]);
+    expect(summary.newsPushed.map((r) => [r.label, r.total])).toEqual([
+      ['set_times_out', 6],
+      ['lineup_drop', 4],
+    ]);
+    expect(summary.newsEmailed).toEqual([{ key: 'lineup_drop', label: 'lineup_drop', total: 3 }]);
     expect(summary.newsHeld).toEqual([]);
   });
 });

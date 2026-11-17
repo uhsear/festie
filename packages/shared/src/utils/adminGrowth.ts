@@ -4,8 +4,10 @@ export interface AdminGrowthReport {
   signupsByRef: { day: string; ref: string; signups: number }[];
   followsPerDay: { day: string; festivalId: string; festivalName: string | null; follows: number }[];
   followers: { festivalId: string; festivalName: string | null; followers: number }[];
-  newsSends: { day: string; type: string; count: number }[];
-  newsHeld: { day: string; type: string; count: number }[];
+  /** People reached in the window, per news type. Two devices of one person count once. */
+  newsPushes: { type: string; count: number }[];
+  newsEmails: { type: string; count: number }[];
+  newsHeld: { type: string; count: number }[];
   generatedAt: string;
 }
 
@@ -27,14 +29,15 @@ function totalBy<T>(rows: T[], key: (row: T) => string, label: (row: T) => strin
   return [...totals.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
 }
 
-/** The window totals the admin card shows: per ref, per festival and per news type. */
+/** The window totals the admin card shows: per ref, per festival and per news type (people, not rows). */
 export function summarizeGrowth(report: AdminGrowthReport) {
   const festivalLabel = (row: { festivalId: string; festivalName: string | null }) => row.festivalName || row.festivalId;
   return {
     signups: totalBy(report.signupsByRef, (r) => r.ref, (r) => r.ref, (r) => r.signups),
     newFollows: totalBy(report.followsPerDay, (r) => r.festivalId, festivalLabel, (r) => r.follows),
     followers: totalBy(report.followers, (r) => r.festivalId, festivalLabel, (r) => r.followers),
-    newsSent: totalBy(report.newsSends, (r) => r.type, (r) => r.type, (r) => r.count),
+    newsPushed: totalBy(report.newsPushes, (r) => r.type, (r) => r.type, (r) => r.count),
+    newsEmailed: totalBy(report.newsEmails, (r) => r.type, (r) => r.type, (r) => r.count),
     newsHeld: totalBy(report.newsHeld, (r) => r.type, (r) => r.type, (r) => r.count),
   };
 }

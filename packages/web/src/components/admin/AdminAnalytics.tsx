@@ -16,6 +16,15 @@ import { useAdminSearch } from './useAdminSearch';
  * Analytics dashboard: named questions, funnel and true totals.
  */
 export default function AdminAnalytics() {
+  return (
+    <div className="space-y-8">
+      <AnalyticsDashboard />
+      <AdminGrowth />
+    </div>
+  );
+}
+
+function AnalyticsDashboard() {
   const [{ festival }, setAdminSearch] = useAdminSearch();
   const { data, error, isError, isPending, refetch } = useQuery({
     queryKey: adminKeys.analytics(festival),
@@ -112,8 +121,6 @@ export default function AdminAnalytics() {
       )}
 
       <FestivalStats stats={data.festivalStats} onSelect={(id) => selectFestival(id)} />
-
-      <AdminGrowth />
 
       {/* Active Users */}
       {data.activeUsers.length > 0 && (

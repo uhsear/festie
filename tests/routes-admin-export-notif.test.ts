@@ -2112,7 +2112,7 @@ describe('routes/admin.js — GET /ref-counts', () => {
     assert.equal(deps.stores.pool.query.mock.calls.length, 0);
   });
 
-  test('GET /growth returns sign-ups by ref, follows, followers, news sends and held pushes, read-only', async () => {
+  test('GET /growth returns sign-ups by ref, follows, followers, people reached by news pushes and emails, and held pushes, read-only', async () => {
     const { default: createAdminRoutes } = await import('../routes/admin.js');
     const deps = makeDeps();
     const queries: any[] = [];
@@ -2122,8 +2122,9 @@ describe('routes/admin.js — GET /ref-counts', () => {
       if (sql.includes('notification_log')) {
         return {
           rows: [
-            { day: '2026-11-01', type: 'lineup_drop', status: 'sent', count: 5 },
-            { day: '2026-11-01', type: 'lineup_drop', status: 'held', count: 2 },
+            { type: 'lineup_drop', channel: 'email', count: 3 },
+            { type: 'lineup_drop', channel: 'held', count: 2 },
+            { type: 'lineup_drop', channel: 'push', count: 5 },
           ],
         };
       }
@@ -2138,13 +2139,16 @@ describe('routes/admin.js — GET /ref-counts', () => {
     assert.deepEqual(res.body.data.signupsByRef, [{ day: '2026-11-01', ref: 'share-festival', signups: 2 }]);
     assert.equal(res.body.data.followsPerDay[0].follows, 4);
     assert.equal(res.body.data.followers[0].followers, 9);
-    assert.deepEqual(res.body.data.newsSends, [{ day: '2026-11-01', type: 'lineup_drop', count: 5 }]);
-    assert.deepEqual(res.body.data.newsHeld, [{ day: '2026-11-01', type: 'lineup_drop', count: 2 }]);
+    assert.deepEqual(res.body.data.newsPushes, [{ type: 'lineup_drop', count: 5 }]);
+    assert.deepEqual(res.body.data.newsEmails, [{ type: 'lineup_drop', count: 3 }]);
+    assert.deepEqual(res.body.data.newsHeld, [{ type: 'lineup_drop', count: 2 }]);
     assert.equal(Number(res.body.data.days), 14);
     assert.equal(queries.length, 4);
     for (const sql of queries) assert.doesNotMatch(sql, /(INSERT|UPDATE|DELETE)/i);
     const newsCall = (deps.stores.pool.query.mock.calls as any[]).find((c) => c.arguments[0].includes('notification_log'));
     assert.deepEqual(newsCall.arguments[1][1], ['lineup_drop', 'set_times_out']);
+    assert.match(newsCall.arguments[0], /COUNT\(DISTINCT user_id\)/);
+    assert.match(newsCall.arguments[0], /created_at >= CURRENT_DATE/);
   });
 
   test('GET /growth is admin-only and reports a query failure as 500', async () => {

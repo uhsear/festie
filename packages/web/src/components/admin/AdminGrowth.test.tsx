@@ -25,16 +25,18 @@ describe('AdminGrowth', () => {
       signupsByRef: [{ day: '2026-11-01', ref: 'share-festival', signups: 3 }],
       followsPerDay: [],
       followers: [{ festivalId: 'f1', festivalName: 'Fest One', followers: 12 }],
-      newsSends: [],
-      newsHeld: [{ day: '2026-11-01', type: 'lineup_drop', count: 2 }],
+      newsPushes: [],
+      newsEmails: [],
+      newsHeld: [{ type: 'lineup_drop', count: 2 }],
       generatedAt: '2026-11-02T00:00:00Z',
     });
     renderGrowth();
-    expect(await screen.findByText('Growth, last 30 days')).toBeInTheDocument();
+    expect(await screen.findByText('Growth, all festivals, last 30 days')).toBeInTheDocument();
     expect(screen.getByText('share-festival')).toBeInTheDocument();
     expect(screen.getByText('Fest One')).toBeInTheDocument();
     expect(screen.getByText('lineup_drop')).toBeInTheDocument();
     expect(screen.getByText('No news pushes sent.')).toBeInTheDocument();
+    expect(screen.getByText('No news emails sent.')).toBeInTheDocument();
   });
 
   it('says so when the report fails to load', async () => {

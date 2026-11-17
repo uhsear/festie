@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -37,6 +37,8 @@ describe('FinishSignupPage', () => {
     vi.clearAllMocks();
     mockState = payload;
   });
+
+  afterEach(() => sessionStorage.removeItem('festie-ref'));
 
   it('redirects to /login when there is no router state', async () => {
     mockState = undefined;
@@ -91,7 +93,6 @@ describe('FinishSignupPage', () => {
     await waitFor(() =>
       expect(completeProviderSignup).toHaveBeenCalledWith(expect.objectContaining({ ref: 'share-festival' })),
     );
-    sessionStorage.removeItem('festie-ref');
   });
 
   it('returns to a safe `next` from login, and ignores an unsafe one', async () => {

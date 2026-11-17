@@ -25,7 +25,7 @@ function TotalsList({ title, rows, empty }: { title: string; rows: GrowthTotal[]
   );
 }
 
-/** Read-only growth card: sign-ups by source, follows, news sends and held pushes. */
+/** Read-only growth card: sign-ups by source, follows, people reached by news pushes and emails, and held pushes. */
 export default function AdminGrowth() {
   const { data, error, isError, isPending } = useQuery({
     queryKey: adminKeys.growth,
@@ -41,7 +41,7 @@ export default function AdminGrowth() {
   const summary = summarizeGrowth(data);
   return (
     <div>
-      <h2 className="type-heading text-text-primary mb-1">Growth, last {data.days} days</h2>
+      <h2 className="type-heading text-text-primary mb-1">Growth, all festivals, last {data.days} days</h2>
       <p className="text-xs text-text-muted mb-4">
         Sign-up counts are a floor: mobile sign-ups and visitors who cleared storage carry no source. Follows are
         counted per festival, not by source.
@@ -50,8 +50,9 @@ export default function AdminGrowth() {
         <TotalsList title="Sign-ups by source" rows={summary.signups} empty="No tagged sign-ups yet." />
         <TotalsList title="New follows by festival" rows={summary.newFollows} empty="No new follows." />
         <TotalsList title="Followers per festival (all time)" rows={summary.followers} empty="No followers yet." />
-        <TotalsList title="News pushes sent, by type" rows={summary.newsSent} empty="No news pushes sent." />
-        <TotalsList title="News pushes held, by type" rows={summary.newsHeld} empty="No news pushes held." />
+        <TotalsList title="People pushed news, by type" rows={summary.newsPushed} empty="No news pushes sent." />
+        <TotalsList title="People emailed news, by type" rows={summary.newsEmailed} empty="No news emails sent." />
+        <TotalsList title="People with a news push held, by type" rows={summary.newsHeld} empty="No news pushes held." />
       </div>
     </div>
   );
