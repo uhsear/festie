@@ -6,7 +6,12 @@ import {
   DB_STUBS, dumpStamp, hasCommand, makeTempDir, runScript, stubEnv, writeStub,
 } from './_backup-stubs';
 
-const skip = hasCommand('bash') ? false : 'needs bash';
+// The drill requires mode 600 on its credentials file, which Windows cannot represent.
+const skip = hasCommand('bash') && process.platform !== 'win32' ? false : 'needs bash on Linux';
+
+const SERVICE_KEYS = ['FIREBASE_CREDENTIALS_PATH', 'RESEND_API_KEY', 'VAPID_PRIVATE_KEY', 'FCM_RETRY_WEBHOOK_URL', 'SENTRY_DSN'];
+const DRILL_CREDS = 'DB_USER=festie\nPGPASSWORD=drillpw\nDB_NAME=festie_test\n';
+const PROD_URL = 'DATABASE_URL=postgres://festival:prodpw@127.0.0.1:5432/festival_planner\n';
 
 // Sidecar rows: name|count|newest write. Restored counts come from RESTORED below.
 const SIDECAR = 'users|100|2026-11-17 01:00:00+00\nfestivals|10|2026-11-17 01:00:00+00\nfestival_sets|500|\n';
@@ -40,7 +45,7 @@ describe('scripts/backup-restore-drill.sh', { skip }, () => {
     writeStub(bin, 'pg_restore', '[ "$1" = "--list" ] && printf "1; 1259 1 TABLE public users festie\\n2; 1259 2 TABLE public festivals festie\\n3; 1259 3 TABLE public festival_sets festie\\n4; 0 0 TABLE DATA public users festie\\n"; true');
     writeStub(bin, 'psql', [
       'q="$*"',
-      'case "$q" in *information_schema*) echo 3; exit 0;; esac',
+      'case "$q" in *information_schema*) echo 3; exit 0;; *pg_database*) echo "$EXISTING_DB"; exit 0;; esac',
       't=$(echo "$q" | sed -n "s/.*FROM \\([a-z_]*\\);.*/\\1/p")',
       'grep "^$t=" "$RESTORED_FILE" | cut -d= -f2',
     ].join('\n'));
@@ -58,7 +63,8 @@ describe('scripts/backup-restore-drill.sh', { skip }, () => {
     });
     delete env.DB_PORT;
     delete env.RESTORE_DB;
-    delete env.SENTRY_DSN;
+    for (const key of SERVICE_KEYS) delete env[key];
+    delete env.EXISTING_DB;
   }
 
   const run = (extra: Record<string, string> = {}) => runScript('scripts/backup-restore-drill.sh', [], { ...env, ...extra });
@@ -76,6 +82,70 @@ describe('scripts/backup-restore-drill.sh', { skip }, () => {
     assert.match(r.stdout, /host=127\.0\.0\.1 port=5433 admin_db=festie_test restore_db=festie_drill_\d+/);
     assert.ok(dbCommands().some((c) => c.startsWith('createdb ')));
     assert.ok(dbCommands().some((c) => c.startsWith('dropdb ')));
+  });
+
+  it('sends every database call to port 5433 with the drill password', () => {
+    assert.equal(run().status, 0);
+    const calls = dbCommands().filter((c) => !c.startsWith('pg_restore --list'));
+    assert.ok(calls.length >= 5, `expected several DB calls, saw ${calls.length}`);
+    for (const call of calls) assert.match(call, / -p 5433 /, call);
+    const passwords = readFileSync(`${log}.pw`, 'utf8').split('\n').filter(Boolean);
+    for (const line of passwords) assert.match(line, /^\S+ drillpw$/, line);
+  });
+
+  it('refuses when the credentials file sets DB_PORT=5432', () => {
+    writeFileSync(path.join(work, 'drill-db.env'), `${DRILL_CREDS}DB_PORT=5432\n`);
+    const r = run();
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /not 5433/);
+    assert.deepEqual(dbCommands(), []);
+  });
+
+  it('refuses when the credentials file is not mode 600', () => {
+    chmodSync(path.join(work, 'drill-db.env'), 0o644);
+    const r = run();
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /mode 600/);
+    assert.deepEqual(dbCommands(), []);
+  });
+
+  it('refuses when the credentials file sets a production service key', () => {
+    writeFileSync(path.join(work, 'drill-db.env'), `${DRILL_CREDS}RESEND_API_KEY=re_x\n`);
+    const r = run();
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /RESEND_API_KEY/);
+    assert.deepEqual(dbCommands(), []);
+  });
+
+  it('refuses when the production .env has no DATABASE_URL or passphrase', () => {
+    writeFileSync(path.join(work, 'prod.env'), 'BACKUP_GPG_PASSPHRASE=secret\n');
+    let r = run();
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /DATABASE_URL not set/);
+    writeFileSync(path.join(work, 'prod.env'), PROD_URL);
+    r = run();
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /BACKUP_GPG_PASSPHRASE not set/);
+    assert.deepEqual(dbCommands(), []);
+  });
+
+  it('refuses a restore DB that already exists and never drops it', () => {
+    const r = run({ EXISTING_DB: '1' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /already exists/);
+    assert.deepEqual(dbCommands().filter((c) => /^(createdb|dropdb) /.test(c)), []);
+  });
+
+  it('fails when the sidecar has no users or festivals row', () => {
+    setup({ sidecar: 'users|100|\nfestival_sets|500|\n' });
+    let r = run();
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /no festivals row/);
+    setup({ sidecar: 'festivals|10|\nfestival_sets|500|\n' });
+    r = run();
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /no users row/);
+    assert.deepEqual(dbCommands(), []);
   });
 
   it('refuses DB_PORT=5432 before any database command', () => {
