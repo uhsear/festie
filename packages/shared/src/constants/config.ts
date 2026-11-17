@@ -467,6 +467,9 @@ export const FESTIVAL_READY_COPY = {
     reminders: { label: 'Turn on set reminders', hint: 'Get a reminder before each set you picked.' },
     offline: { label: 'Download for offline', hint: 'Keep your schedule and picks when the signal drops.' },
   },
+  /** The picks item when the festival has an announced lineup: a mark counts too. */
+  markOrPickLabel: 'Mark acts or pick sets',
+  markOrPickHint: 'Tap Interested on an announced act, or Must See, Want to See or Maybe on a set.',
 } as const;
 
 /** Guest sign-in prompts, single-sourced so web and mobile teasers match. */

@@ -57,6 +57,7 @@ import {
   FestivalDay,
   Stage,
   Profile,
+  InterestMark,
   Priority,
   SavePickRequest,
   SaveNoteRequest,
@@ -64,7 +65,14 @@ import {
 } from '../types';
 
 import { logicalDayIndexAt } from '../utils/dayOf';
-import { mergeGuestPickMaps } from '../utils/guestPicks';
+import {
+  guestInterestIdsToMerge,
+  mergeGuestPickMaps,
+  newlyConvertedCount,
+  planInterestConversion,
+} from '../utils/guestPicks';
+import { lineupDays } from '../utils/lineup';
+import { coverLineup } from '../utils/lineupCover';
 import { writeOutcomeOf, type WriteOutcome } from '../utils/crewWrites';
 import { resolveFestivalTimeZone } from '../utils/festivalTime';
 import { useFestivalUIStore } from './festivalUIStore';
@@ -117,6 +125,11 @@ export interface FestivalDataState {
    * account-only. `mergeGuestPicks` moves them onto the account at sign-in.
    */
   guestPicks: Record<string, Record<string, Priority>>;
+  /**
+   * A guest's "Interested" marks, per festival id then lineup entry id: the same mark objects a
+   * profile holds. Persisted like `guestPicks`. `mergeGuestInterests` sends the open ones at sign-in.
+   */
+  guestInterests: Record<string, Record<string, InterestMark>>;
 }
 
 export interface PickSyncEntry {
@@ -140,9 +153,31 @@ export interface FestivalDataActions {
    * Patch a single profile's picks in place from a realtime socket payload,
    * avoiding a full /profiles refetch on every pick event. Returns false if the
    * profile isn't loaded yet or no picks were provided — the caller should then
-   * fall back to a full reload (e.g. a brand-new joiner).
+   * fall back to a full reload (e.g. a brand-new joiner). It also returns false when the
+   * payload says `interestsChanged`: marks never travel in the payload, so a reload reads them.
    */
-  applyProfilePatch: (patch: { profileId: string; picks?: Record<string, Priority> }) => boolean;
+  applyProfilePatch: (patch: {
+    profileId: string;
+    picks?: Record<string, Priority>;
+    interestsChanged?: boolean;
+  }) => boolean;
+  /**
+   * Mark or unmark an announced act. Signed in: one add or remove delta to PUT /profiles/:id with its
+   * own `interest-<profileId>-<entryId>` clientId, so offline taps on one act collapse to the last
+   * one. A guest's mark stays on the device. Clearing a mark never removes picks.
+   */
+  toggleInterest: (entryId: string) => Promise<void>;
+  /**
+   * Send a guest's open marks to the account at sign-in, per festival. Marks on acts that left the
+   * lineup are dropped. Concurrent calls share one in-flight promise.
+   */
+  mergeGuestInterests: () => Promise<void>;
+  /**
+   * A guest's marks become guest picks when sets cover the act. Runs after a fresh festival load,
+   * never on the persisted copy, and drops marks on acts that left the lineup. Signed-in users
+   * convert on the server.
+   */
+  convertGuestInterests: () => void;
   savePick: (request: SavePickRequest) => Promise<void>;
   /**
    * Bulk-apply ONE priority to many sets in a single coalesced write (M2 bulk
@@ -184,6 +219,11 @@ export function selectMyPicks(state: FestivalDataState): Record<string, Priority
   return state.currentProfile?.picks ?? state.guestPicks[state.currentFestivalId ?? ''] ?? null;
 }
 
+/** The interest marks the current viewer sees: the profile's, else a guest's for this festival. */
+export function selectMyInterests(state: FestivalDataState): Record<string, InterestMark> | null {
+  return state.currentProfile?.interests ?? state.guestInterests[state.currentFestivalId ?? ''] ?? null;
+}
+
 // ── Persisted allProfiles snapshot bounds (F1) ─────────────────────────────
 // allProfiles powers crew-overlap / crew-digest / grid-overlap, which render
 // EMPTY on a cold offline start unless persisted. We persist a BOUNDED,
@@ -211,7 +251,7 @@ function slimProfileForCache(p: Profile): Pick<Profile, 'id' | 'userId' | 'name'
 function rollbackKeys<T>(
   get: () => FestivalDataStore,
   set: (partial: Partial<FestivalDataStore>) => void,
-  field: 'picks' | 'notes' | 'reminders',
+  field: 'picks' | 'notes' | 'reminders' | 'interests',
   prev: Record<string, T | undefined>,
   message: string,
 ): void {
@@ -251,12 +291,37 @@ function setGuestFestivalPicks(
   set({ guestPicks: Object.keys(picks).length > 0 ? { ...others, [festivalId]: picks } : others });
 }
 
+/** Store one festival's guest marks; an empty map removes the festival entry. */
+function setGuestFestivalInterests(
+  get: () => FestivalDataStore,
+  set: (partial: Partial<FestivalDataStore>) => void,
+  festivalId: string,
+  marks: Record<string, InterestMark>,
+): void {
+  const { [festivalId]: _old, ...others } = get().guestInterests;
+  set({ guestInterests: Object.keys(marks).length > 0 ? { ...others, [festivalId]: marks } : others });
+}
+
+/** The count for the "now have sets" toast, in the wording the plan fixes. */
+function showConvertedToast(count: number): void {
+  if (count <= 0) return;
+  const acts = count === 1 ? '1 act you marked now has a set' : `${count} acts you marked now have sets`;
+  useUIStore.getState().showToast(`${acts}. We added ${count === 1 ? 'it' : 'them'} to your picks.`, { kind: 'success' });
+}
+
 function guestFestivalKey(festivalId: string | null | undefined): string {
   if (!festivalId) throw new Error('Choose a festival first');
   return festivalId;
 }
 
 let guestMergeInFlight: Promise<void> | null = null;
+let guestInterestMergeInFlight: Promise<void> | null = null;
+
+/** interestAdd takes at most 50 ids per request. */
+const INTEREST_BATCH = 50;
+
+/** The server's MAX_PICKS, as a cap for converting a guest's marks (a guest has no account limit to read). */
+const GUEST_MAX_PICKS = 500;
 
 // One in-flight join per festival, so two quick taps send one POST (the
 // profile-join rate limit is 10 a minute).
@@ -380,6 +445,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   savesInFlight: 0,
   lastSavedAt: null,
   guestPicks: {},
+  guestInterests: {},
 
   loadFestivals: async () => {
     set({ isLoading: true, error: null });
@@ -487,6 +553,13 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       // The day selector opens on the logical festival day containing now, in the
       // festival zone (01:00 still counts as the night before), else day 0.
       restoreUIForFestival(festivalId, festival, stages, days);
+
+      // A fresh response can show that sets now cover marked acts. A signed-in user's marks converted
+      // on the server, a guest's convert here, and neither runs on the persisted copy.
+      if (prevState.currentProfile?.id === currentProfile?.id) {
+        showConvertedToast(newlyConvertedCount(prevState.currentProfile?.interests, currentProfile?.interests));
+      }
+      if (!useAuthStore.getState().user) get().convertGuestInterests();
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load festival');
       // Point the id back at the festival whose data is still loaded, so the id
@@ -522,8 +595,13 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
               picks: prevState.currentProfile.picks,
               notes: prevState.currentProfile.notes,
               reminders: prevState.currentProfile.reminders,
+              interests: prevState.currentProfile.interests,
             }
           : serverProfile;
+      // One toast per reload: marks that turned from open to converted since the last read.
+      if (prevState.currentProfile?.id === currentProfile?.id) {
+        showConvertedToast(newlyConvertedCount(prevState.currentProfile?.interests, currentProfile?.interests));
+      }
       set({
         allProfiles: profiles,
         pickCounts,
@@ -556,8 +634,9 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
     set({ currentProfile: profile });
   },
 
-  applyProfilePatch: ({ profileId, picks }) => {
-    if (!picks) return false;
+  applyProfilePatch: ({ profileId, picks, interestsChanged }) => {
+    // Marks never travel in the payload (it also reaches crew rooms), so the caller reloads to read them.
+    if (interestsChanged || !picks) return false;
     const { allProfiles, currentProfile } = get();
     const idx = allProfiles.findIndex((p) => p.id === profileId);
     if (idx === -1) return false; // not loaded — caller falls back to full reload
@@ -903,6 +982,129 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
     }
   },
 
+  toggleInterest: async (entryId: string) => {
+    if (isGuestWrite(get)) {
+      const festivalId = guestFestivalKey(get().currentFestivalId);
+      const next = { ...(get().guestInterests[festivalId] ?? {}) };
+      if (next[entryId]) delete next[entryId];
+      else next[entryId] = { state: 'open' };
+      setGuestFestivalInterests(get, set, festivalId, next);
+      return;
+    }
+    if (!get().currentProfile) {
+      try {
+        await joinBeforeWrite(get, get().currentFestivalId);
+      } catch (err) {
+        set({ error: mapErrorToUserMessage(err, 'Failed to save your mark') });
+        throw err;
+      }
+    }
+    // Snapshot only the one key this call owns (see rollbackKeys).
+    const prevMark = get().currentProfile?.interests?.[entryId];
+    set({ error: null });
+    try {
+      const { currentProfile } = get();
+      if (!currentProfile) {
+        throw new Error('No active profile -- select a festival first');
+      }
+      const marked = !!currentProfile.interests?.[entryId];
+      const interests = { ...(currentProfile.interests ?? {}) };
+      if (marked) delete interests[entryId];
+      else interests[entryId] = { state: 'open' };
+      // Optimistic, so the toggle fills at once even offline (the PUT is then queued).
+      set({ currentProfile: { ...currentProfile, interests } });
+      await trackedPut(
+        get,
+        set,
+        `/profiles/${currentProfile.id}`,
+        marked ? { interestRemove: [entryId] } : { interestAdd: [entryId] },
+        `interest-${currentProfile.id}-${entryId}`,
+      );
+    } catch (err) {
+      rollbackKeys(get, set, 'interests', { [entryId]: prevMark }, mapErrorToUserMessage(err, 'Failed to save your mark'));
+      throw err;
+    }
+  },
+
+  // Guest-mark merge, run at the end of mergeGuestPicks (so after login, register and each checkSession).
+  // Per festival: POST /profiles gets or creates the profile, then the guest's open marks that are still
+  // in the lineup and not already on the account go up as interestAdd deltas. A 404 means the festival is
+  // gone, so its marks clear. Any other error keeps them for the next sign-in or app start.
+  mergeGuestInterests: () => {
+    if (guestInterestMergeInFlight) return guestInterestMergeInFlight;
+    guestInterestMergeInFlight = (async () => {
+      if (!useFestivalDataStore.persist.hasHydrated()) {
+        await new Promise<void>((resolve) => {
+          const unsub = useFestivalDataStore.persist.onFinishHydration(() => {
+            unsub();
+            resolve();
+          });
+        });
+      }
+      if (!useAuthStore.getState().user) return;
+      let mergedCurrent = false;
+      for (const festivalId of Object.keys(get().guestInterests)) {
+        const guest = get().guestInterests[festivalId];
+        if (!guest) continue;
+        const dropFestival = () => {
+          const { [festivalId]: _done, ...rest } = get().guestInterests;
+          set({ guestInterests: rest });
+        };
+        try {
+          const profile = await api.post<Profile>('/profiles', { festivalId });
+          const state = get();
+          const lineup =
+            festivalId === state.currentFestivalId && state.currentFestival?.lineup
+              ? state.currentFestival.lineup
+              : ((await api.get<FestivalDetailResponse>(`/festivals/${festivalId}`)).lineup ?? []);
+          const ids = guestInterestIdsToMerge(guest, profile.interests, new Set(lineup.map((entry) => entry.id)));
+          for (let i = 0; i < ids.length; i += INTEREST_BATCH) {
+            await api.put(
+              `/profiles/${profile.id}`,
+              { interestAdd: ids.slice(i, i + INTEREST_BATCH) },
+              { clientId: `interest-merge-${profile.id}-${i}`, offlineLabel: 'Update marks' },
+            );
+          }
+          if (ids.length > 0 && festivalId === get().currentFestivalId) mergedCurrent = true;
+          dropFestival();
+        } catch (err) {
+          if ((err as { status?: number } | null)?.status === 404) dropFestival();
+          else console.warn('guest interest merge failed', festivalId, err);
+        }
+      }
+      const currentId = get().currentFestivalId;
+      if (mergedCurrent && currentId) await get().loadProfiles(currentId).catch(() => {});
+    })().finally(() => {
+      guestInterestMergeInFlight = null;
+    });
+    return guestInterestMergeInFlight;
+  },
+
+  convertGuestInterests: () => {
+    if (useAuthStore.getState().user) return;
+    const { currentFestivalId: festivalId, currentFestival, days, sets, guestInterests, guestPicks } = get();
+    const stored = festivalId ? guestInterests[festivalId] : undefined;
+    if (!festivalId || !stored || !currentFestival || !Array.isArray(currentFestival.lineup)) return;
+    const lineup = currentFestival.lineup;
+    // An act that left the lineup takes its mark with it.
+    const lineupIds = new Set(lineup.map((entry) => entry.id));
+    const marks = Object.fromEntries(Object.entries(stored).filter(([entryId]) => lineupIds.has(entryId)));
+    const picks = guestPicks[festivalId] ?? {};
+    const plan = planInterestConversion({
+      marks,
+      picks,
+      cover: coverLineup(lineup, lineupDays(days, sets), currentFestival.b2bSeparator || 'b2b'),
+      existingSetIds: new Set(sets.map((s) => s.id)),
+      maxPicks: GUEST_MAX_PICKS,
+      now: new Date().toISOString(),
+    });
+    const pruned = Object.keys(marks).length !== Object.keys(stored).length;
+    if (!plan.changed && !pruned) return;
+    if (Object.keys(plan.added).length > 0) setGuestFestivalPicks(get, set, festivalId, { ...picks, ...plan.added });
+    setGuestFestivalInterests(get, set, festivalId, plan.marks);
+    showConvertedToast(newlyConvertedCount(marks, plan.marks));
+  },
+
   setError: (error: string | null) => {
     set({ error });
   },
@@ -966,6 +1168,8 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       }
       const currentId = get().currentFestivalId;
       if (mergedCurrent && currentId) await get().loadProfiles(currentId).catch(() => {});
+      // Marks ride with picks: every sign-in path that merges picks merges marks too.
+      await get().mergeGuestInterests().catch(() => {});
     })().finally(() => {
       guestMergeInFlight = null;
     });
@@ -1009,6 +1213,7 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
       _profilesCachedAt: state._profilesCachedAt,
       _cachedFestivalId: state._cachedFestivalId,
       guestPicks: state.guestPicks,
+      guestInterests: state.guestInterests,
     }),
     // Hydration-vs-live-state guard: persist rehydrates ASYNCHRONOUSLY (the
     // AsyncStorage read), so a user can start selecting a festival BEFORE
@@ -1034,9 +1239,19 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
           _cachedFestivalId: _cfi,
           ...rest
         } = p;
-        return { ...current, ...rest, guestPicks: { ...(p.guestPicks ?? {}), ...current.guestPicks } };
+        return {
+          ...current,
+          ...rest,
+          guestPicks: { ...(p.guestPicks ?? {}), ...current.guestPicks },
+          guestInterests: { ...(p.guestInterests ?? {}), ...current.guestInterests },
+        };
       }
-      return { ...current, ...p, guestPicks: { ...(p.guestPicks ?? {}), ...current.guestPicks } };
+      return {
+        ...current,
+        ...p,
+        guestPicks: { ...(p.guestPicks ?? {}), ...current.guestPicks },
+        guestInterests: { ...(p.guestInterests ?? {}), ...current.guestInterests },
+      };
     },
     // A cached festival renders before any fetch (offline, slow start): restore
     // its remembered filters now so they show and later changes are saved.

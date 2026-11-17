@@ -97,6 +97,8 @@ export interface LineupImportUndoResult {
   restored: number;
   removedStages: number;
   removedDays: number;
+  /** Picks that interest conversion made on the removed sets and nobody changed. Absent from an older server. */
+  autoPicksRemoved?: number;
   kept: { setId: string; artist: string; reason: 'picked' | 'edited' }[];
 }
 
