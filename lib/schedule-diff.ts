@@ -122,11 +122,13 @@ export function formatShiftDelta(minutes: number): string {
 
 /** The stage and minutes when every change is the same bulk shift on one stage and day, else null. */
 function shiftOf(changes: ScheduleChange[]): { stageName: string; delta: number } | null {
-  let shift: { stageName: string; dayLabel: string; delta: number } | null = null;
+  let shift: { stageId: string; dayKey: string; stageName: string; delta: number } | null = null;
   for (const change of changes) {
     if (change.kind !== 'moved') return null;
     const { before, after } = change;
-    if (!before.stageName || before.stageName !== after.stageName || before.dayLabel !== after.dayLabel) return null;
+    if (!before.stageId || !after.stageName || before.stageId !== after.stageId || before.dayKey !== after.dayKey) {
+      return null;
+    }
     if (!before.startTime || !after.startTime) return null;
     const delta = festivalStartMinutes(after.startTime) - festivalStartMinutes(before.startTime);
     // The bound rejects a slot that crosses the 06:00 festival-day start (05:45 to 06:15 reads -1410).
@@ -138,10 +140,8 @@ function shiftOf(changes: ScheduleChange[]): { stageName: string; delta: number 
     ) {
       return null;
     }
-    if (!shift) shift = { stageName: before.stageName, dayLabel: before.dayLabel, delta };
-    else if (shift.stageName !== before.stageName || shift.dayLabel !== before.dayLabel || shift.delta !== delta) {
-      return null;
-    }
+    if (!shift) shift = { stageId: before.stageId, dayKey: before.dayKey, stageName: after.stageName, delta };
+    else if (shift.stageId !== before.stageId || shift.dayKey !== before.dayKey || shift.delta !== delta) return null;
   }
   return shift && { stageName: shift.stageName, delta: shift.delta };
 }

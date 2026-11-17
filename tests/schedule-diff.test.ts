@@ -233,9 +233,11 @@ describe('buildSchedulePushes shift form', () => {
     stageName: string | null = 'Sahara',
     dayLabel = 'Sat',
   ) => ({
+    dayKey: dayLabel,
     dayLabel,
     startTime,
     endTime,
+    stageId: stageName && stageName.toLowerCase(),
     stageName,
   });
   const change = (setId: string, before: any, after: any) => ({
@@ -323,6 +325,16 @@ describe('buildSchedulePushes shift form', () => {
     assert.equal(titleOf(more), '2 of your picks changed');
   });
 
+  it('keeps the shift title when the stage and day are renamed in the same save', () => {
+    const renamed = (startTime: string) => ({
+      ...at(startTime),
+      stageName: 'Sahara Stage',
+      dayLabel: 'Saturday',
+    });
+    const changes = [change('a', at('20:00'), renamed('20:30')), change('b', at('21:00'), renamed('21:30'))];
+    assert.equal(titleOf(changes), 'Sahara Stage: 2 of your picks moved +30 min');
+  });
+
   it('reads a backward shift with a minus sign', () => {
     const changes = [change('a', at('22:00', '23:00'), at('21:45', '22:45')), change('b', at('23:00'), at('22:45'))];
     assert.equal(titleOf(changes), 'Sahara: 2 of your picks moved -15 min');
@@ -357,6 +369,12 @@ describe('isTbaToTime', () => {
     });
     const change = diffPickedSchedule(dated('Sat', 'Sahara', tba), dated('Saturday', 'Sahara Stage', peggy))[0]!;
     assert.equal(isTbaToTime(change), true);
+  });
+
+  it('is false when a day without a date is renamed, because its label is its identity', () => {
+    const undated = (label: string, set: any) => ({ ...festival([]), days: [{ label, sets: [set] }] });
+    const change = diffPickedSchedule(undated('Sat', tba), undated('Saturday', peggy))[0]!;
+    assert.equal(isTbaToTime(change), false);
   });
 
   it('is false when a set moves from a placeholder stage to a real stage and gains a time', () => {
