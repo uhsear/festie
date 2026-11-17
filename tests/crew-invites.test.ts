@@ -65,6 +65,8 @@ function makeInviteDeps(overrides: any = {}) {
       countByFestival: mock.fn(async () => 0),
       create: mock.fn(async (p: any) => p),
     },
+    // ensureFestivalProfile checks the festival is published.
+    pool: { query: mock.fn(async () => ({ rows: [{}] })) },
   };
 
   // Deep-merge stores

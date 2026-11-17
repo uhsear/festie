@@ -287,6 +287,9 @@ export default function createCrewRoutes(deps: any) {
       // Create the caller's profile in this festival if it is missing, as join
       // does. Runs after the cap check so a refused create leaves no stray profile.
       const profileResult = await ensureFestivalProfile(deps, req.user, cleanFestivalId);
+      if (profileResult.error === 'festival-unavailable') {
+        return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      }
       if (profileResult.error === 'limit') {
         return sendError(
           res,
@@ -401,6 +404,9 @@ export default function createCrewRoutes(deps: any) {
           // Owning a crew there needs a profile: create it as POST / and join do, instead
           // of refusing. After the cap check, so a refused reform leaves no stray profile.
           const profileResult = await ensureFestivalProfile(deps, req.user, targetFestivalId);
+          if (profileResult.error === 'festival-unavailable') {
+            return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+          }
           if (profileResult.error === 'limit') {
             return sendError(
               res,

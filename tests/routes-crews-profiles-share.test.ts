@@ -69,6 +69,7 @@ function makeCrewDeps(overrides: any = {}) {
     io: ioObj,
     pool: { query: mock.fn(async () => ({ rows: [{ id: 'f1' }] })) },
     stores: {
+      pool: { query: mock.fn(async () => ({ rows: [{}] })) },
       crews: {
         getById: mock.fn(async () => null),
         create: mock.fn(async (d) => d),
@@ -179,6 +180,16 @@ describe('routes/crews.js', () => {
         .send({ name: 'Crew', festivalId: 'nonexistent' });
       assert.equal(res.status, 404);
       assert.equal(res.body.error.code, 'NOT_FOUND');
+    });
+
+    test('POST /crews maps festival-unavailable from ensureFestivalProfile to 404', async () => {
+      const { app } = await buildCrewApp({
+        sanitizeString: (s: any) => s,
+        sanitizeIdentifier: (s: any) => s,
+        stores: { ...makeCrewDeps().stores, pool: { query: mock.fn(async () => ({ rows: [] })) } },
+      });
+      const res = await request(app).post('/crews').send({ name: 'Crew', festivalId: 'f1' });
+      assert.equal(res.status, 404);
     });
 
     test('creates the festival profile when the user has none', async () => {
@@ -1340,6 +1351,7 @@ function makeProfileDeps(overrides: any = {}) {
     },
     removeProfileSockets: mock.fn(() => {}),
     stores: {
+      pool: { query: mock.fn(async () => ({ rows: [{}] })) },
       profiles: {
         getByFestival: mock.fn(async () => []),
         getById: mock.fn(async () => null),
@@ -1574,6 +1586,15 @@ describe('routes/profiles.js', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
       assert.ok(deps.emitter.profileCreated.mock.calls.length > 0);
+    });
+
+    test('maps festival-unavailable from ensureFestivalProfile to 404', async () => {
+      const { app } = await buildProfileApp({
+        sanitizeIdentifier: (s: any) => s,
+        stores: { ...makeProfileDeps().stores, pool: { query: mock.fn(async () => ({ rows: [] })) } },
+      });
+      const res = await request(app).post('/profiles').send({ festivalId: 'f1' });
+      assert.equal(res.status, 404);
     });
 
     test('returns 500 on creation error', async () => {
