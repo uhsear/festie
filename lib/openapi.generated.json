@@ -1958,6 +1958,9 @@
           "dayCount": {
             "type": "number"
           },
+          "lineupCount": {
+            "type": "number"
+          },
           "startDate": {
             "nullable": true,
             "type": "string"
@@ -1977,6 +1980,7 @@
           "location",
           "stageCount",
           "dayCount",
+          "lineupCount",
           "startDate",
           "endDate"
         ],

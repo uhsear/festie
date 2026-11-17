@@ -15,6 +15,8 @@
  * Imports never delete sets. The lineup announcement is a separate, manual admin
  * action. A commit that adds a published festival's first set times sends the
  * one-time "set times are out" alert (reengagement.sendSetTimesOut).
+ * A commit and an undo also drop the festival list cache, and on a published festival emit
+ * festival:updated, so open clients reload and the announced lineup shows what the sets now cover.
  *
  * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, commit searches
  * Spotify once for the artists of new sets that have no link.
@@ -80,6 +82,7 @@ export default function createLineupImportRoute(deps: any) {
     invalidateFestivalCache,
     getRequestIp,
     reengagement,
+    emitter,
   } = deps;
 
   const router = express.Router();
@@ -97,6 +100,13 @@ export default function createLineupImportRoute(deps: any) {
       .catch(() => {
         log.warn('spotify module not available');
       });
+  }
+
+  // Sets changed, so the list's lineupCount is stale and open clients must reload.
+  // A draft has no attendees, and the event goes to every socket.
+  function announceSetsChanged(festival: any) {
+    deps.invalidateFestivalListCache?.();
+    if (festival?.publishedAt) emitter?.festivalUpdated?.({ festival });
   }
 
   async function writeAuditRow(req: any, res: any, action: string, festivalId: string, details: any) {
@@ -196,6 +206,7 @@ export default function createLineupImportRoute(deps: any) {
       if (!outcome.committed) return sendSuccess(res, { committed: false, plan: outcome.plan });
 
       invalidateFestivalCache();
+      announceSetsChanged(festival);
       // The executor checks publish state, the marker and the times itself.
       reengagement
         ?.sendSetTimesOut?.(festivalId)
@@ -261,6 +272,7 @@ export default function createLineupImportRoute(deps: any) {
           );
         }
         invalidateFestivalCache();
+        announceSetsChanged(await stores.festivals.getById(festivalId));
         log.info('lineup import undone', { festivalId, importId, ...outcome.result, kept: outcome.result.kept.length });
         await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORT_UNDONE, festivalId, {
           importId,
