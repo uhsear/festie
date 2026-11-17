@@ -114,6 +114,8 @@ jobs:
         run: npm run depcruise
       - name: Unused files and dependencies (knip, blocking)
         run: npx knip --include files,dependencies,devDependencies,unlisted
+      - name: Deploy script tests (stdlib unittest, no network)
+        run: python3 -m unittest discover -s tests/deploy -p "test_*.py" -v
       - name: Dead-code report (knip exports, non-blocking)
         run: npm run knip
         continue-on-error: true

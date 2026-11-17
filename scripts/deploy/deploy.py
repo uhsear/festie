@@ -8,6 +8,8 @@
 # carried plaintext SSH + login credentials. This script:
 #
 #   1. SSHes to the prod box (KEY AUTH ONLY — no password support).
+#      Before anything changes it runs scripts/backup-pg.sh and aborts if the
+#      dump fails (pre_deploy_dump).
 #   2. git fetch + reset --hard origin/main, then installs root (npm) and
 #      packages/ (pnpm) dependencies.
 #   3. Migrations are app-managed (applied on backend boot); no deploy step.
@@ -86,6 +88,22 @@ def connect():
     return client
 
 
+def pre_deploy_dump(client, runner=run):
+    """Dump the database before the deploy changes anything.
+
+    Fails closed: a non-zero exit raises SystemExit, so no later step runs and
+    production stays untouched. Writes made while the build runs are not in the
+    dump; that gap is accepted. It runs the host's current backup-pg.sh.
+    """
+    code, out, err = runner(client, f"cd {APP} && bash scripts/backup-pg.sh", timeout=600)
+    print(f"[pre-deploy-dump] exit={code}\n{out}{err}")
+    if code != 0:
+        raise SystemExit(
+            f"pre-deploy dump failed (exit {code}); nothing was changed on the host. "
+            "Fix the dump, then deploy again."
+        )
+
+
 def rollback_hint(tag=None):
     target = tag or "deploy-<previous-timestamp>"
     print("")
@@ -101,6 +119,9 @@ def main():
     deploy_tag = "deploy-" + time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     client = connect()
     try:
+        # 0. Dump the database while nothing has changed yet.
+        pre_deploy_dump(client)
+
         # 1. Sync to origin/main
         code, out, err = run(
             client,
