@@ -7,6 +7,12 @@
 #   20 * * * * cd $APP_DIR && bash scripts/backup-festival-hourly.sh >> logs/backup-festival.log 2>&1
 # (minute 20 stays clear of the 0 */6 dump and the 01:30 off-site push)
 #
+# DEPENDS ON R0a-core (chore/r0a-core-backups): never create the flag before it is
+# deployed. Without its weekly fix, every Sunday run copies a _weekly file and
+# WEEKLY_KEEP prunes older weeklies. Without its tiered off-site retention, hourly
+# pushes cut the off-site store to the last 14 pushes. Exit 75 and BACKUP_LOCK_WAIT
+# also come from R0a-core.
+#
 # Runs backup-pg.sh, then backup-offsite-git.sh, each with BACKUP_LOCK_WAIT=0.
 # Exit 75 from either script means another backup holds the lock: this
 # wrapper logs a skip and exits 0. It takes no lock of its own, so it

@@ -453,7 +453,7 @@
                 <strong>Sliding Window:</strong> Sliding window rate limiting prevents burst attacks at window boundaries
             </div>
             <div class="security-feature">
-                <strong>Distributed Coordination:</strong> All instances sync rate limit state via Redis, preventing limit bypass through load balancer switching
+                <strong>Distributed Coordination:</strong> Rate limit state is stored in Redis when enabled, so limits survive a process restart
             </div>
 
             <h3>DDoS Mitigation</h3>

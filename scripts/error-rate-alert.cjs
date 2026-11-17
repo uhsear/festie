@@ -128,11 +128,11 @@ async function checkHealth(url) {
 }
 
 // ── Pure checks (exported for tests) ──
-// Each returns { bad, msg } per alert kind.
+// Each returns { bad, msg } per alert kind. bad is undefined when there is no verdict.
 function readyObservations(res) {
   const ready = res.status === 200 && res.body?.data?.status === 'ready';
   const redis = res.body?.data?.checks?.redis;
-  const redisBad = typeof redis === 'string' && redis !== 'ok' && redis !== 'disabled';
+  const redisBad = typeof redis === 'string' ? redis !== 'ok' && redis !== 'disabled' : undefined;
   return {
     ready: { bad: !ready, msg: `/api/ready is not ready (status: ${res.status}, error: ${res.error || res.body?.data?.status || 'unready response'})` },
     redis: { bad: redisBad, msg: `Redis is ${redis} (/api/ready checks.redis)` },
@@ -149,8 +149,10 @@ function diskObservations({ freeRatio, probeError }) {
 /**
  * Applies one poll to the persisted state.
  * observations: { kind: { bad, msg } }. Kinds in CONFIRM_POLLS need that many bad polls in a row.
+ * A kind whose bad is undefined has no verdict this poll: its strikes and active flag stay as they were.
  * Returns { state, alerts, recoveries, suppressed }.
- * A kind alerts at most once per cooldownMs. A "recovered" notice follows only an alert that was sent.
+ * A kind alerts at most once per cooldownMs while it stays active. A "recovered" notice follows only an alert
+ * that was sent, and it clears the cooldown so the first failure after a recovery always pages.
  */
 function advance(prevState, observations, now, cooldownMs) {
   const state = normalizeState(prevState);
@@ -159,6 +161,7 @@ function advance(prevState, observations, now, cooldownMs) {
   let suppressed = 0;
 
   for (const [kind, { bad, msg }] of Object.entries(observations)) {
+    if (bad === undefined) continue;
     state.strikes[kind] = bad ? (state.strikes[kind] || 0) + 1 : 0;
     if (bad && state.strikes[kind] >= (CONFIRM_POLLS[kind] || 1)) {
       if (now - (state.lastAlertAt[kind] || 0) > cooldownMs) {
@@ -171,6 +174,7 @@ function advance(prevState, observations, now, cooldownMs) {
     } else if (!bad && state.active[kind]) {
       recoveries.push(`Recovered: ${kind}`);
       delete state.active[kind];
+      delete state.lastAlertAt[kind];
     }
   }
   return { state, alerts, recoveries, suppressed };
@@ -214,7 +218,7 @@ function checkPM2Processes(memoryMb) {
       avgMemoryMB: Math.round(fpProcs.reduce((sum, p) => sum + (p.monit?.memory || 0), 0) / fpProcs.length / 1024 / 1024),
     };
   } catch {
-    return { total: 0, online: 0, stopped: 0, highMemory: 0, avgMemoryMB: 0 };
+    return null;
   }
 }
 
@@ -282,11 +286,14 @@ async function main() {
 
   // 4. PM2 process health
   const pm2 = checkPM2Processes(cfg.memoryMb);
-  observations['pm2-stopped'] = { bad: pm2.stopped > 0, msg: `${pm2.stopped}/${pm2.total} PM2 instances are NOT online` };
-  observations['pm2-memory'] = {
-    bad: pm2.highMemory > 0,
-    msg: `${pm2.highMemory}/${pm2.total} instances over ${cfg.memoryMb}MB (avg: ${pm2.avgMemoryMB}MB)`,
-  };
+  // pm2 null means `pm2 jlist` failed: no verdict, so the kinds are left out.
+  if (pm2) {
+    observations['pm2-stopped'] = { bad: pm2.stopped > 0, msg: `${pm2.stopped}/${pm2.total} PM2 instances are NOT online` };
+    observations['pm2-memory'] = {
+      bad: pm2.highMemory > 0,
+      msg: `${pm2.highMemory}/${pm2.total} instances over ${cfg.memoryMb}MB (avg: ${pm2.avgMemoryMB}MB)`,
+    };
+  }
 
   // 5. Disk space and backup directory writability
   Object.assign(observations, diskObservations(checkDisk(cfg.backupDir)));
@@ -297,7 +304,8 @@ async function main() {
   if (recoveries.length > 0) await sendAlert(recoveries.join('\n'), cfg.webhookUrl, '✅ Festie Recovered');
   if (suppressed > 0) console.log(`[SUPPRESSED] ${suppressed} alert(s) within cooldown window`);
   if (Object.values(observations).every((o) => !o.bad)) {
-    console.log(`[OK ${new Date().toISOString()}] Health: ok, Errors: ${errorCount}, PM2: ${pm2.online}/${pm2.total} online, Mem: ${pm2.avgMemoryMB}MB avg`);
+    const pm2Line = pm2 ? `${pm2.online}/${pm2.total} online, Mem: ${pm2.avgMemoryMB}MB avg` : 'unknown';
+    console.log(`[OK ${new Date().toISOString()}] Health: ok, Errors: ${errorCount}, PM2: ${pm2Line}`);
   }
 
   next.lastErrorCount = errorCount;

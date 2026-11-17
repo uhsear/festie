@@ -45,13 +45,14 @@ describe('error-rate-alert: readyObservations', () => {
   it('flags a 503 not_ready response without a redis verdict', () => {
     const o = readyObservations({ status: 503, body: { data: { status: 'not_ready' } } });
     assert.equal(o.ready.bad, true);
-    assert.equal(o.redis.bad, false);
+    assert.equal(o.redis.bad, undefined);
   });
 
   it('flags an unreachable server as not ready', () => {
     const o = readyObservations({ status: 0, error: 'ECONNREFUSED' });
     assert.equal(o.ready.bad, true);
     assert.match(o.ready.msg, /ECONNREFUSED/);
+    assert.equal(o.redis.bad, undefined);
   });
 
   it('flags a 200 with a non-JSON body as not ready', () => {
@@ -131,6 +132,20 @@ describe('error-rate-alert: advance', () => {
     const [p1, p2] = run([{ health: bad('h') }, { health: good }], prev);
     assert.equal(p1.suppressed, 1);
     assert.deepEqual(p2.recoveries, []);
+  });
+
+  it('pages the first failure after a recovery even inside the cooldown', () => {
+    const results = run([{ health: bad('h') }, { health: good }, { health: bad('h') }]);
+    assert.deepEqual(results[2].alerts, ['h']);
+    assert.equal(results[2].suppressed, 0);
+  });
+
+  it('keeps a kind alerted and sends no recovery when a poll has no verdict', () => {
+    const unknown = readyObservations({ status: 0, error: 'ECONNREFUSED' });
+    const [, p2, p3, p4] = run([{ redis: bad('x') }, { redis: bad('x') }, { redis: unknown.redis }, { redis: good }], null, MIN);
+    assert.deepEqual(p2.alerts, ['x']);
+    assert.deepEqual(p3.recoveries, []);
+    assert.deepEqual(p4.recoveries, ['Recovered: redis']);
   });
 
   it('migrates the old single-number lastAlertAt state', () => {
