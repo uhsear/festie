@@ -14,7 +14,7 @@
 import { MAX_ARTISTS_PER_SET } from './constants';
 import { sanitizeLinkRecord, type LineupImportRowInput } from './schemas';
 import { sanitizeString } from './helpers/sanitize';
-import { lineupNameKey } from './lineup';
+import { lineupFoldKey } from './lineup';
 import { validateColor, validateTime } from './helpers/validation';
 
 type ErrorField = 'artist' | 'day' | 'date' | 'stage' | 'startTime' | 'endTime' | 'link' | 'row';
@@ -100,8 +100,8 @@ export interface PlanInput {
 const DEFAULT_STAGE_COLOR = '#6a6a88';
 const AFTER_MIDNIGHT_CUTOFF = '06:00';
 
-// Artist names fold like the announced lineup, so curly and straight quotes match. Stage names keep the plain fold.
-const normKey = lineupNameKey;
+// Artist names also fold accents and curly quotes. They keep "The" and punctuation, so import never merges two artists.
+const normKey = lineupFoldKey;
 const stageKey = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const blankToNull = (v: any): string | null => (typeof v === 'string' && v ? v : null);
@@ -373,13 +373,14 @@ function findMatch(ctx: Ctx, row: LineupImportRowInput, key: string, day: DayInf
   if (cands.length > 1 && stageId) cands = cands.filter((s) => s.values.stageId === stageId);
   if (cands.length <= 1) return cands[0];
   cands.forEach((c) => ctx.matchedIds.add(c.id));
-  const onDay = day?.label || 'several days';
-  errors.push({
-    field: 'stage',
-    message: stageId
-      ? `Matches ${cands.length} sets on ${onDay} at ${stageNameOf(ctx, stageId) ?? 'this stage'}. Use the export file with set_id.`
-      : `Matches ${cands.length} sets on ${onDay}. Add the stage to tell them apart.`,
-  });
+  const onDay = day ? dayName(day) : 'several days';
+  const stageName = stageNameOf(ctx, stageId) ?? 'this stage';
+  const message = !stageId
+    ? `Matches ${cands.length} sets on ${onDay}. Add the stage to tell them apart.`
+    : day
+      ? `Matches ${cands.length} sets on ${onDay} at ${stageName}. Use the export file with set_id.`
+      : `Matches ${cands.length} sets on ${onDay} at ${stageName}. Add the day to tell them apart.`;
+  errors.push({ field: 'stage', message });
   return undefined;
 }
 

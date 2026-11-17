@@ -84,6 +84,8 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
   const [loading, setLoading] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  // Whether the last checked mapping had a set_id column. Update turns on by default only when that changes.
+  const checkedWithSetId = useRef<boolean | null>(null);
   const { toast, toastError } = useToast();
 
   const checkSize = (value: string) => {
@@ -110,6 +112,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
     if (!checkSize(text)) return;
     const parsed = parseLineupTable(text);
     if (parsed.rows.length === 0) return toast('No rows found in that data.', 'error');
+    checkedWithSetId.current = null;
     setTable(parsed.rows);
     setLines(parsed.lines);
     applyHeader(looksLikeHeader(parsed.rows[0] ?? []), parsed.rows);
@@ -135,7 +138,9 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
 
   const handleCheckRows = () => {
     const nextRows = toImportRows(table, mapping, hasHeader, lines);
-    const update = defaultUpdateExisting(mapping);
+    const hasSetId = mapping.setId !== undefined;
+    const update = checkedWithSetId.current === hasSetId ? updateExisting : defaultUpdateExisting(mapping);
+    checkedWithSetId.current = hasSetId;
     setRows(nextRows);
     setUpdateExisting(update);
     void runPreview(nextRows, update);

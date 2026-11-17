@@ -453,14 +453,42 @@ describe('planLineupImport: re-import visibility', () => {
     assert.equal(p.rows[0]!.errors[0]!.message, 'Matches 2 sets on Friday at Main Stage. Use the export file with set_id.');
   });
 
-  it('matches an artist across curly and straight quotes and a leading The', () => {
-    const lair = { ...kai, id: 'set-lair', artist: "The Dragon's Lair", artists: [{ name: "The Dragon's Lair", links: {} }] };
+  it('matches an artist across curly and straight quotes', () => {
+    const lair = { ...kai, id: 'set-lair', artist: "Dragon's Lair", artists: [{ name: "Dragon's Lair", links: {} }] };
     const f = withSets([{ day: 0, set: lair }]);
-    for (const artist of ['The Dragon’s Lair', 'The Dragonʼs Lair', "The Dragon's Lair"]) {
+    for (const artist of ['Dragon’s Lair', 'Dragonʼs Lair', "Dragon's Lair", "DRAGON'S  lair"]) {
       const { plan: p } = plan([row(2, { artist, day: 'Friday', stage: 'Forest', startTime: '20:00', endTime: '21:00' })], {}, f);
       assert.equal(p.rows[0]!.setId, 'set-lair', artist);
       assert.equal(p.counts.new, 0, artist);
     }
+  });
+
+  it('does not merge "The X" with "X" or "K.X." with "KX"', () => {
+    const stored = [
+      { ...kai, id: 'set-the', artist: 'The Chainsmokers', artists: [{ name: 'The Chainsmokers', links: {} }] },
+      { ...kai, id: 'set-kx', artist: 'K.X.', artists: [{ name: 'K.X.', links: {} }] },
+    ];
+    const f = withSets(stored.map((set) => ({ day: 0, set })));
+    for (const artist of ['Chainsmokers', 'KX']) {
+      const { plan: p, writes } = plan([row(2, { artist, day: 'Friday', stage: 'Forest', startTime: '23:00', endTime: '23:30' })], { updateExisting: true }, f);
+      assert.equal(p.rows[0]!.status, 'new', artist);
+      assert.equal(writes.updates.length, 0, artist);
+    }
+  });
+
+  it('asks for the day when a given stage still matches sets on two days', () => {
+    const f = withSets([
+      { day: 0, set: alpha },
+      { day: 1, set: { ...alpha, id: 'set-a2' } },
+    ]);
+    const { plan: p } = plan([row(2, { artist: 'DJ Alpha', stage: 'Main Stage' })], {}, f);
+    assert.equal(p.rows[0]!.errors[0]!.message, 'Matches 2 sets on several days at Main Stage. Add the day to tell them apart.');
+  });
+
+  it('names a day that has a date but no label in the ambiguity message', () => {
+    const f = festival({ days: [{ dayIndex: 0, label: '', date: '2026-08-21', sets: [{ ...alpha }, { ...alpha, id: 'set-a2' }] }] });
+    const { plan: p } = plan([row(2, { artist: 'DJ Alpha', day: '2026-08-21', stage: 'Main Stage' })], {}, f);
+    assert.equal(p.rows[0]!.errors[0]!.message, 'Matches 2 sets on 2026-08-21 at Main Stage. Use the export file with set_id.');
   });
 
   it('keeps the plain fold for stage names, so a curly quote still names a new stage', () => {

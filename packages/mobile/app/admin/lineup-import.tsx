@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, Alert } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -106,6 +106,8 @@ export default function LineupImportScreen() {
   const [importRows, setImportRows] = useState<LineupImportRow[]>([]);
   const [plan, setPlan] = useState<LineupImportPlan | null>(null);
   const [updateExisting, setUpdateExisting] = useState(false);
+  // Whether the last checked mapping had a set_id column. Update turns on by default only when that changes.
+  const checkedWithSetId = useRef<boolean | null>(null);
   const [createMissing, setCreateMissing] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [result, setResult] = useState<LineupImportCommitResult | null>(null);
@@ -192,6 +194,7 @@ export default function LineupImportScreen() {
     }
     const header = looksLikeHeader(parsed.rows[0] ?? []);
     setTable(parsed.rows);
+    checkedWithSetId.current = null;
     setLines(parsed.lines);
     setHasHeader(header);
     setMapping(defaultMapping(parsed.rows, header));
@@ -218,11 +221,13 @@ export default function LineupImportScreen() {
       );
       return;
     }
-    const update = defaultUpdateExisting(mapping);
+    const hasSetId = mapping.setId !== undefined;
+    const update = checkedWithSetId.current === hasSetId ? updateExisting : defaultUpdateExisting(mapping);
+    checkedWithSetId.current = hasSetId;
     setImportRows(rows);
     setUpdateExisting(update);
     void runPreview(rows, update, createMissing);
-  }, [table, lines, mapping, hasHeader, createMissing, runPreview, say]);
+  }, [table, lines, mapping, hasHeader, createMissing, updateExisting, runPreview, say]);
 
   const handleToggle = useCallback(
     (which: 'update' | 'create', value: boolean) => {

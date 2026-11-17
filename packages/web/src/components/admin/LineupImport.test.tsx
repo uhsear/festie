@@ -134,6 +134,23 @@ describe('LineupImport', () => {
     expect(screen.queryByText(/Turn on Update to apply/)).toBeNull();
   });
 
+  it('keeps Update off after Back and Check rows when the admin turned it off', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
+    render(<LineupImport festivalId="f1" festivalName="Fest" />);
+    fireEvent.change(screen.getByLabelText(/paste cells from google sheets/i), {
+      target: { value: 'set_id,day,stage,artist,start,end\nset-1,Friday,Main Stage,Aurora Lights,21:00,22:00' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Next: match columns' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
+    await userEvent.click(await screen.findByLabelText('Update sets that match'));
+    expect(screen.getByLabelText('Update sets that match')).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
+    await screen.findByRole('button', { name: 'Approve' });
+    expect(api.preview.mock.calls.at(-1)![1].updateExisting).toBe(false);
+    expect(screen.getByLabelText('Update sets that match')).not.toBeChecked();
+  });
+
   it('disables Approve when the plan has an error row', async () => {
     api.preview.mockResolvedValue(
       plan([planRow({ status: 'error', errors: [{ field: 'day', message: 'Unknown day "Fryday".' }] })], { error: 1 }),
