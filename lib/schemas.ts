@@ -38,9 +38,11 @@ import {
   ALLOWED_PICK_PRIORITIES,
   ALLOWED_REMINDER_MINUTES,
 } from './constants';
-import { sanitizeString, normalizeRecordKey, sanitizeIdentifier, validateTime, validateColor } from './helpers';
+import { sanitizeLinkRecord, sanitizeString, normalizeRecordKey, sanitizeIdentifier, validateTime, validateColor } from './helpers';
 import { sendError, ErrorCodes } from './response';
 import { normalizeLineup, todayInZone } from './lineup';
+
+export { sanitizeLinkRecord };
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Reusable Primitives
@@ -943,17 +945,6 @@ export function resolveSetArtists(set: any, storedSet: any, sep = 'b2b'): any[] 
     }
   }
   return result.map((a: any) => ({ ...a, ..._storedArtistExtras(_findArtist(stored, a.name)) }));
-}
-
-export function sanitizeLinkRecord(links: any): Record<string, string> {
-  if (!links || typeof links !== 'object') return {};
-  const clean: Record<string, string> = {};
-  for (const [platform, url] of Object.entries(links)) {
-    if (typeof url !== 'string' || !url.trim()) continue;
-    const trimmed = url.trim().slice(0, 500);
-    if (/^https?:\/\//.test(trimmed)) clean[platform] = trimmed;
-  }
-  return clean;
 }
 
 export function normalizePickPayload(input: any, config: any): { error?: string; value?: any } {

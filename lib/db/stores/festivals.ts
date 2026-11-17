@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
 import { planMoveMarks } from '../../set-moves';
+import { cleanLineupLinks } from '../../lineup';
 
 /**
  * Build a multi-row VALUES clause with parameterized placeholders.
@@ -694,7 +695,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       `,
         [festivalId],
       );
-      return result.rows[0] || null;
+      const row = result.rows[0];
+      return row ? { ...row, lineup: cleanLineupLinks(row.lineup) } : null;
     },
 
     async hardDelete(festivalId: string) {

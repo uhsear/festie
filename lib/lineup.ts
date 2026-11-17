@@ -8,7 +8,7 @@
  * tests/fixtures/lineup-cover.json so they cannot drift.
  */
 
-import { sanitizeString, sanitizeIdentifier } from './helpers/sanitize';
+import { sanitizeString, sanitizeIdentifier, sanitizeLinkRecord } from './helpers/sanitize';
 
 export const MAX_LINEUP_ENTRIES = 500;
 export const MAX_LINKED_SETS = 10;
@@ -104,7 +104,7 @@ export function normalizeLineup(incoming: any[], stored: any[], ctx: NormalizeCo
   return (incoming ?? []).slice(0, MAX_LINEUP_ENTRIES).map((entry: any) => {
     const artists = (entry.artists ?? []).map((artist: any) => ({
       name: sanitizeString(artist.name, 300),
-      links: artist.links ?? {},
+      links: sanitizeLinkRecord(artist.links),
     }));
     let id = sanitizeIdentifier(entry.id, 100);
     let known = id ? storedById.get(id) : undefined;
@@ -130,6 +130,15 @@ export function normalizeLineup(incoming: any[], stored: any[], ctx: NormalizeCo
         .slice(0, MAX_LINKED_SETS),
     };
   });
+}
+
+/** Drops non-http(s) links from a stored lineup on read, whatever wrote the row. */
+export function cleanLineupLinks(lineup: any): any[] {
+  if (!Array.isArray(lineup)) return [];
+  return lineup.map((entry: any) => ({
+    ...entry,
+    artists: (entry?.artists ?? []).map((artist: any) => ({ ...artist, links: sanitizeLinkRecord(artist?.links) })),
+  }));
 }
 
 /** A set's artist names: its artists, or the flat name split on the separator and " b2b ". */

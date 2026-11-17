@@ -8,6 +8,7 @@ import {
   lineupEntryKey,
   lineupIssues,
   lineupNameKey,
+  cleanLineupLinks,
   normalizeLineup,
   todayInZone,
 } from '../lib/lineup.js';
@@ -90,7 +91,7 @@ describe('normalizeLineup', () => {
   ];
 
   test('makes ids for new entries and stamps today', () => {
-    const [entry] = normalizeLineup([{ artists: [{ name: 'New Act', links: {} }] }], [], ctx);
+    const entry = normalizeLineup([{ artists: [{ name: 'New Act', links: {} }] }], [], ctx)[0]!;
     assert.match(entry.id, /^lu-new/);
     assert.equal(entry.announcedAt, '2026-11-20');
     assert.equal(entry.status, 'announced');
@@ -108,12 +109,12 @@ describe('normalizeLineup', () => {
   });
 
   test('a known id keeps the stored announcedAt, a client date is ignored', () => {
-    const [entry] = normalizeLineup([{ id: 'lu-1', artists: [{ name: 'Kai' }], announcedAt: '2020-01-01' }], stored, ctx);
+    const entry = normalizeLineup([{ id: 'lu-1', artists: [{ name: 'Kai' }], announcedAt: '2020-01-01' }], stored, ctx)[0]!;
     assert.equal(entry.announcedAt, '2026-11-01');
   });
 
   test('a source id is kept for a new entry', () => {
-    const [entry] = normalizeLineup([{ id: 'forbidden-kingdom-2dy4', artists: [{ name: '2DY4' }] }], [], ctx);
+    const entry = normalizeLineup([{ id: 'forbidden-kingdom-2dy4', artists: [{ name: '2DY4' }] }], [], ctx)[0]!;
     assert.equal(entry.id, 'forbidden-kingdom-2dy4');
     assert.equal(entry.announcedAt, '2026-11-20');
   });
@@ -125,7 +126,7 @@ describe('normalizeLineup', () => {
   });
 
   test('keeps tier, day, status, poster name and caps linked sets at 10', () => {
-    const [entry] = normalizeLineup(
+    const entry = normalizeLineup(
       [
         {
           artists: [{ name: 'A' }],
@@ -138,12 +139,25 @@ describe('normalizeLineup', () => {
       ],
       [],
       ctx,
-    );
+    )[0]!;
     assert.equal(entry.displayName, 'Poster A');
     assert.equal(entry.tier, 3);
     assert.equal(entry.dayDate, '2027-02-05');
     assert.equal(entry.status, 'cancelled');
     assert.equal(entry.linkedSetIds.length, 10);
+  });
+});
+
+describe('lineup links', () => {
+  const bad = { spotify: 'javascript:alert(1)', website: 'data:text/html,x', instagram: 'https://instagram.com/a' };
+  test('normalizeLineup drops non-http(s) links on write', () => {
+    const entry = normalizeLineup([{ artists: [{ name: 'A', links: bad }] }], [], { createId: (p) => `${p}-x`, today: '2026-11-20' })[0]!;
+    assert.deepEqual(entry.artists[0]!.links, { instagram: 'https://instagram.com/a' });
+  });
+  test('cleanLineupLinks drops them from a stored row on read', () => {
+    const out = cleanLineupLinks([{ id: 'x', artists: [{ name: 'A', links: bad }] }]);
+    assert.deepEqual(out[0].artists[0].links, { instagram: 'https://instagram.com/a' });
+    assert.deepEqual(cleanLineupLinks(null), []);
   });
 });
 
