@@ -61,6 +61,28 @@ describe('AnnouncedNames', () => {
     expect(state()[0]!.artists.map((a) => a.name)).toEqual(['Mira', 'Zed']);
   });
 
+  it('refuses a rename to no names or more than four, shows why and resets the text', () => {
+    render(<Harness initial={[entry('a', ['Mira'])]} />);
+    const input = screen.getByLabelText('Artists for Mira') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.blur(input);
+    expect(screen.getByRole('alert').textContent).toMatch(/at least one artist/);
+    expect(input.value).toBe('Mira');
+    fireEvent.change(input, { target: { value: 'A b2b B b2b C b2b D b2b E' } });
+    fireEvent.blur(input);
+    expect(screen.getByRole('alert').textContent).toMatch(/at most 4 artists/);
+    expect(input.value).toBe('Mira');
+    expect(state()[0]!.artists.map((a) => a.name)).toEqual(['Mira']);
+  });
+
+  it('Edit names can clear a tier and a poster name', () => {
+    render(<Harness initial={[entry('a', ['Mira'], { tier: 1, displayName: 'Poster' })]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit names' }));
+    fireEvent.change(dialogOf().getByLabelText('Names'), { target: { value: 'Mira' } });
+    fireEvent.click(dialogOf().getByRole('button', { name: 'Update list' }));
+    expect(state()[0]).toMatchObject({ id: 'a', tier: null, displayName: null });
+  });
+
   it('flags a day that no longer exists as "Day removed"', () => {
     render(<Harness initial={[entry('a', ['Mira'], { dayDate: '2027-03-01' })]} />);
     expect(screen.getByRole('option', { name: /Day removed/ })).toBeTruthy();
