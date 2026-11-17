@@ -60,6 +60,12 @@ describe('lineupIssues', () => {
     assert.match(issues[0]!.message, /lines 1, 3/);
   });
 
+  test('the duplicate message prints the first entry as typed, with the same-name note', () => {
+    const [issue] = lineupIssues([{ artists: [{ name: 'Zed’s Dead' }, { name: 'Kai' }] }, { artists: [{ name: 'kai' }, { name: 'ZEDS DEAD' }] }]);
+    assert.match(issue!.message, /^The announced lineup lists "Zed’s Dead b2b Kai" more than once \(lines 1, 2\)\./);
+    assert.match(issue!.message, /Two acts with the same name need artist notes, which arrive with the artist repository\./);
+  });
+
   test('B2B order does not make a different entry', () => {
     const issues = lineupIssues([{ artists: [{ name: 'A' }, { name: 'B' }] }, { artists: [{ name: 'B' }, { name: 'A' }] }]);
     assert.equal(issues.length, 1);
