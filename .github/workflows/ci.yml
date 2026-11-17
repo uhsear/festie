@@ -277,7 +277,8 @@ jobs:
     # actually fail on them. Web/shared-gated (P8); not a required check yet.
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    # Pinned: Playwright browsers do not install or launch on ubuntu-26.04, which ubuntu-latest became in 2026-11.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
