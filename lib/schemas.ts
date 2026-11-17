@@ -174,6 +174,9 @@ export const profileUpdateSchema = z
     picks: picksMap,
     notes: notesMap,
     reminders: remindersMap,
+    // Interest marks travel as deltas, never as a whole map, so two devices cannot erase each other's marks.
+    interestAdd: z.array(identifier).max(50).optional(),
+    interestRemove: z.array(identifier).max(50).optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',

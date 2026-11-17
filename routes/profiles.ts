@@ -3,6 +3,7 @@
 
 import { paginateArray } from '../lib/pagination.js';
 import { ensureFestivalProfile } from '../lib/festival-profile.js';
+import { coverLineup } from '../lib/lineup.js';
 
 export default function createProfilesRoutes(deps: any) {
   const {
@@ -177,11 +178,21 @@ export default function createProfilesRoutes(deps: any) {
         nextReminders = Object.fromEntries(Object.entries(nextReminders).filter(([setId]) => validSetIds.has(setId)));
       }
 
+      // Interest marks are deltas. Ids outside the festival's lineup are dropped, like reminders: a lineup
+      // entry that was removed must not break every later save.
+      const lineupIds = new Set((festival?.lineup || []).map((entry: any) => entry.id));
+      const interestIds = (ids: string[] | undefined) =>
+        ids === undefined ? undefined : [...new Set(ids)].filter((id) => lineupIds.has(id));
+      const interestAdd = interestIds(req.validatedBody?.interestAdd);
+      const interestRemove = interestIds(req.validatedBody?.interestRemove);
+
       // Build update fields
       const updateFields: any = {};
       if (nextPicks !== undefined) updateFields.picks = nextPicks;
       if (nextNotes !== undefined) updateFields.notes = nextNotes;
       if (nextReminders !== undefined) updateFields.reminders = nextReminders;
+      if (interestAdd !== undefined) updateFields.interestAdd = interestAdd;
+      if (interestRemove !== undefined) updateFields.interestRemove = interestRemove;
 
       // Update profile
       const profile = await stores.profiles.update(profileId, updateFields);
@@ -191,12 +202,21 @@ export default function createProfilesRoutes(deps: any) {
       emitter.profileUpdated({
         profile,
         user: await getUserById(profile.userId),
-        changedFields: { picks: nextPicks !== undefined },
+        changedFields: {
+          picks: nextPicks !== undefined,
+          interests: interestAdd !== undefined || interestRemove !== undefined,
+        },
       });
 
       // Set ETag for optimistic concurrency on subsequent updates
       if (profile.updatedAt) res.setHeader('ETag', `"${profile.updatedAt}"`);
-      return sendSuccess(res, serializeOwnProfile(profile, await getUserById(profile.userId)));
+      sendSuccess(res, serializeOwnProfile(profile, await getUserById(profile.userId)));
+      // A mark on an act that sets already cover converts at once, after the response.
+      if (interestAdd?.length && festival) {
+        const cover = coverLineup(festival.lineup, festival.days || [], festival.b2bSeparator || 'b2b');
+        if (interestAdd.some((id) => cover[id]?.state === 'scheduled')) await deps.interestConversion?.convert(festival.id);
+      }
+      return;
     } catch (error: any) {
       log.error('profile update failed', { error: error.message, profileId: req.validatedParams?.id });
       return sendError(res, 500, 'Failed to update profile', ErrorCodes.INTERNAL_ERROR);

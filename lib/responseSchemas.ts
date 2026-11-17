@@ -362,6 +362,16 @@ export type PickPriorityResponse = z.infer<typeof pickPriorityResponseSchema>;
  * viewer payload (which omits them) and an own payload (which includes them)
  * both parse.
  */
+/**
+ * One interest mark on an announced act. `open` means no pick was made yet; `converted` lists the
+ * set ids the server picked for it, and `at` is when. Private to the owner, like notes.
+ */
+export const interestMarkResponseSchema = z.object({
+  state: z.enum(['open', 'converted']),
+  sets: z.array(z.string()).optional(),
+  at: z.string().optional(),
+});
+
 export const profileResponseSchema = z.object({
   id: z.string(),
   festivalId: z.string(),
@@ -371,6 +381,7 @@ export const profileResponseSchema = z.object({
   picks: z.record(z.string(), pickPriorityResponseSchema),
   notes: z.record(z.string(), z.string()).optional(),
   reminders: z.record(z.string(), z.number()).optional(),
+  interests: z.record(z.string(), interestMarkResponseSchema).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

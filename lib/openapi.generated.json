@@ -2037,6 +2037,34 @@
               "type": "number"
             }
           },
+          "interests": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "converted"
+                  ]
+                },
+                "sets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "state"
+              ],
+              "additionalProperties": false
+            }
+          },
           "createdAt": {
             "type": "string"
           },
