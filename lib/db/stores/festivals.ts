@@ -643,6 +643,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           f.updated_at AS "updatedAt",
           f.published_at AS "publishedAt",
           f.slug,
+          f.lineup,
           COALESCE(
             (SELECT json_agg(
               json_build_object(
@@ -707,7 +708,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         const updatedAt = festival.updatedAt || createdAt;
 
         await client.query(
-          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)',
+          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, lineup) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)',
           [
             festival.id,
             festival.name,
@@ -722,6 +723,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             // Only the admin create route passes null (a draft); every other caller publishes.
             festival.publishedAt === undefined ? new Date().toISOString() : festival.publishedAt,
             festival.updatedBy ?? null,
+            JSON.stringify(festival.lineup ?? []),
           ],
         );
 
@@ -802,6 +804,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         if (fields.mapConfig !== undefined) {
           sets.push(`map_config = $${idx}`);
           values.push(fields.mapConfig == null ? null : JSON.stringify(fields.mapConfig));
+          idx++;
+        }
+        if (fields.lineup !== undefined) {
+          sets.push(`lineup = $${idx}::jsonb`);
+          values.push(JSON.stringify(fields.lineup));
           idx++;
         }
         if (fields.updatedBy !== undefined) {

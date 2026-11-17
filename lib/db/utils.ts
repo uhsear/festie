@@ -47,6 +47,7 @@ export default function createUtils(pool: Pool) {
         f.updated_at AS "updatedAt",
         f.published_at AS "publishedAt",
         f.slug,
+        f.lineup,
         COALESCE(
           (SELECT json_agg(
             json_build_object(

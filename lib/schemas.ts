@@ -40,6 +40,7 @@ import {
 } from './constants';
 import { sanitizeString, normalizeRecordKey, sanitizeIdentifier, validateTime, validateColor } from './helpers';
 import { sendError, ErrorCodes } from './response';
+import { normalizeLineup, todayInZone } from './lineup';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Reusable Primitives
@@ -397,6 +398,27 @@ export const daySchema = z.object({
 });
 export type DayInput = z.infer<typeof daySchema>;
 
+// One billing line of the announced lineup (festivals.lineup). The server owns announcedAt and
+// makes the id when it is absent; status defaults to announced (see lib/lineup.ts normalizeLineup).
+export const lineupEntrySchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).optional(),
+  artists: z.array(artistLinkSchema).min(1).max(MAX_ARTISTS_PER_SET),
+  displayName: z.string().max(300).optional().nullable(),
+  tier: z.number().int().min(1).max(9).optional().nullable(),
+  dayDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable(),
+  status: z.enum(['announced', 'cancelled']).optional(),
+  announcedAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  linkedSetIds: z.array(z.string().max(100)).max(10).optional(),
+});
+export type LineupEntryInput = z.infer<typeof lineupEntrySchema>;
+
 // Optional IANA time-zone id (e.g. `America/New_York`). Anchors set status +
 // reminder fire-times in the festival's zone. Validated by attempting to
 // construct an Intl.DateTimeFormat with it — a RangeError means an unknown zone.
@@ -513,6 +535,8 @@ export const festivalCreateSchema = z.object({
   timeZone: festivalTimeZone,
   stages: z.array(stageSchema).max(20).optional(),
   days: z.array(daySchema).max(10).optional(),
+  // The announced lineup, at most 500 lines. A save that omits it keeps the stored list.
+  lineup: z.array(lineupEntrySchema).max(500).optional(),
   // Venue point the map and weather use. Sent only when the admin changes it.
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
@@ -534,7 +558,12 @@ export const festivalUpdateSchema = festivalCreateSchema
   .partial()
   // false saves without pushing schedule alerts to people whose picks changed.
   .extend({ notify: z.boolean().optional() })
-  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
+  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required')
+  // The PUT also rewrites name, stages and map from the body, so a lineup save from a stale copy needs the token.
+  .refine((d) => d.lineup === undefined || d.expectedUpdatedAt !== undefined, {
+    message: 'Saving the lineup needs expectedUpdatedAt, the updatedAt you loaded.',
+    path: ['expectedUpdatedAt'],
+  });
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
 
 // ── Lineup import (admin) ───────────────────────────────────────────
@@ -1051,6 +1080,14 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
       }),
     })),
     mapConfig,
+    // Sent: cleaned and keyed against the stored list. Omitted: the stored list stays.
+    lineup:
+      input.lineup !== undefined
+        ? normalizeLineup(input.lineup, existingFestival?.lineup ?? [], {
+            createId: createOpaqueId,
+            today: todayInZone(timeZone),
+          })
+        : (existingFestival?.lineup ?? []),
     latitude: venueValid ? venueLat : null,
     longitude: venueValid ? venueLng : null,
     createdAt: existingFestival?.createdAt || now,

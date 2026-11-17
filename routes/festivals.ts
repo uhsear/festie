@@ -374,6 +374,7 @@ export default function createFestivalsRoutes(deps: any) {
                 ...(s.movedAt ? { movedAt: s.movedAt, movedFrom: s.movedFrom } : {}),
               })),
             })),
+            lineup: festival.lineup ?? [],
             slug: festival.slug ?? null,
             mapConfig: festival.mapConfig ?? null,
             createdAt: festival.createdAt,
@@ -530,6 +531,8 @@ export default function createFestivalsRoutes(deps: any) {
           timeZone: nextFestival.timeZone,
           stages: nextFestival.stages,
           ...(daysSent ? { days: nextFestival.days } : {}),
+          // Only a body that sends the lineup rewrites it, so mobile and map saves keep the stored list.
+          ...(body.lineup !== undefined ? { lineup: nextFestival.lineup } : {}),
           mapConfig: nextFestival.mapConfig,
           updatedBy: req.user?.userId ?? null,
           ...(venueSent ? { latitude: nextFestival.latitude, longitude: nextFestival.longitude } : {}),

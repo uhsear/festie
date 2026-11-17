@@ -122,6 +122,22 @@ export const festivalSetResponseSchema = z.object({
 });
 export type FestivalSetResponse = z.infer<typeof festivalSetResponseSchema>;
 
+/**
+ * One entry of the announced lineup (festivals.lineup). `scheduled` is not stored: readers derive it
+ * from the sets, so it cannot disagree with them (lib/lineup.ts coverLineup).
+ */
+export const lineupEntryResponseSchema = z.object({
+  id: z.string(),
+  artists: z.array(artistResponseSchema),
+  displayName: z.string().nullable(),
+  tier: z.number().int().nullable(),
+  dayDate: z.string().nullable(),
+  status: z.enum(['announced', 'cancelled']),
+  announcedAt: z.string(),
+  linkedSetIds: z.array(z.string()),
+});
+export type LineupEntryResponse = z.infer<typeof lineupEntryResponseSchema>;
+
 // The depth=1 set is the same minus `linkUrl` (the route's L1 mapper drops it).
 const festivalDepth1SetSchema = festivalSetResponseSchema.omit({ linkUrl: true });
 
@@ -158,6 +174,7 @@ export const festivalDepth1ResponseSchema = z.object({
   longitude: z.number().nullable().optional(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalDepth1DaySchema),
+  lineup: z.array(lineupEntryResponseSchema),
   slug: z.string().nullable().optional(),
   mapConfig: festivalMapConfigSchema.nullable(),
   createdAt: z.string(),
@@ -183,6 +200,7 @@ export const festivalResponseSchema = z.object({
   updatedAt: z.string(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalFullDaySchema),
+  lineup: z.array(lineupEntryResponseSchema),
   slug: z.string().nullable().optional(),
 });
 export type FestivalResponse = z.infer<typeof festivalResponseSchema>;

@@ -1,0 +1,117 @@
+{
+  "note": "Shared by tests/lineup.test.ts and packages/shared/src/utils/lineupCover.test.ts so the two coverLineup copies cannot drift. All names are invented.",
+  "sameKey": [
+    ["Bacardi", "Bacardi"],
+    ["Zed's Dead", "Zeds Dead"],
+    ["Above & Beyond", "Above and Beyond"],
+    ["roi*", "roi"],
+    ["The Glitch", "Glitch"],
+    ["Fred again..", "FRED AGAIN!"],
+    ["Tiesto", "Tiesto"]
+  ],
+  "differentKey": [
+    ["HOL", "HOL Two"],
+    ["Mira", "Kai"]
+  ],
+  "cases": [
+    {
+      "name": "equal name sets cover, order is ignored",
+      "separator": "b2b",
+      "lineup": [
+        { "id": "e1", "artists": [{ "name": "Kai" }, { "name": "Mira" }], "status": "announced" }
+      ],
+      "days": [
+        { "date": "2027-02-05", "sets": [{ "id": "s1", "artist": "Mira b2b Kai", "artists": [{ "name": "Mira" }, { "name": "Kai" }] }] }
+      ],
+      "expected": { "e1": { "setIds": ["s1"], "state": "scheduled", "dayIndex": -1 } }
+    },
+    {
+      "name": "a subset does not cover (solo entry, group set)",
+      "separator": "b2b",
+      "lineup": [
+        { "id": "solo", "artists": [{ "name": "INFEKT" }], "status": "announced" },
+        { "id": "trio", "artists": [{ "name": "INFEKT" }, { "name": "MODAL NODES" }, { "name": "roi*" }], "status": "announced" }
+      ],
+      "days": [
+        { "date": "2027-02-05", "sets": [{ "id": "s1", "artist": "x", "artists": [{ "name": "INFEKT" }, { "name": "MODAL NODES" }, { "name": "roi" }] }] }
+      ],
+      "expected": {
+        "solo": { "setIds": [], "state": "announced", "dayIndex": -1 },
+        "trio": { "setIds": ["s1"], "state": "scheduled", "dayIndex": -1 }
+      }
+    },
+    {
+      "name": "a legacy set with empty artists is split on the separator and on b2b",
+      "separator": "vs",
+      "lineup": [
+        { "id": "a", "artists": [{ "name": "A" }, { "name": "B" }], "status": "announced" },
+        { "id": "c", "artists": [{ "name": "C" }, { "name": "D" }], "status": "announced" }
+      ],
+      "days": [
+        { "date": "2027-02-05", "sets": [
+          { "id": "s1", "artist": "A vs B", "artists": [] },
+          { "id": "s2", "artist": "C B2B D" }
+        ] }
+      ],
+      "expected": {
+        "a": { "setIds": ["s1"], "state": "scheduled", "dayIndex": -1 },
+        "c": { "setIds": ["s2"], "state": "scheduled", "dayIndex": -1 }
+      }
+    },
+    {
+      "name": "linkedSetIds add a set by hand and a missing id is ignored",
+      "separator": "b2b",
+      "lineup": [
+        { "id": "e1", "artists": [{ "name": "Alpha" }], "status": "announced", "linkedSetIds": ["s9", "gone"] }
+      ],
+      "days": [
+        { "date": "2027-02-05", "sets": [{ "id": "s9", "artist": "Alpha and Friends", "artists": [{ "name": "Alpha and Friends" }] }] }
+      ],
+      "expected": { "e1": { "setIds": ["s9"], "state": "scheduled", "dayIndex": -1 } }
+    },
+    {
+      "name": "a cancelled entry is never scheduled but still lists its sets",
+      "separator": "b2b",
+      "lineup": [
+        { "id": "e1", "artists": [{ "name": "Alpha" }], "status": "cancelled" }
+      ],
+      "days": [
+        { "date": "2027-02-05", "sets": [{ "id": "s1", "artist": "Alpha", "artists": [{ "name": "Alpha" }] }] }
+      ],
+      "expected": { "e1": { "setIds": ["s1"], "state": "cancelled", "dayIndex": -1 } }
+    },
+    {
+      "name": "one entry covered by two sets returns both ids",
+      "separator": "b2b",
+      "lineup": [
+        { "id": "e1", "artists": [{ "name": "Alpha" }], "status": "announced" }
+      ],
+      "days": [
+        { "date": "2027-02-05", "sets": [{ "id": "s1", "artist": "Alpha", "artists": [{ "name": "Alpha" }] }] },
+        { "date": "2027-02-06", "sets": [{ "id": "s2", "artist": "Alpha", "artists": [{ "name": "Alpha" }] }] }
+      ],
+      "expected": { "e1": { "setIds": ["s1", "s2"], "state": "scheduled", "dayIndex": -1 } }
+    },
+    {
+      "name": "dayDate resolves to the first day with that date; a removed day is -1",
+      "separator": "b2b",
+      "lineup": [
+        { "id": "fri", "artists": [{ "name": "A" }], "status": "announced", "dayDate": "2027-02-05" },
+        { "id": "sat", "artists": [{ "name": "B" }], "status": "announced", "dayDate": "2027-02-06" },
+        { "id": "gone", "artists": [{ "name": "C" }], "status": "announced", "dayDate": "2027-02-07" },
+        { "id": "tba", "artists": [{ "name": "D" }], "status": "announced", "dayDate": null }
+      ],
+      "days": [
+        { "date": "2027-02-06", "sets": [] },
+        { "date": "2027-02-05", "sets": [] },
+        { "date": "2027-02-05", "sets": [] }
+      ],
+      "expected": {
+        "fri": { "setIds": [], "state": "announced", "dayIndex": 1 },
+        "sat": { "setIds": [], "state": "announced", "dayIndex": 0 },
+        "gone": { "setIds": [], "state": "announced", "dayIndex": -1 },
+        "tba": { "setIds": [], "state": "announced", "dayIndex": -1 }
+      }
+    }
+  ]
+}
