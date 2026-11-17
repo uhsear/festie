@@ -93,11 +93,17 @@ fi
 # ── Optional verification ────────────────────────────────────────────────────
 
 if [ "${VERIFY}" = "1" ]; then
-  if pg_restore --list "$BACKUP_FILE" >/dev/null 2>&1; then
+  command -v pg_restore >/dev/null 2>&1 || die "pg_restore not found in PATH -- dump kept unverified: ${BACKUP_FILE}"
+  LIST_RC=0
+  LIST_ERR="$(pg_restore --list "$BACKUP_FILE" 2>&1 >/dev/null)" || LIST_RC=$?
+  if [ "$LIST_RC" -eq 0 ]; then
     log "Verification OK: pg_restore --list succeeded"
+  elif [ "$LIST_RC" -eq 126 ] || [ "$LIST_RC" -eq 127 ]; then
+    # The tool could not run, so the dump is not known to be bad: keep it.
+    die "pg_restore could not run (exit ${LIST_RC}): $(head -n1 <<<"$LIST_ERR") -- dump kept unverified: ${BACKUP_FILE}"
   else
     mv -f "$BACKUP_FILE" "${BACKUP_FILE}.bad"
-    die "pg_restore --list failed -- dump is corrupt, kept as ${BACKUP_FILE}.bad"
+    die "pg_restore --list failed ($(head -n1 <<<"$LIST_ERR")) -- dump is corrupt, kept as ${BACKUP_FILE}.bad"
   fi
 fi
 

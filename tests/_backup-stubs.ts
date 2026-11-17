@@ -22,7 +22,8 @@ export function hasCommand(cmd: string): boolean {
 export function writeStub(binDir: string, name: string, body: string): void {
   mkdirSync(binDir, { recursive: true });
   const file = path.join(binDir, name);
-  writeFileSync(file, `#!/usr/bin/env bash\necho "${name} $*" >> "$STUB_LOG"\n${body}\n`);
+  // $STUB_LOG.pw records the PGPASSWORD each call saw, one "<stub> <password>" line per call.
+  writeFileSync(file, `#!/usr/bin/env bash\necho "${name} $*" >> "$STUB_LOG"\necho "${name} \${PGPASSWORD:-}" >> "$STUB_LOG.pw"\n${body}\n`);
   chmodSync(file, 0o755);
 }
 
