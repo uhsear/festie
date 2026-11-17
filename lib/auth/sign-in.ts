@@ -95,6 +95,24 @@ export async function usernameTaken(username: string, stores: any): Promise<bool
 }
 
 /**
+ * Anonymous ?ref= sign-up count (migration 070): a day and a ref, nothing that
+ * identifies the person. A counting failure is logged and never fails sign-up.
+ * Shared by /register and provider sign-up.
+ */
+export async function countSignupRef(ref: string | undefined, deps: any) {
+  if (!ref) return;
+  try {
+    await deps.stores.pool.query(
+      `INSERT INTO signup_ref_counts (day, ref, signups) VALUES (CURRENT_DATE, $1, 1)
+       ON CONFLICT (day, ref) DO UPDATE SET signups = signup_ref_counts.signups + 1`,
+      [ref],
+    );
+  } catch (error: any) {
+    deps.log.warn('signup ref count failed', { error: error.message });
+  }
+}
+
+/**
  * Username and capacity checks shared by /register and provider sign-up.
  * Returns the error message, or null. The email check runs only when an
  * email is passed.
