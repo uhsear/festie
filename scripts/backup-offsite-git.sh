@@ -29,7 +29,8 @@ set -euo pipefail
 #
 # CONFIG (in ../.env):
 #   BACKUP_GPG_PASSPHRASE   strong random passphrase (generated, stored once)
-#   BACKUP_DIR              optional, default $HOME/backups/festie
+#   (BACKUP_DIR comes from the environment only, default $HOME/backups/festie,
+#   the same as backup-pg.sh; a value in .env is ignored.)
 #
 # FAILURE ALERT: on any non-zero exit, if ~/.config/festie-ntfy-topic exists and
 # is non-empty, a short message is POSTed to https://ntfy.sh/<topic>. The topic
@@ -69,10 +70,13 @@ set -euo pipefail
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# BACKUP_DIR resolves exactly as in backup-pg.sh (caller env, else the default), so
+# both scripts share one directory and one lock; a BACKUP_DIR in .env is ignored.
+CALLER_BACKUP_DIR="${BACKUP_DIR:-}"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../.env" 2>/dev/null || true
 
-BACKUP_DIR="${BACKUP_DIR:-$HOME/backups/festie}"
+BACKUP_DIR="${CALLER_BACKUP_DIR:-$HOME/backups/festie}"
 LOG_FILE="$BACKUP_DIR/offsite-git.log"
 DEPLOY_KEY="${BACKUP_DEPLOY_KEY:-$HOME/.ssh/festie_backups_deploy}"
 REPO_SSH="git@github.com:uhsear/festie-backups.git"
@@ -99,6 +103,10 @@ alert_on_failure() {
     "https://ntfy.sh/$topic" >/dev/null 2>&1 || true
 }
 trap alert_on_failure EXIT
+
+# The lock fd (9) must not leak into children that outlive this run (git's
+# detached gc, a gpg-agent), or they would hold the lock after we exit.
+git() { command git "$@" 9>&-; }
 
 export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 
@@ -134,9 +142,18 @@ if [ $(( $(date +%s) - DUMP_EPOCH )) -gt "$MAX_AGE" ]; then
   log "ERROR: newest dump $BASENAME is older than $((MAX_AGE / 3600)) h -- backups are stale."
   exit 1
 fi
-if ! pg_restore --list "$NEWEST" >/dev/null 2>&1; then
+if ! command -v pg_restore >/dev/null 2>&1; then
+  log "ERROR: pg_restore not found in PATH -- cannot verify $BASENAME."
+  exit 1
+fi
+LIST_RC=0
+LIST_ERR="$(pg_restore --list "$NEWEST" 2>&1 >/dev/null)" || LIST_RC=$?
+if [ "$LIST_RC" -eq 126 ] || [ "$LIST_RC" -eq 127 ]; then
+  log "ERROR: pg_restore could not run (exit $LIST_RC): $(head -n1 <<<"$LIST_ERR") -- $BASENAME left in place."
+  exit 1
+elif [ "$LIST_RC" -ne 0 ]; then
   mv -f "$NEWEST" "${NEWEST}.bad"
-  log "ERROR: pg_restore --list failed for $BASENAME -- renamed to ${BASENAME}.bad."
+  log "ERROR: pg_restore --list failed for $BASENAME ($(head -n1 <<<"$LIST_ERR")) -- renamed to ${BASENAME}.bad."
   exit 1
 fi
 ENC_NAME="${BASENAME}.gpg"
@@ -170,11 +187,11 @@ mkdir -p "$DUMPS_SUBDIR"
 if [ -f "$DUMPS_SUBDIR/$ENC_NAME" ]; then
   log "Already pushed $ENC_NAME -- skipping re-encrypt; running prune only."
 else
-  if gpg --batch --yes --quiet \
+  if gpg --batch --yes --quiet --pinentry-mode loopback \
         --symmetric --cipher-algo AES256 \
-        --passphrase "$BACKUP_GPG_PASSPHRASE" \
+        --passphrase-fd 3 \
         --output "$DUMPS_SUBDIR/$ENC_NAME" \
-        "$NEWEST"; then
+        "$NEWEST" 3<<<"$BACKUP_GPG_PASSPHRASE" 9>&-; then
     log "Encrypted -> $DUMPS_SUBDIR/$ENC_NAME"
     git add "$DUMPS_SUBDIR/$ENC_NAME"
     if [ -f "$NEWEST.counts" ]; then
@@ -190,14 +207,22 @@ else
 fi
 
 # 4. Tiered prune (a dump's .counts sidecar goes with it)
-if command -v node >/dev/null 2>&1; then
-  mapfile -t REMOVE < <(ls -1 "$DUMPS_SUBDIR" | node "$SCRIPT_DIR/lib/backup-retention.cjs")
-  for name in "${REMOVE[@]}"; do
+# A failed prune must not hide: still push the new dump, then exit 1 at the end.
+PRUNE_FAILED=0
+NODE_BIN="$(command -v node || true)"
+[ -n "$NODE_BIN" ] || { [ -x /usr/bin/node ] && NODE_BIN=/usr/bin/node; } || true
+if [ -z "$NODE_BIN" ]; then
+  log "ERROR: node not found in PATH or /usr/bin -- retention prune not run."
+  PRUNE_FAILED=1
+elif ! REMOVE_LIST="$(ls -1 "$DUMPS_SUBDIR" | "$NODE_BIN" "$SCRIPT_DIR/lib/backup-retention.cjs")"; then
+  log "ERROR: retention prune failed -- nothing pruned."
+  PRUNE_FAILED=1
+else
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
     git rm -q --ignore-unmatch "$DUMPS_SUBDIR/$name" || rm -f "$DUMPS_SUBDIR/$name"
     log "Pruned old dump file: $name"
-  done
-else
-  log "WARNING: node not found in PATH -- skipped retention prune."
+  done <<<"$REMOVE_LIST"
 fi
 
 # Commit + push if anything changed
@@ -214,4 +239,8 @@ else
   log "No changes to push."
 fi
 
+if [ "$PRUNE_FAILED" = "1" ]; then
+  log "Off-site git backup pushed, but retention prune failed."
+  exit 1
+fi
 log "Off-site git backup completed."
