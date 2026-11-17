@@ -463,7 +463,14 @@ function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Pro
   const result = openPlannerDatabaseRaw(opts);
   const pool = result && result.pool;
   const databaseUrl = opts.databaseUrl || process.env.DATABASE_URL || '';
-  const log = typeof opts.log === 'function' ? opts.log : () => {};
+  // app-context passes the structured logger (an object with level methods), not a
+  // function. Adapt it, or every runner line and the connect-retry warning is dropped.
+  const log =
+    typeof opts.log === 'function'
+      ? opts.log
+      : opts.log && typeof opts.log.warn === 'function'
+        ? (level: string, message: string, meta?: any) => opts.log[level]?.(message, meta)
+        : () => {};
 
   if (!pool) {
     // Upstream did something unexpected; preserve its return value and

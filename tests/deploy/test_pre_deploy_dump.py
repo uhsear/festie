@@ -19,10 +19,12 @@ DEPLOY_PY = Path(__file__).resolve().parents[2] / "scripts" / "deploy" / "deploy
 
 
 def load_deploy():
-    sys.modules["paramiko"] = types.ModuleType("paramiko")
     spec = importlib.util.spec_from_file_location("festie_deploy_under_test", DEPLOY_PY)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # The stub lives only while deploy.py imports, so a real paramiko used by
+    # another test in the same process is not shadowed.
+    with mock.patch.dict(sys.modules, {"paramiko": types.ModuleType("paramiko")}):
+        spec.loader.exec_module(module)
     return module
 
 
