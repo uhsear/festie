@@ -26,6 +26,8 @@ import EmptyState from '../components/ui/EmptyState';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import OtherDayMatches from '../components/features/OtherDayMatches';
 import TBASection from '../components/timeline/TBASection';
+import AnnouncedLineup from '../components/features/AnnouncedLineup';
+import { useAnnouncedLineup } from '../hooks/useAnnouncedLineup';
 import TimelineLegend from '../components/timeline/TimelineLegend';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
@@ -115,6 +117,8 @@ function GridViewInner() {
     () => Object.fromEntries((days ?? []).map((d) => [d.dayIndex, d.label || d.date])) as Record<number, string>,
     [days],
   );
+
+  const announced = useAnnouncedLineup();
 
   const { vpW } = useTimelineViewport();
   const { nowIndicator, gridRef, scrollToNow } = useNowIndicator(timeBounds, selectedDay);
@@ -253,6 +257,23 @@ function GridViewInner() {
             onSavePick={handleSavePick}
             onOpenDetail={setDetailSet}
           />
+          <AnnouncedLineup className="mt-5" />
+        </div>
+      </RefreshableView>
+    );
+  }
+
+  // The announced lineup stands in for "No sets scheduled for this day" while it has acts to show on this day.
+  if (!allDaySets.length && announced.visible && !searchQuery.trim() && (announced.noSets || announced.selection.active.length > 0)) {
+    return (
+      <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
+        <div
+          className="relative overflow-auto h-full [-webkit-overflow-scrolling:touch] overscroll-contain pt-4"
+          role="region"
+          aria-label={COPY.grid.regionLabel}
+          data-scroll-sentinel
+        >
+          <AnnouncedLineup className="mt-5" />
         </div>
       </RefreshableView>
     );
@@ -405,6 +426,7 @@ function GridViewInner() {
               onOpenDetail={setDetailSet}
             />
           )}
+          <AnnouncedLineup className="mt-5" />
         </div>
       </div>
     </RefreshableView>

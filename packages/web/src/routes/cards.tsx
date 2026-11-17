@@ -16,6 +16,7 @@ import {
   SCHEDULE_GROUP_BYS,
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
+import { useAnnouncedLineup } from '../hooks/useAnnouncedLineup';
 import SetCard from '../components/features/SetCard';
 import PhaseHomeActions from '../components/features/PhaseHomeActions';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
@@ -23,6 +24,7 @@ import FestivalReadyCard from '../components/features/FestivalReadyCard';
 import OtherDayMatches from '../components/features/OtherDayMatches';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import SetTimesBanner from '../components/features/SetTimesBanner';
+import AnnouncedLineup from '../components/features/AnnouncedLineup';
 import DiscoverRow from '../components/features/DiscoverRow';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
@@ -135,6 +137,7 @@ function CardsViewInner() {
     return map;
   }, [getDays]);
   const q = searchQuery.trim();
+  const announced = useAnnouncedLineup();
 
   // Per-set badge naming the other set it clashes with and the overlap.
   const clashBadges = useMemo(
@@ -161,6 +164,9 @@ function CardsViewInner() {
   }
 
   const hasCrew = crews.some((c) => !c.festivalId || c.festivalId === currentFestival.id);
+  // The announced lineup stands in for "No sets for this day" while it has acts to show on this day.
+  const lineupStandsIn =
+    announced.visible && !q && (announced.noSets || announced.selection.active.length > 0);
   const actions = getHomeActions({
     phase,
     signedIn: !!user,
@@ -180,6 +186,7 @@ function CardsViewInner() {
 
       <SetTimesBanner />
       <DiscoverRow />
+      <AnnouncedLineup />
 
       {filteredSets.length > 0 && (
         <div className="flex items-center gap-2 w-full mx-auto max-w-[1440px] mb-[var(--space-3)]">
@@ -212,24 +219,26 @@ function CardsViewInner() {
 
       {/* Card grid */}
       {filteredSets.length === 0 ? (
-        <ScheduleEmptyState
-          dayLabel={dayLabels[selectedDay] ?? 'this day'}
-          dayFallback={{
-            title: 'No sets for this day',
-            description: 'Pick another day from the day selector to browse the schedule.',
-          }}
-          otherDayMatches={
-            q && otherDayGroups.length > 0 ? (
-              <OtherDayMatches
-                groups={otherDayGroups}
-                dayLabels={dayLabels}
-                stages={stages}
-                b2bSeparator={currentFestival?.b2bSeparator}
-                onSelectDay={setSelectedDay}
-              />
-            ) : undefined
-          }
-        />
+        lineupStandsIn ? null : (
+          <ScheduleEmptyState
+            dayLabel={dayLabels[selectedDay] ?? 'this day'}
+            dayFallback={{
+              title: 'No sets for this day',
+              description: 'Pick another day from the day selector to browse the schedule.',
+            }}
+            otherDayMatches={
+              q && otherDayGroups.length > 0 ? (
+                <OtherDayMatches
+                  groups={otherDayGroups}
+                  dayLabels={dayLabels}
+                  stages={stages}
+                  b2bSeparator={currentFestival?.b2bSeparator}
+                  onSelectDay={setSelectedDay}
+                />
+              ) : undefined
+            }
+          />
+        )
       ) : (
         <div
           // `card-grid` is kept for its behavioral hooks (scroll-container

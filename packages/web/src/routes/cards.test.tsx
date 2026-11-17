@@ -130,3 +130,72 @@ describe('CardsView order and earlier row', () => {
     expect(ids()).toEqual(['early', 'mid', 'now', 'late']);
   });
 });
+
+describe('CardsView announced lineup', () => {
+  const entry = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    artists: [{ name }],
+    displayName: null,
+    tier: null,
+    dayDate: null,
+    status: 'announced',
+    announcedAt: '2026-10-01',
+    linkedSetIds: [],
+    ...extra,
+  });
+  const setLineup = (lineup: unknown[]) => {
+    (festivalState.currentFestival as { lineup: unknown[] }).lineup = lineup;
+  };
+
+  beforeEach(() => {
+    Object.assign(festivalState, {
+      currentProfile: null,
+      currentFestival: {
+        id: 'f1',
+        timeZone: 'UTC',
+        startDate: '2026-11-20',
+        endDate: '2026-11-21',
+        lineup: [entry('1', 'Announced Act'), entry('2', 'Second Act')],
+      },
+      days: [
+        { index: 0, date: '2026-11-20', label: 'Fri' },
+        { index: 1, date: '2026-11-21', label: 'Sat' },
+      ],
+      sets: [],
+      selectedDay: 0,
+      stages: [],
+      searchQuery: '',
+      isLoading: false,
+      error: null,
+    });
+  });
+
+  it('shows the lineup instead of "No sets for this day" when the festival has no sets', () => {
+    render(<CardsView />);
+    expect(screen.getByText('2 acts announced · Set times TBA')).toBeInTheDocument();
+    expect(screen.getByText('Announced Act')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  it('shows a day with no sets the acts for that day, and keeps the empty state when it has none', () => {
+    festivalState.sets = [{ ...mkSet('s1', '20:00', '21:00'), artist: 'Announced Act' }];
+    festivalState.selectedDay = 1;
+    setLineup([entry('1', 'Announced Act'), entry('2', 'Saturday Act', { dayDate: '2026-11-21' })]);
+    const { unmount } = render(<CardsView />);
+    expect(screen.getByText('Saturday Act')).toBeInTheDocument();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    unmount();
+
+    // Every act is on the timetable and day 2 has no sets: nothing to list, so the plain empty state stays.
+    setLineup([entry('1', 'Announced Act')]);
+    render(<CardsView />);
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+
+  it('keeps the empty state for a festival with no announced acts', () => {
+    setLineup([]);
+    render(<CardsView />);
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.queryByText(/acts announced/)).not.toBeInTheDocument();
+  });
+});
