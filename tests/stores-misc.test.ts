@@ -1035,6 +1035,7 @@ describe('ProfilesStore', () => {
       };
       const pool = mockPool([
         { rows: [] },           // BEGIN
+        { rows: [] },           // SELECT interests (converted-pick guard)
         { rows: [] },           // UPDATE profile
         { rows: [] },           // DELETE picks
         { rows: [] },           // batch INSERT picks
