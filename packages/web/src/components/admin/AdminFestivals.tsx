@@ -424,6 +424,7 @@ export default function AdminFestivals() {
         issues={issues}
         saving={saving}
         venueGuessed={!!festivalId && venueGuessedFor === festivalId}
+        savedDays={original?.days}
         engagement={engagement}
         engagementError={engagementError}
         onSave={handleSave}

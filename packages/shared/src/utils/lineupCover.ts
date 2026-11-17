@@ -89,3 +89,41 @@ export function coverLineup(
   }
   return cover;
 }
+
+const SAMPLE = 3;
+const nameList = (names: string[]) =>
+  names.length > SAMPLE ? `${names.slice(0, SAMPLE).join(', ')} and ${names.length - SAMPLE} more` : names.join(', ');
+const entryName = (e: LineupEntry) => e.displayName || e.artists.map((a) => a.name).join(' b2b ');
+
+/**
+ * Heads-up lines for the save summary, computed on the form state. `savedDays` are the days as
+ * last saved; with them the check also names acts that this save unschedules by removing a set.
+ */
+export function lineupNotices(
+  lineup: LineupEntry[],
+  days: (CoverDay & { label?: string })[],
+  separator: string,
+  savedDays?: CoverDay[],
+): string[] {
+  const notices: string[] = [];
+  const cover = coverLineup(lineup, days, separator);
+  const unmatched = lineup.filter((e) => cover[e.id]!.state === 'announced');
+  const anySets = days.some((d) => (d.sets ?? []).length > 0);
+  if (anySets && unmatched.length > 0) {
+    notices.push(
+      `${unmatched.length} announced ${unmatched.length === 1 ? 'act has' : 'acts have'} no matching set: ${nameList(unmatched.map(entryName))}. Fix the spelling, or link the set by hand.`,
+    );
+  }
+  if (savedDays) {
+    const before = coverLineup(lineup, savedDays, separator);
+    const lost = lineup.filter((e) => before[e.id]!.state === 'scheduled' && cover[e.id]!.state === 'announced');
+    if (lost.length > 0) notices.push(`This save removes the set for ${nameList(lost.map(entryName))}. They go back to "Announced".`);
+  }
+  for (const entry of lineup) {
+    const c = cover[entry.id]!;
+    if (entry.status !== 'cancelled' || c.setIds.length === 0) continue;
+    const label = days.find((d) => (d.sets ?? []).some((s) => c.setIds.includes(s.id)))?.label;
+    notices.push(`${entryName(entry)} is cancelled but still has ${c.setIds.length} ${c.setIds.length === 1 ? 'set' : 'sets'}${label ? ` on ${label}` : ''}.`);
+  }
+  return notices;
+}
