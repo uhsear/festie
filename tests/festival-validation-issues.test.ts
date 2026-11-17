@@ -397,5 +397,11 @@ describe('publishChecklist data-quality warnings', () => {
       const festival = festivalOf([[set('s1', 'Kai', 'a', '05:00', '07:00')], [], [set('s2', 'Kai', 'b', '06:30', '07:30')]]);
       assert.equal(byKey(publishChecklist(config, festival)).artist_double_booked.status, 'done');
     });
+
+    test('falls back to day order when a day has no date', () => {
+      const festival = festivalOf([[set('s1', 'Kai', 'a', '05:00', '07:00')], [set('s2', 'Kai', 'b', '06:30', '07:30')]]);
+      festival.days.forEach((d: any) => delete d.date);
+      assert.equal(byKey(publishChecklist(config, festival)).artist_double_booked.status, 'warn');
+    });
   });
 });

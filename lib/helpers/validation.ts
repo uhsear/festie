@@ -480,9 +480,7 @@ export function publishChecklist(config: any, festival: any): ChecklistItem[] {
     : {
         key: 'overlaps',
         status: 'warn',
-        label: overlapList.length === 1
-          ? overlapList[0]!
-          : `${overlapList[0]!.slice(0, -1)} (and ${overlapList.length - 1} more).`,
+        label: firstAndCount(overlapList),
       };
 
   const timeWarnings = setTimeWarnings(festival);

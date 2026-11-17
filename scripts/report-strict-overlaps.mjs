@@ -2,7 +2,9 @@
 // stageOverlapWarnings) finds a same-stage overlap that the blocking `stage_overlap` save
 // check does not. Those festivals would fail to save if `stage_overlap` switched to the
 // stricter rule. Reads a JSON file of festivals (an array, or { data: [...] }) and never
-// touches a database. Run it against a staging export only:
+// touches a database. The comparison is by count, so the result is approximate: the two
+// rules can flag different pairs, and the blocking check only compares neighbouring sets.
+// Run it against a staging export only:
 //   node --import tsx/esm scripts/report-strict-overlaps.mjs festivals.json
 import { readFileSync } from 'node:fs';
 import { stageOverlapWarnings, validateFestivalIssues } from '../lib/helpers/validation.ts';
@@ -25,9 +27,9 @@ let gained = 0;
 for (const festival of festivals) {
   const blocking = validateFestivalIssues(noCaps, festival).filter((i) => i.code === 'stage_overlap').length;
   const strict = stageOverlapWarnings(festival);
-  if (strict.length > 0 && blocking === 0) {
+  if (strict.length > blocking) {
     gained += 1;
-    console.log(`${festival.id ?? festival.name}: would gain ${strict.length} blocking overlap(s)`);
+    console.log(`${festival.id ?? festival.name}: strict rule finds ${strict.length} overlap(s), blocking check ${blocking}`);
     for (const line of strict) console.log(`  ${line}`);
   }
 }

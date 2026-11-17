@@ -398,6 +398,17 @@ describe('planLineupImport: time warnings', () => {
     assert.deepEqual(p.rows.map((r) => r.status), ['new', 'new', 'new']);
   });
 
+  it('puts an odd-length warning on the updated row only with updateExisting', () => {
+    const f = withSets([{ day: 0, set: alpha }]);
+    const rows = [late(2, 'New', '20:00', '21:00'), row(3, { artist: 'DJ Alpha', day: 'Friday', startTime: '20:00', endTime: '20:10' })];
+    const on = plan(rows, { updateExisting: true }, f);
+    assert.deepEqual(on.plan.rows.map((r) => r.status), ['new', 'changed']);
+    assert.deepEqual(on.plan.rows[0]!.warnings, []);
+    assert.deepEqual(on.plan.rows[1]!.warnings, ['This set is 10 min long. Check the start and end times.']);
+    const off = plan(rows, {}, f);
+    assert.deepEqual(off.plan.rows[1]!.warnings, []);
+  });
+
   it('warns about a morning start on a day of evening sets', () => {
     const { plan: p } = plan([late(2, 'A', '9pm', '10pm'), late(3, 'B', '22:00', '23:00', 'Main Stage'), late(4, 'C', '9am', '10am')]);
     assert.deepEqual(p.rows[2]!.warnings, ['Starts at 09:00, but most sets that day start at 14:00 or later. Check AM and PM.']);
