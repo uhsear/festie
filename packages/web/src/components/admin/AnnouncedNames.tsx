@@ -14,6 +14,7 @@ import {
 } from '@festie/shared/utils';
 import type { LineupDraft } from '@festie/shared/utils';
 import type { LineupEntry } from '@festie/shared/types';
+import type { LineupInterestCounts } from '@festie/shared/services';
 import Button from '../ui/Button';
 import Dialog from '../ui/Dialog';
 
@@ -27,6 +28,8 @@ interface Props {
   separator?: string;
   /** Changes whenever a save lands, which clears "Not saved yet". */
   savedAt?: string;
+  /** Marks per entry id (admin demand view). A row shows "N marked" when it has any. */
+  interestCounts?: LineupInterestCounts;
   onChange: (next: LineupDraft[]) => void;
 }
 
@@ -91,7 +94,7 @@ function EditableText({
   );
 }
 
-export default function AnnouncedNames({ lineup, days, savedDays, separator, savedAt, onChange }: Props) {
+export default function AnnouncedNames({ lineup, days, savedDays, separator, savedAt, interestCounts, onChange }: Props) {
   const sep = separator || 'b2b';
   const [filter, setFilter] = useState<Filter>('all');
   const [unsaved, setUnsaved] = useState(false);
@@ -194,6 +197,13 @@ export default function AnnouncedNames({ lineup, days, savedDays, separator, sav
     return n > 0 ? `Scheduled (${n} ${n === 1 ? 'set' : 'sets'})` : 'Announced';
   };
 
+  /** "12 marked" for an entry that people marked. Open and converted both count: converted marks still show demand. */
+  const markedLabel = (entry: LineupDraft) => {
+    const counts = entry.id ? interestCounts?.[entry.id] : undefined;
+    const total = counts ? counts.open + counts.converted : 0;
+    return total > 0 ? `${total} marked` : null;
+  };
+
   return (
     <div className="border-t border-glass-border pt-4" data-testid="announced-names">
       <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -286,6 +296,7 @@ export default function AnnouncedNames({ lineup, days, savedDays, separator, sav
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-text-muted whitespace-nowrap">{stateChip(entry, index)}</span>
+                    {markedLabel(entry) && <span className="text-xs text-accent-aqua whitespace-nowrap">{markedLabel(entry)}</span>}
                     <button
                       type="button"
                       aria-label={`Remove ${label}`}

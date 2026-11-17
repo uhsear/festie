@@ -44,6 +44,19 @@ describe('AnnouncedNames', () => {
     expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0);
   });
 
+  it('shows how many people marked an act, open and converted together, and nothing for an act no one marked', () => {
+    render(
+      <AnnouncedNames
+        lineup={[entry('a', ['Kai']), entry('b', ['Mira']), entry('c', ['Zed'])]}
+        days={days}
+        interestCounts={{ a: { open: 2, converted: 3 }, b: { open: 0, converted: 0 } }}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('5 marked')).toBeTruthy();
+    expect(screen.getAllByText(/ marked$/)).toHaveLength(1);
+  });
+
   it('edits tier, day and status in place and keeps the id', () => {
     render(<Harness initial={[entry('a', ['Mira'])]} />);
     fireEvent.change(screen.getByLabelText('Tier for Mira'), { target: { value: '2' } });
