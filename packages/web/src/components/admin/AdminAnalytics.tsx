@@ -8,6 +8,7 @@ import PickDistribution from './PickDistribution';
 import TopSets from './TopSets';
 import FestivalPickInsight from './FestivalPickInsight';
 import FestivalStats from './FestivalStats';
+import AdminGrowth from './AdminGrowth';
 import { ADMIN_QUERY_OPTIONS, adminKeys } from './adminQueries';
 import { useAdminSearch } from './useAdminSearch';
 
@@ -111,6 +112,8 @@ export default function AdminAnalytics() {
       )}
 
       <FestivalStats stats={data.festivalStats} onSelect={(id) => selectFestival(id)} />
+
+      <AdminGrowth />
 
       {/* Active Users */}
       {data.activeUsers.length > 0 && (
