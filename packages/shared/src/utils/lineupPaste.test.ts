@@ -132,6 +132,27 @@ describe('mergeLineupPaste', () => {
     expect(r.lineup.find((e) => e.id === 'lu-3')!.tier).toBe(3);
   });
 
+  it('a heading-less line clears nothing, but exactTiers and exactNames let an edit clear tier and poster name', () => {
+    const edited = parseLineupText('Kai\nMira').entries;
+    const keep = mergeLineupPaste(prev, edited, { mode: 'add' }).lineup;
+    expect(keep.find((e) => e.id === 'lu-1')).toMatchObject({ tier: 2, displayName: 'Kai Live' });
+    const exact = mergeLineupPaste(prev, edited, { mode: 'replace', exactTiers: true, exactNames: true }).lineup;
+    expect(exact.find((e) => e.id === 'lu-1')).toMatchObject({ tier: null, displayName: null });
+    expect(parseLineupText('A\n# Tier 1\nB').hasHeadings).toBe(true);
+    expect(parseLineupText('A\nB').hasHeadings).toBe(false);
+  });
+
+  it('pasted links land by name key, not position, when the B2B order differs', () => {
+    const base = [stored('ab', ['A', 'B'])];
+    const pasted = parseLineupJson(
+      JSON.stringify([{ artists: [{ name: 'B', links: { spotify: 'https://s.example/b' } }, { name: 'A', links: { spotify: 'https://s.example/a' } }] }]),
+    ).entries;
+    const r = mergeLineupPaste(base, pasted, { mode: 'add' }).lineup[0]!;
+    expect(r.artists.map((a) => a.name)).toEqual(['A', 'B']);
+    expect(r.artists[0]!.links).toEqual({ spotify: 'https://s.example/a' });
+    expect(r.artists[1]!.links).toEqual({ spotify: 'https://s.example/b' });
+  });
+
   it('paste for one day puts matched and new lines on that day', () => {
     const r = mergeLineupPaste(prev, parseLineupText('Zed\nBrand New').entries, { mode: 'add', dayDate: '2027-02-06' });
     expect(r.lineup.find((e) => e.id === 'lu-3')!.dayDate).toBe('2027-02-06');

@@ -11,7 +11,8 @@ export function lineupNameKey(name: string): string {
   const folded = String(name ?? '')
     .normalize('NFKD')
     // Marks go only after Latin, Greek or Cyrillic letters, so Japanese and Indic marks keep names apart.
-    .replace(/(?<=[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}])\p{M}+/gu, '')
+    // Explicit ranges, no lookbehind or Script= escapes: this runs in the mobile bundle too.
+    .replace(/([A-Za-z\u00c0-\u024f\u1e00-\u1eff\u0370-\u03ff\u1f00-\u1fff\u0400-\u04ff])\p{M}+/gu, '$1')
     .toLowerCase()
     .replace(/&/g, ' and ')
     .replace(/['’ʼ.]/g, '')
